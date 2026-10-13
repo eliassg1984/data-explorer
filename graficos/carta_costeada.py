@@ -863,6 +863,67 @@ def porcionamientos_de(df_po, cod, n=_N_PORC):
     return out.reset_index(drop=True)[cols]
 
 
+def ultimo_porcionamiento(df_po, cod):
+    """El porcionamiento más nuevo del que salió `cod`: `doc`, `fecha`,
+    `cod_de` (el código de lo que se porcionó) y, si se puede medir, si el
+    peso por unidad de ESTE corte quedó fuera de lo habitual — la marca
+    «Peso por unidad raro» de Movimientos › Para revisar (regla #647), con
+    `kgu` (su peso por unidad) y `hab` (lo habitual). Importa: el corte
+    entra al Almacén al precio que le dio ese peso, y la receta lo hereda.
+    None si no hay porcionamientos. Pura."""
+    if df_po is None or df_po.empty:
+        return None
+    c = {k: _resolver(df_po, [k]) for k in (
+        "COD PORC", "COD PROD FINAL", "FEC REGIST", "COD PROD INIC",
+        "UNID PROD INIC", "PROD FINAL RESULT", "CANT A PORCIONAR",
+        "CANT MERMA", "CANT RESULT", "PESO RESULT")}
+    if not (c["COD PROD FINAL"] and c["FEC REGIST"]):
+        return None
+    d = df_po[df_po[c["COD PROD FINAL"]].astype(str).str.strip() == str(cod).strip()]
+    if d.empty:
+        return None
+    d = (d.assign(_f=pd.to_datetime(d[c["FEC REGIST"]], errors="coerce"))
+         .sort_values("_f", kind="stable"))
+    ult = d.iloc[-1]
+    out = {"doc": str(ult[c["COD PORC"]]).strip() if c["COD PORC"] else "",
+           "fecha": ult["_f"],
+           "cod_de": (str(ult[c["COD PROD INIC"]]).strip()
+                      if c["COD PROD INIC"] else ""),
+           "raro": False, "kgu": float("nan"), "hab": float("nan")}
+    if not all(c[k] for k in ("COD PROD INIC", "CANT RESULT", "PESO RESULT",
+                              "CANT A PORCIONAR", "CANT MERMA")):
+        return out
+    try:
+        from graficos.movimientos_merma import (
+            en_kilos, fuera_de_lo_habitual, gramos_del_nombre,
+            habitual_previo)
+    except ImportError:
+        # Un `graficos` viejo en Cloud hasta el «Reboot app» (regla #357):
+        # sin la marca, no sin la vista.
+        return out
+    q = pd.to_numeric(d[c["CANT RESULT"]], errors="coerce")
+    w = pd.to_numeric(d[c["PESO RESULT"]], errors="coerce")
+    d = d.assign(_kgu=w / q)[(q > 0) & (w > 0)]
+    if d.empty or d.index[-1] != ult.name:
+        return out
+    hab = habitual_previo(d["_kgu"], d[c["COD PROD INIC"]].astype(str).str.strip())
+    gramos = pd.Series(float("nan"), index=d.index)
+    if c["PROD FINAL RESULT"] and c["UNID PROD INIC"]:
+        gramos = gramos_del_nombre(d[c["PROD FINAL RESULT"]]).where(
+            en_kilos(d[c["UNID PROD INIC"]]))
+    raro = fuera_de_lo_habitual(d["_kgu"], hab, gramos)
+    i = d.index[-1]
+    # Como en «Para revisar»: si con el peso habitual la merma sale
+    # imposible, lo habitual no le sirve a ese porcionamiento.
+    cant = pd.to_numeric(ult[c["CANT A PORCIONAR"]], errors="coerce")
+    merma = pd.to_numeric(ult[c["CANT MERMA"]], errors="coerce")
+    corr = ((merma + w[i] - q[i] * hab[i]) / cant
+            if cant and cant > 0 else float("nan"))
+    out.update(kgu=float(d.at[i, "_kgu"]), hab=float(hab[i]),
+               raro=bool(raro[i]) and bool(0 <= corr < 1))
+    return out
+
+
 def costo_de_origen(costo_unit, costo_base, costo_porc):
     """Si el costo por unidad de la receta sale de la receta base o del
     último porcionamiento: «base» o «porc», el que esté más cerca (uno solo
@@ -1018,6 +1079,8 @@ def _bloque_base(df_rb, df_po, plato, ruta, bases, porcs):
           if actual.get("es_base") else None)
     po = (porcionamientos_de(df_po, actual["cod"])
           if actual.get("es_porc") else None)
+    ult = (ultimo_porcionamiento(df_po, actual["cod"])
+           if po is not None and not po.empty else None)
     modos = [m for m, x in zip(_MODOS, (rb, po)) if x is not None]
     with st.container(key="rec_carta_base_caja"):
         with st.container(horizontal=True, vertical_alignment="center",
@@ -1046,13 +1109,32 @@ def _bloque_base(df_rb, df_po, plato, ruta, bases, porcs):
                                         label_visibility="collapsed", width=140)
             else:
                 modo = modos[0]
+            # Los saltos a Movimientos (regla #647): la curva del precio de
+            # este corte y, si su último porcionamiento tiene el peso fuera
+            # de lo habitual, ese porcionamiento en «Para revisar».
+            if modo == _MODOS[1] and ult and ult["cod_de"]:
+                if st.button("Ver curva", key="rec_carta_base_curva",
+                             help="La curva de su precio, porcionamiento por "
+                                  "porcionamiento, y qué la movió —el insumo, "
+                                  "la merma o el gramaje—, en Movimientos › "
+                                  "Rendimiento."):
+                    _saltar_a_movimientos("rend", ult, actual["cod"])
+                if ult["raro"] and _reciente(df_po, ult["fecha"]):
+                    if st.button(
+                            "Revisar", key="rec_carta_base_revisar",
+                            help=f"PO-{ult['doc']} ({ult['fecha']:%d/%m/%y}) "
+                                 f"le asignó {ult['kgu']:,.3f} por unidad y lo "
+                                 f"habitual es {ult['hab']:,.3f}: su costo, y "
+                                 "el de esta receta, pueden estar mal. Verlo en "
+                                 "Movimientos › Para revisar."):
+                        _saltar_a_movimientos("rev", ult, actual["cod"])
             if len(ruta) > 1:
                 st.button("↑ Subir", key="rec_carta_base_subir",
                           on_click=_subir_base, args=(plato,))
             st.button("✕", key="rec_carta_base_cerrar",
                       on_click=_cerrar_base, args=(plato,))
         if modo == _MODOS[1]:
-            _tabla_porcionamientos(po, actual)
+            _tabla_porcionamientos(po, actual, ult)
             return
         if rb.empty:
             st.info("La receta base no tiene insumos cargados.")
@@ -1083,10 +1165,44 @@ def _cant(v, unid):
     return f"{v:,.3f}".rstrip("0").rstrip(".") + (f" {unid.lower()}" if unid else "")
 
 
-def _tabla_porcionamientos(po, actual):
+def _reciente(df_po, fecha, dias=30):
+    """Si `fecha` cae en los últimos `dias` días con porcionamientos: el
+    rango con que abre «Para revisar». Un salto a uno más viejo llegaría a
+    una lista que no lo tiene."""
+    c = _resolver(df_po, ["FEC REGIST"])
+    if not c or pd.isna(fecha):
+        return False
+    tope = pd.to_datetime(df_po[c], errors="coerce").max()
+    return bool(fecha >= tope.normalize() - pd.Timedelta(days=dias - 1))
+
+
+def _saltar_a_movimientos(destino, ult, cod):
+    """Deja escrito a dónde se va y pide la corrida COMPLETA que cambia de
+    reporte: el botón vive en el fragment de la sección, y una corrida de
+    fragment no vuelve a elegir reporte (regla #647). Con un `graficos`
+    viejo en Cloud (regla #357), no hace nada."""
+    try:
+        import navegacion
+        from graficos import movimientos_merma as mm
+        if destino == "rev":
+            mm.ir_a_revisar(ult["doc"])
+            vista = mm.VISTA_REV
+        else:
+            mm.ir_al_corte(ult["cod_de"], cod)
+            vista = mm.VISTA_REND
+        navegacion._ir_a_vista("Movimientos", mm.RAIL_MOVIMIENTOS, vista)
+    except (ImportError, AttributeError):
+        return
+    st.rerun(scope="app")
+
+
+def _tabla_porcionamientos(po, actual, ult=None):
     """Los últimos porcionamientos del insumo abierto (regla #574). No se
     clica: el producto de origen es de otro porcionamiento o de una compra,
-    y el costo se lee acá."""
+    y el costo se lee acá. El más nuevo va en rojo si su peso por unidad
+    quedó fuera de lo habitual (`ultimo_porcionamiento`, regla #647).
+    Los formatos van en el Styler, no en `column_config`: con un Styler,
+    el que manda es el Styler."""
     if po.empty:
         st.info("No hay porcionamientos de este insumo en el parquet.")
         return
@@ -1098,7 +1214,12 @@ def _tabla_porcionamientos(po, actual):
         "Merma": po["Merma"],
         "Costo u.": po["Costo"],
     })
-    st.dataframe(v, hide_index=True, row_height=27,
+    raro = bool(ult and ult["raro"] and po["Fecha"].iloc[0] == ult["fecha"])
+    sty = (v.style.format({"Merma": "{:.0f}%", "Costo u.": "S/ {:,.2f}"})
+           .apply(lambda r: ([f"color: {ERROR}; font-weight: 600"] * len(r)
+                             if raro and r.name == 0 else [""] * len(r)),
+                  axis=1))
+    st.dataframe(sty, hide_index=True, row_height=27,
                  height=alturas.por_filas(len(v), px_fila=27, extra=38,
                                           minimo=0, rol=alturas.CARTA_RECETA),
                  column_config={
@@ -1110,11 +1231,11 @@ def _tabla_porcionamientos(po, actual):
                      "Porcionado": st.column_config.TextColumn(width=70),
                      "Salió": st.column_config.TextColumn(
                          width=62, help="Lo que salió de este corte"),
-                     "Merma": st.column_config.NumberColumn(
-                         format="%.0f%%", width=50,
+                     "Merma": st.column_config.Column(
+                         width=50,
                          help="Merma del porcionamiento, sobre lo porcionado"),
-                     "Costo u.": st.column_config.NumberColumn(
-                         format="S/ %.2f", width=66,
+                     "Costo u.": st.column_config.Column(
+                         width=66,
                          help="Costo por unidad de este corte: el del producto "
                               "porcionado, repartido entre los cortes"),
                  })

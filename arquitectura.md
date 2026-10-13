@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-646 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+647 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (210)
 
@@ -879,7 +879,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#633** — Documentos SUNAT elige su fecha con el panel de las demás tarjetas, no con la píldora de la…
 - **#640** — «Tipo» en Documentos SUNAT: QUÉ se compró —Alimentos, Otros bienes, Servicios o Financiero—.…
 
-**Fechas, rangos y cortes** (16)
+**Fechas, rangos y cortes** (17)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -897,6 +897,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#613** — El cierre de fin de mes se registra en el mes SIGUIENTE: Ajuste lo cuenta en su MES OPERATIVO
 - **#632** — Ajuste de Inventario no tiene fecha en la franja: cada vista elige la suya —una SESIÓN de…
 - **#635** — Los modos Corte / Varios de la píldora de la franja se borraron enteros: sin su único…
+- **#647** — El precio de un corte lo arma el PESO que el Almacén le asigna: el precio de los cortes en…
 
 **Asistente IA** (5)
 
@@ -949,7 +950,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (172)
+**Decisiones de diseño y UX** (173)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1123,6 +1124,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#642** — El panel de fecha elige también por SEMANAS, de lunes a domingo: cada semana del mes es UNA…
 - **#644** — «Filtros» tiene sólo lo que vale para TODO el reporte: lo que cambia unas vistas se elige en…
 - **#645** — «En qué se fue lo que entró» se cuenta de CIERRE A CIERRE de inventario, en dos vistas de una…
+- **#647** — El precio de un corte lo arma el PESO que el Almacén le asigna: el precio de los cortes en…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -50591,6 +50593,117 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-12.)
 
+647. **El precio de un corte lo arma el PESO que el Almacén le asigna: el
+     precio de los cortes en «Rendimiento», la marca «Peso por unidad
+     raro» en «Para revisar», el grupo Porcionamientos de lo general a lo
+     particular y los saltos desde Recetas › Carta costeada.**
+     2026-10-12, a pedido («marca nueva prendida y el orden del rail, así
+     como tú me sugieres, y vamos»), aprobado sobre un mockup con los
+     datos reales (https://claude.ai/artifact/QMyQGbTkZURVycZdeqRVT1).
+     Nació de una pregunta: ninguna vista mostraba la evolución del precio
+     del producto RESULTANTE de un porcionamiento — el segundo gráfico de
+     «Rendimiento» es el costo por kg del producto que ENTRÓ. En
+     `graficos/movimientos_merma.py`, `movimientos_periodo.py`,
+     `movimientos.py`, `carta_costeada.py`, `graficos/alturas.py`,
+     `estilos/_80_cards.py` y `test_graficos.py`.
+
+     **Cómo arma el Almacén el precio de un corte, medido:** reparte lo que
+     costó lo que entró entre los cortes según el PESO que les asigna
+     (`PESO RESULT`), y todos salen al mismo costo por kg asignado; la
+     merma no recibe costo. Así, precio del corte = costo por unidad que
+     entró ÷ (1 − merma) × peso asignado por unidad del corte, al céntimo
+     (PO-2610000059, lomo fino: S/ 2.100,90 ÷ 25,428 kg = S/ 82,62 el kg;
+     el medallón de 170 g, S/ 14,05). Y **la merma no se pesa: es lo
+     porcionado menos los pesos** (`CANT MERMA = CANT A PORCIONAR − Σ PESO
+     RESULT` en 7.767 de 7.770 porcionamientos). Los retazos salen baratos
+     porque se les asigna menos peso del que pesan (0,3 kg por kg).
+
+     **Por qué importa, con un caso:** el 08/10/2026 (PO-2610000070) se
+     tipearon 9,80 kg en los 14 «Pulpo cocido 70gr» (seguramente 0,98). La
+     merma quedó en 21,8 % (con el peso bien, 58,7 %: lo normal del pulpo
+     es 51–66 %, así que «Merma muy baja», con su umbral de 20 %, no lo
+     marcaba), el corte entró al Almacén a S/ 33,10 en vez de ~6,28, ése
+     pasó a ser su precio promedio, y la Fideua quedó con 54,4 % de costo
+     en vez de 25,9 %.
+
+     **Lo que se hizo:**
+     - **«Rendimiento»**: el segundo gráfico alterna «Precio del corte |
+       Costo del insumo» (abre en el corte). El del corte: un punto por
+       porcionamiento, la línea del mes y, cortada, el precio con la merma
+       normal del producto (`precio_corte_por_mes`). A la derecha,
+       «Cortes de este producto | Productos que cambiaron»: cada corte con
+       su precio antes y en los últimos 90 días y «Por qué»; un clic pone
+       su curva. Debajo del gráfico, el cambio repartido entre **insumo**,
+       **merma**, **gramaje** y **otros** (`desglose_precio`): índice de
+       Divisia de media logarítmica (LMDI-I; B. W. Ang, «The LMDI approach
+       to decomposition analysis: a practical guide», Energy Policy 33,
+       2005), que suma EXACTO el cambio. «Otros» es la mezcla de
+       porcionamientos de distinto costo; se muestra si pesa más del 5 %.
+     - **«Para revisar»**: la marca «Peso por unidad raro», prendida de
+       entrada (`pesos_por_unidad`, `marcar(..., pesos)`). La ficha suma
+       «Por u.» y «Habitual», y el aviso dice la merma con el peso
+       habitual y lo que arrastra: si el precio promedio de HOY del corte
+       es el de ese porcionamiento, los platos que lo llevan y su costo
+       corregido (`platos_con_insumo`, sobre `recetaventa.parquet`).
+     - **El producto es UNO** para «Rendimiento» y «Proveedor por kg útil»
+       (`_K_PROD`).
+     - **El grupo va de lo general a lo particular**: Porcionamientos →
+       Rendimiento → Costo por kg útil → Para revisar (era Porcionamientos
+       → Para revisar → Rendimiento → Costo por kg útil).
+     - **Recetas › Carta costeada**, en el detalle «Porcionamientos» de un
+       corte: «Ver curva» salta a «Rendimiento» parado en su producto y su
+       corte, y «Revisar» —sólo si su último porcionamiento tiene el peso
+       fuera de lo habitual y cae en los 30 días de «Para revisar»— a ese
+       porcionamiento (`ultimo_porcionamiento`). Esa fila va en rojo.
+
+     **Lo que muerde, medido:**
+     - **La marca contra los 18 meses no sirve.** Con la mediana de 18
+       meses y 2 veces, salía en 24 cortes en 30 días y 236 líneas en un
+       año, casi todas COSTUMBRE: retazos, grasa, pellejo y carcasa se
+       registran con un factor (0,1–0,3 de su peso) que un día pasa a 1,0,
+       y las conchas cambiaron de unidad. Ahora es contra la mediana de
+       los 10 porcionamientos ANTERIORES del mismo corte y el mismo
+       producto inicial (`habitual_previo`, con 5 o más), lejos es más de
+       2,5 veces o menos de 0,4, y si el nombre dice sus gramos tiene que
+       estar lejos también de ellos (`fuera_de_lo_habitual`): el «Collar /
+       Charela 125gr» se registra siempre al doble y no es un error. Y si
+       con el peso habitual la merma sale imposible (menos de 0 o 100 % o
+       más), lo habitual no le sirve a ese porcionamiento. Del 10 de
+       setiembre al 9 de octubre de 2026: 8 porcionamientos.
+     - **La tarjeta de «Rendimiento» medía 584px contra los 575 de su
+       techo** con el renglón del selector y la nota: se deslizaba 9px por
+       dentro. Los dos gráficos bajaron de 190 y 150 a 180 y 132
+       (`alturas.MERMA_FIG`, `MERMA_FIG_PRECIO`): 556px a 1323×619, y la
+       nota tiene lugar para una segunda línea.
+     - **Una columna «medium» empujó «Por qué» y «Habitual» fuera de la
+       tabla** (las dos tablas, a ~440px). Anchos fijos que suman lo que
+       mide la columna.
+     - **Dos cortes distintos con el mismo nombre corto**: «(P) Pulpo
+       Cocido 120gr x und DD» y «(Rs) Pulpo cocido 120gr x und» difieren en
+       una mayúscula. Se comparan con `casefold` y, si chocan, van enteros.
+     - **Un botón dentro de una sección es un fragment, y una corrida de
+       fragment no cambia de reporte.** El salto escribe el destino
+       (`navegacion._ir_a_vista` y las claves de `ir_al_corte` /
+       `ir_a_revisar`) y pide `st.rerun(scope="app")`: con `on_click`
+       sólo se re-ejecutaba la sección.
+     - **El producto compartido vive en DOS fragments.** Cambiarlo en uno
+       pide la corrida completa de `K_RECARGA` (#644), y sólo si la otra
+       sección ya se dibujó (`_pila_visto_<clave>`, de `seccion_perezosa`):
+       si no, cada cambio de producto pagaba la página entera. La tabla de
+       «Proveedor» se estrena (otra key) cuando el cambio viene de afuera:
+       su selección es de la KEY (#556).
+     - **Con un Styler, el formato lo pone el Styler**: la tabla de
+       porcionamientos de la Carta costeada tenía el `format` en su
+       `column_config`, y para pintar la fila en rojo pasó al Styler.
+
+     **En Cloud hace falta «Reboot app»** (#357):
+     `lineas_porcionamientos` recibe un argumento nuevo (`cod_fin`) que
+     `movimientos.py` le pasa, y `carta_costeada.py` importa de
+     `movimientos_merma.py` nombres nuevos (adentro de una función y con
+     `try`: con un paquete viejo, la Carta sigue sin los botones).
+
+     (2026-10-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50603,7 +50716,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#646**; la próxima toma el número siguiente.
+> última regla es la **#647**; la próxima toma el número siguiente.
 
 >
 

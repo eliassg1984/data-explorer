@@ -424,15 +424,19 @@ MERMA_TABLA = 27 * 9 + 38
 MERMA_CORTES = 27 * 6 + 38
 """Tope de los cortes del porcionamiento elegido, en la ficha de al lado."""
 
-MERMA_FIG = 190
+MERMA_FIG = 180
 """«Rendimiento por producto»: el % de merma de cada porcionamiento."""
 
-MERMA_FIG_PRECIO = 150
-"""«Rendimiento por producto»: el costo del día por unidad, debajo."""
+MERMA_FIG_PRECIO = 132
+"""«Rendimiento por producto»: el precio del corte (o el costo del día por
+unidad que entró), debajo. Los dos bajaron el 2026-10-12 (de 190 y 150,
+regla #647) para pagar el renglón de su selector y la nota de debajo, que
+puede ir en dos líneas: con los de antes, la tarjeta medía 584px contra
+los 575 de su techo y se deslizaba por dentro (medido a 1323×619)."""
 
 MERMA_CAMBIOS = 27 * 10 + 38
-"""Tope de «Productos que cambiaron», al lado de los dos gráficos
-(`MERMA_FIG` + `MERMA_FIG_PRECIO` ≈ 340)."""
+"""Tope de «Productos que cambiaron» y de «Cortes de este producto», al
+lado de los dos gráficos."""
 
 MERMA_PROV = 27 * 10 + 38
 """Tope de las dos tablas de «Proveedor por kg útil»."""

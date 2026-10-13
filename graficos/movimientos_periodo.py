@@ -420,7 +420,7 @@ def fmt_cant(v):
 
 def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
                            merma, fin, cant_fin, unid_fin, pprom, peso,
-                           cod=None):
+                           cod=None, cod_fin=None):
     """`(base, cortes)`: porcionamientos.parquet con los nombres de la tarjeta.
 
     EL GRANO ES LA TRAMPA (regla #510). El parquet trae una fila por CORTE
@@ -451,9 +451,10 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
     del día para quien quiera los dos.
 
     `cortes` son las filas del parquet con producto final, una por corte:
-    `doc`, `fin`, `cant`, `unid` (la del corte), `pprom`, `peso` (en la
-    unidad del producto INICIAL: es la parte de lo que entró que fue a ese
-    corte) y `valor` (`cant × pprom`)."""
+    `doc`, `fin`, `cod_fin` (su código, vacío si no se pidió), `cant`,
+    `unid` (la del corte), `pprom`, `peso` (en la unidad del producto
+    INICIAL: es la parte de lo que entró que fue a ese corte) y `valor`
+    (`cant × pprom`)."""
     idx = d.index
     nan = pd.Series(float("nan"), index=idx)
 
@@ -472,6 +473,7 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
         "cant": _num(cant),
         "merma_cant": _num(merma),
         "fin": _texto(d, fin),
+        "cod_fin": _texto(d, cod_fin),
         "cant_fin": _num(cant_fin),
         "unid_fin": _texto(d, unid_fin),
         "pprom": _num(pprom),
@@ -503,8 +505,8 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
     base["fam"] = ""
     base["vacio"] = False
 
-    cortes = t.loc[t["con_fin"], ["doc", "fin", "cant_fin", "unid_fin",
-                                  "pprom", "peso", "valor_fin"]]
+    cortes = t.loc[t["con_fin"], ["doc", "fin", "cod_fin", "cant_fin",
+                                  "unid_fin", "pprom", "peso", "valor_fin"]]
     cortes = cortes.rename(columns={"cant_fin": "cant", "unid_fin": "unid",
                                     "valor_fin": "valor"})
     return base, cortes.reset_index(drop=True)

@@ -2376,9 +2376,12 @@ CSS = """    /* ================================================================
     .st-key-rec_rb_anidada_hdr [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
-    /* «↑ Subir» y «✕» de la receta base: chicos, del alto del título. */
+    /* «↑ Subir» y «✕» de la receta base: chicos, del alto del título. Y
+       «Ver curva» / «Revisar», los saltos a Movimientos (regla #647). */
     .st-key-rec_carta_base_subir button,
     .st-key-rec_carta_base_cerrar button,
+    .st-key-rec_carta_base_curva button,
+    .st-key-rec_carta_base_revisar button,
     .st-key-rec_rb_anidada_subir button,
     .st-key-rec_rb_anidada_cerrar button {
         min-height: 0 !important;
@@ -2386,9 +2389,16 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_base_subir button p,
     .st-key-rec_carta_base_cerrar button p,
+    .st-key-rec_carta_base_curva button p,
+    .st-key-rec_carta_base_revisar button p,
     .st-key-rec_rb_anidada_subir button p,
     .st-key-rec_rb_anidada_cerrar button p {
         font-size: 12px !important;
+        white-space: nowrap !important;
+    }
+    .st-key-rec_carta_base_revisar button p {
+        color: var(--danger-text) !important;
+        font-weight: 600 !important;
     }
     .rec-vend-rot {
         margin: 0;
@@ -5810,9 +5820,38 @@ CSS = """    /* ================================================================
     }
     /* «Valorizar la merma» en «Para revisar», en el renglón del caption   */
     /* que antes decía dónde cambiarla: compacto, para no estirarlo.       */
-    .st-key-mov_merma_rev_pie [data-testid="stButtonGroup"] button {
+    .st-key-mov_merma_rev_pie [data-testid="stButtonGroup"] button,
+    .st-key-mov_merma_rend_modo [data-testid="stButtonGroup"] button,
+    .st-key-mov_merma_rend_lista [data-testid="stButtonGroup"] button {
         min-height: 26px !important; height: 26px !important;
         padding: 0 10px !important; font-size: 12px !important;
+    }
+    /* «Rendimiento» (regla #647): el renglón de arriba del segundo        */
+    /* gráfico —su título y «Precio del corte | Costo del insumo»— y la    */
+    /* nota de debajo. El título se corta con «…» antes que empujar al     */
+    /* selector, y los dos markdown sin el -16px de Streamlit (#162).      */
+    .st-key-mov_merma_rend_g2_cab {
+        flex-wrap: nowrap !important;
+    }
+    .st-key-mov_merma_rend_g2_cab > .stElementContainer:first-child {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+    }
+    .st-key-mov_merma_rend_g2_cab [data-testid="stMarkdownContainer"],
+    .st-key-mov_merma_rend_nota [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .mov-merma-g2-tit {
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .mov-merma-nota {
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--text-secondary);
     }
     [class*="st-key-mov_f_"][class*="_aj_"] [data-testid="stCaptionContainer"] p {
         font-size: 11.5px !important;

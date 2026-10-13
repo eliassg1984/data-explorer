@@ -239,10 +239,14 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # Mermas» del Almacén no dice — qué porcionamiento revisar, cómo rinde
     # un producto en el tiempo y cuánto cuesta el kg útil según a quién se
     # le compró. Viven en `graficos/movimientos_merma.py`.
+    # El ORDEN va de lo general a lo particular desde el 2026-10-12 (regla
+    # #647), a pedido: cuánto se perdió → en qué producto y desde cuándo →
+    # a quién comprarlo → los casos sueltos. «Para revisar» es la lista de
+    # trabajo y va al final; hasta ese día era la segunda.
     ("Porcionamientos", (("Porcionamientos", "Porcionamientos", ":material/content_cut:"),
-                         ("Merma para revisar", "Para revisar", ":material/flag:"),
                          ("Rendimiento por producto", "Rendimiento", ":material/monitoring:"),
-                         ("Proveedor por kg útil", "Costo por kg útil", ":material/local_shipping:"))),
+                         ("Proveedor por kg útil", "Costo por kg útil", ":material/local_shipping:"),
+                         ("Merma para revisar", "Para revisar", ":material/flag:"))),
     # «Producción» (2026-09-30, regla #575): las órdenes de producción del
     # Almacén, lo que las áreas preparan con sus recetas base. Va junto a
     # Porcionamientos —las dos transformaciones que se registran en el
@@ -278,9 +282,9 @@ _PILA = pila_sin_tablas((
     ("mov_sec_destino",     "En qué se fue cada producto"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
     ("mov_sec_porc",        "Porcionamientos"),
-    ("mov_sec_merma_rev",   "Merma para revisar"),
     ("mov_sec_merma_rend",  "Rendimiento por producto"),
     ("mov_sec_merma_prov",  "Proveedor por kg útil"),
+    ("mov_sec_merma_rev",   "Merma para revisar"),
     ("mov_sec_prod",        "Producción"),
     ("mov_sec_consumo",     "Consumo según recetas"),
 ))
@@ -846,6 +850,7 @@ _COLS_PORC = {
     "unid_fin": "UNID PROD FIN",
     "pprom": "PREC PROM PROD FIN",
     "peso": "PESO RESULT",
+    "cod_fin": "COD PROD FINAL",
 }
 """Las columnas de `porcionamientos.parquet` (la fila 9 del Sheet de
 consultas, 2026-09-23) por el nombre que pide `lineas_porcionamientos`.

@@ -918,7 +918,13 @@ toma la cabecera una vez por `COD PORC`, y la merma en soles sale de los
 cortes: Σ(`CANT RESULT` × `PREC PROM PROD FIN`) es lo que costó lo que
 entró (validado contra lo pagado en compras). Su tarjeta, «Porcionamientos»,
 es la tercera «por período» de Movimientos y la única que mide merma y no
-un valorizado. Regla #510.
+un valorizado. Regla #510. Y el precio de cada CORTE lo arma el Almacén
+repartiendo por PESO: precio = costo por unidad que entró ÷ (1 − merma) ×
+peso asignado por unidad, y la merma ES lo porcionado menos los pesos —un
+peso mal tipeado mueve la merma y el precio de todos los cortes, y el corte
+entra al Almacén a ese precio: así la Fideua llegó al 54 % de costo—. Lo
+marca «Peso por unidad raro» de Para revisar
+(`graficos/movimientos_merma.py::pesos_por_unidad`). Regla #647.
 
 La cuarta, `ventas.parquet`: **una fila por ÍTEM Y POR FORMA DE PAGO**. Un
 plato pagado con cheque + tarjeta sale dos veces con su venta entera: sumar

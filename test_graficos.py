@@ -7611,6 +7611,190 @@ def _pruebas_merma():
     return fallos
 
 
+def _pruebas_cortes_y_peso():
+    """Movimientos › el precio de los cortes y su peso (regla #647).
+
+      1. EL PRECIO DE UN CORTE es lo que costó lo que entró ÷ lo que quedó ×
+         su peso por unidad, y su cambio se reparte entre el insumo, la
+         merma, el gramaje y otros: los cuatro suman EXACTO el cambio. Mes a
+         mes, la línea «con la merma normal».
+      2. LA MARCA «Peso por unidad raro»: contra los porcionamientos
+         ANTERIORES del mismo corte, y lejos también de los gramos del
+         nombre; corrige la merma y pesa en el impacto. La COSTUMBRE —un
+         corte que se registra siempre a 2,6 veces su nombre— no es marca.
+      3. LO QUE ARRASTRA: el precio con el peso habitual y los platos
+         ACTIVOS que lo llevan, con su costo corregido.
+      4. LOS SALTOS desde Recetas: el último porcionamiento de un corte y si
+         su peso es raro; el rail y las vistas que nombran existen, y el
+         grupo Porcionamientos va de lo general a lo particular.
+    """
+    import re
+
+    import pandas as pd
+
+    from graficos import carta_costeada as cc
+    from graficos import movimientos as mov
+    from graficos import movimientos_merma as mm
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    cortes #647 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA cortes #647 · {nombre}: {got!r} != {exp!r}")
+
+    filas = []
+
+    def porc(doc, dia, cod, prod, cant, merma, costo, cortes):
+        # Cada corte: (nombre, código, cantidad, peso). El precio lo pone el
+        # Almacén: lo que costó ÷ la suma de los pesos × su peso por unidad.
+        ckg = costo / sum(p for *_, p in cortes)
+        for fin, cod_fin, cant_fin, peso in cortes:
+            filas.append({
+                "COD PORC": doc, "FEC REGIST": pd.Timestamp(dia),
+                "SUB ALMACEN": "PRODUCCION", "USUARIO REG": "CARLOS",
+                "COD PROD INIC": cod, "PROD INICIAL": prod,
+                "UNID PROD INIC": "KILOS", "CANT A PORCIONAR": cant,
+                "CANT MERMA": merma, "PROD FINAL RESULT": fin,
+                "COD PROD FINAL": cod_fin, "CANT RESULT": cant_fin,
+                "UNID PROD FIN": "UND", "PREC PROM PROD FIN": ckg * peso / cant_fin,
+                "PESO RESULT": peso})
+
+    dias = pd.date_range("2026-06-01", periods=8, freq="10D")
+    # D, el lomo: antes a 60 el kg y 20 % de merma; desde el 21 de julio a
+    # 70 y 30 %. El medallón pesa siempre 0,17 y los retazos se registran
+    # con el 30 % de su peso.
+    for i, dia in enumerate(dias):
+        if dia < pd.Timestamp("2026-07-20"):
+            porc(f"D{i}", dia, "D", "Lomo", 10.0, 2.0, 600.0,
+                 [("(P) Lomo Medallon 170gr x und (produccion)", "D1", 40.0, 6.8),
+                  ("(P) Retazos de carne lomo x Kg (produccion)", "D2", 4.0, 1.2)])
+        else:
+            porc(f"D{i}", dia, "D", "Lomo", 10.0, 3.0, 700.0,
+                 [("(P) Lomo Medallon 170gr x und (produccion)", "D1", 34.0, 5.78),
+                  ("(P) Retazos de carne lomo x Kg (produccion)", "D2", 1.22 / 0.3, 1.22)])
+    # C, el pulpo: ocho normales (50 % de merma) y uno con 7 kg tipeados
+    # en los 20 de 70 g (lo habitual: 1,4). El collar de 125 g se registra
+    # SIEMPRE a 0,325 kg por unidad: costumbre.
+    for i, dia in enumerate(dias):
+        porc(f"C{i}", dia + pd.Timedelta(days=1), "C", "Pulpo entero", 10.0,
+             5.0, 400.0,
+             [("(P) Pulpo cocido 70gr x und (produccion)", "C1", 20.0, 1.4),
+              ("(Rs) Collar 125gr x und DD", "C2", 4.0, 1.3),
+              ("(P) Pulpo cocido 120gr x und (produccion)", "C3", 20.0, 2.3)])
+    porc("2609000009", "2026-09-15 20:57", "C", "Pulpo entero", 10.0, 0.7,
+         400.0, [("(P) Pulpo cocido 70gr x und (produccion)", "C1", 20.0, 7.0),
+                 ("(Rs) Collar 125gr x und DD", "C2", 4.0, 1.3),
+                 ("(P) Pulpo cocido 120gr x und (produccion)", "C3", 10.0, 1.0)])
+    d = pd.DataFrame(filas)
+    cols = dict(fecha="FEC REGIST", doc="COD PORC", area="SUB ALMACEN",
+                tipo="USUARIO REG", prod="PROD INICIAL", cod="COD PROD INIC",
+                unid="UNID PROD INIC", cant="CANT A PORCIONAR",
+                merma="CANT MERMA", fin="PROD FINAL RESULT",
+                cant_fin="CANT RESULT", unid_fin="UNID PROD FIN",
+                pprom="PREC PROM PROD FIN", peso="PESO RESULT",
+                cod_fin="COD PROD FINAL")
+    base, cortes = mm.porcionamientos(d, cols)
+    fin = pd.Timestamp("2026-10-15")
+
+    # ── 1. El precio de los cortes y su desglose ──────────────────────────
+    xs = mm.valorizar(base[base["cod"] == "D"], mm.VALOR_DIA)
+    pc = mm.precios_de_cortes(xs, cortes, fin)
+    med = pc.set_index("clave").loc["D1"]
+    check("los cortes del de más valor al de menos, por su código",
+          pc["clave"].tolist(), ["D1", "D2"])
+    check("el precio de antes y el de los 90 días: costo ÷ lo que quedó × peso",
+          (round(med["a"]["P"], 4), round(med["b"]["P"], 4)), (12.75, 17.0))
+    des = med["desglose"]
+    check("los cuatro factores suman EXACTO el cambio",
+          round(sum(des.values()), 9), round(17.0 - 12.75, 9))
+    check("sin cambio de gramaje ni de mezcla, esos dos dan cero",
+          (round(des["gramaje"], 9), round(des["otros"], 9)), (0.0, 0.0))
+    check("el insumo pesó más que la merma, y es la causa",
+          (des["insumo"] > des["merma"] > 0, med["causa"]), (True, "insumo"))
+    filas_d1 = cortes[cortes["doc"].isin(xs["doc"])
+                      & (mm.clave_corte(cortes) == "D1")]
+    pm = mm.precio_corte_por_mes(xs, filas_d1, 0.2).set_index("mes")
+    ago = pm.loc[pd.Timestamp("2026-08-15")]
+    check("mes a mes: el precio y el precio con la merma normal",
+          (round(float(ago["precio"]), 4), round(float(ago["normal"]), 4)),
+          (17.0, round(17.0 * 0.7 / 0.8, 4)))
+    check("el nombre corto de un corte",
+          [mm.nombre_corto(n) for n in (
+              "(P) Lomo trozos saltado 180gr x und (produccion)",
+              "(Rs) Collar / Charela 125gr x und DD")],
+          ["Lomo trozos saltado 180gr", "Collar / Charela 125gr"])
+
+    # ── 2. La marca del peso ──────────────────────────────────────────────
+    pesos = mm.pesos_por_unidad(base, cortes)
+    raros = pesos[pesos["raro"]]
+    check("sólo el 70 g tipeado ×5 es raro; el collar de siempre, no",
+          sorted(zip(raros["doc"], raros["cod_fin"])), [("2609000009", "C1")])
+    sep = mm.valorizar(base[base["fecha"] >= "2026-09-01"].reset_index(drop=True),
+                       mm.VALOR_DIA)
+    hist = base[base["fecha"] < "2026-09-01"]
+    b = mm.marcar(sep, mm.normales(hist), cortes, pesos)
+    f = b.iloc[0]
+    check("la marca, la merma con el peso habitual y lo que escondió",
+          (bool(f["m_peso"]), round(float(f["pct_corr"]), 4),
+           round(float(f["dpeso"]), 4)), (True, 0.63, 5.6))
+    check("el impacto: lo registrado menos lo del peso habitual",
+          round(float(mm.impacto(b, ["peso"]).iloc[0]), 2), round(-5.6 * 40.0, 2))
+    check("sin `pesos`, ninguna marca de peso",
+          bool(mm.marcar(sep, mm.normales(hist), cortes)["m_peso"].any()), False)
+    check("la marca abre prendida", "peso" in mm.MARCAS_DE_ENTRADA, True)
+
+    # ── 3. Lo que arrastra ────────────────────────────────────────────────
+    linea = pesos[(pesos["doc"] == "2609000009") & (pesos["cod_fin"] == "C1")].iloc[0]
+    p_corr = mm.precio_con_peso_habitual(f, linea)
+    check("el precio con el peso habitual: lo que costó ÷ lo que habría "
+          "quedado × su peso", round(p_corr, 4), round(400.0 / 3.7 * 0.07, 4))
+    p_dia = float(linea["pprom"])
+    rv = pd.DataFrame({
+        "COD PLATO": ["P1", "P1", "P2", "P3"],
+        "NOMB PLATO": ["Fideua", "Fideua", "Arroz", "Viejo"],
+        "ITEM VENTA ACTIVO": ["ACTIV", "ACTIV", "ACTIV", "INACTIV"],
+        "COD INS": ["C1", "X", "C1", "C1"],
+        "TOTAL": [p_dia, 10.0, 2 * p_dia, p_dia],
+        "CST SALON": [40.0, 40.0, 50.0, 30.0],
+        "%CST SALON": [0.4, 0.4, 0.5, 0.3]})
+    pl = mm.platos_con_insumo(rv, "C1", p_corr / p_dia)
+    check("los platos activos que lo llevan, con su costo corregido",
+          (pl["plato"].tolist(), [round(v, 4) for v in pl["costo_corr"]],
+           round(float(pl.set_index("plato").loc["Fideua", "pct_corr"]), 4)),
+          (["Arroz", "Fideua"], [round(50 - 2 * p_dia + 2 * p_corr, 4),
+                                 round(40 - p_dia + p_corr, 4)],
+           round((40 - p_dia + p_corr) * 0.4 / 40, 4)))
+
+    # ── 4. Los saltos y el orden ──────────────────────────────────────────
+    u = cc.ultimo_porcionamiento(d, "C1")
+    check("desde Recetas: el último porcionamiento del corte y su peso raro",
+          (u["doc"], u["cod_de"], u["raro"], round(u["kgu"], 3), round(u["hab"], 3)),
+          ("2609000009", "C", True, 0.35, 0.07))
+    check("el collar de siempre no se marca; un código sin porcionamientos, None",
+          (cc.ultimo_porcionamiento(d, "C2")["raro"],
+           cc.ultimo_porcionamiento(d, "ZZ"), cc.ultimo_porcionamiento(None, "C1")),
+          (False, None, None))
+    src = open("graficos/movimientos.py", encoding="utf-8").read()
+    rail = re.search(r'_render_rail\(_RAIL_CATEGORIAS,\s*"([^"]+)"', src)
+    check("el rail al que salta Recetas es el de Movimientos",
+          rail.group(1) if rail else None, mm.RAIL_MOVIMIENTOS)
+    pila = dict(mov._PILA)
+    check("las vistas y secciones a las que se salta existen en la pila",
+          (pila.get(mm.SEC_REND), pila.get(mm.SEC_REV), pila.get(mm.SEC_PROV) is not None),
+          (mm.VISTA_REND, mm.VISTA_REV, True))
+    orden = [s for s, _ in mov._PILA if s in ("mov_sec_porc", mm.SEC_REND,
+                                              mm.SEC_PROV, mm.SEC_REV)]
+    check("Porcionamientos, de lo general a lo particular",
+          orden, ["mov_sec_porc", mm.SEC_REND, mm.SEC_PROV, mm.SEC_REV])
+    check("la consulta trae el código de cada corte",
+          mov._COLS_PORC.get("cod_fin"), "COD PROD FINAL")
+    return fallos
+
+
 def _pruebas_salidas_comparar():
     """Movimientos › salidas: la causa y los años anteriores (regla #614).
 
@@ -11302,6 +11486,7 @@ def main():
     fallos += _pruebas_salidas_comparar()
     fallos += _pruebas_sin_plato()
     fallos += _pruebas_merma()
+    fallos += _pruebas_cortes_y_peso()
 
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
     fallos += _pruebas_carta_costeada()
