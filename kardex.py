@@ -199,6 +199,25 @@ En el restaurante entero suman cero, y contados de un solo lado inflan lo
 que «entró»."""
 
 
+def sql_filas(relacion, desde, hasta):
+    """Las filas del kardex entre `desde` (desde las 00:00) y `hasta` (hasta
+    las 23:59), tal cual —hora × área × producto × tipo, con la foto del
+    stock—, sin la fila del saldo inicial. Las lee Ajuste › «Análisis de
+    diferencias» (`diferencias_ajuste.calcular`, regla #650) para armar la
+    cuenta de cada línea entre sus dos conteos y el área del otro lado de un
+    requerimiento."""
+    d0 = dt.datetime.combine(desde, dt.time(0, 0))
+    d1 = dt.datetime.combine(hasta, dt.time(0, 0)) + dt.timedelta(days=1)
+    return f"""
+        SELECT "{COL_FECHA}", "CODIGO AREA", "CODIGO PRODUCTO", "COD TIPO",
+               "CANT INGRESO", "CANT SALIDA", "MOVIMIENTOS", "STOCK DESPUES"
+        FROM {relacion}
+        WHERE "COD TIPO" <> 'SI'
+          AND "{COL_FECHA}" >= TIMESTAMP '{d0:%Y-%m-%d %H:%M:%S}'
+          AND "{COL_FECHA}" < TIMESTAMP '{d1:%Y-%m-%d %H:%M:%S}'
+    """
+
+
 def sql_dias_ajuste(relacion):
     """Los días con algún ajuste de inventario (tipo 93): de ahí salen las
     sesiones de conteo (`cortes.sesiones_inventario`) que cortan los

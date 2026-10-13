@@ -415,6 +415,17 @@ DESTINO_FIG = 140
 producto» (regla #645): lo que salió apilado, el sobrante debajo del cero y
 una raya con lo que entró."""
 
+DIFERENCIAS_TABLA = 27 * 28 + 38
+"""Tope de la lista de Ajuste › «Análisis de diferencias» (2026-10-13, regla
+#650): veintiocho filas de 27 y la cabecera, lo que mide la ficha de una
+línea típica (~980px, medido sobre el cierre de setiembre 2026). La ficha va
+AL COSTADO y es más alta que una pantalla, así que la tarjeta no lleva techo
+(`estilos/_80_cards.py`) y la lista se desliza por dentro."""
+
+DIFERENCIAS_FIG = 120
+"""El stock en el sistema entre los dos conteos de la línea elegida en
+«Análisis de diferencias» (regla #650): una escalera, con el cero marcado."""
+
 # ── Movimientos › las tres vistas de merma (2026-10-08, regla #615) ─────
 # Cada tarjeta entra en la pantalla del usuario (~575px, regla #574); lo
 # que no entra se desliza dentro de su tabla.

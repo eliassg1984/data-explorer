@@ -1204,6 +1204,29 @@ de faltante del conteo.
   los lee con `ast` (un nombre de constante ahí revienta la batería).
 - **Tocar la cuenta es subir `sin_plato.VERSION`.**
 
+## Por qué no cuadra cada línea: Ajuste › «Análisis de diferencias»
+
+Desde el 2026-10-13 (regla #650): la lista de faltantes o sobrantes de
+una sesión con el POSIBLE ORIGEN de cada línea (producto × área) y la
+ficha de la elegida al costado. La cuenta es `diferencias_ajuste.py`
+(puro, lo vigila `test_graficos.py::_pruebas_diferencias_ajuste`); la
+carga, `data.diferencias_ajuste_sesion`, en caché de disco por sesión; la
+vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
+
+- **El conteo anterior de una línea no es el cierre anterior**: es el
+  último de ese producto en esa área (en setiembre 2026, el parcial del
+  15–17 set para 920 de 988 líneas). Con él y la ventana por HORA, el
+  kardex cierra la cuenta en el 97 % de las líneas.
+- **Las recetas se leen línea por línea con `T DESCARG`** (#648): «se
+  produjo sin orden» sólo vale para una receta base que algo descarga
+  COMO PRODUCTO; una DD va por insumo y no lleva orden.
+- **El área de descargo de un plato es `SUBALM INS`**, no `AREA PROD`.
+- **Recetas × vendido no cuadra con el descargo del kardex** (31 % de
+  las líneas a ±10 %): en la ficha va con «≈», sin compararlo.
+- **El 74 % del sobrante de un cierre es el sistema en negativo**: se
+  descargó antes de que entrara nada. No es mercadería que apareció.
+- **Tocar la cuenta es subir `diferencias_ajuste.VERSION`.**
+
 ## El consumo según recetas baja hasta lo que se COMPRA
 
 Movimientos › «Consumo según recetas» (2026-09-28): cada plato vendido,

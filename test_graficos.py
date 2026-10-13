@@ -6501,17 +6501,20 @@ def _pruebas_fechas_ajuste():
     check("ningún reporte declara \"cortes\" (los modos de la franja ya no existen)",
           [r for r, c in data.REPORTES.items() if "cortes" in c], [])
     from graficos import ajuste as aj
-    check("una sola pila con las cinco vistas",
+    # «Diferencias» se sumó el 2026-10-13 (regla #650), entre las vistas de
+    # un conteo y las del tiempo.
+    check("una sola pila con las seis vistas",
           [c for c, _v in aj._PILA],
           ["aj_sec_cascada", "aj_sec_heatmap", "aj_sec_distribucion",
-           "aj_sec_evolucion", "aj_sec_detalle"])
+           "aj_sec_diferencias", "aj_sec_evolucion", "aj_sec_detalle"])
     check("se fue la partición del rango por categoría",
           hasattr(aj, "categoria_rango_ajuste"), False)
     fuentes = {n: (raiz / "graficos" / "ajuste" / f"{n}.py").read_text(
         encoding="utf-8") for n in ("_cascada", "_heatmap", "_distribucion",
-                                    "_evolucion", "_pivote")}
+                                    "_evolucion", "_pivote", "_diferencias")}
     check("las vistas de sesión dibujan el selector con flechas",
-          [n for n in ("_cascada", "_heatmap") if '"ajses_' not in fuentes[n]]
+          [n for n in ("_cascada", "_heatmap", "_diferencias")
+           if '"ajses_' not in fuentes[n]]
           + ([] if re.search(r'selector_sesion\(\s*"ajses_dist"',
                              fuentes["_distribucion"])
              else ["_distribucion"]), [])
@@ -8219,6 +8222,159 @@ def _pruebas_sin_plato():
                 if "movimientos_kardex_mes" in p.read_text(encoding="utf-8")
                 and p.name != "test_graficos.py"]
     check("nadie lee ya el kardex por mes", usan_mes, [])
+    return fallos
+
+
+def _pruebas_diferencias_ajuste():
+    """Ajuste › «Análisis de diferencias» (regla #650): `diferencias_ajuste.py`
+    sobre un conteo de mentira con cada caso real del cierre de setiembre
+    2026.
+
+      1. LA CUENTA DE CADA LÍNEA CIERRA contra SU conteo anterior (aquí, un
+         parcial), y entró y salió van POR MOTIVO: el requerimiento dice de
+         qué área vino; la nota de salida se parte por su tipo.
+      2. LAS PISTAS: el traslado entre áreas, la producción sin orden (el
+         insumo falta, lo que se hace con él sobra en negativo y la receta
+         base no se produce), el sistema en negativo, el conteo que revierte
+         al anterior, lo que ninguna receta usa y los platos que no se
+         vendieron.
+      3. «DESCARGA POR INSUMO» (#648): una receta base DD que los platos
+         abren por insumo no lleva orden, así que su insumo faltante y ella
+         sobrante NO son una producción sin registrar.
+      4. LA VISTA está en el rail de Ajuste.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+    from graficos import ajuste as aj
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #650 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #650 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {0: "ALMACEN CENTRAL", 1: "COCINA"}
+    PROD = {10: ("Langostino x und", "UND", 6.6),
+            20: ("(P) Milanesa x und (produccion)", "UND", 23.0),
+            21: ("(Rs) Milanesa x und (calientes)", "UND", 25.0),
+            30: ("(Rs) Zumo de limon DD", "LITROS", 8.0),
+            31: ("Limon", "KILOS", 4.0), 40: ("Pan x Kg", "KILOS", 9.0),
+            50: ("Bolsas al vacio", "UND", 0.2), 60: ("Goma Xantana", "KILOS", 5.0),
+            70: ("Aceite Frituras", "LITROS", 7.0)}
+
+    def fila(t, a, c, s, k):
+        n, u, p = PROD[c]
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "ALIMENTOS", "SUBFAMILIA": "ABARROTES",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": u,
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": p, "AJUSTE VALORIZADO": (k - s) * p}
+    t0, t1 = "2026-09-16 17:30", "2026-10-01 17:35"
+    antes = [(0, 10, 36, 36), (1, 10, 0, 0), (1, 20, 0, 0), (1, 21, 0, 0), (1, 30, 0, 0),
+             (1, 31, 10, 10), (1, 40, 10, 10), (1, 50, 100, 100), (1, 60, 3, 2),
+             (1, 70, 10, 10)]
+    ahora = [(0, 10, 36, 0), (1, 10, -17, 22), (1, 20, 44, 0), (1, 21, -40, 5),
+             (1, 30, 0, 3), (1, 31, 2, 0), (1, 40, 7, 6), (1, 50, 100, 80), (1, 60, 2, 3),
+             (1, 70, 10, 5)]
+    ajuste = pd.DataFrame([fila(t0, *x) for x in antes] + [fila(t1, *x) for x in ahora])
+
+    def kx(t, a, c, tipo, ent, sal, stock, movs=1):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": tipo, "CANT INGRESO": ent,
+                "CANT SALIDA": sal, "MOVIMIENTOS": movs, "STOCK DESPUES": stock}
+    kardex = pd.DataFrame([
+        kx("2026-09-20 12:00", 1, 10, "95", 0, 17, -17),
+        kx("2026-09-18 10:00", 0, 20, "99", 0, 44, 0),
+        kx("2026-09-18 10:00", 1, 20, "99", 44, 0, 44),
+        kx("2026-09-22 13:00", 1, 21, "95", 0, 40, -40),
+        kx("2026-09-21 13:00", 1, 31, "95", 0, 8, 2),
+        kx("2026-09-25 09:00", 1, 40, "98", 0, 3, 7, movs=2),
+    ])
+    rv = pd.DataFrame([
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI", "COD PLATO": cp,
+         "NOMB PLATO": pl, "COD INS": f"{ci:07d}", "CANTIDAD": q, "FACTOR": 1.0,
+         "SUBALM INS": "COCINA", "T DESCARG": t, "FECH MODIF": pd.Timestamp("2026-05-01")}
+        for cp, pl, ci, q, t in (("0000900", "Cotoletta", 21, 1.0, "PRODUCTO"),
+                                 ("0000901", "Mojito", 30, 0.05, "INSUMO"),
+                                 ("0000902", "Huevo frito", 70, 0.1, "PRODUCTO"))])
+    rb = pd.DataFrame([
+        {"RB ACT": "RB.ACTIV", "COD PROD RB": f"{p:07d}", "RB NOMBRE": PROD[p][0],
+         "COD INS RB": f"{c:07d}", "INSUMO": PROD[c][0], "CANT": q, "FACTOR INS": 1.0,
+         "AREA DESC RB": "COCINA", "T DESCARG": "PRODUCTO",
+         "FECH REG": pd.Timestamp("2026-05-01")}
+        for p, c, q in ((21, 20, 1.0), (30, 31, 1.2))])
+    carta = pd.DataFrame(columns=["TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA"])
+    porc = pd.DataFrame(columns=["COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT",
+                                 "PROD INICIAL", "COD PORC", "FEC REGIST", "CANT A PORCIONAR"])
+    ordenes = pd.DataFrame(columns=["NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO",
+                                    "CANTIDAD"])
+    salidas = pd.DataFrame([
+        {"NOMBRE ESTADO SALIDA": "PROCESADO", "AREA": "COCINA", "COD PRODUCTO": "0000040",
+         "FECHA PROCESADO": pd.Timestamp("2026-09-25 09:10"), "CANT SALIDA": q,
+         "TIPO DESCARGO": tp}
+        for q, tp in ((2.0, "Bajas"), (1.0, "Comida Personal"))])
+    venta = pd.DataFrame([
+        {"producto": cp, "dia": pd.Timestamp(d), "unidades": u, "costo": 0.0,
+         "unidades_costeadas": 0.0}
+        for cp, d, u in (("0000900", "2026-09-22", 40), ("0000901", "2026-09-21", 160))])
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, salidas,
+                    venta)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+
+    def pistas(a, c):
+        return [(p["t"], p["f"]) for p in F[de[(a, c)]["id"]]["pistas"]]
+
+    def ti(a, c, t):
+        return [p["ti"] for p in F[de[(a, c)]["id"]]["pistas"] if p["t"] == t]
+
+    # 1 — la cuenta y los motivos
+    check("una línea por producto y área con diferencia", len(L), 10)
+    check("contado antes + entró − salió = sistema, en todas",
+          sorted(L["gap"].abs().round(6).unique().tolist()), [0.0])
+    check("el conteo anterior es el parcial, no un cierre",
+          sorted(set(L["ses0"])), ["Parcial · 16 set"])
+    check("el requerimiento dice de qué área vino",
+          F[de[(1, "20")]["id"]]["ent"], [["Requerimiento de Almacen Central", 44.0, 1]])
+    check("la nota de salida se parte por su tipo",
+          F[de[(1, "40")]["id"]]["sal"],
+          [["Nota de salida · Bajas", 2.0, 1], ["Nota de salida · Comida Personal", 1.0, 1]])
+    # 2 — las pistas
+    check("el traslado: falta en el Almacén lo que sobra en Cocina",
+          ("area", 1) in pistas(0, "10"), True)
+    check("Cocina: el sobrante corrige un negativo", ("neg", 1) in pistas(1, "10"), True)
+    check("el insumo falta y lo que se hace con él sobra", ("prod", 1) in pistas(1, "20"), True)
+    check("y su receta base se vendió sin orden",
+          ti(1, "20", "nada"), ["Su receta base no se produjo"])
+    check("la receta base que nadie produce", ti(1, "21", "receta"),
+          ["Receta base sin órdenes"])
+    check("a la receta base le faltan sus insumos", ti(1, "21", "prod"),
+          ["Faltan sus insumos"])
+    check("lo que ninguna receta usa", de[(1, "50")]["pista_t"], "nadie")
+    check("el conteo que revierte al anterior", ("rev", 1) in pistas(1, "60"), True)
+    check("los platos que no se vendieron", ti(1, "70", "nada"),
+          ["Sus platos no se vendieron"])
+    # 3 — descarga por insumo
+    check("una DD por insumo no es una producción sin registrar",
+          [t for t, _ in pistas(1, "31") + pistas(1, "30") if t == "prod"], [])
+    check("cobertura: soles del faltante y del sobrante",
+          tuple(round(x, 2) for x in da.cobertura(L)[:2]),
+          (round(36 * 6.6 + 44 * 23 + 2 * 4 + 9 + 20 * 0.2 + 5 * 7, 2),
+           round(39 * 6.6 + 45 * 25 + 3 * 8 + 5, 2)))
+    check("los números como el resto de Ajuste", (da.es(1135.8), da.es(-2.0)),
+          ("1,135.8", "−2"))
+    # 4 — la vista
+    check("la vista está en el rail de Ajuste",
+          [v[0] for _, vs in aj._AJUSTE_RAIL_CATEGORIAS for v in vs if v[0] == "Diferencias"],
+          ["Diferencias"])
     return fallos
 
 
@@ -11617,6 +11773,7 @@ def main():
     fallos += _pruebas_requerimientos_por_area()
     fallos += _pruebas_salidas_comparar()
     fallos += _pruebas_sin_plato()
+    fallos += _pruebas_diferencias_ajuste()
     fallos += _pruebas_merma()
     fallos += _pruebas_cortes_y_peso()
 

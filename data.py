@@ -19,6 +19,7 @@ import consumo_recetas
 import kardex
 import analisis_stock
 import sin_plato
+import diferencias_ajuste
 from cortes import sesiones_inventario
 
 
@@ -1424,6 +1425,7 @@ def limpiar_cache(archivo):
     _movimientos_cacheable.clear()
     _venta_clase_dia_cacheable.clear()
     _sin_plato_cacheable.clear()
+    _diferencias_cacheable.clear()
     _sello_r2.clear()
     _SELLOS.pop(archivo, None)
 
@@ -2181,6 +2183,65 @@ def sin_plato_por_cierre():
             kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
             sellos=tuple((a, sello_datos(a)) for a in _ARCHIVOS_SIN_PLATO),
             version=(sin_plato.VERSION, kardex.VERSION,
+                     _version_preparar("ventas.parquet")))
+    except Exception:
+        return None
+
+
+# Los parquets que, además del kardex, lee el «Análisis de diferencias» de
+# Ajuste (`diferencias_ajuste.calcular`, regla #650): sus sellos van en la
+# clave de la caché.
+_ARCHIVOS_DIFERENCIAS = ("ajusteinventario.parquet", "recetaventa.parquet",
+                         "recetabase.parquet", "cartacosteada.parquet",
+                         "porcionamientos.parquet", "ordenesproduccion.parquet",
+                         "salidas.parquet", "ventas.parquet")
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False, max_entries=12)
+def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
+    """Por qué no cuadra cada línea de la sesión de inventario `clave`
+    (`diferencias_ajuste.calcular`, regla #650). Si falla, LANZA: no se
+    cachea.
+
+    `archivo` es el kardex; `sellos`, los de los otros ocho parquets
+    (`_ARCHIVOS_DIFERENCIAS`), y `version`, la de la cuenta. Ninguno se usa
+    en el cuerpo: son la clave (ver el bloque del sello). Del kardex se bajan
+    las filas desde `DIAS_ATRAS` días antes de la sesión hasta su último
+    día: unas 60 mil por cierre. Medido sobre el cierre de setiembre 2026:
+    6 s de cuenta, una vez por versión de los datos."""
+    if not secrets_disponibles():
+        return None
+    aj = cargar("ajusteinventario.parquet")
+    ses = sesiones_inventario(pd.to_datetime(aj["FECHA APERTURA INVENTARIO"],
+                                             errors="coerce"))
+    s = next((x for x in ses if x["clave"] == clave), None)
+    if s is None:
+        return None
+    desde = min(s["dias"]) - timedelta(days=diferencias_ajuste.DIAS_ATRAS)
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+    kx = con.execute(kardex.sql_filas(rel, desde, max(s["dias"]))).df()
+    vend = _venta_por_producto_dia_cacheable(
+        "ventas.parquet", sello_datos("ventas.parquet"),
+        definicion=_version_preparar("ventas.parquet"))
+    return diferencias_ajuste.calcular(
+        aj, s, ses, kx, cargar("recetaventa.parquet"),
+        cargar("recetabase.parquet"), cargar("cartacosteada.parquet"),
+        cargar("porcionamientos.parquet"), cargar("ordenesproduccion.parquet"),
+        cargar("salidas.parquet"), vend)
+
+
+def diferencias_ajuste_sesion(clave):
+    """`{"lineas", "fichas", "resumen"}` de `diferencias_ajuste.calcular` para
+    la sesión `clave` (`cortes.sesiones_inventario`). `None` si no se pudo
+    calcular —sin secrets, R2 caído, la sesión sin diferencias—: quien lo
+    pide avisa. No cacheada (la interna sí)."""
+    try:
+        return _diferencias_cacheable(
+            kardex.ARCHIVO, sello_datos(kardex.ARCHIVO), clave,
+            sellos=tuple((a, sello_datos(a)) for a in _ARCHIVOS_DIFERENCIAS),
+            version=(diferencias_ajuste.VERSION, kardex.VERSION,
                      _version_preparar("ventas.parquet")))
     except Exception:
         return None

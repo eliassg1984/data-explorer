@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-649 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+650 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (211)
 
@@ -720,7 +720,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
-**Datos, R2 y DuckDB** (99)
+**Datos, R2 y DuckDB** (100)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -821,6 +821,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#641** — «Requerimientos por Área» suma lo mismo que «por Período», y lo que no suma va en la fila…
 - **#645** — «En qué se fue lo que entró» se cuenta de CIERRE A CIERRE de inventario, en dos vistas de una…
 - **#648** — Una línea de receta «por insumo» no descuenta su receta base: descuenta SUS insumos, y «En…
+- **#650** — Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de diferencias», con el posible…
 
 **SUNAT y SIRE** (57)
 
@@ -953,7 +954,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (173)
+**Decisiones de diseño y UX** (174)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1128,6 +1129,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#644** — «Filtros» tiene sólo lo que vale para TODO el reporte: lo que cambia unas vistas se elige en…
 - **#645** — «En qué se fue lo que entró» se cuenta de CIERRE A CIERRE de inventario, en dos vistas de una…
 - **#647** — El precio de un corte lo arma el PESO que el Almacén le asigna: el precio de los cortes en…
+- **#650** — Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de diferencias», con el posible…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -50848,6 +50850,125 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-13.)
 
+650. **Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de
+     diferencias», con el posible origen de cada faltante y sobrante y la
+     ficha de la línea.** 2026-10-13, sobre las #612, #632, #645 y #648. En
+     `diferencias_ajuste.py` (la cuenta, pura), `data.py`
+     (`diferencias_ajuste_sesion`, `_diferencias_cacheable`,
+     `_ARCHIVOS_DIFERENCIAS`), `kardex.py::sql_filas`,
+     `graficos/ajuste/_diferencias.py` (la vista),
+     `graficos/ajuste/__init__.py` (el grupo «Revisar» del rail y la
+     sección `aj_sec_diferencias`), `graficos/alturas.py`
+     (`DIFERENCIAS_TABLA`, `DIFERENCIAS_FIG`), `estilos/_80_cards.py` (la
+     tarjeta sin techo) y `test_graficos.py::_pruebas_diferencias_ajuste`.
+
+     **Qué faltaba.** Ajuste decía cuánto faltó y sobró y dónde, pero no
+     por qué. El pedido: «que el usuario pueda identificar qué faltó hacer o
+     registrar, si hay un posible error en una receta, o quizás nada lo
+     consume o tiene un origen desde el inventario anterior». Se aprobó
+     sobre un boceto con los datos reales
+     (https://claude.ai/artifact/3xBmJP5pVSQpMQ7Ds5gcWo), como una vista
+     nueva y no dentro de «Por familia»: no toca lo que ya se usa, pesa más
+     (lee nueve parquets) y responde otra pregunta.
+
+     **Lo medido, cierre de setiembre 2026 (1 y 6 oct), cinco familias.**
+     Faltó S/ 27,014 en 532 líneas y sobró S/ 26,817 en 456: casi se
+     cancelan. **El 74 % del sobrante (S/ 19,715, 239 líneas) es el conteo
+     corrigiendo un stock NEGATIVO**: se descargó (ventas o producción)
+     antes de que entrara nada, no es mercadería que apareció. Las pistas
+     fuertes cubren el 56 % del faltante y el 79 % del sobrante en soles, y
+     quedan 228 líneas sin ninguna: ésas se miran a mano.
+
+     **Las pistas** (`diferencias_ajuste.TIPOS`), cada una «fuerte» (los
+     números calzan o es un hecho del kardex) o «posible»:
+     - *Receta*: la línea ES una receta base que los platos descargan como
+       producto y no tuvo órdenes en seis meses (Pollito bb confitado,
+       Papas shoestring), o una DD que algún plato descarga como producto.
+     - *Producción*: falta el insumo y sobra lo que se hace con él, por
+       receta base o porcionamiento; fuerte si lo de arriba se descargó sin
+       que entrara nada. La Milanesa de Tomahawk: −S/ 1,135.82 la de
+       producción, +S/ 1,136.10 la de calientes, que se vendió 57 veces sin
+       una orden.
+     - *Otra área*: el mismo producto, al revés, en otra área; fuerte si
+       las cantidades calzan (langostino: −36 en Almacén Central, +39 en
+       Cocina, que tenía −17 en el sistema).
+     - *Sistema negativo*, *Revierte el conteo anterior*, *Ninguna receta
+       lo usa* y *Mismo rubro* (`sin_plato.palabra_clave`, sólo si cantidad
+       y monto calzan: suelta emparejaba Bife Ancho con Bife Angosto).
+     - *Nada lo descargó*: no salió nada del área con un documento, y
+       `por_que_nada` sigue cada receta que debía descontarlo para decir
+       cuál falló. De 146 líneas (S/ 6,035): 72 sólo están en platos que no
+       se vendieron —se gastan en platos cuya receta no las lleva; el
+       Aceite Frituras está sólo en el Huevo Frito—; 26 van en una receta
+       base que se vendió sin orden; 21 las descargan desde otra área; 3 se
+       registraron TARDE (una orden o un porcionamiento hasta
+       `DIAS_TARDE` días después del conteo: el Tomahawk de cerdo se
+       porcionó el 6 oct con el conteo el 1). Si un plato se vendió desde
+       el área y aun así no lo descontó, la receta de hoy no es la de
+       entonces: se mira cuándo se editó (`FECH MODIF`) y el costo por
+       plato de los 30 días antes y después contra lo que aporta el
+       producto. Es una prueba DÉBIL —el costo también se mueve con los
+       precios— y sólo es fuerte si calza.
+
+     **Seis cosas que mordieron al armarlo, medidas.**
+     - **El conteo anterior de una línea NO es el cierre anterior**: es el
+       último conteo de ese producto en esa área. En setiembre 2026 era el
+       parcial del 15–17 set para 920 de 988 líneas. Con eso y la ventana
+       por HORA —después de la hora del conteo anterior y hasta la del
+       conteo, sin los ajustes (tipo 93)—, «contado antes + entró − salió =
+       sistema» cierra en el 97 % de las líneas; las demás tienen
+       movimientos en la misma hora del conteo, y la ficha lo dice. Por día
+       cerraba el 80 %.
+     - **`T DESCARG`, línea por línea (#648)**: «producción sin registrar»
+       sólo vale para las recetas base que algo descarga COMO PRODUCTO. Una
+       DD va por insumo y no lleva orden. Sin leerlo, la pista cubría el
+       47 % del faltante; leyéndolo, el 39 %.
+     - **El área de descargo de un plato es `SUBALM INS`**: ahí cae el
+       100 % del descargo de los productos que van a una sola área.
+       `AREA PROD` acierta el 42 %.
+     - **Recetas × lo vendido NO cuadra con el descargo del kardex**: sólo
+       el 31 % de las líneas cae dentro de ±10 % (los canales piden otras
+       cantidades, recetas editadas en el mes, la fecha de turno). En «Dónde
+       se usa» va con «≈», como referencia, sin compararlo con el kardex.
+     - **Los códigos traen distintos ceros**: el ajuste, 10 dígitos de
+       producto y de área; el kardex, 7 de producto y 3 de área; las
+       recetas y las ventas, 7. Se comparan sin los ceros a la izquierda
+       (el área, como entero).
+     - **El script del boceto tardaba más de un minuto** filtrando pandas
+       dentro de un bucle por línea. Con diccionarios por código, numpy
+       para el costo por plato (5 s → 0) y la unidad por valor DISTINTO y
+       no por fila (1,3 s → 0), la cuenta de un cierre son 6 s, una vez por
+       versión de los datos (caché de disco por sesión, con los sellos de
+       los nueve parquets). En frío, con la bajada de los parquets, ~40 s.
+
+     **Entró y salió POR MOTIVO.** Factura, guía, orden de producción,
+     porcionamiento, descargo de ventas. Un requerimiento o una
+     transferencia dice el área del otro lado: la que hizo el movimiento
+     contrario del mismo producto en la misma hora. Una nota de salida se
+     parte por el `TIPO DESCARGO` de `salidas.parquet` (Bajas, Comida
+     Personal…), por fecha de proceso y sin pasar de lo que dice el kardex;
+     lo que no alcanza a explicar queda como «Nota de salida».
+
+     **La vista.** Elige su sesión (‹ › y el panel, #632) y su familia
+     (las cinco de entrada). Lista de faltantes o sobrantes con su pista
+     principal y filtros por tipo; la ficha de la elegida al costado. La
+     tarjeta NO lleva techo (la ficha mide ~980px, #382) y la lista se
+     desliza por dentro (`DIFERENCIAS_TABLA`). La fila se elige con el
+     círculo de `st.dataframe`; «Ver la otra línea» es un callback que
+     cambia de lista si hace falta y BORRA la key de la tabla vieja: si no,
+     `_foco_anterior` leía en la corrida siguiente la fila que seguía
+     elegida allá y le devolvía el foco. Los números van como el resto de
+     Ajuste (`toLocaleString('es-PE')`: 1,135.8), con `da.es`.
+
+     **Tocar la cuenta es subir `diferencias_ajuste.VERSION`.**
+
+     **En Cloud hace falta «Reboot app» para VERLA** (#357): el rail y la
+     pila de Ajuste viven en un paquete que ya está importado. No se cae
+     nada —ningún nombre que importe `app.py` cambió—, pero hasta el
+     reinicio la vista no aparece.
+
+     (2026-10-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50860,7 +50981,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#649**; la próxima toma el número siguiente.
+> última regla es la **#650**; la próxima toma el número siguiente.
 
 >
 
