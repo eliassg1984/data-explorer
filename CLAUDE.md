@@ -417,8 +417,21 @@ tiene la suya desde el 2026-10-12, en el mismo sitio: `COLUMNAS_DRILL_FICHA`
 (0.92 : 1.5), UNA fila con el Ranking a toda la altura y la ficha del
 proveedor elegido —cifras, curva, Productos | Documentos—; la fila marcada
 del ranking manda sobre toda la ficha (regla #646, que reemplazó las cuatro
-tarjetas de las #578 y #579). Y Producto la suya, `COLUMNAS_DRILL_PRODUCTO`
-(1 : 1.25, la Evolución a la izquierda), desde el 2026-10-02: regla #583.
+tarjetas de las #578 y #579). **Producto usa la MISMA desde el
+2026-10-13** (regla #653): ranking de productos | ficha del producto, con
+«Ver por: Producto | Subfamilia | Familia» en la lista. Hasta ese día tenía
+la suya al revés (la Evolución a la izquierda, #583), y al bajar de
+Proveedor a Producto la vista saltaba de lado.
+
+**En la ficha de Producto hay UN precio, el ponderado** (soles ÷
+cantidad), y **las compras marcadas «revisar» no entran en ningún precio**
+—sí en la cantidad y el valor— (`producto.py::marcar_revisar`, regla
+propia: S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o decimales
+en UND). Antes la barra promediaba facturas sin pesar y la tabla de abajo
+ponderaba: dos precios para el mismo mes. Y un clic en la LISTA que pide un
+rerun después de dibujar sus controles preserva sólo los que faltan
+dibujar (`_KEYS_FICHA`): reescribir uno ya dibujado es un
+StreamlitAPIException. Regla #653.
 
 **El período en curso no se compara con uno entero**: al 11 de octubre,
 «octubre contra septiembre» da ▼75 % en verde en casi todo, y es el

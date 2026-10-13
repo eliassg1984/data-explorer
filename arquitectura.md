@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-652 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+653 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (211)
 
@@ -246,7 +246,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
 - **#649** — La barra de las tarjetas «por período» de Movimientos es LISA y resalta UNA parte, elegida…
 
-**Layout y alturas** (91)
+**Layout y alturas** (92)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -339,6 +339,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#624** — Documento y Montos son una línea de la tarjeta de «Compras por período» y mandan SÓLO sobre…
 - **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
 - **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
+- **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
 
 **Plotly y figuras** (115)
 
@@ -956,7 +957,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (175)
+**Decisiones de diseño y UX** (176)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1133,6 +1134,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#647** — El precio de un corte lo arma el PESO que el Almacén le asigna: el precio de los cortes en…
 - **#650** — Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de diferencias», con el posible…
 - **#651** — «Análisis de diferencias» mira los COMBOS, no descarta las líneas sin precio y reconoce lo…
+- **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -51131,6 +51133,96 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-13.)
 
+653. **Compras › Producto es una fila: el ranking a la izquierda y la
+     ficha del producto elegido a la derecha, como Proveedor (#646).**
+     2026-10-13, a pedido, sobre una maqueta clicable con datos reales. En
+     `graficos/compras/producto.py` (reescrito), `_comun.py`
+     (`COLUMNAS_DRILL_FICHA` la usan las dos; `COLUMNAS_DRILL_PRODUCTO`,
+     #583, se borró), `estilos/_80_cards.py` (el piso), `tablas/
+     compras_semanal.py` (fuera `renderizar_compras_producto` y
+     `renderizar_proveedores_producto`) y
+     `test_graficos.py::_pruebas_producto_lista_y_ficha`, que reemplaza a
+     `_pruebas_drill_familia_subfamilia` y `_pruebas_etiqueta_barras_producto`.
+
+     **Por qué.** La crítica de la vista, medida sobre el rango 12 set –
+     11 oct 2026, encontró que se contradecía sola:
+     - **Dos precios para el mismo mes en la misma tarjeta.** La barra y
+       «Resumen Total» promediaban las facturas sin pesar; «Resumen del
+       Período» y «Detalle», el ponderado. Lomo fino de setiembre: S/ 67,17
+       arriba, S/ 70,80 abajo. En 12 meses, 728 de 4.007 producto-mes
+       diferían más de 2 % y 248 más de 10 %.
+     - **Errores de carga leídos como alzas.** Grupo Idali cargó el 29/09
+       seis botellas como 4,5 (6 × 0,75 L): cinco vinos «+33,3 %» en Var.
+       Y 15 kg de lomo fino a S/ 15,85 (Leon Medrano, 19/09) armaban el
+       «fluctuó entre S/ 15,85 y S/ 100,74» de la cabecera.
+     - **Var = primera contra última compra:** 91 de 313 productos tenían
+       una sola compra en el rango (Var 0 por construcción) y 57 dos.
+     - El orden era el espejo de Proveedor (gráfico | lista contra lista |
+       ficha), cuatro AgGrid (#540) y 652 px de alto contra 575.
+
+     **Cómo quedó.**
+     - Lista: fecha, buscador y **«Ver por: Producto | Subfamilia |
+       Familia»**; las familias y subfamilias son botones (`st.pills`)
+       encima. Columnas: Valor, % del ámbito, Δ contra el período anterior
+       de igual largo («nuevo» / «vuelve», como #646) y «vs. hab.». Con
+       Familia o Subfamilia la misma grilla lista los grupos con su monto,
+       %, Prod., Δ y «vs. hab.»; un clic baja a sus productos. Pie de
+       Pareto (análisis ABC, Dickie 1951: 76 productos = 80 %).
+     - Ficha: nombre, ventana (abre en 3 meses, a pedido del 2026-09-12) y
+       grano Semana / Mes / Año / Documento; «última compra 11 oct a
+       S/ 74,50 / kg, cada 3 días»; cinco cifras del rango (compra, Δ,
+       precio ponderado, vs. habitual e impacto en soles); la curva con la
+       CANTIDAD en barras y el PRECIO en línea, el habitual punteado; y
+       Proveedores | Compras | Períodos en HTML (los antiguos «Resumen del
+       Período», «Detalle» y «Resumen Total»).
+
+     **Dos reglas que la vista cumple en todos lados.**
+     1. **Un solo precio, el ponderado** (soles ÷ cantidad: el costo
+        promedio ponderado de la NIC 2, §25). `_precios`, `_resumen`,
+        las tres tablas y la curva lo sacan igual.
+     2. **Lo marcado «revisar» no entra en ningún PRECIO** (sí en la
+        cantidad y el valor, que es lo registrado). `marcar_revisar`, regla
+        PROPIA: una línea de S/ 50 o más a 2,5 veces su precio habitual o a
+        menos de 0,4, o una cantidad con decimales en una unidad que se
+        cuenta entera. 54 + 33 líneas en 12 meses; 21 de los 313 productos
+        del rango. Sin esto el lomo fino mostraba un «ahorro» de S/ 861 que
+        era, entero, la compra a S/ 15,85. Con un 40 % de desvío marcaba el
+        11 % de las líneas (verduras de un día a otro): por eso 2,5 veces.
+
+     **Trampas que costaron una vuelta.**
+     - **`preservar_widgets` después de dibujar revienta.** El clic en
+       un grupo de la lista llega cuando sus botones ya se dibujaron, y
+       pide un rerun para escribirles el estado. Preservar `_KEYS_WIDGET`
+       ahí reescribía `compras_prod_q` ya instanciado: «cannot be modified
+       after the widget … is instantiated». En ese punto se preservan sólo
+       los controles que FALTAN dibujar (`_KEYS_FICHA`), y el pedido viaja
+       en `_cp_prod_ir` y lo aplica `_aplicar_pendiente` antes de dibujar.
+     - **La grilla de grupos lleva un contador en la key**
+       (`cp_prod_gclic`): un componente devuelve su última selección
+       mientras la key no cambie, y volver a «Familia» repetía el clic de
+       la vez anterior y bajaba solo a sus productos.
+     - **El texto de un `st.pills` / `st.segmented_control` va en un
+       `<p>` con su propio cuerpo (14 px).** Achicar la letra del botón no
+       achica el texto: las cinco familias iban en tres renglones. El
+       `font-size` va también sobre `button p`.
+     - **El CSS de la ficha se CLONA del de Proveedor** (`clonar_prefijo`
+       sobre `CSS_FICHA` y `cp_evo_ctrl`), con el ancho del desplegable de
+       la ventana corregido: «Últimos 3 meses» no entra en los 56 px de
+       «12m». Supone `CSS_PROVEEDOR` en la página, como el de antes.
+
+     Alto medido a 1323×619: 564 px al entrar, 559 con las subfamilias
+     abiertas, 512 por familia (el techo es 575). Un AgGrid en vez de
+     cuatro. Verificado con Playwright y datos reales: elegir un producto,
+     una familia desde «Ver por», una barra (Proveedores se acota a ese
+     mes), un proveedor (Compras se filtra), grano Documento, ventana de
+     12 meses y el buscador.
+
+     **En Cloud, «Reboot app»** (#357): `_comun.py` pierde
+     `COLUMNAS_DRILL_PRODUCTO`, `tablas/compras_semanal.py` dos funciones,
+     y `producto.py` importa cosas nuevas de `_css_proveedor.py`.
+
+     (2026-10-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51143,7 +51235,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#652**; la próxima toma el número siguiente.
+> última regla es la **#653**; la próxima toma el número siguiente.
 
 >
 

@@ -1488,11 +1488,11 @@ CSS = """    /* ================================================================
         /* borde inferior de la fila sale en escalón — el mismo síntoma que */
         /* originó esta regla. Desde el 2026-09-12 la tarjeta del ranking   */
         /* lleva ADEMÁS los paneles de Familia/Subfamilia (antes eran una   */
-        /* tarjeta de ancho completo, arriba), y la Evolución se dimensiona */
-        /* contra ella (`_ALTO_EVO` en graficos/compras/producto.py): este  */
-        /* piso queda de red, igual que en Proveedor.                       */
+        /* tarjeta de ancho completo, arriba). Desde el 2026-10-13 la fila  */
+        /* es ranking | ficha, como en Proveedor (regla #653): el piso      */
+        /* iguala la ficha y el ranking, que no miden lo mismo por diseño.  */
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-compras_prod_card_evo, > .st-key-compras_prod_card_ranking, > .st-key-compras_prod_card_vacio),
+        > div:has(> .st-key-compras_prod_card_ficha, > .st-key-compras_prod_card_ranking, > .st-key-compras_prod_card_vacio),
         /* Las tres de arriba de Stock por Área, desde el 2026-10-03: la  */
         /* del ranking suma la fila «Inactivos y servicios» (regla #598)  */
         /* y ya no mide lo mismo que sus vecinas por contenido.           */

@@ -5462,130 +5462,149 @@ def _pruebas_container_queries():
     return fallos
 
 
-def _pruebas_drill_familia_subfamilia():
-    """El drill Familia › Subfamilia → Ranking de productos de
-    `compras/producto.py`.
+def _pruebas_producto_lista_y_ficha():
+    """Compras › Producto: la lista y la ficha (2026-10-13, regla #653).
 
-    Hasta el 2026-09-12 el tercer nivel era un panel propio (los productos
-    del grupo elegido); ese día se fue y su papel lo tomó el Ranking de
-    productos, que los paneles de arriba RECORTAN (`_ambito_ranking`). Las
-    trampas son las mismas, cambió quién las pisa:
+    Las cuentas son puras y se prueban por valor, sin Streamlit, sin R2 y
+    sin red. Lo que se puede romper en silencio y acá falla ruidoso:
 
-      1. Que los niveles dejen de CUADRAR. La suma del panel B tiene que
-         dar la fila elegida del A, y la del ranking recortado la fila
-         elegida del B. Si alguien cambia un `groupby` o un filtro y eso se
-         rompe, en pantalla se ve una tabla perfectamente creíble con los
-         números de otra cosa.
-      2. Que el % deje de ser sobre el PADRE. Es la decisión de diseño del
-         drill: con % global las cinco subfamilias de VINOS darían 4%,
-         0,5%… y la columna dejaría de comparar lo que se está viendo.
-      3. Que el recorte por subfamilia se haga por la subfamilia SOLA. La
-         clave es el PAR (familia, subfamilia): medido sobre R2 el
-         2026-09-09, 9 de las 95 subfamilias de compras.parquet aparecen en
-         más de una familia, así que un `df[col_subfam] == x` suelto mezcla
-         productos de dos familias sin dar error. Acá se reproduce con una
-         subfamilia repetida a propósito.
-      4. Que la UM se pierda. La cantidad de un producto sólo significa algo
-         con su unidad al lado (ver el docstring de `_prod_ranking`).
-      5. Que sin ningún clic el ranking deje de ser el de TODO lo comprado.
-         El panel B abre mostrando la familia de arriba, pero eso es su
-         foco, no el ámbito del ranking (ver `_paneles_familia`).
-
-    Datos sintéticos y deterministas: sin R2, sin secrets, sin red.
+      1. Que los niveles dejen de CUADRAR: la suma de una familia tiene que
+         dar la de sus productos, y la de una subfamilia la de los suyos.
+      2. Que el recorte por subfamilia se haga por la subfamilia SOLA. La
+         clave es el PAR (familia, subfamilia): «Varios» está en A y en B.
+      3. Que una compra mal cargada entre en el PRECIO. La marca «revisar»
+         (`marcar_revisar`) la deja en la cantidad y el valor y la saca del
+         precio ponderado, del «vs. habitual» y de su impacto en soles —
+         sin eso el lomo fino mostraba un ahorro de S/ 861 que era, entero,
+         una compra cargada a S/ 15,85 el kilo.
+      4. Que el período en curso se lea como entero: la curva arranca al
+         INICIO de su período, el último va «parcial» y se compara con los
+         mismos días del anterior.
+      5. Que el «nuevo» y el «vuelve» se confundan con un Δ: sin compras en
+         el período anterior no hay porcentaje.
     """
     fallos = 0
 
     def check(nombre, ok, detalle=""):
         nonlocal fallos
         if ok:
-            print(f"OK    drill · {nombre}")
+            print(f"OK    producto · {nombre}")
         else:
             fallos += 1
-            print(f"FALLA drill · {nombre}{': ' + detalle if detalle else ''}")
+            print(f"FALLA producto · {nombre}{': ' + str(detalle)[:300] if detalle else ''}")
+
+    import numpy as np
 
     from graficos.compras.producto import (
-        _ambito_ranking, _fam_normalizada, _fam_ranking, _prod_ranking,
-        _subfam_normalizada, _subfam_ranking,
+        _ambito, _con_referencia, _etq, _normalizar, _precios, _resumen,
+        _serie, marcar_revisar,
     )
 
-    # "Varios" es la subfamilia repetida entre DOS familias: es la trampa 3.
-    df = pd.DataFrame({
-        "FAM": ["A", "A", "A", "A", "B", "B", "B"],
-        "SUB": ["Carnes", "Carnes", "Verduras", "Varios",
-                "Vinos", "Varios", "Varios"],
-        "PROD": ["Lomo", "Asado", "Papa", "Bolsa",
-                 "Malbec", "Bolsa", "Corcho"],
-        "VAL": [600.0, 200.0, 150.0, 50.0, 300.0, 80.0, 20.0],
-        "CANT": [10.0, 5.0, 30.0, 100.0, 12.0, 40.0, 200.0],
-        "UM": ["KILOS", "KILOS", "KILOS", "UND", "UND", "UND", "UND"],
-        "PUNIT": [60.0, 40.0, 5.0, 0.5, 25.0, 2.0, 0.1],
-        "FECHA": pd.to_datetime(["2026-08-01", "2026-08-02", "2026-08-03",
-                                 "2026-08-04", "2026-08-05", "2026-08-06",
-                                 "2026-08-07"]),
-    })
+    # ── La marca «revisar» ──────────────────────────────────────────────
+    m = marcar_revisar(pd.Series([4.5, 15.0, 2.0, 6.0, 3.0]),
+                       pd.Series([706.8, 237.75, 30.0, 600.0, 900.0]),
+                       pd.Series([117.8, 74.5, 8.0, 100.0, np.nan]),
+                       pd.Series(["UND", "KILOS", "KILOS", "UND", "KILOS"]))
+    check("6 botellas cargadas como 4,5 UND se marcan «um»", m[0] == "um", m)
+    check("15 kg de lomo a S/ 15,85 (0,21 veces el habitual) se marcan",
+          m[1] == "precio", m)
+    check("una línea chica no se marca aunque su precio salte", m[2] == "", m)
+    check("6 UND al precio habitual no se marcan", m[3] == "", m)
+    check("sin precio habitual no hay contra qué marcar", m[4] == "", m)
 
-    def ranking(fam, sub, col_subfam="SUB", col_cant="CANT", col_um="UM"):
-        """El Ranking de productos tal como lo arma la tarjeta: el ámbito
-        que dejan los paneles, y sobre eso `_prod_ranking`."""
-        amb = _ambito_ranking(df, "FAM", col_subfam, fam, sub)
-        return _prod_ranking(amb, "PROD", "FECHA", "VAL", col_cant, "PUNIT",
-                             col_um)
+    # ── Datos: un rango (1–30 set) y su período anterior (2–31 ago) ─────
+    filas = [
+        # FAM, SUB,      PROD,     VAL,    CANT, UM,      FECHA,       PROV, DOC
+        ("A", "Carnes",  "Lomo",   745.0, 10.0, "KILOS", "2026-01-15", "P1", "F00"),
+        ("A", "Carnes",  "Lomo",   745.0, 10.0, "KILOS", "2026-08-10", "P1", "F1"),
+        ("A", "Carnes",  "Lomo",   745.0, 10.0, "KILOS", "2026-09-04", "P1", "F2"),
+        ("A", "Carnes",  "Lomo",   237.75, 15.0, "KILOS", "2026-09-19", "P1", "F3"),
+        ("A", "Carnes",  "Lomo",   800.0, 10.0, "KILOS", "2026-09-22", "P2", "F4"),
+        ("A", "Carnes",  "Asado",  200.0,  5.0, "KILOS", "2026-09-05", "P1", "F2"),
+        ("A", "Varios",  "Bolsa",   50.0, 100.0, "UND",  "2026-09-06", "P3", "F5"),
+        ("B", "Vinos",   "Malbec", 300.0, 12.0, "UND",   "2026-09-07", "P4", "F6"),
+        ("B", "Varios",  "Tapa",    80.0, 40.0, "UND",   "2026-09-08", "P3", "F7"),
+        ("B", "Varios",  "Corcho",  20.0, 200.0, "UND",  "2026-03-01", "P3", "F0"),
+        ("B", "Varios",  "Corcho",  20.0, 200.0, "UND",  "2026-09-09", "P3", "F8"),
+    ]
+    df = pd.DataFrame(filas, columns=["FAM", "SUB", "PROD", "VAL", "CANT", "UM",
+                                      "FECHA", "PROV", "DOC"])
+    df["FECHA"] = pd.to_datetime(df["FECHA"])
+    cols = ("PROD", "FAM", "SUB", "VAL", "CANT", "UM", "FECHA", "PROV", "DOC")
+    hist = _con_referencia(_normalizar(df, *cols))
+    r0, r1 = pd.Timestamp("2026-09-01"), pd.Timestamp("2026-09-30")
+    rng = hist[(hist["fecha"] >= r0) & (hist["fecha"] <= r1)]
+    prev = hist[(hist["fecha"] >= r0 - pd.Timedelta(days=30))
+                & (hist["fecha"] < r0)]
+    antes = hist[hist["fecha"] < r0]
+    check("la compra de lomo a S/ 15,85 sale marcada",
+          rng.loc[rng["valor"] == 237.75, "flag"].tolist() == ["precio"],
+          rng[["prod", "valor", "ref", "flag"]].to_dict("records"))
 
-    fam = _fam_ranking(df, "FAM", "VAL")
-    check("panel A ordena por valor descendente",
-          fam["familia"].tolist() == ["A", "B"], str(fam["familia"].tolist()))
-    check("los % del panel A suman 100", abs(fam["pct"].sum() - 100) < 1e-9)
-    check("el panel A ya no trae la columna de conteo (se pidió fuera)",
-          fam.columns.tolist() == ["familia", "valor", "pct"],
-          str(fam.columns.tolist()))
+    res_p = _resumen(rng, ["prod"], prev, antes["prod"].unique())
+    res_p["fam"] = rng.groupby("prod")["fam"].first().reindex(res_p.index)
+    res_p["sub"] = rng.groupby("prod")["sub"].first().reindex(res_p.index)
+    res_f = _resumen(rng, ["fam"], prev, antes["fam"].unique())
+    res_s = _resumen(rng, ["fam", "sub"], prev,
+                     list(antes[["fam", "sub"]].drop_duplicates()
+                          .itertuples(index=False, name=None)))
 
-    d_fam = df[_fam_normalizada(df, "FAM") == "A"]
-    sub = _subfam_ranking(d_fam, "SUB", "PROD", "VAL")
-    check("el panel B CUADRA con su fila del panel A",
-          abs(sub["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9,
-          f"{sub['valor'].sum()} vs {fam.iloc[0]['valor']}")
-    # 600+200 sobre 1000, no sobre 1400: el % es del PADRE (trampa 2).
-    check("el % del panel B es sobre SU FAMILIA, no sobre el total",
-          abs(float(sub.iloc[0]["pct"]) - 80.0) < 1e-9,
-          f"{sub.iloc[0]['pct']}")
+    lomo = res_p.loc["Lomo"]
+    check("el valor y la cantidad SÍ suman la compra marcada",
+          abs(lomo["valor"] - 1782.75) < 1e-9 and lomo["cant"] == 35.0,
+          (lomo["valor"], lomo["cant"]))
+    check("el precio ponderado NO la cuenta: (745+800)/(10+10)",
+          abs(lomo["pp"] - 77.25) < 1e-9, lomo["pp"])
+    check("el impacto del precio no la cuenta (sin ella, +S/ 55)",
+          abs(lomo["ppv"] - 55.0) < 1e-9, lomo["ppv"])
+    check("el Δ es contra el período anterior de igual largo",
+          abs(lomo["var"] - (1782.75 / 745 - 1) * 100) < 1e-9, lomo["var"])
+    check("sin compras antes del rango: «nuevo», sin porcentaje",
+          res_p.loc["Malbec", "est"] == "nuevo"
+          and np.isnan(res_p.loc["Malbec", "var"]))
+    check("con compras antes pero no en el anterior: «vuelve»",
+          res_p.loc["Corcho", "est"] == "vuelve")
+    check("cada familia CUADRA con sus productos",
+          all(abs(res_f.loc[f, "valor"]
+                  - res_p.loc[res_p["fam"] == f, "valor"].sum()) < 1e-9
+              for f in res_f.index))
+    check("la subfamilia es el PAR: «Varios» de A no lleva lo de B",
+          res_s.loc[("A", "Varios"), "valor"] == 50.0
+          and res_s.loc[("B", "Varios"), "valor"] == 100.0,
+          res_s["valor"].to_dict())
+    amb = _ambito(res_p, "A", "Varios")
+    check("el recorte por (A, Varios) no mezcla familias",
+          amb.index.tolist() == ["Bolsa"] and amb["valor"].sum() == 50.0,
+          amb[["valor"]].to_dict())
+    check("sin familia elegida el ámbito es todo lo comprado",
+          len(_ambito(res_p, None, "Varios")) == len(res_p))
 
-    # Trampa 5: sin ningún clic, el ranking es el de todo lo comprado.
-    todo = ranking(None, None)
-    check("sin clic, el ranking es TODO lo comprado",
-          abs(todo["valor"].sum() - float(df["VAL"].sum())) < 1e-9,
-          f"{todo['valor'].sum()} vs {df['VAL'].sum()}")
+    sin_sub = _normalizar(df, "PROD", "FAM", None, "VAL", "CANT", "UM",
+                          "FECHA", "PROV", "DOC")
+    check("sin columna de Subfamilia todo cae en «Sin subfamilia»",
+          set(sin_sub["sub"]) == {"Sin subfamilia"})
 
-    solo_fam = ranking("A", None)
-    check("con una familia elegida, el ranking CUADRA con su fila del A",
-          abs(solo_fam["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9)
-
-    pro = ranking("A", "Carnes")
-    check("con una subfamilia elegida, el ranking CUADRA con su fila del B",
-          abs(pro["valor"].sum() - float(sub.iloc[0]["valor"])) < 1e-9)
-    check("la columna Prod. del panel B cuenta las filas del ranking",
-          len(pro) == int(sub.iloc[0]["productos"]))
-    check("el % del ranking es sobre SU ámbito (la subfamilia)",
-          abs(float(pro.iloc[0]["pct"]) - 75.0) < 1e-9, f"{pro.iloc[0]['pct']}")
-    check("cada producto se lleva su UM (trampa 4)",
-          pro["um"].tolist() == ["KILOS", "KILOS"], str(pro["um"].tolist()))
-
-    # Trampa 3, la que motivó que `_ambito_ranking` filtre SIEMPRE por la
-    # familia primero: "Varios" existe en A y en B.
-    por_par = ranking("A", "Varios")
-    suelto = df[_subfam_normalizada(df, "SUB") == "Varios"]
-    check("recortar por el PAR (familia, subfamilia) no mezcla familias",
-          float(por_par["valor"].sum()) == 50.0
-          and float(suelto["VAL"].sum()) == 150.0,
-          f"par={por_par['valor'].sum()} suelto={suelto['VAL'].sum()}")
-
-    # Parquet sin columna de Subfamilia: el recorte se queda en la familia
-    # en vez de reventar o de devolver vacío.
-    sin_sub = ranking("A", "Carnes", col_subfam=None)
-    check("sin columna de Subfamilia el ranking se recorta a la familia",
-          abs(sin_sub["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9)
-    flaco = ranking("A", None, col_cant=None, col_um=None)
-    check("sin columnas de Cantidad/UM el ranking no revienta",
-          (flaco["cantidad"] == 0).all() and (flaco["um"] == "").all())
+    # ── La curva ────────────────────────────────────────────────────────
+    h = hist[hist["prod"] == "Lomo"]
+    ultimo = pd.Timestamp("2026-09-22")
+    S = _serie(h, "Mes", "3m", ultimo, (r0, r1))
+    check("la ventana de 3 meses arranca el 1° de su mes, no a mitad",
+          S["ini"] == pd.Timestamp("2026-06-01"), S["ini"])
+    check("los meses sin compras están en el eje",
+          S["keys"] == ["2026-06", "2026-07", "2026-08", "2026-09"], S["keys"])
+    check("el mes en curso va «parcial», contra los mismos días del anterior",
+          S["parc"] is not None and S["refq"] == 10.0, (S["parc"], S["refq"]))
+    p, _hab = _precios(S["agg"])
+    check("el precio de setiembre es SIN la compra marcada",
+          abs(p.loc["2026-09"] - 77.25) < 1e-9 and S["agg"].loc["2026-09", "fl"] == 1,
+          p.to_dict())
+    check("un mes vacío no tiene precio (no un 0)", np.isnan(p.loc["2026-07"]))
+    D = _serie(h, "Documento", "12m", ultimo, (r0, r1))
+    check("por documento: una barra por comprobante", len(D["keys"]) == 5,
+          D["keys"])
+    check("el año se rotula como año (eje de categorías, regla #448)",
+          _etq("2026", "Año") == "2026" and _etq("2026-09", "Mes", True)
+          == "set 2026")
 
     return fallos
 
@@ -5608,6 +5627,11 @@ def _pruebas_compras_sin_bucles_por_grupo():
       · un producto que no pasa el piso de gasto o de cobertura;
       · montos iguales al céntimo en el ranking: van por nombre (en el
         bucle dependían del último decimal de la suma).
+
+    El ranking de Producto (`_prod_ranking`, primera contra última compra)
+    se fue el 2026-10-13 con la vista nueva (regla #653): su oráculo se fue
+    con él, y sus sucesores (`_resumen`, `_ultimo_precio`, `_cada_cuanto`)
+    entran en la guarda de forma de abajo.
 
     Más un caso grande al azar, con semilla fija, para lo que no se me
     ocurrió. Y una guarda con `ast`: ninguna de las cinco vuelve a iterar un
@@ -5642,27 +5666,6 @@ def _pruebas_compras_sin_bucles_por_grupo():
         return (fuente[[llave, col_um]].astype(str).groupby(llave)[col_um]
                 .agg(lambda s: s.mode().iat[0] if not s.mode().empty else "")
                 .to_dict())
-
-    def o_ranking(dd, col_prod, col_fecha, col_valor, col_cant, col_punit, col_um):
-        filas = []
-        for prod, g in dd.groupby(col_prod):
-            um = ""
-            if col_um and col_um in g.columns:
-                _u = g[col_um].dropna()
-                if not _u.empty:
-                    um = str(_u.mode().iat[0])
-            gp = g.dropna(subset=[col_punit])
-            gp = gp[gp[col_punit] > 0].sort_values(col_fecha, kind="stable")
-            ini = fin = var = None
-            if not gp.empty:
-                ini = float(gp[col_punit].iloc[0])
-                fin = float(gp[col_punit].iloc[-1])
-                var = ((fin - ini) / ini * 100) if ini else None
-            filas.append({"producto": str(prod),
-                          "valor": float(g[col_valor].sum()),
-                          "cantidad": float(g[col_cant].sum()) if col_cant else 0.0,
-                          "um": um, "inicio": ini, "fin": fin, "var_pct": var})
-        return {f["producto"]: f for f in filas}
 
     def o_cierres(d, prods, col_prod, col_punit, col_fecha, semanas):
         out = {p: [None] * len(semanas) for p in prods}
@@ -5707,11 +5710,6 @@ def _pruebas_compras_sin_bucles_por_grupo():
             return abs(float(a) - float(b)) <= 1e-9 * max(1.0, abs(float(a)))
         return a == b
 
-    def ranking_por_producto(df):
-        return {r["producto"]: {k: (None if (isinstance(v, float) and np.isnan(v)) else v)
-                                for k, v in r.items() if k != "pct"}
-                for r in df.to_dict("records")}
-
     def semana(f):
         return (f - pd.to_timedelta(f.dt.weekday, unit="D")).dt.normalize()
 
@@ -5739,19 +5737,6 @@ def _pruebas_compras_sin_bucles_por_grupo():
           (_va._unidades_por(d, "p", "um"), o_unidades(d, "p", "um")))
     check("unidades: en el empate gana la menor",
           _va._unidades_por(d, "p", "um")["A"] == "KG")
-    rk = _pr._prod_ranking(d, "p", "f", "valor", "cant", "precio", "um")
-    check("ranking: cada producto dice lo mismo que el bucle",
-          iguales(ranking_por_producto(rk),
-                  {k: o_ranking(d, "p", "f", "valor", "cant", "precio", "um")[k]
-                   for k in ranking_por_producto(rk)}),
-          rk.to_dict("records"))
-    check("ranking: compras del mismo día -> la primera es la de más arriba",
-          float(rk.set_index("producto").loc["A", "inicio"]) == 10.0)
-    check("ranking: montos iguales al céntimo van por nombre",
-          rk["producto"].tolist()[-3:] == ["B", "E", "C"], rk["producto"].tolist())
-    check("ranking: sin columnas de Cantidad/UM no revienta",
-          (_pr._prod_ranking(d, "p", "f", "valor", None, "precio", None)["um"]
-           == "").all())
     ci = _vo._vol_cierres_semanales(d, ["A", "B", "Z"], "p", "precio", "f", sems)
     check("cierres = bucle de antes (mismo día, 0, huecos, producto ausente)",
           iguales(ci, o_cierres(d, ["A", "B", "Z"], "p", "precio", "f", sems)), ci)
@@ -5783,14 +5768,6 @@ def _pruebas_compras_sin_bucles_por_grupo():
     sg = list(pd.to_datetime(sg))
     check("al azar: unidades", iguales(_va._unidades_por(g, "p", "um"),
                                        o_unidades(g, "p", "um")))
-    rg = _pr._prod_ranking(g, "p", "f", "valor", "cant", "precio", "um")
-    o_rg = o_ranking(g, "p", "f", "valor", "cant", "precio", "um")
-    check("al azar: ranking, producto por producto",
-          iguales(ranking_por_producto(rg),
-                  {k: o_rg[k] for k in ranking_por_producto(rg)}))
-    check("al azar: ranking ordenado por monto (céntimos) y nombre",
-          list(zip(rg["valor"].round(2) * -1, rg["producto"]))
-          == sorted(zip(rg["valor"].round(2) * -1, rg["producto"])))
     prods = sorted(g["p"].unique())[:80]
     check("al azar: cierres", iguales(
         _vo._vol_cierres_semanales(g, prods, "p", "precio", "f", sg),
@@ -5801,7 +5778,8 @@ def _pruebas_compras_sin_bucles_por_grupo():
         o_candidatos(g, "p", "precio", "f", "valor", sg[-12:], 300.0, 0.4)))
 
     # ── La guarda de forma ──────────────────────────────────────────────
-    for fn in (_cm.moda_por_grupo, _va._unidades_por, _pr._prod_ranking,
+    for fn in (_cm.moda_por_grupo, _va._unidades_por, _pr._resumen,
+               _pr._ultimo_precio, _pr._cada_cuanto,
                _vo._vol_candidatos, _vo._vol_cierres_semanales,
                _vo._tabla_cierres):
         arbol = ast.parse(textwrap.dedent(inspect.getsource(fn)))
@@ -5817,239 +5795,6 @@ def _pruebas_compras_sin_bucles_por_grupo():
                     for x in ast.walk(nodo)):
                 malos.append("un mode() adentro de una lambda (uno por grupo)")
         check(f"{fn.__name__} no recorre grupos uno por uno", not malos, malos)
-
-    return fallos
-
-
-def _pruebas_etiqueta_barras_producto():
-    """Lo que dicen las barras de la Evolución de Producto (2026-09-20).
-
-    Las funciones son puras, así que se prueban por valor: sin Streamlit,
-    sin R2, sin navegador.
-
-    Lo que se puede romper en silencio y acá falla ruidoso:
-
-      1. Que el conteo de documentos vuelva a ser `nunique` del NÚMERO
-         pelado. Medido sobre compras.parquet el 2026-09-20: 14.555 números
-         distintos contra 17.988 pares (número, proveedor) — el número solo
-         se come el 19% de los comprobantes, porque dos proveedores numeran
-         su "F001-123" cada uno por su cuenta. Un conteo bajo no se ve: es
-         un número creíble.
-      2. Que la variación del VALOR deje de pasar por la #470 y vuelva a
-         compararse contra un período que la ventana corta. La ventana de
-         esta tarjeta es RODANTE, así que la primera y la última barra están
-         cortadas siempre: medido, «jul» decía +181% contra un «jun» que
-         eran 11 días de mes.
-      3. Que la del PRECIO se le pegue a esa guarda. Es lo contrario: el
-         valor es una suma (medio mes suma la mitad) y el precio un
-         promedio (medio mes promedia igual de bien), así que el precio
-         conserva su variación donde el valor la pierde.
-      4. Que la etiqueta rotada vuelva a tener saltos de línea. Rotada, cada
-         renglón se apila a lo ANCHO y el hueco por barra son 30px: la
-         etiqueta de tres renglones deja de leerse (regla #91, Plotly la
-         ESCALA en vez de ocultarla, así que el DOM no lo canta).
-      5. Que un parquet sin columna de documento o sin proveedor reviente.
-         Pasa en modo demo y en cualquier reporte al que le falte la
-         columna: los dos pedazos son opcionales y se caen solos.
-      6. Que el eje o el hover vuelvan a rotular el mes en INGLÉS (#241).
-    """
-    fallos = 0
-
-    def check(nombre, ok, detalle=""):
-        nonlocal fallos
-        if ok:
-            print(f"OK    barras producto · {nombre}")
-        else:
-            fallos += 1
-            print(f"FALLA barras producto · {nombre}"
-                  f"{': ' + detalle if detalle else ''}")
-
-    from datetime import date
-
-    from graficos.compras._comun import _variaciones
-    from graficos.compras.producto import (
-        _compras_del_periodo, _etiquetas_barras, _fmt_cant_um, _fmt_docs, _hover_barras,
-        _periodo_del_clic, _prod_serie_periodo, _rotulo_periodo, _var_precio,
-    )
-
-    # Trampa 1: el MISMO número de documento en dos proveedores distintos,
-    # el mismo mes. Son DOS comprobantes.
-    df = pd.DataFrame({
-        "FECHA": pd.to_datetime(["2026-08-01", "2026-08-02", "2026-08-03",
-                                 "2026-09-01"]),
-        "PUNIT": [10.0, 12.0, 14.0, 20.0],
-        "CANT": [1.0, 2.0, 3.0, 4.0],
-        "VAL": [100.0, 200.0, 300.0, 700.0],
-        "DOC": ["F001-1", "F001-1", "F001-1", "F001-2"],
-        "PROV": ["Alfa", "Beta", "Alfa", "Alfa"],
-    })
-    agg = _prod_serie_periodo(df, "FECHA", "PUNIT", "CANT", "VAL", "Mes",
-                              col_docu="DOC", col_prov="PROV")
-    check("un documento es (número, proveedor), no el número solo",
-          int(agg["docs"].iloc[0]) == 2, f"{agg['docs'].iloc[0]}")
-    check("los proveedores del período van de mayor a menor",
-          [n for n, _ in agg["provs"].iloc[0]] == ["Alfa", "Beta"],
-          str(agg["provs"].iloc[0]))
-    check("y con su valor, no con su conteo",
-          abs(agg["provs"].iloc[0][0][1] - 400.0) < 1e-9,
-          str(agg["provs"].iloc[0]))
-
-    # Trampa 5: sin columna de documento ni de proveedor.
-    flaca = _prod_serie_periodo(df, "FECHA", "PUNIT", "CANT", "VAL", "Mes")
-    check("sin columnas de documento/proveedor la serie no revienta",
-          bool(flaca["docs"].isna().all()) and bool(flaca["provs"].isna().all()))
-
-    # Trampa 2: la ventana rodante corta el primer mes y el último. Sólo la
-    # barra del medio puede decir un porcentaje.
-    claves = ["2026-06", "2026-07", "2026-08", "2026-09"]
-    valores = [6000.0, 17000.0, 18700.0, 9000.0]
-    rng = (date(2026, 6, 20), date(2026, 9, 19))
-    var = _variaciones(claves, valores, "Mes", rng)
-    check("un mes que la ventana corta dice «parcial», no un %",
-          [v[0] for v in var] == ["parcial", "ant_parcial", "ok", "parcial"],
-          str([v[0] for v in var]))
-    check("y el que sí, es % contra la barra ANTERIOR",
-          abs(var[2][1] - 10.0) < 1e-9, str(var[2]))
-
-    # LA ETIQUETA SON DOS CIFRAS, no cuatro (2026-09-20, regla #480): la
-    # variación y los documentos salieron de la barra a pedido —«la etiqueta
-    # de datos es bastante larga»— y viven en el hover y en la tabla de
-    # abajo, que desde ese día está siempre a la vista dentro de la tarjeta.
-    # Que NO estén es lo que se vigila acá: volver a meterlas es volver a
-    # comerse el 45% del alto del gráfico.
-    et = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores)
-    check("la etiqueta lleva precio y valor",
-          all(x in et[2] for x in ("S/ 14.00", "S/ 19k")), et[2])
-    check("y NO lleva ni documentos ni variación",
-          all(x not in et[2] for x in ("docs", "%", "parcial")), et[2])
-    check("sin rotar, la etiqueta son dos renglones",
-          et[2].count("<br>") == 1, et[2])
-    check("el singular de documento no dice '1 docs'",
-          _fmt_docs(1) == "1 doc" and _fmt_docs(2) == "2 docs")
-    # Trampa 4.
-    rot = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, rotada=True)
-    check("rotada, la etiqueta es UN renglón", "<br>" not in rot[2], rot[2])
-    # LA CANTIDAD (2026-10-02, regla #582): derecha es el tercer renglón;
-    # girada reemplaza al valor —con los tres, la etiqueta girada se salía
-    # de la figura—.
-    _cants = [5.0, 12.5, 315.0, 1240.0]
-    et = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores,
-                           cantidades=_cants, um="KG")
-    check("con cantidad, son tres renglones y el último es la cantidad",
-          et[2].count("<br>") == 2 and et[2].endswith("315 KG"), et[2])
-    rot = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, rotada=True,
-                            cantidades=_cants, um="KG")
-    check("rotada lleva precio y cantidad, sin el valor",
-          rot[2] == "S/ 14.00 · 315 KG", rot[2])
-    check("la cantidad lleva un decimal sólo si es chica y lo tiene",
-          [_fmt_cant_um(c, "KG") for c in _cants]
-          == ["5 KG", "12.5 KG", "315 KG", "1,240 KG"],
-          str([_fmt_cant_um(c, "KG") for c in _cants]))
-
-    # ── EL CLIC EN UNA BARRA → SU PERÍODO (2026-09-20, regla #480) ─────
-    # Acá el eje NO es lineal (`_eje_x_kwargs` dibuja sobre los timestamps
-    # de los buckets), así que la `x` del evento vuelve como FECHA y no como
-    # índice: la prima de Semanal (`_clave_del_clic`) no sirve. Lo que se
-    # mira primero es la posición, que Streamlit manda en `point_index`
-    # —snake_case, ver el docstring de `st.plotly_chart`— y no depende del
-    # tipo de eje.
-    #
-    # Se prueba acá y no clickeando en el navegador porque un clic que «no
-    # hace nada» tiene dos causas posibles —no llegó, o llegó y el mapeo
-    # devolvió None— y desde afuera son indistinguibles. Esto separa las dos.
-    _momentos = pd.to_datetime(["2026-06-01", "2026-07-01",
-                                "2026-08-01", "2026-09-01"])
-    check("el clic se resuelve por la POSICIÓN que manda Streamlit",
-          _periodo_del_clic({"curve_number": 0, "point_number": 2,
-                             "point_index": 2, "x": "2026-08-01", "y": 1.0},
-                            claves, _momentos) == "2026-08",
-          str(_periodo_del_clic({"point_index": 2}, claves, _momentos)))
-    check("la primera barra es la 0, no la 1",
-          _periodo_del_clic({"point_index": 0}, claves, _momentos)
-          == "2026-06")
-    check("una posición fuera de rango es un no-op, no una excepción",
-          _periodo_del_clic({"point_index": 99}, claves, _momentos) is None)
-    check("sin posición, la FECHA del punto alcanza",
-          _periodo_del_clic({"x": "2026-07-01"}, claves, _momentos)
-          == "2026-07")
-    check("y una x que no casa con ningún bucket tampoco revienta",
-          _periodo_del_clic({"x": "no es una fecha"}, claves,
-                            _momentos) is None)
-
-    # ── EL DETALLE DE UNA BARRA: una fila por COMPRA ───────────────────
-    # El mismo `df` de arriba: tres compras en agosto, y dos de ellas
-    # comparten el número «F001-1» con proveedores distintos. Son DOS
-    # comprobantes, no uno (la trampa 1, otra vez, pero del lado del
-    # detalle: si acá se contara el número pelado, la tabla diría dos filas
-    # donde el gráfico dice tres documentos y las dos se contradirían).
-    _det, _tot_det = _compras_del_periodo(
-        df, "2026-08", "Mes", "FECHA", "PUNIT", "CANT", "VAL", "DOC", "PROV")
-    check("el detalle lista una fila por (documento, proveedor)",
-          len(_det) == 2, str(None if _det is None else len(_det)))
-    # LAS COLUMNAS POR NOMBRE, y no sólo cuántas filas salieron: la primera
-    # versión de `_compras_del_periodo` renombraba el resultado del groupby
-    # por POSICIÓN y la forma de ese frame cambia entre pandas 2 y 3 — pasó
-    # los tests en la máquina de desarrollo (pandas 3) y reventó en Cloud
-    # (pandas 2.2) con un `ValueError: Length mismatch`. Regla #481.
-    check("y con las columnas que la grilla espera, por nombre",
-          list(_det.columns) == ["fecha", "prov", "cant", "punit", "valor",
-                                 "__doc"],
-          str(list(_det.columns)))
-    check("y no se cuela ninguna compra de otro período",
-          set(_det["fecha"]) <= {"2026-08-01", "2026-08-02", "2026-08-03"},
-          str(list(_det["fecha"])))
-    # Alfa compró 1+3=4 unidades por 100+300=400 → 100.00 exactos. El
-    # promedio SIMPLE de sus dos líneas sería (10+14)/2 = 12, un precio que
-    # nadie pagó: el ponderado es la única definición que sobrevive al
-    # agregado (misma advertencia que la regla #199).
-    _alfa = _det[_det["prov"].str.upper().str.startswith("ALFA")].iloc[0]
-    check("el precio de una compra es el PONDERADO, no el promedio simple",
-          abs(float(_alfa["punit"]) - 100.0) < 1e-9, str(_alfa["punit"]))
-    check("el total tampoco promedia precios: divide valor entre cantidad",
-          _tot_det["punit"] == "S/ 100.00", str(_tot_det["punit"]))
-    check("sin columna de documento no hay detalle que armar, y lo dice",
-          _compras_del_periodo(df, "2026-08", "Mes", "FECHA", "PUNIT",
-                               "CANT", "VAL", None, "PROV") == (None, None))
-
-    # Trampa 3: el precio conserva su variación en TODAS, incluidas las
-    # parciales — es un promedio, no una suma.
-    check("la variación del precio no se calcula con la guarda de parcial",
-          [round(v, 1) if v is not None else None
-           for v in _var_precio([10.0, 12.0, 14.0, 20.0])]
-          == [None, 20.0, 16.7, 42.9],
-          str(_var_precio([10.0, 12.0, 14.0, 20.0])))
-
-    hov = _hover_barras([_rotulo_periodo(f"{c}-01", "Mes") for c in claves],
-                        [10.0, 12.0, 14.0, 20.0], valores, [1, 3, 9, 2],
-                        [[("ALFA SAC", 6000.0)], [("ALFA SAC", 17000.0)],
-                         [("ALFA SAC", 12000.0), ("BETA EIRL", 6700.0)],
-                         [("ALFA SAC", 9000.0)]],
-                        variaciones=var, claves=claves, gran="Mes", rango=rng)
-    check("el hover NOMBRA a los proveedores",
-          "Alfa SAC" in hov[2] and "Beta EIRL" in hov[2], hov[2])
-    check("el hover dice contra QUÉ barra se comparó",
-          "vs jul 2026" in hov[2], hov[2])
-    check("y en una parcial, por qué no hay variación",
-          "sin variación" in hov[0].lower() and "días" in hov[0], hov[0])
-    check("el precio lleva su variación aunque el mes esté cortado",
-          "precio prom. S/ 20.00 <span" in hov[3], hov[3])
-    check("el hover da el valor exacto, no el compacto",
-          "S/ 18,700.00" in hov[2], hov[2])
-    # Trampa 5, del otro lado.
-    check("un hover sin documentos ni proveedores no revienta",
-          "valor S/ 100.00" in _hover_barras(["ago"], [10.0], [100.0],
-                                             None, None)[0])
-    corte = _hover_barras(["ago"], [10.0], [100.0], [9],
-                          [[(f"PROV {i}", 10.0 - i) for i in range(7)]])[0]
-    check("con muchos proveedores, el hover corta y CUENTA el resto",
-          "y 3 más" in corte, corte)
-
-    # Trampa 6.
-    check("el rótulo del período va en español",
-          (_rotulo_periodo("2026-08-01", "Mes") == "ago 2026"
-           and _rotulo_periodo("2026-08-31", "Semana") == "31 ago"
-           and _rotulo_periodo("2026-01-01", "Año") == "2026"),
-          _rotulo_periodo("2026-08-01", "Mes"))
 
     return fallos
 
@@ -6132,6 +5877,13 @@ def _pruebas_grilla_horizontal():
         encoding="utf-8")
     n_filas = len(re.findall(r"st\.columns\(COLUMNAS_DRILL_FICHA\b", prov))
     check("la fila del drill de Proveedor parte con COLUMNAS_DRILL_FICHA",
+          n_filas == 1, f"se encontraron {n_filas}")
+    # Y la de Producto, la MISMA desde el 2026-10-13 (regla #653): dos
+    # secciones vecinas con el orden al revés hacían saltar la vista de lado.
+    prod = (raiz / "graficos" / "compras" / "producto.py").read_text(
+        encoding="utf-8")
+    n_filas = len(re.findall(r"st\.columns\(COLUMNAS_DRILL_FICHA\b", prod))
+    check("la fila del drill de Producto parte con COLUMNAS_DRILL_FICHA",
           n_filas == 1, f"se encontraron {n_filas}")
 
     # ── 3) La constante tiene UN dueño ──────────────────────────────────
@@ -12046,11 +11798,8 @@ def main():
     # ── Grilla horizontal: que todas las filas partan en el mismo sitio ──
     fallos += _pruebas_grilla_horizontal()
 
-    # ── Drill Familia › Subfamilia › Producto: que los 3 niveles cuadren ─
-    fallos += _pruebas_drill_familia_subfamilia()
-
-    # ── Lo que dice cada barra de la Evolución de Producto ──────────────
-    fallos += _pruebas_etiqueta_barras_producto()
+    # ── Producto: la lista cuadra, y la marca «revisar» no entra al precio
+    fallos += _pruebas_producto_lista_y_ficha()
 
     # ── Compras: que no vuelvan los bucles por grupo (regla #537) ───────
     fallos += _pruebas_compras_sin_bucles_por_grupo()
