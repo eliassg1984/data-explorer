@@ -10912,8 +10912,12 @@ def _pruebas_movimientos_periodo():
 
     from graficos import alturas
     from graficos.compras._comun import _periodo_serie
+    import pathlib
+
     from graficos import movimientos_periodo as mp
-    from tema import GRIS_TEXTO_SUAVE, PALETA_SERIES
+    from tema import (
+        GRIS_TEXTO_SUAVE, PALETA_SERIES, SERIE_PRINCIPAL, SERIE_TRAMOS,
+    )
 
     fallos = 0
 
@@ -11037,15 +11041,69 @@ def _pruebas_movimientos_periodo():
           fr.loc[fr["codigo"] == "R1", "registro"].tolist(),
           ["2026-09-07 10:00"])
 
+    # La barra es LISA con UNA parte resaltada (regla #649, la receta de
+    # «Compras por período»): sin resaltar, una barra del color de la serie
+    # y, encima, la capa transparente que lleva hover, clic y etiqueta.
     fig = mp.figura_periodos(v, alturas.COMPACTO, titulo="t", foco="2026-S37")
-    check("figura: un trazo por tramo y sin leyenda (la fila de KPI lo es)",
-          (len(fig.data), fig.layout.showlegend), (4, False))
-    check("figura: la etiqueta va en el tramo de más arriba con valor",
-          [i for i, t in enumerate(fig.data) if t.text and t.text[1]], [3])
+    check("figura: sin resaltar, la barra lisa y la capa de arriba, sin "
+          "leyenda (la fila de KPI lo es)",
+          (len(fig.data), fig.layout.showlegend, fig.layout.barmode,
+           fig.data[-1].marker.color, fig.data[0].hoverinfo),
+          (2, False, "overlay", "rgba(0,0,0,0)", "skip"))
+    check("figura: la etiqueta va en la capa, no en las franjas",
+          [i for i, t in enumerate(fig.data) if t.text and t.text[1]], [1])
     check("figura: el foco atenúa las otras barras por COLOR",
           isinstance(fig.data[0].marker.color, tuple)
-          and fig.data[0].marker.color[0] == PALETA_SERIES[1]
+          and fig.data[0].marker.color[0] == SERIE_PRINCIPAL
           and fig.data[0].marker.color[1].startswith("rgba("), True)
+    fr_ = mp.figura_periodos(v, alturas.COMPACTO, resaltado="COCINA")
+    _coc = next(t[2] for t in tr if t[0] == "COCINA")
+    check("figura: la parte resaltada va en el piso, oscura, y lo demás de "
+          "la barra encima, en lavanda",
+          (len(fr_.data), list(fr_.data[0].y), fr_.data[0].marker.color,
+           list(fr_.data[1].base), fr_.data[1].marker.color),
+          (3, _coc, SERIE_TRAMOS[0], _coc, SERIE_TRAMOS[2]))
+    check("figura: la barra resaltada cierra con su total",
+          [round(a + b, 2) for a, b in zip(fr_.data[0].y, fr_.data[1].y)],
+          [450.0, 55.0])
+    _hov = " ".join(str(cd[1]) for cd in fr_.data[-1].customdata)
+    check("figura: el hover nombra TODAS las partes, la resaltada en "
+          "negrita y el «Resto» contado como en la fila de KPI",
+          ("<b>Cocina: S/" in _hov, "<br>Produccion: S/" in _hov,
+           "2 áreas más" in _hov, "Resto" in _hov),
+          (True, True, True, False))
+    check("figura: el detalle del hover sigue en customdata[3]",
+          "req." in str(fr_.data[-1].customdata[0][3]), True)
+    check("figura: un tramo que no existe deja la barra lisa",
+          len(mp.figura_periodos(v, alturas.COMPACTO,
+                                 resaltado="NO EXISTE").data), 2)
+    check("resaltables: los tramos con nombre, sin «Resto»",
+          mp.resaltables(v), ["PRODUCCION", "COCINA", "BARRA"])
+    check("resaltables: con un solo tramo no hay qué resaltar",
+          mp.resaltables({"trazas": [("COCINA", SERIE_PRINCIPAL, [1.0])]}), [])
+    _est = {}
+    _ops = ["PRODUCCION", "COCINA"]
+    check("lo resaltado abre en el mayor de la vista",
+          mp.resaltado_vigente(_est, mp.PARTIR_AREA, _ops), "PRODUCCION")
+    _est[mp.PARTIR_AREA] = None
+    check("…soltado (None), se respeta",
+          mp.resaltado_vigente(_est, mp.PARTIR_AREA, _ops), None)
+    _est[mp.PARTIR_AREA] = "BARRA"
+    check("…si lo elegido dejó de estar, vuelve al mayor",
+          mp.resaltado_vigente(_est, mp.PARTIR_AREA, _ops), "PRODUCCION")
+    check("…y una entrada por forma de partir",
+          (mp.resaltado_vigente(_est, mp.PARTIR_TIPO, ["Bajas"]),
+           _est[mp.PARTIR_AREA]), ("Bajas", "PRODUCCION"))
+    _kr = mp._html_kpi(505.0, 5, tr, pd.Series([1.0] * 5), None,
+                       mp.REQUERIMIENTOS, resaltables=mp.resaltables(v),
+                       resaltado="COCINA")
+    check("fila de KPI: los tramos son botones y el resaltado va apretado; "
+          "el «Resto» no se resalta",
+          ('data-res="COCINA" aria-pressed="true"' in _kr,
+           'data-res="PRODUCCION" aria-pressed="false"' in _kr,
+           'data-res="Resto"' in _kr, "2 áreas más" in _kr,
+           "background:" in _kr),
+          (True, True, False, True, False))
     for gran in ("Día", "Mes", "Año"):
         _l = base.copy()
         _l["clave"] = _periodo_serie(_l["fecha"], gran)
@@ -11056,6 +11114,16 @@ def _pruebas_movimientos_periodo():
             check(f"figura en {gran}", True, True)
         except Exception as e:  # que se vea el tipo
             check(f"figura en {gran}", f"{type(e).__name__}: {e}", True)
+
+    import ast as _ast
+    _arbol = _ast.parse(pathlib.Path(mp.__file__).read_text(encoding="utf-8"))
+    _llamadas = [n for n in _ast.walk(_arbol)
+                 if isinstance(n, _ast.Call)
+                 and getattr(n.func, "id", None) == "figura_periodos"]
+    check("la tarjeta le pasa `resaltado=` a la figura (#649)",
+          bool(_llamadas) and all(
+              any(kw.arg == "resaltado" for kw in c.keywords)
+              for c in _llamadas), True)
 
     # ── SALIDAS: el mismo código, el otro lado ───────────────────────────
     # S1 de Cocina (Bajas) con dos líneas, S2 de Cocina personal (Comida
@@ -11196,6 +11264,13 @@ def _pruebas_movimientos_periodo():
           (True, True, False))
     check("porc.: el hover cuenta porcionamientos y cortes",
           "2 porc. · 4 cortes" in str(fig_p.data[-1].customdata[0][3]), True)
+    _fpr = mp.figura_periodos(vp, alturas.SEMANAL_SOLO,
+                              resaltado=vp["trazas"][0][0])
+    _etq_r = " ".join(t for t in (_fpr.data[-1].text or []) if t)
+    check("porc.: con una parte resaltada el 2º renglón sigue siendo el % "
+          "de merma (#510, #649)",
+          (len(_fpr.data), "20% merma" in _etq_r, "25% merma" in _etq_r),
+          (3, True, True))
     amb_p = bp[bp["clave"] == "2026-S37"]
     check("porc.: el Detalle abre en el de mayor merma", mp._mayor_valido(amb_p),
           "P1")

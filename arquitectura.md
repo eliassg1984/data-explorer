@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-648 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+649 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (210)
+**CSS y estilos** (211)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -244,6 +244,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#642** — El panel de fecha elige también por SEMANAS, de lunes a domingo: cada semana del mes es UNA…
 - **#644** — «Filtros» tiene sólo lo que vale para TODO el reporte: lo que cambia unas vistas se elige en…
 - **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
+- **#649** — La barra de las tarjetas «por período» de Movimientos es LISA y resalta UNA parte, elegida…
 
 **Layout y alturas** (91)
 
@@ -339,7 +340,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
 - **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
 
-**Plotly y figuras** (114)
+**Plotly y figuras** (115)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -455,6 +456,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#620** — La barra de «Compras por período» se parte por lo que se elige —subfamilia, proveedor o…
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
+- **#649** — La barra de las tarjetas «por período» de Movimientos es LISA y resalta UNA parte, elegida…
 
 **AgGrid y tablas** (94)
 
@@ -50764,6 +50766,88 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-12.)
 
+649. **La barra de las tarjetas «por período» de Movimientos es LISA y
+     resalta UNA parte, elegida desde la fila de KPI: la receta de «Compras
+     por período».** 2026-10-13, sobre las #509, #614 y #621. En
+     `graficos/movimientos_periodo.py` (`figura_periodos`, `_html_kpi`,
+     `resaltables`, `resaltado_vigente`, `_FILA_KPI`),
+     `graficos/movimientos_kpi.js` y
+     `test_graficos.py::_pruebas_movimientos_periodo`.
+
+     **Qué pasaba.** Las cuatro tarjetas —Requerimientos, Salidas,
+     Porcionamientos, Producción— partían cada barra en hasta cinco
+     colores (las áreas, los tipos o los usuarios mayores y «Resto»). A
+     pedido: «la agrupación de colores en las barras les quita el foco».
+     Es la misma queja que llevó a Compras a la #621, y el usuario eligió
+     esa forma sobre un boceto de cinco opciones con los datos reales
+     (hoy · como Compras · una en color y las demás en gris · lisa · una
+     fila por parte).
+
+     **Cómo es ahora.** La barra va en el color de la serie
+     (`SERIE_PRINCIPAL`); con una parte resaltada, esa parte en
+     `SERIE_TRAMOS[0]` apoyada en el piso —para compararla entre períodos
+     sobre la misma base— y lo demás encima en `SERIE_TRAMOS[2]`. Las
+     franjas van con `hoverinfo="skip"` y una capa transparente del alto
+     de la barra (`width=1.0`, `barmode="overlay"`) lleva el hover, el
+     clic y la etiqueta: el cursor responde en la columna entera. El hover
+     nombra TODAS las partes, la resaltada en negrita y el «Resto» contado
+     («10 áreas más», `rotulo_tramo`, con `v["n_partes"]`). El renglón de
+     los documentos de la etiqueta dice cuánto vale la parte
+     (`semanal.renglon_resaltado`); en porcionamientos NO: ahí sigue el %
+     de merma (#510), y la parte se lee en el hover y en la fila.
+
+     **Quién elige la parte: la fila de KPI, no unas fichas.** En Compras
+     son `st.pills` en el renglón del título; acá la fila de KPI ya
+     nombraba cada parte con su monto y su %, y el usuario pidió que fuera
+     ella. Sus tarjetas de tramo son `<button data-res aria-pressed>` y la
+     fila entera es una pieza propia, `_FILA_KPI`
+     (`st.components.v2`, `movimientos_kpi.js`): Python le pasa el HTML de
+     `_html_kpi` y le llega el trigger `resaltar`
+     (`{"nombre": <tramo> | null}`), que el callback escribe en
+     `{k}_resaltado` ANTES del rerun —una entrada por «Partir por», como
+     `semanal._K_RESALTADO`—. Abre en la mayor de la vista, vuelve a ella
+     si la elegida deja de estar (otra fecha, otro filtro), y el «lo
+     soltó» (None) se respeta. El «Resto» no se resalta. El cuadrito de
+     cada tarjeta ya no es el color del tramo —la barra no lo usa—: lleno
+     en la resaltada y hueco en las demás, pintado por el CSS según
+     `aria-pressed`, así el clic cambia la tarjeta sin esperar la corrida.
+
+     **Tres trampas de la fila, medidas.**
+     - **Sin shadow root** (`isolate_styles=False`): con él, las reglas de
+       `_CSS_MOLDE`, que cuelgan de `.st-key-<c>_kpi`, no entrarían, y
+       habría que copiar el CSS de la fila adentro del componente.
+     - **`font: inherit` también hereda el `line-height`**: el botón salía
+       a 25,6px de interlineado contra los 19,2 de las demás tarjetas, la
+       fila pasó de 28 a 37px y la tarjeta creció 9. Va `line-height: 1.2`
+       después del `font`. El fondo del botón crece con `padding` y un
+       `margin` negativo del mismo tamaño, para no cobrar alto.
+     - **El JS reescribe la fila sólo si el HTML cambió**: cada corrida
+       vuelve a llamar la función, y rehacer el DOM igual le borraría el
+       foco del teclado al botón.
+
+     **Probado en el navegador**, con los datos de R2: resaltar
+     «Produccion» dibuja S/ 852.782 en la franja oscura (lo que dice su
+     tarjeta) y otro clic deja la barra lisa; el clic en una barra sigue
+     abriendo su Detalle y atenuando las demás. Ojo al probarlo con el
+     navegador automatizado: un clic que llega sin un movimiento previo
+     del cursor a veces no tiene punto de hover y Plotly no lo emite; con
+     un `hover` antes, responde al primero. Una persona siempre pasa el
+     cursor antes.
+
+     **Lo que no cambió**: los colores de `trazas_por_area` siguen en el
+     dato (`colores_area`, #509) para quien no pase `resaltables`; las
+     rayitas grises de «Comparar con» (#614); la tabla Resumen con una
+     columna por tramo.
+
+     **En Cloud puede hacer falta «Reboot app» para VERLO** (#357), pero
+     no para que ande: nada de afuera de `movimientos_periodo` cambió de
+     nombre ni de firma (`graficos/movimientos.py` llama a las mismas
+     cuatro tarjetas, y lo que se importa de `semanal` ya existía), así que
+     con el módulo viejo en memoria la página sigue dibujando las barras de
+     colores hasta el reinicio.
+
+     (2026-10-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50776,7 +50860,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#648**; la próxima toma el número siguiente.
+> última regla es la **#649**; la próxima toma el número siguiente.
 
 >
 

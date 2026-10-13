@@ -63,9 +63,8 @@ LO QUE LAS HACE DISTINTAS, medido contra los dos parquets el 2026-09-23
     y UNA fecha de registro (los 20.086 requerimientos y las 5.579 salidas,
     sin excepción). El área es al documento lo que el proveedor a una
     compra, y por eso la barra se PARTE POR ÁREA (las tres mayores de la
-    vista y «Resto»): quién pidió, o quién dio de baja. El color sigue al
-    área, no a su puesto (`colores_area`), y es el MISMO en las dos
-    tarjetas: las dos reciben el orden del histórico de requerimientos.
+    vista y «Resto»): quién pidió, o quién dio de baja. Desde la regla
+    #649 la barra no pinta cada parte de un color: ver abajo.
   · Los ANULADOS no suman en barras ni totales y se cuentan en la columna
     Estado, que escribe SÓLO la excepción (regla #239: el 97-98 % está
     procesado). Valen poco pero no cero: los requerimientos anulados de
@@ -76,6 +75,19 @@ LO QUE LAS HACE DISTINTAS, medido contra los dos parquets el 2026-09-23
     movieron el kardex. Los nombra la fila de KPI y se LISTAN en el Detalle.
   · Sin granularidad «Por documento» (la de Compras): un mes son ~480
     requerimientos, o sea ~480 barras.
+
+LA BARRA ES LISA Y RESALTA UNA PARTE (2026-10-13, regla #649, a pedido:
+«la agrupación de colores en las barras les quita el foco […] algo menos
+colorido, quizás como la que tengo en compras por período»; elegida sobre
+un boceto de cinco opciones con los datos reales). Hasta ese día cada parte
+llevaba su color —hasta cinco por barra—. Ahora es la receta de Compras
+(#621): la barra en el color de la serie y UNA parte en morado oscuro
+apoyada en el piso, con lo demás en lavanda encima. La elige la FILA DE
+KPI, que ya nombraba cada parte con su monto y su %: sus tarjetas son
+botones (`_FILA_KPI`, un `st.components.v2`), abre en la mayor de la vista
+y otro clic en la misma la suelta. El hover nombra todas las partes y, en
+la etiqueta, el renglón de los documentos dice cuánto vale la resaltada
+(en porcionamientos sigue el % de merma).
 
 NO TIENEN FRAGMENT PROPIO, a diferencia de la de Compras: aquélla lo
 necesita por su selector de fecha, que escala a una corrida completa (regla
@@ -91,6 +103,7 @@ navegador.
 
 from dataclasses import dataclass
 from html import escape
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -99,7 +112,7 @@ import streamlit as st
 import cortes
 from tema import (
     AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
-    PALETA_SERIES, TEXTO_PRINCIPAL,
+    SERIE_PRINCIPAL, SERIE_TRAMOS, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
@@ -116,8 +129,8 @@ from graficos.compras._comun import (
 from graficos.compras.semanal import (
     _AGRUPADO_GRAN, _ATENUADO, _ETQ_FUENTE, _ETQ_SEP, _LIENZO_PX,
     _TICK_AIRE, _TICK_PX_CARACTER, _anio_semana, _calendario_del_eje,
-    _clave_del_clic, _con_alpha, _del_al, _plan_etiquetas, _rotulo_periodo,
-    _techo_etiquetas,
+    _clave_del_clic, _con_alpha, _del_al, _hover_partes, _plan_etiquetas,
+    _rotulo_periodo, _techo_etiquetas, renglon_resaltado,
 )
 from graficos.movimientos_comun import _rango_vigente
 from tablas.movimientos_periodo import (
@@ -318,6 +331,57 @@ def nombre_tramo(nombre, partir=PARTIR_AREA):
 cuatro o menos en la vista van todas, sin «Resto»: sería un tramo de una
 sola área con otro nombre. Medido en el último mes de requerimientos: Cocina
 y Producción son el 84 % del valorizado y la tercera, Barra, el 5 %."""
+
+
+def rotulo_tramo(nombre, v):
+    """Cómo nombra un tramo el hover de la barra: como la fila de KPI, con
+    el «Resto» contado («10 áreas más») y no con su nombre interno."""
+    partir = v.get("partir", PARTIR_AREA)
+    if nombre != "Resto":
+        return nombre_tramo(nombre, partir)
+    n = v.get("n_partes", 0) - (len(v.get("trazas") or ()) - 1)
+    uno, varios = _PARTIR_UNIDAD.get(partir, _PARTIR_UNIDAD[PARTIR_AREA])
+    return f"{n} {uno if n == 1 else varios} más"
+
+
+def resaltables(v):
+    """Los tramos que la fila de KPI ofrece resaltar en la barra (regla
+    #649): los que tienen nombre —el «Resto» no, como «Otras» en Compras—,
+    en el orden de la barra. Nada si la barra tiene un solo tramo: no hay
+    qué separar."""
+    tr = v.get("trazas") or []
+    if len(tr) < 2:
+        return []
+    return [n for n, _c, _v in tr if n != "Resto"]
+
+
+def resaltado_vigente(estado, partir, ops):
+    """El tramo resaltado con «Partir por» `partir`, o None (barra lisa).
+
+    `estado` es el dict de la tarjeta en `session_state` (`{k}_resaltado`),
+    UNA entrada por forma de partir, como `semanal._K_RESALTADO` en Compras:
+    abre en el primero de `ops` —el mayor de la vista—; si lo elegido dejó
+    de estar (otra fecha, otro filtro) vuelve al primero; y None, que es
+    «lo soltó», se respeta. Escribe en `estado`."""
+    if not ops:
+        return None
+    if partir not in estado or (estado[partir] is not None
+                                and estado[partir] not in ops):
+        estado[partir] = ops[0]
+    return estado[partir]
+
+
+_FILA_KPI = st.components.v2.component(
+    "fila_kpi_movimientos",
+    js=(Path(__file__).parent / "movimientos_kpi.js").read_text(
+        encoding="utf-8"),
+    isolate_styles=False,
+)
+"""La fila de KPI como pieza propia (regla #649): el MISMO HTML de
+`_html_kpi`, y un clic en un tramo lo resalta en la barra. Sin shadow root
+(`isolate_styles=False`) para que la sigan estilando las reglas de
+`_CSS_MOLDE`, que cuelgan de `.st-key-<c>_kpi`. A Python le llega sólo el
+trigger `resaltar`: `{"nombre": <tramo> | null}`."""
 
 _ALTO_FIG_SOLO = alturas.SEMANAL_SOLO - alturas.FRANJA_MODO_SEMANAL
 _ALTO_TABLA = alturas.SEMANAL_TABLA - alturas.FRANJA_MODO_SEMANAL
@@ -835,32 +899,22 @@ def _texto_estado(anulados, sin_procesar, lado):
     return " · ".join(partes), ("sinp" if sin_procesar else "anul")
 
 
-def _etiqueta_arriba(trazas, textos):
-    """El texto de cada TRAMO, con la etiqueta del total sólo en el de más
-    arriba que tenga valor: Plotly pone el `outside` de una barra apilada
-    sólo en la que termina la pila (lo mismo que resuelve
-    `semanal._etiqueta_en_la_punta` para sus tramos)."""
-    salida = [[None] * len(textos) for _ in trazas]
-    for j, txt in enumerate(textos):
-        for i in range(len(trazas) - 1, -1, -1):
-            if trazas[i][2][j]:
-                salida[i][j] = txt
-                break
-    return salida
-
-
 def _renglones(total, n_doc, var, gran, lado, segundo=None, poco=False):
     """Los renglones de la etiqueta de UNA barra como `(plano, html)`: el
     total, los documentos y la variación — la etiqueta de Compras con
     «req.» o «sal.» donde aquélla dice «docs». `segundo` reemplaza al
     renglón de los documentos: en porcionamientos es el % de merma (#510),
     porque una semana con más porcionamientos pierde más soles sin que se
-    trabaje peor, y el % separa las dos cosas."""
+    trabaje peor, y el % separa las dos cosas. Si es un par `(plano, html)`
+    va tal cual: el valor de la parte resaltada, en su tono (#649)."""
     if not total:
         return []
     salida = [(total, total)]
-    _r = segundo if segundo is not None else f"{n_doc:,} {lado.corto}"
-    salida.append((_r, f"<span style='color:{GRIS_TEXTO}'>{_r}</span>"))
+    if isinstance(segundo, tuple):
+        salida.append(segundo)
+    else:
+        _r = segundo if segundo is not None else f"{n_doc:,} {lado.corto}"
+        salida.append((_r, f"<span style='color:{GRIS_TEXTO}'>{_r}</span>"))
     if gran in _GRAN_VARIACION and var:
         estado, pct, _ = var
         if estado == "ok":
@@ -938,6 +992,10 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS,
                 trazas_por_area(dv, claves, orden)),
         partir=partir,
     )
+    # Cuántas partes suman algo en la vista: el «Resto» se nombra contado
+    # («10 áreas más») en la fila de KPI y en el hover (`rotulo_tramo`).
+    v["n_partes"] = int((dv.groupby(_PARTIR_COL.get(partir, "area"))
+                         ["valor"].sum() > 0).sum())
     # Qué áreas hay en cada período, de mayor a menor: el tooltip de la
     # columna «Áreas» del Resumen.
     _pa = (dv.groupby(["clave", "area"])["valor"].sum().reset_index()
@@ -948,8 +1006,18 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS,
     return v
 
 
-def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
+def figura_periodos(v, alto_fig, titulo="", foco=None, comps=(),
+                    resaltado=None):
     """La figura de la tarjeta a partir de `vista_periodos`.
+
+    LA BARRA ES LISA, con UNA parte resaltada (regla #649, la de «Compras
+    por período», #621): `resaltado` es el nombre de un tramo de
+    `v["trazas"]` —lo elige la fila de KPI— y va en morado oscuro apoyado
+    en el piso, con lo demás de la barra en lavanda encima; sin él (None),
+    la barra entera en el color de la serie. Las franjas no reciben el
+    cursor: una capa transparente del alto de la barra y del ancho de su
+    columna lleva el hover —que nombra TODAS las partes, la resaltada en
+    negrita—, el clic y la etiqueta.
 
     `foco` es la clave del período en foco (o None): lo demás se atenúa
     por COLOR, no con `marker.opacity` — esa lista sobre barras con texto
@@ -968,7 +1036,12 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
     fig = go.Figure()
     if not n:
         return fig
-    trazas = v["trazas"] or [("Valorizado", PALETA_SERIES[0], v["tot"])]
+    tot = v["tot"]
+    trazas = v["trazas"] or []
+    partida = len(trazas) > 1
+    k_res = (next((j for j, (_n, _c, _v) in enumerate(trazas)
+                   if _n == resaltado), None)
+             if partida and resaltado is not None else None)
     docs = res["docs"].astype(int).tolist()
 
     # ── La etiqueta de cada barra: lo que ENTRA (`_plan_etiquetas`) ──────
@@ -978,6 +1051,13 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
               else [None] * n)
     segundos = [(f"{t / c:.0%} merma" if (lado.merma and c) else None)
                 for t, c in zip(v["tot"], costos)]
+    # Con una parte resaltada, el renglón de los documentos (que siguen en
+    # el hover) dice cuánto vale esa parte en la barra, como en Compras. En
+    # porcionamientos no: ahí el segundo renglón es el % de merma (#510), y
+    # la parte se lee en el hover y en la fila de KPI.
+    if k_res is not None and not lado.merma:
+        segundos = [renglon_resaltado(p, t) if t else None
+                    for p, t in zip(trazas[k_res][2], tot)]
     _poco = v.get("poco") or [False] * n
     reng = [_renglones(fmt_k(t) if t else None, r, var, gran, lado, s, pc)
             for t, r, var, s, pc in zip(v["tot"], docs, v["variaciones"],
@@ -988,8 +1068,6 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
     if plan:
         sep = _ETQ_SEP if plan == "unida" else "<br>"
         textos = [(sep.join(h for _, h in r[:k_etq]) or None) for r in reng]
-    txt_tr = (_etiqueta_arriba(trazas, textos) if plan
-              else [[None] * n for _ in trazas])
     estilo = dict(textposition="outside", cliponaxis=False,
                   constraintext="none",
                   textangle=-90 if plan in ("girada", "unida") else 0,
@@ -1009,26 +1087,45 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
                for r, ln, a in zip(docs, res["lineas"], res["areas"])]
     anul = [(f"<br><i>{lado.anulados(int(x))} aparte</i>" if x else "")
             for x in res["anulados"]]
+    # ── La barra: lisa, o con UNA parte resaltada (regla #649) ──────────
+    # Las franjas se apilan a mano (`base`) y en `barmode="overlay"`, para
+    # que la ÚLTIMA traza —transparente, del alto de la barra y del ancho de
+    # su columna— quede encima de todo: ella lleva el hover, el clic y la
+    # etiqueta, y el cursor responde en la columna entera y no en una
+    # franja de 4px. Las franjas van con `hoverinfo="skip"`, que también les
+    # apaga el clic (#388): lo recibe la capa. Es la receta de Compras.
     xs = list(range(n))
-    for i, (nombre, color, vals) in enumerate(trazas):
-        rot = nombre_tramo(nombre, v.get("partir", PARTIR_AREA))
+    if k_res is None:
+        visibles = [(tot, [0.0] * n, SERIE_PRINCIPAL)]
+    else:
+        parte = trazas[k_res][2]
+        visibles = [(parte, [0.0] * n, SERIE_TRAMOS[0]),
+                    ([max(t - p, 0.0) for t, p in zip(tot, parte)], parte,
+                     SERIE_TRAMOS[2])]
+    for y, base_, color in visibles:
         if foco is not None and foco in claves:
             color = [color if c == foco else _con_alpha(color, _ATENUADO)
                      for c in claves]
-        fig.add_bar(
-            x=xs, y=vals, name=rot, marker=dict(color=color),
-            customdata=list(zip(v["hover"], [rot] * n, v["tot"], det,
-                                v["var_hover"], anul)),
-            hovertemplate=("%{customdata[0]}"
-                           "<br><b>%{customdata[1]}</b>: S/ %{y:,.2f}"
-                           "<br>Total: S/ %{customdata[2]:,.2f}"
-                           "%{customdata[3]}%{customdata[4]}%{customdata[5]}"
-                           "<extra></extra>"),
-        )
-        if plan:
-            fig.data[-1].update(text=txt_tr[i], **estilo)
-    if len(trazas) > 1:
-        fig.update_layout(barmode="stack")
+        fig.add_bar(x=xs, y=y, base=base_, marker=dict(color=color),
+                    hoverinfo="skip", showlegend=False)
+    # El hover pregunta por la BARRA: todas sus partes, la resaltada en
+    # negrita. `customdata[3]` es el detalle (documentos, líneas, áreas).
+    partes_hov = (_hover_partes(
+        [(rotulo_tramo(_n, v), _c, _v) for _n, _c, _v in trazas], tot,
+        v.get("partir", PARTIR_AREA), k_res) if partida else [""] * n)
+    fig.add_bar(
+        x=xs, y=tot, width=1.0, showlegend=False,
+        marker=dict(color="rgba(0,0,0,0)"),
+        customdata=list(zip(v["hover"], partes_hov, tot, det,
+                            v["var_hover"], anul)),
+        hovertemplate=("%{customdata[0]}"
+                       "<br><b>Total: S/ %{customdata[2]:,.2f}</b>"
+                       "%{customdata[3]}%{customdata[4]}%{customdata[1]}"
+                       "%{customdata[5]}<extra></extra>"),
+    )
+    if plan:
+        fig.data[-1].update(text=textos, **estilo)
+    fig.update_layout(barmode="overlay")
 
     # ── Los años comparados: un trazo por período ─────────────────────────
     # El largo del trazo sigue al ancho de la barra (~0.8 del paso del eje
@@ -1060,8 +1157,8 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
                 _y = [_y[0], tope_comp * 1.06]
             fig.update_yaxes(range=_y)
     # SIN LEYENDA, a diferencia de Compras: la fila de KPI de la cabecera
-    # ya nombra cada tramo con su color, su monto y su % (`_html_kpi`), así
-    # que es la leyenda dicha con números. La de Plotly, además, se montaba
+    # ya nombra cada tramo con su monto y su % (`_html_kpi`), y es la que
+    # elige cuál se resalta (#649): es la leyenda dicha con números. La de Plotly, además, se montaba
     # sobre los rótulos del eje con la figura en COMPACTO (medido: los
     # rótulos de dos renglones de Semana y de Día la alcanzan). Las cuentas
     # de las etiquetas siguen suponiendo la leyenda (`semanal._LEYENDA_Y`),
@@ -1352,7 +1449,8 @@ def _mayor_valido(amb, lado=None):
 
 def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
               costo_area=None, comps=(), aviso=None,
-              unidad=("área", "áreas"), nombrar=_nombre_area, cantidad=""):
+              unidad=("área", "áreas"), nombrar=_nombre_area, cantidad="",
+              resaltables=(), resaltado=None):
     """La fila de KPI: el total de la vista y una tarjeta por TRAMO de la
     barra, con el color del tramo. Es también la leyenda del gráfico, dicha
     con números. `nota` es `(corto, largo)` de lo que no suma, o None.
@@ -1370,7 +1468,14 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
     (`meses_poco_registro`), en ámbar al final de la fila; con él, una
     caída contra el año comparado va en gris y no en verde (regla #626).
     `cantidad` («1,317 kg») va junto a la cuenta de documentos del total,
-    sólo cuando la vista es de una unidad (`unidad_de_vista`, #626)."""
+    sólo cuando la vista es de una unidad (`unidad_de_vista`, #626).
+
+    Con `resaltables` (regla #649) los tramos de esa lista son BOTONES:
+    `data-res` con su nombre y `aria-pressed` en el que es `resaltado`. Su
+    cuadrito ya no es el color del tramo —la barra no lo usa— sino el de la
+    parte resaltada, lleno en el elegido y hueco en los demás (lo pinta el
+    CSS según `aria-pressed`, así el clic lo cambia antes de que vuelva
+    Python). El «Resto» no se resalta y va sin cuadrito."""
     def _t(rot, val, sub, clase="", tip="", color=None, sub_color=None):
         sw = (f'<span class="mp-kpi-sw" style="background:{color}"></span>'
               if color else "")
@@ -1379,6 +1484,18 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
                 f'<span class="mp-kpi-rot">{sw}{escape(rot)}</span>'
                 f'<span class="mp-kpi-val">{escape(val)}'
                 f'<span class="mp-kpi-sub"{_sc}>{escape(sub)}</span></span></div>')
+
+    def _t_res(nombre, rot, val, sub, tip):
+        on = nombre == resaltado
+        tip += (" · resaltado en las barras: otro clic lo suelta" if on
+                else " · clic para resaltarlo en las barras")
+        return (f'<button type="button" class="mp-kpi mp-kpi-res" '
+                f'data-res="{escape(nombre)}" aria-pressed="{str(on).lower()}"'
+                f' title="{escape(tip)}">'
+                f'<span class="mp-kpi-rot"><span class="mp-kpi-sw"></span>'
+                f'{escape(rot)}</span>'
+                f'<span class="mp-kpi-val">{escape(val)}'
+                f'<span class="mp-kpi-sub">{escape(sub)}</span></span></button>')
 
     _n = lado.cuenta(n_docs) + (f" · {cantidad}" if cantidad else "")
     partes = [_t(lado.rot_total, fmt_k(total), _n, "mp-kpi-total",
@@ -1415,9 +1532,12 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
                 if c_area:
                     propio = (f" · su merma es el {v / c_area:.1%} de lo que "
                               "porcionó")
-            partes.append(_t(rot, fmt_k(v), f"{p:.0%}",
-                             tip=f"{rot}: S/ {v:,.2f} · {p:.1%}{propio}",
-                             color=color))
+            tip = f"{rot}: S/ {v:,.2f} · {p:.1%}{propio}"
+            if nombre in resaltables:
+                partes.append(_t_res(nombre, rot, fmt_k(v), f"{p:.0%}", tip))
+            else:
+                partes.append(_t(rot, fmt_k(v), f"{p:.0%}", tip=tip,
+                                 color=None if resaltables else color))
     if costo is not None:
         _pm = f"{total / costo:.1%}" if costo else "—"
         partes.append(_t("Porcionado", fmt_k(costo), f"{_pm} merma",
@@ -1682,6 +1802,44 @@ _CSS_MOLDE = """<style>
 .st-key-__C___kpi .mp-kpi-total .mp-kpi-val {
     color: var(--accent-deep);
     font-weight: 700;
+}
+/* Los tramos que se resaltan en la barra (regla #649): botones con la
+   forma de las demás tarjetas. El fondo crece por arriba y por abajo con
+   un margen negativo, para que la fila no gane alto. Sin `:has` (#469). */
+.st-key-__C___kpi button.mp-kpi-res {
+    font: inherit;
+    line-height: 1.2;  /* el `font` de arriba lo hereda: 25.6px, medido */
+    color: inherit;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 6px;
+    margin: -3px 0;
+    padding: 3px 12px;
+    cursor: pointer;
+    transition: background-color .12s;
+}
+.st-key-__C___kpi button.mp-kpi-res:hover { background: var(--bg-hover); }
+.st-key-__C___kpi button.mp-kpi-res[aria-pressed="true"] {
+    background: var(--accent-light);
+    box-shadow: inset 0 0 0 1px var(--border-lavender);
+    border-left-color: transparent;
+}
+.st-key-__C___kpi button.mp-kpi-res[aria-pressed="true"] + .mp-kpi {
+    border-left-color: transparent;
+}
+.st-key-__C___kpi button.mp-kpi-res:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+.st-key-__C___kpi button.mp-kpi-res .mp-kpi-sw {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--text-muted);
+}
+.st-key-__C___kpi button.mp-kpi-res[aria-pressed="true"] .mp-kpi-sw {
+    background: var(--accent-hover);
+    box-shadow: none;
 }
 .st-key-__C___kpi .mp-kpi-nota { max-width: 300px; }
 /* Los años comparados y el aviso de pocos documentos (regla #614). */
@@ -2036,16 +2194,36 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         kw_kpi = (dict(costo=float(dv["costo"].sum()),
                        costo_area=dv.groupby("area")["costo"].sum().to_dict())
                   if lado.merma else {})
-        kpi.markdown(
-            _html_kpi(float(sum(v["tot"])), int(dv["doc"].nunique()),
-                      v["trazas"],
-                      dv.groupby(_PARTIR_COL.get(partir, "area"))
-                      ["valor"].sum().loc[lambda s: s > 0],
-                      nota, lado, comps=comps, aviso=aviso,
-                      unidad=_PARTIR_UNIDAD.get(partir, ("área", "áreas")),
-                      nombrar=lambda n: nombre_tramo(n, partir),
-                      cantidad=cant_v, **kw_kpi),
-            unsafe_allow_html=True)
+        # ── Qué parte de la barra se resalta (regla #649) ────────────────
+        # La elige la fila de KPI: un clic en un tramo lo resalta y otro
+        # clic en el mismo lo suelta. El callback corre ANTES del rerun, así
+        # que acá ya se lee lo nuevo, y lo leen la fila y la figura.
+        ops_res = resaltables(v)
+        estado_res = st.session_state.setdefault(f"{k}_resaltado", {})
+        resaltado = resaltado_vigente(estado_res, partir, ops_res)
+        k_fila = f"{k}_kpi_res"
+
+        def _al_resaltar(k_fila=k_fila, estado_res=estado_res, partir=partir,
+                         ops_res=tuple(ops_res)):
+            # Un callback de componente no recibe argumentos: el valor se lee
+            # de su key (como en `panel_fecha.py`).
+            a = (st.session_state.get(k_fila) or {}).get("resaltar") or {}
+            nombre = a.get("nombre")
+            estado_res[partir] = nombre if nombre in ops_res else None
+
+        with kpi.container():
+            _FILA_KPI(
+                key=k_fila, on_resaltar_change=_al_resaltar, width="stretch",
+                data={"html": _html_kpi(
+                    float(sum(v["tot"])), int(dv["doc"].nunique()),
+                    v["trazas"],
+                    dv.groupby(_PARTIR_COL.get(partir, "area"))
+                    ["valor"].sum().loc[lambda s: s > 0],
+                    nota, lado, comps=comps, aviso=aviso,
+                    unidad=_PARTIR_UNIDAD.get(partir, ("área", "áreas")),
+                    nombrar=lambda n: nombre_tramo(n, partir),
+                    cantidad=cant_v, resaltables=ops_res,
+                    resaltado=resaltado, **kw_kpi)})
 
         # ── Foco, modo y clic: se resuelven ANTES de dibujar (#398, #399) ─
         # Todo como en Compras: cambiar la granularidad o un filtro suelta el
@@ -2099,7 +2277,7 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         fig = figura_periodos(
             v, alto_fig, titulo=titulo,
             foco=foco if (foco_ok and modo == _MODO_DETALLE) else None,
-            comps=comps)
+            comps=comps, resaltado=resaltado)
         # Lo que devuelve se ignora: el clic ya se leyó arriba.
         st.plotly_chart(fig, use_container_width=True, on_select="rerun",
                         selection_mode="points",
