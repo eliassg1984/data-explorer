@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-654 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+655 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (211)
 
@@ -246,7 +246,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
 - **#649** — La barra de las tarjetas «por período» de Movimientos es LISA y resalta UNA parte, elegida…
 
-**Layout y alturas** (92)
+**Layout y alturas** (93)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -340,6 +340,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
 - **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
 - **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
+- **#655** — «Costo por kg útil» muestra de dónde sale cada número: la ventana dice sus días y empieza a…
 
 **Plotly y figuras** (115)
 
@@ -957,7 +958,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (176)
+**Decisiones de diseño y UX** (177)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1135,6 +1136,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#650** — Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de diferencias», con el posible…
 - **#651** — «Análisis de diferencias» mira los COMBOS, no descarta las líneas sin precio y reconoce lo…
 - **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
+- **#655** — «Costo por kg útil» muestra de dónde sale cada número: la ventana dice sus días y empieza a…
 
 **Mantenimiento y trampas del lenguaje** (16)
 
@@ -51315,6 +51317,72 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-13.)
 
+655. **«Costo por kg útil» muestra de dónde sale cada número: la ventana
+     dice sus días y empieza a las 00:00, los proveedores llevan «mejor»,
+     «más caro» o «pocos», un recuadro hace las cuentas y cada proveedor
+     abre sus porcionamientos con la compra que se le asignó.**
+     2026-10-13, a pedido —«¿cómo el usuario puede saber qué registros o
+     cálculos llegan a esos resultados?»—, aprobado sobre un mockup con los
+     datos reales (https://claude.ai/artifact/VLwoSA7aHGuKPU9aUvQarc). En
+     `graficos/movimientos_merma.py` (`fin_de_ventana`,
+     `partes_pagado_de_mas`, `rastro_proveedor`, `tarjeta_proveedores`),
+     `graficos/alturas.py` (`MERMA_PROV_DET`), `estilos/_80_cards.py` y
+     `test_graficos.py::_pruebas_rastro_proveedor`.
+
+     **Lo que la tarjeta escondía, medido sobre la charela (6 meses al
+     9/10/2026):**
+     - **La ventana se cortaba a la HORA del último porcionamiento**
+       (`max + 1 día` sin normalizar): «6 meses» empezaba el 10/04 a las
+       14:51 y dejaba fuera uno de INVERMAR de esa mañana. Con 4 y no 5,
+       INVERMAR —el más barato, S/ 96,57 el kg útil— no competía, «Mejor»
+       pasaba a LLOCLLA (116,48) y «Pagado de más» daba S/ 610 en vez de
+       S/ 2.416. Ahora `fin_de_ventana` corta a las 00:00 del día
+       siguiente, también en «Rendimiento», y el rótulo dice los días
+       («Del 13 abr al 12 oct 2026»).
+     - **Un proveedor con menos de `MIN_PORC_PROVEEDOR` porcionamientos no
+       compite y no lo decía.** Lleva «pocos», va en gris y, si es más
+       barato que el «Mejor», el recuadro lo dice en ámbar.
+     - **El proveedor no es un dato: lo asigna la app** (la última compra
+       hasta 45 días antes, regla #615). De los 11 porcionamientos de la
+       charela que se le cargan a BARCO AZUL, 7 tenían a LLOCLLA vendiendo
+       en los 21 días previos: el «más caro» descansa en atribuciones
+       dudosas. La lista los marca en «Otro cerca».
+     - **«S/ por kg» es el costo del DÍA, no lo pagado a ese proveedor.** El
+       Almacén costea al promedio de su stock: el 31/05 costeó la charela a
+       S/ 57 y a BARCO AZUL se le había pagado S/ 68. La celda va en ámbar
+       si se alejan más de 5 % (`DIFIERE_PAGADO`).
+
+     **Cómo quedó:** la tabla de proveedores es elegible (de entrada, el
+     «Mejor»); debajo, «Cómo sale» con la merma, el S/ por kg y el S/ por
+     kg útil escritos como cuenta, «Pagado de más» con su cuenta (o, con
+     varios proveedores, lo de cada uno) y los que no compiten;
+     «Ver sus N porcionamientos →» cambia la tabla por la lista del
+     proveedor —número, fecha, lo que entró, la merma, el costo del día, la
+     compra asignada (día · precio) y «Otro cerca»—, con el Total ARRIBA
+     (abajo quedaba detrás del deslizamiento) y «‹ Proveedores» para
+     volver. `partes_pagado_de_mas` suma lo mismo que
+     `resumen_proveedores`: lo vigila la prueba.
+
+     **Lo que muerde:**
+     - **Una nota por proveedor no entra.** Con la cuenta entera de cinco
+       proveedores, el recuadro iba en seis líneas; con más de uno, va lo
+       de cada uno en una línea («S'DE MAR S/ 2.147 · …»), y la cuenta de
+       cada uno sale al elegirlo.
+     - **Una lista de 19 porcionamientos empujaba la tarjeta a 610px**
+       contra 575: dos notas de dos líneas se fueron a la ayuda de las
+       columnas («S/ día», «Compra», «Otro cerca»).
+     - **A 1323px las columnas «medium» dejaban afuera la última** en las
+       dos tablas de la derecha: anchos fijos, y en «Otro cerca» la fecha
+       primero, para que lo que se corte sea el nombre.
+
+     Y una cosa del dato que conviene saber al leer 12 meses: la charela
+     se registraba con ~10 % de merma en octubre de 2025 (el esqueleto
+     con su peso entero, regla #647) y con ~45 % desde diciembre, así que CASAS
+     ARMAS —que vendía entonces— sale «Mejor» a S/ 38 por kg útil. No es el
+     proveedor: es cómo se registró.
+
+     (2026-10-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51327,7 +51395,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#654**; la próxima toma el número siguiente.
+> última regla es la **#655**; la próxima toma el número siguiente.
 
 >
 

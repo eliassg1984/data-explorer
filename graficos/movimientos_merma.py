@@ -414,6 +414,76 @@ def cambios(b, fin):
     return t[["pct_ant", "pct_rec", "dpp", "dprecio", "impacto"]]
 
 
+def fin_de_ventana(d_hist, rango=None):
+    """El borde de arriba (excluido) de las ventanas de 6/12/18 meses: el
+    fin de `rango` o, sin él, las 00:00 del día siguiente al último
+    porcionamiento. A las 00:00 y no a la hora del último (regla #655):
+    con la hora, «6 meses» al 9/10 14:51 empezaba el 10/04 a las 14:51 y
+    dejaba fuera un porcionamiento de esa mañana — y con él, a INVERMAR
+    de «Mejor» proveedor de la charela. Pura."""
+    if rango:
+        return pd.Timestamp(rango[1])
+    return (pd.Timestamp(d_hist["_fecha"].max()) + pd.Timedelta(days=1)).normalize()
+
+
+DIFIERE_PAGADO = 0.05
+"""El costo del día de un porcionamiento «difiere» de lo pagado en su compra
+asignada si se aleja más que esto: el Almacén costea al promedio de lo que
+tiene en stock, y con stock de otras compras no es el precio de ésa."""
+
+
+def partes_pagado_de_mas(t):
+    """De `por_proveedor` (de UN producto), las cuentas de «Pagado de más»,
+    las mismas de `resumen_proveedores`: `mejor` y `peor` (entre los de
+    `MIN_PORC_PROVEEDOR` porcionamientos o más), `minimo` (el útil del
+    mejor), `queda` por proveedor y `de_mas`, lo pagado de más por cada
+    uno: (su útil − el del mejor) × lo que quedó de lo suyo. None si no
+    hay dos proveedores que comparar. Pura."""
+    ok = t[(t["n"] >= MIN_PORC_PROVEEDOR) & (t["cant"] > t["merma"])]
+    if len(ok) < 2:
+        return None
+    queda = ok["cant"] - ok["merma"]
+    minimo = float(ok["util"].min())
+    de_mas = (ok["util"] - minimo) * queda
+    return {"mejor": ok["util"].idxmin(), "peor": ok["util"].idxmax(),
+            "minimo": minimo, "queda": queda, "de_mas": de_mas,
+            "extra": float(de_mas.sum())}
+
+
+def rastro_proveedor(x, compras, prov):
+    """Los porcionamientos de `x` (de UN producto, con `con_proveedor`) que
+    se le asignan a `prov`, del más viejo al más nuevo, con lo que explica
+    cada número: `compra` (el día de la compra asignada) y `pcompra` (lo
+    que se pagó por unidad), `pkg` (el costo del día por unidad), `difiere`
+    (si los dos se alejan más de `DIFIERE_PAGADO`) y, si no es «único»,
+    `otro` y `f_otro`: el proveedor que le vendió el producto en los
+    `DIAS_UNICO` días previos — la atribución no es segura. Un producto da
+    unas decenas de porcionamientos: no hay grupos que recorrer. Pura."""
+    r = x[x["prov"] == prov].copy()
+    if r.empty:
+        return r.assign(compra=pd.NaT, pkg=np.nan, difiere=False, otro=None,
+                        f_otro=pd.NaT)
+    r["compra"] = ((r["fecha"].dt.normalize()
+                    - pd.to_timedelta(r["dias"], unit="D"))
+                   .astype("datetime64[ns]"))
+    r["pkg"] = (r["costo_dia"] / r["cant"]).where(r["cant"] > 0)
+    r["difiere"] = (r["pcompra"] > 0) & (
+        (r["pkg"] / r["pcompra"] - 1).abs() > DIFIERE_PAGADO)
+    r = r.sort_values("compra", kind="stable")
+    cod = str(r["cod"].iloc[0])
+    otros = pd.DataFrame(columns=["f_otro", "otro"])
+    if compras is not None and len(compras):
+        c = compras[(compras["cod"].astype(str) == cod) & (compras["prov"] != prov)]
+        otros = (c.sort_values("f")[["f", "prov"]]
+                 .rename(columns={"f": "f_otro", "prov": "otro"}))
+    otros["f_otro"] = pd.to_datetime(otros["f_otro"]).astype("datetime64[ns]")
+    m = pd.merge_asof(r, otros, left_on="compra", right_on="f_otro",
+                      direction="backward")
+    m["otro"] = m["otro"].where(~m["unico"].astype(bool))
+    m["f_otro"] = m["f_otro"].where(~m["unico"].astype(bool))
+    return m.sort_values("fecha", kind="stable").reset_index(drop=True)
+
+
 def por_proveedor(b, solo_unico=False):
     """Por proveedor (de `con_proveedor`), lo porcionado y su merma, al
     COSTO DEL DÍA: `n`, `cant`, `merma`, `costo`, `pct`, `pkg` (pagado por
@@ -1434,8 +1504,7 @@ def tarjeta_rendimiento(d_hist, cols, rango):
     with st.container(border=True, key=CARD_REND):
         modo = valorizacion()
         precios = precios_hoy()
-        fin_f = (rango[1] if rango
-                 else d_hist["_fecha"].max() + pd.Timedelta(days=1))
+        fin_f = fin_de_ventana(d_hist, rango)
         # columnas-internas: el título a la izquierda, la ventana, la
         # valorización (regla #644) y el producto a la derecha, en el mismo
         # renglón. La del medio pide 492px —258 de la ventana y 226 de la
@@ -1643,11 +1712,161 @@ def tarjeta_rendimiento(d_hist, cols, rango):
 # ═══════════════════════════════════════════════════════════════════════════
 # 3. PROVEEDOR POR KG ÚTIL
 # ═══════════════════════════════════════════════════════════════════════════
+def _rotulo_ventana(ini, fin):
+    """«del 10 abr al 9 oct 2026»: los días que entran en la ventana."""
+    ult = fin - pd.Timedelta(days=1)
+    a = f"{ini.day} {MESES_ABR_ES[ini.month - 1]}" + (
+        f" {ini.year}" if ini.year != ult.year else "")
+    return f"del {a} al {ult.day} {MESES_ABR_ES[ult.month - 1]} {ult.year}"
+
+
+def _corto_prov(nombre):
+    """«INVERSIONES BARCO AZUL E.I.R.L.» → «BARCO AZUL»: para una celda."""
+    t = re.sub(r"\b(S\.?A\.?C\.?|E\.?I\.?R\.?L\.?|S\.?A\.?|SOCIEDAD ANONIMA "
+               r"CERRADA)(?=\s|$)\.?", "", str(nombre)).strip()
+    t = re.sub(r"^(INVERSIONES|CORPORACION|COMPAÑIA|DISTRIBUIDORA)\s+", "", t,
+               flags=re.IGNORECASE)
+    return " ".join(t.split()[:2]) or str(nombre)
+
+
+def _como_sale(s, nombre, u, pm, t, sin, minimo_porc):
+    """El recuadro «Cómo sale» del proveedor elegido (regla #655): sus tres
+    cuentas, lo pagado de más del producto con su cuenta, los proveedores
+    que no compiten por tener pocos porcionamientos y los que quedaron sin
+    proveedor. HTML."""
+    def fila(rot, cuenta, res):
+        return (f'<div style="display:grid;grid-template-columns:118px 1fr;'
+                f'column-gap:8px;font-size:12.5px;line-height:17px">'
+                f'<span style="color:{GRIS_TEXTO}">{rot}</span><span>{cuenta} = '
+                f'<b>{res}</b></span></div>')
+    queda = s["cant"] - s["merma"]
+    filas = [
+        fila("Merma", f"{_c(s['merma'])} de {_c(s['cant'])} {u}", _p(s["pct"])),
+        fila(f"S/ por {u}", f"{_s(s['costo'], 2)} ÷ {_c(s['cant'])} {u}",
+             _s(s["pkg"], 2)),
+        fila(f"S/ por {u} útil",
+             f"{_s(s['costo'], 2)} ÷ ({_c(s['cant'])} − {_c(s['merma'])}) {u}",
+             _s(s["util"], 2) if queda > 0 else "—"),
+    ]
+    notas = []
+    if pm is not None:
+        partes = [(p, v) for p, v in pm["de_mas"].items() if v > 0]
+        if len(partes) == 1:
+            p, v = partes[0]
+            detalle = (f"{html.escape(str(p))}, ({t.loc[p, 'util']:,.2f} − "
+                       f"{pm['minimo']:,.2f}) × {_c(pm['queda'][p])} {u} útiles")
+        else:
+            detalle = (f"Σ (su útil − {pm['minimo']:,.2f}) × sus {u} útiles: "
+                       + " · ".join(f"{html.escape(_corto_prov(p))} {_s(v)}"
+                                    for p, v in sorted(partes, key=lambda z: -z[1])))
+        if partes:
+            notas.append((TEXTO_PRINCIPAL,
+                          f"<b>Pagado de más {_s(pm['extra'])}</b> = {detalle}: lo "
+                          f"que habría costado de menos comprarle todo eso a "
+                          f"{html.escape(str(pm['mejor']))}."))
+    for p, r in t[t["n"] < minimo_porc].iterrows():
+        barato = pm is not None and r["util"] < pm["minimo"]
+        notas.append((AJUSTE_ALERTA_TEXTO if barato else GRIS_TEXTO,
+                      f"{html.escape(str(p))} ({int(r['n'])} porcionamiento"
+                      f"{'' if r['n'] == 1 else 's'}) sale a {_s(r['util'], 2)} por "
+                      f"{u} útil{', <b>más barato que el «Mejor»</b>,' if barato else ''}"
+                      f" pero con menos de {minimo_porc} no entra en «Mejor» ni "
+                      "en «Pagado de más»."))
+    if sin:
+        notas.append((GRIS_TEXTO,
+                      f"{sin} porcionamiento{'s' if sin != 1 else ''} de este "
+                      "producto sin proveedor asignable quedan fuera."))
+    pie = "".join(f'<div style="font-size:12px;line-height:16px;color:{c}">{n}</div>'
+                  for c, n in notas)
+    return (f'<div style="border:1px solid {GRIS_BORDE};background:{LAVANDA_FILA};'
+            f'border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;'
+            f'gap:4px"><div style="font-size:12.5px;font-weight:700;color:{ACENTO}">'
+            f'Cómo sale · {html.escape(str(nombre))}</div>{"".join(filas)}'
+            + (f'<div style="border-top:1px solid {GRIS_LINEA};margin-top:2px;'
+               f'padding-top:4px;display:flex;flex-direction:column;gap:3px">'
+               f'{pie}</div>' if notas else "") + "</div>")
+
+
+def _ir(clave, valor):
+    st.session_state[clave] = valor
+
+
+def _tabla_rastro(rs, u, s):
+    """Los porcionamientos de un proveedor con lo que explica cada número,
+    y una fila Total que reproduce su línea (regla #655)."""
+    inf = float("inf")
+    tot = pd.DataFrame({
+        "N° porc.": [f"Total · {len(rs)}"], "Fecha": [""],
+        "Entró": [s["cant"]], "Merma": [s["merma"]], "%": [s["pct"]],
+        "S/ día": [s["pkg"]], "Compra": [""], "Otro cerca": [""]})
+    tr = pd.DataFrame({
+        "N° porc.": rs["doc"].astype(str),
+        "Fecha": rs["fecha"].dt.strftime("%d/%m"),
+        "Entró": rs["cant"], "Merma": rs["merma_cant"], "%": rs["pct"],
+        "S/ día": rs["pkg"].fillna(inf),
+        "Compra": [f"{c:%d/%m} · {p:,.2f}" if pd.notna(c) else "—"
+                            for c, p in zip(rs["compra"], rs["pcompra"])],
+        "Otro cerca": [f"{f:%d/%m} · {_corto_prov(o)}" if isinstance(o, str) else "—"
+                       for o, f in zip(rs["otro"], rs["f_otro"])],
+    })
+    # El Total ARRIBA: con muchas filas la tabla se desliza, y abajo no se veía.
+    t = pd.concat([tot, tr], ignore_index=True)
+    difiere = [False] + rs["difiere"].tolist()
+    total = 0
+    alerta = f"background-color: {AJUSTE_ALERTA_FONDO}; color: {AJUSTE_ALERTA_TEXTO}; font-weight: 600"
+
+    def estilo(r):
+        if r.name == total:
+            return [f"background-color: {LAVANDA_FILA}; font-weight: 700"] * len(r)
+        out = [""] * len(r)
+        if difiere[r.name]:
+            out[list(r.index).index("S/ día")] = alerta
+        if r["Otro cerca"] != "—":
+            out[list(r.index).index("Otro cerca")] = f"color: {AJUSTE_ALERTA_TEXTO}"
+        return out
+
+    _n = (lambda v: f"{v:,.2f}" if np.isfinite(v) else "—")
+    sty = (t.style.format({"Entró": _n, "Merma": _n, "%": lambda v: _p(v, 0),
+                           "S/ día": _n})
+           .apply(estilo, axis=1))
+    # Suman la columna a 1323px (~523): con anchos libres, «Otro cerca»
+    # quedaba afuera.
+    st.dataframe(
+        sty, hide_index=True, row_height=27,
+        height=_alto_tabla(len(t), alturas.MERMA_PROV),
+        column_config={
+            "N° porc.": st.column_config.TextColumn(width=80),
+            "Fecha": st.column_config.TextColumn(width=44),
+            "Entró": st.column_config.Column(width=48, help=f"Lo porcionado, en {u}."),
+            "Merma": st.column_config.Column(width=48, help=f"La merma, en {u}."),
+            "%": st.column_config.Column(width=38),
+            "S/ día": st.column_config.Column(
+                width=52,
+                help=f"El costo del día por {u}: lo que valieron sus cortes ÷ lo "
+                     "porcionado. En ámbar, si se aleja más de 5 % de lo pagado en "
+                     "la compra asignada: el Almacén costea al promedio de lo que "
+                     "tiene en stock."),
+            "Compra": st.column_config.TextColumn(
+                width=88,
+                help=f"La compra asignada: la última de este producto hasta "
+                     f"{DIAS_PROVEEDOR} días antes del porcionamiento: su día y "
+                     f"lo que se le pagó por {u}."),
+            "Otro cerca": st.column_config.TextColumn(
+                help=f"Quién más le vendió este producto en los {DIAS_UNICO} "
+                     "días previos: la atribución no es segura.")})
+
+
 def tarjeta_proveedores(d_hist, cols, rango):
-    """La sección «Proveedor por kg útil». Siempre al costo del día."""
+    """La sección «Proveedor por kg útil». Siempre al costo del día.
+
+    Desde el 2026-10-13 (regla #655) cada número se puede rastrear: la
+    ventana dice sus días y empieza a las 00:00, la tabla de proveedores
+    marca al «mejor», al «más caro» y a los que tienen pocos porcionamientos
+    para competir, un recuadro hace las cuentas del proveedor elegido y de
+    «Pagado de más», y «Ver sus porcionamientos» los lista con la compra
+    que se le asignó a cada uno."""
     with st.container(border=True, key=CARD_PROV):
-        fin_f = (rango[1] if rango
-                 else d_hist["_fecha"].max() + pd.Timedelta(days=1))
+        fin_f = fin_de_ventana(d_hist, rango)
         # columnas-internas: título, ventana y el filtro de proveedor único
         # en un renglón.
         c_tit, c_ven, c_uni = st.columns([1.3, 0.9, 1.3],
@@ -1676,10 +1895,12 @@ def tarjeta_proveedores(d_hist, cols, rango):
         b = con_proveedor(base, compras)
         r = resumen_proveedores(b, unico)
         nombres = b.drop_duplicates("cod").set_index("cod")["prod"]
-        st.caption("Lo que de verdad cuesta cada unidad aprovechable: lo "
-                   "pagado ÷ lo que queda después de la merma. Siempre al "
-                   "costo del día — a precio de hoy todos los proveedores "
-                   "costarían lo mismo.")
+        st.markdown(f'<div style="font-size:13px;color:{GRIS_TEXTO}"><b style="'
+                    f'color:{TEXTO_PRINCIPAL}">{_rotulo_ventana(ini, fin).capitalize()}.'
+                    '</b> Lo que de verdad cuesta cada unidad aprovechable: lo '
+                    'pagado ÷ lo que queda después de la merma. Siempre al costo '
+                    'del día — a precio de hoy todos los proveedores costarían lo '
+                    'mismo.</div>', unsafe_allow_html=True)
         if r.empty:
             st.info("Ningún producto con dos proveedores de 5 "
                     "porcionamientos o más en la ventana.")
@@ -1712,6 +1933,28 @@ def tarjeta_proveedores(d_hist, cols, rango):
         foco = ss.get(k_foco)
         pos = codigos.index(foco) if foco in codigos else 0
         foco = codigos[pos]
+
+        # El proveedor elegido del producto en foco: el clic en la tabla de
+        # la derecha o, de entrada, el «Mejor». Se lee ANTES de dibujar.
+        x = b[b["cod"] == foco]
+        u = unidad_corta(x["unid"].iloc[0]) if len(x) else ""
+        t = por_proveedor(x, unico)
+        pm = partes_pagado_de_mas(t)
+        provs = t.index.tolist()
+        k_sel, k_vista, k_de = ("_mov_merma_prov_sel", "_mov_merma_prov_vista",
+                                "_mov_merma_prov_de")
+        if ss.get(k_de) != (foco, unico, ini):
+            ss[k_de] = (foco, unico, ini)
+            ss[k_vista], ss[k_sel] = "prov", None
+        base_p = f"mov_merma_prov_det_{foco}"
+        _foco_anterior(base_p, "_mov_merma_prov_sel_clic")
+        clic = ss.pop("_mov_merma_prov_sel_clic", None)
+        if clic in provs:
+            ss[k_sel] = clic
+        sel = ss.get(k_sel)
+        if sel not in provs:
+            sel = pm["mejor"] if pm else (provs[0] if provs else None)
+
         # columnas-internas: el resumen entre productos y el detalle del
         # elegido, en la misma tarjeta.
         c_res, c_det = st.columns([1.15, 1], gap="medium")
@@ -1739,16 +1982,42 @@ def tarjeta_proveedores(d_hist, cols, rango):
                      help="Lo pagado de más por lo que se aprovechó, contra "
                           "el mejor proveedor del mismo producto: Σ (costo "
                           "por unidad útil del proveedor − el del mejor) × "
-                          "lo que quedó de lo suyo.")})
+                          "lo que quedó de lo suyo. La cuenta del producto "
+                          "elegido, a la derecha.")})
         with c_det:
-            x = b[b["cod"] == foco]
-            u = unidad_corta(x["unid"].iloc[0]) if len(x) else ""
-            t = por_proveedor(x, unico)
+            sin = int((x["prov"].isna() | (unico & ~x["unico"])).sum())
+            if ss.get(k_vista) == "porc" and sel is not None:
+                with st.container(horizontal=True, vertical_alignment="center",
+                                  gap="small", key="mov_merma_prov_det_cab"):
+                    st.button("‹ Proveedores", key="mov_merma_prov_volver",
+                              on_click=_ir, args=(k_vista, "prov"))
+                    st.markdown(f'<div class="mov-merma-prov-tit">'
+                                f'{html.escape(str(nombres.get(foco, foco)))} › '
+                                f'{html.escape(str(sel))}</div>',
+                                unsafe_allow_html=True)
+                st.caption(f"Cada fila va a la última compra hasta "
+                           f"{DIAS_PROVEEDOR} días antes: el Almacén no guarda "
+                           "de qué compra salió.")
+                # Las mismas filas que suma `por_proveedor`.
+                xs = x[x["costo_dia"] > 0]
+                if unico:
+                    xs = xs[xs["unico"]]
+                _tabla_rastro(rastro_proveedor(xs, compras, sel), u,
+                              t.loc[sel])
+                return
             st.markdown(f'<div style="font-weight:600;font-size:13px">'
                         f'{html.escape(str(nombres.get(foco, foco)))}</div>',
                         unsafe_allow_html=True)
+            rol = {p: "" for p in provs}
+            if pm:
+                rol[pm["peor"]] = "más caro"
+                rol[pm["mejor"]] = "mejor"
+            for p in provs:
+                if t.loc[p, "n"] < MIN_PORC_PROVEEDOR:
+                    rol[p] = "pocos"
             td = pd.DataFrame({
-                "Proveedor": t.index.tolist(),
+                "Proveedor": provs,
+                "": [rol[p] for p in provs],
                 "Porc.": t["n"].astype(int).tolist(),
                 "Merma": t["pct"].tolist(),
                 f"S/ por {u}": t["pkg"].tolist(),
@@ -1757,21 +2026,42 @@ def tarjeta_proveedores(d_hist, cols, rango):
             })
             _u = pd.to_numeric(td[f"S/ por {u} útil"], errors="coerce")
             tope = float(_u.max()) if _u.notna().any() else 1.0
-            st.dataframe(
-                td.style.format({"Merma": _p, f"S/ por {u}": "{:,.2f}",
-                                 "Días": lambda v: "—" if not np.isfinite(v)
-                                 else f"{v:.0f}"}),
-                hide_index=True, row_height=27,
-                height=_alto_tabla(len(td), alturas.MERMA_PROV),
-                column_config={
-                    "Proveedor": st.column_config.TextColumn(width="medium"),
-                    f"S/ por {u} útil": st.column_config.ProgressColumn(
-                        format="%.2f", min_value=0.0, max_value=tope),
-                    "Días": st.column_config.Column(
-                        help="Mediana de días entre la compra y el "
-                             "porcionamiento.")})
-            sin = int((x["prov"].isna() | (unico & ~x["unico"])).sum())
-            if sin:
-                st.caption(f"{sin} porcionamiento{'s' if sin != 1 else ''} "
-                           "de este producto sin proveedor asignable quedan "
-                           "fuera.")
+            color_rol = {"mejor": AJUSTE_POS_TEXTO, "más caro": AJUSTE_NEG_TEXTO,
+                         "pocos": GRIS_TEXTO, "": TEXTO_PRINCIPAL}
+            p_sel = provs.index(sel) if sel in provs else 0
+            sty = (td.style.format({"Merma": _p, f"S/ por {u}": "{:,.2f}",
+                                    "Días": lambda v: "—" if not np.isfinite(v)
+                                    else f"{v:.0f}"})
+                   .apply(lambda r: [f"color: {GRIS_TEXTO}"] * len(r)
+                          if r[""] == "pocos" else [""] * len(r), axis=1)
+                   .map(lambda v: f"color: {color_rol.get(v, TEXTO_PRINCIPAL)}; "
+                                  "font-weight: 600", subset=[""])
+                   .apply(_resaltar(p_sel), axis=1))
+            # Suman la columna a 1323px (~523, con la de la marca): con
+            # «medium» en el proveedor, «Días» quedaba afuera.
+            _tabla_elegible(
+                base_p, sty, provs, p_sel,
+                _alto_tabla(len(td), alturas.MERMA_PROV_DET),
+                {"Proveedor": st.column_config.TextColumn(width=136),
+                 "Porc.": st.column_config.Column(width=44),
+                 "Merma": st.column_config.Column(width=50),
+                 f"S/ por {u}": st.column_config.Column(width=58),
+                 "": st.column_config.TextColumn(
+                     width=62,
+                     help=f"«Mejor» y «más caro», entre los proveedores con "
+                          f"{MIN_PORC_PROVEEDOR} porcionamientos o más: con "
+                          f"menos («pocos») no compiten."),
+                 f"S/ por {u} útil": st.column_config.ProgressColumn(
+                     format="%.2f", min_value=0.0, max_value=tope, width=96),
+                 "Días": st.column_config.Column(
+                     width=36,
+                     help="Mediana de días entre la compra y el "
+                          "porcionamiento.")})
+            if sel is not None:
+                st.markdown(_como_sale(t.loc[sel], sel, u, pm, t, sin,
+                                       MIN_PORC_PROVEEDOR),
+                            unsafe_allow_html=True)
+                n_sel = int(t.loc[sel, "n"])
+                st.button(f"Ver sus {n_sel} porcionamiento{'s' if n_sel != 1 else ''} →",
+                          key="mov_merma_prov_ver_porc", on_click=_ir,
+                          args=(k_vista, "porc"))

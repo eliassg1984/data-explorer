@@ -5857,6 +5857,36 @@ CSS = """    /* ================================================================
         line-height: 1.45;
         color: var(--text-secondary);
     }
+    /* «Proveedor por kg útil» (regla #655): el renglón «‹ Proveedores ·   */
+    /* producto › proveedor» de la lista de porcionamientos, y los dos     */
+    /* botones de ir y volver, chicos como los de la receta base.          */
+    .st-key-mov_merma_prov_det_cab {
+        flex-wrap: nowrap !important;
+    }
+    .st-key-mov_merma_prov_det_cab [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .st-key-mov_merma_prov_det_cab > .stElementContainer:last-child {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+    }
+    .mov-merma-prov-tit {
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .st-key-mov_merma_prov_volver button,
+    .st-key-mov_merma_prov_ver_porc button {
+        min-height: 0 !important;
+        padding: 3px 12px !important;
+    }
+    .st-key-mov_merma_prov_volver button p,
+    .st-key-mov_merma_prov_ver_porc button p {
+        font-size: 12.5px !important;
+        white-space: nowrap !important;
+    }
     [class*="st-key-mov_f_"][class*="_aj_"] [data-testid="stCaptionContainer"] p {
         font-size: 11.5px !important;
         line-height: 1.4 !important;

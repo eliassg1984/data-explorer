@@ -452,6 +452,11 @@ lado de los dos gráficos."""
 MERMA_PROV = 27 * 10 + 38
 """Tope de las dos tablas de «Proveedor por kg útil»."""
 
+MERMA_PROV_DET = 27 * 6 + 38
+"""Tope de la tabla de proveedores del producto elegido, en «Proveedor por kg
+útil»: desde el 2026-10-13 (regla #655) lleva debajo el recuadro «Cómo sale»
+y el botón a sus porcionamientos, y la tarjeta no puede crecer."""
+
 RB_COSTO_TABLA = 27 * 9 + 38
 """Tope de la tabla de Recetas › Costo recetas base (2026-09-30, regla
 #576): NUEVE filas de 27 más la cabecera y los bordes (trece en la primera

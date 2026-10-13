@@ -7550,6 +7550,98 @@ def _pruebas_cortes_y_peso():
     return fallos
 
 
+def _pruebas_rastro_proveedor():
+    """Movimientos › «Proveedor por kg útil»: el rastro de cada número
+    (regla #655).
+
+      1. LA VENTANA termina a las 00:00 del día siguiente al último
+         porcionamiento, no a su hora: «6 meses» no deja fuera la mañana del
+         primer día.
+      2. «PAGADO DE MÁS», partido por proveedor, suma lo mismo que
+         `resumen_proveedores`, y el que tiene pocos porcionamientos no
+         compite aunque sea el más barato.
+      3. EL RASTRO de un proveedor: la compra asignada a cada porcionamiento,
+         si su costo del día difiere de lo pagado, y quién más vendía cerca
+         —sólo donde la atribución no es «única»—.
+    """
+    import pandas as pd
+
+    from graficos import movimientos_merma as mm
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    rastro #655 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA rastro #655 · {nombre}: {got!r} != {exp!r}")
+
+    # ── 1. La ventana ─────────────────────────────────────────────────────
+    d = pd.DataFrame({"_fecha": pd.to_datetime(["2026-04-10 10:11",
+                                                "2026-10-09 14:51"])})
+    fin = mm.fin_de_ventana(d)
+    ini = fin - pd.DateOffset(months=6)
+    check("termina a las 00:00 del día siguiente al último",
+          fin, pd.Timestamp("2026-10-10"))
+    check("y la mañana del primer día entra", bool(d["_fecha"].min() >= ini), True)
+    check("con un rango, manda el rango",
+          mm.fin_de_ventana(d, (pd.Timestamp("2026-09-01"),
+                                pd.Timestamp("2026-10-01"))),
+          pd.Timestamp("2026-10-01"))
+
+    # ── 2. Pagado de más ──────────────────────────────────────────────────
+    # A (el mejor, 5), B (más caro, 6) y C (el más barato, pero con 4).
+    filas = []
+    for prov, n, costo, merma in (("A", 5, 500.0, 5.0), ("B", 6, 600.0, 6.0),
+                                  ("C", 4, 300.0, 4.0)):
+        for i in range(n):
+            filas.append({"doc": f"{prov}{i}", "cod": "X", "prov": prov,
+                          "unico": True, "dias": 1.0, "cant": 10.0,
+                          "merma_cant": merma, "costo_dia": costo / n * 10 / 10})
+    q = pd.DataFrame(filas)
+    t = mm.por_proveedor(q)
+    pm = mm.partes_pagado_de_mas(t)
+    r = mm.resumen_proveedores(q.assign(costo_dia=q["costo_dia"]))
+    check("el mejor y el más caro, entre los de 5 o más",
+          (pm["mejor"], pm["peor"]), ("A", "B"))
+    check("C, el más barato, no compite: tiene 4",
+          (bool(t.loc["C", "util"] < pm["minimo"]), "C" in pm["de_mas"].index),
+          (True, False))
+    check("partido por proveedor suma lo mismo que el resumen",
+          round(pm["extra"], 6), round(float(r.loc["X", "extra"]), 6))
+    check("lo de B: (su útil − el del mejor) × lo que le quedó",
+          round(float(pm["de_mas"]["B"]), 6),
+          round((t.loc["B", "util"] - t.loc["A", "util"]) * (60 - 36), 6))
+    check("con un solo proveedor que compita, no hay cuenta",
+          mm.partes_pagado_de_mas(t.loc[["A", "C"]]), None)
+
+    # ── 3. El rastro ──────────────────────────────────────────────────────
+    x = pd.DataFrame({
+        "doc": ["P1", "P2", "P3"], "cod": ["X"] * 3, "prov": ["B"] * 3,
+        "fecha": pd.to_datetime(["2026-05-22 10:00", "2026-05-31 08:37",
+                                 "2026-08-15 16:52"]),
+        "dias": [1.0, 1.0, 5.0], "unico": [False, False, True],
+        "cant": [10.0, 10.0, 6.0], "merma_cant": [5.0, 5.0, 3.0],
+        "costo_dia": [600.0, 570.0, 306.0], "pcompra": [60.0, 68.0, 51.0]})
+    compras = pd.DataFrame({
+        "cod": ["X"] * 5,
+        "f": pd.to_datetime(["2026-05-18", "2026-05-21", "2026-05-30",
+                             "2026-05-30", "2026-08-10"]).astype("datetime64[ns]"),
+        "prov": ["A", "B", "A", "B", "B"],
+        "pu": [48.0, 60.0, 55.0, 68.0, 51.0]})
+    rs = mm.rastro_proveedor(x, compras, "B").set_index("doc")
+    check("la compra asignada: el día del porcionamiento menos sus días",
+          [f"{v:%d/%m}" for v in rs["compra"]], ["21/05", "30/05", "10/08"])
+    check("el costo del día lejos de lo pagado (57 contra 68)",
+          rs["difiere"].tolist(), [False, True, False])
+    check("quién más vendía cerca, sólo donde no es «único»",
+          [o if isinstance(o, str) else None for o in rs["otro"]],
+          ["A", "A", None])
+    return fallos
+
+
 def _pruebas_salidas_comparar():
     """Movimientos › salidas: la causa y los años anteriores (regla #614).
 
@@ -11973,6 +12065,7 @@ def main():
     fallos += _pruebas_diferencias_perfil()
     fallos += _pruebas_merma()
     fallos += _pruebas_cortes_y_peso()
+    fallos += _pruebas_rastro_proveedor()
 
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
     fallos += _pruebas_carta_costeada()
