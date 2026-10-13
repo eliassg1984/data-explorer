@@ -8499,6 +8499,125 @@ def _pruebas_diferencias_combos():
     return fallos
 
 
+def _pruebas_diferencias_req_sunat():
+    """Ajuste › «Análisis de diferencias», los requerimientos y las facturas de
+    SUNAT sin ingresar (regla #652), con los casos reales del cierre de
+    setiembre 2026:
+
+      1. QUIÉN LO PIDE: el hueso de pollo no lo usa ninguna receta, y
+         Producción lo pide por requerimiento. Un requerimiento no es
+         consumo, pero dice qué área lo usa: la pista lo nombra, y la ficha
+         lista lo pedido en 90 días por área (no lo de DESPUÉS del conteo).
+      2. LA FACTURA SIN INGRESAR: el Caelum Malbec sobra 12 en Cava y una
+         factura de 12 que SUNAT tiene y el Almacén no lo nombra: pista
+         fuerte. Y no se emparejan nombres que sólo se parecen: «ají
+         amarillo en polvo» no es «ají amarillo».
+      3. EL REQUERIMIENTO SIN PROCESAR: falta en el Almacén lo que Barra
+         pidió y nadie procesó.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #652 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #652 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {0: "ALMACEN CENTRAL", 2: "CAVA", 6: "PRODUCCION"}
+    PROD = {95: ("Hueso De Pollo", "KILOS", 4.0),
+            96: ("Caelum Terroir Malbec 750ml", "UND", 30.0),
+            97: ("Aji Amarillo En Polvo", "KILOS", 20.0), 98: ("Limon", "KILOS", 3.0)}
+
+    def fila(t, a, c, s, k):
+        n, u, p = PROD[c]
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "ALIMENTOS", "SUBFAMILIA": "VARIOS",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": u,
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": p, "AJUSTE VALORIZADO": (k - s) * p}
+    t0, t1 = "2026-09-16 17:30", "2026-10-01 17:35"
+    ajuste = pd.DataFrame(
+        [fila(t0, *x) for x in ((6, 95, 39.05, 39.05), (2, 96, 0, 0), (6, 97, 1, 1),
+                                (0, 98, 20, 20))]
+        + [fila(t1, *x) for x in ((6, 95, 47.05, 0), (2, 96, -2, 10), (6, 97, 1, 1.2),
+                                  (0, 98, 20, 15))])
+
+    def kx(t, a, c, tipo, ent, sal, stock):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": tipo, "CANT INGRESO": ent,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
+    kardex = pd.DataFrame([kx("2026-09-27 14:00", 6, 95, "99", 8, 0, 47.05),
+                           kx("2026-09-27 14:00", 0, 95, "99", 0, 8, 0),
+                           kx("2026-09-25 13:00", 2, 96, "95", 0, 2, -2)])
+    vacia = lambda *cols: pd.DataFrame(columns=list(cols))
+    rv = vacia("ITEM VENTA ACTIVO", "RV ACTIV", "DESCARG", "COD PLATO", "NOMB PLATO", "COD INS",
+               "CANTIDAD", "FACTOR", "SUBALM INS", "T DESCARG", "FECH MODIF")
+    rb = vacia("RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO", "CANT",
+               "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG")
+    carta = vacia("TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA")
+    porc = vacia("COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT", "PROD INICIAL",
+                 "COD PORC", "FEC REGIST", "CANT A PORCIONAR")
+    ordenes = vacia("NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO", "CANTIDAD")
+    venta = vacia("producto", "dia", "unidades", "costo", "unidades_costeadas")
+    reqs = pd.DataFrame([
+        {"CODIGO PRODUCTO": f"{c:07d}", "SUB ALMACEN": a, "FECHA REGISTRO": pd.Timestamp(f),
+         "COD REQUERIMIENTO": n, "NOMBRE ESTADO REQUERIMIENTO": e, "CANTIDAD": q}
+        for c, a, f, n, e, q in (
+            (95, "PRODUCCION", "2026-09-27 14:42", "R1", "PROCESADO", 8.0),
+            (95, "PRODUCCION", "2026-09-15 13:31", "R2", "PROCESADO", 19.5),
+            (95, "COCINA", "2026-09-15 09:01", "R3", "PROCESADO", 12.0),
+            (95, "PRODUCCION", "2026-10-06 14:03", "R4", "PROCESADO", 10.2),
+            (98, "BARRA", "2026-09-30 10:00", "R5", "GENERADO", 5.0))])
+    sunat = pd.DataFrame([
+        {"doc": d, "ruc": "20000000001", "prov": "PROVEEDOR S.A.C.",
+         "fecha": pd.Timestamp(f), "descripcion": ds, "cantidad": q, "unidad": u}
+        for d, f, ds, q, u in (
+            ("E001-3599", "2026-09-20", "CAELUM VINO TINTO MALBEC TERROIRS 750ML", 12.0, "unidad"),
+            ("FC01-115", "2026-09-20", "AJI AMARILLO", 2.0, "kg"))])
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta,
+                    requerimientos=reqs, sunat=sunat)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+
+    def pistas(a, c):
+        return F[de[(a, c)]["id"]]["pistas"]
+
+    # 1 — quién lo pide
+    check("lo pedido por área en 90 días, sin lo de después del conteo",
+          [(a, q, n, w) for a, q, n, _f, w in F[de[(6, "95")]["id"]]["pide"]],
+          [("PRODUCCION", 27.5, 2, 8.0), ("COCINA", 12.0, 1, 0.0)])
+    check("ninguna receta lo usa, y lo pide Producción",
+          [("Produccion lo pidió por requerimiento: 27.5 kg en 2 requerimientos" in p["tx"])
+           for p in pistas(6, "95") if p["t"] == "nadie"], [True])
+    # 2 — la factura sin ingresar
+    check("el sobrante que nombra una factura sin ingresar, con la misma cantidad",
+          [(p["t"], p["f"]) for p in pistas(2, "96")][:1], [("sunat", 1)])
+    check("y dice qué factura es", "E001-3599" in pistas(2, "96")[0]["tx"], True)
+    check("«ají amarillo en polvo» no es «ají amarillo»",
+          [p["t"] for p in pistas(6, "97") if p["t"] == "sunat"], [])
+    check("las palabras: sin tildes, sin paréntesis, los números aparte",
+          da.palabras("(Rs) Chocolate 72% Cacao x Kg"),
+          (frozenset({"chocolate", "cacao"}), frozenset({"72"})))
+    check("un número distinto no empareja",
+          da.parecido(da.palabras("Chocolate 60% Cacao"),
+                      da.palabras("CHOCOLATE AL 45% DE CACAO CON LECHE")), None)
+    check("ni un prefijo parecido", da.parecido(da.palabras("Membrillo"),
+                                                da.palabras("MEMBRESIA PLUXEE")), None)
+    # 3 — el requerimiento sin procesar
+    check("falta en el Almacén lo que Barra pidió y nadie procesó",
+          [(p["t"], p["f"]) for p in pistas(0, "98") if p["t"] == "req"], [("req", 1)])
+    return fallos
+
+
 def _pruebas_detalle_salidas():
     """Movimientos › «Detalle de salidas» (regla #511).
 
@@ -11896,6 +12015,7 @@ def main():
     fallos += _pruebas_sin_plato()
     fallos += _pruebas_diferencias_ajuste()
     fallos += _pruebas_diferencias_combos()
+    fallos += _pruebas_diferencias_req_sunat()
     fallos += _pruebas_merma()
     fallos += _pruebas_cortes_y_peso()
 

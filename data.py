@@ -1426,6 +1426,7 @@ def limpiar_cache(archivo):
     _venta_clase_dia_cacheable.clear()
     _sin_plato_cacheable.clear()
     _diferencias_cacheable.clear()
+    _sunat_sin_ingresar_cacheable.clear()
     _sello_r2.clear()
     _SELLOS.pop(archivo, None)
 
@@ -2194,7 +2195,9 @@ def sin_plato_por_cierre():
 _ARCHIVOS_DIFERENCIAS = ("ajusteinventario.parquet", "recetaventa.parquet",
                          "recetabase.parquet", "cartacosteada.parquet",
                          "porcionamientos.parquet", "ordenesproduccion.parquet",
-                         "salidas.parquet", "ventas.parquet", "combosdetalle.parquet")
+                         "salidas.parquet", "ventas.parquet", "combosdetalle.parquet",
+                         "requerimientos.parquet", "sunat_compras.parquet",
+                         "compras.parquet", "notascreditocompras.parquet")
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False, max_entries=12)
@@ -2203,7 +2206,7 @@ def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
     (`diferencias_ajuste.calcular`, regla #650). Si falla, LANZA: no se
     cachea.
 
-    `archivo` es el kardex; `sellos`, los de los otros nueve parquets
+    `archivo` es el kardex; `sellos`, los de los otros trece parquets
     (`_ARCHIVOS_DIFERENCIAS`), y `version`, la de la cuenta. Ninguno se usa
     en el cuerpo: son la clave (ver el bloque del sello). Del kardex se bajan
     las filas desde `DIAS_ATRAS` días antes de la sesión hasta su último
@@ -2231,11 +2234,90 @@ def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
         combos = cargar("combosdetalle.parquet")
     except Exception:
         combos = None
+    # Quién pide cada producto, y las facturas que SUNAT tiene y el Almacén
+    # no (#652). Lo mismo: sin ellos, la cuenta sigue sin esas pistas.
+    try:
+        reqs = cargar("requerimientos.parquet")
+    except Exception:
+        reqs = None
+    su = sunat_sin_ingresar(min(s["dias"]) - timedelta(days=45), max(s["dias"]))
     return diferencias_ajuste.calcular(
         aj, s, ses, kx, cargar("recetaventa.parquet"),
         cargar("recetabase.parquet"), cargar("cartacosteada.parquet"),
         cargar("porcionamientos.parquet"), cargar("ordenesproduccion.parquet"),
-        cargar("salidas.parquet"), vend, combos=combos)
+        cargar("salidas.parquet"), vend, combos=combos, requerimientos=reqs, sunat=su)
+
+
+# Los emisores que no venden mercadería: sus comprobantes no se leen (#652).
+_NO_MERCADERIA = ("BANCO|FINANCIERA|SEGUROS|REASEGUROS|CAJA RURAL|CAJA MUNICIPAL|"
+                  "ENTIDAD PRESTADORA|RAPPI|PLUXEE")
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False, max_entries=12)
+def _sunat_sin_ingresar_cacheable(archivo, sello, desde, hasta, sellos=(), version=None):
+    """Las líneas del XML de los comprobantes que SUNAT registra y el Almacén
+    no —«Solo SUNAT» en «Documentos SUNAT», el MISMO cruce
+    (`cruzar_con_parquet`)—, emitidos entre `desde` y `hasta`: `doc`, `ruc`,
+    `prov`, `fecha` y lo de `sunat.lineas_xml`. Las lee Ajuste › «Análisis de
+    diferencias» para decir qué factura sin ingresar explica un sobrante
+    (regla #652). Si falla, LANZA: no se cachea.
+
+    `archivo` es el registro del SIRE y `sellos`, los de las compras y sus
+    notas. Los XML se bajan de R2 EN PARALELO: de a uno eran 205 s por mes
+    y medio de comprobantes; con 16 hilos, 17. Un original que el sync baje
+    DESPUÉS no cambia la clave: entra con el registro del día siguiente."""
+    if not secrets_disponibles():
+        return None
+    from concurrent.futures import ThreadPoolExecutor
+    import sunat
+    from graficos.compras import documentos_sunat as _ds
+    reg = sunat._registro_de_parquet()
+    if reg is None or reg.empty:
+        return None
+    f = pd.to_datetime(reg["fecha_emision"], errors="coerce")
+    reg = reg[(f >= pd.Timestamp(desde)) & (f < pd.Timestamp(hasta) + pd.Timedelta(days=1))]
+    if reg.empty:
+        return None
+    compras = cargar(definicion_compra.ARCHIVO, notas_credito=False)
+    cruce = _ds.cruzar_con_parquet(reg, _ds._parquet_agrupado_por_documento(
+        compras, "FECHA_EMISION_DOC", desde, hasta, notas=notas_credito_compras()))
+    solo = cruce[(cruce["estado"] == "Solo SUNAT")
+                 & ~cruce["proveedor"].astype(str).str.contains(_NO_MERCADERIA, case=False)]
+    if solo.empty:
+        return None
+    s3 = get_s3_cliente()
+    bucket = st.secrets["R2_BUCKET"]
+
+    def leer(par):
+        ruc, doc = par
+        serie, _, numero = str(doc).partition("-")
+        try:
+            return s3.get_object(Bucket=bucket, Key=sunat._clave_original(
+                ruc, serie, numero, "xml"))["Body"].read()
+        except Exception:
+            return None
+    with ThreadPoolExecutor(16) as ex:
+        xmls = list(ex.map(leer, zip(solo["ruc_proveedor"], solo["documento"])))
+    filas = []
+    for r, xml in zip(solo.itertuples(index=False), xmls):
+        for li in sunat.lineas_xml(xml):
+            filas.append({"doc": r.documento, "ruc": r.ruc_proveedor, "prov": r.proveedor,
+                          "fecha": r.fecha_emision, **li})
+    return pd.DataFrame(filas) if filas else None
+
+
+def sunat_sin_ingresar(desde, hasta):
+    """Las líneas de las facturas que SUNAT tiene y el Almacén no, emitidas
+    entre `desde` y `hasta` (`date`), o None —sin secrets, sin registro, R2
+    caído—. No cacheada (la interna sí). Regla #652."""
+    try:
+        return _sunat_sin_ingresar_cacheable(
+            "sunat_compras.parquet", sello_datos("sunat_compras.parquet"), desde, hasta,
+            sellos=tuple((a, sello_datos(a)) for a in (definicion_compra.ARCHIVO,
+                                                       definicion_compra.ARCHIVO_NOTAS)),
+            version=1)
+    except Exception:
+        return None
 
 
 def diferencias_ajuste_sesion(clave):

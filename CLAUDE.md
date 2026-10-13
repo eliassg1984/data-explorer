@@ -1225,6 +1225,12 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   TOTALES del período, no por día: el POS descuenta las ventas en lotes, a
   la mañana siguiente y juntando días. Lo elegido en un combo a elegir
   (CPEDIDO) no llega a ningún parquet: esa pista es «posible».
+- **Dice quién PIDE cada producto** (los requerimientos de 90 días, por
+  área) **y qué factura de SUNAT sin ingresar explica un sobrante** (el
+  cruce «Solo SUNAT» de Documentos SUNAT y las líneas de su XML, #652).
+  Emparejar nombres de XML con productos engaña fácil: se piden palabras
+  enteras, los mismos números (60 % no es 45 %) y no sólo genéricas
+  (`diferencias_ajuste.parecido`).
 - **Una línea de S/ 0 también es una diferencia**: un producto que nunca se
   compró no tiene precio, y su sobrante puede ser la otra mitad de un
   faltante («Vendido con el código del otro», #651). El lado lo dice la

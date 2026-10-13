@@ -40,6 +40,12 @@ LAS PISTAS, en el orden en que se muestran (fuertes primero):
   combo    va en un combo que se vendió y esos días no lo descontó (#651):
            fijo, falta en lo que descarga el combo; a elegir, la opción no se
            marcó en el pedido
+  sunat    un SOBRANTE que nombra una factura que SUNAT registra y el Almacén
+           no (`Solo SUNAT` en «Documentos SUNAT»): la mercadería llegó y la
+           factura no se ingresó (#652). Por la descripción del XML, con los
+           números del nombre y sin quedarse en palabras genéricas
+  req      un requerimiento SIN PROCESAR del producto, de antes del conteo:
+           si se entregó, el Almacén ya no lo tiene y el sistema sí (#652)
   area     el mismo producto, al revés, en otra área (traslado sin registrar)
   neg      el sistema terminó en negativo: el sobrante corrige un descargo
            que se hizo sin ingreso, no es mercadería que apareció
@@ -62,13 +68,14 @@ Puro pandas, sin streamlit. Lo vigila
 """
 
 from collections import defaultdict
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 
 from sin_plato import palabra_clave
 
-VERSION = 2
+VERSION = 3
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula."""
 
@@ -88,12 +95,14 @@ USOS_FICHA = 10
 
 FAMILIA_OPERACION = "COSTOS PRODUCCION"
 
-TIPOS = ("receta", "prod", "combo", "area", "rubro", "neg", "rev", "nada", "nadie")
+TIPOS = ("receta", "prod", "combo", "sunat", "req", "area", "rubro", "neg", "rev", "nada",
+         "nadie")
 """Los tipos de pista, en el orden en que se muestran a igual fuerza. «rubro»
 va antes que «neg» y «nada» desde la #651: cuando es fuerte («vendido con el
 código del otro») explica por qué hay un negativo o por qué no salió nada."""
 
 NOMBRE_TIPO = {"receta": "Receta", "prod": "Producción", "combo": "Combo",
+               "sunat": "Factura sin ingresar", "req": "Sin procesar",
                "area": "Otra área",
                "neg": "Sistema negativo", "rev": "Revierte",
                "nada": "Nada lo descargó", "nadie": "Ninguna receta",
@@ -167,6 +176,70 @@ def _q(q, u):
 
 def _titulo(s):
     return str(s or "").strip().title()
+
+
+_VACIAS = frozenset(
+    "con sin para del los las und unid unidad unidades kg kgs kilo kilos grs gramos ml lts "
+    "litro litros por caja cajas bolsa paquete pqt botella bot frasco sac eirl produccion "
+    "calientes frios pasteleria parrilla parrillas cocina arroces bar limpio limpia".split())
+_GENERICAS = frozenset(
+    "vino vinos tinto blanco rosado salsa chocolate pisco cerveza aceite queso harina azucar "
+    "agua leche crema pasta papa pan sal jugo fruta carne pollo pescado whisky vodka ron gin "
+    "licor huevo huevos verde rojo roja amarillo negro negra fresco fresca organico extra "
+    "entero entera premium".split())
+
+
+def palabras(texto):
+    """`(palabras, números)` de un nombre de producto o de una línea de XML,
+    para emparejarlos (#652): sin tildes, sin lo que va entre paréntesis
+    («(Rs)», «(produccion)»), sin palabras vacías, y los números de dos
+    cifras o más aparte (750 ml, 60 % cacao, Pisco 1615)."""
+    import re
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode().lower()
+    t = re.sub(r"\([^)]*\)", " ", t)
+    pal = frozenset(w for w in re.findall(r"[a-z]+", t) if len(w) >= 3 and w not in _VACIAS)
+    nums = frozenset(n for n in re.findall(r"\d+", t) if len(n) >= 2)
+    return pal, nums
+
+
+def _misma(a, b):
+    """La misma palabra, o plural y singular («terroir», «terroirs»): un prefijo
+    de cinco letras solo emparejaba «membrillo» con «membresía»."""
+    if a == b:
+        return True
+    corta, larga = sorted((a, b), key=len)
+    return len(corta) >= 5 and larga.startswith(corta) and len(larga) - len(corta) <= 3
+
+
+def parecido(producto, linea):
+    """Qué tanto nombra una línea de XML a un producto: la parte de las
+    palabras del producto que aparecen en la línea, o None si no alcanza.
+    No alcanza si los NÚMEROS no coinciden (un chocolate al 60 % no es uno al
+    45 %), si coinciden menos de tres cuartos de las palabras («ají amarillo
+    en polvo» no es «ají amarillo»), o si todas las que coinciden son
+    genéricas («vino tinto de cocina» no es «Caelum vino tinto Malbec»). Un
+    producto de UNA palabra tiene que ser lo único que nombra la línea:
+    «Beterraga» no es «brote de beterraga»."""
+    pw, pn = producto
+    dw, dn = linea
+    if not pw:
+        return None
+    if pn and dn and not (pn & dn):
+        return None
+    hay = [w for w in pw if any(_misma(w, t) for t in dw)]
+    if len(pw) == 1:
+        p = next(iter(pw))
+        if not hay or len(p) < 6 or not all(w in _GENERICAS or _misma(w, p) for w in dw):
+            return None
+        return 1.0
+    if len(hay) < 2 or len(hay) / len(pw) < 0.75 or all(w in _GENERICAS for w in hay):
+        return None
+    return len(hay) / len(pw)
+
+
+_UNIDAD_XML = {"unidad": "und", "botella": "und", "kg": "kg", "litro": "L", "g": "g",
+               "ml": "ml", "docena": "doc", "lata": "und"}
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -412,7 +485,8 @@ def es_dd(nombre):
 # ═══════════════════════════════════════════════════════════════════════
 
 def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
-             carta, porcionamientos, ordenes, salidas, venta_dia, combos=None):
+             carta, porcionamientos, ordenes, salidas, venta_dia, combos=None,
+             requerimientos=None, sunat=None):
     """Todo lo que dibuja la vista para UNA sesión: `{"lineas", "fichas",
     "resumen"}`, o None sin líneas.
 
@@ -422,7 +496,10 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     y `tipos`, los tipos separados por coma). `fichas`: `{id: dict}` con las
     pistas y todo lo de la ficha. `combos` es `combosdetalle.parquet` (la
     ficha de cada combo: sus opciones, no lo que se eligió); sin él, no hay
-    pista de combo. Pura."""
+    pista de combo. `requerimientos` es `requerimientos.parquet` (quién pide
+    cada producto) y `sunat`, las líneas del XML de los comprobantes que
+    SUNAT registra y el Almacén no (`data.sunat_sin_ingresar`); sin ellos, no
+    hay esas pistas. Pura."""
     A = ajuste_normalizado(ajuste)
     L = lineas_de_sesion(A, sesion)
     if L.empty:
@@ -494,6 +571,35 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             combos_de[r.cp].append((r.cc, r.combo, r.g, bool(r.fijo), float(r.cant),
                                     int(r.n_op)))
     cods_combo = {t_[0] for v_ in combos_de.values() for t_ in v_}
+
+    # Los requerimientos de cada producto: quién lo pide y lo pendiente
+    # (#652). Arreglos por código: se miran línea por línea.
+    rq_de = {}
+    if requerimientos is not None and len(requerimientos):
+        rq = requerimientos
+        RQ = pd.DataFrame({"cod": _cod(rq["CODIGO PRODUCTO"]), "area": _up(rq["SUB ALMACEN"]),
+                           "f": _fecha(rq["FECHA REGISTRO"]),
+                           "num": rq["COD REQUERIMIENTO"].fillna("").astype(str).str.strip(),
+                           "estado": _up(rq["NOMBRE ESTADO REQUERIMIENTO"]),
+                           "q": _num(rq["CANTIDAD"])})
+        RQ = RQ[RQ["f"].notna() & (RQ["q"] > 0)]
+        rq_de = {c: (g["f"].to_numpy(), g["area"].to_numpy(), g["q"].to_numpy(),
+                     g["num"].to_numpy(), g["estado"].to_numpy())
+                 for c, g in RQ.groupby("cod")}
+
+    # Las líneas de las facturas que SUNAT tiene y el Almacén no (#652).
+    SU = None
+    if sunat is not None and len(sunat):
+        SU = pd.DataFrame({"doc": sunat["doc"].astype(str), "prov": sunat["prov"].astype(str),
+                           "fecha": _fecha(sunat["fecha"]),
+                           "desc": sunat["descripcion"].fillna("").astype(str),
+                           "q": _num(sunat["cantidad"]),
+                           "u": sunat["unidad"].fillna("").astype(str).str.lower()})
+        SU = SU[SU["fecha"].notna()].reset_index(drop=True)
+        SU["pal"] = SU["desc"].map(palabras)
+        su_f, su_pal = SU["fecha"].to_numpy(), SU["pal"].tolist()
+        su_filas = SU.drop(columns="pal").to_dict("records")
+    _su_idx = {}
 
     op = ordenes[_up(ordenes["NOMBRE ESTADO"]) == "PROCESADO"]
     OP = pd.DataFrame({"cod": _cod(op["COD PRODUCTO"]), "f": _fecha(op["FECHA PROCESO"]),
@@ -636,6 +742,33 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     hist_lab = [_MESES[s["mes"][1] - 1] for s in cierres]
 
     # ── Las fichas ───────────────────────────────────────────────────
+    def quien_pide(x):
+        """`(pide, pendientes)`: los requerimientos PROCESADOS del producto en
+        los 90 días antes del conteo, por área que lo pidió (`[área, cantidad,
+        requerimientos, último, cantidad entre los dos conteos]`), y los SIN
+        PROCESAR registrados en los 30 días antes del conteo."""
+        h = rq_de.get(x["cod"])
+        if h is None:
+            return [], []
+        f_, a_, q_, n_, e_ = h
+        t1 = np.datetime64(x["t1"])
+        m = ((e_ == "PROCESADO") & (f_ > np.datetime64(x["t1"] - pd.Timedelta(days=90)))
+             & (f_ <= t1))
+        por = {}
+        for a, q, f, n, win in zip(a_[m], q_[m], f_[m], n_[m], f_[m] > np.datetime64(x["t0w"])):
+            e = por.setdefault(a, [0.0, set(), f, 0.0])
+            e[0] += float(q)
+            e[1].add(n)
+            e[2] = max(e[2], f)
+            e[3] += float(q) if win else 0.0
+        pide = sorted(([a, v[0], len(v[1]), pd.Timestamp(v[2]), v[3]] for a, v in por.items()),
+                      key=lambda r_: -r_[1])
+        mp = ((e_ == "GENERADO") & (f_ <= t1)
+              & (f_ > np.datetime64(x["t1"] - pd.Timedelta(days=30))))
+        pend = [[n, a, float(q), pd.Timestamp(f)]
+                for a, q, f, n in zip(a_[mp], q_[mp], f_[mp], n_[mp])]
+        return pide, pend
+
     lin = L.to_dict("records")
     fichas, usos_todos = {}, {}
     for x in lin:
@@ -660,6 +793,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             "viene": {"compra": comp.get(c), "porc": porc_origen.get(c),
                       "uporc": ult_porc_fin.get(c)},
         }
+        fichas[i]["pide"], fichas[i]["pend"] = quien_pide(x)
 
     # ── Las pistas ───────────────────────────────────────────────────
     E = pd.concat([
@@ -751,6 +885,79 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                   f"pedido, serían hasta {es(hasta)} {un} de los {es(falta)} que faltan.")
             fu = False
         return {"t": "combo", "f": int(fu), "ti": "Combo que no lo descontó", "tx": tx}
+
+    def factura_sin_ingresar(x):
+        """La pista de SUNAT: una línea de una factura que SUNAT registra y el
+        Almacén no, emitida entre los dos conteos (o hasta tres días antes),
+        que nombra este producto. Fuerte si además la cantidad calza, en la
+        misma unidad."""
+        if SU is None:
+            return None
+        k_ = (x["t0w"], x["t1"])
+        if k_ not in _su_idx:
+            _su_idx[k_] = np.flatnonzero(
+                (su_f > np.datetime64(x["t0w"] - pd.Timedelta(days=3)))
+                & (su_f <= np.datetime64(x["t1"])))
+        pp = palabras(x["producto"])
+        mejor = None
+        for j in _su_idx[k_]:
+            sc = parecido(pp, su_pal[j])
+            if sc is None:
+                continue
+            r = su_filas[j]
+            calza = (_UNIDAD_XML.get(r["u"]) == (x["u"] or "und")
+                     and 0.5 <= r["q"] / max(abs(x["q"]), 1e-9) <= 2.0)
+            clave = (calza, sc, -abs(r["q"] - abs(x["q"])))
+            if mejor is None or clave > mejor[0]:
+                mejor = (clave, j)
+        if mejor is None:
+            return None
+        (calza, _sc, _), j = mejor
+        r = SimpleNamespace(**su_filas[j])
+        n_doc = int((SU["doc"] == r.doc).sum())
+        return {"t": "sunat", "f": int(calza), "ti": "Factura sin ingresar",
+                "tx": f"La factura {r.doc} de {r.prov} ({fecha_corta(r.fecha)}) trae «{r.desc}» × "
+                      f"{es(r.q)} {r.u} y no está ingresada en el Almacén: figura en SUNAT y no en el "
+                      f"sistema{f' (con otras {n_doc - 1} líneas)' if n_doc > 1 else ''}. Si la "
+                      "mercadería llegó, este sobrante es esa compra sin registrar."}
+
+    def sin_procesar(x, pend):
+        """La pista de un requerimiento SIN PROCESAR de antes del conteo: si
+        se entregó, el que lo dio ya no lo tiene (faltante) y el que lo
+        recibió sí (sobrante), y el sistema todavía dice lo contrario."""
+        if not pend:
+            return None
+        q = float(x["q"])
+        n, a, qq, f = max(pend, key=lambda p_: p_[2])
+        if q > 0 and a == x["area"]:
+            tx = (f"El requerimiento N° {n} de esta área ({es(qq)} {x['u'] or 'und'}, "
+                  f"{fecha_corta(f)}) sigue sin procesar: si se entregó, aquí está lo que el "
+                  "sistema todavía no ingresó.")
+        elif q < 0 and a != x["area"]:
+            tx = (f"El requerimiento N° {n} de {_titulo(a)} ({es(qq)} {x['u'] or 'und'}, "
+                  f"{fecha_corta(f)}) sigue sin procesar: si se entregó, esta área ya no lo "
+                  "tiene y el sistema todavía sí.")
+        else:
+            return None
+        return {"t": "req", "f": int(0.6 <= qq / max(abs(q), 1e-9) <= 1.6),
+                "ti": "Requerimiento sin procesar", "tx": tx}
+
+    def lo_pide(x, pide):
+        """Quién lo pide, en una frase, para las pistas de lo que nada
+        descargó: si se gasta, es en el área que lo pide (#652)."""
+        if not pide:
+            return ""
+        u = x["u"] or "und"
+        a, q, n, ult, _ = pide[0]
+        if a == x["area"]:
+            frase = (f" {_titulo(a)} lo pidió por requerimiento: {es(q)} {u} en {n} "
+                     f"requerimiento{'s' if n != 1 else ''} en 90 días (el último, "
+                     f"{fecha_corta(ult)}). Es el área que lo usa, y nada registra en qué.")
+        else:
+            otros = ", ".join(f"{_titulo(r_[0])} {es(r_[1])} {u}" for r_ in pide[:3])
+            frase = (f" Lo piden por requerimiento: {otros} en 90 días (el último, "
+                     f"{fecha_corta(max(r_[3] for r_ in pide))}). Si se gasta, es ahí.")
+        return frase
 
     def por_que_nada(x):
         """Por qué no salió: sigue cada camino por el que el POS lo
@@ -974,6 +1181,15 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                                 f"{es(abs(q0))} {u}; ahora {'sobra' if x['q'] > 0 else 'falta'} "
                                 f"{es(abs(x['q']))} {u}. Puede ser un error de conteo o un "
                                 "documento registrado tarde."})
+        # sunat — una factura que SUNAT tiene y el Almacén no
+        if q > 0:
+            ps = factura_sin_ingresar(x)
+            if ps is not None:
+                P.append(ps)
+        # req — un requerimiento sin procesar
+        pr = sin_procesar(x, f["pend"])
+        if pr is not None:
+            P.append(pr)
         # combo — va en un combo que se vendió y no lo descontó
         pc = combo_sin_descontar(x, usos_todos[i], f["sal"]) if q < 0 else None
         # nada / nadie
@@ -982,7 +1198,8 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                 P.append({"t": "nadie", "f": 1, "ti": "Ninguna receta lo usa",
                           "tx": "Ningún plato, receta base ni porcionamiento lo usa: su consumo "
                                 "sólo aparece al contar. Si se usa en cocina, falta en una "
-                                "receta; si es merma o uso del área, va en una nota de salida."})
+                                "receta; si es merma o uso del área, va en una nota de salida."
+                                + lo_pide(x, f["pide"])})
             elif x["sal"] <= 1e-9:
                 p_ = por_que_nada(x)
                 antes_ = (desde_[0].upper() + desde_[1:] + " no salió nada de esta área con "
@@ -990,7 +1207,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                 if p_ is None and pc is not None:
                     pc["tx"] = antes_ + "Sus platos no se vendieron sueltos. " + pc["tx"]
                 elif p_ is not None:
-                    p_["tx"] = antes_ + p_["tx"]
+                    p_["tx"] = antes_ + p_["tx"] + lo_pide(x, f["pide"])
                     P.append(p_)
         if pc is not None:
             P.append(pc)

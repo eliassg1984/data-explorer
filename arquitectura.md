@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-651 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+652 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (211)
 
@@ -824,7 +824,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#650** — Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de diferencias», con el posible…
 - **#651** — «Análisis de diferencias» mira los COMBOS, no descarta las líneas sin precio y reconoce lo…
 
-**SUNAT y SIRE** (57)
+**SUNAT y SIRE** (58)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -883,6 +883,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#630** — El «Resumen del cruce» de Documentos SUNAT mide la FIDELIDAD respecto de SUNAT: la base es…
 - **#633** — Documentos SUNAT elige su fecha con el panel de las demás tarjetas, no con la píldora de la…
 - **#640** — «Tipo» en Documentos SUNAT: QUÉ se compró —Alimentos, Otros bienes, Servicios o Financiero—.…
+- **#652** — «Análisis de diferencias» dice QUIÉN PIDE cada producto y qué factura de SUNAT sin ingresar…
 
 **Fechas, rangos y cortes** (17)
 
@@ -51052,6 +51053,84 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-13.)
 
+652. **«Análisis de diferencias» dice QUIÉN PIDE cada producto y qué
+     factura de SUNAT sin ingresar explica un sobrante.** 2026-10-13, sobre
+     las #650 y #651. En `diferencias_ajuste.py` (`palabras`, `parecido`,
+     `factura_sin_ingresar`, `sin_procesar`, `lo_pide`, `quien_pide`,
+     `VERSION` 3), `data.py` (`sunat_sin_ingresar`,
+     `_sunat_sin_ingresar_cacheable`, `requerimientos.parquet` y el registro
+     del SIRE en `_ARCHIVOS_DIFERENCIAS`), `graficos/ajuste/_diferencias.py`
+     («Quién lo pide») y `test_graficos.py::_pruebas_diferencias_req_sunat`.
+
+     **Dos pedidos del usuario, con su ejemplo.**
+     - «Los requerimientos no generan consumo, pero son un dato para hilar
+       qué área lo está usando»: el **Hueso de pollo** (−47,05 kg en
+       Producción, −S/ 188) no lo usa ninguna receta ni porcionamiento, y
+       Producción lo pide por requerimiento —47,05 kg en 4 en 90 días—. La
+       ficha sólo lo dejaba ver en «Entró por», lo de entre los dos
+       conteos.
+     - «En Documentos SUNAT hay documentos del mes que no figuran en el
+       sistema; eso generaría un sobrante»: el **Caelum Terroir Malbec**
+       sobra 8,1 und en Cava (con el sistema en −2,5) y la factura
+       E001-3599 de Infinity Brands (4 set), 12 botellas, figura en SUNAT y
+       no en el Almacén.
+
+     **Quién lo pide.** Los requerimientos PROCESADOS del producto en los
+     90 días antes del conteo, por área que los pidió (la ficha, «Quién lo
+     pide»), y los que siguen SIN PROCESAR de los 30 días antes. Las pistas
+     de lo que nada descargó lo nombran: «Producción lo pidió por
+     requerimiento: 47,05 kg en 4 en 90 días. Es el área que lo usa, y nada
+     registra en qué.» Uno sin procesar es pista propia («Requerimiento sin
+     procesar»): si se entregó, el que lo dio ya no lo tiene y el que lo
+     recibió sí. En setiembre 2026 no hubo ninguno de antes del conteo (los
+     18 pendientes eran del 11 oct), pero la pista queda.
+
+     **La factura sin ingresar.** El MISMO cruce de «Documentos SUNAT»
+     (`cruzar_con_parquet`, «Solo SUNAT»), sin bancos, seguros ni Rappi, y
+     las líneas de su XML (`sunat.lineas_xml`). Un SOBRANTE la recibe si
+     una línea de una factura emitida entre los dos conteos (o hasta tres
+     días antes) nombra al producto; fuerte si además la cantidad calza en
+     la misma unidad (0,5–2). Para el sobrante nada más: una factura sin
+     ingresar no explica un faltante.
+
+     **Emparejar nombres: lo que se midió con los 57 primeros.** La
+     primera versión (un prefijo de cinco letras, dos tercios de las
+     palabras) emparejaba «Membrillo» con «MEMBRESÍA PLUXEE», el
+     «Chocolate 60 % Cacao» con un chocolate al 45 %, el «Pisco 1615» con
+     un Sarcay y el «Vino tinto de cocina» con un Caelum Malbec. Las
+     reglas que quedaron (`parecido`):
+     - palabras enteras, o singular y plural (`_misma`: «terroir» y
+       «terroirs»), sin tildes ni lo que va entre paréntesis;
+     - los NÚMEROS tienen que coincidir si los dos los traen (60 %, 750 ml,
+       1615);
+     - tres cuartos de las palabras del producto, y no todas genéricas
+       («vino», «tinto», «pisco», «salsa», `_GENERICAS`);
+     - un producto de UNA palabra tiene que ser lo único que nombra la
+       línea: «Beterraga» no es «BROTE DE BETERRAGA».
+     Quedaron 16 en el cierre de setiembre, 3 fuertes (el Caelum Malbec y
+     los chocolates de 60 y 72 % de Fage). La factura de verduras de La
+     Cesta (FC01-115, 14 set) aparece en una docena: entera sin ingresar.
+     Un número de unidades que no calza (3 bolsas de sal contra 0,16 kg)
+     queda en «posible».
+
+     **Lo que cuesta.** Los XML se bajan de R2 en paralelo, con 16 hilos:
+     de a uno eran 205 s por mes y medio de comprobantes; así, 17 (28 con
+     el cruce). Van en su propia caché de disco
+     (`_sunat_sin_ingresar_cacheable`), con el sello del registro, de las
+     compras y de sus notas; un original que el sync baje DESPUÉS entra con
+     el registro del día siguiente. La cuenta pasa de 8 a 12 s: la búsqueda
+     va por índices de numpy y con las ventanas de fecha en caché.
+
+     **Lo que NO ve.** Una factura que se ingresó DESPUÉS del conteo ya
+     figura en el sistema y sale «Coincide»: en el conteo faltaba, pero el
+     cruce de hoy no lo sabe. Y la descripción de un XML no siempre nombra
+     el producto como el Almacén: lo que no empareja no se acusa.
+
+     **En Cloud, «Reboot app»** (#357): `data.py` le pasa a
+     `diferencias_ajuste.calcular` dos argumentos nuevos.
+
+     (2026-10-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51064,7 +51143,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#651**; la próxima toma el número siguiente.
+> última regla es la **#652**; la próxima toma el número siguiente.
 
 >
 

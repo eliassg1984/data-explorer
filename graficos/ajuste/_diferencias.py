@@ -68,7 +68,8 @@ _NOMBRE_FILTRO = {"todas": "Todas", "fuerte": "Con pista fuerte",
 _ICONO = {"receta": ":material/error:", "prod": ":material/precision_manufacturing:",
           "area": ":material/swap_horiz:", "neg": ":material/remove:",
           "rev": ":material/undo:", "nada": ":material/block:",
-          "combo": ":material/restaurant_menu:",
+          "combo": ":material/restaurant_menu:", "sunat": ":material/receipt_long:",
+          "req": ":material/pending_actions:",
           "nadie": ":material/no_meals:", "rubro": ":material/compare_arrows:"}
 
 _SIN_DATOS = ("No se pudo armar el análisis de esta sesión: hace falta el "
@@ -382,6 +383,24 @@ def _viene_html(x, fi):
     return '<div class="dif-viene">' + "".join(f"<div>{t}</div>" for t in out) + "</div>"
 
 
+def _pide_html(x, fi):
+    """Quién lo pide: los requerimientos del producto por área (#652). No
+    mueven consumo, pero dicen qué área lo usa."""
+    u = _e(x["u"] or "und")
+    filas = []
+    for a, q, n, ult, win in fi.get("pide") or []:
+        en = f" · entre los dos conteos, {_cant(win)} {u}" if win > 1e-9 else ""
+        filas.append(f'<div><b>{_e(str(a).title())}</b>: {_cant(q)} {u} en {n} '
+                     f'requerimiento{"s" if n != 1 else ""}, el último el '
+                     f'{da.fecha_corta(ult)}{en}</div>')
+    for n, a, q, f in fi.get("pend") or []:
+        filas.append(f'<div><span class="dif-et al">sin procesar</span> N° {_e(n)} de '
+                     f'{_e(str(a).title())}: {_cant(q)} {u}, el {da.fecha_corta(f)}</div>')
+    if not filas:
+        return '<div class="dif-nota">Nadie lo pidió por requerimiento en los últimos 90 días.</div>'
+    return '<div class="dif-viene">' + "".join(filas) + "</div>"
+
+
 def _usos_html(x, fi):
     u = _e(x["u"] or "und")
     if not fi["usos"]:
@@ -474,6 +493,8 @@ def _ficha(x, fi, por_clave):
         st.plotly_chart(_fig_camino(x, fi), width="stretch", key="ajdif_camino",
                         config={"displaylogo": False, "displayModeBar": False})
     st.markdown('<div class="dif-h">De dónde viene</div>' + _viene_html(x, fi)
+                + '<div class="dif-h">Quién lo pide (requerimientos, 90 días)</div>'
+                + _pide_html(x, fi)
                 + '<div class="dif-h">Dónde se usa</div>'
                 '<div class="dif-nota">Lo que lo descarga, con lo vendido o producido entre los '
                 'dos conteos. «≈» es recetas × vendido: una referencia, no el kardex. «Receta '
