@@ -1221,6 +1221,14 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   produjo sin orden» sólo vale para una receta base que algo descarga
   COMO PRODUCTO; una DD va por insumo y no lleva orden.
 - **El área de descargo de un plato es `SUBALM INS`**, no `AREA PROD`.
+- **Mira los combos** (`combosdetalle.parquet`, #651) y los compara por
+  TOTALES del período, no por día: el POS descuenta las ventas en lotes, a
+  la mañana siguiente y juntando días. Lo elegido en un combo a elegir
+  (CPEDIDO) no llega a ningún parquet: esa pista es «posible».
+- **Una línea de S/ 0 también es una diferencia**: un producto que nunca se
+  compró no tiene precio, y su sobrante puede ser la otra mitad de un
+  faltante («Vendido con el código del otro», #651). El lado lo dice la
+  CANTIDAD.
 - **Recetas × vendido no cuadra con el descargo del kardex** (31 % de
   las líneas a ±10 %): en la ficha va con «≈», sin compararlo.
 - **El 74 % del sobrante de un cierre es el sistema en negativo**: se

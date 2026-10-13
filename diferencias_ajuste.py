@@ -37,6 +37,9 @@ LAS PISTAS, en el orden en que se muestran (fuertes primero):
            descarga como producto
   prod     falta un insumo y sobra lo que se hace con él (o al revés), por
            receta base o porcionamiento
+  combo    va en un combo que se vendió y esos días no lo descontó (#651):
+           fijo, falta en lo que descarga el combo; a elegir, la opción no se
+           marcó en el pedido
   area     el mismo producto, al revés, en otra área (traslado sin registrar)
   neg      el sistema terminó en negativo: el sobrante corrige un descargo
            que se hizo sin ingreso, no es mercadería que apareció
@@ -45,7 +48,9 @@ LAS PISTAS, en el orden en que se muestran (fuertes primero):
            receta que debía descontarlo (`por_que_nada`)
   nadie    ningún plato, receta base ni porcionamiento lo usa
   rubro    mismo rubro (`sin_plato.palabra_clave`), al revés, con cantidades
-           y montos que calzan — la más débil
+           que calzan. Fuerte si lo que falta no tuvo salidas y lo que sobra se
+           vendió sin haber entrado: se vendió uno con el código del otro (la
+           Sauvignon Blanc y la Chardonnay de Cinco Sentidos, setiembre 2026)
 
 Recetas × lo vendido NO cuadra con el descargo del kardex (31 % de las líneas
 dentro de ±10 %: canales, recetas editadas en el mes, fecha de turno). En la
@@ -63,7 +68,7 @@ import pandas as pd
 
 from sin_plato import palabra_clave
 
-VERSION = 1
+VERSION = 2
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula."""
 
@@ -83,10 +88,13 @@ USOS_FICHA = 10
 
 FAMILIA_OPERACION = "COSTOS PRODUCCION"
 
-TIPOS = ("receta", "prod", "area", "neg", "rev", "nada", "nadie", "rubro")
-"""Los tipos de pista, en el orden en que se muestran a igual fuerza."""
+TIPOS = ("receta", "prod", "combo", "area", "rubro", "neg", "rev", "nada", "nadie")
+"""Los tipos de pista, en el orden en que se muestran a igual fuerza. «rubro»
+va antes que «neg» y «nada» desde la #651: cuando es fuerte («vendido con el
+código del otro») explica por qué hay un negativo o por qué no salió nada."""
 
-NOMBRE_TIPO = {"receta": "Receta", "prod": "Producción", "area": "Otra área",
+NOMBRE_TIPO = {"receta": "Receta", "prod": "Producción", "combo": "Combo",
+               "area": "Otra área",
                "neg": "Sistema negativo", "rev": "Revierte",
                "nada": "Nada lo descargó", "nadie": "Ninguna receta",
                "rubro": "Mismo rubro"}
@@ -204,7 +212,10 @@ def lineas_de_sesion(a, sesion):
         familia=("familia", "first"), subfamilia=("subfamilia", "first"),
         u=("u", "first"), s=("s", "first"), k=("k", "last"), q=("q", "sum"),
         v=("v", "sum"), precio=("precio", "last"))
-    L = L[L["v"].abs() > EPS].reset_index(drop=True)
+    # Con cantidad aunque valgan S/ 0: un producto que nunca se compró no
+    # tiene precio, y su sobrante es la otra mitad de un faltante (#651).
+    # Faltante o sobrante lo dice la CANTIDAD; el monto, cuánto pesa.
+    L = L[(L["v"].abs() > EPS) | (L["q"].abs() > 1e-6)].reset_index(drop=True)
     ini = pd.Timestamp(min(sesion["dias"]))
     ant = (a[a["t"] < ini].sort_values("t", kind="stable")
            .drop_duplicates(["acod", "cod"], keep="last")
@@ -240,15 +251,14 @@ def _es_compra(t):
     return t.str.isdigit() & (pd.to_numeric(t, errors="coerce") < 90)
 
 
-def ventana(K, L, desde):
+def ventana(K, L):
     """Las filas del kardex de cada línea entre sus dos conteos (sin ajustes):
-    después de la hora del conteo anterior y hasta la hora de este. Una
-    línea sin conteo anterior, o con uno más viejo que `desde`, no tiene
-    ventana."""
-    base = L[["id", "acod", "cod", "t0", "t1"]]
-    base = base[base["t0"].notna() & (base["t0"] >= desde)]
+    después de la hora del conteo anterior (`t0w`) y hasta la hora de este.
+    Una línea que nunca se contó en su área arranca en `desde`, lo más viejo
+    que se lee del kardex (#651)."""
+    base = L[["id", "acod", "cod", "t0w", "t1"]]
     W = K[K["t"] != "93"].merge(base, on=["acod", "cod"])
-    W = W[(W["hora"] > W["t0"].dt.floor("h")) & (W["hora"] <= W["t1"].dt.floor("h"))]
+    W = W[(W["hora"] > W["t0w"].dt.floor("h")) & (W["hora"] <= W["t1"].dt.floor("h"))]
     return W.reset_index(drop=True)
 
 
@@ -300,8 +310,8 @@ def motivos(W, K, L, salidas, area_de):
     k98 = k98[k98["q98"] > 1e-9]
     notas = []
     if len(k98) and salidas is not None and len(salidas):
-        S = salidas.merge(L[["id", "area", "cod", "t0", "t1"]], on=["area", "cod"])
-        S = S[S["id"].isin(k98["id"]) & (S["f"] > S["t0"].dt.floor("D"))
+        S = salidas.merge(L[["id", "area", "cod", "t0w", "t1"]], on=["area", "cod"])
+        S = S[S["id"].isin(k98["id"]) & (S["f"] > S["t0w"].dt.floor("D"))
               & (S["f"] <= S["t1"])]
         T = (S.groupby(["id", "tipo"], as_index=False)
              .agg(q=("q", "sum"), n=("q", "size"))
@@ -341,9 +351,7 @@ def caminos_del_stock(W, L):
             out.setdefault(int(r.id), []).append((r.hora, float(r.stock)))
     caminos = {}
     for r in L.itertuples(index=False):
-        if pd.isna(r.t0):
-            continue
-        caminos[int(r.id)] = ([(r.t0, float(r.c0))] + out.get(int(r.id), [])
+        caminos[int(r.id)] = ([(r.t0w, float(r.c0w))] + out.get(int(r.id), [])
                               + [(r.t1, float(r.s))])
     return caminos
 
@@ -404,7 +412,7 @@ def es_dd(nombre):
 # ═══════════════════════════════════════════════════════════════════════
 
 def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
-             carta, porcionamientos, ordenes, salidas, venta_dia):
+             carta, porcionamientos, ordenes, salidas, venta_dia, combos=None):
     """Todo lo que dibuja la vista para UNA sesión: `{"lineas", "fichas",
     "resumen"}`, o None sin líneas.
 
@@ -412,7 +420,9 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     `producto`, `area`, `familia`, `subfamilia`, `u`, `s`, `k`, `q`, `v`,
     `precio`, `pista`/`pista_t`/`pista_f` la principal, `n_pistas`, `fuerte`
     y `tipos`, los tipos separados por coma). `fichas`: `{id: dict}` con las
-    pistas y todo lo de la ficha. Pura."""
+    pistas y todo lo de la ficha. `combos` es `combosdetalle.parquet` (la
+    ficha de cada combo: sus opciones, no lo que se eligió); sin él, no hay
+    pista de combo. Pura."""
     A = ajuste_normalizado(ajuste)
     L = lineas_de_sesion(A, sesion)
     if L.empty:
@@ -420,17 +430,25 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     ini = pd.Timestamp(min(sesion["dias"]))
     desde = ini - pd.Timedelta(days=DIAS_ATRAS)
     area_de = A.drop_duplicates("acod").set_index("acod")["area"].to_dict()
-    L["t0x"] = L["t0"].where(L["t0"].notna() & (L["t0"] >= desde),
-                             L["t1"] - pd.Timedelta(days=15))
+    # Una línea que nunca se contó en su área (o hace más de DIAS_ATRAS días)
+    # arranca en `desde`, con el stock que tenía el kardex: la Chardonnay que
+    # se vendió sin entrar no tenía conteo anterior en Cava (#651).
+    L["sin_ant"] = L["t0"].isna() | (L["t0"] < desde)
+    L["t0w"] = L["t0"].where(~L["sin_ant"], desde)
+    L["t0x"] = L["t0w"]
 
     # ── El kardex ─────────────────────────────────────────────────────
     K = kardex_normalizado(kardex)
-    W = ventana(K, L, desde)
+    W = ventana(K, L)
     tot = W.groupby("id").agg(ing=("ent", "sum"), sal=("sal", "sum"))
     L["ing"] = L["id"].map(tot["ing"]).fillna(0.0)
     L["sal"] = L["id"].map(tot["sal"]).fillna(0.0)
-    con_cuenta = L["t0"].notna() & (L["t0"] >= desde)
-    L["gap"] = np.where(con_cuenta, L["c0"] + L["ing"] - L["sal"] - L["s"], np.nan)
+    # Sin conteo anterior, lo que había es la foto del kardex ANTES de su
+    # primer movimiento de la ventana; sin movimientos, lo que dice hoy.
+    prim = W.sort_values("hora", kind="stable").drop_duplicates("id")
+    abre = (prim["stock"] - prim["ent"] + prim["sal"]).set_axis(prim["id"].to_numpy())
+    L["c0w"] = np.where(L["sin_ant"], L["id"].map(abre).fillna(L["s"]), L["c0"])
+    L["gap"] = L["c0w"] + L["ing"] - L["sal"] - L["s"]
     S = None
     if salidas is not None and len(salidas):
         sa = salidas[_up(salidas["NOMBRE ESTADO SALIDA"]) == "PROCESADO"]
@@ -458,6 +476,24 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     por_ins = {c: sorted(v) for c, v in por_ins.items()}
     con_stock = set(como_prod)
     rb_nombre = RB.drop_duplicates("prod").set_index("prod")["rbn"].to_dict()
+
+    # Los combos: qué platos lleva cada uno, fijos o a elegir por grupo. El
+    # grupo se compara en mayúsculas (en el POS «D» y «d» son el mismo).
+    combos_de = defaultdict(list)
+    if combos is not None and len(combos):
+        cb = combos
+        if "COMBO ACTIVO" in cb.columns:
+            cb = cb[_num(cb["COMBO ACTIVO"]) == 1]
+        cb = pd.DataFrame({"cc": _cod(cb["COD COMBO"]),
+                           "combo": cb["COMBO"].fillna("").astype(str).str.strip(),
+                           "g": _up(cb["GRUPO"]), "cp": _cod(cb["COD PRODUCTO"]),
+                           "fijo": _num(cb["FIJO"]) == 1,
+                           "cant": _num(cb["CANTIDAD"]).replace(0, 1.0)})
+        cb["n_op"] = cb.groupby(["cc", "g"])["cp"].transform("nunique")
+        for r in cb.itertuples(index=False):
+            combos_de[r.cp].append((r.cc, r.combo, r.g, bool(r.fijo), float(r.cant),
+                                    int(r.n_op)))
+    cods_combo = {t_[0] for v_ in combos_de.values() for t_ in v_}
 
     op = ordenes[_up(ordenes["NOMBRE ESTADO"]) == "PROCESADO"]
     OP = pd.DataFrame({"cod": _cod(op["COD PRODUCTO"]), "f": _fecha(op["FECHA PROCESO"]),
@@ -488,10 +524,15 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     vent = L[["t0x", "t1"]].drop_duplicates().reset_index(drop=True)
     vent["w"] = np.arange(len(vent))
     L = L.merge(vent, on=["t0x", "t1"], how="left")
-    vend, ords, porcs = {}, {}, {}
+    vend, ords, porcs, vdias = {}, {}, {}, {}
     for r in vent.itertuples(index=False):
         x = VD[(VD["dia"] > r.t0x.normalize()) & (VD["dia"] <= r.t1.normalize())]
         vend[r.w] = x.groupby("cp")["unidades"].sum().to_dict()
+        # Los días en que se vendió cada combo, para mirar el kardex esos días.
+        vdias[r.w] = defaultdict(set)
+        xc = x[x["cp"].isin(cods_combo) & (x["unidades"] > 0)]
+        for cp_, d_ in zip(xc["cp"], xc["dia"]):
+            vdias[r.w][cp_].add(d_)
         o = OP[(OP["f"] > r.t0x) & (OP["f"] <= r.t1)]
         ords[r.w] = o.groupby("cod")["q"].agg(["sum", "size"]).to_dict("index")
         p = PO[(PO["f"] > r.t0x) & (PO["f"] <= r.t1)]
@@ -537,7 +578,8 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         for x in rv_por_ci.get(c, ()):
             nv = float(vend[w].get(x.cp, 0.0))
             ed = x.fm if pd.notna(x.fm) and x.fm >= t0x else None
-            out.append({"via": "plato", "n": x.plato, "q": float(x.q), "a": x.area,
+            out.append({"via": "plato", "n": x.plato, "cp": x.cp, "q": float(x.q),
+                        "a": x.area,
                         "t": x.t, "nv": nv, "d": nv * x.q if x.t == "PRODUCTO" else 0.0,
                         "ed": ed, "cc": costo_alrededor(x.cp, ed) if ed is not None else None,
                         "ap": float(x.q) * precio})
@@ -554,11 +596,24 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                 nv = float(vend[w].get(y.cp, 0.0))
                 ed = y.fm if pd.notna(y.fm) and y.fm >= t0x else None
                 qq = float(x.q * y.q)
-                out.append({"via": "plato_ins", "n": y.plato, "por": x.rbn, "q": qq,
+                out.append({"via": "plato_ins", "n": y.plato, "cp": y.cp, "por": x.rbn,
+                            "q": qq,
                             "a": x.area, "t": x.t, "nv": nv,
                             "d": nv * qq if x.t == "PRODUCTO" else 0.0, "ed": ed,
                             "cc": costo_alrededor(y.cp, ed) if ed is not None else None,
                             "ap": qq * precio})
+        # Los combos que llevan uno de esos platos: fijo, el combo lo
+        # descuenta siempre; a elegir, sólo si se marcó esa opción.
+        for u_ in [u for u in out if u["via"] in ("plato", "plato_ins")]:
+            for cc_, nom, g, fijo, cant, n_op in combos_de.get(u_["cp"], ()):
+                nv = float(vend[w].get(cc_, 0.0))
+                qq = u_["q"] * cant
+                prod_ = u_["t"] == "PRODUCTO"
+                out.append({"via": "combo", "n": nom, "cc_": cc_, "plato": u_["n"],
+                            "g": g, "fijo": fijo, "n_op": n_op, "q": qq, "a": u_["a"],
+                            "t": u_["t"], "nv": nv,
+                            "d": nv * qq if (fijo and prod_) else 0.0,
+                            "hasta": nv * qq if prod_ else 0.0, "ed": None})
         for fin, fin_n in po_por_ini.get(c, ()):
             p = porcs[w].get((c, fin), {"q": 0.0, "n": 0})
             out.append({"via": "porc", "n": fin_n, "a": "", "t": "PRODUCTO",
@@ -582,10 +637,10 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
 
     # ── Las fichas ───────────────────────────────────────────────────
     lin = L.to_dict("records")
-    fichas = {}
+    fichas, usos_todos = {}, {}
     for x in lin:
         i, c = int(x["id"]), x["cod"]
-        usos = usos_de(x)
+        usos = usos_todos[i] = usos_de(x)
         rec = None
         if c in rb_nombre:
             ins = sorted(rb_por_prod.get(c, ()), key=lambda r: -r.q)
@@ -625,7 +680,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         x["pk"] = palabra_clave(x["producto"])
     por_pk = defaultdict(list)
     for x in lin:
-        if x["pk"] and abs(x["v"]) > 20:
+        if x["pk"]:
             por_pk[x["pk"]].append(x)
 
     def k95_en(cod, t0, t1):
@@ -649,12 +704,61 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                  & (h[0] <= np.datetime64(t1 + pd.Timedelta(days=DIAS_TARDE)))]
         return pd.Timestamp(f.min()) if len(f) else None
 
+    def combo_sin_descontar(x, usos, salio):
+        """La pista de combo: un combo que lleva un plato de este producto, que
+        se vendió entre los dos conteos y que no lo descontó.
+
+        POR TOTALES Y NO POR DÍA: el POS descuenta las ventas en LOTES, a la
+        mañana siguiente y a veces juntando varios días (Reto Malbec, set
+        2026: 1,6 el 21 a las 9, 4,8 el 23 a las 10, 3,4 el 28 a las 9). Lo
+        que se mira es si lo que el kardex descontó por ventas en el período
+        es lo de los platos SUELTOS: si es eso, el combo no puso nada."""
+        kx = sum(m[1] for m in salio if m[0] == "Descargo de ventas")
+        sueltos = sum(u_["d"] for u_ in usos
+                      if u_["via"] in ("plato", "plato_ins") and u_["t"] == "PRODUCTO"
+                      and u_["aqui"] is not False)
+        if abs(kx - sueltos) > max(0.05, 0.03 * max(kx, sueltos)):
+            return None
+        cands = []
+        for u_ in usos:
+            if (u_["via"] != "combo" or u_["t"] != "PRODUCTO" or u_["nv"] <= 0
+                    or u_["aqui"] is False):
+                continue
+            dias = sorted(vdias[x["w"]].get(u_["cc_"], ()))
+            cands.append((u_["hasta"], u_, dias))
+        if not cands:
+            return None
+        hasta, u_, dias = max(cands, key=lambda t_: t_[0])
+        un = x["u"] or "und"
+        falta = abs(x["q"])
+        ratio = hasta / max(falta, 1e-9)
+        fechas = (", ".join(fecha_corta(d) for d in dias[:3])
+                  + (" y otros días" if len(dias) > 3 else ""))
+        if kx > 1e-9:
+            cuenta = (f"Lo que el kardex descontó por ventas ({es(kx)} {un}) es lo de los platos "
+                      "sueltos: el combo no descontó nada de este producto. ")
+        else:
+            cuenta = "El kardex no descontó nada por ventas. "
+        if u_["fijo"]:
+            tx = (f"Va fijo en el combo {u_['n']} ({u_['plato']}), que se vendió "
+                  f"{es(u_['nv'], 0)} veces ({fechas}). {cuenta}Serían {es(hasta)} {un} de los "
+                  f"{es(falta)} que faltan: falta en lo que descarga el combo.")
+            fu = 0.5 <= ratio <= 1.5
+        else:
+            tx = (f"{u_['plato']} es una de las {u_['n_op']} opciones del grupo "
+                  f"«{u_['g'].lower()}» del combo {u_['n']}, que se vendió {es(u_['nv'], 0)} "
+                  f"veces ({fechas}). {cuenta}Si se sirvió y la opción no se marcó en el "
+                  f"pedido, serían hasta {es(hasta)} {un} de los {es(falta)} que faltan.")
+            fu = False
+        return {"t": "combo", "f": int(fu), "ti": "Combo que no lo descontó", "tx": tx}
+
     def por_que_nada(x):
         """Por qué no salió: sigue cada camino por el que el POS lo
-        descontaría y dice cuál falló."""
+        descontaría y dice cuál falló. None si lo único que hay son platos que
+        se vendieron DENTRO de un combo: eso lo dice la pista del combo."""
         c, area, t0, t1, w = x["cod"], x["area"], x["t0x"], x["t1"], x["w"]
         aqui = _titulo(x["area"])
-        sin_orden, quieta, otra, quietos, vendidos = [], [], [], [], []
+        sin_orden, quieta, otra, quietos, vendidos, en_combo = [], [], [], [], [], []
         for r in rb_por_ci.get(c, ()):
             if r.t != "PRODUCTO" or r.prod not in con_stock:
                 continue      # va por insumo: no lleva orden
@@ -672,7 +776,10 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                         for y in rv_por_ci.get(r.prod, ()) if y.t == "INSUMO"]
         for cp, plato, ar, qq, por, fm in caminos:
             nv = float(vend[w].get(cp, 0.0))
-            if nv <= 0:
+            if nv <= 0 and (not ar or ar == area) and any(
+                    vend[w].get(t_[0], 0.0) > 0 for t_ in combos_de.get(cp, ())):
+                en_combo.append(plato)
+            elif nv <= 0:
                 quietos.append(plato)
             elif ar and ar != area:
                 otra.append((plato, ar))
@@ -722,12 +829,20 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                     "tx": f"{otra[0][0]} lo descarga desde {', '.join(areas[:2])}, no desde "
                           f"{aqui}. Lo que falta aquí puede haberse usado allá sin traslado, "
                           "o la receta apunta al área equivocada."}
+        if en_combo and not quietos:
+            return None
         if quietos:
             nom = sorted(set(quietos))
+            # Los combos que llevan esos platos, que tampoco se vendieron: el
+            # plato no se vendió NI suelto NI dentro de un combo.
+            cbs = sorted({t_[1] for cp, plato, *_ in caminos if plato in nom
+                          for t_ in combos_de.get(cp, ())})
+            ni = (f", ni sueltos ni en {'el combo' if len(cbs) == 1 else 'los combos'} que "
+                  f"los lleva{'n' if len(cbs) > 1 else ''} ({', '.join(cbs[:2])})" if cbs else "")
             return {"t": "nada", "f": 1, "ti": "Sus platos no se vendieron",
                     "tx": f"Sólo lo descargan {', '.join(nom[:3])}{' y otros' if len(nom) > 3 else ''}, "
-                          "y no se vendieron entre los dos conteos. Si se gastó, fue en platos "
-                          "cuya receta no lo lleva: ahí falta en una receta."}
+                          f"y no se vendieron entre los dos conteos{ni}. Si se gastó, fue en "
+                          "platos cuya receta no lo lleva: ahí falta en una receta."}
         if quieta:
             return {"t": "nada", "f": 1, "ti": "Su receta base no se movió",
                     "tx": f"Va en {quieta[0][0].rbn}, que no se vendió ni se produjo entre los "
@@ -751,8 +866,11 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     hace6 = ini - pd.Timedelta(days=DIAS_ATRAS)
     for x in lin:
         i, c, v, u = int(x["id"]), x["cod"], float(x["v"]), x["u"] or "und"
+        q, sg = float(x["q"]), np.sign(x["q"])
         f = fichas[i]
         t0s = fecha_corta(x["t0"]) if pd.notna(x["t0"]) else "—"
+        desde_ = (f"en los últimos {DIAS_ATRAS} días (no se había contado en esta área)"
+                  if x["sin_ant"] else f"desde el conteo del {t0s}")
         sin_ing = x["ing"] <= 1e-9
         P = []
         # receta — la línea ES una receta base
@@ -777,7 +895,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                                 f"({', '.join(rec['prod_l'][:3])}). Si debía ir por insumo, "
                                 "ahí falta el check."})
         # prod — falta el insumo y sobra lo que se hace con él (o al revés)
-        if v < 0:
+        if q < 0:
             cand = []
             for b, via in deriv.get(c, ()):
                 sb = [y for y in por_cod.get(b, ()) if y["v"] > 0]
@@ -796,7 +914,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                                 + (f"Ese producto se descargó sin que entrara nada: falta registrar "
                                    f"la {que}." if fu else f"Puede ser una {que} sin registrar."),
                           "r": int(top["id"]), "m": len(cand) - 1})
-        if v > 0 and c in insum:
+        if q > 0 and c in insum:
             fal = []
             for a_, via in insum[c]:
                 ya = [y for y in por_cod.get(a_, ()) if y["v"] < 0]
@@ -817,9 +935,9 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                                    if fu else f"Puede ser una {que} sin registrar."),
                           "r": int(min(fal[0][2], key=lambda y: y["v"])["id"]), "m": len(fal) - 1})
         # area — el mismo producto, al revés, en otra área
-        otras = [y for y in por_cod[c] if y["id"] != i and np.sign(y["v"]) == -np.sign(v)]
+        otras = [y for y in por_cod[c] if y["id"] != i and np.sign(y["q"]) == -sg]
         if otras:
-            o = max(otras, key=lambda y: abs(y["v"]))
+            o = max(otras, key=lambda y: (abs(y["v"]), abs(y["q"])))
             ratio = abs(x["q"]) / max(abs(o["q"]), 1e-9)
             fu = 0.6 <= ratio <= 1.6
             extra = f" (el sistema tenía {es(o['s'])})" if o["s"] < 0 else ""
@@ -832,12 +950,12 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                                "sin registrar, por una parte."),
                       "r": int(o["id"])})
         # neg — el sistema terminó en negativo
-        if v > 0 and x["s"] < 0:
+        if q > 0 and x["s"] < 0:
             salio = sorted(f["sal"], key=lambda m: -m[1])[:2]
             por = " y ".join(f"{es(m[1])} {u} por {m[0][0].lower() + m[0][1:]}"
                              for m in salio) or "algo"
             if sin_ing:
-                tx = (f"El sistema terminó en {es(x['s'])} {u}: desde el conteo del {t0s} "
+                tx = (f"El sistema terminó en {es(x['s'])} {u}: {desde_} "
                       f"salieron {por} y no entró nada. El sobrante corrige ese negativo: no "
                       "es mercadería que apareció.")
             else:
@@ -856,39 +974,77 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                                 f"{es(abs(q0))} {u}; ahora {'sobra' if x['q'] > 0 else 'falta'} "
                                 f"{es(abs(x['q']))} {u}. Puede ser un error de conteo o un "
                                 "documento registrado tarde."})
+        # combo — va en un combo que se vendió y no lo descontó
+        pc = combo_sin_descontar(x, usos_todos[i], f["sal"]) if q < 0 else None
         # nada / nadie
-        if v < 0:
+        if q < 0:
             if c not in usados:
                 P.append({"t": "nadie", "f": 1, "ti": "Ninguna receta lo usa",
                           "tx": "Ningún plato, receta base ni porcionamiento lo usa: su consumo "
                                 "sólo aparece al contar. Si se usa en cocina, falta en una "
                                 "receta; si es merma o uso del área, va en una nota de salida."})
-            elif x["sal"] <= 1e-9 and pd.notna(x["gap"]):
+            elif x["sal"] <= 1e-9:
                 p_ = por_que_nada(x)
-                p_["tx"] = (f"Desde el conteo del {t0s} no salió nada de esta área con un "
-                            "documento. " + p_["tx"])
-                P.append(p_)
-        # rubro — mismo rubro, al revés, si cantidad y monto calzan
+                antes_ = (desde_[0].upper() + desde_[1:] + " no salió nada de esta área con "
+                          "un documento. ")
+                if p_ is None and pc is not None:
+                    pc["tx"] = antes_ + "Sus platos no se vendieron sueltos. " + pc["tx"]
+                elif p_ is not None:
+                    p_["tx"] = antes_ + p_["tx"]
+                    P.append(p_)
+        if pc is not None:
+            P.append(pc)
+        # rubro — mismo rubro, al revés, si las cantidades calzan. Un lado
+        # puede valer S/ 0 (nunca se compró); si los dos tienen precio, los
+        # montos también tienen que calzar.
         ya = {p_.get("r") for p_ in P}
-        if abs(v) > 20 and x["pk"]:
-            cand = [y for y in por_pk[x["pk"]]
-                    if y["cod"] != c and np.sign(y["v"]) == -np.sign(v)
-                    and y["u"] == x["u"] and y["id"] not in ya
-                    and 0.6 <= abs(y["q"]) / max(abs(x["q"]), 1e-9) <= 1.6
-                    and 0.5 <= abs(y["v"]) / abs(v) <= 2.0]
+        if x["pk"]:
+            cand = []
+            for y in por_pk[x["pk"]]:
+                if (y["cod"] == c or np.sign(y["q"]) != -sg or y["u"] != x["u"]
+                        or y["id"] in ya or max(abs(v), abs(y["v"])) <= 20):
+                    continue
+                rq = abs(y["q"]) / max(abs(q), 1e-9)
+                if not 0.6 <= rq <= 1.6:
+                    continue
+                if abs(v) > EPS and abs(y["v"]) > EPS and not 0.5 <= abs(y["v"]) / abs(v) <= 2.0:
+                    continue
+                cand.append((rq, y))
             if cand:
-                o = max(cand, key=lambda y: abs(y["v"]))
-                P.append({"t": "rubro", "f": 0, "ti": "Mismo rubro, al revés",
-                          "tx": f"Del otro lado: {o['producto']} {_q(o['q'], o['u'] or 'und')} en "
-                                f"{_titulo(o['area'])}. Las cantidades calzan: puede ser un conteo "
-                                "o una receta con el código del otro.",
-                          "r": int(o["id"])})
+                rq, o = max(cand, key=lambda t_: (abs(t_[1]["v"]), abs(t_[1]["q"])))
+                fal, sob = (x, o) if q < 0 else (o, x)
+                vendio = sum(m[1] for m in fichas[int(sob["id"])]["sal"]
+                             if m[0] == "Descargo de ventas")
+                # Lo que falta no tuvo salidas y lo que sobra se vendió sin haber
+                # entrado: se vendió uno con el código del otro.
+                cambio = (fal["sal"] <= 1e-9 and sob["s"] < 0
+                          and sob["ing"] <= 1e-9 and vendio > 0 and 0.8 <= rq <= 1.25)
+                us_ = sob["u"] or "und"
+                if cambio and q < 0:
+                    tx = (f"Del otro lado: {o['producto']} {_q(o['q'], us_)} en "
+                          f"{_titulo(o['area'])}, que se vendió {es(vendio)} {us_} sin haber "
+                          f"entrado nunca (el sistema quedó en {es(o['s'])}), mientras éste no "
+                          "tuvo ninguna salida. Lo más probable: se vendió este producto con el "
+                          "código del otro.")
+                elif cambio:
+                    tx = (f"Del otro lado: {o['producto']} {_q(o['q'], o['u'] or 'und')} en "
+                          f"{_titulo(o['area'])}, que no tuvo ninguna salida, mientras éste se "
+                          f"vendió {es(vendio)} {us_} sin haber entrado nunca. Lo más probable: "
+                          f"se vendió {o['producto']} con el código de éste.")
+                else:
+                    tx = (f"Del otro lado: {o['producto']} {_q(o['q'], o['u'] or 'und')} en "
+                          f"{_titulo(o['area'])}. Las cantidades calzan: puede ser un conteo "
+                          "o una receta con el código del otro.")
+                P.append({"t": "rubro", "f": int(cambio), "r": int(o["id"]), "tx": tx,
+                          "ti": "Vendido con el código del otro" if cambio
+                          else "Mismo rubro, al revés"})
         P.sort(key=lambda p_: (-p_["f"], TIPOS.index(p_["t"])))
         f["pistas"] = P
 
     # ── La tabla ─────────────────────────────────────────────────────
     out = L[["id", "cod", "acod", "producto", "area", "familia", "subfamilia", "u", "s",
-             "k", "q", "v", "precio", "t0", "t1", "c0", "ing", "sal", "gap"]].copy()
+             "k", "q", "v", "precio", "t0", "t1", "c0", "ing", "sal", "gap", "sin_ant",
+             "t0w", "c0w"]].copy()
     out["area"] = out["area"].map(_titulo)
     P0 = [fichas[i]["pistas"][0] if fichas[i]["pistas"] else None for i in out["id"]]
     out["pista"] = [p_["ti"] if p_ else "" for p_ in P0]

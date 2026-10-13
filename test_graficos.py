@@ -8378,6 +8378,127 @@ def _pruebas_diferencias_ajuste():
     return fallos
 
 
+def _pruebas_diferencias_combos():
+    """Ajuste › «Análisis de diferencias», los combos y los productos sin
+    precio (regla #651), con el caso real del cierre de setiembre 2026:
+
+      1. VENDIDO CON EL CÓDIGO DEL OTRO: entran 6 Sauvignon Blanc a Cava y no
+         sale ninguna; se venden 6 Chardonnay que nunca entraron (el sistema
+         queda en −6 y la Chardonnay, sin precio, sobra por S/ 0). La línea
+         de S/ 0 entra a la lista —como sobrante, por la CANTIDAD— y las dos
+         se señalan una a la otra, como pista fuerte.
+      2. LA COPA A ELEGIR DEL COMBO: el Menu Sapiens se vende 16 veces y ese
+         día no se descuenta el Reto Malbec, una de sus dos copas: pista
+         posible, «hasta» 16 × 0,2.
+      3. EL PLATO FIJO DEL COMBO: el pan va siempre, y si el combo se vende
+         sin descontarlo, la pista es fuerte y reemplaza a «Nada lo
+         descargó» (sus platos sólo se vendieron dentro del combo).
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #651 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #651 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {1: "COCINA", 2: "CAVA"}
+    PROD = {80: ("Cinco Sentidos Sauvignon Blanc 750ml", "UND", 38.0),
+            81: ("Cinco Sentidos Chardonnay 750ml", "UND", 0.0),
+            90: ("Reto Malbec 750ml", "UND", 60.0), 91: ("Pan de la casa", "UND", 1.5)}
+
+    def fila(t, a, c, s, k):
+        n, u, p = PROD[c]
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "VINOS Y ESPUMANTES", "SUBFAMILIA": "VINO",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": u,
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": p, "AJUSTE VALORIZADO": (k - s) * p}
+    t0, t1 = "2026-09-16 17:30", "2026-10-01 17:35"
+    ajuste = pd.DataFrame(
+        [fila(t0, *x) for x in ((2, 80, 0, 0), (2, 81, 0, 0), (2, 90, 10, 10), (1, 91, 20, 20))]
+        + [fila(t1, *x) for x in ((2, 80, 6, 0), (2, 81, -6, 0), (2, 90, 9, 5.8),
+                                  (1, 91, 20, 4))])
+
+    def kx(t, a, c, tipo, ent, sal, stock):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": tipo, "CANT INGRESO": ent,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
+    kardex = pd.DataFrame([kx("2026-09-18 10:00", 2, 80, "99", 6, 0, 6),
+                           kx("2026-09-21 13:00", 2, 81, "95", 0, 6, -6),
+                           kx("2026-09-19 13:00", 2, 90, "95", 0, 1, 9)])
+    rv = pd.DataFrame([
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+         "COD PLATO": f"{cp:07d}", "NOMB PLATO": pl, "COD INS": f"{ci:07d}", "CANTIDAD": q,
+         "FACTOR": 1.0, "SUBALM INS": ar, "T DESCARG": "PRODUCTO",
+         "FECH MODIF": pd.Timestamp("2026-05-01")}
+        for cp, pl, ci, q, ar in ((903, "(Cp) Cinco Sentidos Sauvignon Blanc", 80, 0.2, "CAVA"),
+                                  (904, "(Bt) Cinco Sentidos Chardonnay", 81, 1.0, "CAVA"),
+                                  (905, "(Cp) Reto Malbec", 90, 0.2, "CAVA"),
+                                  (907, "(Cp) Otro vino", 92, 0.2, "CAVA"),
+                                  (908, "Pan a la brasa", 91, 1.0, "COCINA"))])
+    rb = pd.DataFrame(columns=["RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO",
+                               "CANT", "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG"])
+    carta = pd.DataFrame(columns=["TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA"])
+    porc = pd.DataFrame(columns=["COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT",
+                                 "PROD INICIAL", "COD PORC", "FEC REGIST", "CANT A PORCIONAR"])
+    ordenes = pd.DataFrame(columns=["NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO",
+                                    "CANTIDAD"])
+    combos = pd.DataFrame([
+        {"COD COMBO": "0000906", "COMBO": "Menu Sapiens Sept2026", "COMBO ACTIVO": 1,
+         "GRUPO": g, "COD PRODUCTO": f"{cp:07d}", "PRODUCTO": "", "PRODUCTO ACTIVO": 1,
+         "CANTIDAD": 1.0, "FIJO": fijo}
+        for g, cp, fijo in (("g", 905, 0), ("g", 907, 0), ("a", 908, 1))])
+    venta = pd.DataFrame([
+        {"producto": f"{cp:07d}", "dia": pd.Timestamp(d), "unidades": u, "costo": 0.0,
+         "unidades_costeadas": 0.0}
+        for cp, d, u in ((904, "2026-09-21", 6), (906, "2026-09-24", 16), (905, "2026-09-19", 5))])
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta,
+                    combos=combos)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+
+    def pistas(a, c):
+        return F[de[(a, c)]["id"]]["pistas"]
+
+    # 1 — vendido con el código del otro, con un lado sin precio
+    check("la línea sin precio entra a la lista", (2, "81") in de, True)
+    check("y es un sobrante por la cantidad aunque valga S/ 0",
+          (de[(2, "81")]["q"], de[(2, "81")]["v"]), (6.0, 0.0))
+    check("lo que falta: vendido con el código del otro, fuerte",
+          [(p["ti"], p["f"]) for p in pistas(2, "80")][:1],
+          [("Vendido con el código del otro", 1)])
+    check("lo que sobra apunta al que falta",
+          [(p["ti"], p["f"], p.get("r")) for p in pistas(2, "81")][:1],
+          [("Vendido con el código del otro", 1, de[(2, "80")]["id"])])
+    # 2 — la copa a elegir del combo
+    combo = [p for p in pistas(2, "90") if p["t"] == "combo"]
+    check("la copa a elegir del combo que no se descontó",
+          [(p["ti"], p["f"]) for p in combo], [("Combo que no lo descontó", 0)])
+    check("dice hasta cuánto, si todos la eligieron", "hasta 3.2 und" in combo[0]["tx"], True)
+    usos = [u for u in F[de[(2, "90")]["id"]]["usos"] if u["via"] == "combo"]
+    check("y el combo está en «Dónde se usa»",
+          [(u["n"], u["g"], u["fijo"], u["nv"], round(u["hasta"], 6)) for u in usos],
+          [("Menu Sapiens Sept2026", "G", False, 16.0, 3.2)])
+    # 3 — el plato fijo del combo
+    check("el pan fijo del combo: pista fuerte y la principal",
+          [(p["t"], p["f"]) for p in pistas(1, "91")][:1], [("combo", 1)])
+    check("reemplaza a «Nada lo descargó»",
+          [p["t"] for p in pistas(1, "91") if p["t"] == "nada"], [])
+    check("y dice que no salió nada con un documento",
+          pistas(1, "91")[0]["tx"].startswith("Desde el conteo del 16 set no salió nada"), True)
+    return fallos
+
+
 def _pruebas_detalle_salidas():
     """Movimientos › «Detalle de salidas» (regla #511).
 
@@ -11774,6 +11895,7 @@ def main():
     fallos += _pruebas_salidas_comparar()
     fallos += _pruebas_sin_plato()
     fallos += _pruebas_diferencias_ajuste()
+    fallos += _pruebas_diferencias_combos()
     fallos += _pruebas_merma()
     fallos += _pruebas_cortes_y_peso()
 

@@ -2194,7 +2194,7 @@ def sin_plato_por_cierre():
 _ARCHIVOS_DIFERENCIAS = ("ajusteinventario.parquet", "recetaventa.parquet",
                          "recetabase.parquet", "cartacosteada.parquet",
                          "porcionamientos.parquet", "ordenesproduccion.parquet",
-                         "salidas.parquet", "ventas.parquet")
+                         "salidas.parquet", "ventas.parquet", "combosdetalle.parquet")
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False, max_entries=12)
@@ -2203,7 +2203,7 @@ def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
     (`diferencias_ajuste.calcular`, regla #650). Si falla, LANZA: no se
     cachea.
 
-    `archivo` es el kardex; `sellos`, los de los otros ocho parquets
+    `archivo` es el kardex; `sellos`, los de los otros nueve parquets
     (`_ARCHIVOS_DIFERENCIAS`), y `version`, la de la cuenta. Ninguno se usa
     en el cuerpo: son la clave (ver el bloque del sello). Del kardex se bajan
     las filas desde `DIAS_ATRAS` días antes de la sesión hasta su último
@@ -2225,11 +2225,17 @@ def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
     vend = _venta_por_producto_dia_cacheable(
         "ventas.parquet", sello_datos("ventas.parquet"),
         definicion=_version_preparar("ventas.parquet"))
+    # La ficha de los combos (#651). Sin ella la cuenta sigue, sin la pista
+    # de combo: no es motivo para dejar la vista en blanco.
+    try:
+        combos = cargar("combosdetalle.parquet")
+    except Exception:
+        combos = None
     return diferencias_ajuste.calcular(
         aj, s, ses, kx, cargar("recetaventa.parquet"),
         cargar("recetabase.parquet"), cargar("cartacosteada.parquet"),
         cargar("porcionamientos.parquet"), cargar("ordenesproduccion.parquet"),
-        cargar("salidas.parquet"), vend)
+        cargar("salidas.parquet"), vend, combos=combos)
 
 
 def diferencias_ajuste_sesion(clave):

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-650 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+651 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (211)
 
@@ -720,7 +720,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
-**Datos, R2 y DuckDB** (100)
+**Datos, R2 y DuckDB** (101)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -822,6 +822,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#645** — «En qué se fue lo que entró» se cuenta de CIERRE A CIERRE de inventario, en dos vistas de una…
 - **#648** — Una línea de receta «por insumo» no descuenta su receta base: descuenta SUS insumos, y «En…
 - **#650** — Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de diferencias», con el posible…
+- **#651** — «Análisis de diferencias» mira los COMBOS, no descarta las líneas sin precio y reconoce lo…
 
 **SUNAT y SIRE** (57)
 
@@ -954,7 +955,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (174)
+**Decisiones de diseño y UX** (175)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1130,6 +1131,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#645** — «En qué se fue lo que entró» se cuenta de CIERRE A CIERRE de inventario, en dos vistas de una…
 - **#647** — El precio de un corte lo arma el PESO que el Almacén le asigna: el precio de los cortes en…
 - **#650** — Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de diferencias», con el posible…
+- **#651** — «Análisis de diferencias» mira los COMBOS, no descarta las líneas sin precio y reconoce lo…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -50969,6 +50971,87 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-13.)
 
+651. **«Análisis de diferencias» mira los COMBOS, no descarta las líneas
+     sin precio y reconoce lo vendido con el código de otro producto.**
+     2026-10-13, sobre la #650. En `diferencias_ajuste.py`
+     (`combo_sin_descontar`, `por_que_nada`, la pista «rubro», `ventana`,
+     `VERSION` 2), `data.py` (`combosdetalle.parquet` en
+     `_ARCHIVOS_DIFERENCIAS`), `graficos/ajuste/_diferencias.py` y
+     `test_graficos.py::_pruebas_diferencias_combos`.
+
+     **Qué pasaba.** El usuario lo cazó en la primera mirada: la
+     Sauvignon Blanc de Cinco Sentidos (−6,2 und en Cava, −S/ 236) decía
+     «Sus platos no se vendieron» y él sabía que la casa sirve Cinco
+     Sentidos en el «Menu Sapiens Sept2026». La cuenta no miraba los
+     combos. Y al mirar los datos apareció algo más que eso:
+     - entraron 6 Sauvignon Blanc a Cava el 12 set y no salió ninguna con
+       un documento;
+     - se vendieron 6 botellas de **Chardonnay** (20, 21 y 26 set) que
+       NUNCA entraron: el sistema quedó en −6 y el conteo las devolvió como
+       sobrante de **S/ 0**, porque la Chardonnay no tiene precio (nunca se
+       compró);
+     - el combo, vendido 16 veces el 24 set, elige su copa entre (Cp)
+       Reto Malbec y (Cp) Cinco Sentidos Chardonnay, y el kardex no
+       descontó ninguna de las dos.
+     O sea: las Sauvignon se vendieron con el código de la Chardonnay, y
+     el combo se sirvió sin marcar la copa. La vista no veía ninguna de las
+     dos cosas por tres huecos.
+
+     **1. Las líneas sin precio se descartaban.** El filtro era
+     `|AJUSTE VALORIZADO| > EPS`: la Chardonnay valía S/ 0. Ahora entra
+     toda línea con CANTIDAD, y faltante o sobrante lo dice la cantidad,
+     no el monto (14 líneas en el cierre de setiembre). Los soles de los
+     KPI no cambian.
+
+     **2. «Mismo rubro» exigía S/ 20 de los dos lados.** Ahora basta con
+     uno y, si un lado vale S/ 0, sólo se comparan las cantidades. Y es
+     FUERTE —«Vendido con el código del otro»— cuando lo que falta no tuvo
+     ninguna salida y lo que sobra se vendió sin haber entrado (sistema en
+     negativo, nada que entrara, descargo de ventas) con cantidades que
+     calzan (0,8–1,25). Va antes que «Sistema negativo» y «Nada lo
+     descargó»: es lo que los explica.
+
+     **3. Los combos.** `combosdetalle.parquet` (la ficha TCOMBO, #608)
+     dice qué platos lleva cada combo, por grupo, fijos o a elegir. En
+     «Dónde se usa» aparece cada combo que lleva un plato del producto, con
+     lo vendido; fijo, con su «≈»; a elegir, «si todos lo eligieron». Y una
+     pista nueva, «Combo que no lo descontó»: fuerte si el plato va FIJO y
+     lo que tendría que haber salido calza con lo que falta (0,5–1,5);
+     posible si es una opción a elegir, porque lo elegido (CPEDIDO) no
+     llega a ningún parquet. Reto Malbec: «hasta 3,2 und de las 3,8 que
+     faltan» (16 × 0,2). Si los platos del producto sólo se vendieron
+     dentro de un combo, esa pista reemplaza a «Nada lo descargó».
+
+     **La trampa que costó la primera versión: el descargo de ventas va en
+     LOTES.** El POS descuenta a la mañana siguiente y a veces junta varios
+     días (Reto Malbec: 1,6 el 21 a las 9, 4,8 el 23 a las 10, 3,4 el 28 a
+     las 9, que es lo del 25, el 26 y el 27). Mirar «¿se descontó el día del
+     combo o el siguiente?» daba un descargo normal de otro día y la pista
+     no salía. Lo que se compara es el TOTAL del período: si lo que el
+     kardex descontó por ventas en el área es lo de los platos sueltos
+     (Reto Malbec: 22 und = 14 botellas + 40 copas × 0,2), el combo no puso
+     nada. Con tolerancia de 3 %; si no calza —recetas editadas, canales—,
+     no se acusa al combo.
+
+     **Y una línea que nunca se contó en su área ya arma su cuenta.** La
+     Chardonnay no tenía conteo anterior en Cava, así que no tenía ventana
+     de kardex: no se podía ver que se vendió sin entrar. Ahora arranca
+     `DIAS_ATRAS` días antes, con el stock que el kardex tenía antes de su
+     primer movimiento (`c0w`, `t0w`, `sin_ant`), y la ficha lo dice
+     («kardex 3 abr» en vez de «contado …»).
+
+     **Medido, cierre de setiembre 2026:** las pistas fuertes pasan de
+     cubrir el 56,1 % al 57,1 % del faltante; las líneas sin pista, de 225
+     a 214. 16 combos que no descontaron (2 fuertes) y 3 «vendido con el
+     código del otro». La cuenta tarda 8 s en vez de 6: las líneas sin
+     conteo miran 180 días de ventas.
+
+     **En Cloud, otra vez «Reboot app»** (#357): `data.py` le pasa a
+     `diferencias_ajuste.calcular` un argumento nuevo (`combos=`). Con los
+     dos módulos viejos en memoria la vista sigue como estaba.
+
+     (2026-10-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50981,7 +51064,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#650**; la próxima toma el número siguiente.
+> última regla es la **#651**; la próxima toma el número siguiente.
 
 >
 

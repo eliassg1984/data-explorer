@@ -68,6 +68,7 @@ _NOMBRE_FILTRO = {"todas": "Todas", "fuerte": "Con pista fuerte",
 _ICONO = {"receta": ":material/error:", "prod": ":material/precision_manufacturing:",
           "area": ":material/swap_horiz:", "neg": ":material/remove:",
           "rev": ":material/undo:", "nada": ":material/block:",
+          "combo": ":material/restaurant_menu:",
           "nadie": ":material/no_meals:", "rubro": ":material/compare_arrows:"}
 
 _SIN_DATOS = ("No se pudo armar el análisis de esta sesión: hace falta el "
@@ -270,42 +271,47 @@ def _ir(clave, lado):
 
 
 def _cabecera_ficha(x):
-    lado = "dif-neg" if x["v"] < 0 else "dif-pos"
+    lado = "dif-neg" if x["q"] < 0 else "dif-pos"
     fam = str(x["familia"]).capitalize()
     sub = str(x["subfamilia"]).capitalize()
     return (f'<div class="dif-n">{_e(x["producto"])}</div>'
             f'<div class="dif-s">{_e(x["area"])} · {_e(fam)}{" › " + _e(sub) if sub else ""}'
             f' · en {_e(x["u"] or "und")} · S/ {x["precio"]:,.2f} por {_e(x["u"] or "und")}</div>'
             f'<div class="dif-monto {lado}">{_soles(x["v"])}'
-            f'<span>{"faltante" if x["v"] < 0 else "sobrante"} · '
+            f'<span>{"faltante" if x["q"] < 0 else "sobrante"} · '
             f'{"+" if x["q"] > 0 else ""}{da.es(x["q"])} {_e(x["u"])}</span></div>')
 
 
 def _pista_html(p):
+    # Sin f-strings anidados con las mismas comillas: eso es Python 3.12+
+    # (PEP 701), y Cloud puede correr uno anterior.
+    mas = " (y %d más)" % p["m"] if p.get("m") else ""
     return (f'<div class="dif-pista {p["t"]} {"f" if p["f"] else ""}"><b>{_e(p["ti"])}</b>'
             f'<span class="dif-fz {"f" if p["f"] else "p"}">{"Fuerte" if p["f"] else "Posible"}</span>'
-            f'<br>{_e(p["tx"])}{f" (y {p["m"]} más)" if p.get("m") else ""}</div>')
+            f'<br>{_e(p["tx"])}{mas}</div>')
 
 
 def _cuenta_html(x, fi):
     u = _e(x["u"] or "und")
-    if pd.isna(x["t0"]):
-        return '<div class="dif-nota">No hay un conteo anterior de esta línea.</div>'
-    if pd.isna(x["gap"]):
-        return (f'<div class="dif-nota">El conteo anterior fue el {da.fecha_corta(x["t0"])} '
-                f'{x["t0"].year}: con más de {da.DIAS_ATRAS} días de distancia no se arma la '
-                'cuenta.</div>')
-    t0, t1 = da.fecha_corta(x["t0"]), da.fecha_corta(x["t1"])
+    t0, t1 = da.fecha_corta(x["t0w"]), da.fecha_corta(x["t1"])
     dif = "dn" if x["q"] < 0 else "dp"
+    # Sin conteo anterior en el área, la cuenta arranca con lo que decía el
+    # kardex hace DIAS_ATRAS días (#651).
+    primero = f"kardex {t0}" if x["sin_ant"] else f"contado {t0}"
     h = ('<div class="dif-ecu">'
-         f'<span class="c"><i>contado {t0}</i><b>{_cant(x["c0"])}</b></span><span class="o">+</span>'
+         f'<span class="c"><i>{primero}</i><b>{_cant(x["c0w"])}</b></span><span class="o">+</span>'
          f'<span class="c"><i>entró</i><b>{_cant(x["ing"])}</b></span><span class="o">−</span>'
          f'<span class="c"><i>salió</i><b>{_cant(x["sal"])}</b></span><span class="o">=</span>'
          f'<span class="c"><i>sistema {t1}</i><b>{_cant(x["s"])}</b></span><span class="o">→</span>'
          f'<span class="c"><i>contado {t1}</i><b>{_cant(x["k"])}</b></span>'
          f'<span class="c {dif}"><i>diferencia</i><b>{"+" if x["q"] > 0 else ""}{_cant(x["q"])} {u}</b></span>'
          '</div>')
-    if abs(x["gap"]) < 0.01:
+    if x["sin_ant"]:
+        antes = (f' Antes, el {da.fecha_corta(x["t0"])} {x["t0"].year}.'
+                 if pd.notna(x["t0"]) else "")
+        h += (f'<div class="dif-nook">No se había contado en esta área en los últimos '
+              f'{da.DIAS_ATRAS} días: la cuenta arranca con lo que decía el kardex.{antes}</div>')
+    elif abs(x["gap"]) < 0.01:
         h += (f'<div class="dif-ok">Cuadra con el kardex. Conteo anterior: '
               f'{_e(x["ses0"] or t0)}.</div>')
     else:
@@ -383,7 +389,20 @@ def _usos_html(x, fi):
     h = []
     for o in fi["usos"]:
         via = o["via"]
-        if via == "porc":
+        if via == "combo":
+            nombre = "Combo " + _e(o["n"])
+            como = ("fijo" if o["fijo"] else
+                    "una de %d opciones del grupo «%s»" % (o["n_op"], _e(o["g"].lower())))
+            cuanto = (f'{_e(o["plato"])} · {como}'
+                      f' · {o["nv"]:,.0f} vendidos entre los dos conteos')
+            et = ""
+            if o["a"]:
+                et += (f'<span class="dif-et {"aqui" if o["aqui"] else ""}">'
+                       + ("desde esta área" if o["aqui"] else "desde " + _e(str(o["a"]).title()))
+                       + "</span>")
+            if not o["fijo"] and o.get("hasta"):
+                et += f'<span class="dif-et">si todos lo eligieron, {_cant(o["hasta"])} {u}</span>'
+        elif via == "porc":
             nombre = "Porcionamiento → " + _e(o["n"])
             cuanto = (f'{_cant(o["nv"])} {u} porcionados en {o["no"]}' if o.get("no")
                       else "ninguno entre los dos conteos")
@@ -412,7 +431,8 @@ def _usos_html(x, fi):
         if o.get("cc"):
             et += (f'<span class="dif-et">costo por plato S/ {o["cc"][0]:,.2f} → '
                    f'S/ {o["cc"][1]:,.2f} · este producto aporta S/ {o["ap"]:,.2f}</span>')
-        d = f'≈ {_cant(o["d"])} {u}' if o["d"] else "—"
+        d = (f'≈ {_cant(o["d"])} {u}' if o["d"] else
+             f'hasta {_cant(o["hasta"])} {u}' if o.get("hasta") else "—")
         h.append(f'<div class="dif-uso"><div class="n">{nombre}</div><div class="d">{d}</div>'
                  f'<div class="x">{cuanto} {et}</div></div>')
     mas = fi["usos_n"] - len(fi["usos"])
@@ -447,7 +467,7 @@ def _ficha(x, fi, por_clave):
         if ref is not None:
             st.button(f'Ver {ref["producto"]} · {ref["area"]} →', key=f"ajdif_ir_{j}",
                       type="tertiary", on_click=_ir,
-                      args=(_clave(ref), "fal" if ref["v"] < 0 else "sob"))
+                      args=(_clave(ref), "fal" if ref["q"] < 0 else "sob"))
     st.markdown('<div class="dif-h">La cuenta entre los dos conteos</div>'
                 + _cuenta_html(x, fi), unsafe_allow_html=True)
     if len(fi["camino"]) >= 2:
@@ -468,8 +488,8 @@ def _ficha(x, fi, por_clave):
 
 def _kpis(f):
     fal, sob, pf, ps, sin = da.cobertura(f)
-    nf, ns = int((f["v"] < 0).sum()), int((f["v"] > 0).sum())
-    sin_f = int(((f["n_pistas"] == 0) & (f["v"] < 0)).sum())
+    nf, ns = int((f["q"] < 0).sum()), int((f["q"] > 0).sum())
+    sin_f = int(((f["n_pistas"] == 0) & (f["q"] < 0)).sum())
     return ('<div class="dif-kpis">'
             f'<div class="dif-kpi"><span class="r">Faltó</span><span class="v dif-neg">'
             f'{_soles(-fal)}</span><span class="d">{nf:,} líneas</span></div>'
@@ -543,7 +563,9 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         if ss.get(K_LADO) not in LADOS:
             ss[K_LADO] = LADOS[0]
         lado = ss[K_LADO]
-        base = lin[lin["v"] < 0] if lado == "fal" else lin[lin["v"] > 0]
+        # El lado lo dice la CANTIDAD: una línea sin precio vale S/ 0 y sigue
+        # siendo un faltante o un sobrante (#651).
+        base = lin[lin["q"] < 0] if lado == "fal" else lin[lin["q"] > 0]
         q = (ss.get(K_BUSCAR) or "").strip().lower()
         if q:
             base = base[(base["producto"].str.lower() + " " + base["area"].str.lower())
@@ -560,7 +582,7 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         # de abajo a lo ancho (en un tercio de la fila se partían en tres).
         c_l, c_b = st.columns([3.0, 1.0], vertical_alignment="center")
         with c_l:
-            n_fal, n_sob = int((lin["v"] < 0).sum()), int((lin["v"] > 0).sum())
+            n_fal, n_sob = int((lin["q"] < 0).sum()), int((lin["q"] > 0).sum())
             st.segmented_control(
                 "Lado", LADOS, key=K_LADO, required=True, label_visibility="collapsed",
                 format_func=lambda o: f"Faltantes · {n_fal}" if o == "fal" else f"Sobrantes · {n_sob}")
@@ -579,7 +601,8 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
             f = f[f["n_pistas"] == 0]
         elif filtro != "todas":
             f = f[tipos.loc[f.index].map(lambda ts: filtro in ts)]
-        f = f.sort_values("v", ascending=(lado == "fal"), kind="stable").reset_index(drop=True)
+        f = f.sort_values(["v", "q"], ascending=(lado == "fal"),
+                          kind="stable").reset_index(drop=True)
 
         # columnas-internas: la lista y la ficha de la línea elegida.
         c_tab, c_fic = st.columns([1.5, 1], gap="medium")
