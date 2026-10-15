@@ -91,8 +91,49 @@ function filas(st, ls, pre, nivel) {
   return h;
 }
 
+// ── El modo LECTURA (la ficha de Costo Carta, regla #657) ───────────────
+// El mismo árbol, sin campos ni cifras de arriba: lo que cuesta cada línea,
+// qué parte del plato es y, en cada receta base, cuándo se guardó.
+function filasLectura(st, ls, pre, nivel, total) {
+  let h = '';
+  ls.forEach((n, i) => {
+    const ruta = pre === '' ? String(i) : `${pre}.${i}`;
+    const tieneH = !!(n.hijos && n.hijos.length), abierta = st.abiertos.has(ruta);
+    const porc = esPorcionado(n);
+    let tag = '';
+    if (tieneH) tag = `<span class="tag">receta base${n.base && n.base.fecha ? ' · ' + fecha(n.base.fecha) : ''}</span>`;
+    else if (porc) tag = `<span class="tag">porcionado de ${esc(n.porc.origen)} · merma ${n.porc.merma.toFixed(1).replace('.', ',')} % · ${Math.round(n.porc.peso * 1000)} g</span>`;
+    const pct = total ? n.costo / total * 100 : 0;
+    const cant = (+n.cant).toLocaleString('en-US', { maximumFractionDigits: 3 });
+    h += `<tr class="n${Math.min(nivel, 3)}"><td class="nom" style="padding-left:${8 + nivel * 18}px">`
+      + `<button type="button" class="tog${tieneH ? '' : ' no'}" data-tog="${ruta}" ${tieneH ? '' : 'tabindex="-1"'} aria-label="${tieneH ? (abierta ? 'Cerrar' : 'Abrir') + ' la receta base' : ''}">${tieneH ? (abierta ? '▾' : '▸') : '·'}</button>`
+      + `${esc(n.ins)}${tag}</td>`
+      + `<td class="r">${cant} <span class="u">${esc(n.unid)}</span></td><td class="r">${f2(n.costo)}</td>`
+      + `<td class="r"><span class="barra" style="width:${Math.max(2, Math.min(pct, 100) * 0.6)}px"></span>${pct.toFixed(1).replace('.', ',')} %</td></tr>`;
+    if (tieneH && abierta) h += filasLectura(st, n.hijos, ruta, nivel + 1, total);
+  });
+  return h;
+}
+
+function dibujarLectura(raiz) {
+  const st = raiz.__st;
+  if (!st.nodos.length) {
+    raiz.innerHTML = '<p class="vacio">Este plato no tiene receta.</p>';
+    return;
+  }
+  const total = st.nodos.reduce((a, n) => a + n.costo, 0);
+  const nb = (ls) => ls.reduce((a, n) => a + (n.hijos && n.hijos.length ? 1 + nb(n.hijos) : 0), 0);
+  const algunaAbierta = st.abiertos.size > 0;
+  raiz.innerHTML = `
+    <div class="cab"><span class="gris">${st.nodos.length} insumos, ${nb(st.nodos)} recetas base · costo ${f2(total)}</span>
+      <button type="button" class="sec chico" data-a="todo">${algunaAbierta ? 'Plegar todo' : 'Desplegar todo'}</button></div>
+    <div class="tabla lectura"><table><thead><tr><th>Insumo · ▸ abre la receta base con su fecha</th><th class="r">Cantidad</th><th class="r">Costo</th><th class="r">% del plato</th></tr></thead>
+      <tbody>${filasLectura(st, st.nodos, '', 0, total)}</tbody></table></div>`;
+}
+
 function dibujar(raiz) {
   const st = raiz.__st;
+  if (st.lectura) { dibujarLectura(raiz); return; }
   if (!st.nodos.length) {
     raiz.innerHTML = '<p class="vacio">Este plato no tiene receta que simular.</p>';
     return;
@@ -210,7 +251,17 @@ function enlazar(raiz) {
     if (m) { st.modo = m.dataset.modo; dibujar(raiz); return; }
     const a = t.closest('[data-a]');
     if (!a) return;
-    if (a.dataset.a === 'reset') {
+    if (a.dataset.a === 'todo') {
+      if (st.abiertos.size) st.abiertos.clear();
+      else {
+        const abrir = (ls, pre) => ls.forEach((n, i) => {
+          const r = pre === '' ? String(i) : `${pre}.${i}`;
+          if (n.hijos && n.hijos.length) { st.abiertos.add(r); abrir(n.hijos, r); }
+        });
+        abrir(st.nodos, '');
+      }
+      dibujar(raiz);
+    } else if (a.dataset.a === 'reset') {
       st.estado = {}; st.modo = 'hoy'; st.precio = st.precio0; st.aviso = '';
       dibujar(raiz);
     } else if (a.dataset.a === 'guardar') {
@@ -246,7 +297,8 @@ export default function (component) {
     raiz.__st = {
       cod: p.cod, nodos: d.nodos || [], div: d.divisor || DIV_DEF,
       precio0: +p.precio || 0, precio: +p.precio || 0, obj: +d.obj || 30,
-      modo: 'hoy', estado: {}, abiertos: new Set(['0']), por: d.usuario || '', aviso: '',
+      modo: 'hoy', estado: {}, abiertos: new Set(d.lectura ? [] : ['0']), por: d.usuario || '', aviso: '',
+      lectura: !!d.lectura,
     };
   }
   const st = raiz.__st;

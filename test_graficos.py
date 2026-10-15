@@ -432,6 +432,149 @@ def _pruebas_simulador_receta():
 
 
 
+def _pruebas_costo_carta_ficha():
+    """Costo Carta «tabla primero» (regla #657): la ficha del plato debajo de
+    la tabla, con la evolución de su costo, las ediciones de sus recetas base
+    y los picos.
+
+      · LAS EDICIONES (`simulador_receta.ediciones_base`): el log del Almacén
+        guarda la receta ANTES de cada guardado; dos guardados a menos de
+        dos horas son UNA edición, y lo que movió se mide con los precios de
+        ANTES (una edición no se lleva la suba de precios del medio);
+      · LO QUE MOVIÓ AL PLATO (`marcas_plato`): la edición × lo que lleva un
+        plato de esa receta base, sólo si la usa HOY;
+      · LOS PICOS (`picos_plato`): un día a más de 2,5 veces lo habitual, y
+        su posible causa en el porcionamiento raro de uno de sus cortes;
+      · LA FECHA (`carta_costeada.ctx_fecha`, `con_ventas(rango=)`): abre en
+        los últimos 3 meses del último día con venta, y lo vendido es el del
+        rango.
+    """
+    import datetime as dt
+
+    import pandas as pd
+
+    import simulador_receta as sr
+    from graficos import carta_costeada as cc
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ficha de la carta · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ficha de la carta · {nombre}: got={got!r} exp={exp!r}")
+
+    # ── Las ediciones ──────────────────────────────────────────────────
+    t1 = pd.Timestamp("2026-08-01 10:00")
+    t1b = t1 + pd.Timedelta(minutes=30)
+    t2 = pd.Timestamp("2026-09-01 12:00")
+    mlog = pd.DataFrame({"COD RB": ["R1"] * 3, "COD PROD RB": ["P1"] * 3,
+                         "RB NOMBRE": ["(Rs) Salsa"] * 3,
+                         "USUARIO": ["ANA", "ANA", "LUIS"],
+                         "FECH MOV": [t1, t1b, t2]})
+    dlog = pd.DataFrame({
+        "COD RB": ["R1"] * 6, "COD INS": ["A", "B", "A", "B", "A", "B"],
+        "CANT": [100.0, 50.0, 120.0, 50.0, 150.0, 50.0],
+        "PRECIO": [0.01, 0.02, 0.01, 0.02, 0.01, 0.02],
+        "FECH MOV": [t1, t1, t1b, t1b, t2, t2]})
+    rb = pd.DataFrame({"COD RB": ["R1", "R1"], "COD INS RB": ["A", "B"],
+                       "INSUMO": ["Tomate", "Aceite"], "CANT": [150.0, 40.0],
+                       # El precio de HOY de B subió: no entra en la edición.
+                       "CST UNIT INS": [0.01, 0.05]})
+    ed = sr.ediciones_base(mlog, dlog, rb)
+    check("dos guardados a media hora son UNA edición", len(ed), 2)
+    check("la primera: el tomate de 100 a 150, +S/ 0,50 por unidad de la base",
+          (ed[0]["t"], round(ed[0]["delta"], 6), ed[0]["cambios"][0][1:4]),
+          (t1, 0.5, ("Tomate", 100.0, 150.0)))
+    check("la segunda, contra la receta de hoy y con los precios de ANTES",
+          (round(ed[1]["delta"], 6), ed[1]["usr"]), (-0.2, "LUIS"))
+    check("sin log, ninguna", (sr.ediciones_base(None, dlog, rb),
+                               sr.ediciones_base(mlog, dlog.iloc[0:0], rb)), ([], []))
+
+    nodos = [{"cod": "P1", "ins": "(Rs) Salsa", "cant": 200.0, "factor": 1000.0,
+              "costo": 0.46, "hijos": [
+                  {"cod": "A", "ins": "Tomate", "cant": 30.0, "factor": 1000.0,
+                   "costo": 0.3},
+                  {"cod": "B", "ins": "Aceite", "cant": 8.0, "factor": 1000.0,
+                   "costo": 0.16}]},
+             {"cod": "C1", "ins": "Lomo trozos", "cant": 1.0, "factor": 1.0,
+              "costo": 10.0, "porc": {"origen": "Lomo fino", "cod_origen": "L",
+                                      "merma": 10.0, "peso": 0.18}}]
+    mp = sr.marcas_plato(nodos, ed)
+    check("lo que movió al plato: × lo que lleva de la base (0,2)",
+          [round(m["esp"], 6) for m in mp], [0.1, -0.04])
+    check("la marca dice qué cambió", mp[0]["txt"], "Tomate: 100 → 150")
+    check("una base que el plato no usa no marca nada",
+          sr.marcas_plato([nodos[1]], ed), [])
+    check("los porcionados del árbol, una vez cada uno",
+          list(cc._porcionados(nodos + [nodos[1]])), ["C1"])
+
+    # ── Los picos ───────────────────────────────────────────────────────
+    dias = pd.date_range("2026-08-01", periods=30, freq="D")
+    costo = [10.0] * 30
+    costo[20] = 40.0
+    agg = pd.DataFrame({"producto": ["0000010"] * 30, "dia": dias,
+                        "unidades": [2.0] * 30, "neto": [60.0] * 30,
+                        "costo": [c * 2 for c in costo],
+                        "unidades_costeadas": [2.0] * 30,
+                        "neto_sin_costo": [0.0] * 30})
+    filas = []
+    for i, (dia, precio) in enumerate([("2026-06-10", 10.0), ("2026-07-01", 10.5),
+                                        ("2026-07-20", 9.8),
+                                        (dias[18].strftime("%Y-%m-%d"), 31.0)]):
+        filas.append({"COD PORC": f"PO{i}", "COD PROD FINAL": "C1",
+                      "COD PROD INIC": "L", "FEC REGIST": pd.Timestamp(dia),
+                      "PREC PROM PROD FIN": precio, "CANT A PORCIONAR": 10.0,
+                      "CANT TOT RESUL": 3.0, "PROD INICIAL": "Lomo fino",
+                      "USUARIO REG": "CARLOS"})
+    po = pd.DataFrame(filas)
+    pk = sr.picos_plato(agg, "0000010", nodos, po)
+    check("un pico: el día a 4 veces lo habitual",
+          [(p["ini"], p["pico"], p["normal"], p["exceso"]) for p in pk],
+          [(dias[20], 40.0, 10.0, 60.0)])
+    check("y su posible causa: el porcionamiento raro de dos días antes",
+          pk[0]["causa"].startswith("Posible causa: el porcionamiento PO3"), True)
+    check("sin porcionamientos, el pico sin causa",
+          sr.picos_plato(agg, "0000010")[0]["causa"], "")
+    check("sin ventas, ninguno", sr.picos_plato(None, "0000010"), [])
+
+    # ── La fecha ────────────────────────────────────────────────────────
+    ctx = cc.ctx_fecha(agg, hoy=dt.date(2026, 10, 15))
+    check("los topes de la fecha son los días con venta",
+          (ctx["fecha_min"], ctx["fecha_max"]), (dt.date(2026, 8, 1), dt.date(2026, 8, 30)))
+    check("abre en los últimos 3 meses (recortados a lo que hay)",
+          ctx["rango_default_cat"][cc.CATEGORIA_FECHA], (dt.date(2026, 8, 1), dt.date(2026, 8, 30)))
+    check("su clave es la de la categoría de la Carta",
+          ctx["k_rango"], "rango_cat_Recetas_carta")
+    check("sin ventas no hay fecha", cc.ctx_fecha(None), None)
+    t = pd.DataFrame({"Cod": ["0000010", "0000020"]})
+    tv, r = cc.con_ventas(t, agg, rango=(dt.date(2026, 8, 21), dt.date(2026, 8, 30)))
+    check("lo vendido es el del rango, con los dos bordes",
+          (r, float(tv.set_index("Cod").loc["0000010", "Vendidos"])),
+          ((dt.date(2026, 8, 21), dt.date(2026, 8, 30)), 20.0))
+    check("los meses del rango, para sombrearlos",
+          cc.meses_del_rango([pd.Period("2026-07"), pd.Period("2026-08"),
+                              pd.Period("2026-09")],
+                             (dt.date(2026, 8, 21), dt.date(2026, 9, 2))),
+          [False, True, True])
+    check("la tabla lleva todas las columnas, con las del rango",
+          [c for c in cc.COLUMNAS_RANGO if c in cc.columnas_carta()],
+          list(cc.COLUMNAS_RANGO))
+
+    # ── Lo que no puede volver ──────────────────────────────────────────
+    import inspect
+    fuente = inspect.getsource(cc)
+    check("ya no hay «Más columnas» (regla #657)",
+          ("Más columnas" in inspect.getsource(cc.render_carta_costeada),
+           hasattr(cc, "VENTANAS_VENDIDOS"), hasattr(cc, "_panel")),
+          (False, False, False))
+    check("la fecha es la de las tarjetas, no un desplegable propio",
+          "selector_fecha_tarjeta(" in fuente, True)
+    return fallos
+
+
 def _pruebas_placeholder_de_inyeccion():
     """`"a" + b + "c".replace(tok, val)` reemplaza SOLO en `"c"`.
 
@@ -10176,17 +10319,16 @@ def _pruebas_carta_costeada():
     check("sin resumen de ventas la vista sigue, en cero",
           (cc.con_ventas(t, None)[1], float(cc.con_ventas(t, None)[0]["Vendidos"].sum())),
           (None, 0.0))
-    # La ventana de «Vendidos» se elige (regla #572): con 30 días, lo del
-    # 1 de julio queda fuera y lo del 27 de setiembre dentro.
-    t30, r30 = cc.con_ventas(t, agg, cc.VENTANAS_VENDIDOS["30 días"])
+    # Los días de lo vendido (los de «¿Y si sube un insumo?»; la Carta
+    # elige un rango con su fecha, regla #657): con 30 días, lo del 1 de
+    # julio queda fuera y lo del 27 de setiembre dentro.
+    t30, r30 = cc.con_ventas(t, agg, 30)
     check("con 30 días, sólo lo vendido en esos 30",
           (r30, float(t30.set_index("Cod").loc["0000010", "Vendidos"])),
           ((date(2026, 8, 29), date(2026, 9, 27)), 3.0))
-    t365, _ = cc.con_ventas(t, agg, cc.VENTANAS_VENDIDOS["1 año"])
+    t365, _ = cc.con_ventas(t, agg, 365)
     check("con un año, también lo de junio",
           float(t365.set_index("Cod").loc["0000010", "Vendidos"]), 105.0)
-    check("la ventana por defecto sigue en 90 días",
-          cc.VENTANAS_VENDIDOS["90 días"], cc.DIAS_VENDIDOS)
     # Lo vendido puede llegar ya cargado o como la función que lo carga
     # (regla #573): cargado, pasa tal cual.
     check("lo vendido ya cargado pasa tal cual",
@@ -10208,26 +10350,22 @@ def _pruebas_carta_costeada():
     check("el mes se escribe en castellano", cc._etiqueta_mes(pd.Period("2026-09")),
           "set 26")
 
-    # Las columnas de la tabla (regla #570): primero lo que ubica al
-    # producto, y lo que no hace falta para decidir, detrás de «Más
-    # columnas» — sin eso no entra el producto elegido al costado.
+    # Las columnas de la tabla: primero lo que ubica al producto, y desde la
+    # regla #657 TODAS —antes la mitad iba detrás de «Más columnas»—.
     base = cc.columnas_carta()
     check("la tabla empieza por Grupo, Subgrupo y Producto", base[:3],
           ["Grupo", "Subgrupo", "Producto"])
-    # «P. neto» se sumó a las opcionales en la regla #574.
-    _opcionales = {"Tipo", "Actualizado", "UltimaVenta", "Margen", "Vendidos",
-                   "Neto"}
-    check("sin «Más columnas» no están las seis opcionales",
-          sorted(_opcionales & set(base)), [])
-    check("con «Más columnas» están las seis",
-          sorted(_opcionales - set(cc.columnas_carta(mas=True))), [])
+    _todas = {"Tipo", "Actualizado", "UltimaVenta", "Margen", "Vendidos",
+              "Neto", "VendidoNeto", "PctVendido", "SinCostoNeto", "Oferta"}
+    check("están todas, también las que antes se escondían",
+          sorted(_todas - set(base)), [])
     check("y todas existen en la carta preparada",
-          sorted(set(cc.columnas_carta(mas=True)) - set(tv.columns)
-                 - {"Actualizado"}), [])
+          sorted(set(base) - set(tv.columns) - {"Actualizado"}), [])
     check("en el teléfono el nombre va primero",
           cc.columnas_carta(movil=True)[:3], ["Producto", "Grupo", "Subgrupo"])
-    check("sin ventas no hay «Vendidos», ni con «Más columnas»",
-          "Vendidos" in cc.columnas_carta(mas=True, con_ventas_=False), False)
+    check("sin ventas no hay lo vendido",
+          sorted(set(cc.COLUMNAS_RANGO) & set(cc.columnas_carta(con_ventas_=False))),
+          [])
     check("la banda de los combos existe en la carta preparada",
           sorted(set(cc._BANDA) - set(t.columns)), [])
 
@@ -10275,9 +10413,6 @@ def _pruebas_carta_costeada():
     check("marca la receta base que tiene adentro", list(tb["EsBase"]), [True, False])
     check("el % es sobre el total de la receta base",
           round(float(tb["%"].sum()), 6), 100.0)
-    fil = cc._filas_clic(tb, bases)
-    check("abrir la de adentro: su escala es su cantidad ÷ su factor",
-          round(fil[0]["escala"], 6), 0.12)
     check("un artículo sin receta base, tabla vacía",
           (cc.receta_base(rb, "0000460", 1.0, bases).empty,
            cc.receta_base(None, "0003215").empty, cc.codigos_base(None)),
@@ -10314,13 +10449,6 @@ def _pruebas_carta_costeada():
           (cc.costo_de_origen(1.705, 0.034, 1.705), cc.costo_de_origen(21.0, 21.0, 28.0),
            cc.costo_de_origen(5.0, None, 4.0), cc.costo_de_origen(5.0, None, None)),
           ("porc", "base", "porc", None))
-    fp = cc._filas_clic(pd.DataFrame({"Cod": ["0004117", "0000460"],
-                                      "Insumo": ["(P) Pesca", "Sal"],
-                                      "Cantidad": [1.0, 3.0], "Factor": [1.0, 1000.0],
-                                      "Costo": [26.78, 0.01]}),
-                        frozenset(), cc.codigos_porcionados(po))
-    check("un porcionado se puede abrir; un insumo de compra, no",
-          [cc._abre(x) for x in fp], [True, False])
 
     rv = pd.DataFrame({"COD PLATO": ["0000010", "0000010", "0000030"],
                        "FECH MODIF": pd.to_datetime(["2022-09-23", "2022-09-23",
@@ -12179,6 +12307,7 @@ def main():
 
     # ── El simulador de receta: que nadie vuelva a ordenar el borrador ─
     fallos += _pruebas_simulador_receta()
+    fallos += _pruebas_costo_carta_ficha()
 
     # ── Nuevo Costeo: lo que el almacén todavía no tiene (#597) ─────────
     fallos += _pruebas_articulos_nuevos()

@@ -373,15 +373,17 @@ doce desde la #574: la pantalla del usuario no es de 768 sino de ~620px
 entrar en ~575."""
 
 CARTA_RECETA = 27 * 5 + 38
-"""Tope de la tabla de la receta en el panel de la Carta costeada (regla
-#572), y de la receta base o los porcionamientos que se abren debajo: cinco
-filas de 27 (seis hasta la #574). La receta más larga se desliza DENTRO de
-la tabla; la tarjeta no crece."""
+"""Tope de la tabla de los porcionamientos de un corte en la ficha de la
+Carta costeada (regla #574; hasta la #657 también de la receta y la receta
+base, que hoy son un árbol): cinco filas de 27. Lo que no entra se desliza
+DENTRO de la tabla."""
 
-CARTA_FIG = 180
-"""El gráfico del panel de la Carta costeada (dona, Sankey, costo en el
-tiempo), regla #572: 60px menos que MINI (200 hasta la #574) para que el
-panel entre en ~575px junto a la receta de cinco filas."""
+CARTA_EVOLUCION = 300
+"""La evolución del costo del plato en la ficha de Costo Carta (regla #657),
+y la dona y el Sankey que comparten su lugar: la ficha baja debajo de la
+tabla y la tarjeta no tiene techo, así que el gráfico ya no paga el alto de
+la receta como los 180px de cuando iba al costado (`CARTA_FIG`, #572).
+300 = lo que mide el árbol de una receta de ocho líneas con su cabecera."""
 
 STOCK_EVOLUCION_FIG = 118
 """Stock por Producto (2026-10-11, regla #637): el gráfico de la banda de

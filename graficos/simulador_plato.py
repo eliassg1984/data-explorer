@@ -166,3 +166,17 @@ def simular_plato(cod, nombre, precio, df_rv):
     }
     _COMPONENTE(key=k, data=data, on_guardar_change=_al_guardar,
                 width="stretch")
+
+
+def receta_lectura(cod, df_rv):
+    """La receta del plato `cod` como árbol de SÓLO LECTURA, en la ficha de
+    Costo Carta (regla #657): el mismo componente y el mismo árbol que el
+    simulador, sin campos, con cada receta base plegada y la fecha en que se
+    guardó. Devuelve los nodos: la ficha los usa para las marcas del log y
+    los picos (`simulador_receta.marcas_plato`, `picos_plato`)."""
+    nodos = armar_arbol(df_rv, cod)
+    _COMPONENTE(key=f"rec_arbol_{cod}",
+                data={"plato": {"cod": cod, "nombre": "", "precio": 0},
+                      "nodos": nodos, "lectura": True},
+                width="stretch")
+    return nodos

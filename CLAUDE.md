@@ -514,7 +514,7 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
   come el clic de lo que haya ahí (un botón, un interruptor). Y una tabla sin
   el foco se come el PRIMER clic sobre una fila ya marcada: «soltá la fila
   para cerrar» pide a veces dos clics — mejor un botón de cerrar que estrene
-  la tabla (`graficos/carta_costeada.py::_cerrar_base`). Regla #572.
+  la tabla (lo tuvo la receta base de Costo Carta hasta la #657). Regla #572.
 - **Un `st.toast` seguido de un `st.rerun()` no se ve NUNCA** (medido): el
   rerun se lo lleva antes de pintarlo. El acuse viaja por `session_state`
   y lo pinta la corrida siguiente. Misma #474.
@@ -1322,6 +1322,16 @@ escribe; reemplazó a la `st.data_editor` de `recetaventa.py`. Lo que muerde:
   `on_dismiss` que borra `rec_carta_sim_abierto`
   (`carta_costeada.py::_modal_simulador`), o el próximo clic la reabre.
 - **Guardar es una propuesta de Nuevo Costeo** (JSON en R2), nunca el POS.
+
+**Costo Carta es «la tabla primero»** desde el mismo día (regla #657): la
+carta a todo el ancho con sus 16 columnas, una fecha de tarjeta con ctx
+PROPIO (`carta_costeada.ctx_fecha`: `franja_fecha.contexto()` trae el del
+último reporte que publicó) y, debajo, la ficha: la receta como árbol de
+lectura (`simulador_plato.receta_lectura`) y la evolución del costo con ▼
+las ediciones de sus recetas base —del log del Almacén, filas
+`recetabaselog`/`recetabaselogdet` del Sheet— y ● los picos con su posible
+causa (`simulador_receta.picos_plato`). En una `go.Bar`, el hover va en
+`hovertext`: `text` se escribe adentro de la barra.
 
 «¿Y si sube un insumo?» (vista «Alza Insumo») usa
 `simulador_receta.exposicion_carta`: cuánto de cada insumo de compra lleva

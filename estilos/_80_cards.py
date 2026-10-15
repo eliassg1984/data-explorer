@@ -2081,7 +2081,7 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab_ver, .st-key-rec_carta_cab_oferta,
     .st-key-rec_carta_cab_grupo, .st-key-rec_carta_cab_tipo,
-    .st-key-rec_carta_cab_buscar, .st-key-rec_carta_cab_vend,
+    .st-key-rec_carta_cab_buscar, .st-key-rec_carta_cab_fecha,
     .st-key-rec_carta_det_modo,
     .st-key-rec_rb_det_cab_ver, .st-key-rec_rb_cab_ventana,
     .st-key-rec_rb_cab_area, .st-key-rec_rb_cab_produccion,
@@ -2093,7 +2093,7 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab_ver::after, .st-key-rec_carta_cab_oferta::after,
     .st-key-rec_carta_cab_grupo::after, .st-key-rec_carta_cab_tipo::after,
-    .st-key-rec_carta_cab_buscar::after, .st-key-rec_carta_cab_vend::after,
+    .st-key-rec_carta_cab_buscar::after, .st-key-rec_carta_cab_fecha::after,
     .st-key-rec_rb_det_cab_ver::after, .st-key-rec_rb_cab_ventana::after,
     .st-key-rec_rb_cab_area::after, .st-key-rec_rb_cab_produccion::after,
     .st-key-rec_rb_cab_buscar::after,
@@ -2109,7 +2109,7 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab_ver::before, .st-key-rec_carta_cab_oferta::before,
     .st-key-rec_carta_cab_grupo::before, .st-key-rec_carta_cab_tipo::before,
-    .st-key-rec_carta_cab_buscar::before, .st-key-rec_carta_cab_vend::before,
+    .st-key-rec_carta_cab_buscar::before, .st-key-rec_carta_cab_fecha::before,
     .st-key-rec_rb_det_cab_ver::before, .st-key-rec_rb_cab_ventana::before,
     .st-key-rec_rb_cab_area::before, .st-key-rec_rb_cab_produccion::before,
     .st-key-rec_rb_cab_buscar::before,
@@ -2134,7 +2134,7 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab_ver:hover::before, .st-key-rec_carta_cab_oferta:hover::before,
     .st-key-rec_carta_cab_grupo:hover::before, .st-key-rec_carta_cab_tipo:hover::before,
-    .st-key-rec_carta_cab_buscar:hover::before, .st-key-rec_carta_cab_vend:hover::before,
+    .st-key-rec_carta_cab_buscar:hover::before, .st-key-rec_carta_cab_fecha:hover::before,
     .st-key-rec_rb_det_cab_ver:hover::before, .st-key-rec_rb_cab_ventana:hover::before,
     .st-key-rec_rb_cab_area:hover::before, .st-key-rec_rb_cab_produccion:hover::before,
     .st-key-rec_rb_cab_buscar:hover::before,
@@ -2146,7 +2146,7 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_grupo::before { content: "Grupo"; }
     .st-key-rec_carta_cab_tipo::before { content: "Tipo"; }
     .st-key-rec_carta_cab_buscar::before { content: "Buscar"; }
-    .st-key-rec_carta_cab_vend::before { content: "Ventana de lo vendido"; }
+    .st-key-rec_carta_cab_fecha::before { content: "Fecha de lo vendido"; }
     .st-key-rec_alza_cab_ins::before { content: "Insumo de compra"; }
     .st-key-rec_alza_cab_pct::before { content: "Cambio de precio"; }
     /* El deslizador de «Cambio de precio» con ancho propio: en un
@@ -2267,8 +2267,6 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab [data-baseweb="select"] > div,
     .st-key-rec_carta_cab [data-testid="stTextInputRootElement"],
     .st-key-rec_carta_cab [data-baseweb="input"],
-    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] [role="group"],
-    .st-key-rec_carta_cab_vend [data-baseweb="select"] > div,
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"],
     .st-key-rec_carta_det_modo [data-baseweb="select"] > div,
     .st-key-rec_rb_cab [data-testid="stSelectbox"] [role="group"],
@@ -2289,7 +2287,6 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab [data-baseweb="select"] > div:hover,
     .st-key-rec_carta_cab [data-testid="stTextInputRootElement"]:hover,
     .st-key-rec_carta_cab [data-baseweb="input"]:hover,
-    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] [role="group"]:hover,
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"]:hover,
     .st-key-rec_rb_cab [data-testid="stSelectbox"] [role="group"]:hover,
     .st-key-rec_rb_cab [data-baseweb="select"] > div:hover,
@@ -2301,8 +2298,6 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab [data-testid="stSelectbox"] input,
     .st-key-rec_carta_cab [data-baseweb="select"] div[value],
-    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] input,
-    .st-key-rec_carta_cab_vend [data-baseweb="select"] div[value],
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] input,
     .st-key-rec_carta_det_modo [data-baseweb="select"] div[value],
     .st-key-rec_rb_cab [data-testid="stSelectbox"] input,
@@ -2327,19 +2322,16 @@ CSS = """    /* ================================================================
         background: transparent !important;
     }
     .st-key-rec_carta_cab [data-testid="stSelectbox"] [role="group"] button,
-    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] [role="group"] button,
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"] button,
     .st-key-rec_rb_cab [data-testid="stSelectbox"] [role="group"] button,
     .st-key-rec_rb_det_cab [data-testid="stSelectbox"] [role="group"] button {
         width: 22px !important;
         height: 26px !important;
     }
-    /* Las sub-tarjetas de `_card()` del panel —la receta, lo que descarga y
-       el gráfico— sin marco ni relleno: adentro de la tarjeta blanca serían
-       cajas dentro de la caja. */
-    .st-key-rec_card_carta .st-key-chartcard_rv_comp_receta,
-    .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga,
-    .st-key-rec_card_carta .st-key-chartcard_rec_carta_mini {
+    /* La sub-tarjeta de `_card()` de la ficha —lo que descarga un producto
+       sin receta— sin marco ni relleno: adentro de la tarjeta blanca sería
+       una caja dentro de la caja. */
+    .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga {
         border: none !important;
         padding: 0 !important;
         box-shadow: none !important;
@@ -2353,17 +2345,79 @@ CSS = """    /* ================================================================
     .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga {
         padding-bottom: 16px !important;
     }
-    /* Desde la regla #572 la receta va sin título al pie —el nombre del
-       plato ya está arriba—, así que lo que la separa del gráfico, o de la
-       receta base abierta en su lugar, es una línea ENCIMA de ellos. */
-    .st-key-rec_card_carta .st-key-chartcard_rec_carta_mini,
-    .st-key-rec_carta_base_caja {
-        border-top: 1px solid var(--border) !important;
-        padding-top: 10px !important;
-    }
+    /* La ficha del plato elegido va DEBAJO de la tabla desde la regla #657
+       (al costado desde la #570): la separa una línea arriba. */
     .st-key-rec_carta_plato {
-        border-left: 1px solid var(--border);
-        padding-left: 16px;
+        border-top: 1px solid var(--border);
+        padding-top: 12px;
+        margin-top: 4px;
+    }
+    /* Lo que va al lado del nombre: de dónde es (gris) y sus cifras. */
+    .rec-ficha-ruta {
+        margin-left: 8px;
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--text-secondary);
+    }
+    .rec-ficha-cifras {
+        margin: 0;
+        font-size: 12.5px !important;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+    .rec-ficha-aviso {
+        margin: 0;
+        font-size: 12.5px !important;
+        color: var(--warning-text);
+    }
+    /* Debajo de la evolución: las ediciones de sus recetas base y los
+       picos del rango, en palabras. */
+    .rec-evo-lista {
+        margin: 0;
+        padding-left: 0;
+        list-style: none;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--text-secondary);
+    }
+    .rec-evo-lista li {
+        margin: 0 0 3px 0;
+    }
+    .rec-evo-lista .rec-evo-marca {
+        color: var(--accent-deep);
+    }
+    .rec-evo-lista .rec-evo-pico {
+        color: var(--danger-text);
+    }
+    /* La fecha de la tarjeta, al final del renglón del título (#657): la
+       píldora de las tarjetas de Compras y Movimientos. */
+    .st-key-rec_carta_f_fila {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        width: auto !important;
+    }
+    .st-key-rec_carta_f_escala button {
+        min-width: 0 !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        padding: 0 10px !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        box-shadow: var(--shadow) !important;
+    }
+    .st-key-rec_carta_f_escala button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-rec_carta_f_escala button > div > div:last-child:not(:first-child) {
+        display: none !important;
     }
     /* El renglón del nombre (#572): el nombre se corta con «…» y «Simular»
        queda a su derecha. La línea de abajo es de la FILA y no del `<p>`:
@@ -2448,16 +2502,6 @@ CSS = """    /* ================================================================
         margin: 0;
         font-size: 12px !important;
         color: var(--text-secondary);
-    }
-    /* Debajo de 640px Streamlit apila las columnas: el panel queda abajo de
-       la tabla y la línea pasa de su costado a su borde de arriba. */
-    @media screen and (max-width: 640px) {
-        .st-key-rec_carta_plato {
-            border-left: none;
-            padding-left: 0;
-            border-top: 1px solid var(--border);
-            padding-top: 12px;
-        }
     }
     .st-key-form_receta_card_receta,
     .st-key-form_receta_card_precio {

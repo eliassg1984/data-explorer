@@ -408,3 +408,256 @@ def alza(exposiciones, carta, insumo, pct):
         return out
     return out.sort_values(["DeltaMes", "Lleva"], ascending=False,
                            key=lambda s: s.abs()).reset_index(drop=True)
+
+
+# ─── El log de las recetas base (MRECETABASE_LOG / DRECETABASE_LOG) ──────
+# El Almacén guarda en el log la receta base COMO ESTABA ANTES de cada
+# guardado (medido el 2026-10-15: la Milanesa de lomo del 13/10 a las
+# 17:23:47 guarda el insumo de S/ 20,28 que se quitó). La versión nueva es la
+# fila siguiente del log, o la receta de hoy. `FECH REG` de recetabase es la
+# hora del último guardado. Las recetas de PLATO no tienen log.
+ARCHIVO_LOG = "recetabaselog.parquet"
+ARCHIVO_LOG_DET = "recetabaselogdet.parquet"
+
+JUNTAR_GUARDADOS = pd.Timedelta(hours=2)
+"""Guardados seguidos de la misma receta base, a menos de esto, son UNA
+edición: se guarda, se corrige un número, se vuelve a guardar."""
+
+
+def consulta_sheet_log():
+    """El SQL de la fila `recetabaselog` del Sheet (la cabecera del log), con
+    los nombres completos que usa el usuario (sin apodos de tabla)."""
+    return """SELECT
+    ALMACEN.DBO.MRECETABASE_LOG.tRecetaBase AS [COD RB],
+    ALMACEN.DBO.MRECETABASE_LOG.tCodigoProducto AS [COD PROD RB],
+    ALMACEN.DBO.MRECETABASE_LOG.tDescripcion AS [RB NOMBRE],
+    ALMACEN.DBO.MRECETABASE_LOG.nTotalCosto AS [COSTO],
+    ALMACEN.DBO.MRECETABASE_LOG.fRegistro AS [FECH REG],
+    ALMACEN.DBO.MRECETABASE_LOG.Usuario AS [USUARIO],
+    ALMACEN.DBO.MRECETABASE_LOG.fMovimiento AS [FECH MOV]
+FROM ALMACEN.DBO.MRECETABASE_LOG"""
+
+
+def consulta_sheet_log_det():
+    """El SQL de la fila `recetabaselogdet` del Sheet (las líneas del log)."""
+    return """SELECT
+    ALMACEN.DBO.DRECETABASE_LOG.tRecetaBase AS [COD RB],
+    ALMACEN.DBO.DRECETABASE_LOG.tItem AS [ITEM],
+    ALMACEN.DBO.DRECETABASE_LOG.tCodigoProducto AS [COD INS],
+    ALMACEN.DBO.DRECETABASE_LOG.nCantidad AS [CANT],
+    ALMACEN.DBO.DRECETABASE_LOG.nPrecio AS [PRECIO],
+    ALMACEN.DBO.DRECETABASE_LOG.fMovimiento AS [FECH MOV]
+FROM ALMACEN.DBO.DRECETABASE_LOG"""
+
+
+def ediciones_base(mlog, dlog, df_rb):
+    """Cada edición de una receta base, con cuánto movió su costo POR UNIDAD
+    de la base, con los MISMOS precios de antes (para que una edición no se
+    lleve la suba de precios de los meses que pasaron). Una lista de dicts
+    cod_prod, nombre, t, usr, delta, cambios [(cod, nombre, antes, después,
+    soles)], por fecha. Vacía si falta el log."""
+    need_m = ("COD RB", "COD PROD RB", "RB NOMBRE", "FECH MOV")
+    need_d = ("COD RB", "COD INS", "CANT", "PRECIO", "FECH MOV")
+    if (mlog is None or dlog is None or mlog.empty or dlog.empty
+            or not all(c in mlog.columns for c in need_m)
+            or not all(c in dlog.columns for c in need_d)):
+        return []
+    m = pd.DataFrame({
+        "rb": _txt(mlog["COD RB"]), "prod": _txt(mlog["COD PROD RB"]),
+        "nombre": _txt(mlog["RB NOMBRE"]),
+        "usr": _txt(mlog["USUARIO"]) if "USUARIO" in mlog.columns else "",
+        "t": pd.to_datetime(mlog["FECH MOV"], errors="coerce"),
+    }).dropna(subset=["t"]).sort_values(["rb", "t"], kind="stable")
+    d = pd.DataFrame({
+        "rb": _txt(dlog["COD RB"]), "cod": _txt(dlog["COD INS"]),
+        "q": _num(dlog["CANT"]), "p": _num(dlog["PRECIO"]),
+        "t": pd.to_datetime(dlog["FECH MOV"], errors="coerce"),
+    }).dropna(subset=["t"])
+    lineas = {rb: g for rb, g in d.groupby("rb", sort=False)}
+    actual, nombres = {}, {}
+    if df_rb is not None and not df_rb.empty and "COD RB" in df_rb.columns:
+        for rb, g in df_rb.groupby(_txt(df_rb["COD RB"]), sort=False):
+            actual[rb] = {c: (q, p) for c, q, p in zip(
+                _txt(g["COD INS RB"]), _num(g["CANT"]), _num(g["CST UNIT INS"]))}
+        nombres = dict(zip(_txt(df_rb["COD INS RB"]), _txt(df_rb["INSUMO"])))
+
+    def foto(rb, t):
+        """Las líneas del guardado de `rb` a la hora `t` (a 3 s)."""
+        g = lineas.get(rb)
+        if g is None:
+            return None
+        x = g[(g["t"] - t).abs() <= pd.Timedelta(seconds=3)]
+        if x.empty:
+            return None
+        return {c: (float(q), float(p)) for c, q, p in zip(x["cod"], x["q"], x["p"])}
+
+    out = []
+    for rb, g in m.groupby("rb", sort=False):
+        grupos = []
+        for f in g.to_dict("records"):
+            if grupos and f["t"] - grupos[-1][-1]["t"] < JUNTAR_GUARDADOS:
+                grupos[-1].append(f)
+            else:
+                grupos.append([f])
+        for i, gr in enumerate(grupos):
+            antes = foto(rb, gr[0]["t"])
+            despues = (foto(rb, grupos[i + 1][0]["t"]) if i + 1 < len(grupos)
+                       else actual.get(rb))
+            if antes is None or despues is None:
+                continue
+            ca = sum(q * p for q, p in antes.values())
+            cd = sum(q * (antes[c][1] if c in antes else p)
+                     for c, (q, p) in despues.items())
+            cambios = []
+            for c in set(antes) | set(despues):
+                qa = antes.get(c, (0.0, 0.0))[0]
+                qd = despues.get(c, (0.0, 0.0))[0]
+                if abs(qa - qd) > 1e-9:
+                    pr = antes[c][1] if c in antes else despues[c][1]
+                    cambios.append((c, nombres.get(c, c), qa, qd, (qd - qa) * pr))
+            if not cambios:
+                continue
+            cambios.sort(key=lambda z: -abs(z[4]))
+            out.append({"cod_prod": gr[0]["prod"], "nombre": gr[-1]["nombre"],
+                        "t": gr[0]["t"], "usr": gr[-1]["usr"],
+                        "delta": cd - ca, "cambios": cambios})
+    return sorted(out, key=lambda e: e["t"])
+
+
+def uso_de_bases(nodos):
+    """{código de receta base: unidades de esa base que lleva UN plato}, con
+    las bases que están dentro de otras bases."""
+    acc = {}
+
+    def bajar(n):
+        if n.get("hijos"):
+            acc[n["cod"]] = acc.get(n["cod"], 0.0) + (
+                n["cant"] / n["factor"] if n["factor"] else 0.0)
+            for h in n["hijos"]:
+                bajar(h)
+    for n in nodos:
+        bajar(n)
+    return acc
+
+
+def marcas_plato(nodos, ediciones):
+    """Las ediciones de las recetas base que el plato usa HOY, con lo que cada
+    una lo movió: dicts t, base, usr, esp (soles por plato), txt, n."""
+    uso = uso_de_bases(nodos)
+    out = []
+    for e in ediciones:
+        u = uso.get(e["cod_prod"])
+        if not u:
+            continue
+        c = e["cambios"][0]
+        out.append({"t": e["t"], "base": e["nombre"], "usr": e["usr"],
+                    "esp": u * e["delta"], "txt": f"{c[1]}: {c[2]:g} → {c[3]:g}",
+                    "n": len(e["cambios"])})
+    return out
+
+
+# ─── Los picos del costo al vender ────────────────────────────────────────
+PICO_VECES = 2.5
+"""Un día es pico si el costo por unidad al vender pasa esto veces la
+mediana de los 90 días anteriores, y al menos `PICO_MINIMO` soles más."""
+PICO_MINIMO = 3.0
+PORC_RARO_VECES = 1.8
+"""Un porcionamiento es raro si su costo por corte pasa esto veces la
+mediana del mismo corte en los 120 días anteriores (regla #647)."""
+
+
+def cortes_del_arbol(nodos):
+    """Los códigos de las HOJAS del árbol: insumos y cortes."""
+    acc = set()
+
+    def bajar(n):
+        if n.get("hijos"):
+            for h in n["hijos"]:
+                bajar(h)
+        else:
+            acc.add(n["cod"])
+    for n in nodos:
+        bajar(n)
+    return acc
+
+
+def _causa_porcionamiento(po, ini):
+    """El porcionamiento raro de `po` (los de los cortes del plato) que salió
+    entre 4 días antes del pico y el día siguiente, contado en una frase."""
+    cerca = po[(po["_f"] >= ini - pd.Timedelta(days=4))
+               & (po["_f"] <= ini + pd.Timedelta(days=1))]
+    for _, x in cerca.drop_duplicates("COD PORC").iterrows():
+        hist = po[(po["_corte"] == x["_corte"]) & (po["_f"] < x["_f"])
+                  & (po["_f"] >= x["_f"] - pd.Timedelta(days=120))]
+        precio = float(x["PREC PROM PROD FIN"] or 0)
+        habitual = float(hist["PREC PROM PROD FIN"].median()) if len(hist) >= 3 else 0.0
+        if not (habitual and precio >= PORC_RARO_VECES * habitual):
+            continue
+        ini_c = float(x["CANT A PORCIONAR"] or 0)
+        res = float(x["CANT TOT RESUL"] or 0)
+        merma = (ini_c - res) / ini_c * 100 if ini_c else 0.0
+        usr = str(x.get("USUARIO REG") or "").strip()
+        return (f"Posible causa: el porcionamiento {x['COD PORC']} del {x['_f']:%d/%m %H:%M}"
+                f"{' · ' + usr if usr else ''}: {ini_c:g} de "
+                f"{str(x['PROD INICIAL']).strip()} con {merma:.0f} % de merma; "
+                f"cada corte a S/ {precio:,.2f} (lo habitual, S/ {habitual:,.2f}).")
+    return ""
+
+
+def picos_plato(agg, cod, nodos=None, df_po=None, extra_cortes=()):
+    """Los días seguidos en que el plato se vendió a más de `PICO_VECES` su
+    costo habitual: dicts ini, fin, unid, normal, pico, exceso y `causa` (el
+    porcionamiento raro de uno de sus cortes, si lo hubo justo antes). De los
+    50 picos medidos el 2026-10-15, ninguno grande venía de una compra; el
+    29 % del costo de más, de porcionamientos con merma imposible.
+
+    Los cortes que se miran son los de la receta de HOY, `extra_cortes` (lo
+    que descarga un plato directo) y los HERMANOS de todos ellos —los que
+    salen del mismo insumo—: la receta pudo apuntar a otro corte cuando fue
+    el pico (el Lomo Saltado usaba en agosto «lomo trozos 180 g» y hoy
+    «170 g»). Por eso la causa se dice como POSIBLE."""
+    if agg is None or agg.empty:
+        return []
+    a = agg[agg["producto"].astype(str).str.strip() == str(cod).strip()]
+    a = a[a["unidades_costeadas"] > 0]
+    if a.empty:
+        return []
+    g = (a.assign(d=pd.to_datetime(a["dia"]))
+         .groupby("d")[["costo", "unidades_costeadas"]].sum().sort_index())
+    if len(g) < 10:
+        return []
+    cu = g["costo"] / g["unidades_costeadas"]
+    med = cu.rolling("90D", min_periods=8).median().shift(1)
+    alto = ((cu > PICO_VECES * med) & (cu - med > PICO_MINIMO)).fillna(False)
+    dias = list(cu.index[alto])
+    if not dias:
+        return []
+    grupos = [[dias[0]]]
+    for d in dias[1:]:
+        if (d - grupos[-1][-1]).days <= 7:
+            grupos[-1].append(d)
+        else:
+            grupos.append([d])
+    po = None
+    need = ("COD PORC", "COD PROD FINAL", "FEC REGIST", "PREC PROM PROD FIN",
+            "CANT A PORCIONAR", "CANT TOT RESUL", "PROD INICIAL")
+    if ((nodos or extra_cortes) and df_po is not None and not df_po.empty
+            and all(c in df_po.columns for c in need + ("COD PROD INIC",))):
+        cortes = cortes_del_arbol(nodos or []) | {str(c).strip() for c in extra_cortes}
+        po = df_po.assign(_corte=_txt(df_po["COD PROD FINAL"]),
+                          _origen=_txt(df_po["COD PROD INIC"]),
+                          _f=pd.to_datetime(df_po["FEC REGIST"], errors="coerce"))
+        origenes = set(po.loc[po["_corte"].isin(cortes), "_origen"])
+        po = po[po["_corte"].isin(cortes) | po["_origen"].isin(origenes)]
+    out = []
+    for gr in grupos:
+        ini, fin = gr[0], gr[-1]
+        normal = float(med.loc[ini])
+        unid = g.loc[gr, "unidades_costeadas"]
+        out.append({
+            "ini": ini, "fin": fin, "unid": float(unid.sum()), "normal": normal,
+            "pico": float(cu.loc[gr].median()),
+            "exceso": float(((cu.loc[gr] - normal) * unid).sum()),
+            "causa": _causa_porcionamiento(po, ini) if po is not None and not po.empty else "",
+        })
+    return out

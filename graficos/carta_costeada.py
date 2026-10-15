@@ -39,13 +39,24 @@ Dos modos en UNA tarjeta, y no dos tarjetas: la carta completa y la banda de
 los combos no entran juntas en una pantalla de laptop, y una tarjeta con
 barra propia no va (`CLAUDE.md` § Alturas).
 
-UNA tarjeta blanca, como las de los otros reportes, con la tabla a la
-izquierda y el producto elegido a la derecha (regla #570). Para que el
-producto quepa al costado, la tabla muestra por defecto sólo lo que la
-identifica y lo que cuesta —Grupo, Subgrupo, Producto, % de costo y los
-tres montos— y el interruptor «Más columnas» suma Margen, Vendidos, Tipo,
-Actualizado y Última venta; con ellas la tabla se desliza de costado, con
-las tres primeras fijas.
+LA TABLA PRIMERO, Y EL PLATO DEBAJO (regla #657, opción B del boceto
+https://claude.ai/artifact/JFkrxwH2wCipPTGQey1TJ5). Del 2026-09-29 al
+2026-10-15 el producto elegido iba AL COSTADO de la tabla (regla #570), y
+para que cupiera la tabla escondía la mitad de sus columnas detrás de «Más
+columnas». Desde la #657 la tabla va a todo el ancho con TODAS —lo vendido
+en el rango con su venta neta, su % y lo vendido sin costo incluidos—, las
+tres que dicen qué producto es quedan fijas al deslizarla de costado, y la
+ficha del elegido baja: la receta como árbol, con sus recetas base y la
+fecha en que se guardó cada una (`simulador_plato.receta_lectura`), y la
+evolución del costo con lo vendido de cada mes, los cambios de sus recetas
+base (`simulador_receta.marcas_plato`, del log del Almacén) y los días en
+que se vendió a un costo imposible (`simulador_receta.picos_plato`). La
+tarjeta no tiene techo: la página baja, como en Compras › Producto.
+
+UN SELECTOR DE FECHA manda sobre lo vendido —las cuatro columnas del rango
+y lo que la evolución resalta—: el panel de las tarjetas de Compras
+(`base.selector_fecha_tarjeta`), con su ctx propio (`_ctx_fecha`) porque
+Recetas no tiene fecha en la franja. Abre en «Últimos 3 meses».
 
 `st.dataframe` y no AgGrid: es una tabla de sólo lectura, y cada AgGrid
 cuesta 1,28 MB y más de un segundo de navegador (regla #540). Composición
@@ -53,9 +64,9 @@ usaba AgGrid sólo para el clic en una fila; `st.dataframe` lo hace con
 `selection_mode="single-row-required"` (ver `_key_tabla`).
 """
 
+import datetime
 import hashlib
 import math
-from functools import partial
 from html import escape
 
 import numpy as np
@@ -63,18 +74,25 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import simulador_receta as sr
 from cortes import MESES_ABR_ES
+from data import _cargar_cacheable, cargar, secrets_disponibles, sello_datos
+from estado_rango import atajos_tarjeta, clave_rango
 from graficos import alturas
 from graficos.base import (_card, _compras_layout, _es_movil, _resolver,
+                           rango_tarjeta, selector_fecha_tarjeta,
                            una_vez_por_corrida)
 from graficos.recetas_comun import divisor_neto
 from graficos.recetaventa import (
-    _dib_sankey_insumo_costo, _dib_torta_costo_utilidad, receta_del_plato,
+    _dib_sankey_insumo_costo, _dib_torta_costo_utilidad, _receta_original,
+    columnas_receta,
 )
-from graficos.simulador_plato import AYUDA as AYUDA_SIMULAR, simular_plato
+from graficos.simulador_plato import (AYUDA as AYUDA_SIMULAR, receta_lectura,
+                                      simular_plato)
 from graficos.ventas_mix import pct_costo
-from tema import (ACENTO, ADVERTENCIA, ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO,
-                  LAVANDA_FONDO)
+from tema import (ACENTO, ACENTO_TEXTO, ADVERTENCIA, ADVERTENCIA_TEXTO, ERROR,
+                  GRIS_CUADRICULA, GRIS_TEXTO, LAVANDA_BORDE, LAVANDA_FILA,
+                  LAVANDA_FOCO, LAVANDA_FONDO)
 from utils import _norm
 
 ARCHIVO = "cartacosteada.parquet"
@@ -130,31 +148,33 @@ GRUPO_VENTA_INTERNA = "Venta Interna"
 interruptor, a pedido: encabezaban la tabla sin decir nada de la carta."""
 
 DIAS_VENDIDOS = 90
-"""La ventana de «Vendidos» por defecto: 90 días hasta el último día con
-venta."""
+"""Los días de lo vendido de «¿Y si sube un insumo?» (`recetas_alza.py`),
+hasta el último día con venta. La Carta elige los suyos con su fecha."""
 
-VENTANAS_VENDIDOS = {"30 días": 30, "90 días": 90, "6 meses": 180,
-                     "1 año": 365}
-"""Las ventanas que se pueden elegir para «Vendidos» (regla #572). Terminan
-todas en el último día con venta del resumen, no hoy."""
+CATEGORIA_FECHA = "carta"
+"""La categoría del rango de la tarjeta: su clave es
+`rango_cat_Recetas_carta` (`estado_rango.clave_rango`)."""
 
-_K_VENTANA = "rec_carta_vend_ventana"
-"""El selector de la ventana de «Vendidos». Se dibuja sólo con «Más
-columnas» —es la columna que mide—, y con `persist_state="page"` conserva
-lo elegido mientras está escondido."""
+ATAJO_INICIAL = "m3"
+"""Con qué abre la fecha: los últimos 3 meses hasta el último día con venta
+—los 90 días que medía «Vendidos» hasta la regla #657, con nombre de
+atajo—."""
 
-_K_VENTAS_OK = "rec_carta_ventas_ok"
-"""Si en esta sesión ya se cargó lo vendido (regla #573). Desde entonces se
-pide siempre: la segunda vez es la caché, y así el aviso de lo vendido sin
-costo no aparece y desaparece según esté prendido «Más columnas»."""
+_K_SOLO_VEND = "rec_carta_solo_vend"
+"""«Sólo vendidos en el rango»: 320 de 605 productos activos no se
+vendieron en 90 días (medido el 2026-10-15). Arranca apagado: la carta
+entera."""
 
-_K_BASE = "rec_carta_base"
-"""La receta base abierta en el panel: `{"plato", "ruta", "aviso", "gen"}`.
-`ruta` es la lista de recetas base abiertas, de la del plato a la más
-adentro; cada una `{"cod", "nombre", "escala", "costo", "es_base"}`. La
-escriben los clics en las tablas (callbacks), antes de la corrida que
-dibuja. `gen` va en la key de la tabla de la receta y la sube «✕»: cerrar
-estrena la tabla, sin la fila marcada."""
+_K_FICHA_VISTA = "rec_carta_ficha_vista"
+"""Qué muestra el lado derecho de la ficha: la evolución (por defecto), la
+dona, el Sankey o los porcionados del plato."""
+
+_K_PORC = "rec_carta_porc_sel"
+"""El porcionado elegido en «Porcionados» de la ficha."""
+
+PROPORCION_FICHA = (1.45, 1)
+"""La receta | la evolución, en la ficha de debajo de la tabla: la del
+boceto. A 1323px el árbol mide ~650 y deja ~450 al gráfico."""
 
 _SIN_FECHA = pd.Timestamp("1900-01-01")
 """Una fecha que falta. `st.dataframe` pinta «None» en un vacío aunque el
@@ -163,16 +183,7 @@ columna sigue siendo de fechas, y ordenar por ella ordena por fecha."""
 
 _K_FOCO = "rec_carta_foco"
 """El código del producto elegido. Sólo lo escribe un clic: sin clic, o
-con el elegido fuera del filtro, el panel sigue a la primera fila."""
-
-_K_MAS = "rec_carta_mas_cols"
-"""El interruptor «Más columnas» (regla #570): arranca apagado."""
-
-PROPORCION = (0.6, 0.4)
-"""Tabla | producto elegido. Sin «P. neto» (regla #574) las columnas de
-siempre miden 678px con la casilla de selección, y a 1323px de ancho —la
-pantalla del usuario— le tocan ~688: el panel se queda con ~458, y los
-nombres de la receta ganan 30px."""
+con el elegido fuera del filtro, la ficha sigue a la primera fila."""
 
 
 def _num(df, col):
@@ -289,7 +300,7 @@ def fechas_de_receta(df_rv):
     return s.to_dict()
 
 
-def con_ventas(t, agg, dias=DIAS_VENDIDOS):
+def con_ventas(t, agg, dias=DIAS_VENDIDOS, rango=None):
     """`t` con lo vendido de cada producto en los últimos `dias` días del
     resumen de Ventas (`definicion_venta.por_producto_dia`): Vendidos
     (unidades), VendidoNeto, SinCostoNeto (lo vendido sin costo) y
@@ -297,17 +308,21 @@ def con_ventas(t, agg, dias=DIAS_VENDIDOS):
     vendió, que se escribe «—»).
 
     La ventana termina en el último día con venta del resumen, no hoy: el
-    parquet llega de la madrugada. Devuelve `(t, (ini, fin))`, o
-    `(t, None)` sin resumen. Pura."""
+    parquet llega de la madrugada. Con `rango` (`(ini, fin)`, fechas, los
+    dos incluidos) manda ése: es el de la fecha de la tarjeta (regla #657).
+    Devuelve `(t, (ini, fin))`, o `(t, None)` sin resumen. Pura."""
     t = t.copy()
     if agg is None or agg.empty:
         for col in ("Vendidos", "VendidoNeto", "SinCostoNeto", "PctVendido"):
             t[col] = 0.0
         return t, None
     dia = pd.to_datetime(agg["dia"])
-    fin = dia.max().normalize()
-    ini = fin - pd.Timedelta(days=dias - 1)
-    u = agg[dia >= ini]
+    if rango is not None:
+        ini, fin = pd.Timestamp(rango[0]), pd.Timestamp(rango[1])
+    else:
+        fin = dia.max().normalize()
+        ini = fin - pd.Timedelta(days=dias - 1)
+    u = agg[(dia >= ini) & (dia < fin + pd.Timedelta(days=1))]
     s = u.groupby("producto")[["unidades", "neto", "costo",
                                "neto_sin_costo"]].sum()
     s.index = s.index.astype(str).str.strip()
@@ -447,101 +462,116 @@ def _dibujar_tabla(base, sty, pos_foco, codigos, alto, cfg):
 
 def _pintar_foco(pos):
     """La fila elegida, con fondo lavanda: la marca nativa de la selección es
-    una casilla chica a la izquierda, y el panel queda debajo de la tabla."""
+    una casilla chica a la izquierda, y la ficha queda debajo de la tabla."""
     def _fila(r):
         return [f"background-color: {LAVANDA_FONDO}" if r.name == pos else ""
                 ] * len(r)
     return _fila
 
 
-def columnas_carta(mas=False, con_ventas_=True, movil=False):
-    """Las columnas de la tabla de la carta, en orden (regla #570). Primero
-    lo que ubica al producto —Grupo, Subgrupo y su nombre—, después lo que
-    cuesta. `mas`: el interruptor «Más columnas», que suma Margen y Vendidos
-    junto al % y Tipo y las dos fechas al final. `movil`: en un teléfono la
-    tabla no entra nunca entera y el nombre va PRIMERO, que es como se sabe
-    qué fila es (con Grupo y Subgrupo delante, en 306px no se veía). Pura."""
-    cols = ["Grupo", "Subgrupo", "Producto", "Pct"]
+COLUMNAS_RANGO = ("Vendidos", "VendidoNeto", "PctVendido", "SinCostoNeto")
+"""Las columnas que mide la fecha de la tarjeta (regla #657)."""
+
+
+def columnas_carta(con_ventas_=True, movil=False):
+    """Las columnas de la tabla de la carta, en orden: TODAS desde la regla
+    #657 —antes la mitad iba detrás de «Más columnas» para que el producto
+    cupiera al costado—. Primero lo que ubica al producto —Grupo, Subgrupo y
+    su nombre—, después lo que cuesta hoy, lo vendido en el rango, los
+    precios y lo que lo describe. `movil`: en un teléfono la tabla no entra
+    nunca entera y el nombre va PRIMERO, que es como se sabe qué fila es
+    (con Grupo y Subgrupo delante, en 306px no se veía). Pura."""
+    cols = ["Grupo", "Subgrupo", "Producto", "Pct", "Margen"]
     if movil:
-        cols = ["Producto", "Grupo", "Subgrupo", "Pct"]
-    if mas:
-        cols.append("Margen")
-        if con_ventas_:
-            cols.append("Vendidos")
-    cols.append("Precio")
-    if mas:
-        # «P. neto» se esconde con las demás desde la regla #574: es el precio
-        # ÷ 1,235, y el % de costo ya está calculado sobre él.
-        cols.append("Neto")
-    cols.append("Costo")
-    if mas:
-        cols += ["Tipo", "Actualizado", "UltimaVenta"]
+        cols = ["Producto", "Grupo", "Subgrupo", "Pct", "Margen"]
+    if con_ventas_:
+        cols += list(COLUMNAS_RANGO)
+    cols += ["Precio", "Neto", "Costo", "Tipo", "Oferta", "Actualizado",
+             "UltimaVenta"]
     return cols
 
 
-def _tabla_carta(t, pos_foco, rango, mas=False, dias=DIAS_VENDIDOS):
+def _impresa(v):
+    return "Impresa" if v == OFERTAS[0] else ""
+
+
+def _tabla_carta(t, pos_foco, rango):
     movil = _es_movil()
-    cols = columnas_carta(mas, rango is not None, movil)
-    col_vend = f"Vendidos {dias} d"
+    cols = columnas_carta(rango is not None, movil)
     v = t[cols].rename(columns={
         "Pct": "% costo", "Precio": "P. venta", "Neto": "P. neto",
-        "UltimaVenta": "Última venta", "Vendidos": col_vend})
+        "UltimaVenta": "Última venta", "VendidoNeto": "Venta neta",
+        "PctVendido": "% vendido", "SinCostoNeto": "Sin costo",
+        "Actualizado": "Receta actualizada", "Oferta": "Carta"})
+    v["Carta"] = v["Carta"].map(_impresa)
     sty = (v.style
-           .format(_pct, subset=["% costo"])
+           .format(_pct, subset=[c for c in ("% costo", "% vendido")
+                                 if c in v.columns])
            .format(_soles, subset=[c for c in ("P. venta", "P. neto", "Costo",
-                                               "Margen") if c in v.columns])
-           .map(_estilo_pct, subset=["% costo"])
+                                               "Margen", "Venta neta",
+                                               "Sin costo") if c in v.columns])
+           .format(_dia, subset=["Receta actualizada", "Última venta"])
+           .map(_estilo_pct, subset=[c for c in ("% costo", "% vendido")
+                                     if c in v.columns])
+           .map(_estilo_margen, subset=["Margen"])
            .apply(_pintar_foco(pos_foco), axis=1))
-    if "Margen" in v.columns:
-        sty = sty.map(_estilo_margen, subset=["Margen"])
-    if "Actualizado" in v.columns:
-        sty = sty.format(_dia, subset=["Actualizado", "Última venta"])
-    if col_vend in v.columns:
-        sty = sty.format(_unidades, subset=[col_vend])
-    # Con «Más columnas» la tabla no entra en su mitad y se desliza de
-    # costado: las tres que dicen QUÉ producto es quedan fijas. Fijas SÓLO
-    # entonces: Streamlit lleva las fijas a la izquierda —fijar sólo el
-    # nombre lo pondría delante del grupo— y las pinta en gris. En el
-    # teléfono, sólo el nombre, que ya va primero: las tres no entran.
-    fija = bool(mas) and not movil
-    vendidos_help = (f"Unidades vendidas en los últimos {dias} días "
-                     "hasta el último día con venta")
+    if "Vendidos" in v.columns:
+        sty = sty.format(_unidades, subset=["Vendidos"])
+        sty = sty.map(lambda x: f"color: {ADVERTENCIA_TEXTO}" if x else "",
+                      subset=["Sin costo"])
+    # La tabla no entra entera en una laptop (16 columnas, ~1.360px): las
+    # tres que dicen QUÉ producto es quedan fijas al deslizarla. En el
+    # teléfono, sólo el nombre, que ya va primero.
+    fija = not movil
+    en_rango = ""
     if rango is not None:
-        vendidos_help += f": del {rango[0]:%d/%m/%Y} al {rango[1]:%d/%m/%Y}"
+        en_rango = f" del {rango[0]:%d/%m/%Y} al {rango[1]:%d/%m/%Y}"
     cfg = {
-        "Grupo": st.column_config.TextColumn(pinned=fija, width=100),
-        "Subgrupo": st.column_config.TextColumn(pinned=fija, width=114),
-        "Producto": st.column_config.TextColumn(pinned=fija or movil, width=210),
+        "Grupo": st.column_config.TextColumn(pinned=fija, width=92),
+        "Subgrupo": st.column_config.TextColumn(pinned=fija, width=104),
+        "Producto": st.column_config.TextColumn(pinned=True, width=200),
         "% costo": st.column_config.Column(
-            width=64, help="Costo ÷ precio neto de Salón (sin IGV ni recargo). "
-                           "«—»: sin costo cargado en el POS."),
+            width=62, help="Costo de hoy ÷ precio neto de Salón (sin IGV ni "
+                           "recargo). «—»: sin costo cargado en el POS."),
         "Margen": st.column_config.Column(
-            width=78, help="Lo que deja cada unidad: precio neto − costo"),
-        col_vend: st.column_config.Column(
-            width=100, help=vendidos_help + ". Con la definición de venta de "
-                                           "Ventas; el dato llega de madrugada."),
-        "P. venta": st.column_config.Column(width=76, help="Precio de Salón, con impuestos"),
-        "P. neto": st.column_config.Column(width=76, help="Precio de Salón ÷ 1,235, como el sistema"),
+            width=72, help="Lo que deja cada unidad hoy: precio neto − costo"),
+        "Vendidos": st.column_config.Column(
+            width=70, help=f"Unidades vendidas{en_rango}, con la definición "
+                           "de venta de Ventas. El rango es el de la fecha de "
+                           "arriba."),
+        "Venta neta": st.column_config.Column(
+            width=86, help=f"Lo vendido{en_rango}, sin IGV ni recargo"),
+        "% vendido": st.column_config.Column(
+            width=70, help="El % de costo al que se VENDIÓ en el rango: el "
+                           "costo que guardó el POS en cada pedido ÷ la venta "
+                           "neta. Puede no ser el de hoy."),
+        "Sin costo": st.column_config.Column(
+            width=86, help="Lo vendido en el rango que entró al FoodCost con "
+                           "costo 0"),
+        "P. venta": st.column_config.Column(width=72, help="Precio de Salón, con impuestos"),
+        "P. neto": st.column_config.Column(width=72, help="Precio de Salón ÷ 1,235, como el sistema"),
         "Costo": st.column_config.Column(
-            width=76, help="Costo de hoy. En un combo, el que calcula la consulta: "
+            width=72, help="Costo de hoy. En un combo, el que calcula la consulta: "
                            "mirá «Combos» para ver cómo."),
         "Tipo": st.column_config.TextColumn(
-            width=82, help="Con qué descarga del almacén: receta, artículo directo, "
+            width=74, help="Con qué descarga del almacén: receta, artículo directo, "
                            "combo, no aplica o sin enlace"),
-        "Actualizado": st.column_config.Column(
-            width=88, help="Última modificación de la receta en el POS"),
-        "Última venta": st.column_config.Column(width=88),
+        "Carta": st.column_config.TextColumn(
+            width=62, help="«Impresa»: con botón del 1 al 19 en el POS"),
+        "Receta actualizada": st.column_config.Column(
+            width=96, help="Última modificación de la receta del plato en el POS"),
+        "Última venta": st.column_config.Column(width=84),
     }
     _dibujar_tabla("rec_carta_tabla", sty, pos_foco, list(t["Cod"]),
                    _alto(len(v)), cfg)
 
 
 _BANDA = ["Minimo", "Promedio", "Esperado", "Maximo", "Real90", "Vendidos90"]
-"""Las columnas de la banda de un combo, que en la tabla suma «Más
-columnas»: la banda del combo elegido ya está al costado, en su panel."""
+"""Las columnas de la banda de un combo: en la tabla de «Combos» siempre a
+la vista desde la regla #657 (antes, con «Más columnas»)."""
 
 
-def _tabla_combos(t, pos_foco, mas=False):
+def _tabla_combos(t, pos_foco, mas=True):
     cols = ["Producto", "TipoCombo", "Metodo", "Costo", "Pct"]
     if mas:
         cols += _BANDA
@@ -673,90 +703,194 @@ def _etiqueta_mes(p):
     return f"{MESES_ABR_ES[p.month - 1]} {p.year % 100:02d}"
 
 
-def _dib_costo_en_el_tiempo(f, agg, alto=alturas.MINI):
-    """La línea del costo por unidad al vender y, punteado, el de hoy."""
+def meses_del_rango(meses, rango):
+    """Qué meses de `meses` (Periods) tocan el rango `(ini, fin)`. Pura."""
+    if rango is None:
+        return [False] * len(meses)
+    a = pd.Period(pd.Timestamp(rango[0]), freq="M")
+    b = pd.Period(pd.Timestamp(rango[1]), freq="M")
+    return [a <= m <= b for m in meses]
+
+
+def _hover_mes(r):
+    partes = [f"<b>{_etiqueta_mes(r['mes'])}</b>"]
+    if pd.notna(r["costo_unit"]):
+        partes.append(f"S/ {r['costo_unit']:,.2f} por unidad al vender")
+    else:
+        partes.append("vendido sin costo")
+    partes.append(f"{r['unidades']:,.0f} vendidos")
+    if pd.notna(r["pct"]):
+        partes.append(f"al {r['pct']:.1f} % de costo")
+    if r["neto_sin_costo"] > 0:
+        partes.append(f"S/ {r['neto_sin_costo']:,.0f} sin costo")
+    return "<br>".join(partes)
+
+
+def _dib_evolucion(f, agg, rango, marcas=(), picos=(), alto=alturas.CARTA_EVOLUCION):
+    """La evolución del costo del plato (regla #657): por mes, lo vendido en
+    barras (las del rango, más fuertes) y el costo por unidad con que se
+    vendió en una línea —la foto del POS en cada pedido, regla #557—; el
+    costo de HOY punteado; ▼ arriba en los meses en que se editó una de sus
+    recetas base (`marcas`, del log del Almacén) y un círculo rojo en los
+    picos (`picos`). El rango de la fecha, sombreado."""
     g = costo_mensual(agg, f["Cod"])
     if g.empty:
         st.info("No se vendió desde enero de 2025, que es desde cuando hay "
                 "ventas en la app: no hay costo al vender que mostrar.")
         return
     etq = [_etiqueta_mes(p) for p in g["mes"]]
+    en = meses_del_rango(list(g["mes"]), rango)
     sin = g["neto_sin_costo"] > 0
+    pos = {m: i for i, m in enumerate(g["mes"])}
 
-    def _hover(r):
-        partes = [f"<b>{_etiqueta_mes(r['mes'])}</b>"]
-        if pd.notna(r["costo_unit"]):
-            partes.append(f"S/ {r['costo_unit']:,.2f} por unidad")
-        else:
-            partes.append("vendido sin costo")
-        partes.append(f"{r['unidades']:,.0f} vendidos")
-        if pd.notna(r["pct"]):
-            partes.append(f"al {r['pct']:.1f} % de costo")
-        if r["neto_sin_costo"] > 0:
-            partes.append(f"S/ {r['neto_sin_costo']:,.0f} sin costo")
-        return "<br>".join(partes)
-
-    fig = go.Figure(go.Scatter(
-        x=etq, y=g["costo_unit"], mode="lines+markers", connectgaps=False,
-        line=dict(color=ACENTO, width=2),
-        # Un mes con algo vendido sin costo va en ámbar: su costo por unidad
-        # es el de las unidades que SÍ lo traen, pero en el FoodCost de ese
-        # mes hay neto con costo 0 (regla #556).
-        marker=dict(size=7, color=[ADVERTENCIA if s else ACENTO for s in sin]),
-        text=[_hover(r) for _, r in g.iterrows()],
-        hovertemplate="%{text}<extra></extra>"))
-    # Los meses vendidos ENTEROS sin costo no tienen punto en la línea: se
-    # marcan abajo, para que el hueco diga por qué es un hueco.
-    vacios = g["costo_unit"].isna()
-    minimo = float(g["costo_unit"].min()) if g["costo_unit"].notna().any() else 0.0
-    if vacios.any():
-        fig.add_trace(go.Scatter(
-            x=[e for e, v in zip(etq, vacios) if v],
-            y=[minimo] * int(vacios.sum()), mode="markers",
-            marker=dict(symbol="x-thin", size=9, color=ADVERTENCIA,
-                        line=dict(width=2, color=ADVERTENCIA)),
-            text=[_hover(r) for _, r in g[vacios].iterrows()],
-            hovertemplate="%{text}<extra></extra>"))
-    if not f["SinCosto"]:
-        fig.add_hline(y=float(f["Costo"]), line=dict(color=GRIS_TEXTO, width=1,
-                                                     dash="dot"),
-                      annotation_text=f"hoy S/ {f['Costo']:,.2f}",
-                      annotation_position="top left",
-                      annotation_font=dict(size=10, color=GRIS_TEXTO))
+    fig = go.Figure(go.Bar(
+        x=etq, y=g["unidades"], name="Vendidos",
+        marker=dict(color=[LAVANDA_FOCO if e else LAVANDA_BORDE for e in en]),
+        # `hovertext` y no `text`: en una barra, `text` se escribe ADENTRO.
+        hovertext=[_hover_mes(r) for _, r in g.iterrows()],
+        hovertemplate="%{hovertext}<extra></extra>"))
+    # El rango, sombreado detrás: en un eje de categorías la posición de
+    # cada mes es su índice, y la franja va de medio mes antes a medio
+    # después.
+    if any(en):
+        i0 = en.index(True)
+        i1 = len(en) - 1 - en[::-1].index(True)
+        fig.add_vrect(x0=i0 - 0.5, x1=i1 + 0.5, fillcolor=LAVANDA_FILA,
+                      line_width=0, layer="below")
     _compras_layout(fig, alto=alto)
-    # Un rótulo cada tanto: veinte meses en 430px se pisan (y girados comen
-    # alto). Categorías SIEMPRE: «ene 25» en un eje sin tipo lo decide
-    # Plotly (#448).
-    paso = max(1, math.ceil(len(etq) / 7))
-    tope = float(np.nanmax([g["costo_unit"].max(), f["Costo"] or 0.0]))
-    fig.update_layout(showlegend=False, margin=dict(l=6, r=8, t=20, b=6))
+    paso = max(1, math.ceil(len(etq) / 8))
+    fig.update_layout(showlegend=False, bargap=0.35,
+                      margin=dict(l=6, r=8, t=24, b=6))
     fig.update_xaxes(type="category", tickangle=0, tickfont=dict(size=10),
                      tickvals=etq[::paso], ticktext=etq[::paso],
                      fixedrange=True)
-    fig.update_yaxes(showticklabels=True, tickprefix="S/ ",
-                     tickformat=",.2f" if tope < 20 else ",.0f",
-                     tickfont=dict(size=10), automargin=True, fixedrange=True,
-                     rangemode="tozero")
+    tope_u = float(g["unidades"].max() or 1.0)
+    fig.update_yaxes(showticklabels=False, fixedrange=True,
+                     range=[0, tope_u * 2.4], showgrid=False)
+
+    # El costo va en un eje APARTE, creado después de los `update_*axes`
+    # (que tocan todos los ejes que existan, CLAUDE.md § Plotly) y al lado
+    # izquierdo: las barras son la escala de abajo y no llevan números.
+    cu = g["costo_unit"]
+    tope = float(np.nanmax([cu.max() if cu.notna().any() else 0.0,
+                            f["Costo"] or 0.0,
+                            *[p["pico"] for p in picos]] or [1.0])) or 1.0
+    fig.add_trace(go.Scatter(
+        x=etq, y=cu, mode="lines+markers", connectgaps=False, yaxis="y2",
+        line=dict(color=ACENTO, width=2),
+        # Un mes con algo vendido sin costo, en ámbar (regla #556).
+        marker=dict(size=7, color=[ADVERTENCIA if s else ACENTO for s in sin]),
+        text=[_hover_mes(r) for _, r in g.iterrows()],
+        hovertemplate="%{text}<extra></extra>"))
+    if not f["SinCosto"]:
+        fig.add_trace(go.Scatter(
+            x=[etq[0], etq[-1]], y=[float(f["Costo"])] * 2, mode="lines",
+            yaxis="y2", line=dict(color=GRIS_TEXTO, width=1, dash="dot"),
+            hovertemplate=f"Hoy: S/ {f['Costo']:,.2f}<extra></extra>"))
+        fig.add_annotation(x=etq[0], y=float(f["Costo"]), yref="y2",
+                           text=f"hoy S/ {f['Costo']:,.2f}", showarrow=False,
+                           xanchor="left", yanchor="bottom",
+                           font=dict(size=10, color=GRIS_TEXTO))
+    # Los picos: un círculo rojo en su mes, a la altura del costo del pico.
+    pk = [p for p in picos if pd.Period(p["ini"], freq="M") in pos]
+    if pk:
+        fig.add_trace(go.Scatter(
+            x=[etq[pos[pd.Period(p["ini"], freq="M")]] for p in pk],
+            y=[p["pico"] for p in pk], mode="markers", yaxis="y2",
+            marker=dict(size=13, color="rgba(0,0,0,0)",
+                        line=dict(width=2, color=ERROR)),
+            text=[_texto_pico(p) for p in pk],
+            hovertemplate="%{text}<extra></extra>"))
+    # Las ediciones de sus recetas base: ▼ arriba de todo, una por mes.
+    mk = {}
+    for m in marcas:
+        per = pd.Period(pd.Timestamp(m["t"]), freq="M")
+        if per in pos:
+            mk.setdefault(per, []).append(m)
+    if mk:
+        fig.add_trace(go.Scatter(
+            x=[etq[pos[p]] for p in mk], y=[tope * 1.18] * len(mk),
+            mode="markers", yaxis="y2",
+            marker=dict(symbol="triangle-down", size=10, color=ACENTO_TEXTO),
+            text=["<br>".join(_texto_marca(m) for m in ms[:4])
+                  + (f"<br>y {len(ms) - 4} más" if len(ms) > 4 else "")
+                  for ms in mk.values()],
+            hovertemplate="%{text}<extra></extra>"))
+    fig.update_layout(
+        hoverlabel=dict(align="left"),
+        yaxis2=dict(overlaying="y", side="left", showticklabels=True,
+                    tickprefix="S/ ", tickformat=",.2f" if tope < 20 else ",.0f",
+                    tickfont=dict(size=10), automargin=True, fixedrange=True,
+                    range=[0, tope * 1.28], showgrid=True,
+                    gridcolor=GRIS_CUADRICULA, zeroline=False))
     st.plotly_chart(fig, use_container_width=True,
-                    key=f"rec_carta_tiempo_{f['Cod']}",
+                    key=f"rec_carta_evo_{f['Cod']}",
                     config={"displaylogo": False, "displayModeBar": False})
 
-    con = g[g["costo_unit"].notna()]
+    con = g[cu.notna()]
+    pie = []
     if len(con) >= 2:
         a, b = con.iloc[0], con.iloc[-1]
         var = (b["costo_unit"] / a["costo_unit"] - 1) * 100 if a["costo_unit"] else 0.0
-        st.caption(f"De S/ {a['costo_unit']:,.2f} ({_etiqueta_mes(a['mes'])}) a "
+        pie.append(f"De S/ {a['costo_unit']:,.2f} ({_etiqueta_mes(a['mes'])}) a "
                    f"S/ {b['costo_unit']:,.2f} ({_etiqueta_mes(b['mes'])}): "
-                   f"{'+' if var >= 0 else '−'}{abs(var):.1f} %. El costo que "
-                   "guardó el POS al vender, por unidad.")
-    if vacios.any():
-        n = int(vacios.sum())
-        st.caption(f"✕ {n} {'mes vendido' if n == 1 else 'meses vendidos'} "
-                   "sin costo: no hay costo por unidad que dibujar.")
+                   f"{'+' if var >= 0 else '−'}{abs(var):.1f} %, el costo que "
+                   "guardó el POS al vender.")
+    if any(en):
+        pie.append("Sombreado: el rango de la fecha.")
     if f["Tipo"] == "Combo" and (g["mes"] < _COMBO_ANTES).any():
-        st.caption("Hasta setiembre de 2025 el POS registró los platos de los "
-                   "combos entre 8 y 32 % más baratos que sueltos: esa parte "
-                   "de la línea sale baja.")
+        pie.append("Hasta setiembre de 2025 el POS registró los platos de los "
+                   "combos entre 8 y 32 % más baratos que sueltos.")
+    if pie:
+        st.caption(" ".join(pie))
+
+
+def _texto_marca(m):
+    signo = "+" if m["esp"] >= 0 else "−"
+    quien = f" · {m['usr']}" if m.get("usr") else ""
+    otros = m.get("n", 1) - 1
+    mas = (f" (y {otros} {'cambio' if otros == 1 else 'cambios'} más)"
+           if otros > 0 else "")
+    return (f"▼ {pd.Timestamp(m['t']):%d/%m/%y}{quien} · {escape(m['base'])}: "
+            f"{escape(m['txt'])}{mas} → {signo}S/ {abs(m['esp']):,.2f} por plato")
+
+
+def _texto_pico(p):
+    dias = (f"{p['ini']:%d/%m/%y}" if p["ini"] == p["fin"]
+            else f"del {p['ini']:%d/%m} al {p['fin']:%d/%m/%y}")
+    t = (f"<b>Pico {dias}</b><br>S/ {p['pico']:,.2f} por unidad (lo habitual, "
+         f"S/ {p['normal']:,.2f})<br>{p['unid']:,.0f} vendidos: "
+         f"S/ {p['exceso']:,.0f} de costo de más")
+    if p.get("causa"):
+        t += "<br>" + escape(p["causa"])
+    return t
+
+
+def _lista_en_rango(marcas, picos, rango):
+    """Debajo del gráfico, con palabras: lo que movió el costo EN el rango —
+    las ediciones de sus recetas base y los picos con su posible causa—."""
+    if rango is None:
+        return
+    a = pd.Timestamp(rango[0])
+    b = pd.Timestamp(rango[1]) + pd.Timedelta(days=1)
+    ms = [m for m in marcas if a <= pd.Timestamp(m["t"]) < b]
+    ps = [p for p in picos if a <= p["ini"] < b]
+    if not (ms or ps):
+        return
+    filas = []
+    for m in ms[-6:][::-1]:
+        filas.append(f'<li class="rec-evo-marca">{_texto_marca(m)}</li>')
+    for p in ps[::-1]:
+        dias = (f"{p['ini']:%d/%m}" if p["ini"] == p["fin"]
+                else f"{p['ini']:%d/%m}–{p['fin']:%d/%m}")
+        causa = f" {escape(p['causa'])}" if p.get("causa") else ""
+        filas.append(f'<li class="rec-evo-pico">● {dias}: S/ {p["pico"]:,.2f} por '
+                     f'unidad (lo habitual, S/ {p["normal"]:,.2f}), S/ '
+                     f'{p["exceso"]:,.0f} de más.{causa}</li>')
+    extra = (f'<li class="rec-evo-marca">y {len(ms) - 6} ediciones más</li>'
+             if len(ms) > 6 else "")
+    st.markdown(f'<ul class="rec-evo-lista">{"".join(filas)}{extra}</ul>',
+                unsafe_allow_html=True)
 
 
 # ─── Las recetas base (regla #572) ───────────────────────────────────────
@@ -940,228 +1074,6 @@ def costo_de_origen(costo_unit, costo_base, costo_porc):
             else "porc")
 
 
-def _escala(cantidad, factor):
-    """Cuántas unidades de la receta base usa una línea: su cantidad (en la
-    unidad de la receta) ÷ el factor a la unidad del kardex."""
-    return float(cantidad) / float(factor) if factor and factor > 0 else float(cantidad)
-
-
-def _filas_clic(r, bases, porcs=frozenset()):
-    """Lo que un clic en la fila `i` de la tabla `r` necesita saber."""
-    cods = r["Cod"] if "Cod" in r.columns else pd.Series("", index=r.index)
-    facts = r["Factor"] if "Factor" in r.columns else pd.Series(0.0, index=r.index)
-    return [{"cod": str(c), "nombre": str(n), "escala": _escala(q, fa),
-             "costo": float(co), "es_base": str(c) in bases,
-             "es_porc": str(c) in porcs}
-            for c, n, q, fa, co in zip(cods, r["Insumo"], r["Cantidad"], facts,
-                                       r["Costo"])]
-
-
-def _abre(fila):
-    """Si una fila se puede abrir: tiene receta base o sale de un
-    porcionamiento."""
-    return bool(fila.get("es_base") or fila.get("es_porc"))
-
-
-def _al_elegir_en_receta(key, plato, filas):
-    """Clic en la receta del plato: abre la receta base de esa fila, o la
-    cierra si se soltó la fila o si el insumo no tiene."""
-    fila = _fila_elegida(st.session_state.get(key))
-    gen = (st.session_state.get(_K_BASE) or {}).get("gen", 0)
-    estado = {"plato": plato, "ruta": [], "gen": gen}
-    if fila is not None and 0 <= fila < len(filas):
-        if _abre(filas[fila]):
-            estado["ruta"] = [filas[fila]]
-        else:
-            estado["aviso"] = filas[fila]["nombre"]
-    st.session_state[_K_BASE] = estado
-
-
-def _al_elegir_en_base(key, plato, ruta, filas):
-    """Clic en una receta base abierta: si esa fila también es receta base,
-    se abre ella (un nivel más adentro)."""
-    fila = _fila_elegida(st.session_state.get(key))
-    if fila is not None and 0 <= fila < len(filas) and _abre(filas[fila]):
-        e = st.session_state.get(_K_BASE) or {}
-        st.session_state[_K_BASE] = {"plato": plato, "ruta": ruta + [filas[fila]],
-                                     "gen": e.get("gen", 0)}
-
-
-def _subir_base(plato):
-    e = st.session_state.get(_K_BASE) or {}
-    if e.get("plato") == plato:
-        st.session_state[_K_BASE] = {"plato": plato, "gen": e.get("gen", 0),
-                                     "ruta": list(e.get("ruta", []))[:-1]}
-
-
-def _cerrar_base(plato):
-    """«✕»: cierra la receta base y estrena la tabla de la receta. Soltar la
-    fila también la cierra, pero la tabla que no tiene el foco se come el
-    primer clic sobre una fila ya marcada (medido: después de tocar otro
-    control, hacían falta dos)."""
-    e = st.session_state.get(_K_BASE) or {}
-    st.session_state[_K_BASE] = {"plato": plato, "ruta": [],
-                                 "gen": e.get("gen", 0) + 1}
-
-
-def _estado_base(plato):
-    """El estado de la receta base abierta PARA ESTE PLATO. Si era de otro,
-    se vacía: la tabla de la receta nace sin fila elegida, y dejarlo haría
-    que al volver al plato apareciera abierta una receta base sin su fila."""
-    e = st.session_state.get(_K_BASE) or {}
-    if e.get("plato") != plato:
-        e = {"plato": plato, "ruta": [], "gen": e.get("gen", 0)}
-        st.session_state[_K_BASE] = e
-    return e
-
-
-_CFG_RECETA = {
-    # Suman 396 + los 36 de la casilla de selección: el panel mide ~441 a
-    # 1323px, la pantalla del usuario (regla #574; con los anchos
-    # automáticos el número del «%» quedaba cortado contra el borde).
-    # El «▸» se explica en la ayuda de la cabecera y no en un renglón
-    # debajo de la tabla: eran 36px, y sin ellos la tarjeta entra en ~600
-    # de alto (regla #574).
-    "Insumo": st.column_config.TextColumn(
-        width=176, help="▸ receta base o porcionado: clic en la fila para "
-                        "ver de dónde sale su costo"),
-    "Cantidad": st.column_config.NumberColumn(format="%.3f", width=64),
-    "Costo": st.column_config.NumberColumn(format="S/ %.2f", width=66),
-    "%": st.column_config.ProgressColumn(format="%.1f%%", min_value=0,
-                                         max_value=100, width=90),
-}
-
-
-def _con_flecha(r, porcs=frozenset()):
-    """La tabla a mostrar: «▸» delante de lo que se puede abrir —una receta
-    base o un porcionado—. En una copia: el Sankey usa los nombres tal
-    cual."""
-    v = r[["Insumo", "Cantidad", "Costo", "%"]].copy()
-    abre = r["EsBase"] if "EsBase" in r.columns else pd.Series(False, index=r.index)
-    if "Cod" in r.columns:
-        abre = abre | r["Cod"].isin(porcs)
-    v["Insumo"] = np.where(abre, "▸ " + r["Insumo"], r["Insumo"])
-    return v
-
-
-def _tabla_receta(orig, plato, bases, porcs=frozenset()):
-    """La receta del plato en lectura, clicable (reglas #572 y #574)."""
-    r = orig.copy()
-    r["EsBase"] = (r["Cod"].isin(bases) if "Cod" in r.columns
-                   else pd.Series(False, index=r.index))
-    filas = _filas_clic(r, bases, porcs)
-    gen = _estado_base(plato).get("gen", 0)
-    key = _key_tabla(f"rec_carta_rv_{plato}_{gen}",
-                     [f"{x['cod']}:{x['nombre']}" for x in filas])
-    st.dataframe(_con_flecha(r, porcs), key=key,
-                 on_select=partial(_al_elegir_en_receta, key, plato, filas),
-                 selection_mode="single-row", hide_index=True, row_height=27,
-                 height=alturas.por_filas(len(r), px_fila=27, extra=38,
-                                          minimo=0, rol=alturas.CARTA_RECETA),
-                 column_config=_CFG_RECETA)
-    e = _estado_base(plato)
-    if e.get("aviso") and not e.get("ruta"):
-        st.caption(f"«{e['aviso']}» es un insumo de compra: no tiene receta "
-                   "base ni porcionamientos.")
-
-
-
-_MODOS = ("Receta base", "Porcionamientos")
-
-
-def _bloque_base(df_rb, df_po, plato, ruta, bases, porcs):
-    """Debajo de la receta, en el lugar del gráfico: de dónde sale el costo
-    del insumo abierto — su receta base, proporcionada a lo que lleva UN
-    plato (regla #572), o sus últimos porcionamientos (regla #574). Va en el
-    lugar del gráfico y con su mismo alto para que abrirla no estire la
-    tarjeta."""
-    actual = ruta[-1]
-    rb = (receta_base(df_rb, actual["cod"], actual["escala"], bases)
-          if actual.get("es_base") else None)
-    po = (porcionamientos_de(df_po, actual["cod"])
-          if actual.get("es_porc") else None)
-    ult = (ultimo_porcionamiento(df_po, actual["cod"])
-           if po is not None and not po.empty else None)
-    modos = [m for m, x in zip(_MODOS, (rb, po)) if x is not None]
-    with st.container(key="rec_carta_base_caja"):
-        with st.container(horizontal=True, vertical_alignment="center",
-                          key="rec_carta_base_hdr"):
-            # La ABIERTA primero: con el camino entero («A › B») el renglón
-            # se cortaba en la de afuera y la que se estaba viendo no se
-            # leía (medido en el segundo nivel). El camino va en el tooltip.
-            migas = " › ".join(x["nombre"] for x in ruta)
-            st.markdown(f'<p class="rec-base-tit" title="{escape(migas)}">'
-                        f'{escape(actual["nombre"])}</p>',
-                        unsafe_allow_html=True)
-            if len(modos) > 1:
-                # Las dos cosas (49 insumos): abre en la que explica el costo
-                # de la receta — la más cercana a su costo por unidad.
-                unit = actual["costo"] / actual["escala"] if actual["escala"] else 0.0
-                c_base = float(rb["Costo"].sum()) / actual["escala"] if (
-                    actual["escala"] and not rb.empty) else None
-                c_porc = float(po["Costo"].iloc[0]) if not po.empty else None
-                de = costo_de_origen(unit, c_base, c_porc)
-                k_modo = f"rec_carta_det_modo_{actual['cod']}"
-                if st.session_state.get(k_modo) not in modos:
-                    st.session_state[k_modo] = (_MODOS[1] if de == "porc"
-                                                else _MODOS[0])
-                with st.container(key="rec_carta_det_modo", width="content"):
-                    modo = st.selectbox("De dónde sale", modos, key=k_modo,
-                                        label_visibility="collapsed", width=140)
-            else:
-                modo = modos[0]
-            # Los saltos a Movimientos (regla #647): la curva del precio de
-            # este corte y, si su último porcionamiento tiene el peso fuera
-            # de lo habitual, ese porcionamiento en «Para revisar».
-            if modo == _MODOS[1] and ult and ult["cod_de"]:
-                if st.button("Ver curva", key="rec_carta_base_curva",
-                             help="La curva de su precio, porcionamiento por "
-                                  "porcionamiento, y qué la movió —el insumo, "
-                                  "la merma o el gramaje—, en Movimientos › "
-                                  "Rendimiento."):
-                    _saltar_a_movimientos("rend", ult, actual["cod"])
-                if ult["raro"] and _reciente(df_po, ult["fecha"]):
-                    if st.button(
-                            "Revisar", key="rec_carta_base_revisar",
-                            help=f"PO-{ult['doc']} ({ult['fecha']:%d/%m/%y}) "
-                                 f"le asignó {ult['kgu']:,.3f} por unidad y lo "
-                                 f"habitual es {ult['hab']:,.3f}: su costo, y "
-                                 "el de esta receta, pueden estar mal. Verlo en "
-                                 "Movimientos › Para revisar."):
-                        _saltar_a_movimientos("rev", ult, actual["cod"])
-            if len(ruta) > 1:
-                st.button("↑ Subir", key="rec_carta_base_subir",
-                          on_click=_subir_base, args=(plato,))
-            st.button("✕", key="rec_carta_base_cerrar",
-                      on_click=_cerrar_base, args=(plato,))
-        if modo == _MODOS[1]:
-            _tabla_porcionamientos(po, actual, ult)
-            return
-        if rb.empty:
-            st.info("La receta base no tiene insumos cargados.")
-            return
-        filas = _filas_clic(rb, bases, porcs)
-        key = _key_tabla(f"rec_carta_rb_{plato}_" + "-".join(x["cod"] for x in ruta),
-                         [f"{x['cod']}:{x['nombre']}" for x in filas])
-        st.dataframe(_con_flecha(rb, porcs), key=key,
-                     on_select=partial(_al_elegir_en_base, key, plato, ruta, filas),
-                     selection_mode="single-row", hide_index=True, row_height=27,
-                     height=alturas.por_filas(len(rb), px_fila=27, extra=38,
-                                              minimo=0, rol=alturas.CARTA_RECETA),
-                     column_config=_CFG_RECETA)
-        total = float(rb["Costo"].sum())
-        pie = f"Lo que lleva un plato: S/ {total:,.2f}"
-        if abs(total - actual["costo"]) > max(0.01, 0.01 * abs(actual["costo"])):
-            # Las líneas que no cuadran las costea el precio promedio del
-            # almacén, no la receta (45 de 866 al 2026-09-30).
-            pie += (f" (en la receta: S/ {actual['costo']:,.2f}, promedio del "
-                    "almacén)")
-        pie += "."
-        if any(_abre(x) for x in filas):
-            pie += " ▸ abre lo de adentro."
-        st.caption(pie)
-
-
 def _cant(v, unid):
     return f"{v:,.3f}".rstrip("0").rstrip(".") + (f" {unid.lower()}" if unid else "")
 
@@ -1261,10 +1173,7 @@ def _lo_vendido(ventas):
     if not callable(ventas):
         return ventas
     with st.spinner("Cargando lo vendido… la primera vez del día tarda"):
-        agg = ventas()
-    if agg is not None:
-        st.session_state[_K_VENTAS_OK] = True
-    return agg
+        return ventas()
 
 
 _K_SIM_ABIERTO = "rec_carta_sim_abierto"
@@ -1295,38 +1204,155 @@ def _modal_simulador(cod, nombre, precio, df_rv):
                                   on_dismiss=_cerrar_simulador)(_contenido))()
 
 
-def _panel(f, df_rv, dias, ventas=None, df_rb=None, porcionamientos=None):
-    """Al costado de la tabla (regla #570): el producto elegido, su receta
-    (o lo que descarga) y, debajo, la dona / el Sankey / su costo en el
-    tiempo — o la receta base que se abrió con un clic en la receta (regla
-    #572). Lo que era la parte de abajo de «Composición» (regla #556), más
-    el costo con que se vendió (regla #557).
+# ─── La fecha de la tarjeta (regla #657) ──────────────────────────────────
+def ctx_fecha(agg, hoy=None):
+    """El `ctx` del panel de fecha de la tarjeta: Recetas no tiene fecha en
+    la franja (`app.py` no publica uno), así que se arma acá con los topes de
+    lo VENDIDO —primer y último día con venta— y su default, los últimos 3
+    meses. Con el mismo dict el botón escribe y la vista lee: la clave es
+    `estado_rango.clave_rango("Recetas", False, "carta")`. None sin ventas.
+    Pura salvo por la fecha de hoy."""
+    if agg is None or agg.empty or "dia" not in agg.columns:
+        return None
+    dias = pd.to_datetime(agg["dia"], errors="coerce").dropna()
+    if dias.empty:
+        return None
+    fmin, fmax = dias.min().date(), dias.max().date()
+    hoy = hoy or datetime.date.today()
+    defecto = next((r for c, _n, _g, r in atajos_tarjeta(min(fmax, hoy), (fmin, fmax))
+                    if c == ATAJO_INICIAL), (fmin, fmax))
+    return {"k_rango": clave_rango("Recetas", False, CATEGORIA_FECHA),
+            "fecha_min": fmin, "fecha_max": fmax, "reporte": "Recetas",
+            "usa_carga_rango": False, "hoy": hoy, "rango_default": defecto,
+            "rango_default_cat": {CATEGORIA_FECHA: defecto}}
 
-    Desde la #572 cabe en una pantalla de 1366×768: sin la línea de números
-    del producto (a pedido), con «Simular» en el renglón del nombre y el
-    gráfico de 200px. «Simular» abre una modal desde la regla #656."""
+
+# ─── El log de las recetas base (regla #657) ──────────────────────────────
+@st.cache_data(ttl=3600, show_spinner=False, max_entries=2)
+def _ediciones_cacheable(sello_m, sello_d, sello_rb, version=sr.VERSION):
+    """Las ediciones de las recetas base (`simulador_receta.ediciones_base`):
+    ~6 s sobre el log entero, por eso en caché por los tres sellos."""
+    mlog = _cargar_cacheable(sr.ARCHIVO_LOG, sello_m)
+    dlog = _cargar_cacheable(sr.ARCHIVO_LOG_DET, sello_d)
+    return sr.ediciones_base(mlog, dlog, cargar("recetabase.parquet"))
+
+
+def ediciones_bases():
+    """Las ediciones de las recetas base, o None si el log no está en R2 —
+    faltan las filas `recetabaselog` y `recetabaselogdet` del Sheet—, no hay
+    secrets (modo demo) o la lectura falla: la vista sigue sin las marcas.
+    Se pregunta el sello ANTES de leer: `data.cargar` de un parquet que no
+    existe pinta un error en pantalla."""
+    if not secrets_disponibles():
+        return None
+    s_m, s_d = sello_datos(sr.ARCHIVO_LOG), sello_datos(sr.ARCHIVO_LOG_DET)
+    if not (s_m and s_d):
+        return None
+    try:
+        return _ediciones_cacheable(s_m, s_d, sello_datos("recetabase.parquet"))
+    except Exception:
+        return None
+
+
+# ─── La ficha del plato elegido (regla #657) ──────────────────────────────
+def _receta_para_sankey(df_rv, cod):
+    """La receta del parquet, como la lee el Sankey (Insumo, Costo…)."""
+    c = columnas_receta(df_rv)
+    if df_rv is None or not c["cod"]:
+        return None
+    return _receta_original(df_rv, str(cod), c["cod"], c["ins"], c["cant"],
+                            c["total"], c["cod_ins"], c["factor"])
+
+
+def _porcionados(nodos):
+    """Los cortes porcionados del árbol, cada uno una vez: `{cod: nodo}`."""
+    acc = {}
+
+    def bajar(n):
+        if n.get("hijos"):
+            for h in n["hijos"]:
+                bajar(h)
+        elif n.get("porc"):
+            acc.setdefault(n["cod"], n)
+    for n in nodos:
+        bajar(n)
+    return acc
+
+
+def _vista_porcionados(porcs, df_po):
+    """Los últimos porcionamientos de un corte del plato (regla #574), con
+    los saltos a Movimientos (regla #647). Elegido en un desplegable: en el
+    árbol, un corte no se clica."""
+    cods = list(porcs)
+    if st.session_state.get(_K_PORC) not in cods:
+        st.session_state[_K_PORC] = cods[0]
+    with st.container(horizontal=True, vertical_alignment="center",
+                      key="rec_carta_base_hdr"):
+        with st.container(key="rec_carta_det_modo", width="content"):
+            cod = st.selectbox("Corte", cods, key=_K_PORC,
+                               label_visibility="collapsed", width=230,
+                               format_func=lambda c: porcs[c]["ins"])
+        po = porcionamientos_de(df_po, cod)
+        ult = ultimo_porcionamiento(df_po, cod) if not po.empty else None
+        if ult and ult["cod_de"]:
+            if st.button("Ver curva", key="rec_carta_base_curva",
+                         help="La curva de su precio, porcionamiento por "
+                              "porcionamiento, y qué la movió —el insumo, la "
+                              "merma o el gramaje—, en Movimientos › "
+                              "Rendimiento."):
+                _saltar_a_movimientos("rend", ult, cod)
+            if ult["raro"] and _reciente(df_po, ult["fecha"]):
+                if st.button(
+                        "Revisar", key="rec_carta_base_revisar",
+                        help=f"PO-{ult['doc']} ({ult['fecha']:%d/%m/%y}) le "
+                             f"asignó {ult['kgu']:,.3f} por unidad y lo "
+                             f"habitual es {ult['hab']:,.3f}: su costo, y el "
+                             "de esta receta, pueden estar mal. Verlo en "
+                             "Movimientos › Para revisar."):
+                    _saltar_a_movimientos("rev", ult, cod)
+    n = porcs[cod]
+    actual = {"costo": float(n["costo"]),
+              "escala": float(n["cant"]) / float(n["factor"] or 1.0)}
+    _tabla_porcionamientos(po, actual, ult)
+
+
+def _cabecera_ficha(f, es_receta, rango):
+    """El renglón del nombre: el plato, de dónde es y su tipo; lo de hoy y
+    lo del rango en números; «Simular» a la derecha."""
+    cod, nombre = str(f["Cod"]), str(f["Producto"])
+    ruta_txt = " › ".join(x for x in (f["Grupo"], f["Subgrupo"]) if x)
+    hoy = ("sin costo" if f["SinCosto"] else
+           f"hoy S/ {f['Costo']:,.2f} · {f['Pct']:.1f} %")
+    cifras = [hoy]
+    if rango is not None:
+        vend = f"{f.get('Vendidos', 0):,.0f} vendidos en el rango"
+        if f.get("PctVendido"):
+            vend += f" al {f['PctVendido']:.1f} %"
+        cifras.append(vend)
+    with st.container(horizontal=True, vertical_alignment="center",
+                      key="rec_carta_plato_hdr"):
+        st.markdown(
+            f'<p class="chart-card-hdr">{escape(nombre)} '
+            f'<span class="rec-ficha-ruta">{escape(ruta_txt)} · '
+            f'{escape(f["Tipo"])}</span></p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="rec-ficha-cifras">{escape(" · ".join(cifras))}</p>',
+                    unsafe_allow_html=True)
+        if es_receta:
+            st.button("Simular", key="rec_carta_simular",
+                      icon=":material/tune:", help=AYUDA_SIMULAR,
+                      on_click=_abrir_simulador, args=(cod,))
+
+
+def _ficha(f, df_rv, agg, rango, porcionamientos=None):
+    """Debajo de la tabla (regla #657): el plato elegido. A la izquierda su
+    receta como árbol —o lo que descarga, si no tiene—; a la derecha la
+    evolución de su costo, la dona Costo/Utilidad, el Sankey o sus
+    porcionados. «Simular» abre la modal de la regla #656."""
     cod, nombre = str(f["Cod"]), str(f["Producto"])
     es_receta = f["Tipo"] == "Receta"
-    bases = codigos_base(df_rb)
-    # Los porcionamientos, sólo si hay receta que marcar (regla #574): el
-    # parquet es chico (12.368 filas) y lo comparte «Revisar recetas».
-    df_po = (porcionamientos() if callable(porcionamientos) else porcionamientos) \
-        if es_receta else None
-    porcs = codigos_porcionados(df_po)
+    df_po = porcionamientos() if callable(porcionamientos) else porcionamientos
     with st.container(key="rec_carta_plato"):
-        ruta_txt = " › ".join(x for x in (f["Grupo"], f["Subgrupo"]) if x)
-        with st.container(horizontal=True, vertical_alignment="center",
-                          key="rec_carta_plato_hdr"):
-            st.markdown(f'<p class="chart-card-hdr">{escape(nombre)} · '
-                        f'{escape(ruta_txt)} · {escape(f["Tipo"])}'
-                        + '</p>', unsafe_allow_html=True)
-            if es_receta:
-                # Acá y no adentro de la receta: un renglón menos. Abre el
-                # simulador en una modal ancha (regla #656): al costado de la
-                # tabla el panel mide ~460px y el árbol pide ~700.
-                st.button("Simular", key="rec_carta_simular",
-                          icon=":material/tune:", help=AYUDA_SIMULAR,
-                          on_click=_abrir_simulador, args=(cod,))
+        _cabecera_ficha(f, es_receta, rango)
         sin_costo_neto = float(f.get("SinCostoNeto", 0.0))
         if sin_costo_neto > 0:
             # Dos historias distintas con el mismo número: el que HOY no
@@ -1337,77 +1363,87 @@ def _panel(f, df_rv, dias, ventas=None, df_rb=None, porcionamientos=None):
             causa = ("el POS no le tiene costo" if f["SinCosto"] else
                      "se vendió antes de que el POS se lo cargara")
             st.markdown(
-                f'<p style="color:{ADVERTENCIA_TEXTO};margin:0">'
-                f'S/ {sin_costo_neto:,.0f} de lo vendido en {dias} '
-                f'días entró al FoodCost con costo 0: {causa}, y así queda '
-                f'guardado.</p>', unsafe_allow_html=True)
+                f'<p class="rec-ficha-aviso">S/ {sin_costo_neto:,.0f} de lo '
+                f'vendido en el rango entró al FoodCost con costo 0: {causa}, '
+                'y así queda guardado.</p>', unsafe_allow_html=True)
         if es_receta and st.session_state.get(_K_SIM_ABIERTO) == cod:
             _modal_simulador(cod, nombre, float(f["Precio"]), df_rv)
-        if es_receta:
-            r, _ = receta_del_plato(
-                df_rv, cod, nombre, titulo=False,
-                dibujar_lectura=partial(_tabla_receta, plato=cod, bases=bases,
-                                        porcs=porcs))
-        else:
-            r = None
-            _descarga(f)
-        e = _estado_base(cod)
-        if e.get("ruta"):
-            _bloque_base(df_rb, df_po, cod, e["ruta"], bases, porcs)
-            return
-        with _card("rec_carta_mini"):
-            # NO `st.tabs`: dibuja las dos pestañas y esconde la otra, y
-            # un `plotly_events` escondido mide 0 y alterna su alto sin
-            # fin — trababa la página entera (regla #500). Y `persist_state`:
-            # mientras hay una receta base abierta este control no se
-            # dibuja, y al cerrarla vuelve como quedó.
-            vista = st.segmented_control(
-                "Vista", ["Costo / Utilidad", "Sankey", "En el tiempo"],
-                default="Costo / Utilidad", key="rec_carta_mini_vista",
-                label_visibility="collapsed", persist_state="page")
-            alto = alturas.CARTA_FIG
-            if vista == "En el tiempo":
-                _dib_costo_en_el_tiempo(f, ventas, alto=alto)
-            elif vista == "Sankey":
-                if r is None:
-                    st.info("Sin receta no hay Sankey: el Sankey reparte "
-                            "el costo entre los insumos de la receta.")
-                else:
-                    _dib_sankey_insumo_costo(r, nombre, cod, alto=alto)
-            elif f["SinCosto"]:
-                # Sin costo, la dona dibujaría «0 % de costo» y toda la
-                # porción como utilidad: una cifra que no existe.
-                st.info("Sin costo cargado: no hay cómo repartir el "
-                        "precio entre costo y utilidad.")
+        nodos = []
+        # columnas-internas: la receta | su evolución, adentro de la ficha
+        # del plato (regla #657); no parte la página.
+        c_rec, c_evo = st.columns(list(PROPORCION_FICHA), gap="medium")
+        with c_rec:
+            if es_receta:
+                with st.container(key="rec_carta_arbol"):
+                    nodos = receta_lectura(cod, df_rv)
             else:
-                _dib_torta_costo_utilidad(f["Neto"], f["Costo"], f["Pct"],
-                                          cod, alto=alto)
+                _descarga(f)
+        ediciones = ediciones_bases() if nodos else None
+        # Sin las que no movieron el plato ni un céntimo: un ▼ que dice
+        # «+S/ 0,00» es ruido.
+        marcas = [m for m in (sr.marcas_plato(nodos, ediciones) if ediciones else [])
+                  if abs(m["esp"]) >= 0.01]
+        picos = sr.picos_plato(agg, cod, nodos, df_po)
+        porcs = _porcionados(nodos)
+        with c_evo:
+            with st.container(key="rec_carta_evo"):
+                opciones = ["Evolución", "Costo / Utilidad", "Sankey"]
+                if porcs and df_po is not None:
+                    opciones.append("Porcionados")
+                if st.session_state.get(_K_FICHA_VISTA) not in opciones:
+                    st.session_state[_K_FICHA_VISTA] = opciones[0]
+                # NO `st.tabs`: dibuja todas y esconde las otras, y un gráfico
+                # escondido mide 0 (regla #500).
+                vista = st.segmented_control(
+                    "Vista", opciones, key=_K_FICHA_VISTA,
+                    label_visibility="collapsed") or opciones[0]
+                if vista == "Evolución":
+                    _dib_evolucion(f, agg, rango, marcas, picos)
+                    _lista_en_rango(marcas, picos, rango)
+                    if es_receta and ediciones is None:
+                        st.caption("Sin las marcas de las recetas base: falta "
+                                   "su log en R2 (las filas «recetabaselog» y "
+                                   "«recetabaselogdet» del Sheet).")
+                elif vista == "Sankey":
+                    r = _receta_para_sankey(df_rv, cod) if es_receta else None
+                    if r is None:
+                        st.info("Sin receta no hay Sankey: el Sankey reparte "
+                                "el costo entre los insumos de la receta.")
+                    else:
+                        _dib_sankey_insumo_costo(r, nombre, cod,
+                                                 alto=alturas.CARTA_EVOLUCION)
+                elif vista == "Porcionados":
+                    _vista_porcionados(porcs, df_po)
+                elif f["SinCosto"]:
+                    # Sin costo, la dona dibujaría «0 % de costo» y toda la
+                    # porción como utilidad: una cifra que no existe.
+                    st.info("Sin costo cargado: no hay cómo repartir el "
+                            "precio entre costo y utilidad.")
+                else:
+                    _dib_torta_costo_utilidad(f["Neto"], f["Costo"], f["Pct"],
+                                              cod, alto=alturas.CARTA_EVOLUCION)
 
 
 # ─── La vista ─────────────────────────────────────────────────────────────
 def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
                           porcionamientos=None):
-    """La vista entera: UNA tarjeta con la carta a la izquierda y el
-    producto elegido a la derecha (regla #570). `df` es
+    """La vista entera: UNA tarjeta con la carta a todo el ancho y, debajo,
+    la ficha del producto elegido (regla #657). `df` es
     `cartacosteada.parquet` (o None si no se pudo cargar); `df_rv`,
     recetaventa.parquet (las recetas y su fecha); `ventas`, lo vendido por
     producto y día, o la FUNCIÓN que lo carga (`data.venta_por_producto_dia`,
     que es como lo pasa el dispatcher: regla #573), o None; `df_rb`,
-    recetabase.parquet (para abrir una receta base), o None;
-    `porcionamientos`, porcionamientos.parquet o la función que lo carga
-    (regla #574), o None.
+    recetabase.parquet (lo lee el árbol por su caché; se acepta por la firma
+    del dispatcher); `porcionamientos`, porcionamientos.parquet o la función
+    que lo carga (regla #574), o None.
 
-    Lo vendido se carga SÓLO si algo en pantalla lo usa: la columna
-    «Vendidos» (con «Más columnas»), el filtro «Sin costo» (se ordena por
-    lo vendido) o «En el tiempo». Es leer ventas.parquet casi entero —237.604
-    filas y 96 MB; 10 s en frío en la laptop, bastante más en Cloud— y hasta
-    el 2026-09-30 se pagaba al abrir la vista aunque la columna estuviera
-    escondida.
+    Lo vendido se carga SIEMPRE desde la regla #657: la tabla lo muestra a
+    la vista y la fecha de la tarjeta sale de sus días. Es leer
+    ventas.parquet casi entero —10 s en frío en la laptop, bastante más en
+    Cloud—; la segunda vez es la caché (regla #573).
 
-    Desde la regla #574, a pedido, el título es sólo «Carta costeada» (lo
-    demás, al pasar el cursor) y en SU renglón van los desplegables —qué
-    ver, la oferta, grupo, tipo y el buscador—, con el estilo de la cabecera
-    de Ventas › Por hora. Los tres interruptores bajaron al renglón de
+    El renglón del título lleva los desplegables —qué ver, la oferta, grupo,
+    tipo, el buscador— y la fecha (regla #574); los interruptores, el de
     encima de la tabla."""
     ss = st.session_state
     # LO ELEGIDO, ANTES DE DIBUJAR NADA: la tabla nueva sale con eso marcado.
@@ -1433,23 +1469,18 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
         fechas = fechas_de_receta(df_rv)
         carta["Actualizado"] = pd.to_datetime(
             carta["Cod"].map(fechas), errors="coerce").fillna(_SIN_FECHA)
-        # La ventana de «Vendidos» se lee ANTES de dibujar su selector, que va
-        # más abajo, encima de la tabla: Streamlit ya dejó en el estado lo
-        # que se eligió en el clic que disparó esta corrida.
-        ventana = ss.get(_K_VENTANA)
-        if ventana not in VENTANAS_VENDIDOS:
-            ventana = "90 días"
-        dias = VENTANAS_VENDIDOS[ventana]
         grupos = ["Todos"] + sorted(
             g for g in carta["Grupo"].unique()
             if g and (vi or g.casefold() != GRUPO_VENTA_INTERNA.casefold()))
         hay_oferta = bool((carta["Oferta"] != "").any())
+        agg = _lo_vendido(ventas)
+        ctx = ctx_fecha(agg)
 
         # EL RENGLÓN DEL TÍTULO (regla #574): desplegables sin caja, con un
         # subrayado —los de Ventas › Por hora—; el nombre de cada uno aparece
-        # debajo al pasar el cursor. El ancho lo pone Python (`width=`). En
-        # «Combos» la oferta y el tipo se apagan en vez de esconderse: un
-        # widget que no se dibuja pierde su estado.
+        # debajo al pasar el cursor. En «Combos» la oferta y el tipo se
+        # apagan en vez de esconderse: un widget que no se dibuja pierde su
+        # estado. La fecha, AL FINAL (regla #657).
         with cab:
             with st.container(key="rec_carta_cab_ver", width="content"):
                 ver = st.selectbox("Ver", VER, key=_K_VER,
@@ -1478,19 +1509,31 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
                 buscar = st.text_input("Buscar", key="rec_carta_buscar",
                                        placeholder="Buscar producto",
                                        label_visibility="collapsed", width=170)
+            if ctx is not None:
+                with st.container(key="rec_carta_cab_fecha", width="content"):
+                    selector_fecha_tarjeta("rec_carta_f", None,
+                                           categoria=CATEGORIA_FECHA, ctx=ctx)
 
-        # Lo vendido, sólo si algo lo muestra (ver el docstring). Todo se lee
-        # del estado: los controles que lo piden ya se dibujaron o van más
-        # abajo, y Streamlit dejó ahí lo del clic que disparó la corrida.
-        pide_ventas = (bool(ss.get(_K_MAS)) or tipo == "Sin costo"
-                       or ss.get("rec_carta_mini_vista") == "En el tiempo"
-                       or bool(ss.get(_K_VENTAS_OK)))
-        agg = _lo_vendido(ventas) if pide_ventas else None
-        carta, rango = con_ventas(carta, agg, dias)
+        rango = rango_tarjeta(CATEGORIA_FECHA, ctx) if ctx is not None else None
+        carta, rango = con_ventas(carta, agg, rango=rango)
 
-        # Sin la línea de números que iba acá (cuántos, mediana, cuántos
-        # sobre el 35 %…): se quitó a pedido el 2026-09-30, con la del
-        # producto, para que la tarjeta entre en una pantalla (regla #572).
+        # Encima de la tabla, lo que cambia QUÉ filas tiene. A la IZQUIERDA:
+        # a la derecha lo taparía la barrita de íconos que `st.dataframe`
+        # asoma sobre su esquina.
+        with st.container(horizontal=True, vertical_alignment="center",
+                          key="rec_carta_mas_fila"):
+            st.toggle("Inactivos", key="rec_carta_inactivos",
+                      help="Sumar los productos que el POS tiene inactivos")
+            st.toggle("Venta interna", key="rec_carta_vi",
+                      help="Sumar los productos «(Cst)» de Venta Interna, "
+                           "que se venden a precio de costo y por eso pasan "
+                           "el 100 %")
+            solo_vend = st.toggle(
+                "Sólo vendidos en el rango", key=_K_SOLO_VEND,
+                disabled=rango is None,
+                help="Esconder los productos que no se vendieron en el rango "
+                     "de la fecha")
+
         if ver == "Combos":
             t = filtrar(carta, grupo, "Combo", buscar, venta_interna=vi)
             vacio = "No hay combos con este filtro."
@@ -1498,6 +1541,9 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
             t = filtrar(carta, grupo, tipo, buscar, venta_interna=vi,
                         oferta=oferta)
             vacio = "Ningún producto con este filtro."
+        if solo_vend and rango is not None:
+            t = t[t["Vendidos"] > 0]
+            vacio = "Ningún producto de este filtro se vendió en el rango."
         if t.empty:
             st.info(vacio)
             return
@@ -1505,64 +1551,27 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
         pos = t.index[t["Cod"] == ss.get(_K_FOCO)]
         pos = int(pos[0]) if len(pos) else 0
 
-        # columnas-internas: la tabla y, AL COSTADO, el producto elegido
-        # (regla #570); es la tarjeta de la vista, no parte la página.
-        c_tabla, c_panel = st.columns(list(PROPORCION), gap="medium")
-        with c_tabla:
-            # Encima de la tabla, lo que cambia QUÉ filas y columnas tiene:
-            # los tres interruptores y, con «Más columnas», la ventana de
-            # «Vendidos». A la IZQUIERDA: a la derecha lo taparía la barrita
-            # de íconos que `st.dataframe` asoma sobre su esquina.
-            with st.container(horizontal=True, vertical_alignment="center",
-                              key="rec_carta_mas_fila"):
-                mas = st.toggle(
-                    "Más columnas", key=_K_MAS,
-                    help="En la carta: Margen, Vendidos, P. neto, Tipo, "
-                         "Actualizado y Última venta. En Combos: la banda de "
-                         "costos (mínimo, promedio, esperado, máximo y real). "
-                         "La tabla se desliza de costado; el producto elegido "
-                         "sigue al lado.")
-                st.toggle("Inactivos", key="rec_carta_inactivos",
-                          help="Sumar los productos que el POS tiene inactivos")
-                st.toggle("Venta interna", key="rec_carta_vi",
-                          help="Sumar los productos «(Cst)» de Venta Interna, "
-                               "que se venden a precio de costo y por eso pasan "
-                               "el 100 %")
-                if mas and ver != "Combos" and rango is not None:
-                    with st.container(key="rec_carta_cab_vend", width="content"):
-                        st.selectbox(
-                            "Vendidos en", list(VENTANAS_VENDIDOS),
-                            index=list(VENTANAS_VENDIDOS).index("90 días"),
-                            format_func=lambda x: f"Vendidos en {x}",
-                            key=_K_VENTANA, label_visibility="collapsed",
-                            width=160, persist_state="page")
-            if ver == "Combos":
-                _tabla_combos(t, pos, mas)
-                st.caption(
-                    "Con la cantidad de la ficha y el costo de HOY de cada plato. "
-                    "Esperado: cada opción pesada por lo que eligieron los "
-                    "clientes; Real: lo servido en 90 días.")
-            else:
-                _tabla_carta(t, pos, rango, mas, dias)
-                pie = (f"Ámbar sobre {_UMBRAL_COSTO_OK} %, rojo sobre "
-                       f"{_UMBRAL_COSTO_WARN} %.")
-                if tipo == "Sin costo":
-                    pie = "Ordenada por lo vendido."
-                if oferta:
-                    pie += " Impresa: con botón del 1 al 19 en el POS."
-                if n_sin_precio:
-                    pie += (f" {n_sin_precio} sin precio de Salón (S/ 1 o menos) "
-                            "no se muestran.")
-                if rango is not None:
-                    # «¿Vendidos cuándo?» (preguntado el 2026-09-29): la
-                    # ventana termina en el último día con venta, no hoy.
-                    # Con el año del inicio si no es el del fin: con «1 año»
-                    # decía «del 29/09 al 28/09/2026».
-                    desde = (f"{rango[0]:%d/%m}" if rango[0].year == rango[1].year
-                             else f"{rango[0]:%d/%m/%Y}")
-                    pie += f" Vendidos: del {desde} al {rango[1]:%d/%m/%Y}."
-                elif pide_ventas:
-                    pie += " No se pudieron leer las ventas: sin «Vendidos»."
-                st.caption(pie)
-        with c_panel:
-            _panel(t.iloc[pos], df_rv, dias, agg, df_rb, porcionamientos)
+        if ver == "Combos":
+            _tabla_combos(t, pos)
+            st.caption(
+                "Con la cantidad de la ficha y el costo de HOY de cada plato. "
+                "Esperado: cada opción pesada por lo que eligieron los "
+                "clientes; Real: lo servido en 90 días.")
+        else:
+            _tabla_carta(t, pos, rango)
+            pie = (f"% de costo: ámbar sobre {_UMBRAL_COSTO_OK} %, rojo sobre "
+                   f"{_UMBRAL_COSTO_WARN} %.")
+            if tipo == "Sin costo":
+                pie = "Ordenada por lo vendido."
+            if n_sin_precio:
+                pie += (f" {n_sin_precio} sin precio de Salón (S/ 1 o menos) "
+                        "no se muestran.")
+            if rango is not None:
+                desde = (f"{rango[0]:%d/%m}" if rango[0].year == rango[1].year
+                         else f"{rango[0]:%d/%m/%Y}")
+                pie += (f" Vendidos, venta neta, % vendido y sin costo: del "
+                        f"{desde} al {rango[1]:%d/%m/%Y}.")
+            elif ventas is not None:
+                pie += " No se pudieron leer las ventas: sin lo vendido."
+            st.caption(pie)
+        _ficha(t.iloc[pos], df_rv, agg, rango, porcionamientos)

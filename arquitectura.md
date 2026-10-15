@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-656 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+657 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (212)
 
@@ -960,7 +960,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (177)
+**Decisiones de diseño y UX** (178)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1139,6 +1139,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#651** — «Análisis de diferencias» mira los COMBOS, no descarta las líneas sin precio y reconoce lo…
 - **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
 - **#655** — «Costo por kg útil» muestra de dónde sale cada número: la ventana dice sus días y empieza a…
+- **#657** — Costo Carta es «la tabla primero»: la carta a todo el ancho con TODAS sus columnas, una fecha…
 
 **Mantenimiento y trampas del lenguaje** (16)
 
@@ -51452,6 +51453,90 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-15.)
 
+657. **Costo Carta es «la tabla primero»: la carta a todo el ancho con
+     TODAS sus columnas, una fecha que manda sobre lo vendido, y debajo la
+     ficha del plato —la receta como árbol con la fecha de cada receta
+     base, y la evolución de su costo con las ediciones de sus recetas base
+     y los picos—.**
+     2026-10-15, a pedido —«quisiera tener como vista principal
+     inicialmente una tabla, en donde figuren todas las columnas
+     incluidas»—, opción B del boceto
+     (https://claude.ai/artifact/JFkrxwH2wCipPTGQey1TJ5), con el selector
+     de fecha «el mismo que uso en los demás». En
+     `graficos/carta_costeada.py` (la vista), `simulador_receta.py`
+     (`ediciones_base`, `marcas_plato`, `picos_plato`),
+     `graficos/simulador_plato.py::receta_lectura` + el modo lectura de su
+     `.js`, `graficos/alturas.py::CARTA_EVOLUCION`, `estilos/_80_cards.py`
+     y `test_graficos.py::_pruebas_costo_carta_ficha`. Reemplaza el panel
+     al costado de la #570 y el «Más columnas».
+
+     **La tabla:** dieciséis columnas —las del rango (Vendidos, Venta neta,
+     % vendido, Sin costo; `COLUMNAS_RANGO`) incluidas—, con Grupo,
+     Subgrupo y Producto fijas: no entra en una laptop (~1.360px contra
+     ~1.150) y se desliza de costado. «Carta» dice «Impresa» en las 44 de
+     605 que lo son, en vez de una columna «Oferta» con la misma palabra en
+     todas. «Sólo vendidos en el rango» (apagado) esconde las 320 que no
+     se vendieron en 90 días. Lo vendido se carga SIEMPRE: está a la
+     vista, y la fecha sale de sus días (deja de valer la carga perezosa de
+     la #573 para esta vista; la segunda vez es la caché).
+
+     **La fecha es el panel de las tarjetas** (`selector_fecha_tarjeta`,
+     #616) con un ctx PROPIO (`ctx_fecha`): Recetas no tiene fecha en la
+     franja y `franja_fecha.contexto()` trae el de OTRO reporte —el último
+     que publicó—, así que leerlo daría los topes y la clave de aquél. Los
+     topes son el primer y el último día con venta; la clave,
+     `rango_cat_Recetas_carta`; abre en «Últimos 3 meses» (los 90 días de
+     antes, con nombre de atajo). Todo vive dentro del fragment de la
+     sección: el panel no necesita bandera de escalada.
+
+     **La ficha, debajo** (`PROPORCION_FICHA` 1,45 : 1), sin techo: la
+     página baja, como en Compras › Producto (#382). Con la pila que
+     encaja (#533) una sección más alta que la pantalla se desliza libre
+     por dentro y encaja recién al salir de ella.
+     - **La receta es el árbol del simulador en modo lectura**
+       (`receta_lectura`, `lectura: True` en el componente): plegado,
+       «Desplegar todo», y en cada receta base su FECH REG (el último
+       guardado, confirmado con el log). El componente pone `min-width: 0`
+       en esa tabla: la de la modal pide 680px y en ~660 cortaba «% del
+       plato».
+     - **La evolución** (`_dib_evolucion`): barras de lo vendido por mes
+       (las del rango más fuertes, el rango sombreado) y la línea del costo
+       con que se vendió —la foto del POS, #557— en un eje APARTE creado
+       después de los `update_*axes`; el de hoy, punteado. **En una barra
+       el hover va en `hovertext`, no en `text`**: `text` se escribe
+       ADENTRO de la barra y salían rayas ilegibles.
+     - **▼ las ediciones de sus recetas base** (`ediciones_base` →
+       `marcas_plato`): el log del Almacén (`MRECETABASE_LOG` /
+       `DRECETABASE_LOG`) guarda la receta ANTES de cada guardado; dos
+       guardados a menos de dos horas son una edición, y lo que movió se
+       mide con los precios de ANTES para no cargarle la suba de precios del
+       medio. Por plato = la edición × lo que lleva un plato de esa base,
+       sólo si la usa HOY; las de menos de un céntimo no se marcan. 517
+       ediciones en 5 s: en caché por los tres sellos. Llegan por dos filas
+       nuevas del Sheet, `recetabaselog` y `recetabaselogdet`
+       (`consulta_sheet_log`/`_det`); sin ellas la vista dice que faltan y
+       sigue. Se pregunta el sello ANTES de leer: `data.cargar` de un
+       parquet que no existe pinta un error.
+     - **● los picos** (`picos_plato`): días seguidos a más de 2,5 veces la
+       mediana de los 90 días anteriores y S/ 3 por encima, con su
+       POSIBLE causa: un porcionamiento de sus cortes —o de los hermanos
+       del mismo insumo, porque la receta pudo apuntar a otro corte— a 1,8
+       veces su precio habitual, entre 4 días antes y el día siguiente. El
+       Lomo Saltado del 24/08/26: S/ 112,77 por unidad contra 25,32, el
+       porcionamiento 2608000179 con 87 % de merma.
+     - **«Porcionados»**, cuarta vista del lado derecho cuando el árbol
+       tiene cortes: los porcionamientos del elegido y los saltos «Ver
+       curva» / «Revisar» de la #647, que antes se abrían con un clic en la
+       receta.
+
+     **Lo que se fue:** el panel al costado (#570), «Más columnas», la
+     ventana de «Vendidos» (#572), y la receta clicable con sus recetas
+     base de a una (`_bloque_base`, `_cerrar_base`): el árbol las muestra
+     todas.
+
+     (2026-10-15.)
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51464,7 +51549,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#656**; la próxima toma el número siguiente.
+> última regla es la **#657**; la próxima toma el número siguiente.
 
 >
 

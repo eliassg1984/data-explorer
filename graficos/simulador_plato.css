@@ -61,6 +61,12 @@ tr.porc td { color: var(--text-muted); font-size: 11.5px; padding-top: 1px; }
 .por { width: 150px; padding: 3px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); }
 .aviso { margin: 0; font-size: 12px; color: var(--text-secondary); min-height: 1em; }
 .vacio { color: var(--text-muted); }
+.sec.chico { padding: 2px 9px; font-size: 12px; margin-left: auto; }
+.tabla.lectura { max-height: none; }
+/* En la ficha de Costo Carta el árbol mide ~660px: sin el piso de 680 de la
+   modal, que lo hacía deslizarse de costado y cortaba «% del plato». */
+.tabla.lectura table { min-width: 0; }
+.barra { display: inline-block; height: 6px; margin-right: 6px; vertical-align: middle; border-radius: 3px; background: var(--border-lavender); }
 
 .gris { color: var(--text-muted); }
 .ok { color: var(--success-text); font-weight: 600; }
