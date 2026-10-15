@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-657 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+658 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (212)
+**CSS y estilos** (213)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -246,6 +246,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
 - **#649** — La barra de las tarjetas «por período» de Movimientos es LISA y resalta UNA parte, elegida…
 - **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
+- **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
 
 **Layout y alturas** (93)
 
@@ -960,7 +961,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (178)
+**Decisiones de diseño y UX** (179)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1140,6 +1141,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
 - **#655** — «Costo por kg útil» muestra de dónde sale cada número: la ventana dice sus días y empieza a…
 - **#657** — Costo Carta es «la tabla primero»: la carta a todo el ancho con TODAS sus columnas, una fecha…
+- **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
 
 **Mantenimiento y trampas del lenguaje** (16)
 
@@ -51537,6 +51539,63 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (2026-10-15.)
 
 
+658. **La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de
+     factor o de unidad de un artículo de la receta es la causa más común
+     de un pico del costo al vender, y se marca en la evolución.**
+     2026-10-15, a pedido —«programa en la ficha de Costo Carta la lectura
+     de la fila auditoriacostos»—. En `simulador_receta.py`
+     (`cambios_auditoria`, `cambios_del_plato`, `_causa_auditoria` y el
+     `cambios=` de `picos_plato`), `graficos/carta_costeada.py`
+     (`cambios_auditoria`, la ◆ de `_dib_evolucion`, `_lista_en_rango`),
+     `estilos/_80_cards.py` y `test_graficos.py::_pruebas_costo_carta_ficha`.
+
+     **De dónde sale:** `INFSEGURIDAD.DBO.MMOVIMIENTO`, la auditoría campo
+     por campo de las pantallas del POS y del Almacén (quién, cuándo, valor
+     anterior y nuevo; las recetas NO están, para eso el log de la #657).
+     La fila `auditoriacostos` del Sheet
+     (`simulador_receta.consulta_sheet_auditoria`) trae, desde 2025, sólo
+     los campos que mueven un costo —«ARTICULOS Y PRECIOS»: Factor, Unidad
+     de Salida, Unidad de Kardex y Precio de Costo; «PRODUCTOS»: Tipo y
+     Enlace Descargo del plato— con el nombre de cada unidad
+     (`ALMACEN.DBO.vUnidadMedida`, una subconsulta con nombre por lado):
+     4.219 filas al 2026-10-15. El código de «PRODUCTOS» es el `COD PLATO`.
+
+     **Lo que se limpia** (`cambios_auditoria`, 315 cambios de 4.219 filas):
+     - **ANTES vacío no es un cambio**: es un artículo que nació en ese
+       guardado (la mayoría de las filas).
+     - **El precio de costo cambia casi siempre por redondeo** (17,74825 →
+       17,748) **o por la coma** («18,1579» y «18.158»: `_numero` lee las
+       dos): cuenta sólo si salta 1,8 veces o más (`PRECIO_SALTO`).
+     - **El mismo cambio se anota dos veces** a segundos uno del otro
+       (0000539, factor 1000 → 24, dos guardados en 10 s): se queda el
+       primero si el repetido es de menos de una hora.
+     - **Un guardado es UNA línea** (`CORRELATIVO`): «factor 1000 → 1,
+       unidad de salida GRAMOS → UND».
+
+     **La causa de un pico** (`_causa_auditoria`): un cambio de un artículo
+     del árbol de HOY (recetas base abiertas) o del descargo del plato,
+     entre 7 días antes del pico y el día mismo. Si cambió el factor y bajó,
+     dice cuántas veces cuesta más una receta que lo sigue pidiendo como
+     antes: factor de antes ÷ el de después (cantidad × precio ÷ factor).
+     Medido sobre los 43 picos de las ventas al 2026-10-15 (S/ 33.063 de
+     costo de más): los porcionamientos explicaban 11 (S/ 8.543, la #657);
+     la auditoría explica otros 10 (S/ 20.107) y ninguno se pisa: 21 picos,
+     el 87 % del exceso. La Berenjena Asada del 03/12/25 (S/ 16.461): el
+     02/12 la Berenjena Mediana pasó de factor 1000 a 1 y de GRAMOS a UND.
+     Ventana de 4 días: 9 picos; de 7: 10; de 30: 15, con cuatro de
+     relación dudosa (cambios de 15 a 26 días antes).
+
+     **Las marcas** (`cambios_del_plato`): ◆ naranja debajo de las ▼ de las
+     recetas base, una por mes, y en la lista de debajo las del rango. Sin
+     la fila en R2 la ficha lo dice en su pie y sigue: se pregunta el sello
+     antes de leer, como el log de la #657.
+
+     **El `li` de `.stMarkdown` mide 1rem** y le gana a una clase sola: la
+     lista va con `font-size … !important`.
+
+     (2026-10-15.)
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51549,7 +51608,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#657**; la próxima toma el número siguiente.
+> última regla es la **#658**; la próxima toma el número siguiente.
 
 >
 

@@ -2380,14 +2380,22 @@ CSS = """    /* ================================================================
         line-height: 1.45;
         color: var(--text-secondary);
     }
+    /* `!important` en el tamaño: el `li` de `.stMarkdown` (1rem) le gana
+       a una clase sola. */
     .rec-evo-lista li {
         margin: 0 0 3px 0;
+        font-size: 12px !important;
+        line-height: 1.45 !important;
     }
     .rec-evo-lista .rec-evo-marca {
         color: var(--accent-deep);
     }
     .rec-evo-lista .rec-evo-pico {
         color: var(--danger-text);
+    }
+    /* ◆ los cambios de factor, unidad o descargo de la auditoría (#658). */
+    .rec-evo-lista .rec-evo-cambio {
+        color: var(--warning-text);
     }
     /* La fecha de la tarjeta, al final del renglón del título (#657): la
        píldora de las tarjetas de Compras y Movimientos. */

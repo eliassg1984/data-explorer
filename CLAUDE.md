@@ -1331,7 +1331,12 @@ lectura (`simulador_plato.receta_lectura`) y la evolución del costo con ▼
 las ediciones de sus recetas base —del log del Almacén, filas
 `recetabaselog`/`recetabaselogdet` del Sheet— y ● los picos con su posible
 causa (`simulador_receta.picos_plato`). En una `go.Bar`, el hover va en
-`hovertext`: `text` se escribe adentro de la barra.
+`hovertext`: `text` se escribe adentro de la barra. **Y lee la auditoría del
+POS** (regla #658, fila `auditoriacostos` del Sheet, de
+`INFSEGURIDAD.DBO.MMOVIMIENTO`): un cambio de factor o de unidad de un
+artículo sin ajustar las recetas explicó el 61 % del costo de más de los
+picos —la Berenjena de factor 1000 a 1—; se marca con ◆. Una fila con ANTES
+vacío es un artículo NUEVO, no un cambio.
 
 «¿Y si sube un insumo?» (vista «Alza Insumo») usa
 `simulador_receta.exposicion_carta`: cuánto de cada insumo de compra lleva

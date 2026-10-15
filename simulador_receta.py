@@ -42,6 +42,7 @@ Tocar la cuenta es subir `VERSION`: va en la clave de la caché.
 
 import math
 
+import numpy as np
 import pandas as pd
 
 VERSION = 1
@@ -604,12 +605,17 @@ def _causa_porcionamiento(po, ini):
     return ""
 
 
-def picos_plato(agg, cod, nodos=None, df_po=None, extra_cortes=()):
+def picos_plato(agg, cod, nodos=None, df_po=None, extra_cortes=(),
+                cambios=None):
     """Los días seguidos en que el plato se vendió a más de `PICO_VECES` su
     costo habitual: dicts ini, fin, unid, normal, pico, exceso y `causa` (el
-    porcionamiento raro de uno de sus cortes, si lo hubo justo antes). De los
-    50 picos medidos el 2026-10-15, ninguno grande venía de una compra; el
-    29 % del costo de más, de porcionamientos con merma imposible.
+    porcionamiento raro de uno de sus cortes, si lo hubo justo antes, y/o el
+    cambio de factor o de unidad de uno de sus artículos, de `cambios` —la
+    auditoría del POS, `cambios_auditoria`—). De los 50 picos medidos el
+    2026-10-15, ninguno grande venía de una compra; el 29 % del costo de
+    más, de porcionamientos con merma imposible, y el 59 %, de cambios de
+    factor o de unidad sin ajustar las recetas (sobre los 43 picos de ese
+    día: 26 % y 61 %, ninguno con las dos causas).
 
     Los cortes que se miran son los de la receta de HOY, `extra_cortes` (lo
     que descarga un plato directo) y los HERMANOS de todos ellos —los que
@@ -654,10 +660,226 @@ def picos_plato(agg, cod, nodos=None, df_po=None, extra_cortes=()):
         ini, fin = gr[0], gr[-1]
         normal = float(med.loc[ini])
         unid = g.loc[gr, "unidades_costeadas"]
+        causas = [_causa_porcionamiento(po, ini) if po is not None and not po.empty else "",
+                  _causa_auditoria(cambios, nodos or [], cod, ini)]
         out.append({
             "ini": ini, "fin": fin, "unid": float(unid.sum()), "normal": normal,
             "pico": float(cu.loc[gr].median()),
             "exceso": float(((cu.loc[gr] - normal) * unid).sum()),
-            "causa": _causa_porcionamiento(po, ini) if po is not None and not po.empty else "",
+            "causa": " ".join(c for c in causas if c),
         })
     return out
+
+
+# ─── La auditoría del POS (regla #658) ────────────────────────────────────
+# `INFSEGURIDAD.DBO.MMOVIMIENTO` guarda, campo por campo, quién cambió qué en
+# las pantallas del POS y del Almacén (desde 2021; las RECETAS no, para eso
+# está el log de arriba). De ahí sale la fila `auditoriacostos` del Sheet,
+# con sólo los campos que mueven un costo: el factor y las unidades de un
+# artículo —cambiarlos sin tocar las recetas que lo piden multiplica su
+# costo: la Panceta pasó de factor 1000 a 1 y la receta seguía pidiendo
+# gramos—, su precio de costo, y el tipo y el enlace de descargo de un plato.
+ARCHIVO_AUDITORIA = "auditoriacostos.parquet"
+
+CAMPOS_ARTICULO = ("Factor", "Unidad de Salida", "Unidad de Kardex")
+CAMPO_PRECIO = "Precio de Costo"
+CAMPOS_PLATO = ("Tipo Descargo", "Enlace Descargo")
+PANTALLA_ARTICULO = "ARTICULOS Y PRECIOS"
+PANTALLA_PLATO = "PRODUCTOS"
+
+DIAS_CAUSA_AUDITORIA = 7
+"""Un cambio explica un pico si es de hasta 7 días antes de que empiece
+(medido: los nueve que explicaban caían entre el mismo día y 4 días antes;
+con 30 días se sumaban cuatro de dudosa relación)."""
+
+PRECIO_SALTO = 1.8
+"""Un cambio del precio de costo cuenta sólo si se multiplica o divide por
+más de esto: casi todos son redondeos (17,74825 → 17,748) o la coma por el
+punto."""
+
+TIPOS_DESCARGO = {"R": "receta", "D": "directo", "N": "no aplica"}
+
+
+def consulta_sheet_auditoria():
+    """El SQL de la fila `auditoriacostos` del Sheet. Las unidades llegan con
+    su nombre (`vUnidadMedida`), en una subconsulta con nombre por lado."""
+    return """SELECT
+    INFSEGURIDAD.DBO.MMOVIMIENTO.nCorrelativo AS [CORRELATIVO],
+    INFSEGURIDAD.DBO.MMOVIMIENTO.ffecha AS [FECHA],
+    INFSEGURIDAD.DBO.MMOVIMIENTO.tUsuario AS [USUARIO],
+    INFSEGURIDAD.DBO.MMOVIMIENTO.tTabla AS [PANTALLA],
+    INFSEGURIDAD.DBO.MMOVIMIENTO.tId_RegistroUnico AS [CODIGO],
+    INFSEGURIDAD.DBO.MMOVIMIENTO.tCampo AS [CAMPO],
+    INFSEGURIDAD.DBO.MMOVIMIENTO.tValorAnterior AS [ANTES],
+    INFSEGURIDAD.DBO.MMOVIMIENTO.tValorActual AS [DESPUES],
+    UNIDAD_ANTES.DESCRIPCION AS [UNIDAD ANTES],
+    UNIDAD_DESPUES.DESCRIPCION AS [UNIDAD DESPUES]
+FROM INFSEGURIDAD.DBO.MMOVIMIENTO
+LEFT JOIN (SELECT ALMACEN.DBO.vUnidadMedida.CODIGO,
+                  ALMACEN.DBO.vUnidadMedida.DESCRIPCION
+           FROM ALMACEN.DBO.vUnidadMedida) AS UNIDAD_ANTES
+    ON UNIDAD_ANTES.CODIGO = INFSEGURIDAD.DBO.MMOVIMIENTO.tValorAnterior
+   AND INFSEGURIDAD.DBO.MMOVIMIENTO.tCampo LIKE 'Unidad%'
+LEFT JOIN (SELECT ALMACEN.DBO.vUnidadMedida.CODIGO,
+                  ALMACEN.DBO.vUnidadMedida.DESCRIPCION
+           FROM ALMACEN.DBO.vUnidadMedida) AS UNIDAD_DESPUES
+    ON UNIDAD_DESPUES.CODIGO = INFSEGURIDAD.DBO.MMOVIMIENTO.tValorActual
+   AND INFSEGURIDAD.DBO.MMOVIMIENTO.tCampo LIKE 'Unidad%'
+WHERE INFSEGURIDAD.DBO.MMOVIMIENTO.ffecha >= '20250101'
+  AND INFSEGURIDAD.DBO.MMOVIMIENTO.tTabla IN ('ARTICULOS Y PRECIOS', 'PRODUCTOS')
+  AND INFSEGURIDAD.DBO.MMOVIMIENTO.tCampo IN ('Factor', 'Unidad de Salida',
+      'Unidad de Kardex', 'Precio de Costo', 'Enlace Descargo', 'Tipo Descargo')"""
+
+
+def _numero(v):
+    """«18,158» y «18.158» son el mismo número (la auditoría trae los dos)."""
+    try:
+        return float(str(v).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def _vacio(s):
+    return (s == "") | (s.str.lower().isin(("nan", "none", "<na>")))
+
+
+def cambios_auditoria(df):
+    """La fila `auditoriacostos` limpia, una fila por guardado de un código:
+    t, usr, pantalla, cod, guardado (el `CORRELATIVO`) y `campos`
+    ({campo: (antes, después)}, con el nombre de la unidad si lo hay).
+
+    Se van: lo que nació en ese guardado (ANTES vacío: es un artículo nuevo,
+    no un cambio), lo que quedó igual, los precios que no saltaron
+    `PRECIO_SALTO` veces, y el mismo cambio anotado dos veces (pasa:
+    guardados a segundos uno del otro). Pura. DataFrame vacío sin datos."""
+    cols = ["t", "usr", "pantalla", "cod", "guardado", "campos"]
+    need = ("FECHA", "PANTALLA", "CODIGO", "CAMPO", "ANTES", "DESPUES")
+    if df is None or df.empty or not all(c in df.columns for c in need):
+        return pd.DataFrame(columns=cols)
+
+    def col(nombre):
+        if nombre in df.columns:
+            return _txt(df[nombre].astype("string").fillna(""))
+        return pd.Series("", index=df.index)
+    d = pd.DataFrame({
+        "t": pd.to_datetime(df["FECHA"], errors="coerce"),
+        "usr": col("USUARIO"), "pantalla": col("PANTALLA").str.upper(),
+        "cod": col("CODIGO"), "campo": col("CAMPO"),
+        "antes": col("ANTES"), "despues": col("DESPUES"),
+        "u_antes": col("UNIDAD ANTES"), "u_despues": col("UNIDAD DESPUES"),
+        "guardado": col("CORRELATIVO"),
+    }).dropna(subset=["t"])
+    for c in ("u_antes", "u_despues", "despues"):
+        d.loc[_vacio(d[c]), c] = ""
+    d = d[~_vacio(d["antes"]) & (d["antes"] != d["despues"])]
+    num = d["campo"].isin(("Factor", CAMPO_PRECIO))
+    a_n, d_n = d["antes"].map(_numero), d["despues"].map(_numero)
+    igual = num & ((a_n - d_n).abs() <= 1e-9 * (1 + a_n.abs()))
+    razon = (d_n / a_n).where((a_n > 0) & (d_n > 0))
+    chico = (d["campo"] == CAMPO_PRECIO) & ~((razon >= PRECIO_SALTO)
+                                             | (razon <= 1 / PRECIO_SALTO))
+    d = d[~igual & ~chico]
+    if d.empty:
+        return pd.DataFrame(columns=cols)
+    d = d.sort_values("t", kind="stable")
+    # El mismo cambio anotado dos veces a menos de una hora: el primero.
+    clave = ["cod", "campo", "antes", "despues"]
+    previo = d.groupby(clave, sort=False)["t"].shift()
+    d = d[previo.isna() | ((d["t"] - previo) > pd.Timedelta(hours=1))]
+    d = d.assign(_g=np.where(d["guardado"] != "", d["guardado"],
+                             d["t"].dt.floor("min").astype(str)))
+    out = []
+    for (_g, cod), x in d.groupby(["_g", "cod"], sort=False):
+        campos = {}
+        for r in x.itertuples(index=False):
+            ant = r.u_antes or r.antes
+            des = r.u_despues or r.despues
+            if r.campo == "Tipo Descargo":
+                ant = TIPOS_DESCARGO.get(r.antes, r.antes)
+                des = TIPOS_DESCARGO.get(r.despues, r.despues)
+            campos[r.campo] = (ant, des)
+        out.append({"t": x["t"].iloc[0], "usr": x["usr"].iloc[0],
+                    "pantalla": x["pantalla"].iloc[0], "cod": cod,
+                    "guardado": x["guardado"].iloc[0], "campos": campos})
+    return pd.DataFrame(out, columns=cols).sort_values("t").reset_index(drop=True)
+
+
+def _nombres_del_arbol(nodos):
+    """{código: nombre} de todo el árbol: insumos, recetas base y cortes."""
+    acc = {}
+
+    def bajar(n):
+        acc.setdefault(n["cod"], n.get("ins", n["cod"]))
+        for h in n.get("hijos", ()):
+            bajar(h)
+    for n in nodos:
+        bajar(n)
+    return acc
+
+
+def _texto_campos(campos):
+    """«factor 1000 → 1, unidad de salida GRAMOS → UND»."""
+    partes = []
+    for c in CAMPOS_ARTICULO + (CAMPO_PRECIO,) + CAMPOS_PLATO:
+        if c in campos:
+            a, b = campos[c]
+            partes.append(f"{c.lower()} {a or '—'} → {b or '—'}")
+    return ", ".join(partes)
+
+
+def _veces_factor(campos):
+    """Cuántas veces sube el costo de una receta que no se tocó: el factor
+    de antes ÷ el de después (cantidad × precio ÷ factor). None si no se
+    cambió el factor o si baja."""
+    if "Factor" not in campos:
+        return None
+    a, b = (_numero(v) for v in campos["Factor"])
+    if not (a > 0 and b > 0) or a <= b:
+        return None
+    return a / b
+
+
+def cambios_del_plato(cambios, nodos, cod_plato):
+    """Los cambios de la auditoría que tocan al plato: los de factor, unidad
+    y precio de los artículos de su receta de HOY (con las recetas base
+    abiertas) y los de descargo del plato mismo. Dicts t, usr, cod, nombre,
+    txt, veces (o None), del_plato. Pura."""
+    if cambios is None or len(cambios) == 0:
+        return []
+    nombres = _nombres_del_arbol(nodos)
+    plato = str(cod_plato).strip()
+    out = []
+    for r in cambios.itertuples(index=False):
+        del_plato = r.pantalla == PANTALLA_PLATO and r.cod == plato
+        if not del_plato and not (r.pantalla == PANTALLA_ARTICULO and r.cod in nombres):
+            continue
+        validos = CAMPOS_PLATO if del_plato else CAMPOS_ARTICULO + (CAMPO_PRECIO,)
+        campos = {c: v for c, v in r.campos.items() if c in validos}
+        if not campos:
+            continue
+        out.append({"t": r.t, "usr": r.usr, "cod": r.cod,
+                    "nombre": "el plato" if del_plato else nombres[r.cod],
+                    "txt": _texto_campos(campos), "veces": _veces_factor(campos),
+                    "del_plato": del_plato})
+    return out
+
+
+def _causa_auditoria(cambios, nodos, cod_plato, ini):
+    """El cambio de la auditoría que explica un pico: el de factor o de
+    unidad de un artículo del plato (o un salto de su precio de costo, o el
+    descargo del plato) entre `DIAS_CAUSA_AUDITORIA` días antes del pico y
+    el día mismo, contado en una frase. Vacío si no hay."""
+    desde = ini - pd.Timedelta(days=DIAS_CAUSA_AUDITORIA)
+    hasta = ini + pd.Timedelta(days=1)
+    cerca = [c for c in cambios_del_plato(cambios, nodos, cod_plato)
+             if desde <= c["t"] < hasta]
+    if not cerca:
+        return ""
+    frases = []
+    for c in cerca[-2:]:
+        usr = f" · {c['usr']}" if c["usr"] else ""
+        veces = (f": una receta que lo pide como antes cuesta {c['veces']:,.0f} "
+                 "veces más" if c["veces"] and c["veces"] >= 2 else "")
+        frases.append(f"el {c['t']:%d/%m %H:%M}{usr} se cambió {c['nombre']} "
+                      f"({c['txt']}){veces}")
+    return "Posible causa: " + "; ".join(frases) + "."

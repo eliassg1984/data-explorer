@@ -540,6 +540,55 @@ def _pruebas_costo_carta_ficha():
           sr.picos_plato(agg, "0000010")[0]["causa"], "")
     check("sin ventas, ninguno", sr.picos_plato(None, "0000010"), [])
 
+    # ── La auditoría del POS (regla #658) ──────────────────────────────
+    # Lo que llega de la fila `auditoriacostos`: un artículo NUEVO (ANTES
+    # vacío), un redondeo de precio, el mismo cambio anotado dos veces, el
+    # factor y la unidad del corte en UN guardado, y el descargo del plato.
+    aud = pd.DataFrame({
+        "CORRELATIVO": ["1", "2", "3", "3", "4", "5", "6"],
+        "FECHA": [dias[17].strftime("%Y-%m-%d 09:00"),
+                  "2026-08-02 10:00", dias[18].strftime("%Y-%m-%d 15:00"),
+                  dias[18].strftime("%Y-%m-%d 15:00"),
+                  dias[18].strftime("%Y-%m-%d 15:00:20"),
+                  "2026-06-01 10:00", "2026-08-10 11:00"],
+        "USUARIO": ["ANA"] * 7,
+        "PANTALLA": ["ARTICULOS Y PRECIOS"] * 6 + ["PRODUCTOS"],
+        "CODIGO": ["C9", "C1", "C1", "C1", "C1", "C1", "0000010"],
+        "CAMPO": ["Factor", "Precio de Costo", "Factor", "Unidad de Salida",
+                  "Factor", "Precio de Costo", "Tipo Descargo"],
+        "ANTES": ["", "18,1579", "1000", "003", "1000", "10", "D"],
+        "DESPUES": ["1", "18.158", "1", "001", "1", "40", "R"],
+        "UNIDAD ANTES": [None, None, None, "GRAMOS", None, None, None],
+        "UNIDAD DESPUES": [None, None, None, "UND", None, None, None],
+    })
+    ca = sr.cambios_auditoria(aud)
+    check("se van lo nuevo, el redondeo y el cambio anotado dos veces",
+          [(r.cod, sorted(r.campos)) for r in ca.itertuples()],
+          [("C1", ["Precio de Costo"]), ("0000010", ["Tipo Descargo"]),
+           ("C1", ["Factor", "Unidad de Salida"])])
+    check("la unidad, con su nombre; el descargo, en palabras",
+          (ca.iloc[2]["campos"]["Unidad de Salida"], ca.iloc[1]["campos"]["Tipo Descargo"]),
+          (("GRAMOS", "UND"), ("directo", "receta")))
+    cp = sr.cambios_del_plato(ca, nodos, "0000010")
+    check("los del plato: sus artículos y su descargo",
+          [(c["nombre"], c["veces"]) for c in cp],
+          [("Lomo trozos", None), ("el plato", None), ("Lomo trozos", 1000.0)])
+    check("y otro plato no ve el descargo de éste",
+          [c["nombre"] for c in sr.cambios_del_plato(ca, nodos, "0000099")],
+          ["Lomo trozos", "Lomo trozos"])
+    pk2 = sr.picos_plato(agg, "0000010", nodos, cambios=ca)
+    check("el pico se explica por el cambio de factor de dos días antes",
+          ("factor 1000 → 1" in pk2[0]["causa"], "1,000 veces más" in pk2[0]["causa"]),
+          (True, True))
+    check("sin auditoría no hay esa causa",
+          sr.picos_plato(agg, "0000010", nodos, cambios=None)[0]["causa"], "")
+    check("la auditoría vacía o sin columnas no rompe",
+          (len(sr.cambios_auditoria(None)), len(sr.cambios_auditoria(aud.iloc[0:0])),
+           sr.cambios_del_plato(None, nodos, "0000010")), (0, 0, []))
+    check("la consulta del Sheet nombra las tablas enteras",
+          ("INFSEGURIDAD.DBO.MMOVIMIENTO.tCampo" in sr.consulta_sheet_auditoria(),
+           " AS M " in sr.consulta_sheet_auditoria()), (True, False))
+
     # ── La fecha ────────────────────────────────────────────────────────
     ctx = cc.ctx_fecha(agg, hoy=dt.date(2026, 10, 15))
     check("los topes de la fecha son los días con venta",

@@ -726,13 +726,16 @@ def _hover_mes(r):
     return "<br>".join(partes)
 
 
-def _dib_evolucion(f, agg, rango, marcas=(), picos=(), alto=alturas.CARTA_EVOLUCION):
+def _dib_evolucion(f, agg, rango, marcas=(), picos=(), auditoria=(),
+                   alto=alturas.CARTA_EVOLUCION):
     """La evolución del costo del plato (regla #657): por mes, lo vendido en
     barras (las del rango, más fuertes) y el costo por unidad con que se
     vendió en una línea —la foto del POS en cada pedido, regla #557—; el
     costo de HOY punteado; ▼ arriba en los meses en que se editó una de sus
-    recetas base (`marcas`, del log del Almacén) y un círculo rojo en los
-    picos (`picos`). El rango de la fecha, sombreado."""
+    recetas base (`marcas`, del log del Almacén), ◆ en los que se cambió el
+    factor, la unidad o el precio de uno de sus artículos o el descargo del
+    plato (`auditoria`, de la auditoría del POS, regla #658) y un círculo
+    rojo en los picos (`picos`). El rango de la fecha, sombreado."""
     g = costo_mensual(agg, f["Cod"])
     if g.empty:
         st.info("No se vendió desde enero de 2025, que es desde cuando hay "
@@ -816,6 +819,21 @@ def _dib_evolucion(f, agg, rango, marcas=(), picos=(), alto=alturas.CARTA_EVOLUC
                   + (f"<br>y {len(ms) - 4} más" if len(ms) > 4 else "")
                   for ms in mk.values()],
             hovertemplate="%{text}<extra></extra>"))
+    # Los cambios de la auditoría: ◆ debajo de los ▼, una por mes.
+    ma = {}
+    for c in auditoria:
+        per = pd.Period(pd.Timestamp(c["t"]), freq="M")
+        if per in pos:
+            ma.setdefault(per, []).append(c)
+    if ma:
+        fig.add_trace(go.Scatter(
+            x=[etq[pos[p]] for p in ma], y=[tope * 1.08] * len(ma),
+            mode="markers", yaxis="y2",
+            marker=dict(symbol="diamond", size=9, color=ADVERTENCIA),
+            text=["<br>".join(_texto_cambio(c) for c in cs[:4])
+                  + (f"<br>y {len(cs) - 4} más" if len(cs) > 4 else "")
+                  for cs in ma.values()],
+            hovertemplate="%{text}<extra></extra>"))
     fig.update_layout(
         hoverlabel=dict(align="left"),
         yaxis2=dict(overlaying="y", side="left", showticklabels=True,
@@ -855,6 +873,15 @@ def _texto_marca(m):
             f"{escape(m['txt'])}{mas} → {signo}S/ {abs(m['esp']):,.2f} por plato")
 
 
+def _texto_cambio(c):
+    """Un cambio de la auditoría del POS, en una línea (regla #658)."""
+    quien = f" · {c['usr']}" if c.get("usr") else ""
+    veces = (f" (×{c['veces']:,.0f} si su receta no cambió)"
+             if c.get("veces") and c["veces"] >= 2 else "")
+    return (f"◆ {pd.Timestamp(c['t']):%d/%m/%y}{quien} · {escape(c['nombre'])}: "
+            f"{escape(c['txt'])}{veces}")
+
+
 def _texto_pico(p):
     dias = (f"{p['ini']:%d/%m/%y}" if p["ini"] == p["fin"]
             else f"del {p['ini']:%d/%m} al {p['fin']:%d/%m/%y}")
@@ -866,20 +893,24 @@ def _texto_pico(p):
     return t
 
 
-def _lista_en_rango(marcas, picos, rango):
+def _lista_en_rango(marcas, picos, rango, auditoria=()):
     """Debajo del gráfico, con palabras: lo que movió el costo EN el rango —
-    las ediciones de sus recetas base y los picos con su posible causa—."""
+    las ediciones de sus recetas base, los cambios de sus artículos en la
+    auditoría del POS y los picos con su posible causa—."""
     if rango is None:
         return
     a = pd.Timestamp(rango[0])
     b = pd.Timestamp(rango[1]) + pd.Timedelta(days=1)
     ms = [m for m in marcas if a <= pd.Timestamp(m["t"]) < b]
+    cs = [c for c in auditoria if a <= pd.Timestamp(c["t"]) < b]
     ps = [p for p in picos if a <= p["ini"] < b]
-    if not (ms or ps):
+    if not (ms or cs or ps):
         return
     filas = []
     for m in ms[-6:][::-1]:
         filas.append(f'<li class="rec-evo-marca">{_texto_marca(m)}</li>')
+    for c in cs[-6:][::-1]:
+        filas.append(f'<li class="rec-evo-cambio">{_texto_cambio(c)}</li>')
     for p in ps[::-1]:
         dias = (f"{p['ini']:%d/%m}" if p["ini"] == p["fin"]
                 else f"{p['ini']:%d/%m}–{p['fin']:%d/%m}")
@@ -889,6 +920,8 @@ def _lista_en_rango(marcas, picos, rango):
                      f'{p["exceso"]:,.0f} de más.{causa}</li>')
     extra = (f'<li class="rec-evo-marca">y {len(ms) - 6} ediciones más</li>'
              if len(ms) > 6 else "")
+    if len(cs) > 6:
+        extra += f'<li class="rec-evo-cambio">y {len(cs) - 6} cambios más</li>'
     st.markdown(f'<ul class="rec-evo-lista">{"".join(filas)}{extra}</ul>',
                 unsafe_allow_html=True)
 
@@ -1254,6 +1287,29 @@ def ediciones_bases():
         return None
 
 
+@st.cache_data(ttl=3600, show_spinner=False, max_entries=2)
+def _auditoria_cacheable(sello, version=sr.VERSION):
+    """La auditoría limpia (`simulador_receta.cambios_auditoria`): ~1,5 s
+    sobre las ~4.200 filas, en caché por su sello."""
+    return sr.cambios_auditoria(_cargar_cacheable(sr.ARCHIVO_AUDITORIA, sello))
+
+
+def cambios_auditoria():
+    """Los cambios de la auditoría del POS (regla #658), o None si la fila
+    `auditoriacostos` del Sheet todavía no llegó a R2, no hay secrets o la
+    lectura falla: la ficha sigue sin ellos. El sello, ANTES de leer, por lo
+    mismo que `ediciones_bases`."""
+    if not secrets_disponibles():
+        return None
+    sello = sello_datos(sr.ARCHIVO_AUDITORIA)
+    if not sello:
+        return None
+    try:
+        return _auditoria_cacheable(sello)
+    except Exception:
+        return None
+
+
 # ─── La ficha del plato elegido (regla #657) ──────────────────────────────
 def _receta_para_sankey(df_rv, cod):
     """La receta del parquet, como la lee el Sankey (Insumo, Costo…)."""
@@ -1383,7 +1439,9 @@ def _ficha(f, df_rv, agg, rango, porcionamientos=None):
         # «+S/ 0,00» es ruido.
         marcas = [m for m in (sr.marcas_plato(nodos, ediciones) if ediciones else [])
                   if abs(m["esp"]) >= 0.01]
-        picos = sr.picos_plato(agg, cod, nodos, df_po)
+        cambios = cambios_auditoria()
+        picos = sr.picos_plato(agg, cod, nodos, df_po, cambios=cambios)
+        auditoria = sr.cambios_del_plato(cambios, nodos, cod)
         porcs = _porcionados(nodos)
         with c_evo:
             with st.container(key="rec_carta_evo"):
@@ -1398,12 +1456,18 @@ def _ficha(f, df_rv, agg, rango, porcionamientos=None):
                     "Vista", opciones, key=_K_FICHA_VISTA,
                     label_visibility="collapsed") or opciones[0]
                 if vista == "Evolución":
-                    _dib_evolucion(f, agg, rango, marcas, picos)
-                    _lista_en_rango(marcas, picos, rango)
+                    _dib_evolucion(f, agg, rango, marcas, picos, auditoria)
+                    _lista_en_rango(marcas, picos, rango, auditoria)
+                    faltan = []
                     if es_receta and ediciones is None:
-                        st.caption("Sin las marcas de las recetas base: falta "
-                                   "su log en R2 (las filas «recetabaselog» y "
-                                   "«recetabaselogdet» del Sheet).")
+                        faltan.append("las ediciones de sus recetas base (filas "
+                                      "«recetabaselog» y «recetabaselogdet»)")
+                    if cambios is None:
+                        faltan.append("los cambios de factor y unidad de la "
+                                      "auditoría del POS (fila «auditoriacostos»)")
+                    if faltan:
+                        st.caption("Sin " + " ni ".join(faltan) + ": todavía "
+                                   "no están en R2. Se agregan en el Sheet.")
                 elif vista == "Sankey":
                     r = _receta_para_sankey(df_rv, cod) if es_receta else None
                     if r is None:
