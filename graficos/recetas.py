@@ -6,7 +6,10 @@ dos destinos que un chip alternaba (Receta base / Receta venta). A pedido:
 «quiero que las visualizaciones de estos toggles figuren todas juntas».
 
     Costo Carta (cartacosteada.parquet)   Carta costeada, con la receta del
-                                          producto elegido al costado
+                                          producto elegido al costado y su
+                                          «Simular» (regla #656)
+    Alza Insumo                           ¿y si sube un insumo de compra?,
+                                          en todos los platos (regla #656)
     Costo Recetas Base                    lo que usan las ventas de cada
       (recetabase.parquet +               receta base, lo producido y su
        ordenesproduccion.parquet)         costo por unidad en el tiempo
@@ -101,6 +104,7 @@ from graficos.base import (
     renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.carta_costeada import ARCHIVO as ARCHIVO_CARTA, render_carta_costeada
+from graficos.recetas_alza import render_alza
 from graficos.recetas_base_costo import ARCHIVO_ORDENES, render_costo_recetas_base
 from graficos.recetas_revisar import render_revisar_recetas
 from formulario_receta import render_formulario_receta
@@ -131,6 +135,10 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # hacía «Composición del plato», que se fue con «Costeo Receta Venta»
     # (regla #556).
     ("Carta",  (("Carta costeada",                      "Costo Carta",     ":material/menu_book:"),)),
+    # «¿Y si sube un insumo?» (2026-10-15, regla #656): elegir un insumo de
+    # compra y cuánto sube, y ver qué platos lo llevan y cómo quedan. Al lado
+    # de la carta porque mide lo mismo que ella, en todos los platos a la vez.
+    ("Alza",   (("Alza de insumo",                      "Alza Insumo",     ":material/trending_up:"),)),
     # «Costo de recetas base» (2026-09-30, regla #576): reemplazó al Ranking
     # de recetas base. Lo usado por las ventas contra lo producido por
     # órdenes, y el costo por unidad en el tiempo; ver
@@ -163,6 +171,7 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
 # Las dos Tablas, ocultas, al pie.
 _PILA = pila_sin_tablas((
     ("rec_sec_carta",        "Carta costeada"),
+    ("rec_sec_alza",         "Alza de insumo"),
     ("rec_sec_costo_rb",     "Costo de recetas base"),
     ("rec_sec_revisar",      "Revisar recetas"),
     ("rec_sec_nueva",        "Nueva receta"),
@@ -249,6 +258,11 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             ventas=venta_por_producto_dia, df_rb=df_rb,
             porcionamientos=partial(_cargar_reporte, "porcionamientos.parquet"))
 
+    def _dib_alza():
+        # Lo vendido como FUNCIÓN, como en la Carta (regla #573): se lee
+        # recién cuando la sección se construye.
+        render_alza(ventas=venta_por_producto_dia)
+
     def _dib_revisar():
         # Lo que lee (porcionamientos, el primer nivel de las ventas, el
         # maestro, la carta y las salidas) lo carga la sección misma, por lo
@@ -281,6 +295,7 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
     _DIBUJANTES = {
         "rec_sec_carta":        _dib_carta,
+        "rec_sec_alza":         _dib_alza,
         "rec_sec_costo_rb":     _dib_costo_rb,
         "rec_sec_revisar":      _dib_revisar,
         "rec_sec_nueva":        _dib_nueva,

@@ -2005,11 +2005,13 @@ CSS = """    /* ================================================================
     /* «Revisar recetas» (`rec_card_revisar`) lleva el mismo look desde la
        regla #574, a pedido: era la última de Recetas con el marco gris; y
        «Costo recetas base» (`rec_card_costo_rb`) desde que nació, con la
-       tarjeta de la receta elegida debajo (`rec_card_rb_detalle`) (#576). */
+       tarjeta de la receta elegida debajo (`rec_card_rb_detalle`) (#576).
+       «¿Y si sube un insumo?» (`rec_card_alza`) desde que nació (#656). */
     .st-key-rec_card_carta,
     .st-key-rec_card_revisar,
     .st-key-rec_card_costo_rb,
-    .st-key-rec_card_rb_detalle {
+    .st-key-rec_card_rb_detalle,
+    .st-key-rec_card_alza {
         background: var(--bg-card) !important;
         border: none !important;
         border-radius: 20px !important;
@@ -2017,6 +2019,7 @@ CSS = """    /* ================================================================
         box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
     }
     .st-key-rec_card_carta > div,
+    .st-key-rec_card_alza > div,
     .st-key-rec_card_revisar > div,
     .st-key-rec_card_costo_rb > div,
     .st-key-rec_card_rb_detalle > div {
@@ -2031,7 +2034,8 @@ CSS = """    /* ================================================================
        base» (`rec_rb_cab`, regla #576) es el mismo renglón. */
     .st-key-rec_carta_cab,
     .st-key-rec_rb_cab,
-    .st-key-rec_rb_det_cab {
+    .st-key-rec_rb_det_cab,
+    .st-key-rec_alza_cab {
         border-bottom: 1px solid var(--border);
         padding-bottom: 6px;
         flex-wrap: nowrap !important;
@@ -2040,7 +2044,8 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab .chart-card-hdr,
     .st-key-rec_rb_cab .chart-card-hdr,
-    .st-key-rec_rb_det_cab .chart-card-hdr {
+    .st-key-rec_rb_det_cab .chart-card-hdr,
+    .st-key-rec_alza_cab .chart-card-hdr {
         border-bottom: none;
         margin: 0 6px 0 0;
         padding: 0;
@@ -2080,7 +2085,8 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_det_modo,
     .st-key-rec_rb_det_cab_ver, .st-key-rec_rb_cab_ventana,
     .st-key-rec_rb_cab_area, .st-key-rec_rb_cab_produccion,
-    .st-key-rec_rb_cab_buscar {
+    .st-key-rec_rb_cab_buscar,
+    .st-key-rec_alza_cab_ins, .st-key-rec_alza_cab_pct {
         position: relative;
         padding-left: 11px !important;
         overflow: visible !important;
@@ -2090,7 +2096,8 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_buscar::after, .st-key-rec_carta_cab_vend::after,
     .st-key-rec_rb_det_cab_ver::after, .st-key-rec_rb_cab_ventana::after,
     .st-key-rec_rb_cab_area::after, .st-key-rec_rb_cab_produccion::after,
-    .st-key-rec_rb_cab_buscar::after {
+    .st-key-rec_rb_cab_buscar::after,
+    .st-key-rec_alza_cab_ins::after, .st-key-rec_alza_cab_pct::after {
         content: "";
         position: absolute;
         left: 0;
@@ -2105,7 +2112,8 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_buscar::before, .st-key-rec_carta_cab_vend::before,
     .st-key-rec_rb_det_cab_ver::before, .st-key-rec_rb_cab_ventana::before,
     .st-key-rec_rb_cab_area::before, .st-key-rec_rb_cab_produccion::before,
-    .st-key-rec_rb_cab_buscar::before {
+    .st-key-rec_rb_cab_buscar::before,
+    .st-key-rec_alza_cab_ins::before, .st-key-rec_alza_cab_pct::before {
         position: absolute;
         top: calc(100% + 2px);
         left: 11px;
@@ -2129,7 +2137,8 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_buscar:hover::before, .st-key-rec_carta_cab_vend:hover::before,
     .st-key-rec_rb_det_cab_ver:hover::before, .st-key-rec_rb_cab_ventana:hover::before,
     .st-key-rec_rb_cab_area:hover::before, .st-key-rec_rb_cab_produccion:hover::before,
-    .st-key-rec_rb_cab_buscar:hover::before {
+    .st-key-rec_rb_cab_buscar:hover::before,
+    .st-key-rec_alza_cab_ins:hover::before, .st-key-rec_alza_cab_pct:hover::before {
         opacity: 1;
     }
     .st-key-rec_carta_cab_ver::before { content: "Ver"; }
@@ -2138,6 +2147,37 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_tipo::before { content: "Tipo"; }
     .st-key-rec_carta_cab_buscar::before { content: "Buscar"; }
     .st-key-rec_carta_cab_vend::before { content: "Ventana de lo vendido"; }
+    .st-key-rec_alza_cab_ins::before { content: "Insumo de compra"; }
+    .st-key-rec_alza_cab_pct::before { content: "Cambio de precio"; }
+    /* El deslizador de «Cambio de precio» con ancho propio: en un
+       contenedor `width="content"` se encoge a 139px y los −30 / +50 de los
+       extremos se le montan. */
+    .st-key-rec_alza_cab_pct { width: 280px; padding-right: 14px !important; }
+    /* «¿Y si sube un insumo?» (regla #656): la fila de cinco cifras, cada
+       una con su rótulo arriba y su pie abajo. */
+    .rec-alza-kpis {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .rec-alza-kpi {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        min-width: 0;
+    }
+    .rec-alza-kpi small { color: var(--text-muted); font-size: 11.5px; }
+    .rec-alza-kpi b { font-size: 17px; font-variant-numeric: tabular-nums; }
+    .rec-alza-kpi span {
+        color: var(--text-muted);
+        font-size: 11.5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
     .st-key-rec_rb_det_cab_ver::before { content: "Ver"; }
     .st-key-rec_rb_cab_ventana::before { content: "Uso y producción en"; }
     .st-key-rec_rb_cab_area::before { content: "Área de la receta"; }

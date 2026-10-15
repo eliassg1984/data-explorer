@@ -1304,6 +1304,29 @@ Lo que ya mordió:
 
 Detalle, trampas y mediciones en `arquitectura.md` regla #558.
 
+## «Simular» un plato y «¿Y si sube un insumo?»
+
+Desde el 2026-10-15 (regla #656). «Simular» (botón de la ficha del plato en
+Costo Carta) abre una modal con la receta como ÁRBOL: recetas base editables
+por dentro, precio por la unidad de COMPRA (S/ por kg), merma y peso de los
+cortes, precio de venta y «para quedar en X %». Es un `st.components.v2`
+(`graficos/simulador_plato.js`) porque la cuenta tiene que correr mientras se
+escribe; reemplazó a la `st.data_editor` de `recetaventa.py`. Lo que muerde:
+
+- **La cuenta está dos veces**: en el JS (en vivo) y en
+  `simulador_receta.costo_nodo` (lo que se guarda como propuesta). Si se toca
+  una, se toca la otra: el test busca las fórmulas escritas igual.
+- **El árbol se reescala a la receta**: sin eso, abrir una receta base
+  cambiaba el costo del plato sin haber tocado nada.
+- **La modal es un fragment dentro de otro**: `una_vez_por_corrida` y un
+  `on_dismiss` que borra `rec_carta_sim_abierto`
+  (`carta_costeada.py::_modal_simulador`), o el próximo clic la reabre.
+- **Guardar es una propuesta de Nuevo Costeo** (JSON en R2), nunca el POS.
+
+«¿Y si sube un insumo?» (vista «Alza Insumo») usa
+`simulador_receta.exposicion_carta`: cuánto de cada insumo de compra lleva
+cada plato, con los cortes porcionados contados para su insumo de origen.
+
 ## El eje temporal de la franja es un RANGO, con un solo dueño
 
 `estado_rango.py` es el dueño único del rango de la franja (`clave_rango`,

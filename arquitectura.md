@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-655 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+656 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (211)
+**CSS y estilos** (212)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -245,6 +245,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#644** — «Filtros» tiene sólo lo que vale para TODO el reporte: lo que cambia unas vistas se elige en…
 - **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
 - **#649** — La barra de las tarjetas «por período» de Movimientos es LISA y resalta UNA parte, elegida…
+- **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
 
 **Layout y alturas** (93)
 
@@ -722,7 +723,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
-**Datos, R2 y DuckDB** (101)
+**Datos, R2 y DuckDB** (102)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -825,6 +826,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#648** — Una línea de receta «por insumo» no descuenta su receta base: descuenta SUS insumos, y «En…
 - **#650** — Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de diferencias», con el posible…
 - **#651** — «Análisis de diferencias» mira los COMBOS, no descarta las líneas sin precio y reconoce lo…
+- **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
 
 **SUNAT y SIRE** (58)
 
@@ -51383,6 +51385,73 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-13.)
 
+656. **«Simular» un plato abre una modal con la receta como ÁRBOL —las
+     recetas base editables por dentro—, el precio por la unidad de COMPRA,
+     la merma y el peso de los porcionados y el precio de venta; y «¿Y si
+     sube un insumo?» mide el alza de un insumo de compra en todos los
+     platos a la vez.**
+     2026-10-15, a pedido —«revisar y mejora si puedes esa funcionalidad que
+     dice simular»—, aprobado sobre un boceto con los datos reales
+     (https://claude.ai/artifact/JFkrxwH2wCipPTGQey1TJ5, «Simular,
+     revisado»). En `simulador_receta.py` (la cuenta, pura),
+     `graficos/simulador_plato.py` + `.js` + `.css` (el componente),
+     `graficos/carta_costeada.py` (el botón y la modal),
+     `graficos/recetas_alza.py` (la vista), `graficos/recetas.py` (rail y
+     pila), `estilos/_80_cards.py` y
+     `test_graficos.py::_pruebas_simulador_receta`.
+
+     **Lo que el simulador de la #451 no respondía** (una `st.data_editor`
+     sobre la receta, en `recetaventa.py`, que se borró):
+     - **Sólo el primer nivel.** Una receta base era un renglón con su
+       costo: no se podía cambiar el demiglace de la Salsa de Lomo.
+     - **El precio de un gramo.** El Tomate Limpio se editaba a S/ 0,0091;
+       se compra a S/ 9,10 el kilo. Ahora la cantidad va con su unidad
+       (`simulador_receta.UNIDADES`) y el precio por la de compra
+       (`UNIDAD_COMPRA`): S/ por kg.
+     - **Sin precio de venta**: la pregunta es «¿a cuánto lo vendo para
+       quedar en 30 %?» (`precio_sugerido`).
+     - **La merma y el peso de un corte, fijos**, cuando de ahí sale casi
+       todo el costo del lomo: corte = precio del origen ÷ (1 − merma) ×
+       peso (#647), del ÚLTIMO porcionamiento (`porcionamientos_vigentes`).
+       Bajar la merma del Lomo Saltado de 25,4 % a 18 % lo deja en S/ 22,60.
+     - **La columna «Costo» iba una corrida atrasada**: el editor no
+       recalcula una columna bloqueada. Por eso es un `st.components.v2`
+       (como el panel de fechas, #616): la cuenta corre en el navegador
+       mientras se escribe, y a Python le llega sólo «guardar».
+
+     **Lo que conviene saber antes de tocarlo:**
+     - **La cuenta está DOS veces, a propósito**: en
+       `simulador_plato.js::costo` (en vivo) y en
+       `simulador_receta.costo_nodo` (lo que se guarda sale de Python, no de
+       lo que diga el navegador). El test busca las fórmulas escritas igual
+       en el JS; si se toca una, se toca la otra.
+     - **El árbol se REESCALA a la receta**: la receta base guarda el costo
+       de la última corrida de `Sp_ActualizaReceta` y sus líneas pueden
+       haberse movido; sin reescalar, abrir una base cambiaba el costo del
+       plato sin tocar nada. El test exige que el árbol sume la receta.
+     - **«Última compra» y «promedio 90 días» no se usan si la compra está
+       en otra unidad** (más de 3 veces el precio de hoy): es otra unidad,
+       no otro precio (`_precio_modo`).
+     - **La modal es un fragment dentro de otro** (`seccion_perezosa`):
+       `una_vez_por_corrida` encima y `on_dismiss` que borra
+       `rec_carta_sim_abierto`, como la ficha de Documentos SUNAT (#587):
+       sin borrarlo, el próximo clic en la tabla la reabre.
+     - **Guardar es la propuesta de Nuevo Costeo** (`_guardar_propuesta`,
+       tipo «Simulación», JSON en R2): las líneas de primer nivel con su
+       costo simulado y, en `simulacion.cambios`, el borrador entero. La
+       app no escribe en el POS.
+
+     **«¿Y si sube un insumo?»** (vista «Alza Insumo», al lado de Costo
+     Carta): cuánto de cada insumo de COMPRA lleva cada plato
+     (`exposicion_carta`: recetas base abiertas y los cortes contados para
+     el insumo del que salen —`origen_de_cortes`, siguiendo la cadena:
+     el lomo cabeza sale del lomo fino—). Suma el costo de la receta
+     (835 platos, mediana 1,000). Medido el 2026-10-15: el lomo fino +10 %
+     son +S/ 1.670 de costo al mes en 9 platos, y uno pasa de 35 %. La
+     exposición va en caché por los sellos de los tres parquets (#367).
+
+     (2026-10-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51395,7 +51464,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#655**; la próxima toma el número siguiente.
+> última regla es la **#656**; la próxima toma el número siguiente.
 
 >
 

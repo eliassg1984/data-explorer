@@ -65,12 +65,13 @@ import streamlit as st
 
 from cortes import MESES_ABR_ES
 from graficos import alturas
-from graficos.base import _card, _compras_layout, _es_movil, _resolver
+from graficos.base import (_card, _compras_layout, _es_movil, _resolver,
+                           una_vez_por_corrida)
 from graficos.recetas_comun import divisor_neto
 from graficos.recetaventa import (
-    _K_SIM_ON, AYUDA_SIMULAR, _dib_sankey_insumo_costo,
-    _dib_torta_costo_utilidad, receta_del_plato,
+    _dib_sankey_insumo_costo, _dib_torta_costo_utilidad, receta_del_plato,
 )
+from graficos.simulador_plato import AYUDA as AYUDA_SIMULAR, simular_plato
 from graficos.ventas_mix import pct_costo
 from tema import (ACENTO, ADVERTENCIA, ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO,
                   LAVANDA_FONDO)
@@ -1266,6 +1267,34 @@ def _lo_vendido(ventas):
     return agg
 
 
+_K_SIM_ABIERTO = "rec_carta_sim_abierto"
+"""El código del plato cuyo simulador está abierto (regla #656). Lo escribe
+el botón «Simular» y lo borra cualquier cierre de la modal: sin borrarlo, la
+corrida siguiente —un clic en la tabla— la volvería a abrir."""
+
+
+def _abrir_simulador(cod):
+    st.session_state[_K_SIM_ABIERTO] = cod
+
+
+def _cerrar_simulador():
+    st.session_state[_K_SIM_ABIERTO] = None
+
+
+def _modal_simulador(cod, nombre, precio, df_rv):
+    """El simulador del plato en una modal ancha (`st.dialog`), como la ficha
+    de Documentos SUNAT (regla #587): la página queda detrás y la ✕, Esc o un
+    clic afuera la cierran. El título va por plato, así que el decorador se
+    aplica acá. `una_vez_por_corrida` porque una modal es un fragment, y ésta
+    se llama dentro del de `seccion_perezosa` (regla #456)."""
+    def _contenido():
+        with st.container(key="rec_sim_modal"):
+            simular_plato(cod, nombre, precio, df_rv)
+
+    una_vez_por_corrida(st.dialog(f"Simular · {nombre}", width="large",
+                                  on_dismiss=_cerrar_simulador)(_contenido))()
+
+
 def _panel(f, df_rv, dias, ventas=None, df_rb=None, porcionamientos=None):
     """Al costado de la tabla (regla #570): el producto elegido, su receta
     (o lo que descarga) y, debajo, la dona / el Sankey / su costo en el
@@ -1275,10 +1304,9 @@ def _panel(f, df_rv, dias, ventas=None, df_rb=None, porcionamientos=None):
 
     Desde la #572 cabe en una pantalla de 1366×768: sin la línea de números
     del producto (a pedido), con «Simular» en el renglón del nombre y el
-    gráfico de 200px."""
+    gráfico de 200px. «Simular» abre una modal desde la regla #656."""
     cod, nombre = str(f["Cod"]), str(f["Producto"])
     es_receta = f["Tipo"] == "Receta"
-    simulando = es_receta and bool(st.session_state.get(_K_SIM_ON))
     bases = codigos_base(df_rb)
     # Los porcionamientos, sólo si hay receta que marcar (regla #574): el
     # parquet es chico (12.368 filas) y lo comparte «Revisar recetas».
@@ -1291,13 +1319,14 @@ def _panel(f, df_rv, dias, ventas=None, df_rb=None, porcionamientos=None):
                           key="rec_carta_plato_hdr"):
             st.markdown(f'<p class="chart-card-hdr">{escape(nombre)} · '
                         f'{escape(ruta_txt)} · {escape(f["Tipo"])}'
-                        + (" · borrador, no se guarda" if simulando else "")
                         + '</p>', unsafe_allow_html=True)
             if es_receta:
-                # Acá y no adentro de la receta: un renglón menos. Se dibuja
-                # SIEMPRE que hay receta —un widget que no se dibuja pierde
-                # su estado, y este decide si la tabla es un editor—.
-                st.toggle("Simular", key=_K_SIM_ON, help=AYUDA_SIMULAR)
+                # Acá y no adentro de la receta: un renglón menos. Abre el
+                # simulador en una modal ancha (regla #656): al costado de la
+                # tabla el panel mide ~460px y el árbol pide ~700.
+                st.button("Simular", key="rec_carta_simular",
+                          icon=":material/tune:", help=AYUDA_SIMULAR,
+                          on_click=_abrir_simulador, args=(cod,))
         sin_costo_neto = float(f.get("SinCostoNeto", 0.0))
         if sin_costo_neto > 0:
             # Dos historias distintas con el mismo número: el que HOY no
@@ -1312,20 +1341,17 @@ def _panel(f, df_rv, dias, ventas=None, df_rb=None, porcionamientos=None):
                 f'S/ {sin_costo_neto:,.0f} de lo vendido en {dias} '
                 f'días entró al FoodCost con costo 0: {causa}, y así queda '
                 f'guardado.</p>', unsafe_allow_html=True)
+        if es_receta and st.session_state.get(_K_SIM_ABIERTO) == cod:
+            _modal_simulador(cod, nombre, float(f["Precio"]), df_rv)
         if es_receta:
-            r, costo_sim = receta_del_plato(
-                df_rv, cod, nombre, toggle=False, titulo=False,
+            r, _ = receta_del_plato(
+                df_rv, cod, nombre, titulo=False,
                 dibujar_lectura=partial(_tabla_receta, plato=cod, bases=bases,
                                         porcs=porcs))
         else:
-            r, costo_sim = None, None
+            r = None
             _descarga(f)
-        # Simulando, la tabla es un editor sin clic: nada abierto (y al
-        # volver, la tabla de lectura nace sin fila elegida).
         e = _estado_base(cod)
-        if simulando and e.get("ruta"):
-            e = {"plato": cod, "ruta": []}
-            st.session_state[_K_BASE] = e
         if e.get("ruta"):
             _bloque_base(df_rb, df_po, cod, e["ruta"], bases, porcs)
             return
@@ -1347,16 +1373,15 @@ def _panel(f, df_rv, dias, ventas=None, df_rb=None, porcionamientos=None):
                     st.info("Sin receta no hay Sankey: el Sankey reparte "
                             "el costo entre los insumos de la receta.")
                 else:
-                    _dib_sankey_insumo_costo(r, nombre, cod,
-                                             costo_sim is not None, alto=alto)
-            elif f["SinCosto"] and costo_sim is None:
+                    _dib_sankey_insumo_costo(r, nombre, cod, alto=alto)
+            elif f["SinCosto"]:
                 # Sin costo, la dona dibujaría «0 % de costo» y toda la
                 # porción como utilidad: una cifra que no existe.
                 st.info("Sin costo cargado: no hay cómo repartir el "
                         "precio entre costo y utilidad.")
             else:
                 _dib_torta_costo_utilidad(f["Neto"], f["Costo"], f["Pct"],
-                                          cod, costo_sim, alto=alto)
+                                          cod, alto=alto)
 
 
 # ─── La vista ─────────────────────────────────────────────────────────────

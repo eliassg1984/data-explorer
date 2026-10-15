@@ -109,7 +109,8 @@ def _activo(serie):
 # ─── El catálogo de insumos de almacén ──────────────────────────────────────
 # Vivía en `formulario_receta.py::_catalogo_insumos_cacheado` y se mudó acá
 # el 2026-09-17, cuando el simulador de Composición (`recetaventa.py::
-# _panel_receta`) necesitó el mismo catálogo para "agregar un insumo". Es el
+# _panel_receta`, reemplazado el 2026-10-15 por `simulador_plato.py`, regla
+# #656) necesitó el mismo catálogo para "agregar un insumo". Es el
 # escenario de la regla #379 —dos copias del mismo formateo divergiendo—
 # atajado antes de que naciera la segunda: la herramienta y el dashboard
 # tienen que ofrecer EL MISMO catálogo o "agregar Sal De Mesa" significa dos

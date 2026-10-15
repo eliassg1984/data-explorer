@@ -294,25 +294,29 @@ def _pruebas_articulos_nuevos():
 
 
 def _pruebas_simulador_receta():
-    """El simulador de la receta de un plato (`graficos/recetaventa.py`), el
-    que abre un clic en Recetas › Carta costeada (hasta el 2026-09-28, en
-    Composición; regla #556).
+    """El simulador de Recetas (regla #656): `simulador_receta.py`, la cuenta
+    pura del «Simular» de un plato (`graficos/simulador_plato.py`, en una
+    modal) y de «¿Y si sube un insumo?» (`graficos/recetas_alza.py`).
 
-    LO QUE VIGILA ES UN ORDEN, y cuesta verlo: el editor empareja lo
-    tecleado con el borrador **por POSICIÓN** (`editado.iloc[i]` ↔
-    `lineas[i]`), así que `_receta_simulada` NO puede ordenar. Nació
-    ordenando por costo —copiado de `_receta_original`, donde sí
-    corresponde— y el bug es mudo: mientras nada cambie de puesto todo
-    anda, y en cuanto un costo se mueve, editar una fila escribe en otro
-    insumo y «Quitar» saca al vecino. Medido el 2026-09-17 con un editor
-    sembrado. Ordena quien DIBUJA (`_panel_receta`, para el Sankey y la
-    dona), no quien calcula.
+    Reemplazó el 2026-10-15 al simulador de `recetaventa.py` (una
+    `st.data_editor` del primer nivel de la receta, regla #451): este test
+    vigilaba que su borrador no se reordenara, y se fue con él.
 
-    Lo demás son las dos cuentas del borrador: el costo es
-    `Cantidad * Precio` (consecuencia, no dato), y el precio unitario se
-    despeja de `Costo / Cantidad` sin reventar con cantidad 0 — que en el
-    parquet existe, 19 filas, todas con costo 0."""
-    from graficos.recetaventa import _precios_y_pesos, _receta_simulada
+    Un plato de mentira con las tres clases de línea —una receta base, un
+    insumo comprado y un corte porcionado— y lo que se vigila:
+      · el árbol suma, sin tocar nada, lo que la receta dice que cuesta;
+      · cada edición mueve el costo como en la cocina: el precio de una línea
+        DENTRO de la receta base, la cantidad de la base (que escala a sus
+        líneas), la merma del corte (precio ÷ (1 − merma) × peso, #647);
+      · «última compra» usa la compra, pero no si está en otra unidad (más
+        de 3 veces el precio de hoy);
+      · la exposición lleva el corte al insumo del que sale y suma el costo;
+      · la cuenta del navegador (`simulador_plato.js`) es la misma que la de
+        Python: las fórmulas, escritas igual en los dos.
+    """
+    import pathlib
+
+    import simulador_receta as sr
 
     fallos = 0
 
@@ -324,35 +328,86 @@ def _pruebas_simulador_receta():
             fallos += 1
             print(f"FALLA simulador receta · {nombre}: got={got!r} exp={exp!r}")
 
-    # Tres líneas en orden de costo CRECIENTE: si la función ordenara, el
-    # orden de salida sería el inverso del de entrada y se vería enseguida.
-    lineas = [
-        {"Insumo": "barato", "Cantidad": 1.0, "Precio": 1.0},
-        {"Insumo": "medio", "Cantidad": 2.0, "Precio": 2.0},
-        {"Insumo": "caro", "Cantidad": 3.0, "Precio": 10.0},
-    ]
-    r = _receta_simulada(lineas)
-    check("el borrador NO se reordena (el editor empareja por posición)",
-          list(r["Insumo"]), ["barato", "medio", "caro"])
-    check("el costo es Cantidad x Precio", [round(v, 6) for v in r["Costo"]],
-          [1.0, 4.0, 30.0])
-    check("el % se reparte sobre el total del borrador",
-          round(float(r[r["Insumo"] == "caro"]["%"].iloc[0]), 4),
-          round(30.0 / 35.0 * 100, 4))
+    rv = pd.DataFrame({
+        "COD PLATO": ["P1"] * 3,
+        "COD INS": ["B1", "I1", "C1"],
+        "INS RV": ["(Rs) Salsa", "Tomate", "(P) Corte"],
+        "CANTIDAD": [80.0, 30.0, 1.0],
+        "UNID COSTO": ["GRAMOS", "GRAMOS", "UND"],
+        "FACTOR": [1000.0, 1000.0, 1.0],
+        "TOTAL": [1.6, 0.3, 20.0],
+    })
+    rb = pd.DataFrame({          # 1 kg de salsa: 500 g de X y 1 kg de Y
+        "COD PROD RB": ["B1", "B1"], "COD INS RB": ["X", "Y"],
+        "INSUMO": ["X", "Y"], "CANT": [500.0, 1000.0], "UNID": ["GRAMOS"] * 2,
+        "FACTOR INS": [1000.0, 1000.0], "CST SUBT INS": [10.0, 10.0],
+        "RB NOMBRE": ["(Rs) Salsa"] * 2, "RB UNID": ["KILOS"] * 2,
+        "FECH REG": ["2026-10-01"] * 2,
+    })
+    po = pd.DataFrame({          # 10 kg de lomo → 8 kg en 40 cortes de 200 g
+        "COD PORC": ["PO1"], "COD PROD INIC": ["L"], "PROD INICIAL": ["Lomo"],
+        "FEC REGIST": ["2026-10-10"], "UNID PROD INIC": ["KILOS"],
+        "CANT A PORCIONAR": [10.0], "CANT TOT RESUL": [8.0],
+        "COD PROD FINAL": ["C1"], "CANT RESULT": [40.0], "PESO RESULT": [8.0],
+        "PREC PROM PROD FIN": [20.0],
+    })
+    compras = {"I1": {"ult": 12.0, "fult": "2026-10-12", "p90": 11.0, "unid": "kg"},
+               "L": {"ult": 88.0, "fult": "2026-10-12", "p90": 80.0, "unid": "kg"}}
+    bases, info = sr.lineas_de_bases(rb)
+    porcs = sr.porcionamientos_vigentes(po)
+    nodos = sr.arbol_plato(rv, "P1", bases, info, porcs, compras)
+    por_cod = {n["cod"]: str(i) for i, n in enumerate(nodos)}
+    r = lambda v: round(v, 4)  # noqa: E731
 
-    lineas[0]["Cantidad"] = 100.0     # ahora "barato" es el más caro
-    r2 = _receta_simulada(lineas)
-    check("y sigue sin reordenarse cuando un costo cambia de puesto",
-          list(r2["Insumo"]), ["barato", "medio", "caro"])
+    check("el árbol suma lo que dice la receta", r(sr.costo_arbol(nodos)), 21.9)
+    check("la receta base se abre con sus líneas, proporcionadas",
+          [(h["cod"], r(h["cant"]), r(h["costo"])) for h in nodos[int(por_cod["B1"])]["hijos"]],
+          [("X", 40.0, 0.8), ("Y", 80.0, 0.8)])
+    corte = nodos[int(por_cod["C1"])]
+    check("el corte trae su merma y su peso", (corte["porc"]["merma"], r(corte["porc"]["peso"])),
+          (20.0, 0.2))
+    check("el precio del origen se despeja del corte", r(sr.precio_origen_hoy(corte)), 80.0)
+    check("la unidad de la receta, corta", nodos[int(por_cod["I1"])]["unid"], "g")
+    rb_ = por_cod["B1"]
+    check("un precio DENTRO de la receta base mueve el plato",
+          r(sr.costo_arbol(nodos, {f"{rb_}.1": {"P": 20.0}})), r(21.9 + 0.8))
+    check("la cantidad de la base escala a sus líneas",
+          r(sr.costo_arbol(nodos, {rb_: {"cant": 160.0}})), r(21.9 + 1.6))
+    check("la merma del corte: precio ÷ (1 − merma) × peso",
+          r(sr.costo_arbol(nodos, {por_cod["C1"]: {"merma": 25.0}})),
+          r(1.6 + 0.3 + 80 / 0.75 * 0.2))
+    check("con la última compra: el tomate a 12 y el lomo a 88",
+          r(sr.costo_arbol(nodos, modo="ult")), r(1.6 + 0.36 + 88 / 0.8 * 0.2))
+    otra = dict(compras, I1={"ult": 12000.0, "fult": "", "p90": 12000.0, "unid": "und"})
+    n2 = sr.arbol_plato(rv, "P1", bases, info, porcs, otra)
+    check("una compra en otra unidad no se usa: queda el precio de hoy",
+          r(sr.costo_arbol(n2, modo="ult")), r(1.6 + 0.3 + 88 / 0.8 * 0.2))
+    check("precio sugerido para quedar en 30 %",
+          r(sr.precio_sugerido(30.0, 30, 1.235)), r(100 * 1.235))
 
-    cero = _precios_y_pesos(pd.DataFrame({
-        "Insumo": ["sin cantidad"], "Cantidad": [0.0], "Costo": [0.0]}))
-    check("cantidad 0 no revienta al despejar el precio unitario",
-          float(cero["Precio"].iloc[0]), 0.0)
+    expo = sr.exposicion_carta(rv, rb, po)
+    check("la exposición lleva el corte a su insumo de origen",
+          {k: r(v) for k, v in expo["P1"].items()},
+          {"X": 0.8, "Y": 0.8, "I1": 0.3, "L": 20.0})
+    carta = pd.DataFrame({"Cod": ["P1"], "Producto": ["Plato"], "Grupo": ["A"],
+                          "Subgrupo": ["B"], "Precio": [100.0], "Neto": [80.0],
+                          "Costo": [21.9], "Vendidos": [30.0]})
+    a = sr.alza(expo, carta, "L", 10)
+    check("el lomo +10 % sube el plato 2,00",
+          (r(a["CostoNuevo"].iloc[0]), r(a["DeltaMes"].iloc[0])), (23.9, 20.0))
+    check("y el precio para mantener su %",
+          r(a["PrecioMantener"].iloc[0]), r(100 * 23.9 / 21.9))
 
-    vacio = _receta_simulada([])
-    check("un borrador vacío devuelve las mismas columnas",
-          list(vacio.columns), ["Insumo", "Cantidad", "Costo", "Precio", "%"])
+    # La gemela del navegador: las tres fórmulas, escritas igual.
+    js = (pathlib.Path(__file__).parent / "graficos" / "simulador_plato.js").read_text(encoding="utf-8")
+    for formula in ("cant * P / (1 - m / 100) * peso", "cant * P / n.factor",
+                    "v / hoy > 1 / 3 && v / hoy < 3", "n.costo / n.cant * n.factor"):
+        check(f"el JS calcula «{formula}»", formula in js, True)
+    css = (pathlib.Path(__file__).parent / "graficos" / "simulador_plato.css").read_text(encoding="utf-8")
+    check("el CSS del simulador no usa :has() (regla #469)", ":has(" in css, False)
+    import graficos.recetaventa as rv_mod
+    check("el simulador viejo de recetaventa ya no existe",
+          hasattr(rv_mod, "_receta_simulada") or hasattr(rv_mod, "_K_SIM_ON"), False)
 
     # ── El clic del Sankey ──────────────────────────────────────
     # `plotly_events` deja en `session_state` un STRING JSON, no una lista:
@@ -9596,8 +9651,10 @@ def _pruebas_costo_recetas_base():
     # ── El rail: el orden y los nombres que se pidieron (2026-09-30) ──────
     visibles = [v for _cat, vistas in rec._RAIL_CATEGORIAS for v in vistas
                 if not v[1].startswith("Tabla")]
+    # «Alza Insumo» se sumó el 2026-10-15, al lado de la carta (regla #656).
     check("el rail, en el orden pedido",
-          [v[1] for v in visibles], ["Costo Carta", "Costo Recetas Base", "Revisar", "Nuevo Costeo"])
+          [v[1] for v in visibles],
+          ["Costo Carta", "Alza Insumo", "Costo Recetas Base", "Revisar", "Nuevo Costeo"])
     check("la pila, en el mismo orden",
           [s for _k, s in rec._PILA if not s.startswith("Tabla")],
           [v[0] for v in visibles])
