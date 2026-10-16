@@ -1025,6 +1025,11 @@ contra 371 días antes — el Día de la Madre contra un domingo cualquiera.
 Comparativo, Mix › Detalle › «Año pasado» y Por hora lo cuentan igual, y
 `test_graficos.py` los compara día por día de 2025 a 2029. Regla #659.
 
+Y su total cuenta sólo los períodos que TIENEN año pasado: el parquet
+empieza el 1-ene-2025, y un mes del año pasado anterior a eso no es «cero
+ventas» (el KPI dice «10 de 12»). En Mes el día de semana NO se cancela —un
+octubre con cinco sábados—: la barra marca «cal. ±x %». Regla #660.
+
 ## La compra resta las notas de crédito: `definicion_compra.py`
 
 Desde el 2026-10-04. Las notas de crédito de los proveedores NO están en

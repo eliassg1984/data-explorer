@@ -158,6 +158,11 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
     col_serv   = _resolver(df_f, ["Servicio", "Tipo Servicio",
                                   "Nomb Servicio", "Nombre Servicio"])
     col_mesero  = _resolver(df_f, ["Nombre Mesero", "Nomb Mesero"])
+    # El neto (sin IGV ni recargo), para «Venta | Neto» del Comparativo
+    # (regla #660). Si la venta ya ES el neto, no hay nada que elegir.
+    _col_neto  = _resolver(df_f, ["Neto Total Item Ddocumento"])
+    if _col_neto == col_venta:
+        _col_neto = None
     if not col_fecha:
         for _c in df_f.columns:
             if pd.api.types.is_datetime64_any_dtype(df_f[_c]):
@@ -304,7 +309,8 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
             _ventas_comparativo(d, col_venta, col_fecha, col_pax=col_pax,
                                 col_pedido=col_pedido, col_prod=col_prod,
                                 col_cant=col_cant, col_fam=col_fam,
-                                col_sub=col_sub, filtrar_cb=_filtrar_items)
+                                col_sub=col_sub, filtrar_cb=_filtrar_items,
+                                col_neto=_col_neto)
 
         # ── 3) Análisis de platos: el ranking entre hasta 4 períodos
         # (graficos/ventas_platos.py, regla #529). Trae sus períodos aparte

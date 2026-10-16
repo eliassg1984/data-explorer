@@ -2956,6 +2956,7 @@ CSS = """    /* ================================================================
        se inyecta en Compras. Desde el 2026-10-05 la usa también el total de
        la ventana de «Comparativo vs Año Pasado» (`ventas_comp_tot`, regla
        #659), que también hace de leyenda. */
+    .st-key-ventas_comp_platos_kpi [data-testid="stMarkdownContainer"],
     .st-key-ventas_comp_tot [data-testid="stMarkdownContainer"],
     .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"],
     .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"],
@@ -2968,6 +2969,7 @@ CSS = """    /* ================================================================
     /* El título y los KPI en un renglón (regla #519): el look de
        `.chart-card-hdr` —mismo cuerpo, peso y color, y la línea abajo— pero
        compartiendo el flex con los KPI. */
+    .st-key-ventas_comp_platos_kpi .vt-cab,
     .st-key-ventas_comp_tot .vt-cab,
     .st-key-vt_resumen_kpi .vt-cab,
     .st-key-vt_mix_cabfila .vt-cab,
@@ -2982,6 +2984,7 @@ CSS = """    /* ================================================================
         padding: 0 0 6px;
         border-bottom: 1px solid var(--border);
     }
+    .st-key-ventas_comp_platos_kpi .vt-cab-tit,
     .st-key-ventas_comp_tot .vt-cab-tit,
     .st-key-vt_resumen_kpi .vt-cab-tit,
     .st-key-vt_mix_cabfila .vt-cab-tit,
@@ -2995,6 +2998,7 @@ CSS = """    /* ================================================================
         color: var(--accent-deep);
         white-space: nowrap;
     }
+    .st-key-ventas_comp_platos_kpi .vt-kpis,
     .st-key-ventas_comp_tot .vt-kpis,
     .st-key-vt_resumen_kpi .vt-kpis,
     .st-key-vt_mix_cabfila .vt-kpis,
@@ -3007,6 +3011,7 @@ CSS = """    /* ================================================================
         align-items: stretch;
         gap: 2px 0;
     }
+    .st-key-ventas_comp_platos_kpi .vt-kpi,
     .st-key-ventas_comp_tot .vt-kpi,
     .st-key-vt_resumen_kpi .vt-kpi,
     .st-key-vt_mix_cabfila .vt-kpi,
@@ -3023,6 +3028,7 @@ CSS = """    /* ================================================================
         line-height: 1.2;
         border-left: 1px solid var(--border);
     }
+    .st-key-ventas_comp_platos_kpi .vt-kpi:first-child,
     .st-key-ventas_comp_tot .vt-kpi:first-child,
     .st-key-vt_resumen_kpi .vt-kpi:first-child,
     .st-key-vt_mix_cabfila .vt-kpi:first-child,
@@ -3034,6 +3040,7 @@ CSS = """    /* ================================================================
         border-left: none;
         max-width: none;
     }
+    .st-key-ventas_comp_platos_kpi .vt-kpi-rot,
     .st-key-ventas_comp_tot .vt-kpi-rot,
     .st-key-vt_resumen_kpi .vt-kpi-rot,
     .st-key-vt_mix_cabfila .vt-kpi-rot,
@@ -3047,6 +3054,7 @@ CSS = """    /* ================================================================
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    .st-key-ventas_comp_platos_kpi .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-ventas_comp_tot .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_resumen_kpi .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_mix_cabfila .vt-kpi[style] .vt-kpi-rot::before,
@@ -3062,6 +3070,7 @@ CSS = """    /* ================================================================
         border-radius: 2px;
         background: var(--vt-kpi-color);
     }
+    .st-key-ventas_comp_platos_kpi .vt-kpi-val,
     .st-key-ventas_comp_tot .vt-kpi-val,
     .st-key-vt_resumen_kpi .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-val,
@@ -3074,6 +3083,7 @@ CSS = """    /* ================================================================
         color: var(--text-primary);
         white-space: nowrap;
     }
+    .st-key-ventas_comp_platos_kpi .vt-kpi-sub,
     .st-key-ventas_comp_tot .vt-kpi-sub,
     .st-key-vt_resumen_kpi .vt-kpi-sub,
     .st-key-vt_mix_cabfila .vt-kpi-sub,
@@ -3086,6 +3096,7 @@ CSS = """    /* ================================================================
         font-weight: 400;
         color: var(--text-secondary);
     }
+    .st-key-ventas_comp_platos_kpi .vt-kpi-total .vt-kpi-val,
     .st-key-ventas_comp_tot .vt-kpi-total .vt-kpi-val,
     .st-key-vt_resumen_kpi .vt-kpi-total .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-total .vt-kpi-val,
@@ -3096,6 +3107,7 @@ CSS = """    /* ================================================================
         color: var(--accent-deep);
         font-weight: 700;
     }
+    .st-key-ventas_comp_platos_kpi .vt-kpi-alerta .vt-kpi-val,
     .st-key-ventas_comp_tot .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_resumen_kpi .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-alerta .vt-kpi-val,
@@ -4508,9 +4520,57 @@ CSS = """    /* ================================================================
         }
     }
     /* Alto mínimo del total de la ventana: se llena después de cargar los
-       datos y, vacío, la tarjeta saltaría en cada clic (regla #108). */
+       datos y, vacío, la tarjeta saltaría en cada clic (regla #108). Con la
+       línea «Por qué» debajo (regla #660) son dos renglones. */
     .st-key-ventas_comp_tot {
-        min-height: 28px;
+        min-height: 48px;
+    }
+    /* «Mes a la fecha» y «Año a la fecha» van a la DERECHA de la fila del
+       total, separados de los KPI de la ventana: no dependen de ella. */
+    .st-key-ventas_comp_tot .vt-kpis-sep {
+        flex: 1 1 0;
+        min-width: 12px;
+    }
+    .st-key-ventas_comp_tot .vt-kpis-sep + .vt-kpi {
+        border-left: none;
+    }
+    /* La línea «Por qué» (regla #660): debajo de los KPI, cada cosa con su
+       tooltip; un renglón, que se corta con «…» si no entra. */
+    .st-key-ventas_comp_tot .vt-lectura,
+    .st-key-ventas_comp_platos_kpi .vt-lectura {
+        margin-top: 3px;
+        font-size: 11px;
+        line-height: 16px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .st-key-ventas_comp_tot .vt-lectura span + span::before,
+    .st-key-ventas_comp_platos_kpi .vt-lectura span + span::before {
+        content: "·";
+        margin: 0 8px;
+        color: var(--border);
+    }
+    .st-key-ventas_comp_tot .vt-lectura span,
+    .st-key-ventas_comp_platos_kpi .vt-lectura span {
+        cursor: help;
+    }
+    .st-key-ventas_comp_platos_kpi {
+        margin-bottom: 6px;
+    }
+    /* El rótulo de los paneles «Por grupo» / «Por canal» del drill. */
+    .vt-drill-tit {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 2px;
+    }
+    /* «Venta | Neto» (regla #660), a la izquierda de «Vista»: el mismo aire,
+       sin línea —son los dos «qué muestro»—. */
+    .st-key-ventas_comp_g_monto {
+        padding-left: 24px;
+        min-height: 38px;
     }
     /* En el celular los cinco KPI (~410px) no entran en una tarjeta de
        ~300: la fila se partía en dos renglones de 57px, la reserva de 28

@@ -2434,6 +2434,97 @@ def _pruebas_puras():
           _vc._var_txt(0.04)[0], "0%")
     check("variación · el menos tipográfico", _vc._var_txt(-4.66)[0], "−4.7%")
 
+    # ── Lo que se agregó el 2026-10-16 (regla #660) ─────────────────────
+    # El año pasado antes del primer día del parquet NO es «cero ventas».
+    _rp_sd = [((2024, 11), _dt.date(2024, 11, 1), _dt.date(2024, 11, 30)),
+              ((2024, 12), _dt.date(2024, 12, 1), _dt.date(2024, 12, 31)),
+              ((2025, 1), _dt.date(2025, 1, 1), _dt.date(2025, 1, 31))]
+    _ok_sd = _vc._comparables(_rp_sd, _dt.date(2025, 1, 1))
+    check("sin dato AP · los meses antes del parquet no se comparan",
+          _ok_sd, [False, False, True])
+    check("sin dato AP · sin saber el inicio, se comparan todos",
+          _vc._comparables(_rp_sd, None), [True, True, True])
+    check("sin dato AP · el rótulo nombra los meses",
+          _vc._texto_sin_dato([k for k, _i, _f in _rp_sd], _ok_sd, "Mes"),
+          "nov 2024 y dic 2024")
+    # El total deja afuera los períodos sin año pasado (de los dos lados).
+    _vc._cargar_tramo = lambda *a, **k: _df_t
+    try:
+        _tot_sd = _vc._series_por_rangos(
+            "x.parquet", "F", "Fec Reg Documento", "Venta Item Ddocumento",
+            None, None, _rangos_t, None, en_total=[True, False])[3]
+    finally:
+        _vc._cargar_tramo = _orig_tramo
+    check("sin dato AP · el total suma sólo los períodos comparables",
+          (_tot_sd["venta"], _tot_sd["n"]), (150.0, 1))
+
+    # Un mes NO cancela el día de semana: octubre de 2026 trae cinco sábados
+    # y el de 2025, cuatro (y un viernes más). Con el sábado vendiendo 1.000
+    # y el resto 100, la diferencia de calendario es +900 − 100 sobre la
+    # venta de octubre 2025.
+    _oct25 = [_dt.date(2025, 10, 1) + _dt.timedelta(days=i) for i in range(31)]
+    _dias_ap = {f: (1000.0 if f.weekday() == 5 else 100.0) for f in _oct25}
+    _ef = _vc._efecto_calendario(
+        (_dt.date(2026, 10, 1), _dt.date(2026, 10, 31)),
+        (_dt.date(2025, 10, 1), _dt.date(2025, 10, 31)), _dias_ap)
+    check("calendario · un sábado de más pesa, un viernes de menos resta",
+          round(_ef, 4), round((1000.0 - 100.0) / sum(_dias_ap.values()) * 100, 4))
+    check("calendario · 364 días antes no tiene efecto",
+          _vc._efecto_calendario(
+              (_dt.date(2026, 10, 5), _dt.date(2026, 10, 11)),
+              (_dt.date(2025, 10, 6), _dt.date(2025, 10, 12)),
+              {_dt.date(2025, 10, 6) + _dt.timedelta(days=i): 100.0 * (i + 1)
+               for i in range(7)}), 0.0)
+
+    # La diferencia partida en clientes / ticket / sin clientes SUMA exacto.
+    _pq = _vc._por_que({"venta": 1300.0, "pax": 25.0, "cli": 1100.0},
+                       {"venta": 1000.0, "pax": 20.0, "cli": 900.0})
+    check("por qué · los tres efectos suman la diferencia",
+          round(_pq["clientes"] + _pq["ticket"] + _pq["sin_clientes"], 6),
+          300.0)
+    check("por qué · clientes al ticket del año pasado",
+          round(_pq["clientes"], 6), 225.0)
+    check("por qué · sin clientes en algún lado no se parte",
+          _vc._por_que({"venta": 10.0, "pax": None, "cli": None},
+                       {"venta": 5.0, "pax": None, "cli": None}), None)
+
+    # Por producto: cantidad al precio de antes + precio sobre lo de hoy.
+    _ec, _ep, _qu = _vc._efectos_producto(300.0, 200.0, 10.0, 10.0)
+    check("producto · el mismo volumen más caro es «más caro»",
+          (_ec, _ep, _qu), (0.0, 100.0, "más caro"))
+    _ec, _ep, _qu = _vc._efectos_producto(150.0, 200.0, 6.0, 8.0)
+    check("producto · los dos efectos suman el Δ",
+          (round(_ec + _ep, 6), _qu), (-50.0, "vende menos"))
+    check("producto · nuevo y ya no se vende",
+          (_vc._efectos_producto(50.0, 0.0, 2.0, 0.0)[2],
+           _vc._efectos_producto(0.0, 80.0, 0.0, 3.0)[2]),
+          ("nuevo", "ya no se vende"))
+    _t_q = _t_d.assign(cant=[10.0, 0.0, 5.0, 30.0, 2.0],
+                       cant_ap=[10.0, 40.0, 0.0, 31.0, 2.0])
+    _tab_q, _res_q = _vc._explica_diferencia(_t_q, top=3)
+    check("explica · cantidad + precio suman la diferencia, también el Resto",
+          (round(float((_tab_q["ef_cant"] + _tab_q["ef_precio"]).sum()), 6),
+           round(_res_q["ef_cant"] + _res_q["ef_precio"], 6)), (-350.0, -350.0))
+
+    # «Mes a la fecha» / «Año a la fecha»: los mismos días del calendario.
+    check("a la fecha · el año",
+          _vc._a_la_fecha(_dt.date(2026, 10, 15), "año"),
+          (_dt.date(2026, 1, 1), _dt.date(2026, 10, 15),
+           _dt.date(2025, 1, 1), _dt.date(2025, 10, 15)))
+
+    # La línea «Por qué»: el IGV se nombra sólo si tuerce la comparación.
+    _lec = _vc._lectura(
+        {"venta": 1100.0, "neto": 1000.0, "pax": None, "cli": None,
+         "raro": 0.0, "canales": {"SALON": 1100.0}},
+        {"venta": 1000.0, "neto": 840.0, "pax": None, "cli": None,
+         "raro": 0.0, "canales": {"SALON": 900.0, "PEDIDOS YA": 100.0}})
+    _txts = [t for t, _ in _lec]
+    check("lectura · el IGV distinto de los dos lados se dice",
+          any(t.startswith("Sin IGV") for t in _txts), True)
+    check("lectura · un canal de un solo lado se dice",
+          any(t.startswith("Pedidos Ya: sólo el año pasado") for t in _txts),
+          True)
+
     # ── Mapa por hora (Ventas › Por hora) ───────────────────────────────
     from graficos import ventas_horario as _vh
 

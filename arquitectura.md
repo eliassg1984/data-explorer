@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-659 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+660 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (213)
 
@@ -344,7 +344,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
 - **#655** — «Costo por kg útil» muestra de dónde sale cada número: la ventana dice sus días y empieza a…
 
-**Plotly y figuras** (116)
+**Plotly y figuras** (117)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -462,6 +462,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
 - **#649** — La barra de las tarjetas «por período» de Movimientos es LISA y resalta UNA parte, elegida…
 - **#659** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
+- **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
 
 **AgGrid y tablas** (94)
 
@@ -962,7 +963,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (180)
+**Decisiones de diseño y UX** (181)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1144,6 +1145,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#657** — Costo Carta es «la tabla primero»: la carta a todo el ancho con TODAS sus columnas, una fecha…
 - **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
 - **#659** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
+- **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
 
 **Mantenimiento y trampas del lenguaje** (16)
 
@@ -51747,6 +51749,83 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-05.)
 
+
+660. **Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene
+     año pasado, un mes NO cancela el día de semana, «Venta | Neto», el año
+     y el mes a la fecha, una línea «Por qué», y el clic abre una
+     comparación, no una lista.** 2026-10-16, a pedido («qué le faltaría,
+     que no tenga otra vista»; y del drill, «muy pobre para ser una
+     comparación»). Todo en `graficos/ventas_comparativo.py`.
+
+     - **El año pasado antes del parquet no es «cero ventas»**
+       (`_comparables`, `_texto_sin_dato`). El histórico empieza el
+       1-ene-2025: con 12 meses hasta oct-2026, noviembre y diciembre de
+       2024 entraban al total como S/ 0 y el crecimiento salía inflado
+       (medido en el demo con dos años: +17 % donde era −3,2 %). Ahora esos
+       períodos quedan FUERA del total, de los dos lados
+       (`_series_por_rangos(en_total=…)`), el KPI dice «10 de 12» y su
+       tooltip cuáles, y su barra del año pasado no se dibuja: «sin dato
+       AP» arriba. El primer día sale de `data.rango_fechas` sobre la
+       columna con que se carga; si no se sabe (`None`) se comparan todos,
+       como antes. **En el demo `rango_fechas` devuelve None** (busca una
+       columna «Fecha» que el demo de ventas no tiene): para verlo en local
+       hay que parchear eso en una copia.
+     - **Un mes no trae «todos los días» parejos**: el caption y el
+       docstring decían que en Mes «el ruido del día de semana se cancela
+       solo», y es falso — 31 días son cuatro semanas y tres sueltos, y
+       esos tres cambian de un año al otro. `_efecto_calendario` valoriza
+       los días de semana de más o de menos con lo que ese día vendió en
+       promedio el año pasado; la barra lo marca «cal. ±x %» desde un
+       punto, y la línea «Por qué» suma el de la ventana desde medio punto.
+       En Semana (364 días) da cero siempre, y así lo dice el caption.
+     - **«Venta | Neto»** (`ventas_comp_vista_monto`, al lado de «Vista»):
+       todo —barras, total, drill— pasa a medirse con el neto (sin IGV ni
+       recargo, `NETO TOTAL ITEM DDOCUMENTO`) y el ticket se llama «Ticket
+       neto». El IGV cambió dos veces (18 → 10 % el 10/06/2025, → 10,5 %
+       el 10/02/2026, regla #590): con el mismo precio de carta la venta
+       bruta del año pasado no es comparable. La key empieza con
+       `ventas_comp_vista` A PROPÓSITO, para heredar el dibujo de los pills
+       de «Vista» por prefijo. Sin columna de neto (o si la venta YA es el
+       neto) no se dibuja.
+     - **«Mes a la fecha» y «Año a la fecha»** a la derecha de la fila del
+       total (`_a_la_fecha`, `_kpi_a_la_fecha`): del 1 hasta el último día
+       con datos contra los mismos días del CALENDARIO un año antes (la
+       cuenta de un cierre, no por día de semana). No dependen de la
+       ventana; sí de los filtros. Un año a la fecha son hasta 12 meses por
+       lado y la vista se re-corre con cada clic: `_total_memo` lo recuerda
+       en `session_state` con el sello del parquet (#367), la fecha por
+       turno (#593) y una firma de los filtros (filas y venta del `d`).
+     - **La línea «Por qué»** (`_lectura`, `.vt-lectura` en
+       `estilos/_80_cards.py`), debajo de los KPI, cada cosa sólo si
+       aplica y con su tooltip: la diferencia partida en **clientes ×
+       ticket del año pasado + ticket × clientes de hoy + canales sin
+       clientes** (`_por_que`: suman exacto la diferencia); **«Sin IGV»**
+       si la diferencia neta se aparta medio punto de la RELACIÓN (no de
+       los %: +219 contra +218 no es nada); **«Calendario»**; **«Sin
+       Eventos ni Venta interna»** (`GRUPOS_RAROS` de
+       `ventas_ficha_hora.py`: el evento de S/ 58.500 de un día); y **los
+       canales de un solo lado** (Pedidos Ya existió sólo en 2025). El
+       total pasa de 28 a 48px y los 20 los paga la figura
+       (`alturas.VENTAS_COMP_FIG` 296 → 276): la tarjeta no crece.
+     - **El drill es una comparación** (`_drill_detalle`, `_fig_delta`,
+       `_efectos_producto`). Hasta este día el clic abría sólo la tabla de
+       productos con Venta AP/actual y su Δ: decía cuánto cambió cada plato,
+       no por qué. Ahora la tarjeta abre con los KPI y la línea «Por qué»
+       DEL PERÍODO, sigue con la diferencia **por Grupo y por Canal**
+       (barras horizontales a medias, aunque haya un solo panel: a todo el
+       ancho cuatro barras se leen vacías), y la tabla trae **«Qué
+       cambió»** (nuevo, ya no se vende, vende más/menos, más caro/barato),
+       **«Por cantidad»** (lo vendido de más o de menos al precio del año
+       pasado) y **«Por precio»** (el precio promedio sobre lo de hoy), que
+       suman el Δ —también en la fila «Resto»—, y el precio promedio de
+       los dos lados. El pie dice la diferencia entera partida igual.
+
+     Lo que no se hizo: el clic para ocultar una serie en Montos (#91)
+     sigue sin volver. El Comparativo no lleva proyección del mes ni
+     «mejor y peor día»: el Resumen y Por día ya contestan eso.
+
+     (2026-10-16.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51759,7 +51838,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#659**; la próxima toma el número siguiente.
+> última regla es la **#660**; la próxima toma el número siguiente.
 
 >
 
