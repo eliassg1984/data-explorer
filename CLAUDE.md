@@ -1100,11 +1100,14 @@ Familia y Subfamilia salen del histórico SIN el filtro de Documento: elegir
 
 ## El costo de ventas: el reporte «Costos»
 
-Desde el 2026-10-09. Una vista, «Costo de ventas», por MES OPERATIVO:
+Desde el 2026-10-09. Una vista, «Costo de Venta Ajustado» en el rail
+(desde el 2026-10-16; su id sigue siendo «Costo de ventas»), por MES
+OPERATIVO:
 
     Consumo operativo = inventario inicial + compras − inventario final
     Consumo carta     = consumo operativo − consumos no vendidos
-                        (bajas + demás notas de salida + cortesías)
+                        (bajas + demás notas de salida + cortesías
+                         + costo de descuentos)
 
 El consumo carta se compara con el costo del POS (Paloteo › Comparativo ›
 «(a) Ventas en el rango»); el operativo es el dato de antes. Los nombres son
@@ -1117,6 +1120,15 @@ POS y Eventos y Venta interna no son la venta: los dos se ajustan en
 pantalla (Eventos se suma a la venta por defecto; Venta interna, no). Por **quincena o semana** el inventario es el del KARDEX al final
 del período (`costo_ventas.inventario_en_momentos`), no lo contado: las
 semanas no suman el mes. Reemplazó a Ventas › «Venta vs Compra». Regla #622.
+
+**El costo de descuentos es la parte REGALADA** (costo × descuento ÷
+carta: un plato al 50 % deja la mitad de su costo), y **se resta de los
+dos lados**: ese plato SÍ se vendió y el POS lo costea entero, así que la
+comparación es contra el «Sistema Restaurante ajustado» y la
+diferencia no cambia. Sale de `definicion_venta.por_grupo_dia`
+(`costo_descuento`). El descuento cuadra al céntimo con el Reporte de
+Descuentos del POS (`spRep_Descuento`): septiembre 2026, S/ 50.481,50.
+Regla #661.
 
 ## El stock también tiene UNA definición: lo ACTIVO
 

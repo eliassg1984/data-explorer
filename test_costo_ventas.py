@@ -153,6 +153,31 @@ igual(float(cort.loc[P("2026-09"), "Alimentos"]), 12.0, "la cortesía, a su cost
 igual(float(v_ap.loc[P("2026-09"), "Eventos"]), 500.0, "Eventos va aparte")
 ok(float(venta.loc[P("2026-09")].sum()) == 60.0, "Eventos no suma a la venta")
 
+# El costo de la parte DESCONTADA (regla #661): costo × descuento ÷ carta.
+# Un plato de carta 100 al 50 % (costo 30) deja 15; una línea sin descuento,
+# 0; una cortesía no tiene «descuento» (va entera a cortesías); la nota de
+# crédito que anula un plato al 20 % lo resta; el ítem pagado en dos formas
+# cuenta una vez.
+vd = pd.DataFrame({
+    dv.FECHA: pd.to_datetime(["2026-09-03"] * 6),
+    dv.GRUPO: ["Alimentos"] * 4 + ["Eventos", "Alimentos"],
+    dv.CLASE: [dv.VENTA, dv.VENTA, dv.VENTA, dv.CORTESIA, dv.VENTA, dv.NOTA_CREDITO],
+    dv.LLAVE_ITEM: ["A1", "A1", "B1", "C1", "E1", "N1"],
+    dv.NETO_ITEM: [50.0, 50.0, 40.0, 0.0, 80.0, -40.0],
+    dv.COSTO: [30.0, 30.0, 12.0, 9.0, 20.0, -10.0],
+    dv.CARTA_UNIT: [100.0, 100.0, 40.0, 25.0, 100.0, 50.0],
+    dv.CANTIDAD: [1.0, 1.0, 1.0, 1.0, 1.0, -1.0],
+    dv.DESCUENTO_ITEM: [50.0, 50.0, 0.0, 25.0, 20.0, -10.0],
+})
+pgd_d = dv.por_grupo_dia(vd)
+desc, desc_ap = cv.descuentos_por(pgd_d, cv.clave_mes)
+igual(round(float(desc.loc[P("2026-09"), "Alimentos"]), 6), 13.0,
+      "costo de descuentos: 30 × 50 % − 10 × 20 % (la nota resta), sin la cortesía")
+igual(round(float(desc_ap.loc[P("2026-09"), "Eventos"]), 6), 4.0,
+      "el descuento de Eventos va aparte, como su costo")
+igual(cv.descuentos_por(pgd.drop(columns=["costo_descuento"]), cv.clave_mes)[0].empty, True,
+      "sin la columna (una caché vieja), el costo de descuentos va vacío")
+
 # ── armar: la tabla entera ───────────────────────────────────────────────
 D = cv.armar(ajuste, compras, salidas, pgd)
 igual([x["k"] for x in D["periodos"]], ["2026-09", "2026-10"], "armar: meses")
@@ -166,6 +191,11 @@ igual(consumo, 750.0, "consumo operativo = inicial + compras − final")
 carta = consumo - D["salidas"]["Bajas"]["Alimentos"][0] - f["cortesias"]["Alimentos"][0]
 igual(carta, 718.0, "consumo carta = operativo − bajas − cortesías")
 igual(D["venta_extra"]["Eventos"][0], 500.0, "armar: Eventos aparte")
+ok("descuentos" in f and "descuento_extra" in D,
+   "armar: el costo de descuentos viaja como fila (regla #661)")
+_js = (RAIZ / "graficos" / "costos_tabla.js").read_text(encoding="utf-8")
+ok("r.desc" in _js and "resta(r.pos, r.desc)" in _js and "nv = suma(suma(r.bajas, r.cort), r.desc)" in _js,
+   "la tabla resta el costo de descuentos de los DOS lados: consumo y POS (regla #661)")
 ok(set(cv.tabla_larga(D).columns) == {"PERIODO", "FAMILIA", "CONCEPTO", "SOLES"},
    "la tabla para el asistente, con columnas por nombre")
 igual(cv.armar(ajuste.iloc[:0], compras, salidas, pgd)["periodos"], [],

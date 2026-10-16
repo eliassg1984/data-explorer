@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-660 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+661 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (213)
 
@@ -963,7 +963,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (181)
+**Decisiones de diseño y UX** (182)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1146,6 +1146,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
 - **#659** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
 - **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
+- **#661** — El costo de los DESCUENTOS es un consumo no vendido, y se resta de los dos lados: «Costo de…
 
 **Mantenimiento y trampas del lenguaje** (16)
 
@@ -51826,6 +51827,55 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-16.)
 
+661. **El costo de los DESCUENTOS es un consumo no vendido, y se resta de
+     los dos lados: «Costo de Venta Ajustado».** 2026-10-16, a pedido
+     («quiero que este dato se coloque en mi vista de costo de ventas,
+     como dentro de Consumos no Vendidos»; y la vista se renombra).
+
+     - **El Reporte de Descuentos del POS es `spRep_Descuento`**
+       (INFOREST, Consulta.exe › Descuentos). Cuenta las líneas de
+       `DPEDIDO` con `nDescuento > 0` o pedido con `MPEDIDO.tDescuento`,
+       pedido ≠ 03, por `MPEDIDO.fRegistro` (la apertura de la mesa); en
+       «Precio Venta» el descuento de la línea es `nPrecioOficial ×
+       nCantidad − nVenta`, y el motivo sale de `vMotivoDescuento`.
+       **Septiembre 2026 cuadra al céntimo con la app: S/ 50.481,50**
+       (17 motivos; BCP 50 % S/ 23.402, 50 % Comercio 9.213, Amex Platinum
+       8.600, Socios 2.257,50…), con dos condiciones: un ítem una vez
+       (#517) y la definición de venta — VENTA más NOTA DE CRÉDITO (#524).
+       Sumar también lo ANULADO da 633,20 de más (el documento anulado y
+       el re-emitido llevan la misma línea; el POS, que lee el pedido, una
+       vez), y sin la nota, 100 de más (un canje). En el parquet es
+       `DESCUENTO ITEM DDOCUMENTO`, con el motivo en `NOMBRE DESCUENTO`.
+     - **Un plato con descuento SÍ se vendió**, y el POS lo costea ENTERO
+       en «(a) Ventas en el rango». Restar su descuento del consumo sin
+       más descuadraba la «Diferencia» por ese monto. Se eligió (de cuatro
+       opciones, a pedido) **el costo de la parte regalada**: costo ×
+       descuento ÷ precio de carta de la línea —un plato al 50 % deja la
+       mitad de su costo, como media cortesía—, restado del consumo
+       («Costo de descuentos», en «Consumos no vendidos › Sistema
+       Restaurante») Y del costo del POS («Sistema Restaurante
+       ajustado»). La diferencia no cambia; los dos costos quedan
+       ajustados. Septiembre 2026: S/ 12.297, contra S/ 42.941 del costo
+       entero de esos platos. El descuento en soles (lo no cobrado) se
+       descartó: es un precio, y las bajas y cortesías van a costo.
+     - **La cuenta vive en `definicion_venta.por_grupo_dia`**, columna
+       `costo_descuento` (VERSION 6: la caché de disco de la venta por
+       grupo no caduca). La parte se acota entre 0 y 1; en una nota de
+       crédito descuento y carta van en negativo, la parte sale positiva y
+       el costo negativo la resta. Las cortesías no llevan: su costo entero
+       ya está en «Costo de cortesías». `costo_ventas.descuentos_por` lo
+       agrupa por cubeta y, aparte, para Eventos y Venta interna
+       (`descuento_extra`): si se suma Eventos a Alimentos, su descuento
+       viaja con su costo. Sin la columna (una caché anterior), vacío.
+     - **El nombre**: el rail dice «Costo de Venta Ajustado» y la tabla
+       «Estado de costo de venta ajustado»; el id de la vista sigue siendo
+       «Costo de ventas» (renombrar es cambiar sólo el rótulo).
+
+     Lo vigila `test_costo_ventas.py` (la cuenta con una nota, una
+     cortesía y Eventos, y que la tabla reste de los dos lados).
+
+     (2026-10-16.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51838,7 +51888,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#660**; la próxima toma el número siguiente.
+> última regla es la **#661**; la próxima toma el número siguiente.
 
 >
 

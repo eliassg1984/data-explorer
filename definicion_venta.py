@@ -60,7 +60,7 @@ consumen los dos lados — `data.py` y las vistas —, igual que `cortes.py`.
 import numpy as np
 import pandas as pd
 
-VERSION = 5
+VERSION = 6
 """Entra en la clave de la caché de `data.py`. Subirla al cambiar la
 definición: la caché vive en disco y, sin esto, seguiría sirviendo el df
 preparado con la regla anterior hasta que cambie el parquet.
@@ -70,7 +70,8 @@ la caché local tenía el df de la 1, sin esa columna, y «Ranking & FoodCost»
 siguió mostrando el FoodCost con el costo unitario. La 3 es el costo de
 los combos (regla #542); la 4, los niños de las notas de crédito, que
 restan como los adultos (regla #591); la 5, la nota que toma la fecha de
-su propia fila, y la venta por día del turno de caja (regla #593)."""
+su propia fila, y la venta por día del turno de caja (regla #593); la 6,
+el costo de la parte DESCONTADA en `por_grupo_dia` (regla #661)."""
 
 CLASE = "CLASE VENTA"
 VENTA = "Venta"
@@ -723,7 +724,7 @@ def unidades_por_clase_dia(df):
         g[c] = g[c].astype(object)
     return g[list(POR_CLASE_DIA)]
 
-POR_GRUPO_DIA = ("dia", "grupo", "clase", "neto", "costo")
+POR_GRUPO_DIA = ("dia", "grupo", "clase", "neto", "costo", "costo_descuento")
 """Las columnas de `por_grupo_dia`, con nombre fijo (regla #481)."""
 
 
@@ -736,7 +737,14 @@ def por_grupo_dia(df):
     una cortesía es cero; su precio de carta no entra acá). Un ítem una vez
     (regla #517). Lo lee el reporte Costos (`costo_ventas.py`): la venta
     neta y el costo según el POS de cada mes, y el costo de las cortesías.
-    El día es el que trae el df: el del turno si se preparó con `turno`."""
+    El día es el que trae el df: el del turno si se preparó con `turno`.
+
+    `costo_descuento` es el costo de la parte REGALADA de cada plato con
+    descuento: costo × descuento ÷ precio de carta de la línea —un plato al
+    50 % deja la mitad de su costo—. Es como una media cortesía, y el
+    reporte Costos la resta de los dos lados (regla #661). El descuento es
+    el del Reporte de Descuentos del POS (`spRep_Descuento`, «Precio
+    Venta»): septiembre 2026 cuadra al céntimo, S/ 50.481,50."""
     vacio = pd.DataFrame(columns=list(POR_GRUPO_DIA))
     if df is None or df.empty:
         return vacio
@@ -762,11 +770,19 @@ def por_grupo_dia(df):
         "clase": d[c_clase].where(d[c_clase] == CORTESIA, VENTA).astype(object),
         "neto": _num(NETO_ITEM),
         "costo": _num(COSTO),
-    }).dropna(subset=["dia", "grupo"])
+    })
+    # La parte descontada: descuento ÷ carta, entre 0 y 1. En una nota de
+    # crédito los dos van en negativo y la parte sale positiva; el costo,
+    # negativo, la resta.
+    carta = _num(CARTA_UNIT) * _num(CANTIDAD)
+    parte = (_num(DESCUENTO_ITEM) / carta.where(carta.abs() > 1e-9)).fillna(0.0)
+    b["costo_descuento"] = (b["costo"] * parte.clip(0.0, 1.0)).where(
+        b["clase"] != CORTESIA, 0.0)
+    b = b.dropna(subset=["dia", "grupo"])
     if b.empty:
         return vacio
     g = b.groupby(["dia", "grupo", "clase"], as_index=False)[
-        ["neto", "costo"]].sum()
+        ["neto", "costo", "costo_descuento"]].sum()
     g["grupo"] = g["grupo"].astype(object)
     return g
 

@@ -41,11 +41,13 @@ from graficos.base import (
     _render_rail, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
 )
 
-# Una sola vista. El rail se declara igual —con `rail_sin_tablas`, como
+# Una sola vista: «Costo de Venta Ajustado» desde el 2026-10-16 (a pedido,
+# al sumar el costo de descuentos, regla #661). El id sigue siendo «Costo de
+# ventas»: renombrar es cambiar sólo el rótulo. El rail se declara igual —con `rail_sin_tablas`, como
 # todos (regla #507)— porque de él salen el panel del reporte en la columna
 # (`graficos/__init__.py::_RAILS`, regla #568) y el rótulo de la franja.
 _COSTOS_RAIL_CATEGORIAS = rail_sin_tablas((
-    ("Costos", (("Costo de ventas", "Costo de Ventas", ":material/calculate:"),)),
+    ("Costos", (("Costo de ventas", "Costo de Venta Ajustado", ":material/calculate:"),)),
 ))
 
 # Vacía y no ausente: `_render_rail` distingue `secciones=()` («destino

@@ -59,17 +59,21 @@ function porFamilia(st, data, w, b) {
   const r = {
     v: de(f.venta), ii: de(f.inv_inicial), c: de(f.compras), fi: de(f.inv_final),
     bajas: de((data.salidas || {})[BAJAS]), cort: de(f.cortesias), pos: de(f.costo_pos),
+    desc: de(f.descuentos),
   };
   if (b === 'Alimentos') {
     for (const g of Object.keys(data.venta_extra || {}).filter((x) => st.extra.has(x))) {
       r.v = suma(r.v, cortar(data.venta_extra[g], w));
       r.pos = suma(r.pos, cortar((data.costo_extra || {})[g], w));
+      const d = cortar((data.descuento_extra || {})[g], w);
+      if (d.length) r.desc = suma(r.desc, d);
     }
   }
   r.operativo = resta(suma(r.ii, r.c), r.fi);
-  // Consumos no vendidos: las bajas, el costo de las cortesías y las demás
-  // salidas que no se quitaron. Es lo que va del consumo operativo al carta.
-  let nv = suma(r.bajas, r.cort);
+  // Consumos no vendidos: las bajas, el costo de las cortesías, el de la
+  // parte descontada y las demás salidas que no se quitaron. Es lo que va
+  // del consumo operativo al carta.
+  let nv = suma(suma(r.bajas, r.cort), r.desc);
   for (const t of st.agregadas) {
     r[`s_${t}`] = de((data.salidas || {})[t]);
     nv = suma(nv, r[`s_${t}`]);
@@ -77,7 +81,12 @@ function porFamilia(st, data, w, b) {
   r.nv = nv;
   r.carta = resta(r.operativo, nv);
   r.margen = resta(r.v, r.carta);
-  r.dif = resta(r.carta, r.pos);
+  // El POS costea ENTERO el plato con descuento —se vendió—: su costo
+  // ajustado le resta la misma parte descontada, y la diferencia compara
+  // lo mismo con lo mismo (regla #661).
+  r.pos_desc = r.desc;
+  r.pos_aj = resta(r.pos, r.desc);
+  r.dif = resta(r.carta, r.pos_aj);
   return r;
 }
 
@@ -95,7 +104,7 @@ function filas(st) {
     // crece hacia abajo con sus dos tramos —lo que viene del Almacén y lo
     // que viene del Sistema Restaurante—, que contablemente son cosas
     // distintas (merma o desmedro, gasto de personal, promoción).
-    { k: 'nv', nom: 'Consumos no vendidos', nota: 'bajas, consumo interno y cortesías', signo: '−', tipo: 'suma', sentido: 'mal', grupo: true, fuerte: true },
+    { k: 'nv', nom: 'Consumos no vendidos', nota: 'bajas, consumo interno, cortesías y descuentos', signo: '−', tipo: 'suma', sentido: 'mal', grupo: true, fuerte: true },
   ];
   if (st.grupoAbierto) {
     f.push({ tramo: 'Notas de salida del Almacén' });
@@ -104,14 +113,17 @@ function filas(st) {
     f.push({ agregar: true });
     f.push({ tramo: 'Sistema Restaurante' });
     f.push({ k: 'cort', nom: 'Costo de cortesías', tipo: 'suma', sentido: 'mal', hijo: true });
+    f.push({ k: 'desc', nom: 'Costo de descuentos', nota: 'costo del plato × % de descuento: la parte regalada', tipo: 'suma', sentido: 'mal', hijo: true });
   }
   f.push({ k: 'carta', nom: 'Consumo carta', nota: 'consumo operativo − consumos no vendidos', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
   f.push({ k: 'p_carta', nom: '% costo carta real', tipo: 'pct', sentido: 'mal', num: 'carta', den: 'v', calc: true });
   f.push({ k: 'margen', nom: 'Margen bruto', nota: 'venta − consumo carta', signo: '=', tipo: 'suma', sentido: 'bien', calc: true, fuerte: true });
   f.push({ sec: 'Contra el Sistema Restaurante (Paloteo comparativo)' });
   f.push({ k: 'pos', nom: 'Costo según Sistema Restaurante', tipo: 'suma', sentido: 'mal' });
-  f.push({ k: 'p_pos', nom: '% costo según Sistema Restaurante', tipo: 'pct', sentido: 'mal', num: 'pos', den: 'v' });
-  f.push({ k: 'dif', nom: 'Diferencia', nota: 'consumo carta − Sistema Restaurante', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
+  f.push({ k: 'pos_desc', nom: 'Costo de descuentos', nota: 'la misma parte regalada que en consumos no vendidos', signo: '−', tipo: 'suma', sentido: 'neutro' });
+  f.push({ k: 'pos_aj', nom: 'Sistema Restaurante ajustado', nota: 'costo según Sistema Restaurante − costo de descuentos', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
+  f.push({ k: 'p_pos', nom: '% Sistema Restaurante ajustado', nota: 'costo ajustado según Sistema Restaurante ÷ venta neta', tipo: 'pct', sentido: 'mal', num: 'pos_aj', den: 'v' });
+  f.push({ k: 'dif', nom: 'Diferencia', nota: 'consumo carta − Sistema Restaurante ajustado', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
   f.push({ k: 'p_dif', nom: 'Diferencia en puntos', tipo: 'pp', sentido: 'mal', calc: true });
   return f;
 }
@@ -127,7 +139,7 @@ function valores(st, data, w, fila, fams) {
   }
   if (fila.tipo === 'pp') {
     const c = valores(st, data, w, { tipo: 'pct', num: 'carta', den: 'v' }, fams);
-    const p = valores(st, data, w, { tipo: 'pct', num: 'pos', den: 'v' }, fams);
+    const p = valores(st, data, w, { tipo: 'pct', num: 'pos_aj', den: 'v' }, fams);
     return {
       mes: c.mes.map((x, i) => (x == null || p.mes[i] == null ? null : x - p.mes[i])),
       tot: c.tot == null || p.tot == null ? null : c.tot - p.tot,
@@ -182,7 +194,7 @@ function dibujar(raiz) {
   // sube y entra entera en la pantalla.
   const hayMas = data.periodos.length > VENTANA;
   const aviso = esMes ? '' : `Por ${st.grano}, el inventario es el del kardex al final de cada período, no lo contado: el ajuste de cada cierre cae entero en el período del cierre, y por eso las ${plural(st.grano)} no suman el mes.`;
-  let html = `<div class="cv-cab"><div class="cv-tit"><h2>Estado de costo de ventas</h2>
+  let html = `<div class="cv-cab"><div class="cv-tit"><h2>Estado de costo de venta ajustado</h2>
     <span class="cv-rango">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)} · ${n} ${plural(st.grano)}${esMes ? ' operativos' : ''}</span>
     ${hayMas ? `<span class="cv-ventana"><button type="button" data-ventana="-1" aria-label="Períodos anteriores" ${w.ini === 0 ? 'disabled' : ''}>‹</button><button type="button" data-ventana="1" aria-label="Períodos siguientes" ${w.fin >= data.periodos.length ? 'disabled' : ''}>›</button></span>` : ''}
     ${aviso ? `<span class="cv-kardex" title="${esc(aviso)}">inventario del kardex ⓘ</span>` : ''}</div>
@@ -372,7 +384,8 @@ function notas(data, w) {
     <dt>Compras</dt><dd>Valor neto, sin IGV, con las notas de crédito de los proveedores restadas, por fecha del documento.</dd>
     <dt>Bajas y las otras salidas</dt><dd>Notas de salida procesadas, a su valor neto, por fecha de registro, como la «Relación de Notas de Salidas» del Almacén.</dd>
     <dt>Costo de cortesías</dt><dd>Lo que el Sistema Restaurante facturó como cortesía en Alimentos, Bebidas y Vinos, a precio costo. Se resta porque su costo, «(a) Ventas en el rango», no las incluye: en el Paloteo son otro origen, «(b) Cortesías».</dd>
-    <dt>Consumo operativo, consumos no vendidos y consumo carta</dt><dd>Consumo operativo = inventario inicial + compras − inventario final: todo lo que salió del almacén; no se compara con el Sistema Restaurante. Consumos no vendidos: lo consumido que no se vendió —las bajas, las demás notas de salida (entran todas; abierto el grupo, la × quita una) y el costo de las cortesías—; en control de costos, las deducciones que llevan del costo de lo consumido al costo de lo vendido. Consumo carta = consumo operativo − consumos no vendidos: lo que costó lo vendido, y es el que se compara con el Sistema Restaurante.</dd>
+    <dt>Costo de descuentos</dt><dd>La parte regalada de los platos con descuento: su costo × el % de descuento de la línea (un plato al 50 % deja la mitad de su costo, como media cortesía). El descuento es el del Reporte de Descuentos del Sistema Restaurante, a precio venta. Ese plato sí se vendió y el Sistema Restaurante lo costea entero, así que se resta de los dos lados: del consumo y del costo según el Sistema Restaurante. La diferencia no cambia; los dos costos quedan ajustados.</dd>
+    <dt>Consumo operativo, consumos no vendidos y consumo carta</dt><dd>Consumo operativo = inventario inicial + compras − inventario final: todo lo que salió del almacén; no se compara con el Sistema Restaurante. Consumos no vendidos: lo consumido que no se vendió —las bajas, las demás notas de salida (entran todas; abierto el grupo, la × quita una), el costo de las cortesías y el de los descuentos—; en control de costos, las deducciones que llevan del costo de lo consumido al costo de lo vendido. Consumo carta = consumo operativo − consumos no vendidos: lo que costó lo vendido, y es el que se compara con el Sistema Restaurante.</dd>
     <dt>Costo según Sistema Restaurante</dt><dd>El costo a precio costo de lo vendido en esos grupos: lo del Paloteo de Producción, tipo Comparativo, con origen «(a) Ventas en el rango». El Paloteo fecha por la apertura de la mesa y esta tabla por el turno: un pedido de medianoche del último día puede caer en otro mes.</dd>
   </dl></details>
   <details class="nota alerta"><summary>Antes de leer la diferencia</summary><ul>

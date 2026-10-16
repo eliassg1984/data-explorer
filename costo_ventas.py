@@ -10,9 +10,16 @@ LA CUENTA, período por período y por familia:
 
     Consumo operativo = inventario inicial + compras − inventario final
     Consumos no vendidos = bajas + demás notas de salida + costo de cortesías
+                           + costo de descuentos
                            (las salidas entran todas; en pantalla se puede
                             quitar una)
     Consumo carta     = consumo operativo − consumos no vendidos
+
+El costo de descuentos es la parte REGALADA de los platos con descuento
+(costo × descuento ÷ precio de carta, `definicion_venta.por_grupo_dia`): un
+plato al 50 % deja la mitad de su costo, como media cortesía. Ese plato SÍ
+se vendió y el POS lo costea entero, así que se resta también del costo
+según el POS —«ajustado»—: la diferencia no cambia (regla #661).
 
 El consumo operativo es todo lo que salió del almacén; el consumo carta, lo
 que costó lo vendido, y es el que se compara con el costo que dice el
@@ -72,9 +79,10 @@ import pandas as pd
 
 from cortes import MESES_ABR_ES, fecha_operativa
 
-VERSION = 3
+VERSION = 4
 """Subirla cuando cambie QUÉ se calcula. 2: semanas y quincenas. 3: los
-rótulos de los períodos sin «cierre»/«kardex» (lo dice la cabecera)."""
+rótulos de los períodos sin «cierre»/«kardex» (lo dice la cabecera). 4: el
+costo de descuentos (regla #661)."""
 
 DESDE = pd.Period("2025-10", freq="M")
 """El primer mes que se muestra: antes los cierres no sirven (regla #612)."""
@@ -362,6 +370,28 @@ def ventas_por(por_grupo_dia, clave):
     return venta, pos, cortesias, v_ap, c_ap
 
 
+def descuentos_por(por_grupo_dia, clave):
+    """El costo de la parte descontada (`costo_descuento` de
+    `definicion_venta.por_grupo_dia`): `(período × CUBETAS, período × grupo
+    aparte)`. Sin la columna —una caché de antes de la regla #661—, vacío."""
+    vacio = pd.DataFrame(columns=list(CUBETAS), dtype=float)
+    if (por_grupo_dia is None or por_grupo_dia.empty
+            or "costo_descuento" not in por_grupo_dia.columns):
+        return vacio, pd.DataFrame()
+    d = por_grupo_dia
+    k = clave(d["dia"])
+    grupo = d["grupo"].map(_norm)
+    cort = d["clase"].astype(str).str.upper().str.startswith("CORTES")
+    v = _num(d["costo_descuento"])
+    por_cub = _por_clave_y_cubeta(k[~cort], grupo.map(GRUPOS_VENTA)[~cort], v[~cort])
+    ap = grupo.map(GRUPOS_APARTE)
+    m = ap.notna() & ~cort
+    b = pd.DataFrame({"k": k[m], "g": ap[m], "v": v[m]}).dropna(subset=["k"])
+    if b.empty:
+        return por_cub, pd.DataFrame()
+    return por_cub, b.groupby(["k", "g"])["v"].sum().unstack("g").fillna(0.0)
+
+
 # Los nombres por mes, que usan el test y quien quiera una serie suelta.
 def compras_por_mes(compras):
     return compras_por(compras, clave_mes)
@@ -388,6 +418,7 @@ def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave):
     """Lo común a los tres granos: las series de cada fila en el orden de
     `claves`, con los inventarios ya calculados."""
     venta, pos, cortesias, v_ap, c_ap = ventas_por(por_grupo_dia, clave)
+    descuentos, d_ap = descuentos_por(por_grupo_dia, clave)
 
     def serie(df):
         r = df.reindex(claves).reindex(columns=list(CUBETAS)).fillna(0.0)
@@ -406,10 +437,12 @@ def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave):
             "venta": serie(venta),
             "costo_pos": serie(pos),
             "cortesias": serie(cortesias),
+            "descuentos": serie(descuentos),
         },
         "salidas": {t: serie(df) for t, df in salidas_por(salidas, clave).items()},
         "venta_extra": {g: plana(v_ap, g) for g in GRUPOS_APARTE.values()},
         "costo_extra": {g: plana(c_ap, g) for g in GRUPOS_APARTE.values()},
+        "descuento_extra": {g: plana(d_ap, g) for g in GRUPOS_APARTE.values()},
     }
 
 
