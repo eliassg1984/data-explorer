@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-658 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+660 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (213)
 
@@ -344,7 +344,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
 - **#655** — «Costo por kg útil» muestra de dónde sale cada número: la ventana dice sus días y empieza a…
 
-**Plotly y figuras** (115)
+**Plotly y figuras** (117)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -461,6 +461,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
 - **#649** — La barra de las tarjetas «por período» de Movimientos es LISA y resalta UNA parte, elegida…
+- **#659** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
+- **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
 
 **AgGrid y tablas** (94)
 
@@ -961,7 +963,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (179)
+**Decisiones de diseño y UX** (181)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1142,6 +1144,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#655** — «Costo por kg útil» muestra de dónde sale cada número: la ventana dice sus días y empieza a…
 - **#657** — Costo Carta es «la tabla primero»: la carta a todo el ancho con TODAS sus columnas, una fecha…
 - **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
+- **#659** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
+- **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
 
 **Mantenimiento y trampas del lenguaje** (16)
 
@@ -6897,6 +6901,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
     Los dos modos conviven detrás de un `st.pills`:
 
+    > ⚠ **Desde el 2026-10-05 «Mismo día de semana» es 364 días antes, no la
+
+    > misma semana ISO — leer la #659.** 2026 tiene 53 semanas ISO: en 2027
+
+    > la cuenta de abajo comparaba contra 371 días antes.
+
+
     - **"Mismo día de semana"** (default): misma semana ISO + mismo día de
 
       semana del año ISO anterior (`date.fromisocalendar`). La fecha se
@@ -7191,6 +7202,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
     que es una afirmación falsa.
 
+
+
+    > ⚠ **Desde el 2026-10-05 el drill ordena por |Δ S/| y junta el resto en
+
+    > una fila — leer la #659.** Por venta actual, el plato que dejó de
+
+    > venderse quedaba siempre fuera del top.
 
 
     **Drill:** clic en una barra → ranking de platos de ESE período, Actual
@@ -7502,6 +7520,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
     El control son los checkboxes del panel "Detalle", que además muestran
 
     el valor absoluto — tener legend Y panel era decir lo mismo dos veces.
+
+    > ⚠ **Desde el 2026-10-05 Montos tampoco tiene legend ni `_legend_on`:
+
+    > la leyenda es la fila del total (`_html_totales`) y el margen de arriba
+
+    > es fijo (30, 50 en Descomposición) — leer la #659.** Se perdió el clic
+
+    > para ocultar una serie en Montos, que esta regla registra como pedido.
+
 
     El legend nativo queda sólo en Montos, y el margen superior es
 
@@ -9209,6 +9236,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      que Por día (#104). Tres cosas que costaron medición:
 
+
+
+     > ⚠ **Desde el 2026-10-05 la fila es un `st.container(horizontal=True,
+
+     > gap=24)` con `st.space("stretch")`, no `st.columns` con espaciador —
+
+     > leer la #659.** El separador sigue colgado del grupo, ahora de su
+
+     > envoltorio (`ventas_comp_g_*`), con el mismo aire a cada lado.
 
 
      - **Separadores colgados del GRUPO, no de la posición.** Los tres
@@ -51596,6 +51632,200 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (2026-10-15.)
 
 
+659. **Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364
+     días antes, no la misma semana ISO; la ventana dice su total; el clic
+     dice qué explica la diferencia; y los separadores, al medio.**
+     2026-10-05, a pedido, después de revisar la vista con el usuario
+     («¿hace falta esta vista, o ya la tengo en otra?»). La respuesta fue
+     que sí hace falta —es la única que pone la serie entera contra el año
+     pasado y la única con la Descomposición clientes × ticket—, pero que
+     tenía un error de calendario y le faltaba la cifra principal.
+
+     - **364 días y no la semana ISO** (`_fecha_equivalente`, `_clave_ap`).
+       La #86 alineaba «Mismo día de semana» por número de semana ISO, y la
+       Semana por (año ISO − 1, mismo número). Da 364 días casi siempre,
+       pero 2026 tiene 53 semanas ISO: desde el 28/12/2026 y en TODO 2027
+       compara contra 371 días antes — la fecha corrida seis días. El Día de
+       la Madre de 2027 (dom 9 may) caía contra el dom 3 may de 2026, un
+       domingo cualquiera; la S18 de 2027 contra la S18 de 2026, que no
+       tiene el Día de la Madre (está en la S19). Y la S52 y la S53 de 2026
+       caían las dos sobre la S52 de 2025: el total la contaba dos veces.
+       Mix › Detalle › «Año pasado» (`rango_ano_pasado`, #527) y Por hora
+       (`_ano_pasado`) ya contaban 364: tres vistas, dos calendarios.
+       `test_graficos.py::_pruebas_puras` las compara día por día y semana
+       por semana de 2025 a 2029. El hover del año pasado en Semana dice
+       sólo las fechas: «S19» sobre la barra «S18» se leería como un error.
+     - **El total de la ventana** (`_html_totales`, fila `ventas_comp_tot`
+       entre la franja y el gráfico): Año pasado, Actual, Diferencia (% y
+       S/), Clientes y Ticket con su Δ. La vista no decía en ningún lado
+       cuánto más o menos que el año pasado en esos 14 días. Se cuenta
+       sobre la UNIÓN de los rangos (`_series_por_rangos`, cuarto valor), no
+       sumando barras: en «Misma fecha» el 28 y el 29 de febrero de un
+       bisiesto caen los dos en el 28, y un pedido partido entre dos días
+       es una mesa. El ticket es el de la #591.
+       - **La fila ES la leyenda**: la muestra de color de la #515 va en lo
+         que se dibuja (Año pasado/Actual en Montos, Clientes/Ticket en
+         Descomposición) y la figura va sin legend. Se perdió el clic en el
+         legend para ocultar una serie —que la #91 registra como pedido del
+         usuario: se le consultó—; se ganaron los 95px de margen que el
+         legend pedía arriba (ahora 30, 50 en Descomposición por el panel
+         «Detalle»).
+       - **Sin legend el %Var se salía por arriba**: las etiquetas son
+         anotaciones y el autorange no las ve. En Montos el eje Y lleva
+         rango fijo: 1.22 del tope, 1.30 si hay un período «en curso». Y
+         abajo, si hay un día negativo (sólo notas de crédito), 0.14 de aire:
+         sin él la etiqueta de esa barra caía bajo el eje.
+       - **La tarjeta no crece**: la fila mide 28 + 16 y la figura pasó de
+         340 a 296 (`alturas.VENTAS_COMP_FIG`; el 340 era un literal que la
+         guarda de altos no veía por el paréntesis). El área de trazo crece
+         21px con etiquetas (el margen de arriba baja 65 y la figura 44):
+         232 en Día medido a 1440, 248 en Mes. Con 30 días el margen ya era
+         60 y el área queda casi igual. Lo que sí la hizo crecer, en la
+         primera pasada, fue el CAPTION: un texto 26 caracteres más largo
+         bajó a un tercer renglón y la tarjeta midió 22px más. Se acortó
+         hasta el largo de antes. Lo que se mide es la tarjeta (#449).
+     - **El clic dice qué explica la diferencia** (`_explica_diferencia`,
+       pura y con test). El drill era el top 15 por venta ACTUAL: un plato
+       que el año pasado se vendía y hoy no —venta 0— quedaba siempre
+       último y fuera, aunque el docstring decía que verlo era el punto.
+       Ahora ordena por |Δ S/|, como el puente de Mix, agrega la columna
+       Δ S/ y junta el resto en una fila, sólo si sobran dos o más. Sin
+       vacíos (#529): ±∞ en el %Var y el formateador escribe «nuevo». Con
+       el año pasado negativo el %Var divide por su valor absoluto, y el
+       Δ S/ decide signo y color por el monto redondeado: si no, «−350%» al
+       lado de «+S/ 140», y «+S/ 0» en verde.
+       - **No lleva a Mix**, aunque fue lo que se propuso primero: Mix sólo
+         ve el rango de la franja (`ventas_mix.py:586`) y con el de por
+         defecto 9 de las 14 barras de Día caen afuera. Llevarlo obligaba a
+         cambiarle la fecha a todo el reporte, que recarga R2 y reconstruye
+         las secciones. Si el foco sembrado no existe, Mix lo borra callado
+         y muestra otro período.
+     - **La fila de controles es un `st.container(horizontal=True,
+       gap=24)`** con cada grupo a su ancho de contenido y un
+       `st.space("stretch")` antes de «Vista» (enmienda la #107). Con
+       `st.columns` proporcionales el sobrante de cada columna caía a la
+       derecha del grupo: la línea quedaba a 102-113px del anterior y a 17
+       del siguiente, y «Vista» a 108px del borde contra 16 a la izquierda
+       (medido a 1440). Ahora 24 y 24 en una fila de 800px o más (12 y 12
+       en una angosta), y «Vista» a la misma distancia del borde derecho
+       que «Día» del izquierdo.
+       - Los envoltorios llevan `_g_` en la key (`ventas_comp_g_grano`…):
+         sin eso los atrapan los `[class*="st-key-ventas_comp_grano"]` de
+         los pills y heredan su estilo.
+       - **El aire lo pone el `padding-left` del envoltorio**, con la línea
+         en su mitad, y no el `gap` de la fila (`gap=None`).
+       - **Una fila de menos de 800px no entra** con 24 a cada lado: «Vista»
+         baja a otro renglón (franja de 38 a 88px). La fila es su propio
+         container (`container-name: vcompctrl`) y un `@container
+         vcompctrl (max-width: 800px)` baja a 12 a cada lado y el texto a
+         13px. No un
+         `@media` por viewport, como fue en la primera pasada: con la
+         columna del rail fijada (248px en vez de 80, #568) el mismo
+         viewport deja ~170px menos de fila.
+       - **«Vista» vive en un `st.empty()` que se vacía en cada corrida**:
+         vacío mide 24px. En una fila donde no entra al lado de los otros
+         (menos de 660px: el rail fijado entre 901 y ~985, el celular)
+         subía al renglón de arriba mientras cargaban los datos y bajaba
+         al terminar — la tarjeta saltaba 38px en cada clic. Ahí va SIEMPRE
+         en su propio renglón (`min-width: 100cqw`) con el alto de un grupo
+         lleno (38; 50 en el celular). Medido cuadro a cuadro con
+         `requestAnimationFrame`: la fila no cambia de alto al recargar.
+     - **En el celular el total es un renglón deslizable**: los cinco KPI
+       piden ~410px; partidos en dos renglones (57px) la reserva de 28 no
+       los cubría y todo lo de abajo saltaba 29px al recargar.
+       - **El `font-size` de un pill va en su `<p>`**: en Streamlit 1.64 el
+         texto vive en un stMarkdownContainer que fija 0.875rem. El
+         `font-size: 15px` de los pills de esta franja deja el botón en 15
+         y el texto en 14 — medido con `getComputedStyle` en la cadena.
+     - **«0%» sin signo y en gris** (`_var_txt`, el formato de
+       `compras._comun._fmt_variacion` con el color de Ventas): la vista
+       escribía `f"{v:+.0f}%"`, y salía «+0%» en verde y «-0%» en rojo para
+       un cambio que no hubo.
+     - **De paso**: el arnés de `test_graficos.py::_pruebas_fragment_anidado_una_vez`
+       no corría con Streamlit 1.64 (moría con StopIteration sin probar
+       nada): `AppTest` crea su propio almacén de fragments y se lo pasa al
+       runner, así que el parche de `lsr.MemoryFragmentStorage` no llegaba.
+       Va además `at._fragment_storage = registro` (#456).
+
+     (2026-10-05.)
+
+
+660. **Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene
+     año pasado, un mes NO cancela el día de semana, «Venta | Neto», el año
+     y el mes a la fecha, una línea «Por qué», y el clic abre una
+     comparación, no una lista.** 2026-10-16, a pedido («qué le faltaría,
+     que no tenga otra vista»; y del drill, «muy pobre para ser una
+     comparación»). Todo en `graficos/ventas_comparativo.py`.
+
+     - **El año pasado antes del parquet no es «cero ventas»**
+       (`_comparables`, `_texto_sin_dato`). El histórico empieza el
+       1-ene-2025: con 12 meses hasta oct-2026, noviembre y diciembre de
+       2024 entraban al total como S/ 0 y el crecimiento salía inflado
+       (medido en el demo con dos años: +17 % donde era −3,2 %). Ahora esos
+       períodos quedan FUERA del total, de los dos lados
+       (`_series_por_rangos(en_total=…)`), el KPI dice «10 de 12» y su
+       tooltip cuáles, y su barra del año pasado no se dibuja: «sin dato
+       AP» arriba. El primer día sale de `data.rango_fechas` sobre la
+       columna con que se carga; si no se sabe (`None`) se comparan todos,
+       como antes. **En el demo `rango_fechas` devuelve None** (busca una
+       columna «Fecha» que el demo de ventas no tiene): para verlo en local
+       hay que parchear eso en una copia.
+     - **Un mes no trae «todos los días» parejos**: el caption y el
+       docstring decían que en Mes «el ruido del día de semana se cancela
+       solo», y es falso — 31 días son cuatro semanas y tres sueltos, y
+       esos tres cambian de un año al otro. `_efecto_calendario` valoriza
+       los días de semana de más o de menos con lo que ese día vendió en
+       promedio el año pasado; la barra lo marca «cal. ±x %» desde un
+       punto, y la línea «Por qué» suma el de la ventana desde medio punto.
+       En Semana (364 días) da cero siempre, y así lo dice el caption.
+     - **«Venta | Neto»** (`ventas_comp_vista_monto`, al lado de «Vista»):
+       todo —barras, total, drill— pasa a medirse con el neto (sin IGV ni
+       recargo, `NETO TOTAL ITEM DDOCUMENTO`) y el ticket se llama «Ticket
+       neto». El IGV cambió dos veces (18 → 10 % el 10/06/2025, → 10,5 %
+       el 10/02/2026, regla #590): con el mismo precio de carta la venta
+       bruta del año pasado no es comparable. La key empieza con
+       `ventas_comp_vista` A PROPÓSITO, para heredar el dibujo de los pills
+       de «Vista» por prefijo. Sin columna de neto (o si la venta YA es el
+       neto) no se dibuja.
+     - **«Mes a la fecha» y «Año a la fecha»** a la derecha de la fila del
+       total (`_a_la_fecha`, `_kpi_a_la_fecha`): del 1 hasta el último día
+       con datos contra los mismos días del CALENDARIO un año antes (la
+       cuenta de un cierre, no por día de semana). No dependen de la
+       ventana; sí de los filtros. Un año a la fecha son hasta 12 meses por
+       lado y la vista se re-corre con cada clic: `_total_memo` lo recuerda
+       en `session_state` con el sello del parquet (#367), la fecha por
+       turno (#593) y una firma de los filtros (filas y venta del `d`).
+     - **La línea «Por qué»** (`_lectura`, `.vt-lectura` en
+       `estilos/_80_cards.py`), debajo de los KPI, cada cosa sólo si
+       aplica y con su tooltip: la diferencia partida en **clientes ×
+       ticket del año pasado + ticket × clientes de hoy + canales sin
+       clientes** (`_por_que`: suman exacto la diferencia); **«Sin IGV»**
+       si la diferencia neta se aparta medio punto de la RELACIÓN (no de
+       los %: +219 contra +218 no es nada); **«Calendario»**; **«Sin
+       Eventos ni Venta interna»** (`GRUPOS_RAROS` de
+       `ventas_ficha_hora.py`: el evento de S/ 58.500 de un día); y **los
+       canales de un solo lado** (Pedidos Ya existió sólo en 2025). El
+       total pasa de 28 a 48px y los 20 los paga la figura
+       (`alturas.VENTAS_COMP_FIG` 296 → 276): la tarjeta no crece.
+     - **El drill es una comparación** (`_drill_detalle`, `_fig_delta`,
+       `_efectos_producto`). Hasta este día el clic abría sólo la tabla de
+       productos con Venta AP/actual y su Δ: decía cuánto cambió cada plato,
+       no por qué. Ahora la tarjeta abre con los KPI y la línea «Por qué»
+       DEL PERÍODO, sigue con la diferencia **por Grupo y por Canal**
+       (barras horizontales a medias, aunque haya un solo panel: a todo el
+       ancho cuatro barras se leen vacías), y la tabla trae **«Qué
+       cambió»** (nuevo, ya no se vende, vende más/menos, más caro/barato),
+       **«Por cantidad»** (lo vendido de más o de menos al precio del año
+       pasado) y **«Por precio»** (el precio promedio sobre lo de hoy), que
+       suman el Δ —también en la fila «Resto»—, y el precio promedio de
+       los dos lados. El pie dice la diferencia entera partida igual.
+
+     Lo que no se hizo: el clic para ocultar una serie en Montos (#91)
+     sigue sin volver. El Comparativo no lleva proyección del mes ni
+     «mejor y peor día»: el Resumen y Por día ya contestan eso.
+
+     (2026-10-16.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51608,7 +51838,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#658**; la próxima toma el número siguiente.
+> última regla es la **#660**; la próxima toma el número siguiente.
 
 >
 

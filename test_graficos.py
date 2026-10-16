@@ -2226,18 +2226,23 @@ def _pruebas_puras():
           _vc._fecha_equivalente(_dt.date(2024, 2, 29), "calendario"),
           _dt.date(2023, 2, 28))
 
-    # Alineación por semana ISO: el DÍA DE SEMANA es lo que se conserva
+    # «Mismo día de semana»: 364 días antes (regla #659), no la misma semana
+    # ISO — 2026 tiene 53 semanas ISO y en 2027 eso daba 371 días.
     _orig = _dt.date(2026, 8, 5)                      # miércoles
     _eq = _vc._fecha_equivalente(_orig, "semana")
     check("equivalente semana conserva día de semana",
           _eq.weekday(), _orig.weekday())
-    check("equivalente semana conserva semana ISO",
-          _eq.isocalendar()[1], _orig.isocalendar()[1])
+    check("equivalente semana = 364 días antes", (_orig - _eq).days, 364)
     check("equivalente semana cae en el año anterior", _eq.year, 2025)
-    # Semana 53 (2026 la tiene; 2025 no) → cae a la 52 sin reventar
+    # El Día de la Madre 2027 (dom 9 may) contra el de 2026 (dom 10 may): con
+    # la semana ISO caía contra el dom 3 may de 2026, un domingo cualquiera.
+    check("equivalente semana 2027: Día de la Madre contra Día de la Madre",
+          _vc._fecha_equivalente(_dt.date(2027, 5, 9), "semana"),
+          _dt.date(2026, 5, 10))
+    # La semana 53 de 2026 no revienta ni se repite: cae contra la de Año Nuevo
     _s53 = _dt.date.fromisocalendar(2026, 53, 3)
-    check("equivalente semana 53 → 52 sin error",
-          _vc._fecha_equivalente(_s53, "semana").isocalendar()[1], 52)
+    check("equivalente semana 53 → 364 días antes",
+          _vc._fecha_equivalente(_s53, "semana"), _dt.date(2025, 12, 31))
 
     check("_etiqueta_clave día",
           _vc._etiqueta_clave(_dt.date(2026, 8, 5), "Día"), "Mié 05/08")
@@ -2258,13 +2263,43 @@ def _pruebas_puras():
     _cl_m = _vc._claves_hacia_atras(_dt.date(2026, 1, 15), "Mes", 3)
     check("claves mes cruzan el año", _cl_m, [(2025, 11), (2025, 12), (2026, 1)])
 
-    # Clave AP: mismo número de período, un año antes
+    # Clave AP: el mes, el mismo un año antes; la semana, la que empieza 364
+    # días antes (regla #659) — casi siempre el mismo número, no siempre.
     check("clave AP mes", _vc._clave_ap((2026, 3), "Mes", "semana"), (2025, 3))
     check("clave AP semana", _vc._clave_ap((2026, 20), "Semana", "semana"),
           (2025, 20))
-    # 2025 no tiene semana 53 → cae a la 52 en vez de reventar
-    check("clave AP semana 53 → 52",
-          _vc._clave_ap((2026, 53), "Semana", "semana"), (2025, 52))
+    check("clave AP semana 2027: S18 contra la S19 de 2026",
+          _vc._clave_ap((2027, 18), "Semana", "semana"), (2026, 19))
+    # La 53 de 2026 contra la de Año Nuevo; con la cuenta ISO caían la 52 y
+    # la 53 sobre la misma (2025, 52), y el total la sumaba dos veces.
+    check("clave AP semana 53 → la de Año Nuevo",
+          _vc._clave_ap((2026, 53), "Semana", "semana"), (2026, 1))
+
+    # LAS TRES VISTAS QUE COMPARAN CONTRA EL AÑO PASADO DICEN LO MISMO (regla
+    # #659): el Comparativo, Mix › Detalle › «Año pasado» y Por hora. Día por
+    # día y semana por semana, de 2025 a 2029 (cruza la S53 de 2026).
+    from graficos import ventas_horario as _vh_ap
+    from graficos.ventas_mix import rango_ano_pasado as _mix_ap
+    _dif_dia, _dif_sem = [], []
+    _f = _dt.date(2025, 1, 1)
+    while _f <= _dt.date(2029, 12, 31):
+        _c = _vc._fecha_equivalente(_f, "semana")
+        if not (_c == _mix_ap(_f.isoformat(), "Día", None)[0]
+                == _vh_ap._ano_pasado(_f, "Día")):
+            _dif_dia.append(_f)
+        if _f.weekday() == 0:
+            _k = _vc._clave_de_fecha(_f, "Semana")
+            _r = _vc._rango_de_clave(_vc._clave_ap(_k, "Semana", "semana"),
+                                     "Semana")
+            if not (_r == _mix_ap(f"{_k[0]}-S{_k[1]:02d}", "Semana", None)
+                    and _vc._clave_ap(_k, "Semana", "semana")
+                    == _vh_ap._ano_pasado(_k, "Semana")):
+                _dif_sem.append(_k)
+        _f += _dt.timedelta(days=1)
+    check("año pasado · días en que Comparativo, Mix y Por hora difieren",
+          _dif_dia[:3], [])
+    check("año pasado · semanas en que Comparativo, Mix y Por hora difieren",
+          _dif_sem[:3], [])
 
     # Rango de clave: el mes cierra en su último día real (28/30/31)
     check("rango mes feb-2025 (no bisiesto)",
@@ -2335,6 +2370,160 @@ def _pruebas_puras():
     _ra2, _rp2, _parc2 = _vc._rangos_comparables(
         [(2026, 7)], [(2025, 7)], "Mes", _dt.date(2026, 7, 31))
     check("recorte: mes completo no marca parcial", _parc2, set())
+
+    # ── El total de la ventana (regla #659) ─────────────────────────────
+    # Se cuenta sobre la UNIÓN de los rangos, no sumando las barras: en
+    # «Misma fecha» el 28 y el 29 de febrero de un bisiesto caen los dos en
+    # el 28 del año anterior, y una cuenta partida entre dos días es UN
+    # pedido. Sin R2: `_cargar_tramo` devuelve un parquet de mentira.
+    import pandas as _pd_t
+    _df_t = _pd_t.DataFrame({
+        "Fec Reg Documento": _pd_t.to_datetime(
+            ["2027-02-28", "2027-02-28", "2027-03-01", "2027-03-02"]),
+        "Venta Item Ddocumento": [100.0, 50.0, 30.0, 999.0],
+        "Cant Pax": [2, 2, 2, 5],
+        "Llave Local Pedido": ["P1", "P2", "P1", "P9"],
+    })
+    _orig_tramo = _vc._cargar_tramo
+    _vc._cargar_tramo = lambda *a, **k: _df_t
+    try:
+        _rangos_t = [("a", _dt.date(2027, 2, 28), _dt.date(2027, 2, 28)),
+                     ("b", _dt.date(2027, 2, 28), _dt.date(2027, 3, 1))]
+        _v_t, _p_t, _c_t, _tot_t = _vc._series_por_rangos(
+            "x.parquet", "F", "Fec Reg Documento", "Venta Item Ddocumento",
+            "Cant Pax", "Llave Local Pedido", _rangos_t, None)
+    finally:
+        _vc._cargar_tramo = _orig_tramo
+    check("total ventana · las barras siguen siendo por rango",
+          (_v_t["a"], _v_t["b"]), (150.0, 180.0))
+    check("total ventana · un día en dos rangos cuenta UNA vez",
+          _tot_t["venta"], 180.0)
+    check("total ventana · el pedido partido en dos días es una mesa",
+          _tot_t["pax"], 4.0)
+
+    # ── Qué explica la diferencia del período (regla #659) ──────────────
+    # Ordena por |Δ S/|: el plato que el año pasado vendía y hoy no —venta
+    # actual 0— va PRIMERO. Hasta el 2026-10-05 el top era por venta actual
+    # y ése quedaba siempre afuera.
+    _t_d = _pd_t.DataFrame({
+        "prod": ["A", "B", "C", "D", "E"],
+        "venta": [100.0, 0.0, 50.0, 300.0, 20.0],
+        "venta_ap": [90.0, 400.0, 0.0, 310.0, 20.0],
+    })
+    _tab_d, _res_d = _vc._explica_diferencia(_t_d, top=3)
+    check("explica · el que dejó de venderse va primero",
+          list(_tab_d["prod"])[:3], ["B", "C", "D"])
+    check("explica · el resto va junto, al final",
+          (_tab_d["prod"].iloc[-1], bool(_tab_d["resto"].iloc[-1])),
+          ("Resto · 2 productos", True))
+    check("explica · las filas suman la diferencia entera",
+          (float(_tab_d["d"].sum()), _res_d["d_total"]), (-350.0, -350.0))
+    check("explica · sin venta el año pasado es «nuevo» (+∞), no un vacío",
+          float(_tab_d.loc[_tab_d["prod"] == "C", "var"].iloc[0]),
+          float("inf"))
+    # Con UN producto de más no hay «Resto · 1»: va con su nombre.
+    _tab_d1, _res_d1 = _vc._explica_diferencia(_t_d, top=4)
+    check("explica · sobra uno: va con su nombre, sin fila Resto",
+          (len(_tab_d1), bool(_tab_d1["resto"].any()), _res_d1["n_resto"]),
+          (5, False, 0))
+    # El año pasado negativo (sólo una nota de crédito): el signo del %Var
+    # sigue al del Δ S/, no al revés.
+    check("explica · año pasado negativo: el %Var sube si el Δ sube",
+          _vc._var_tabla(100.0, -40.0) > 0, True)
+    check("variación · 0 % sin signo y en gris",
+          _vc._var_txt(0.04)[0], "0%")
+    check("variación · el menos tipográfico", _vc._var_txt(-4.66)[0], "−4.7%")
+
+    # ── Lo que se agregó el 2026-10-16 (regla #660) ─────────────────────
+    # El año pasado antes del primer día del parquet NO es «cero ventas».
+    _rp_sd = [((2024, 11), _dt.date(2024, 11, 1), _dt.date(2024, 11, 30)),
+              ((2024, 12), _dt.date(2024, 12, 1), _dt.date(2024, 12, 31)),
+              ((2025, 1), _dt.date(2025, 1, 1), _dt.date(2025, 1, 31))]
+    _ok_sd = _vc._comparables(_rp_sd, _dt.date(2025, 1, 1))
+    check("sin dato AP · los meses antes del parquet no se comparan",
+          _ok_sd, [False, False, True])
+    check("sin dato AP · sin saber el inicio, se comparan todos",
+          _vc._comparables(_rp_sd, None), [True, True, True])
+    check("sin dato AP · el rótulo nombra los meses",
+          _vc._texto_sin_dato([k for k, _i, _f in _rp_sd], _ok_sd, "Mes"),
+          "nov 2024 y dic 2024")
+    # El total deja afuera los períodos sin año pasado (de los dos lados).
+    _vc._cargar_tramo = lambda *a, **k: _df_t
+    try:
+        _tot_sd = _vc._series_por_rangos(
+            "x.parquet", "F", "Fec Reg Documento", "Venta Item Ddocumento",
+            None, None, _rangos_t, None, en_total=[True, False])[3]
+    finally:
+        _vc._cargar_tramo = _orig_tramo
+    check("sin dato AP · el total suma sólo los períodos comparables",
+          (_tot_sd["venta"], _tot_sd["n"]), (150.0, 1))
+
+    # Un mes NO cancela el día de semana: octubre de 2026 trae cinco sábados
+    # y el de 2025, cuatro (y un viernes más). Con el sábado vendiendo 1.000
+    # y el resto 100, la diferencia de calendario es +900 − 100 sobre la
+    # venta de octubre 2025.
+    _oct25 = [_dt.date(2025, 10, 1) + _dt.timedelta(days=i) for i in range(31)]
+    _dias_ap = {f: (1000.0 if f.weekday() == 5 else 100.0) for f in _oct25}
+    _ef = _vc._efecto_calendario(
+        (_dt.date(2026, 10, 1), _dt.date(2026, 10, 31)),
+        (_dt.date(2025, 10, 1), _dt.date(2025, 10, 31)), _dias_ap)
+    check("calendario · un sábado de más pesa, un viernes de menos resta",
+          round(_ef, 4), round((1000.0 - 100.0) / sum(_dias_ap.values()) * 100, 4))
+    check("calendario · 364 días antes no tiene efecto",
+          _vc._efecto_calendario(
+              (_dt.date(2026, 10, 5), _dt.date(2026, 10, 11)),
+              (_dt.date(2025, 10, 6), _dt.date(2025, 10, 12)),
+              {_dt.date(2025, 10, 6) + _dt.timedelta(days=i): 100.0 * (i + 1)
+               for i in range(7)}), 0.0)
+
+    # La diferencia partida en clientes / ticket / sin clientes SUMA exacto.
+    _pq = _vc._por_que({"venta": 1300.0, "pax": 25.0, "cli": 1100.0},
+                       {"venta": 1000.0, "pax": 20.0, "cli": 900.0})
+    check("por qué · los tres efectos suman la diferencia",
+          round(_pq["clientes"] + _pq["ticket"] + _pq["sin_clientes"], 6),
+          300.0)
+    check("por qué · clientes al ticket del año pasado",
+          round(_pq["clientes"], 6), 225.0)
+    check("por qué · sin clientes en algún lado no se parte",
+          _vc._por_que({"venta": 10.0, "pax": None, "cli": None},
+                       {"venta": 5.0, "pax": None, "cli": None}), None)
+
+    # Por producto: cantidad al precio de antes + precio sobre lo de hoy.
+    _ec, _ep, _qu = _vc._efectos_producto(300.0, 200.0, 10.0, 10.0)
+    check("producto · el mismo volumen más caro es «más caro»",
+          (_ec, _ep, _qu), (0.0, 100.0, "más caro"))
+    _ec, _ep, _qu = _vc._efectos_producto(150.0, 200.0, 6.0, 8.0)
+    check("producto · los dos efectos suman el Δ",
+          (round(_ec + _ep, 6), _qu), (-50.0, "vende menos"))
+    check("producto · nuevo y ya no se vende",
+          (_vc._efectos_producto(50.0, 0.0, 2.0, 0.0)[2],
+           _vc._efectos_producto(0.0, 80.0, 0.0, 3.0)[2]),
+          ("nuevo", "ya no se vende"))
+    _t_q = _t_d.assign(cant=[10.0, 0.0, 5.0, 30.0, 2.0],
+                       cant_ap=[10.0, 40.0, 0.0, 31.0, 2.0])
+    _tab_q, _res_q = _vc._explica_diferencia(_t_q, top=3)
+    check("explica · cantidad + precio suman la diferencia, también el Resto",
+          (round(float((_tab_q["ef_cant"] + _tab_q["ef_precio"]).sum()), 6),
+           round(_res_q["ef_cant"] + _res_q["ef_precio"], 6)), (-350.0, -350.0))
+
+    # «Mes a la fecha» / «Año a la fecha»: los mismos días del calendario.
+    check("a la fecha · el año",
+          _vc._a_la_fecha(_dt.date(2026, 10, 15), "año"),
+          (_dt.date(2026, 1, 1), _dt.date(2026, 10, 15),
+           _dt.date(2025, 1, 1), _dt.date(2025, 10, 15)))
+
+    # La línea «Por qué»: el IGV se nombra sólo si tuerce la comparación.
+    _lec = _vc._lectura(
+        {"venta": 1100.0, "neto": 1000.0, "pax": None, "cli": None,
+         "raro": 0.0, "canales": {"SALON": 1100.0}},
+        {"venta": 1000.0, "neto": 840.0, "pax": None, "cli": None,
+         "raro": 0.0, "canales": {"SALON": 900.0, "PEDIDOS YA": 100.0}})
+    _txts = [t for t, _ in _lec]
+    check("lectura · el IGV distinto de los dos lados se dice",
+          any(t.startswith("Sin IGV") for t in _txts), True)
+    check("lectura · un canal de un solo lado se dice",
+          any(t.startswith("Pedidos Ya: sólo el año pasado") for t in _txts),
+          True)
 
     # ── Mapa por hora (Ventas › Por hora) ───────────────────────────────
     from graficos import ventas_horario as _vh
