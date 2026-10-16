@@ -1106,8 +1106,10 @@ OPERATIVO:
 
     Consumo operativo = inventario inicial + compras − inventario final
     Consumo carta     = consumo operativo − consumos no vendidos
-                        (bajas + demás notas de salida + cortesías
+                        (notas de salida que no son bajas + cortesías
                          + costo de descuentos)
+    Diferencia        = consumo carta − costo del POS con descuento
+                      = bajas registradas + faltante no registrado
 
 El consumo carta se compara con el costo del POS (Paloteo › Comparativo ›
 «(a) Ventas en el rango»); el operativo es el dato de antes. Los nombres son
@@ -1124,8 +1126,11 @@ semanas no suman el mes. Reemplazó a Ventas › «Venta vs Compra». Regla #622
 **El costo de descuentos es la parte REGALADA** (costo × descuento ÷
 carta: un plato al 50 % deja la mitad de su costo), y **se resta de los
 dos lados**: ese plato SÍ se vendió y el POS lo costea entero, así que la
-comparación es contra el «Sistema Restaurante ajustado» y la
-diferencia no cambia. Sale de `definicion_venta.por_grupo_dia`
+comparación es contra el «Costo con descuento» (debajo del «Costo sin
+descuento», el Paloteo tal cual). **Las bajas no se restan**: son pérdida,
+se quedan en el consumo carta y explican la Diferencia junto al faltante
+no registrado (regla #662, como el cuadro de costos que el usuario llevaba
+antes). Sale de `definicion_venta.por_grupo_dia`
 (`costo_descuento`). El descuento cuadra al céntimo con el Reporte de
 Descuentos del POS (`spRep_Descuento`): septiembre 2026, S/ 50.481,50.
 Regla #661.

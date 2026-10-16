@@ -188,14 +188,17 @@ igual(f["inv_final"]["Alimentos"][0], 950.0, "el final de setiembre")
 consumo = (f["inv_inicial"]["Alimentos"][0] + f["compras"]["Alimentos"][0]
            - f["inv_final"]["Alimentos"][0])
 igual(consumo, 750.0, "consumo operativo = inicial + compras − final")
-carta = consumo - D["salidas"]["Bajas"]["Alimentos"][0] - f["cortesias"]["Alimentos"][0]
-igual(carta, 718.0, "consumo carta = operativo − bajas − cortesías")
+igual(D["salidas"]["Bajas"]["Alimentos"][0], 20.0, "armar: las bajas viajan aparte")
+carta = consumo - f["cortesias"]["Alimentos"][0]
+igual(carta, 738.0, "consumo carta = operativo − cortesías (las bajas se quedan, #662)")
 igual(D["venta_extra"]["Eventos"][0], 500.0, "armar: Eventos aparte")
 ok("descuentos" in f and "descuento_extra" in D,
    "armar: el costo de descuentos viaja como fila (regla #661)")
 _js = (RAIZ / "graficos" / "costos_tabla.js").read_text(encoding="utf-8")
-ok("r.desc" in _js and "resta(r.pos, r.desc)" in _js and "nv = suma(suma(r.bajas, r.cort), r.desc)" in _js,
+ok("r.desc" in _js and "resta(r.pos, r.desc)" in _js and "let nv = suma(r.cort, r.desc);" in _js,
    "la tabla resta el costo de descuentos de los DOS lados: consumo y POS (regla #661)")
+ok("r.falt = resta(r.dif, r.bajas)" in _js and "r.bajas, r.cort" not in _js,
+   "las bajas no son un consumo no vendido: explican la diferencia (regla #662)")
 ok(set(cv.tabla_larga(D).columns) == {"PERIODO", "FAMILIA", "CONCEPTO", "SOLES"},
    "la tabla para el asistente, con columnas por nombre")
 igual(cv.armar(ajuste.iloc[:0], compras, salidas, pgd)["periodos"], [],

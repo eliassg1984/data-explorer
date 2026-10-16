@@ -9,11 +9,17 @@ Regla #622.
 LA CUENTA, período por período y por familia:
 
     Consumo operativo = inventario inicial + compras − inventario final
-    Consumos no vendidos = bajas + demás notas de salida + costo de cortesías
-                           + costo de descuentos
+    Consumos no vendidos = notas de salida que no son bajas + costo de
+                           cortesías + costo de descuentos
                            (las salidas entran todas; en pantalla se puede
                             quitar una)
     Consumo carta     = consumo operativo − consumos no vendidos
+    Diferencia        = consumo carta − costo del POS con descuento
+                      = bajas registradas + faltante no registrado
+
+Las BAJAS no son un consumo no vendido: son pérdida, se quedan en el
+consumo carta y explican la diferencia, como en el cuadro de costos que el
+usuario llevaba antes (regla #662).
 
 El costo de descuentos es la parte REGALADA de los platos con descuento
 (costo × descuento ÷ precio de carta, `definicion_venta.por_grupo_dia`): un

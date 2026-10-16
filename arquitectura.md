@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-661 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+662 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (213)
 
@@ -963,7 +963,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (182)
+**Decisiones de diseño y UX** (183)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1147,6 +1147,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#659** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
 - **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
 - **#661** — El costo de los DESCUENTOS es un consumo no vendido, y se resta de los dos lados: «Costo de…
+- **#662** — Las bajas explican la Diferencia, y el POS tiene dos costos: sin y con descuento
 
 **Mantenimiento y trampas del lenguaje** (16)
 
@@ -51854,7 +51855,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        mitad de su costo, como media cortesía—, restado del consumo
        («Costo de descuentos», en «Consumos no vendidos › Sistema
        Restaurante») Y del costo del POS («Sistema Restaurante
-       ajustado»). La diferencia no cambia; los dos costos quedan
+       ajustado», hoy «Costo con descuento», #662). La diferencia no cambia; los dos costos quedan
        ajustados. Septiembre 2026: S/ 12.297, contra S/ 42.941 del costo
        entero de esos platos. El descuento en soles (lo no cobrado) se
        descartó: es un precio, y las bajas y cortesías van a costo.
@@ -51876,6 +51877,39 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-16.)
 
+662. **Las bajas explican la Diferencia, y el POS tiene dos costos: sin y
+     con descuento.** 2026-10-16, a pedido, sobre el cuadro de costos que
+     el usuario armaba antes a mano («CUADRO RESUMEN DE COSTOS PAPACHOS
+     MIRAFLORES», junio 2015, Excel fuera del repo).
+
+     - **El cuadro de 2015 tiene la misma cuenta que la #622**: inventario
+       inicial + compras − inventario final = consumo; menos «Menos
+       (Inferior)» —salsas, pruebas, cortesías, comida de personal y
+       «Dscto. Costo»— = costo de ventas; % sobre la venta neta (bruta ÷
+       1,28) contra el teórico del sistema. Su «Dscto. Costo» es el costo
+       × 50 %: la misma parte regalada de la #661.
+     - **Las bajas NO estaban en «Menos»**: iban abajo, en «Diferencias»,
+       con la diferencia de inventario («mermas no registradas»), en % de
+       compras y de ventas. Así quedó la tabla: las bajas salen de
+       «Consumos no vendidos», se quedan en el consumo carta, y debajo de
+       la Diferencia van «Bajas registradas» y «Faltante no registrado»
+       (diferencia − bajas). La diferencia sube en el monto de las bajas
+       (sep 2026, de S/ 11.043 a 12.114) y queda partida en lo que tiene
+       documento y lo que no.
+     - **El teórico tenía dos columnas, «C/ DSCTO» y «S/ DSCTO»**. La
+       comparación lleva «Costo sin descuento» (el Paloteo tal cual, para
+       cotejarlo) y «Costo con descuento» (menos la parte regalada), cada
+       uno con su %; la Diferencia es contra el con descuento. Reemplazan
+       a las tres filas de la #661 (costo, − descuentos, = ajustado).
+     - **Sin cambiar todavía**: el cuadro de 2015 sólo descontaba los
+       descuentos DE PERSONAL al 50 %; la tabla, todos (bancos y comercios
+       incluidos). En sep 2026 los internos —Descuento Personal, Socios,
+       Directorio— son ≈ S/ 650 de los 12.297.
+
+     Todo en `graficos/costos_tabla.js`; lo vigila `test_costo_ventas.py`.
+
+     (2026-10-16.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51888,7 +51922,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#661**; la próxima toma el número siguiente.
+> última regla es la **#662**; la próxima toma el número siguiente.
 
 >
 
