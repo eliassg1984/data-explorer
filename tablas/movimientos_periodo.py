@@ -335,10 +335,13 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
     return None
 
 
-def renderizar_documentos_mov(tp, altura, key, rotulo_tipo="", total=None):
+def renderizar_documentos_mov(tp, altura, key, rotulo_tipo="", total=None,
+                              rotulo_fecha="Registro"):
     """Una fila por DOCUMENTO del período en foco.
 
-    `tp` trae `registro` (fecha y hora en ISO, «2026-09-22 14:24»),
+    `tp` trae `registro` (fecha y hora en ISO, «2026-09-22 14:24»; la
+    columna se llama así por historia, y `rotulo_fecha` dice cuál fecha es:
+    «Registro» o «Proceso», la que eligió el usuario, regla #639),
     `codigo`, `area`, `tipo`, `lineas` y `valor` —números crudos: el formato
     lo pone la grilla, para que se ordenen— más cuatro ocultas: `__estado`
     («», «anulado», «sin procesar» o «sin ítems»), `__elbl` (lo que la
@@ -362,9 +365,9 @@ def renderizar_documentos_mov(tp, altura, key, rotulo_tipo="", total=None):
         suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
     )
     # 100: «22/09 14:24» mide ~74px a 13px, más el padding y la flecha.
-    gb.configure_column("registro", header_name="Registro",
+    gb.configure_column("registro", header_name=rotulo_fecha,
                         valueFormatter=_JS_FECHA_HORA,
-                        headerTooltip="Fecha y hora de registro",
+                        headerTooltip=f"Fecha y hora de {rotulo_fecha.lower()}",
                         width=100, minWidth=100, suppressSizeToFit=True)
     # 100: «2609000407» —diez dígitos, los cuatro primeros son año y mes—
     # mide ~72px.

@@ -12,6 +12,7 @@ ultimos 200 commits, 2,7x el siguiente) y sus dos funciones mayores
     _cascada.py          vista Cascada (la mas grande)
     _heatmap.py          vista "Mapa de calor" (hoy una tabla Familia x Area, #468)
     _distribucion.py     vista Distribucion
+    _diferencias.py      vista Analisis de diferencias: por que no cuadra cada linea (#650)
 
 Este __init__ se queda con lo que define el dashboard como tal: la
 config del rail, su pila y el punto de entrada publico
@@ -77,6 +78,7 @@ from graficos.ajuste._heatmap import _graf_heatmap_ajuste  # noqa: F401
 from graficos.ajuste._distribucion import (  # noqa: F401
     _graf_distribucion_ajuste, _fig_pareto_ajuste, _pareto_datos,
 )
+from graficos.ajuste._diferencias import vista_diferencias
 
 
 # Rail derecho de Ajuste (mismo componente compartido que Compras). El id
@@ -99,6 +101,12 @@ _AJUSTE_RAIL_CATEGORIAS = rail_sin_tablas((
     # existen: miraban el mismo dato que Evolución y se fusionaron en ella
     # (#501). El mismo día la tabla volvió a salir de Evolución como vista
     # propia, porque no dependía de la serie (#504).
+    # «Revisar» nació el 2026-10-13 con «Análisis de diferencias» (regla
+    # #650): por qué falta o sobra cada producto en cada área, con la ficha
+    # de la línea. Va entre las vistas de un conteo y las del tiempo porque
+    # mira UNA sesión, como las de arriba.
+    ("Revisar",     (("Diferencias", "Análisis de diferencias",
+                      ":material/troubleshoot:"),)),
     ("Tiempo",      (("Evolución",            "Evolución", ":material/show_chart:"),
                      ("Detalle por producto", "Tabla dinámica",
                       ":material/pivot_table_chart:"))),
@@ -119,6 +127,7 @@ _PILA = pila_sin_tablas((
     ("aj_sec_cascada",      "Cascada"),
     ("aj_sec_heatmap",      "Mapa de calor"),
     ("aj_sec_distribucion", "Distribución"),
+    ("aj_sec_diferencias",  "Diferencias"),
     ("aj_sec_evolucion",    "Evolución"),
     ("aj_sec_detalle",      "Detalle por producto"),
     ("aj_sec_tabla",        "Tabla"),
@@ -300,6 +309,13 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         # corrida completa, después de dibujar la vista entera (regla #632).
         recargar_si_cambio_mes()
 
+    def _dib_diferencias():
+        """Análisis de diferencias: su propia tarjeta, su sesión y su familia
+        (regla #650). Recibe el parquet entero, como las de arriba: la cuenta
+        la arma `data.diferencias_ajuste_sesion` con el kardex y las recetas."""
+        vista_diferencias(df_full, col_fecha, col_familia, col_area,
+                          col_ajuste_val, col_producto)
+
     def _dib_evolucion():
         """Evolución dibuja su propia tarjeta (serie + familias), así que no
         va en `_en_tarjeta`. Recibe `d`: el parquet entero con los chips; los
@@ -339,6 +355,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         "aj_sec_cascada":      _dib_cascada,
         "aj_sec_heatmap":      _dib_heatmap,
         "aj_sec_distribucion": _dib_distribucion,
+        "aj_sec_diferencias":  _dib_diferencias,
         "aj_sec_tabla":        _dib_tabla,
         "aj_sec_evolucion":    _dib_evolucion,
         "aj_sec_detalle":      _dib_detalle,

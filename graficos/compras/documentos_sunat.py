@@ -91,16 +91,17 @@ from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, JsCode
 import data
 import definicion_compra
 import sunat
+import tipo_compra
 from cortes import MESES_ABR_ES
 from estado_rango import clave_rango, restaurar_eco
-import franja_fecha
 from tema import (
     ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR_FONDO, ERROR_TEXTO,
     GRIS_BORDE, GRIS_FONDO, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
     LAVANDA_CABECERA_GRUPO, LAVANDA_FOCO, LAVANDA_FONDO,
     TEXTO_PRINCIPAL,
 )
-from graficos.base import _compras_layout, _compras_truncar, una_vez_por_corrida
+from graficos.base import (
+    _compras_layout, _compras_truncar, selector_fecha_tarjeta, una_vez_por_corrida)
 from graficos.compras._comun import (
     ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK,
 )
@@ -1187,6 +1188,16 @@ def _chips_de(fila):
     return "|".join(chips)
 
 
+@st.cache_data(ttl=3600, show_spinner=False, max_entries=2)
+def _tablas_tipo(sello, version, _d):
+    """Lo que el historial del Almacén dice de cada proveedor y documento
+    (`tipo_compra.tablas_almacen`): medio segundo con 53.000 líneas y no
+    depende del rango, así que se calcula una vez por versión del parquet.
+    `version` es `tipo_compra.VERSION`: cambiar las reglas no sirve una
+    tabla vieja. Regla #640."""
+    return tipo_compra.tablas_almacen(_d)
+
+
 def _tabla_documentos(df_cruce, df_sire):
     """LA tabla del drill: los comprobantes de SUNAT y, en la misma celda,
     lo que dice el sistema cuando no coincide. Devuelve la fila COMPLETA
@@ -1205,15 +1216,18 @@ def _tabla_documentos(df_cruce, df_sire):
     al lado y en las 122 «Solo SUNAT» estaban vacías. Ahora son ocho
     columnas y 868 px de mínimo.
 
-    LAS OCHO, y por qué no son más:
+    LAS OCHO, y por qué no son más (NUEVE desde el 2026-10-11, con «Tipo»):
       · Fecha, Documento, Proveedor — la identidad.
+      · Tipo — QUÉ se compró: Alimentos, Otros bienes, Servicios o
+        Financiero (`tipo_compra.py`, regla #640). No es el tipo de
+        comprobante, que sigue siendo un chip.
       · Base, IGV, Total — el dinero, con la segunda línea de
         `_JS_IMPORTE` cuando el sistema dice otra cosa.
       · D — la detracción, que SUNAT ya marca y no se mostraba en ningún
         lado (1.145 de 16.678 en el registro completo).
       · «Está vs Sistema» — el estado del cruce.
-    Lo demás se midió y se dejó afuera: «Tipo» es 97,6 % «Factura» (va
-    como chip, ver `_JS_DOCUMENTO`), «Fecha de vencimiento» viene vacía o
+    Lo demás se midió y se dejó afuera: el tipo de comprobante es 97,6 %
+    «Factura» (va como chip, ver `_JS_DOCUMENTO`), «Fecha de vencimiento» viene vacía o
     igual a la emisión en 229 de 307 filas, «Período tributario» es
     constante dentro de un mes y «Estado del comprobante» es «Activo» en
     los 16.678 del registro. Todos viven en la ficha, que es donde se mira
@@ -1308,6 +1322,10 @@ def _tabla_documentos(df_cruce, df_sire):
             "Documento": str(r.get("documento") or ""),
             "Proveedor": str(r.get("proveedor") or "")
                          or str(r.get("proveedor_sistema") or ""),
+            # Qué se compró (`tipo_compra.clasificar`, regla #640). Sin
+            # tipo, una raya: el tooltip dice por qué no hubo pista.
+            "Tipo": str(r.get("tipo") or "") or "—",
+            "_tipo_por": str(r.get("tipo_por") or ""),
             "Base": base_u if base_u is not None else base_s,
             "IGV": igv_u if igv_u is not None else igv_s,
             "Total": total_sunat if total_sunat is not None else tot_s,
@@ -1328,18 +1346,31 @@ def _tabla_documentos(df_cruce, df_sire):
     gb.configure_default_column(resizable=True, sortable=True, filter=False,
                                 editable=False, suppressMovable=True)
     for oculta in ("_car", "_chips", "_sim", "_base_sis", "_igv_sis",
-                   "_total_sis", "_conv", "_dos", "_ver"):
+                   "_total_sis", "_conv", "_dos", "_ver", "_tipo_por"):
         gb.configure_column(oculta, hide=True)
-    # `_tipo` va oculta pero NO muerta: con el tipo fuera de las columnas
-    # visibles (es un chip), ésta es la que permite ordenar y filtrar por
-    # tipo sin gastar 94 px de ancho.
-    gb.configure_column("_tipo", hide=True, headerName="Tipo")
+    # `_tipo` va oculta pero NO muerta: con el tipo de COMPROBANTE fuera de
+    # las columnas visibles (es un chip), ésta es la que permite ordenar y
+    # filtrar por él sin gastar 94 px de ancho. No confundir con «Tipo», la
+    # visible, que es QUÉ se compró (regla #640).
+    gb.configure_column("_tipo", hide=True, headerName="Tipo de comprobante")
     gb.configure_column("Fecha", width=96, minWidth=96)
     # +19px desde que lleva el ojo (14 del ícono y 5 de aire).
     gb.configure_column("Documento", width=159, minWidth=145,
                         cellRenderer=_JS_DOCUMENTO)
     gb.configure_column("Proveedor", minWidth=170, flex=1,
                         tooltipField="Proveedor")
+    # 88 px: «Otros bienes», el rótulo más largo, con el aire de la celda.
+    # El tooltip es el motivo; la raya de «sin tipo», en gris.
+    gb.configure_column(
+        "Tipo", width=88, minWidth=88, tooltipField="_tipo_por",
+        headerTooltip="Qué se compró: Alimentos, Otros bienes, Servicios o "
+                      "Financiero. SUNAT no lo informa: sale de cómo está "
+                      "cargado en el Almacén, de lo que se le compra a ese "
+                      "proveedor y de si la factura va sin IGV. El cursor "
+                      "sobre la celda dice de dónde.",
+        cellStyle=JsCode(
+            "function(p){ return p.value === '—' ? {'color':'%s'} : {}; }"
+            % GRIS_TEXTO_SUAVE))
     gb.configure_column("Base", type=["numericColumn"], width=100, minWidth=100,
                         cellRenderer=_JS_IMPORTE,
                         cellRendererParams={"campoSis": "_base_sis"})
@@ -2718,6 +2749,15 @@ def _pie_comprobante(doc, lineas, totales=None):
     total = _del_registro(doc, "total")
     total = None if total is None else _s(total)
 
+    # El total del PAPEL (`PayableAmount`) puede diferir del registro: el
+    # recargo al consumo y el redondeo del retail no entran al total del
+    # registro del SIRE. Se usa para rotular el total y para explicar la
+    # diferencia más abajo.
+    pagable = _num((totales or {}).get("total"))
+    cargos = _num((totales or {}).get("cargos"))
+    _diverge = (total is not None and pagable is not None
+                and abs(abs(pagable) - abs(total)) > _TOLERANCIA_CENTAVOS)
+
     filas = []
     if grav:
         filas.append(("Gravado", grav, False))
@@ -2725,7 +2765,11 @@ def _pie_comprobante(doc, lineas, totales=None):
         filas.append(("No gravado", ngrav, False))
     filas.append(("IGV", igv, False))
     if total is not None:
-        filas.append(("TOTAL", total, True))
+        # «TOTAL» cuando el registro coincide con el papel; «Total registro»
+        # cuando NO —recargo al consumo, redondeo—, para no leerse como si
+        # se contradijera con el total del comprobante (el PDF). La
+        # diferencia la explica la línea de abajo.
+        filas.append(("Total registro" if _diverge else "TOTAL", total, True))
 
     _bloque_totales([_renglon_total(e, v, sim, f) for e, v, f in filas])
 
@@ -2762,13 +2806,26 @@ def _pie_comprobante(doc, lineas, totales=None):
     # redondeo que explicar — hay un descuadre, y se dice así.
     import sunat_importacion as _simp
 
-    pagable = _num((totales or {}).get("total"))
     _dif = (None if pagable is None or total is None
             else round(abs(pagable) - abs(total), 2))
     if _dif and abs(_dif) <= _simp.REDONDEO_MAXIMO + 1e-9:
         st.caption(f"El comprobante redondea el total a {sim} "
                    f"{abs(pagable):,.2f} ({_dif:+.2f}); SUNAT anota "
                    f"{sim} {abs(total):,.2f}. Se carga lo del comprobante.")
+    elif _dif and cargos and abs(abs(_dif) - abs(cargos)) <= _TOLERANCIA_CENTAVOS:
+        # EL HUECO TIENE NOMBRE cuando es el recargo al consumo. SUNAT no lo
+        # suma al total del registro —no es parte de la operación gravada—
+        # pero el `PayableAmount` del papel sí, y el importador lo carga
+        # DENTRO del neto (ver `sunat_importacion`): el documento entra por
+        # el total del comprobante y cuadra. Es normal y explicable, como el
+        # ISC: se explica en vez de mandar a "revisar" un documento que el
+        # Almacén acepta. Ver regla #314.
+        st.caption(f"El comprobante cobra {sim} {abs(pagable):,.2f}; el "
+                   f"registro anota {sim} {abs(total):,.2f}. La diferencia "
+                   f"es el recargo al consumo ({sim} {abs(cargos):,.2f}), "
+                   "que SUNAT no suma al registro. Al Almacén entra dentro "
+                   "del neto, así que el documento se carga por el total del "
+                   "comprobante.")
     elif _dif:
         st.caption(f"⚠ El comprobante declara {sim} {abs(pagable):,.2f} y "
                    f"el registro {sim} {abs(total):,.2f} "
@@ -4531,19 +4588,21 @@ def renderizar_documentos_sunat(d, col_fecha):
         c_fecha, c_mes, c_prov, c_est, c_act = st.columns(
             [1.5, 1.0, 2.1, 1.35, 0.95])
         with c_fecha:
-            # El pill de fecha, DENTRO de la tarjeta. Acá la fecha no es
-            # contexto global: es EL filtro de la tabla — el rango que se
-            # le consulta al SIRE. NO es una copia del de la franja: es la
-            # MISMA llamada, movida. `app.py` lo publica y NO lo dibuja
-            # —desde el 2026-09-06 en ninguna vista de Compras—, porque el
-            # widget no se puede duplicar: su key es la clave canónica del
-            # rango. O sea que ésta es la única tarjeta de todo el reporte
-            # que trae el calendario entero; las demás tocan ese mismo
-            # rango con `base.py::selector_fecha_tarjeta`.
+            # La fecha, DENTRO de la tarjeta: acá no es contexto global,
+            # es EL filtro de la tabla — el rango que se le consulta al
+            # SIRE. Hasta el 2026-10-11 era el pill viejo de la franja
+            # (`franja_fecha.render()`: atajos cortos + un `date_input`), el
+            # único que quedaba en la app; se reportó como «no es similar al
+            # de otros reportes». Ahora es el panel de las demás tarjetas
+            # (`selector_fecha_tarjeta`, regla #616) SIN `categoria`: escribe
+            # la clave canónica del reporte, que es la que lee
+            # `_rango_vigente`. Al no ser ya la key de un widget, Streamlit
+            # no la borra al salir del reporte; el espejo de
+            # `restaurar_eco` queda como red. Regla #633.
             #
             # El selector «Ver» que había acá bajó al panel del gráfico
             # (`_panel_grafico`), que es lo único que controlaba.
-            franja_fecha.render()
+            selector_fecha_tarjeta("sunat_f", "sunat_fecha_flag")
         with c_mes:
             mes_sunat = st.selectbox(
                 "Mes en SUNAT", list(_MES_SUNAT), key="sunat_mes_sunat",
@@ -4639,6 +4698,15 @@ def renderizar_documentos_sunat(d, col_fecha):
             g_pq = _parquet_agrupado_por_documento(
                 d, col_fecha, f_ini, f_fin, notas=data.notas_credito_compras())
             df_cruce = cruzar_con_parquet(vis, g_pq)
+            # «Tipo»: qué se compró (Alimentos, Otros bienes, Servicios,
+            # Financiero). Se agrega ANTES de los filtros para que viaje
+            # también al Excel. El SIRE no lo dice: sale del Almacén y de
+            # dos señales del registro, en el orden de `tipo_compra.py`.
+            # Regla #640.
+            df_cruce = tipo_compra.clasificar(
+                df_cruce, vis,
+                _tablas_tipo(data.sello_datos(definicion_compra.ARCHIVO),
+                             tipo_compra.VERSION, d))
 
             # EL FILTRO DE PROVEEDOR VA ACÁ, sobre el cruce ya armado, y no
             # sobre `vis` antes de cruzar. Recortar el lado SUNAT primero

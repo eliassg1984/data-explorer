@@ -19,7 +19,7 @@ trae un lunes, un viernes y un sábado, y un mes también — el ruido de
 día-de-semana se cancela al sumar. La semana se compara contra la de 364
 días antes y el mes contra el mismo mes.
 
-364 DÍAS Y NO «LA MISMA SEMANA ISO» (regla #633): hasta el 2026-10-05 el
+364 DÍAS Y NO «LA MISMA SEMANA ISO» (regla #659): hasta el 2026-10-05 el
 par se buscaba por número de semana ISO. Da lo mismo casi siempre, pero
 2026 tiene 53 semanas ISO: desde el 28/12/2026 y durante todo 2027 eso
 compara contra 371 días antes, con la fecha corrida SEIS días — el Día de
@@ -132,7 +132,7 @@ _MESES_ES = ("Ene", "Feb", "Mar", "Abr", "May", "Jun",
              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
 
 _UN_ANO_DE_SEMANAS = _dt.timedelta(days=364)
-"""El «mismo día de semana del año pasado»: 52 semanas justas (regla #633)."""
+"""El «mismo día de semana del año pasado»: 52 semanas justas (regla #659)."""
 
 
 def _fecha_equivalente(f, modo):
@@ -143,7 +143,7 @@ def _fecha_equivalente(f, modo):
         existe en un año no bisiesto → cae al 28.
     modo="semana": 364 días antes, el mismo día de la semana. Es la cuenta
         de `ventas_mix.rango_ano_pasado` y `ventas_horario._ano_pasado`, y
-        `test_graficos.py` vigila que sigan siendo la misma (regla #633).
+        `test_graficos.py` vigila que sigan siendo la misma (regla #659).
     """
     if modo == "calendario":
         try:
@@ -181,7 +181,7 @@ def _clave_ap(clave, grano, modo):
     Semana: la que empieza 364 días antes — casi siempre el mismo número de
     semana, pero NO en 2027 (2026 tiene 53 semanas ISO): la S18 de 2027 va
     contra la S19 de 2026, que es la de los mismos días del calendario
-    (regla #633). Mes: el mismo mes un año antes."""
+    (regla #659). Mes: el mismo mes un año antes."""
     if grano == "Día":
         return _fecha_equivalente(clave, modo)
     if grano == "Semana":
@@ -243,7 +243,7 @@ def _texto_periodo(clave, grano, fin_real=None, con_numero=True):
 
     `con_numero=False` calla el número de semana: el del año pasado no
     siempre es el de la barra (la S18 de 2027 va contra la S19 de 2026,
-    regla #633), y un hover que dice «S19» sobre la barra «S18» se lee
+    regla #659), y un hover que dice «S19» sobre la barra «S18» se lee
     como un error. Las fechas sí dicen lo que se sumó."""
     ini, fin = _rango_de_clave(clave, grano)
     if fin_real is not None:
@@ -306,7 +306,7 @@ def _series_por_rangos(archivo, col_parquet, col_fecha, col_venta, col_pax,
     cubre a todos. La venta del ticket es la de los canales que registran
     clientes (`definicion_venta.con_clientes`, regla #591): sin Rappi.
 
-    `total` es el de la VENTANA entera (regla #633): `{"venta", "pax",
+    `total` es el de la VENTANA entera (regla #659): `{"venta", "pax",
     "cli"}`, con `pax`/`cli` en None si no hay clientes. Se cuenta sobre la
     UNIÓN de los rangos y no sumando las barras: en «Misma fecha» el 28 y el
     29 de febrero de un bisiesto caen los dos en el 28 del año anterior, y
@@ -414,7 +414,7 @@ def _var_tabla(actual, previo):
 def _explica_diferencia(t, top=15):
     """Qué productos explican la diferencia de UN período contra el año
     pasado: los `top` que más pesaron, de mayor a menor |Δ S/|, y los demás
-    juntos en una fila «Resto» (regla #633).
+    juntos en una fila «Resto» (regla #659).
 
     `t` trae una fila por producto con `venta` y `venta_ap` (0 del lado en
     que no se vendió) y, si hay, `cant`, `cant_ap`, `fam` y `sub`.
@@ -563,7 +563,7 @@ def _titulo_comparativo(grano, modo, es_desc):
 
 
 def _html_totales(tot_act, tot_ap, es_desc, tramo_act, tramo_ap):
-    """La fila del TOTAL DE LA VENTANA (regla #633), con el dibujo de los KPI
+    """La fila del TOTAL DE LA VENTANA (regla #659), con el dibujo de los KPI
     de Ventas (`.vt-kpis`, `estilos/_80_cards.py`).
 
     Hasta el 2026-10-05 la vista no decía en ningún lado la cifra que se
@@ -639,7 +639,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                         col_sub=None, filtrar_cb=None):
     """Comparativo Año Pasado vs Actual por día, semana o mes — en montos o
     descompuesto en pax × ticket, con el total de la ventana arriba y, al
-    clickear un período, qué productos explican su diferencia (#633)."""
+    clickear un período, qué productos explican su diferencia (#659)."""
     if not (col_venta and col_fecha):
         st.info("Faltan columnas (Venta, Fecha) para el comparativo.")
         return
@@ -695,7 +695,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     with _card(f"ventas_comparativo_{_grano_layout}"):
         _ph_hdr = st.empty()
         # UNA FILA HORIZONTAL, cada grupo a su ancho de contenido (regla
-        # #633). Hasta el 2026-10-05 eran `st.columns([1.3, 1.6, 2.1, 0.5,
+        # #659). Hasta el 2026-10-05 eran `st.columns([1.3, 1.6, 2.1, 0.5,
         # 1.5])`: cada columna medía más que su grupo, todo el sobrante caía
         # a la DERECHA del grupo, y la línea —que cada grupo dibuja a su
         # izquierda— quedaba a 102-113px del grupo anterior y a 17 del
@@ -766,7 +766,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             f'<hr style="border:none;border-top:2px solid {GRIS_BORDE};'
             'margin:-6px -18px 12px;width:calc(100% + 36px);">',
             unsafe_allow_html=True)
-        # El TOTAL DE LA VENTANA (regla #633): se reserva acá —entre la franja
+        # El TOTAL DE LA VENTANA (regla #659): se reserva acá —entre la franja
         # y el gráfico, fuera del slot, porque adentro lo taparía el panel
         # «Detalle» flotante— y se llena cuando ya están los datos. El CSS le
         # da un alto mínimo para que la tarjeta no salte mientras carga (#108).
@@ -830,7 +830,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
     es_desc = vista == "Descomposición"
 
-    # El total de la ventana, en el hueco que dejó la franja (regla #633).
+    # El total de la ventana, en el hueco que dejó la franja (regla #659).
     def _tramo(rangos):
         return f"{rangos[0][1]:%d/%m/%Y} al {rangos[-1][2]:%d/%m/%Y}"
     _ph_tot.markdown(
@@ -865,7 +865,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     _SERIES_DESC = ("venta", "pax", "ticket")
     _ver = {s: bool(st.session_state.get(f"ventas_comp_ver_{s}", True))
             for s in _SERIES_DESC}
-    # Sin legend nativo desde el 2026-10-05 (regla #633): la leyenda es la
+    # Sin legend nativo desde el 2026-10-05 (regla #659): la leyenda es la
     # fila del total (`_html_totales`), que pinta con el color de cada serie
     # lo que se dibuja y además dice su cifra. En Descomposición, encima, el
     # control son los switches del panel "Detalle".
@@ -1014,7 +1014,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         height=(alturas.VENTAS_COMP_FIG_MOVIL if _es_movil()
                 else alturas.VENTAS_COMP_FIG),
         # Arriba sólo queda la franja de los rótulos «feriado»/«±1 fer.»
-        # (y=1.0 paper): el legend se fue a la fila del total (#633) y las
+        # (y=1.0 paper): el legend se fue a la fila del total (#659) y las
         # etiquetas de Montos caen DENTRO del área por el rango del eje Y de
         # abajo. En Descomposición, además, el panel «Detalle» flota en la
         # esquina de arriba: con 50 no le tapa nada.
@@ -1042,7 +1042,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         fig.update_yaxes(ticksuffix="%", tickformat=",.0f",
                          gridcolor=GRIS_BORDE, zeroline=False)
     else:
-        # Rango FIJO en Montos (regla #633): las etiquetas de valor, el %Var
+        # Rango FIJO en Montos (regla #659): las etiquetas de valor, el %Var
         # (+14 % del tope) y «en curso» (+24 %) son anotaciones, y el
         # autorange no las ve. Con el margen de 95 que tenía el legend se
         # salían hacia ese aire; sin él, el rango les hace lugar adentro —
@@ -1272,7 +1272,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.caption(_texto_caption)
 
     # ── Drill: qué productos explican la diferencia del período ──────────
-    # Hasta el 2026-10-05 era el top 15 por venta ACTUAL (regla #633).
+    # Hasta el 2026-10-05 era el top 15 por venta ACTUAL (regla #659).
     # El clic NO lleva a Mix › Detalle › «Año pasado», aunque esa vista
     # contesta lo mismo: Mix sólo ve el rango de la franja (con el de por
     # defecto, 9 de las 14 barras de Día caen afuera) y llevarlo obligaba a

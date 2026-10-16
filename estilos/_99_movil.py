@@ -16,7 +16,8 @@ CSS = """    /* ================================================================
            variable en 0 vuelven solos a su sitio los seis `calc()` que en
            escritorio corren cosas hacia abajo por la franja: la banda
            blanca (_40_ajuste_franja), el pill de fecha, los chips, el
-           stepper de cortes y el título de Ventas (_50_fecha), y el rail
+           stepper de cortes —borrado el 2026-10-11, #635— y el título
+           de Ventas (_50_fecha), y el rail
            derecho de vistas (_20_compras_rail). Sin esto, cada uno tendría
            que repetir su override acá. */
         :root {

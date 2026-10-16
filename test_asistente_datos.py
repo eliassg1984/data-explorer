@@ -252,6 +252,99 @@ r = ejecutar_sql(None, "SELECT COUNT(*) AS n FROM salidas", extras)
 ok(r.get("ok") and r["filas"][0]["n"] == 2,
    "extras: sin `datos`, las extras se consultan igual")
 
+# ── Requerimientos: lo que suma la página (regla #643) ─────────────────────
+# El `datos` de Movimientos. Las vistas no suman los anulados ni las líneas
+# sin producto (#641) y el modelo no lo sabía: S/ 238.884 contra 238.118 en
+# los últimos 30 días. Los casos de `test_graficos.py::_pruebas_
+# requerimientos_por_area`: R1 con dos líneas; R2 ANULADO con valor; R3 SIN
+# ÍTEMS; R4 GENERADO con ítem (suma); R5 anulado, en minúscula y con un
+# espacio, y sin ítems. Con PRECIO UNIT, que el resumen sumaba en vez del
+# valorizado.
+print("\n── requerimientos: qué suma ──")
+from asistente_datos import filtro_requerimientos  # noqa: E402
+
+dr = pd.DataFrame({
+    "FECHA REGISTRO": pd.to_datetime(
+        ["2026-09-12", "2026-09-12", "2026-09-13", "2026-09-14",
+         "2026-09-15", "2026-09-16"]),
+    "FECHA PROCESADO": pd.to_datetime(
+        ["2026-09-12", "2026-09-12", None, "2026-09-14", None, None]),
+    "COD REQUERIMIENTO": ["R1", "R1", "R2", "R3", "R4", "R5"],
+    "NOMBRE ESTADO REQUERIMIENTO": ["PROCESADO", "PROCESADO", "ANULADO",
+                                    "PROCESADO", "GENERADO", " anulado"],
+    "SUB ALMACEN": ["COCINA", "COCINA", "PRODUCCION", "GASTOS", "BARRA",
+                    "COCINA"],
+    "NOMBRE PRODUCTO": ["A", "B", "C", None, "D", " "],
+    "CANTIDAD": [1.0, 2.0, 3.0, None, 4.0, None],
+    "PRECIO UNIT": [10.0, 10.0, 10.0, None, 10.0, None],
+    "VALOR ITEM": [10.0, 20.0, 30.0, None, 40.0, None],
+})
+filtro = filtro_requerimientos(dr)
+nr = nota_de_grano(dr) or ""
+ok(filtro is not None and f"WHERE {filtro})" in nr,
+   "requerimientos: la nota trae el filtro EXACTO que se prueba abajo")
+ok('COUNT(DISTINCT "COD REQUERIMIENTO")' in nr and "COUNT(*)" in nr,
+   "requerimientos: un requerimiento es un código, no una fila (#508)")
+ok('"PRECIO UNIT" es por unidad: no lo sumes' in nr,
+   "requerimientos: el precio unitario no se suma")
+ok('"FECHA PROCESADO"' in nr and "NO está recortado" in nr,
+   "requerimientos: nombra las dos fechas y que `datos` es el histórico")
+r = ejecutar_sql(dr, 'SELECT SUM("VALOR ITEM") AS v, COUNT(DISTINCT '
+                 f'"COD REQUERIMIENTO") AS n FROM (SELECT * FROM datos '
+                 f'WHERE {filtro})')
+ok(r.get("ok") and r["filas"][0] == {"v": 70.0, "n": 2},
+   "requerimientos: el filtro de la nota pasa el validador y da 70 en 2 "
+   "requerimientos (R1 y R4)")
+
+# Contra las VISTAS: lo que el filtro deja tiene que ser lo que suma
+# «Requerimientos por Área». Si `_que_suman` cambia de criterio —excluir
+# también lo GENERADO, por ejemplo—, el asistente se queda atrás y esto
+# falla.
+from graficos.movimientos import requerimientos_que_suman  # noqa: E402
+
+_val, _ = requerimientos_que_suman(
+    dr, col_estado="NOMBRE ESTADO REQUERIMIENTO", col_prod="NOMBRE PRODUCTO",
+    col_doc="COD REQUERIMIENTO", col_val="VALOR ITEM")
+ok(r.get("ok") and r["filas"][0]["v"] == _val["VALOR ITEM"].sum()
+   and r["filas"][0]["n"] == _val["COD REQUERIMIENTO"].nunique(),
+   "requerimientos: la nota suma lo mismo que `requerimientos_que_suman`")
+
+rr = resumen_para_prompt(dr, "Movimientos", {})
+ok('Suma de "VALOR ITEM" sin anulados' in rr and "S/ 70.00" in rr,
+   "requerimientos: el resumen suma como la página (70, no 100)")
+ok("Requerimientos que suman: 2" in rr
+   and "Anulados, aparte: 2 requerimientos por S/ 30.00" in rr,
+   "requerimientos: el resumen cuenta códigos y nombra los anulados aparte")
+ok('"PRECIO UNIT"' not in rr.split("REQUERIMIENTOS")[0],
+   "requerimientos: el resumen no suma el precio unitario")
+
+# El demo (`data._datos_demo`) escribe las columnas en otra caja y no trae
+# el código: la nota usa los nombres REALES y el filtro sigue andando.
+dd = pd.DataFrame({
+    "Fecha Registro": pd.to_datetime(["2025-01-01", "2025-01-02",
+                                      "2025-01-03"]),
+    "Nombre Producto": ["Producto demo 001", "Producto demo 002", None],
+    "Nombre Estado Requerimiento": ["Procesado", "Anulado", "Procesado"],
+    "Valor Item": [5.0, 7.0, 0.0],
+})
+fd = filtro_requerimientos(dd) or ""
+ok('"Nombre Estado Requerimiento"' in fd and '"Nombre Producto"' in fd,
+   "requerimientos: el filtro usa la caja real de las columnas")
+r = ejecutar_sql(dd, f'SELECT SUM("Valor Item") AS v FROM datos WHERE {fd}')
+ok(r.get("ok") and r["filas"][0]["v"] == 5.0,
+   "requerimientos: 'Anulado' en minúscula tampoco suma")
+ok("COUNT(DISTINCT" not in (nota_de_grano(dd) or "-")
+   and "Anulados, aparte: S/ 7.00" in resumen_para_prompt(dd, "X", {}),
+   "requerimientos: sin código, la nota no habla de contar códigos")
+
+ok(filtro_requerimientos(d) is None and filtro_requerimientos(dv) is None,
+   "otros reportes: no se confunden con requerimientos")
+_sin_estado = pd.DataFrame({"PRECIO UNIT": [10.0, 10.0],
+                            "VALOR ITEM": [10.0, 20.0]})
+ok('Suma de "VALOR ITEM": S/ 30.00' in resumen_para_prompt(_sin_estado,
+                                                            "X", {}),
+   "sin estado, el resumen igual elige VALOR ITEM antes que PRECIO UNIT")
+
 # ── Cierre ─────────────────────────────────────────────────────────────────
 print()
 if _fallos:

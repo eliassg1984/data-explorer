@@ -294,25 +294,29 @@ def _pruebas_articulos_nuevos():
 
 
 def _pruebas_simulador_receta():
-    """El simulador de la receta de un plato (`graficos/recetaventa.py`), el
-    que abre un clic en Recetas › Carta costeada (hasta el 2026-09-28, en
-    Composición; regla #556).
+    """El simulador de Recetas (regla #656): `simulador_receta.py`, la cuenta
+    pura del «Simular» de un plato (`graficos/simulador_plato.py`, en una
+    modal) y de «¿Y si sube un insumo?» (`graficos/recetas_alza.py`).
 
-    LO QUE VIGILA ES UN ORDEN, y cuesta verlo: el editor empareja lo
-    tecleado con el borrador **por POSICIÓN** (`editado.iloc[i]` ↔
-    `lineas[i]`), así que `_receta_simulada` NO puede ordenar. Nació
-    ordenando por costo —copiado de `_receta_original`, donde sí
-    corresponde— y el bug es mudo: mientras nada cambie de puesto todo
-    anda, y en cuanto un costo se mueve, editar una fila escribe en otro
-    insumo y «Quitar» saca al vecino. Medido el 2026-09-17 con un editor
-    sembrado. Ordena quien DIBUJA (`_panel_receta`, para el Sankey y la
-    dona), no quien calcula.
+    Reemplazó el 2026-10-15 al simulador de `recetaventa.py` (una
+    `st.data_editor` del primer nivel de la receta, regla #451): este test
+    vigilaba que su borrador no se reordenara, y se fue con él.
 
-    Lo demás son las dos cuentas del borrador: el costo es
-    `Cantidad * Precio` (consecuencia, no dato), y el precio unitario se
-    despeja de `Costo / Cantidad` sin reventar con cantidad 0 — que en el
-    parquet existe, 19 filas, todas con costo 0."""
-    from graficos.recetaventa import _precios_y_pesos, _receta_simulada
+    Un plato de mentira con las tres clases de línea —una receta base, un
+    insumo comprado y un corte porcionado— y lo que se vigila:
+      · el árbol suma, sin tocar nada, lo que la receta dice que cuesta;
+      · cada edición mueve el costo como en la cocina: el precio de una línea
+        DENTRO de la receta base, la cantidad de la base (que escala a sus
+        líneas), la merma del corte (precio ÷ (1 − merma) × peso, #647);
+      · «última compra» usa la compra, pero no si está en otra unidad (más
+        de 3 veces el precio de hoy);
+      · la exposición lleva el corte al insumo del que sale y suma el costo;
+      · la cuenta del navegador (`simulador_plato.js`) es la misma que la de
+        Python: las fórmulas, escritas igual en los dos.
+    """
+    import pathlib
+
+    import simulador_receta as sr
 
     fallos = 0
 
@@ -324,35 +328,86 @@ def _pruebas_simulador_receta():
             fallos += 1
             print(f"FALLA simulador receta · {nombre}: got={got!r} exp={exp!r}")
 
-    # Tres líneas en orden de costo CRECIENTE: si la función ordenara, el
-    # orden de salida sería el inverso del de entrada y se vería enseguida.
-    lineas = [
-        {"Insumo": "barato", "Cantidad": 1.0, "Precio": 1.0},
-        {"Insumo": "medio", "Cantidad": 2.0, "Precio": 2.0},
-        {"Insumo": "caro", "Cantidad": 3.0, "Precio": 10.0},
-    ]
-    r = _receta_simulada(lineas)
-    check("el borrador NO se reordena (el editor empareja por posición)",
-          list(r["Insumo"]), ["barato", "medio", "caro"])
-    check("el costo es Cantidad x Precio", [round(v, 6) for v in r["Costo"]],
-          [1.0, 4.0, 30.0])
-    check("el % se reparte sobre el total del borrador",
-          round(float(r[r["Insumo"] == "caro"]["%"].iloc[0]), 4),
-          round(30.0 / 35.0 * 100, 4))
+    rv = pd.DataFrame({
+        "COD PLATO": ["P1"] * 3,
+        "COD INS": ["B1", "I1", "C1"],
+        "INS RV": ["(Rs) Salsa", "Tomate", "(P) Corte"],
+        "CANTIDAD": [80.0, 30.0, 1.0],
+        "UNID COSTO": ["GRAMOS", "GRAMOS", "UND"],
+        "FACTOR": [1000.0, 1000.0, 1.0],
+        "TOTAL": [1.6, 0.3, 20.0],
+    })
+    rb = pd.DataFrame({          # 1 kg de salsa: 500 g de X y 1 kg de Y
+        "COD PROD RB": ["B1", "B1"], "COD INS RB": ["X", "Y"],
+        "INSUMO": ["X", "Y"], "CANT": [500.0, 1000.0], "UNID": ["GRAMOS"] * 2,
+        "FACTOR INS": [1000.0, 1000.0], "CST SUBT INS": [10.0, 10.0],
+        "RB NOMBRE": ["(Rs) Salsa"] * 2, "RB UNID": ["KILOS"] * 2,
+        "FECH REG": ["2026-10-01"] * 2,
+    })
+    po = pd.DataFrame({          # 10 kg de lomo → 8 kg en 40 cortes de 200 g
+        "COD PORC": ["PO1"], "COD PROD INIC": ["L"], "PROD INICIAL": ["Lomo"],
+        "FEC REGIST": ["2026-10-10"], "UNID PROD INIC": ["KILOS"],
+        "CANT A PORCIONAR": [10.0], "CANT TOT RESUL": [8.0],
+        "COD PROD FINAL": ["C1"], "CANT RESULT": [40.0], "PESO RESULT": [8.0],
+        "PREC PROM PROD FIN": [20.0],
+    })
+    compras = {"I1": {"ult": 12.0, "fult": "2026-10-12", "p90": 11.0, "unid": "kg"},
+               "L": {"ult": 88.0, "fult": "2026-10-12", "p90": 80.0, "unid": "kg"}}
+    bases, info = sr.lineas_de_bases(rb)
+    porcs = sr.porcionamientos_vigentes(po)
+    nodos = sr.arbol_plato(rv, "P1", bases, info, porcs, compras)
+    por_cod = {n["cod"]: str(i) for i, n in enumerate(nodos)}
+    r = lambda v: round(v, 4)  # noqa: E731
 
-    lineas[0]["Cantidad"] = 100.0     # ahora "barato" es el más caro
-    r2 = _receta_simulada(lineas)
-    check("y sigue sin reordenarse cuando un costo cambia de puesto",
-          list(r2["Insumo"]), ["barato", "medio", "caro"])
+    check("el árbol suma lo que dice la receta", r(sr.costo_arbol(nodos)), 21.9)
+    check("la receta base se abre con sus líneas, proporcionadas",
+          [(h["cod"], r(h["cant"]), r(h["costo"])) for h in nodos[int(por_cod["B1"])]["hijos"]],
+          [("X", 40.0, 0.8), ("Y", 80.0, 0.8)])
+    corte = nodos[int(por_cod["C1"])]
+    check("el corte trae su merma y su peso", (corte["porc"]["merma"], r(corte["porc"]["peso"])),
+          (20.0, 0.2))
+    check("el precio del origen se despeja del corte", r(sr.precio_origen_hoy(corte)), 80.0)
+    check("la unidad de la receta, corta", nodos[int(por_cod["I1"])]["unid"], "g")
+    rb_ = por_cod["B1"]
+    check("un precio DENTRO de la receta base mueve el plato",
+          r(sr.costo_arbol(nodos, {f"{rb_}.1": {"P": 20.0}})), r(21.9 + 0.8))
+    check("la cantidad de la base escala a sus líneas",
+          r(sr.costo_arbol(nodos, {rb_: {"cant": 160.0}})), r(21.9 + 1.6))
+    check("la merma del corte: precio ÷ (1 − merma) × peso",
+          r(sr.costo_arbol(nodos, {por_cod["C1"]: {"merma": 25.0}})),
+          r(1.6 + 0.3 + 80 / 0.75 * 0.2))
+    check("con la última compra: el tomate a 12 y el lomo a 88",
+          r(sr.costo_arbol(nodos, modo="ult")), r(1.6 + 0.36 + 88 / 0.8 * 0.2))
+    otra = dict(compras, I1={"ult": 12000.0, "fult": "", "p90": 12000.0, "unid": "und"})
+    n2 = sr.arbol_plato(rv, "P1", bases, info, porcs, otra)
+    check("una compra en otra unidad no se usa: queda el precio de hoy",
+          r(sr.costo_arbol(n2, modo="ult")), r(1.6 + 0.3 + 88 / 0.8 * 0.2))
+    check("precio sugerido para quedar en 30 %",
+          r(sr.precio_sugerido(30.0, 30, 1.235)), r(100 * 1.235))
 
-    cero = _precios_y_pesos(pd.DataFrame({
-        "Insumo": ["sin cantidad"], "Cantidad": [0.0], "Costo": [0.0]}))
-    check("cantidad 0 no revienta al despejar el precio unitario",
-          float(cero["Precio"].iloc[0]), 0.0)
+    expo = sr.exposicion_carta(rv, rb, po)
+    check("la exposición lleva el corte a su insumo de origen",
+          {k: r(v) for k, v in expo["P1"].items()},
+          {"X": 0.8, "Y": 0.8, "I1": 0.3, "L": 20.0})
+    carta = pd.DataFrame({"Cod": ["P1"], "Producto": ["Plato"], "Grupo": ["A"],
+                          "Subgrupo": ["B"], "Precio": [100.0], "Neto": [80.0],
+                          "Costo": [21.9], "Vendidos": [30.0]})
+    a = sr.alza(expo, carta, "L", 10)
+    check("el lomo +10 % sube el plato 2,00",
+          (r(a["CostoNuevo"].iloc[0]), r(a["DeltaMes"].iloc[0])), (23.9, 20.0))
+    check("y el precio para mantener su %",
+          r(a["PrecioMantener"].iloc[0]), r(100 * 23.9 / 21.9))
 
-    vacio = _receta_simulada([])
-    check("un borrador vacío devuelve las mismas columnas",
-          list(vacio.columns), ["Insumo", "Cantidad", "Costo", "Precio", "%"])
+    # La gemela del navegador: las tres fórmulas, escritas igual.
+    js = (pathlib.Path(__file__).parent / "graficos" / "simulador_plato.js").read_text(encoding="utf-8")
+    for formula in ("cant * P / (1 - m / 100) * peso", "cant * P / n.factor",
+                    "v / hoy > 1 / 3 && v / hoy < 3", "n.costo / n.cant * n.factor"):
+        check(f"el JS calcula «{formula}»", formula in js, True)
+    css = (pathlib.Path(__file__).parent / "graficos" / "simulador_plato.css").read_text(encoding="utf-8")
+    check("el CSS del simulador no usa :has() (regla #469)", ":has(" in css, False)
+    import graficos.recetaventa as rv_mod
+    check("el simulador viejo de recetaventa ya no existe",
+          hasattr(rv_mod, "_receta_simulada") or hasattr(rv_mod, "_K_SIM_ON"), False)
 
     # ── El clic del Sankey ──────────────────────────────────────
     # `plotly_events` deja en `session_state` un STRING JSON, no una lista:
@@ -375,6 +430,198 @@ def _pruebas_simulador_receta():
 
     return fallos
 
+
+
+def _pruebas_costo_carta_ficha():
+    """Costo Carta «tabla primero» (regla #657): la ficha del plato debajo de
+    la tabla, con la evolución de su costo, las ediciones de sus recetas base
+    y los picos.
+
+      · LAS EDICIONES (`simulador_receta.ediciones_base`): el log del Almacén
+        guarda la receta ANTES de cada guardado; dos guardados a menos de
+        dos horas son UNA edición, y lo que movió se mide con los precios de
+        ANTES (una edición no se lleva la suba de precios del medio);
+      · LO QUE MOVIÓ AL PLATO (`marcas_plato`): la edición × lo que lleva un
+        plato de esa receta base, sólo si la usa HOY;
+      · LOS PICOS (`picos_plato`): un día a más de 2,5 veces lo habitual, y
+        su posible causa en el porcionamiento raro de uno de sus cortes;
+      · LA FECHA (`carta_costeada.ctx_fecha`, `con_ventas(rango=)`): abre en
+        los últimos 3 meses del último día con venta, y lo vendido es el del
+        rango.
+    """
+    import datetime as dt
+
+    import pandas as pd
+
+    import simulador_receta as sr
+    from graficos import carta_costeada as cc
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ficha de la carta · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ficha de la carta · {nombre}: got={got!r} exp={exp!r}")
+
+    # ── Las ediciones ──────────────────────────────────────────────────
+    t1 = pd.Timestamp("2026-08-01 10:00")
+    t1b = t1 + pd.Timedelta(minutes=30)
+    t2 = pd.Timestamp("2026-09-01 12:00")
+    mlog = pd.DataFrame({"COD RB": ["R1"] * 3, "COD PROD RB": ["P1"] * 3,
+                         "RB NOMBRE": ["(Rs) Salsa"] * 3,
+                         "USUARIO": ["ANA", "ANA", "LUIS"],
+                         "FECH MOV": [t1, t1b, t2]})
+    dlog = pd.DataFrame({
+        "COD RB": ["R1"] * 6, "COD INS": ["A", "B", "A", "B", "A", "B"],
+        "CANT": [100.0, 50.0, 120.0, 50.0, 150.0, 50.0],
+        "PRECIO": [0.01, 0.02, 0.01, 0.02, 0.01, 0.02],
+        "FECH MOV": [t1, t1, t1b, t1b, t2, t2]})
+    rb = pd.DataFrame({"COD RB": ["R1", "R1"], "COD INS RB": ["A", "B"],
+                       "INSUMO": ["Tomate", "Aceite"], "CANT": [150.0, 40.0],
+                       # El precio de HOY de B subió: no entra en la edición.
+                       "CST UNIT INS": [0.01, 0.05]})
+    ed = sr.ediciones_base(mlog, dlog, rb)
+    check("dos guardados a media hora son UNA edición", len(ed), 2)
+    check("la primera: el tomate de 100 a 150, +S/ 0,50 por unidad de la base",
+          (ed[0]["t"], round(ed[0]["delta"], 6), ed[0]["cambios"][0][1:4]),
+          (t1, 0.5, ("Tomate", 100.0, 150.0)))
+    check("la segunda, contra la receta de hoy y con los precios de ANTES",
+          (round(ed[1]["delta"], 6), ed[1]["usr"]), (-0.2, "LUIS"))
+    check("sin log, ninguna", (sr.ediciones_base(None, dlog, rb),
+                               sr.ediciones_base(mlog, dlog.iloc[0:0], rb)), ([], []))
+
+    nodos = [{"cod": "P1", "ins": "(Rs) Salsa", "cant": 200.0, "factor": 1000.0,
+              "costo": 0.46, "hijos": [
+                  {"cod": "A", "ins": "Tomate", "cant": 30.0, "factor": 1000.0,
+                   "costo": 0.3},
+                  {"cod": "B", "ins": "Aceite", "cant": 8.0, "factor": 1000.0,
+                   "costo": 0.16}]},
+             {"cod": "C1", "ins": "Lomo trozos", "cant": 1.0, "factor": 1.0,
+              "costo": 10.0, "porc": {"origen": "Lomo fino", "cod_origen": "L",
+                                      "merma": 10.0, "peso": 0.18}}]
+    mp = sr.marcas_plato(nodos, ed)
+    check("lo que movió al plato: × lo que lleva de la base (0,2)",
+          [round(m["esp"], 6) for m in mp], [0.1, -0.04])
+    check("la marca dice qué cambió", mp[0]["txt"], "Tomate: 100 → 150")
+    check("una base que el plato no usa no marca nada",
+          sr.marcas_plato([nodos[1]], ed), [])
+    check("los porcionados del árbol, una vez cada uno",
+          list(cc._porcionados(nodos + [nodos[1]])), ["C1"])
+
+    # ── Los picos ───────────────────────────────────────────────────────
+    dias = pd.date_range("2026-08-01", periods=30, freq="D")
+    costo = [10.0] * 30
+    costo[20] = 40.0
+    agg = pd.DataFrame({"producto": ["0000010"] * 30, "dia": dias,
+                        "unidades": [2.0] * 30, "neto": [60.0] * 30,
+                        "costo": [c * 2 for c in costo],
+                        "unidades_costeadas": [2.0] * 30,
+                        "neto_sin_costo": [0.0] * 30})
+    filas = []
+    for i, (dia, precio) in enumerate([("2026-06-10", 10.0), ("2026-07-01", 10.5),
+                                        ("2026-07-20", 9.8),
+                                        (dias[18].strftime("%Y-%m-%d"), 31.0)]):
+        filas.append({"COD PORC": f"PO{i}", "COD PROD FINAL": "C1",
+                      "COD PROD INIC": "L", "FEC REGIST": pd.Timestamp(dia),
+                      "PREC PROM PROD FIN": precio, "CANT A PORCIONAR": 10.0,
+                      "CANT TOT RESUL": 3.0, "PROD INICIAL": "Lomo fino",
+                      "USUARIO REG": "CARLOS"})
+    po = pd.DataFrame(filas)
+    pk = sr.picos_plato(agg, "0000010", nodos, po)
+    check("un pico: el día a 4 veces lo habitual",
+          [(p["ini"], p["pico"], p["normal"], p["exceso"]) for p in pk],
+          [(dias[20], 40.0, 10.0, 60.0)])
+    check("y su posible causa: el porcionamiento raro de dos días antes",
+          pk[0]["causa"].startswith("Posible causa: el porcionamiento PO3"), True)
+    check("sin porcionamientos, el pico sin causa",
+          sr.picos_plato(agg, "0000010")[0]["causa"], "")
+    check("sin ventas, ninguno", sr.picos_plato(None, "0000010"), [])
+
+    # ── La auditoría del POS (regla #658) ──────────────────────────────
+    # Lo que llega de la fila `auditoriacostos`: un artículo NUEVO (ANTES
+    # vacío), un redondeo de precio, el mismo cambio anotado dos veces, el
+    # factor y la unidad del corte en UN guardado, y el descargo del plato.
+    aud = pd.DataFrame({
+        "CORRELATIVO": ["1", "2", "3", "3", "4", "5", "6"],
+        "FECHA": [dias[17].strftime("%Y-%m-%d 09:00"),
+                  "2026-08-02 10:00", dias[18].strftime("%Y-%m-%d 15:00"),
+                  dias[18].strftime("%Y-%m-%d 15:00"),
+                  dias[18].strftime("%Y-%m-%d 15:00:20"),
+                  "2026-06-01 10:00", "2026-08-10 11:00"],
+        "USUARIO": ["ANA"] * 7,
+        "PANTALLA": ["ARTICULOS Y PRECIOS"] * 6 + ["PRODUCTOS"],
+        "CODIGO": ["C9", "C1", "C1", "C1", "C1", "C1", "0000010"],
+        "CAMPO": ["Factor", "Precio de Costo", "Factor", "Unidad de Salida",
+                  "Factor", "Precio de Costo", "Tipo Descargo"],
+        "ANTES": ["", "18,1579", "1000", "003", "1000", "10", "D"],
+        "DESPUES": ["1", "18.158", "1", "001", "1", "40", "R"],
+        "UNIDAD ANTES": [None, None, None, "GRAMOS", None, None, None],
+        "UNIDAD DESPUES": [None, None, None, "UND", None, None, None],
+    })
+    ca = sr.cambios_auditoria(aud)
+    check("se van lo nuevo, el redondeo y el cambio anotado dos veces",
+          [(r.cod, sorted(r.campos)) for r in ca.itertuples()],
+          [("C1", ["Precio de Costo"]), ("0000010", ["Tipo Descargo"]),
+           ("C1", ["Factor", "Unidad de Salida"])])
+    check("la unidad, con su nombre; el descargo, en palabras",
+          (ca.iloc[2]["campos"]["Unidad de Salida"], ca.iloc[1]["campos"]["Tipo Descargo"]),
+          (("GRAMOS", "UND"), ("directo", "receta")))
+    cp = sr.cambios_del_plato(ca, nodos, "0000010")
+    check("los del plato: sus artículos y su descargo",
+          [(c["nombre"], c["veces"]) for c in cp],
+          [("Lomo trozos", None), ("el plato", None), ("Lomo trozos", 1000.0)])
+    check("y otro plato no ve el descargo de éste",
+          [c["nombre"] for c in sr.cambios_del_plato(ca, nodos, "0000099")],
+          ["Lomo trozos", "Lomo trozos"])
+    pk2 = sr.picos_plato(agg, "0000010", nodos, cambios=ca)
+    check("el pico se explica por el cambio de factor de dos días antes",
+          ("factor 1000 → 1" in pk2[0]["causa"], "1,000 veces más" in pk2[0]["causa"]),
+          (True, True))
+    check("sin auditoría no hay esa causa",
+          sr.picos_plato(agg, "0000010", nodos, cambios=None)[0]["causa"], "")
+    check("la auditoría vacía o sin columnas no rompe",
+          (len(sr.cambios_auditoria(None)), len(sr.cambios_auditoria(aud.iloc[0:0])),
+           sr.cambios_del_plato(None, nodos, "0000010")), (0, 0, []))
+    check("la consulta del Sheet nombra las tablas enteras",
+          ("INFSEGURIDAD.DBO.MMOVIMIENTO.tCampo" in sr.consulta_sheet_auditoria(),
+           " AS M " in sr.consulta_sheet_auditoria()), (True, False))
+
+    # ── La fecha ────────────────────────────────────────────────────────
+    ctx = cc.ctx_fecha(agg, hoy=dt.date(2026, 10, 15))
+    check("los topes de la fecha son los días con venta",
+          (ctx["fecha_min"], ctx["fecha_max"]), (dt.date(2026, 8, 1), dt.date(2026, 8, 30)))
+    check("abre en los últimos 3 meses (recortados a lo que hay)",
+          ctx["rango_default_cat"][cc.CATEGORIA_FECHA], (dt.date(2026, 8, 1), dt.date(2026, 8, 30)))
+    check("su clave es la de la categoría de la Carta",
+          ctx["k_rango"], "rango_cat_Recetas_carta")
+    check("sin ventas no hay fecha", cc.ctx_fecha(None), None)
+    t = pd.DataFrame({"Cod": ["0000010", "0000020"]})
+    tv, r = cc.con_ventas(t, agg, rango=(dt.date(2026, 8, 21), dt.date(2026, 8, 30)))
+    check("lo vendido es el del rango, con los dos bordes",
+          (r, float(tv.set_index("Cod").loc["0000010", "Vendidos"])),
+          ((dt.date(2026, 8, 21), dt.date(2026, 8, 30)), 20.0))
+    check("los meses del rango, para sombrearlos",
+          cc.meses_del_rango([pd.Period("2026-07"), pd.Period("2026-08"),
+                              pd.Period("2026-09")],
+                             (dt.date(2026, 8, 21), dt.date(2026, 9, 2))),
+          [False, True, True])
+    check("la tabla lleva todas las columnas, con las del rango",
+          [c for c in cc.COLUMNAS_RANGO if c in cc.columnas_carta()],
+          list(cc.COLUMNAS_RANGO))
+
+    # ── Lo que no puede volver ──────────────────────────────────────────
+    import inspect
+    fuente = inspect.getsource(cc)
+    check("ya no hay «Más columnas» (regla #657)",
+          ("Más columnas" in inspect.getsource(cc.render_carta_costeada),
+           hasattr(cc, "VENTANAS_VENDIDOS"), hasattr(cc, "_panel")),
+          (False, False, False))
+    check("la fecha es la de las tarjetas, no un desplegable propio",
+          "selector_fecha_tarjeta(" in fuente, True)
+    return fallos
 
 
 def _pruebas_placeholder_de_inyeccion():
@@ -1979,7 +2226,7 @@ def _pruebas_puras():
           _vc._fecha_equivalente(_dt.date(2024, 2, 29), "calendario"),
           _dt.date(2023, 2, 28))
 
-    # «Mismo día de semana»: 364 días antes (regla #633), no la misma semana
+    # «Mismo día de semana»: 364 días antes (regla #659), no la misma semana
     # ISO — 2026 tiene 53 semanas ISO y en 2027 eso daba 371 días.
     _orig = _dt.date(2026, 8, 5)                      # miércoles
     _eq = _vc._fecha_equivalente(_orig, "semana")
@@ -2017,7 +2264,7 @@ def _pruebas_puras():
     check("claves mes cruzan el año", _cl_m, [(2025, 11), (2025, 12), (2026, 1)])
 
     # Clave AP: el mes, el mismo un año antes; la semana, la que empieza 364
-    # días antes (regla #633) — casi siempre el mismo número, no siempre.
+    # días antes (regla #659) — casi siempre el mismo número, no siempre.
     check("clave AP mes", _vc._clave_ap((2026, 3), "Mes", "semana"), (2025, 3))
     check("clave AP semana", _vc._clave_ap((2026, 20), "Semana", "semana"),
           (2025, 20))
@@ -2029,7 +2276,7 @@ def _pruebas_puras():
           _vc._clave_ap((2026, 53), "Semana", "semana"), (2026, 1))
 
     # LAS TRES VISTAS QUE COMPARAN CONTRA EL AÑO PASADO DICEN LO MISMO (regla
-    # #633): el Comparativo, Mix › Detalle › «Año pasado» y Por hora. Día por
+    # #659): el Comparativo, Mix › Detalle › «Año pasado» y Por hora. Día por
     # día y semana por semana, de 2025 a 2029 (cruza la S53 de 2026).
     from graficos import ventas_horario as _vh_ap
     from graficos.ventas_mix import rango_ano_pasado as _mix_ap
@@ -2124,7 +2371,7 @@ def _pruebas_puras():
         [(2026, 7)], [(2025, 7)], "Mes", _dt.date(2026, 7, 31))
     check("recorte: mes completo no marca parcial", _parc2, set())
 
-    # ── El total de la ventana (regla #633) ─────────────────────────────
+    # ── El total de la ventana (regla #659) ─────────────────────────────
     # Se cuenta sobre la UNIÓN de los rangos, no sumando las barras: en
     # «Misma fecha» el 28 y el 29 de febrero de un bisiesto caen los dos en
     # el 28 del año anterior, y una cuenta partida entre dos días es UN
@@ -2154,7 +2401,7 @@ def _pruebas_puras():
     check("total ventana · el pedido partido en dos días es una mesa",
           _tot_t["pax"], 4.0)
 
-    # ── Qué explica la diferencia del período (regla #633) ──────────────
+    # ── Qué explica la diferencia del período (regla #659) ──────────────
     # Ordena por |Δ S/|: el plato que el año pasado vendía y hoy no —venta
     # actual 0— va PRIMERO. Hasta el 2026-10-05 el top era por venta actual
     # y ése quedaba siempre afuera.
@@ -3004,7 +3251,6 @@ def _pruebas_estado_y_utils():
     # ── estado_rango: qué clave usa cada reporte ────────────────────────
     from estado_rango import (
         _fin_de_mes, _recortar_media, atajos_rango, clave_rango,
-        clave_corte as _clave_corte, clave_modo as _clave_modo,
     )
 
     check("clave_rango carga_por_rango",
@@ -3025,19 +3271,6 @@ def _pruebas_estado_y_utils():
           clave_rango("Compras", False, categoria="sec_proveedor")
           != clave_rango("Compras", False, categoria="sec_semanal"),
           True)
-    # El corte espeja la partición del rango: si no, cambiar de sección
-    # dejaría vivo un corte que ya no corresponde al rango en pantalla.
-    check("clave_corte espeja la partición del rango",
-          _clave_corte("Compras", categoria="sec_proveedor")
-          != _clave_corte("Compras", categoria="sec_semanal"),
-          True)
-    check("clave_corte por categoría separa reportes",
-          _clave_corte("Compras", categoria="tiempo")
-          != _clave_corte("Ajuste de Inventario", categoria="tiempo"),
-          True)
-    check("clave_modo se deriva de la del corte",
-          _clave_modo(_clave_corte("Compras", categoria="sec_semanal")),
-          "modo_" + _clave_corte("Compras", categoria="sec_semanal"))
     check("clave_rango normal",
           clave_rango("Compras", False), "rango_franja_Compras")
     # carga_por_rango GANA sobre la categoría: el date-picker tiene que
@@ -3795,7 +4028,14 @@ def _pruebas_rango_por_tarjeta():
     # ademas distingue una LLAMADA de un import o de la definicion misma.
     raiz = pathlib.Path(__file__).parent / "graficos" / "compras"
     sin_categoria, n_llamadas = [], 0
+    # `documentos_sunat.py` vive en este paquete por historia, pero es el
+    # drill de OTRO reporte (Documentos SUNAT, regla #577): su tarjeta es
+    # la única con fecha y escribe la clave canónica de SU reporte, sin
+    # categoría, a propósito (regla #633).
+    _OTRO_REPORTE = {"documentos_sunat.py"}
     for py, texto in _fuentes_py(raiz):
+        if py.name in _OTRO_REPORTE:
+            continue
         try:
             arbol = ast.parse(texto)
         except SyntaxError:                      # que lo cante otra guarda
@@ -3835,8 +4075,7 @@ def _pruebas_rango_por_tarjeta():
     por_defecto = (datetime.date(2025, 9, 6), f_max)   # los 12m de app.py
     ctx_previo = st.session_state.get("_franja_fecha_ctx")
     franja_fecha.publicar(
-        k_rango="rango_franja_Compras", k_corte="corte_franja_Compras",
-        corte_apl=None, cortes=[], fecha_min=f_min, fecha_max=f_max,
+        k_rango="rango_franja_Compras", fecha_min=f_min, fecha_max=f_max,
         reporte="Compras", usa_carga_rango=False,
         hoy=datetime.date(2026, 9, 8), rango_default=por_defecto,
     )
@@ -3866,8 +4105,7 @@ def _pruebas_rango_por_tarjeta():
     for _k in (k_prov, k_sem):
         st.session_state.pop(_k, None)
     franja_fecha.publicar(
-        k_rango="rango_franja_Compras", k_corte="corte_franja_Compras",
-        corte_apl=None, cortes=[], fecha_min=f_min, fecha_max=f_max,
+        k_rango="rango_franja_Compras", fecha_min=f_min, fecha_max=f_max,
         reporte="Compras", usa_carga_rango=False,
         hoy=datetime.date(2026, 9, 8), rango_default=por_defecto,
         rango_default_cat={"sec_proveedor": mes},
@@ -3900,8 +4138,7 @@ def _pruebas_rango_por_tarjeta():
     for _k in (k_prov, k_sem):
         st.session_state.pop(_k, None)
     franja_fecha.publicar(
-        k_rango="rango_franja_Compras", k_corte="corte_franja_Compras",
-        corte_apl=None, cortes=[], fecha_min=f_min, fecha_max=f_max,
+        k_rango="rango_franja_Compras", fecha_min=f_min, fecha_max=f_max,
         reporte="Compras", usa_carga_rango=False,
         hoy=datetime.date(2026, 9, 8), rango_default=por_defecto,
     )
@@ -4111,6 +4348,16 @@ def _pruebas_panel_fecha():
     check("el CSS del panel no usa :has()", ":has(" in css, False)
     check("el JS exporta la función del componente", "export default function" in js, True)
     check("el JS no calcula atajos (los manda Python)", "Últimos" in js, False)
+    # Semanas (regla #642): entre Meses y Días, de lunes a domingo —la
+    # semana de «Esta semana»—, y lo elegido recortado a los datos en el JS.
+    check("el panel ofrece Semanas entre Meses y Días",
+          js.index('data-modo="meses"') < js.index('data-modo="semanas"')
+          < js.index('data-modo="dias"'), True)
+    check("las semanas arrancan el lunes",
+          "const lunes = (n) => n - dow(n);" in js
+          and "getUTCDay() + 6) % 7" in js, True)
+    check("un clic se recorta a los datos en el JS",
+          "Math.min(e, st.max)" in js and "Math.max(s, st.min)" in js, True)
     arbol = ast.parse((raiz / "base.py").read_text(encoding="utf-8"))
     sel = next(n for n in arbol.body
                if isinstance(n, ast.FunctionDef) and n.name == "selector_fecha_tarjeta")
@@ -4389,7 +4636,10 @@ def _pruebas_fecha_por_vista():
 
     raiz = Path(__file__).parent
     fuente = (raiz / "graficos" / "movimientos.py").read_text(encoding="utf-8")
-    con_ventana = {"mov_sec_merma_rend", "mov_sec_merma_prov"}
+    # Sin categoría: las dos de merma traen su ventana, y las dos de cierre
+    # a cierre (regla #645) eligen un CIERRE de inventario, no un rango.
+    con_ventana = {"mov_sec_merma_rend", "mov_sec_merma_prov",
+                   "mov_sec_sinplato", "mov_sec_destino"}
     secciones = {c for c, _v in mov._PILA}
     # La pila sin «Tabla» (MOSTRAR_VISTAS_TABLA apagado) igual las declara.
     secciones |= {"mov_sec_tabla_req", "mov_sec_tabla_sal"}
@@ -4444,6 +4694,161 @@ def _pruebas_fecha_por_vista():
           len(mov.recortar_vista(d, rng)), 2)
     check("sin rango, entero", len(mov.recortar_vista(d, None)), 3)
     check("fechas_de", mov.fechas_de(d["_fecha"]), (D(2026, 9, 30), D(2026, 10, 7)))
+
+    # 4. LA FECHA DE LOS REQUERIMIENTOS (regla #639): registro o proceso,
+    # abre en registro, y sin la columna de proceso cae a la de registro
+    # diciendo que fue ésa la que se usó.
+    dos = pd.DataFrame({"FECHA REGISTRO": [], "FECHA PROCESADO": []})
+    sola = pd.DataFrame({"Fecha Registro": []})
+    check("requerimientos por registro",
+          mov.columna_de_fecha(dos, mov.FECHA_REGISTRO),
+          ("FECHA REGISTRO", mov.FECHA_REGISTRO))
+    check("requerimientos por proceso",
+          mov.columna_de_fecha(dos, mov.FECHA_PROCESO),
+          ("FECHA PROCESADO", mov.FECHA_PROCESO))
+    check("sin columna de proceso, la de registro y lo dice",
+          mov.columna_de_fecha(sola, mov.FECHA_PROCESO),
+          ("Fecha Registro", mov.FECHA_REGISTRO))
+    check("el selector de requerimientos abre en registro",
+          mov._AJUSTES["req_fecha"][::3], (mov.K_FECHA_REQ, mov.FECHA_REGISTRO))
+    check("las vistas de requerimientos usan la fecha elegida",
+          "columna_de_fecha(df_f, fecha_requerimientos())" in fuente, True)
+    return fallos
+
+
+_SCRIPT_ELECCION_COMPARTIDA = '''
+import streamlit as st
+from graficos.base import eleccion_compartida
+
+for _sitio in ("t_a", "t_b"):
+    eleccion_compartida("t_valor", "Valor", ("Uno", "Dos"), "Uno", _sitio,
+                        recarga="t_recarga")
+'''
+
+
+def _pruebas_ajustes_compartidos():
+    """Movimientos: «Filtros» tiene sólo lo que vale para todo el reporte
+    (regla #644).
+
+    1. EL MISMO VALOR EN VARIOS SITIOS (`base.eleccion_compartida`): elegido
+       en uno, sale elegido en el otro, y pide la corrida completa. Con
+       AppTest, que corre el Streamlit de verdad.
+    2. «FILTROS» SÓLO TIENE LOS CHIPS: adentro del `compartimento_filtros`
+       de Movimientos no se llama a nada más que `filtro_pills`. Las fechas,
+       la comparación y la valorización estaban ahí y no decían a qué vistas
+       cambiaban.
+    3. CADA AJUSTE DEL PIE se ve en TODAS las vistas que gobierna (al menos
+       dos visibles: si no, no es compartido), y cada categoría del pie es
+       la de una vista de verdad.
+    4. QUIEN LEE LA VALORIZACIÓN LA MUESTRA: toda función de Movimientos que
+       llama a `valorizacion()` dibuja también `control_valorizacion`. Una
+       tarjeta que valorizara sin el control cambiaría de monto por un clic
+       hecho en otra.
+    """
+    import ast
+    import pathlib
+    import tempfile
+
+    import graficos.movimientos as mov
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ajustes compartidos · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ajustes compartidos · {nombre}: got={got!r} exp={exp!r}")
+
+    # 1. El mismo valor en dos sitios.
+    try:
+        from streamlit.testing.v1 import AppTest
+        with tempfile.TemporaryDirectory() as tmp:
+            script = pathlib.Path(tmp) / "eleccion_compartida.py"
+            script.write_text(_SCRIPT_ELECCION_COMPARTIDA, encoding="utf-8")
+            at = AppTest.from_file(str(script), default_timeout=30)
+            at.run()
+            check("abre en el default, en los dos sitios",
+                  [at.segmented_control(key=k).value
+                   for k in ("t_a_uno", "t_b_uno")], ["Uno", "Uno"])
+            at.segmented_control(key="t_a_uno").set_value("Dos").run()
+            check("elegido en uno, sale elegido en el otro",
+                  [at.segmented_control(key=k).value
+                   for k in ("t_a_dos", "t_b_dos")], ["Dos", "Dos"])
+            check("el valor vive en su clave",
+                  at.session_state["t_valor"], "Dos")
+            check("y pide la corrida completa",
+                  at.session_state["t_recarga"], True)
+            at.session_state["t_recarga"] = False
+            at.segmented_control(key="t_b_dos").set_value("Uno").run()
+            check("y de vuelta desde el otro",
+                  ([at.segmented_control(key=k).value
+                    for k in ("t_a_uno", "t_b_uno")],
+                   at.session_state["t_valor"]), (["Uno", "Uno"], "Uno"))
+            check("sin excepciones", [e.value for e in at.exception], [])
+    except Exception as e:  # el arnés en sí: que se vea qué se movió
+        fallos += 1
+        print(f"FALLA ajustes compartidos · el arnés no corrió: "
+              f"{type(e).__name__}: {e}")
+
+    # 2. «Filtros» sólo con los chips.
+    raiz = pathlib.Path(__file__).parent
+    arbol = ast.parse((raiz / "graficos" / "movimientos.py")
+                      .read_text(encoding="utf-8"))
+    adentro = []
+    for nodo in ast.walk(arbol):
+        if not isinstance(nodo, ast.With):
+            continue
+        if not any(isinstance(i.context_expr, ast.Call)
+                   and getattr(i.context_expr.func, "id", "")
+                   == "compartimento_filtros" for i in nodo.items):
+            continue
+        for sub in nodo.body:
+            for c in ast.walk(sub):
+                if isinstance(c, ast.Call):
+                    f = c.func
+                    adentro.append(f.id if isinstance(f, ast.Name)
+                                   else getattr(f, "attr", "?"))
+    check("«Filtros» de Movimientos dibuja sólo los chips",
+          sorted(set(adentro)), ["filtro_pills"])
+
+    # 3. Los ajustes del pie.
+    cats = set(mov.CATEGORIA_VISTA.values())
+    check("cada pie es el de una vista de verdad",
+          sorted(set(mov.AJUSTES_PIE) - cats), [])
+    check("cada ajuste del pie existe",
+          sorted({a for v in mov.AJUSTES_PIE.values() for a in v}
+                 - set(mov._AJUSTES)), [])
+    for ajuste in mov._AJUSTES:
+        check(f"«{mov._AJUSTES[ajuste][1]}» se ve en dos vistas o más",
+              len(mov.vistas_con_ajuste(ajuste)) >= 2, True)
+    check("las salidas comparan en su vista y en la de área",
+          mov.vistas_con_ajuste("comparar", salvo="sal_periodo"),
+          ["Salidas por Área"])
+
+    # 4. Quien lee la valorización la muestra.
+    sin_control = []
+    for modulo in ("movimientos.py", "movimientos_merma.py"):
+        arbol = ast.parse((raiz / "graficos" / modulo)
+                          .read_text(encoding="utf-8"))
+        for fn in ast.walk(arbol):
+            if not isinstance(fn, ast.FunctionDef) or fn.name == "valorizacion":
+                continue
+            llamadas = {c.func.id for c in ast.walk(fn)
+                        if isinstance(c, ast.Call)
+                        and isinstance(c.func, ast.Name)}
+            # Las funciones anidadas cuentan en la de afuera y en ellas
+            # mismas: se mira la más chica que lee el valor.
+            hijas = [h for h in ast.walk(fn) if h is not fn
+                     and isinstance(h, ast.FunctionDef)
+                     and any(isinstance(c, ast.Call)
+                             and getattr(c.func, "id", "") == "valorizacion"
+                             for c in ast.walk(h))]
+            if "valorizacion" in llamadas and not hijas \
+                    and "control_valorizacion" not in llamadas:
+                sin_control.append(f"{modulo}::{fn.name}")
+    check("quien lee la valorización dibuja su control", sin_control, [])
     return fallos
 
 
@@ -5402,130 +5807,149 @@ def _pruebas_container_queries():
     return fallos
 
 
-def _pruebas_drill_familia_subfamilia():
-    """El drill Familia › Subfamilia → Ranking de productos de
-    `compras/producto.py`.
+def _pruebas_producto_lista_y_ficha():
+    """Compras › Producto: la lista y la ficha (2026-10-13, regla #653).
 
-    Hasta el 2026-09-12 el tercer nivel era un panel propio (los productos
-    del grupo elegido); ese día se fue y su papel lo tomó el Ranking de
-    productos, que los paneles de arriba RECORTAN (`_ambito_ranking`). Las
-    trampas son las mismas, cambió quién las pisa:
+    Las cuentas son puras y se prueban por valor, sin Streamlit, sin R2 y
+    sin red. Lo que se puede romper en silencio y acá falla ruidoso:
 
-      1. Que los niveles dejen de CUADRAR. La suma del panel B tiene que
-         dar la fila elegida del A, y la del ranking recortado la fila
-         elegida del B. Si alguien cambia un `groupby` o un filtro y eso se
-         rompe, en pantalla se ve una tabla perfectamente creíble con los
-         números de otra cosa.
-      2. Que el % deje de ser sobre el PADRE. Es la decisión de diseño del
-         drill: con % global las cinco subfamilias de VINOS darían 4%,
-         0,5%… y la columna dejaría de comparar lo que se está viendo.
-      3. Que el recorte por subfamilia se haga por la subfamilia SOLA. La
-         clave es el PAR (familia, subfamilia): medido sobre R2 el
-         2026-09-09, 9 de las 95 subfamilias de compras.parquet aparecen en
-         más de una familia, así que un `df[col_subfam] == x` suelto mezcla
-         productos de dos familias sin dar error. Acá se reproduce con una
-         subfamilia repetida a propósito.
-      4. Que la UM se pierda. La cantidad de un producto sólo significa algo
-         con su unidad al lado (ver el docstring de `_prod_ranking`).
-      5. Que sin ningún clic el ranking deje de ser el de TODO lo comprado.
-         El panel B abre mostrando la familia de arriba, pero eso es su
-         foco, no el ámbito del ranking (ver `_paneles_familia`).
-
-    Datos sintéticos y deterministas: sin R2, sin secrets, sin red.
+      1. Que los niveles dejen de CUADRAR: la suma de una familia tiene que
+         dar la de sus productos, y la de una subfamilia la de los suyos.
+      2. Que el recorte por subfamilia se haga por la subfamilia SOLA. La
+         clave es el PAR (familia, subfamilia): «Varios» está en A y en B.
+      3. Que una compra mal cargada entre en el PRECIO. La marca «revisar»
+         (`marcar_revisar`) la deja en la cantidad y el valor y la saca del
+         precio ponderado, del «vs. habitual» y de su impacto en soles —
+         sin eso el lomo fino mostraba un ahorro de S/ 861 que era, entero,
+         una compra cargada a S/ 15,85 el kilo.
+      4. Que el período en curso se lea como entero: la curva arranca al
+         INICIO de su período, el último va «parcial» y se compara con los
+         mismos días del anterior.
+      5. Que el «nuevo» y el «vuelve» se confundan con un Δ: sin compras en
+         el período anterior no hay porcentaje.
     """
     fallos = 0
 
     def check(nombre, ok, detalle=""):
         nonlocal fallos
         if ok:
-            print(f"OK    drill · {nombre}")
+            print(f"OK    producto · {nombre}")
         else:
             fallos += 1
-            print(f"FALLA drill · {nombre}{': ' + detalle if detalle else ''}")
+            print(f"FALLA producto · {nombre}{': ' + str(detalle)[:300] if detalle else ''}")
+
+    import numpy as np
 
     from graficos.compras.producto import (
-        _ambito_ranking, _fam_normalizada, _fam_ranking, _prod_ranking,
-        _subfam_normalizada, _subfam_ranking,
+        _ambito, _con_referencia, _etq, _normalizar, _precios, _resumen,
+        _serie, marcar_revisar,
     )
 
-    # "Varios" es la subfamilia repetida entre DOS familias: es la trampa 3.
-    df = pd.DataFrame({
-        "FAM": ["A", "A", "A", "A", "B", "B", "B"],
-        "SUB": ["Carnes", "Carnes", "Verduras", "Varios",
-                "Vinos", "Varios", "Varios"],
-        "PROD": ["Lomo", "Asado", "Papa", "Bolsa",
-                 "Malbec", "Bolsa", "Corcho"],
-        "VAL": [600.0, 200.0, 150.0, 50.0, 300.0, 80.0, 20.0],
-        "CANT": [10.0, 5.0, 30.0, 100.0, 12.0, 40.0, 200.0],
-        "UM": ["KILOS", "KILOS", "KILOS", "UND", "UND", "UND", "UND"],
-        "PUNIT": [60.0, 40.0, 5.0, 0.5, 25.0, 2.0, 0.1],
-        "FECHA": pd.to_datetime(["2026-08-01", "2026-08-02", "2026-08-03",
-                                 "2026-08-04", "2026-08-05", "2026-08-06",
-                                 "2026-08-07"]),
-    })
+    # ── La marca «revisar» ──────────────────────────────────────────────
+    m = marcar_revisar(pd.Series([4.5, 15.0, 2.0, 6.0, 3.0]),
+                       pd.Series([706.8, 237.75, 30.0, 600.0, 900.0]),
+                       pd.Series([117.8, 74.5, 8.0, 100.0, np.nan]),
+                       pd.Series(["UND", "KILOS", "KILOS", "UND", "KILOS"]))
+    check("6 botellas cargadas como 4,5 UND se marcan «um»", m[0] == "um", m)
+    check("15 kg de lomo a S/ 15,85 (0,21 veces el habitual) se marcan",
+          m[1] == "precio", m)
+    check("una línea chica no se marca aunque su precio salte", m[2] == "", m)
+    check("6 UND al precio habitual no se marcan", m[3] == "", m)
+    check("sin precio habitual no hay contra qué marcar", m[4] == "", m)
 
-    def ranking(fam, sub, col_subfam="SUB", col_cant="CANT", col_um="UM"):
-        """El Ranking de productos tal como lo arma la tarjeta: el ámbito
-        que dejan los paneles, y sobre eso `_prod_ranking`."""
-        amb = _ambito_ranking(df, "FAM", col_subfam, fam, sub)
-        return _prod_ranking(amb, "PROD", "FECHA", "VAL", col_cant, "PUNIT",
-                             col_um)
+    # ── Datos: un rango (1–30 set) y su período anterior (2–31 ago) ─────
+    filas = [
+        # FAM, SUB,      PROD,     VAL,    CANT, UM,      FECHA,       PROV, DOC
+        ("A", "Carnes",  "Lomo",   745.0, 10.0, "KILOS", "2026-01-15", "P1", "F00"),
+        ("A", "Carnes",  "Lomo",   745.0, 10.0, "KILOS", "2026-08-10", "P1", "F1"),
+        ("A", "Carnes",  "Lomo",   745.0, 10.0, "KILOS", "2026-09-04", "P1", "F2"),
+        ("A", "Carnes",  "Lomo",   237.75, 15.0, "KILOS", "2026-09-19", "P1", "F3"),
+        ("A", "Carnes",  "Lomo",   800.0, 10.0, "KILOS", "2026-09-22", "P2", "F4"),
+        ("A", "Carnes",  "Asado",  200.0,  5.0, "KILOS", "2026-09-05", "P1", "F2"),
+        ("A", "Varios",  "Bolsa",   50.0, 100.0, "UND",  "2026-09-06", "P3", "F5"),
+        ("B", "Vinos",   "Malbec", 300.0, 12.0, "UND",   "2026-09-07", "P4", "F6"),
+        ("B", "Varios",  "Tapa",    80.0, 40.0, "UND",   "2026-09-08", "P3", "F7"),
+        ("B", "Varios",  "Corcho",  20.0, 200.0, "UND",  "2026-03-01", "P3", "F0"),
+        ("B", "Varios",  "Corcho",  20.0, 200.0, "UND",  "2026-09-09", "P3", "F8"),
+    ]
+    df = pd.DataFrame(filas, columns=["FAM", "SUB", "PROD", "VAL", "CANT", "UM",
+                                      "FECHA", "PROV", "DOC"])
+    df["FECHA"] = pd.to_datetime(df["FECHA"])
+    cols = ("PROD", "FAM", "SUB", "VAL", "CANT", "UM", "FECHA", "PROV", "DOC")
+    hist = _con_referencia(_normalizar(df, *cols))
+    r0, r1 = pd.Timestamp("2026-09-01"), pd.Timestamp("2026-09-30")
+    rng = hist[(hist["fecha"] >= r0) & (hist["fecha"] <= r1)]
+    prev = hist[(hist["fecha"] >= r0 - pd.Timedelta(days=30))
+                & (hist["fecha"] < r0)]
+    antes = hist[hist["fecha"] < r0]
+    check("la compra de lomo a S/ 15,85 sale marcada",
+          rng.loc[rng["valor"] == 237.75, "flag"].tolist() == ["precio"],
+          rng[["prod", "valor", "ref", "flag"]].to_dict("records"))
 
-    fam = _fam_ranking(df, "FAM", "VAL")
-    check("panel A ordena por valor descendente",
-          fam["familia"].tolist() == ["A", "B"], str(fam["familia"].tolist()))
-    check("los % del panel A suman 100", abs(fam["pct"].sum() - 100) < 1e-9)
-    check("el panel A ya no trae la columna de conteo (se pidió fuera)",
-          fam.columns.tolist() == ["familia", "valor", "pct"],
-          str(fam.columns.tolist()))
+    res_p = _resumen(rng, ["prod"], prev, antes["prod"].unique())
+    res_p["fam"] = rng.groupby("prod")["fam"].first().reindex(res_p.index)
+    res_p["sub"] = rng.groupby("prod")["sub"].first().reindex(res_p.index)
+    res_f = _resumen(rng, ["fam"], prev, antes["fam"].unique())
+    res_s = _resumen(rng, ["fam", "sub"], prev,
+                     list(antes[["fam", "sub"]].drop_duplicates()
+                          .itertuples(index=False, name=None)))
 
-    d_fam = df[_fam_normalizada(df, "FAM") == "A"]
-    sub = _subfam_ranking(d_fam, "SUB", "PROD", "VAL")
-    check("el panel B CUADRA con su fila del panel A",
-          abs(sub["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9,
-          f"{sub['valor'].sum()} vs {fam.iloc[0]['valor']}")
-    # 600+200 sobre 1000, no sobre 1400: el % es del PADRE (trampa 2).
-    check("el % del panel B es sobre SU FAMILIA, no sobre el total",
-          abs(float(sub.iloc[0]["pct"]) - 80.0) < 1e-9,
-          f"{sub.iloc[0]['pct']}")
+    lomo = res_p.loc["Lomo"]
+    check("el valor y la cantidad SÍ suman la compra marcada",
+          abs(lomo["valor"] - 1782.75) < 1e-9 and lomo["cant"] == 35.0,
+          (lomo["valor"], lomo["cant"]))
+    check("el precio ponderado NO la cuenta: (745+800)/(10+10)",
+          abs(lomo["pp"] - 77.25) < 1e-9, lomo["pp"])
+    check("el impacto del precio no la cuenta (sin ella, +S/ 55)",
+          abs(lomo["ppv"] - 55.0) < 1e-9, lomo["ppv"])
+    check("el Δ es contra el período anterior de igual largo",
+          abs(lomo["var"] - (1782.75 / 745 - 1) * 100) < 1e-9, lomo["var"])
+    check("sin compras antes del rango: «nuevo», sin porcentaje",
+          res_p.loc["Malbec", "est"] == "nuevo"
+          and np.isnan(res_p.loc["Malbec", "var"]))
+    check("con compras antes pero no en el anterior: «vuelve»",
+          res_p.loc["Corcho", "est"] == "vuelve")
+    check("cada familia CUADRA con sus productos",
+          all(abs(res_f.loc[f, "valor"]
+                  - res_p.loc[res_p["fam"] == f, "valor"].sum()) < 1e-9
+              for f in res_f.index))
+    check("la subfamilia es el PAR: «Varios» de A no lleva lo de B",
+          res_s.loc[("A", "Varios"), "valor"] == 50.0
+          and res_s.loc[("B", "Varios"), "valor"] == 100.0,
+          res_s["valor"].to_dict())
+    amb = _ambito(res_p, "A", "Varios")
+    check("el recorte por (A, Varios) no mezcla familias",
+          amb.index.tolist() == ["Bolsa"] and amb["valor"].sum() == 50.0,
+          amb[["valor"]].to_dict())
+    check("sin familia elegida el ámbito es todo lo comprado",
+          len(_ambito(res_p, None, "Varios")) == len(res_p))
 
-    # Trampa 5: sin ningún clic, el ranking es el de todo lo comprado.
-    todo = ranking(None, None)
-    check("sin clic, el ranking es TODO lo comprado",
-          abs(todo["valor"].sum() - float(df["VAL"].sum())) < 1e-9,
-          f"{todo['valor'].sum()} vs {df['VAL'].sum()}")
+    sin_sub = _normalizar(df, "PROD", "FAM", None, "VAL", "CANT", "UM",
+                          "FECHA", "PROV", "DOC")
+    check("sin columna de Subfamilia todo cae en «Sin subfamilia»",
+          set(sin_sub["sub"]) == {"Sin subfamilia"})
 
-    solo_fam = ranking("A", None)
-    check("con una familia elegida, el ranking CUADRA con su fila del A",
-          abs(solo_fam["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9)
-
-    pro = ranking("A", "Carnes")
-    check("con una subfamilia elegida, el ranking CUADRA con su fila del B",
-          abs(pro["valor"].sum() - float(sub.iloc[0]["valor"])) < 1e-9)
-    check("la columna Prod. del panel B cuenta las filas del ranking",
-          len(pro) == int(sub.iloc[0]["productos"]))
-    check("el % del ranking es sobre SU ámbito (la subfamilia)",
-          abs(float(pro.iloc[0]["pct"]) - 75.0) < 1e-9, f"{pro.iloc[0]['pct']}")
-    check("cada producto se lleva su UM (trampa 4)",
-          pro["um"].tolist() == ["KILOS", "KILOS"], str(pro["um"].tolist()))
-
-    # Trampa 3, la que motivó que `_ambito_ranking` filtre SIEMPRE por la
-    # familia primero: "Varios" existe en A y en B.
-    por_par = ranking("A", "Varios")
-    suelto = df[_subfam_normalizada(df, "SUB") == "Varios"]
-    check("recortar por el PAR (familia, subfamilia) no mezcla familias",
-          float(por_par["valor"].sum()) == 50.0
-          and float(suelto["VAL"].sum()) == 150.0,
-          f"par={por_par['valor'].sum()} suelto={suelto['VAL'].sum()}")
-
-    # Parquet sin columna de Subfamilia: el recorte se queda en la familia
-    # en vez de reventar o de devolver vacío.
-    sin_sub = ranking("A", "Carnes", col_subfam=None)
-    check("sin columna de Subfamilia el ranking se recorta a la familia",
-          abs(sin_sub["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9)
-    flaco = ranking("A", None, col_cant=None, col_um=None)
-    check("sin columnas de Cantidad/UM el ranking no revienta",
-          (flaco["cantidad"] == 0).all() and (flaco["um"] == "").all())
+    # ── La curva ────────────────────────────────────────────────────────
+    h = hist[hist["prod"] == "Lomo"]
+    ultimo = pd.Timestamp("2026-09-22")
+    S = _serie(h, "Mes", "3m", ultimo, (r0, r1))
+    check("la ventana de 3 meses arranca el 1° de su mes, no a mitad",
+          S["ini"] == pd.Timestamp("2026-06-01"), S["ini"])
+    check("los meses sin compras están en el eje",
+          S["keys"] == ["2026-06", "2026-07", "2026-08", "2026-09"], S["keys"])
+    check("el mes en curso va «parcial», contra los mismos días del anterior",
+          S["parc"] is not None and S["refq"] == 10.0, (S["parc"], S["refq"]))
+    p, _hab = _precios(S["agg"])
+    check("el precio de setiembre es SIN la compra marcada",
+          abs(p.loc["2026-09"] - 77.25) < 1e-9 and S["agg"].loc["2026-09", "fl"] == 1,
+          p.to_dict())
+    check("un mes vacío no tiene precio (no un 0)", np.isnan(p.loc["2026-07"]))
+    D = _serie(h, "Documento", "12m", ultimo, (r0, r1))
+    check("por documento: una barra por comprobante", len(D["keys"]) == 5,
+          D["keys"])
+    check("el año se rotula como año (eje de categorías, regla #448)",
+          _etq("2026", "Año") == "2026" and _etq("2026-09", "Mes", True)
+          == "set 2026")
 
     return fallos
 
@@ -5548,6 +5972,11 @@ def _pruebas_compras_sin_bucles_por_grupo():
       · un producto que no pasa el piso de gasto o de cobertura;
       · montos iguales al céntimo en el ranking: van por nombre (en el
         bucle dependían del último decimal de la suma).
+
+    El ranking de Producto (`_prod_ranking`, primera contra última compra)
+    se fue el 2026-10-13 con la vista nueva (regla #653): su oráculo se fue
+    con él, y sus sucesores (`_resumen`, `_ultimo_precio`, `_cada_cuanto`)
+    entran en la guarda de forma de abajo.
 
     Más un caso grande al azar, con semilla fija, para lo que no se me
     ocurrió. Y una guarda con `ast`: ninguna de las cinco vuelve a iterar un
@@ -5582,27 +6011,6 @@ def _pruebas_compras_sin_bucles_por_grupo():
         return (fuente[[llave, col_um]].astype(str).groupby(llave)[col_um]
                 .agg(lambda s: s.mode().iat[0] if not s.mode().empty else "")
                 .to_dict())
-
-    def o_ranking(dd, col_prod, col_fecha, col_valor, col_cant, col_punit, col_um):
-        filas = []
-        for prod, g in dd.groupby(col_prod):
-            um = ""
-            if col_um and col_um in g.columns:
-                _u = g[col_um].dropna()
-                if not _u.empty:
-                    um = str(_u.mode().iat[0])
-            gp = g.dropna(subset=[col_punit])
-            gp = gp[gp[col_punit] > 0].sort_values(col_fecha, kind="stable")
-            ini = fin = var = None
-            if not gp.empty:
-                ini = float(gp[col_punit].iloc[0])
-                fin = float(gp[col_punit].iloc[-1])
-                var = ((fin - ini) / ini * 100) if ini else None
-            filas.append({"producto": str(prod),
-                          "valor": float(g[col_valor].sum()),
-                          "cantidad": float(g[col_cant].sum()) if col_cant else 0.0,
-                          "um": um, "inicio": ini, "fin": fin, "var_pct": var})
-        return {f["producto"]: f for f in filas}
 
     def o_cierres(d, prods, col_prod, col_punit, col_fecha, semanas):
         out = {p: [None] * len(semanas) for p in prods}
@@ -5647,11 +6055,6 @@ def _pruebas_compras_sin_bucles_por_grupo():
             return abs(float(a) - float(b)) <= 1e-9 * max(1.0, abs(float(a)))
         return a == b
 
-    def ranking_por_producto(df):
-        return {r["producto"]: {k: (None if (isinstance(v, float) and np.isnan(v)) else v)
-                                for k, v in r.items() if k != "pct"}
-                for r in df.to_dict("records")}
-
     def semana(f):
         return (f - pd.to_timedelta(f.dt.weekday, unit="D")).dt.normalize()
 
@@ -5679,19 +6082,6 @@ def _pruebas_compras_sin_bucles_por_grupo():
           (_va._unidades_por(d, "p", "um"), o_unidades(d, "p", "um")))
     check("unidades: en el empate gana la menor",
           _va._unidades_por(d, "p", "um")["A"] == "KG")
-    rk = _pr._prod_ranking(d, "p", "f", "valor", "cant", "precio", "um")
-    check("ranking: cada producto dice lo mismo que el bucle",
-          iguales(ranking_por_producto(rk),
-                  {k: o_ranking(d, "p", "f", "valor", "cant", "precio", "um")[k]
-                   for k in ranking_por_producto(rk)}),
-          rk.to_dict("records"))
-    check("ranking: compras del mismo día -> la primera es la de más arriba",
-          float(rk.set_index("producto").loc["A", "inicio"]) == 10.0)
-    check("ranking: montos iguales al céntimo van por nombre",
-          rk["producto"].tolist()[-3:] == ["B", "E", "C"], rk["producto"].tolist())
-    check("ranking: sin columnas de Cantidad/UM no revienta",
-          (_pr._prod_ranking(d, "p", "f", "valor", None, "precio", None)["um"]
-           == "").all())
     ci = _vo._vol_cierres_semanales(d, ["A", "B", "Z"], "p", "precio", "f", sems)
     check("cierres = bucle de antes (mismo día, 0, huecos, producto ausente)",
           iguales(ci, o_cierres(d, ["A", "B", "Z"], "p", "precio", "f", sems)), ci)
@@ -5723,14 +6113,6 @@ def _pruebas_compras_sin_bucles_por_grupo():
     sg = list(pd.to_datetime(sg))
     check("al azar: unidades", iguales(_va._unidades_por(g, "p", "um"),
                                        o_unidades(g, "p", "um")))
-    rg = _pr._prod_ranking(g, "p", "f", "valor", "cant", "precio", "um")
-    o_rg = o_ranking(g, "p", "f", "valor", "cant", "precio", "um")
-    check("al azar: ranking, producto por producto",
-          iguales(ranking_por_producto(rg),
-                  {k: o_rg[k] for k in ranking_por_producto(rg)}))
-    check("al azar: ranking ordenado por monto (céntimos) y nombre",
-          list(zip(rg["valor"].round(2) * -1, rg["producto"]))
-          == sorted(zip(rg["valor"].round(2) * -1, rg["producto"])))
     prods = sorted(g["p"].unique())[:80]
     check("al azar: cierres", iguales(
         _vo._vol_cierres_semanales(g, prods, "p", "precio", "f", sg),
@@ -5741,7 +6123,8 @@ def _pruebas_compras_sin_bucles_por_grupo():
         o_candidatos(g, "p", "precio", "f", "valor", sg[-12:], 300.0, 0.4)))
 
     # ── La guarda de forma ──────────────────────────────────────────────
-    for fn in (_cm.moda_por_grupo, _va._unidades_por, _pr._prod_ranking,
+    for fn in (_cm.moda_por_grupo, _va._unidades_por, _pr._resumen,
+               _pr._ultimo_precio, _pr._cada_cuanto,
                _vo._vol_candidatos, _vo._vol_cierres_semanales,
                _vo._tabla_cierres):
         arbol = ast.parse(textwrap.dedent(inspect.getsource(fn)))
@@ -5757,239 +6140,6 @@ def _pruebas_compras_sin_bucles_por_grupo():
                     for x in ast.walk(nodo)):
                 malos.append("un mode() adentro de una lambda (uno por grupo)")
         check(f"{fn.__name__} no recorre grupos uno por uno", not malos, malos)
-
-    return fallos
-
-
-def _pruebas_etiqueta_barras_producto():
-    """Lo que dicen las barras de la Evolución de Producto (2026-09-20).
-
-    Las funciones son puras, así que se prueban por valor: sin Streamlit,
-    sin R2, sin navegador.
-
-    Lo que se puede romper en silencio y acá falla ruidoso:
-
-      1. Que el conteo de documentos vuelva a ser `nunique` del NÚMERO
-         pelado. Medido sobre compras.parquet el 2026-09-20: 14.555 números
-         distintos contra 17.988 pares (número, proveedor) — el número solo
-         se come el 19% de los comprobantes, porque dos proveedores numeran
-         su "F001-123" cada uno por su cuenta. Un conteo bajo no se ve: es
-         un número creíble.
-      2. Que la variación del VALOR deje de pasar por la #470 y vuelva a
-         compararse contra un período que la ventana corta. La ventana de
-         esta tarjeta es RODANTE, así que la primera y la última barra están
-         cortadas siempre: medido, «jul» decía +181% contra un «jun» que
-         eran 11 días de mes.
-      3. Que la del PRECIO se le pegue a esa guarda. Es lo contrario: el
-         valor es una suma (medio mes suma la mitad) y el precio un
-         promedio (medio mes promedia igual de bien), así que el precio
-         conserva su variación donde el valor la pierde.
-      4. Que la etiqueta rotada vuelva a tener saltos de línea. Rotada, cada
-         renglón se apila a lo ANCHO y el hueco por barra son 30px: la
-         etiqueta de tres renglones deja de leerse (regla #91, Plotly la
-         ESCALA en vez de ocultarla, así que el DOM no lo canta).
-      5. Que un parquet sin columna de documento o sin proveedor reviente.
-         Pasa en modo demo y en cualquier reporte al que le falte la
-         columna: los dos pedazos son opcionales y se caen solos.
-      6. Que el eje o el hover vuelvan a rotular el mes en INGLÉS (#241).
-    """
-    fallos = 0
-
-    def check(nombre, ok, detalle=""):
-        nonlocal fallos
-        if ok:
-            print(f"OK    barras producto · {nombre}")
-        else:
-            fallos += 1
-            print(f"FALLA barras producto · {nombre}"
-                  f"{': ' + detalle if detalle else ''}")
-
-    from datetime import date
-
-    from graficos.compras._comun import _variaciones
-    from graficos.compras.producto import (
-        _compras_del_periodo, _etiquetas_barras, _fmt_cant_um, _fmt_docs, _hover_barras,
-        _periodo_del_clic, _prod_serie_periodo, _rotulo_periodo, _var_precio,
-    )
-
-    # Trampa 1: el MISMO número de documento en dos proveedores distintos,
-    # el mismo mes. Son DOS comprobantes.
-    df = pd.DataFrame({
-        "FECHA": pd.to_datetime(["2026-08-01", "2026-08-02", "2026-08-03",
-                                 "2026-09-01"]),
-        "PUNIT": [10.0, 12.0, 14.0, 20.0],
-        "CANT": [1.0, 2.0, 3.0, 4.0],
-        "VAL": [100.0, 200.0, 300.0, 700.0],
-        "DOC": ["F001-1", "F001-1", "F001-1", "F001-2"],
-        "PROV": ["Alfa", "Beta", "Alfa", "Alfa"],
-    })
-    agg = _prod_serie_periodo(df, "FECHA", "PUNIT", "CANT", "VAL", "Mes",
-                              col_docu="DOC", col_prov="PROV")
-    check("un documento es (número, proveedor), no el número solo",
-          int(agg["docs"].iloc[0]) == 2, f"{agg['docs'].iloc[0]}")
-    check("los proveedores del período van de mayor a menor",
-          [n for n, _ in agg["provs"].iloc[0]] == ["Alfa", "Beta"],
-          str(agg["provs"].iloc[0]))
-    check("y con su valor, no con su conteo",
-          abs(agg["provs"].iloc[0][0][1] - 400.0) < 1e-9,
-          str(agg["provs"].iloc[0]))
-
-    # Trampa 5: sin columna de documento ni de proveedor.
-    flaca = _prod_serie_periodo(df, "FECHA", "PUNIT", "CANT", "VAL", "Mes")
-    check("sin columnas de documento/proveedor la serie no revienta",
-          bool(flaca["docs"].isna().all()) and bool(flaca["provs"].isna().all()))
-
-    # Trampa 2: la ventana rodante corta el primer mes y el último. Sólo la
-    # barra del medio puede decir un porcentaje.
-    claves = ["2026-06", "2026-07", "2026-08", "2026-09"]
-    valores = [6000.0, 17000.0, 18700.0, 9000.0]
-    rng = (date(2026, 6, 20), date(2026, 9, 19))
-    var = _variaciones(claves, valores, "Mes", rng)
-    check("un mes que la ventana corta dice «parcial», no un %",
-          [v[0] for v in var] == ["parcial", "ant_parcial", "ok", "parcial"],
-          str([v[0] for v in var]))
-    check("y el que sí, es % contra la barra ANTERIOR",
-          abs(var[2][1] - 10.0) < 1e-9, str(var[2]))
-
-    # LA ETIQUETA SON DOS CIFRAS, no cuatro (2026-09-20, regla #480): la
-    # variación y los documentos salieron de la barra a pedido —«la etiqueta
-    # de datos es bastante larga»— y viven en el hover y en la tabla de
-    # abajo, que desde ese día está siempre a la vista dentro de la tarjeta.
-    # Que NO estén es lo que se vigila acá: volver a meterlas es volver a
-    # comerse el 45% del alto del gráfico.
-    et = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores)
-    check("la etiqueta lleva precio y valor",
-          all(x in et[2] for x in ("S/ 14.00", "S/ 19k")), et[2])
-    check("y NO lleva ni documentos ni variación",
-          all(x not in et[2] for x in ("docs", "%", "parcial")), et[2])
-    check("sin rotar, la etiqueta son dos renglones",
-          et[2].count("<br>") == 1, et[2])
-    check("el singular de documento no dice '1 docs'",
-          _fmt_docs(1) == "1 doc" and _fmt_docs(2) == "2 docs")
-    # Trampa 4.
-    rot = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, rotada=True)
-    check("rotada, la etiqueta es UN renglón", "<br>" not in rot[2], rot[2])
-    # LA CANTIDAD (2026-10-02, regla #582): derecha es el tercer renglón;
-    # girada reemplaza al valor —con los tres, la etiqueta girada se salía
-    # de la figura—.
-    _cants = [5.0, 12.5, 315.0, 1240.0]
-    et = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores,
-                           cantidades=_cants, um="KG")
-    check("con cantidad, son tres renglones y el último es la cantidad",
-          et[2].count("<br>") == 2 and et[2].endswith("315 KG"), et[2])
-    rot = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, rotada=True,
-                            cantidades=_cants, um="KG")
-    check("rotada lleva precio y cantidad, sin el valor",
-          rot[2] == "S/ 14.00 · 315 KG", rot[2])
-    check("la cantidad lleva un decimal sólo si es chica y lo tiene",
-          [_fmt_cant_um(c, "KG") for c in _cants]
-          == ["5 KG", "12.5 KG", "315 KG", "1,240 KG"],
-          str([_fmt_cant_um(c, "KG") for c in _cants]))
-
-    # ── EL CLIC EN UNA BARRA → SU PERÍODO (2026-09-20, regla #480) ─────
-    # Acá el eje NO es lineal (`_eje_x_kwargs` dibuja sobre los timestamps
-    # de los buckets), así que la `x` del evento vuelve como FECHA y no como
-    # índice: la prima de Semanal (`_clave_del_clic`) no sirve. Lo que se
-    # mira primero es la posición, que Streamlit manda en `point_index`
-    # —snake_case, ver el docstring de `st.plotly_chart`— y no depende del
-    # tipo de eje.
-    #
-    # Se prueba acá y no clickeando en el navegador porque un clic que «no
-    # hace nada» tiene dos causas posibles —no llegó, o llegó y el mapeo
-    # devolvió None— y desde afuera son indistinguibles. Esto separa las dos.
-    _momentos = pd.to_datetime(["2026-06-01", "2026-07-01",
-                                "2026-08-01", "2026-09-01"])
-    check("el clic se resuelve por la POSICIÓN que manda Streamlit",
-          _periodo_del_clic({"curve_number": 0, "point_number": 2,
-                             "point_index": 2, "x": "2026-08-01", "y": 1.0},
-                            claves, _momentos) == "2026-08",
-          str(_periodo_del_clic({"point_index": 2}, claves, _momentos)))
-    check("la primera barra es la 0, no la 1",
-          _periodo_del_clic({"point_index": 0}, claves, _momentos)
-          == "2026-06")
-    check("una posición fuera de rango es un no-op, no una excepción",
-          _periodo_del_clic({"point_index": 99}, claves, _momentos) is None)
-    check("sin posición, la FECHA del punto alcanza",
-          _periodo_del_clic({"x": "2026-07-01"}, claves, _momentos)
-          == "2026-07")
-    check("y una x que no casa con ningún bucket tampoco revienta",
-          _periodo_del_clic({"x": "no es una fecha"}, claves,
-                            _momentos) is None)
-
-    # ── EL DETALLE DE UNA BARRA: una fila por COMPRA ───────────────────
-    # El mismo `df` de arriba: tres compras en agosto, y dos de ellas
-    # comparten el número «F001-1» con proveedores distintos. Son DOS
-    # comprobantes, no uno (la trampa 1, otra vez, pero del lado del
-    # detalle: si acá se contara el número pelado, la tabla diría dos filas
-    # donde el gráfico dice tres documentos y las dos se contradirían).
-    _det, _tot_det = _compras_del_periodo(
-        df, "2026-08", "Mes", "FECHA", "PUNIT", "CANT", "VAL", "DOC", "PROV")
-    check("el detalle lista una fila por (documento, proveedor)",
-          len(_det) == 2, str(None if _det is None else len(_det)))
-    # LAS COLUMNAS POR NOMBRE, y no sólo cuántas filas salieron: la primera
-    # versión de `_compras_del_periodo` renombraba el resultado del groupby
-    # por POSICIÓN y la forma de ese frame cambia entre pandas 2 y 3 — pasó
-    # los tests en la máquina de desarrollo (pandas 3) y reventó en Cloud
-    # (pandas 2.2) con un `ValueError: Length mismatch`. Regla #481.
-    check("y con las columnas que la grilla espera, por nombre",
-          list(_det.columns) == ["fecha", "prov", "cant", "punit", "valor",
-                                 "__doc"],
-          str(list(_det.columns)))
-    check("y no se cuela ninguna compra de otro período",
-          set(_det["fecha"]) <= {"2026-08-01", "2026-08-02", "2026-08-03"},
-          str(list(_det["fecha"])))
-    # Alfa compró 1+3=4 unidades por 100+300=400 → 100.00 exactos. El
-    # promedio SIMPLE de sus dos líneas sería (10+14)/2 = 12, un precio que
-    # nadie pagó: el ponderado es la única definición que sobrevive al
-    # agregado (misma advertencia que la regla #199).
-    _alfa = _det[_det["prov"].str.upper().str.startswith("ALFA")].iloc[0]
-    check("el precio de una compra es el PONDERADO, no el promedio simple",
-          abs(float(_alfa["punit"]) - 100.0) < 1e-9, str(_alfa["punit"]))
-    check("el total tampoco promedia precios: divide valor entre cantidad",
-          _tot_det["punit"] == "S/ 100.00", str(_tot_det["punit"]))
-    check("sin columna de documento no hay detalle que armar, y lo dice",
-          _compras_del_periodo(df, "2026-08", "Mes", "FECHA", "PUNIT",
-                               "CANT", "VAL", None, "PROV") == (None, None))
-
-    # Trampa 3: el precio conserva su variación en TODAS, incluidas las
-    # parciales — es un promedio, no una suma.
-    check("la variación del precio no se calcula con la guarda de parcial",
-          [round(v, 1) if v is not None else None
-           for v in _var_precio([10.0, 12.0, 14.0, 20.0])]
-          == [None, 20.0, 16.7, 42.9],
-          str(_var_precio([10.0, 12.0, 14.0, 20.0])))
-
-    hov = _hover_barras([_rotulo_periodo(f"{c}-01", "Mes") for c in claves],
-                        [10.0, 12.0, 14.0, 20.0], valores, [1, 3, 9, 2],
-                        [[("ALFA SAC", 6000.0)], [("ALFA SAC", 17000.0)],
-                         [("ALFA SAC", 12000.0), ("BETA EIRL", 6700.0)],
-                         [("ALFA SAC", 9000.0)]],
-                        variaciones=var, claves=claves, gran="Mes", rango=rng)
-    check("el hover NOMBRA a los proveedores",
-          "Alfa SAC" in hov[2] and "Beta EIRL" in hov[2], hov[2])
-    check("el hover dice contra QUÉ barra se comparó",
-          "vs jul 2026" in hov[2], hov[2])
-    check("y en una parcial, por qué no hay variación",
-          "sin variación" in hov[0].lower() and "días" in hov[0], hov[0])
-    check("el precio lleva su variación aunque el mes esté cortado",
-          "precio prom. S/ 20.00 <span" in hov[3], hov[3])
-    check("el hover da el valor exacto, no el compacto",
-          "S/ 18,700.00" in hov[2], hov[2])
-    # Trampa 5, del otro lado.
-    check("un hover sin documentos ni proveedores no revienta",
-          "valor S/ 100.00" in _hover_barras(["ago"], [10.0], [100.0],
-                                             None, None)[0])
-    corte = _hover_barras(["ago"], [10.0], [100.0], [9],
-                          [[(f"PROV {i}", 10.0 - i) for i in range(7)]])[0]
-    check("con muchos proveedores, el hover corta y CUENTA el resto",
-          "y 3 más" in corte, corte)
-
-    # Trampa 6.
-    check("el rótulo del período va en español",
-          (_rotulo_periodo("2026-08-01", "Mes") == "ago 2026"
-           and _rotulo_periodo("2026-08-31", "Semana") == "31 ago"
-           and _rotulo_periodo("2026-01-01", "Año") == "2026"),
-          _rotulo_periodo("2026-08-01", "Mes"))
 
     return fallos
 
@@ -6063,19 +6213,23 @@ def _pruebas_grilla_horizontal():
           "(usar COLUMNAS_DRILL, o marcar `# columnas-internas:`)",
           not culpables, ", ".join(culpables[:6]))
 
-    # ── 2) Las dos filas del drill de Proveedor usan las constantes ─────
-    # Positiva, no negativa: sin esto, borrar las dos llamadas dejaría la
-    # guarda #1 en verde. Desde el 2026-10-01 son dos constantes PROPIAS
-    # —arriba `COLUMNAS_DRILL_TABLAS`, abajo `COLUMNAS_DRILL_ABAJO`, reglas
-    # #578 y #579—, y se pide cada una por su nombre: el prefijo solo dejaba
-    # pasar dos filas partidas con la misma.
+    # ── 2) La fila del drill de Proveedor usa su constante ──────────────
+    # Positiva, no negativa: sin esto, borrar la llamada dejaría la guarda
+    # #1 en verde. Desde el 2026-10-12 es UNA fila, Ranking | ficha, con
+    # `COLUMNAS_DRILL_FICHA` (regla #646); hasta ese día eran dos, con
+    # `COLUMNAS_DRILL_TABLAS` y `COLUMNAS_DRILL_ABAJO` (reglas #578 y #579).
     prov = (raiz / "graficos" / "compras" / "proveedor.py").read_text(
         encoding="utf-8")
-    n_filas = [len(re.findall(r"st\.columns\(%s\b" % c, prov))
-               for c in ("COLUMNAS_DRILL_TABLAS", "COLUMNAS_DRILL_ABAJO")]
-    check("las 2 filas del drill de Proveedor parten con "
-          "COLUMNAS_DRILL_TABLAS y COLUMNAS_DRILL_ABAJO",
-          n_filas == [1, 1], f"se encontraron {n_filas}")
+    n_filas = len(re.findall(r"st\.columns\(COLUMNAS_DRILL_FICHA\b", prov))
+    check("la fila del drill de Proveedor parte con COLUMNAS_DRILL_FICHA",
+          n_filas == 1, f"se encontraron {n_filas}")
+    # Y la de Producto, la MISMA desde el 2026-10-13 (regla #653): dos
+    # secciones vecinas con el orden al revés hacían saltar la vista de lado.
+    prod = (raiz / "graficos" / "compras" / "producto.py").read_text(
+        encoding="utf-8")
+    n_filas = len(re.findall(r"st\.columns\(COLUMNAS_DRILL_FICHA\b", prod))
+    check("la fila del drill de Producto parte con COLUMNAS_DRILL_FICHA",
+          n_filas == 1, f"se encontraron {n_filas}")
 
     # ── 3) La constante tiene UN dueño ──────────────────────────────────
     intrusos = []
@@ -6429,28 +6583,37 @@ def _pruebas_fechas_ajuste():
     _por_vista = re.search(r'REPORTES_FECHA_POR_VISTA = \(([^)]*)\)', app)
     check("la franja de Ajuste no dibuja fecha",
           bool(_por_vista and '"Ajuste de Inventario"' in _por_vista.group(1)), True)
+    # Era un `elif` detrás de la rama del modo Corte; desde la regla #635,
+    # que borró esa rama, es el `if` que abre el filtro por la franja.
     check("app.py no filtra Ajuste por la franja",
-          "elif _franja_con_fecha and not es_ajuste:" in app,
+          "if _franja_con_fecha and not es_ajuste:" in app,
           True)
     check("app.py ya no reparte el rango por categoría",
           "categoria_rango_ajuste" in app.split("# Hasta el 2026-10-11 Ajuste")[0],
           False)
     import data
-    check("Ajuste ya no pide los modos de corte de la franja",
-          "cortes" in data.REPORTES["Ajuste de Inventario"], False)
+    # Desde la regla #635 nadie lee `"cortes"`: los modos Corte / Varios de
+    # la franja se borraron. Un reporte que la declare esperaría una
+    # píldora con cortes y no pasaría nada, sin error que lo diga.
+    check("ningún reporte declara \"cortes\" (los modos de la franja ya no existen)",
+          [r for r, c in data.REPORTES.items() if "cortes" in c], [])
     from graficos import ajuste as aj
-    check("una sola pila con las cinco vistas",
+    # «Diferencias» se sumó el 2026-10-13 (regla #650), entre las vistas de
+    # un conteo y las del tiempo.
+    check("una sola pila con las seis vistas",
           [c for c, _v in aj._PILA],
           ["aj_sec_cascada", "aj_sec_heatmap", "aj_sec_distribucion",
-           "aj_sec_evolucion", "aj_sec_detalle"])
+           "aj_sec_diferencias", "aj_sec_evolucion", "aj_sec_detalle"])
     check("se fue la partición del rango por categoría",
           hasattr(aj, "categoria_rango_ajuste"), False)
     fuentes = {n: (raiz / "graficos" / "ajuste" / f"{n}.py").read_text(
         encoding="utf-8") for n in ("_cascada", "_heatmap", "_distribucion",
-                                    "_evolucion", "_pivote")}
+                                    "_evolucion", "_pivote", "_diferencias")}
     check("las vistas de sesión dibujan el selector con flechas",
-          [n for n in ("_cascada", "_heatmap") if '"ajses_' not in fuentes[n]]
-          + ([] if 'selector_sesion("ajses_dist"' in fuentes["_distribucion"]
+          [n for n in ("_cascada", "_heatmap", "_diferencias")
+           if '"ajses_' not in fuentes[n]]
+          + ([] if re.search(r'selector_sesion\(\s*"ajses_dist"',
+                             fuentes["_distribucion"])
              else ["_distribucion"]), [])
     check("las vistas de meses dibujan su botón",
           [n for n, k in (("_evolucion", '"ajf_evo"'), ("_pivote", '"ajf_det"'),
@@ -6464,6 +6627,45 @@ def _pruebas_fechas_ajuste():
     css = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
     check("los dos controles tienen su CSS",
           ('st-key-ajf_' in css, 'st-key-ajses_' in css), (True, True))
+
+    # EL PANEL DE LA SESIÓN (regla #634): una pieza propia, como el de
+    # fechas, con el neto y el detalle de cada sesión.
+    from graficos.ajuste._comun import (
+        datos_panel_sesion, stats_sesiones, texto_familias)
+    css_p = (raiz / "graficos" / "ajuste" / "panel_sesion.css").read_text(
+        encoding="utf-8")
+    js_p = (raiz / "graficos" / "ajuste" / "panel_sesion.js").read_text(
+        encoding="utf-8")
+    check("el panel de la sesión: sin :has() y con su función",
+          (":has(" in css_p, "export default function" in js_p), (False, True))
+    df_s = pd.DataFrame({
+        "F": pd.to_datetime(["2026-09-15", "2026-09-15", "2026-09-16",
+                             "2026-10-01", "2026-10-01", "2026-10-06",
+                             "2026-10-06"]),
+        "AREA": ["COCINA", "BARRA", "COCINA ", "COCINA", "CAVA", "VENTA", "VENTA"],
+        "AV": [-10.0, 5.0, 0.0, -100.0, 40.0, 7.0, 0.0],
+        "P": ["p1", "p2", "p1", "p1", "p3", "p4", "p5"],
+    })
+    ses_s = sesiones_inventario(df_s["F"])
+    st_s = stats_sesiones(df_s, "F", "AREA", "AV", "P", ses_s)
+    check("cuentas de cada sesión: neto, áreas (sin el espacio), productos",
+          (st_s["parcial_2026-09-15"], st_s["cierre_2026-09"]),
+          ((-5.0, 2, 2), (-53.0, 3, 3)))
+    dp = datos_panel_sesion(ses_s, ses_s[-1], {"cierre_2026-09"}, False,
+                            True, False, st_s, texto_familias(()))
+    fila = dp["sesiones"][-1]
+    check("el panel recibe el nombre, el neto y el detalle",
+          (fila["nombre"], fila["neto"], fila["meta"], fila["anio"]),
+          ("Cierre de setiembre", -53.0,
+           "registrado el 1 y 6 oct (se juntan 2 conteos) · 3 áreas · "
+           "3 productos con diferencia", 2026))
+    check("el pie dice de qué familias es el neto",
+          dp["pie"][0].startswith("Neto de todas las familias."), True)
+    check("las cinco familias de entrada se nombran así",
+          texto_familias(("ALIMENTOS", "BEBIDAS CON ALCOHOL",
+                          "BEBIDAS SIN ALCOHOL", "VINOS Y ESPUMANTES",
+                          "ENVASES Y EMBALAJES")),
+          "las cinco familias de entrada")
     return fallos
 
 
@@ -6758,8 +6960,12 @@ def _pruebas_listado_inventario():
                 col_punit="PU", col_cant="STK", col_val="VAL")
 
     L = armar_listado(d, **cols)
-    check("un producto por código, de la A a la Z por nombre",
-          L.productos.index.tolist(), ["04", "02", "01"])
+    # De la A a la Z por familia › subfamilia › nombre (regla #636): el
+    # Azúcar (Alimentos › Abarrotes) antes que el Pollo (Alimentos › Aves),
+    # y el Pisco (Bebidas) al final aunque por nombre iría segundo.
+    check("un producto por código, de la A a la Z por familia, "
+          "subfamilia y nombre",
+          L.productos.index.tolist(), ["04", "01", "02"])
     from graficos.inventario_productos import clave_orden
     check("la A a la Z no mira el prefijo del almacén ni las tildes",
           sorted(["Cebolla", "(P) Bife Ancho", "Ávila", "(Rs) Ají Panca"],
@@ -6818,13 +7024,13 @@ def _pruebas_listado_inventario():
     f = filas_grilla(L)
     check("rowData: cada producto seguido de sus áreas",
           list(zip(f["__tipo"], f["__padre"])),
-          [("p", ""), ("a", "04"), ("a", "04"), ("p", ""), ("a", "02"),
-           ("p", ""), ("a", "01"), ("a", "01")])
+          [("p", ""), ("a", "04"), ("a", "04"), ("p", ""), ("a", "01"),
+           ("a", "01"), ("p", ""), ("a", "02")])
     check("la fila de área lleva el ÁREA en «nombre» y deja vacío lo del "
           "producto", tuple(f.loc[1, ["nombre", "familia", "codigo"]]),
           ("COCINA", "", ""))
     check("familia y subfamilia se escriben como nombre propio",
-          f.loc[3, "familia"], "Bebidas con Alcohol")
+          f.loc[f["codigo"] == "02", "familia"].iloc[0], "Bebidas con Alcohol")
 
     # En unidad de salida (regla #598), con los casos del reporte por área
     # del POS de Barra del 2026-10-03.
@@ -6857,6 +7063,133 @@ def _pruebas_listado_inventario():
           f2.loc[f2["__id"] == "04|BARRA", "cant_salida"].iloc[0], "−1 kg")
     check("rowData: y la del kardex, para el tooltip",
           f2.loc[f2["__id"] == "01", "cant_kardex"].iloc[0], "3 kg")
+    return fallos
+
+
+def _pruebas_analisis_stock():
+    """`analisis_stock.py` y el listado con historia (regla #637): los cierres
+    del día 7, la regla del correlativo en cada momento, el consumo del
+    restaurante (sin lo que va de un área a otra ni los ajustes), el ABC, los
+    días de inventario, el estado, y que el gráfico del recorte cuente
+    también los productos que hoy están en cero."""
+    import datetime as _dt
+    import analisis_stock as A
+    from graficos.inventario_productos import (
+        armar_listado, cuentas_estado, filas_grilla, por_estado)
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    analisis stock · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA analisis stock · {nombre}: got={got!r} exp={exp!r}")
+
+    m = A.momentos_de_cierre(_dt.datetime(2026, 10, 9, 14))
+    check("13 cierres y hoy", len(m), 14)
+    check("el primero, 12 meses antes del último", m[0][0], "set 25")
+    check("el cierre de setiembre se toma el 7 de octubre, ya contado",
+          m[-2], ("set 26", _dt.datetime(2026, 10, 7, 23)))
+    check("y al final, hoy", m[-1][0], "hoy")
+    check("con el kardex al 5, setiembre todavía no cerró",
+          A.momentos_de_cierre(_dt.datetime(2026, 10, 5, 9))[-2][0], "ago 26")
+
+    fotos = pd.DataFrame({
+        "area": ["001", "001", "001", "002"], "cod": ["P", "P", "P", "Q"],
+        "fecha": pd.to_datetime(["2026-01-10 08:00", "2026-02-03 10:00",
+                                 "2026-02-03 09:00", "2026-02-20 12:00"]),
+        # El de las 09:00 tiene el correlativo MAYOR: manda él, no el de las 10.
+        "correlativo": [1, 2, 3, 1],
+        "stock": [2.0, 5.0, 4.0, 1.0], "precio": [10.0, 10.0, 10.0, 3.0]})
+    v = A.valor_en_momentos(fotos, [_dt.datetime(2026, 1, 31, 23),
+                                    _dt.datetime(2026, 2, 28, 23)])
+    check("al primer momento, la foto de enero", v.loc[("001", "P"), 0], 20.0)
+    check("manda el mayor correlativo, no la hora más tardía",
+          v.loc[("001", "P"), 1], 40.0)
+    check("sin movimiento hasta un momento, vale cero", v.loc[("002", "Q"), 0], 0.0)
+
+    movs = pd.DataFrame({
+        "cod": ["P", "P", "P", "P", "P", "Q"],
+        "tipo": ["95", "97", "99", "93", "01", "96"],
+        "cant_out": [3.0, 50.0, 40.0, 7.0, 1.0, 2.0]})
+    c = A.consumo_por_producto(movs)
+    check("consumo: ventas sí; transferencia, requerimiento, ajuste y "
+          "compra no", float(c["P"]), 3.0)
+    check("el porcionamiento es consumo", float(c["Q"]), 2.0)
+
+    abc = A.clase_abc(pd.Series({"a": 70.0, "b": 20.0, "c": 6.0, "d": 4.0,
+                                 "e": -5.0, "f": 0.0}))
+    # b es A: lo acumulado ANTES de él (70 %) no llegaba al 80 %.
+    check("ABC: A mientras lo de antes no llega al 80 %, B al 95 %, C el resto",
+          list(abc), ["A", "A", "B", "C", None, None])
+    d = A.dias_de_inventario(pd.Series([9.0, 1.0, 0.0, -2.0]),
+                             pd.Series([90.0, 0.0, 90.0, 90.0]))
+    check("días: stock ÷ consumo diario", float(d[0]), 9.0)
+    check("días: sin consumo o sin stock no es un número",
+          [x != x for x in d[1:]], [True, True, True])
+    e = A.estado(pd.Series([-1.0, 5.0, 100.0, 1.0]), pd.Series([9.0, 0.0, 90.0, 90.0]),
+                 pd.Series([float("nan"), float("nan"), 100.0, 1.0]))
+    check("estado: negativo, sin consumo, más de 60 días, nada",
+          list(e), ["neg", "sin", "alto", ""])
+    check("días de un conjunto: valor ÷ consumo diario en soles",
+          round(A.dias_del_conjunto([100.0, 50.0], [10.0, 5.0], [90.0, 0.0],
+                                    [10.0, 10.0]), 6), 15.0)
+
+    d = pd.DataFrame({
+        "COD": ["01", "01", "02", "03"], "CA": ["000", "001", "001", "000"],
+        "PROD": ["Pollo", "Pollo", "Pisco", "Sal"],
+        "FAM": ["ALIMENTOS", "ALIMENTOS", "BEBIDAS", "ALIMENTOS"],
+        "SUB": ["AVES", "AVES", "PISCO", "ABARROTES"],
+        "AREA": ["ALMACEN", "COCINA", "COCINA", "ALMACEN"],
+        "UM": ["KILOS", "KILOS", "LITROS", "KILOS"], "PU": [10.0, 10.0, 30.0, 2.0],
+        "STK": [2.0, -1.0, 3.0, 0.0], "VAL": [20.0, -10.0, 90.0, 0.0]})
+    hist = pd.DataFrame(
+        [[5, 20], [0, -10], [60, 90], [40, 0]], columns=[0, 1],
+        index=pd.MultiIndex.from_tuples([("000", "01"), ("001", "01"),
+                                         ("001", "02"), ("000", "03")]))
+    cols = dict(col_cod="COD", col_prod="PROD", col_fam="FAM", col_subfam="SUB",
+                col_area="AREA", col_unidad="UM", col_punit="PU", col_cant="STK",
+                col_val="VAL", col_cod_area="CA", historia=hist,
+                consumo=pd.Series({"01": 9.0}))
+    L = armar_listado(d, **cols)
+    check("el gráfico del recorte cuenta la Sal, que hoy está en cero",
+          [float(x) for x in L.serie], [105.0, 100.0])
+    check("cada producto suma la historia de sus áreas",
+          (float(L.productos.loc["01", "__h0"]), float(L.productos.loc["01", "__h1"])),
+          (5.0, 10.0))
+    check("días y estado del producto",
+          (float(L.productos.loc["01", "dias"]), L.productos.loc["02", "estado"]),
+          (10.0, "sin"))
+    check("el buscador no cambia el ABC: es del recorte",
+          armar_listado(d, **cols, texto="pollo").productos.loc["01", "abc"], "B")
+    check("cuántos hay en cada chip", cuentas_estado(L.productos),
+          {"todos": 2, "A": 1, "neg": 0, "sin": 1, "alto": 0})
+    check("un chip deja sus productos y sus áreas",
+          (por_estado(L, "sin").productos.index.tolist(),
+           sorted(set(por_estado(L, "sin").areas["codigo"]))), (["02"], ["02"]))
+    f = filas_grilla(L)
+    check("la historia viaja como texto, en el producto y en cada área",
+          list(f["__sp"]), ["5,10", "5,20", "0,-10", "60,90", "60,90"])
+    check("la unidad corta también en las filas de área", list(f["__um"]),
+          ["kg", "kg", "kg", "Lt", "Lt"])
+    check("sin historia el listado sigue como antes",
+          armar_listado(d, **{**cols, "historia": None, "consumo": None}).serie, None)
+
+    # Stock por Área y Familia (regla #638).
+    top, total, cambiaron = A.lo_que_mas_cambio(
+        pd.DataFrame({0: [10, 0, 5, 3], 1: [0, 8, 5, 3.4]},
+                     index=["vacio", "nuevo", "igual", "poco"]), 0, n=1)
+    check("qué más cambió: el mayor cambio, aunque se haya vaciado",
+          top.to_dict(), {"vacio": -10.0})
+    check("qué más cambió: el total de todos y cuántos se movieron un sol",
+          (round(total, 6), cambiaron), (-1.6, 2))
+    from graficos.inventario import TODAS, _filtrar_ruta
+    _d = pd.DataFrame({"AREA": ["COCINA", "BARRA"], "FAM": ["A", "B"]})
+    check("«Todas las áreas» no recorta, la familia sí",
+          _filtrar_ruta(_d, (("AREA", TODAS, "Todas las áreas"),
+                             ("FAM", "B", "B"))).index.tolist(), [1])
     return fallos
 
 
@@ -7378,9 +7711,284 @@ def _pruebas_merma():
     return fallos
 
 
-def _pruebas_salidas_comparar_y_destino():
-    """Movimientos › salidas: la causa, los años anteriores y el destino de
-    lo que entra (regla #614).
+def _pruebas_cortes_y_peso():
+    """Movimientos › el precio de los cortes y su peso (regla #647).
+
+      1. EL PRECIO DE UN CORTE es lo que costó lo que entró ÷ lo que quedó ×
+         su peso por unidad, y su cambio se reparte entre el insumo, la
+         merma, el gramaje y otros: los cuatro suman EXACTO el cambio. Mes a
+         mes, la línea «con la merma normal».
+      2. LA MARCA «Peso por unidad raro»: contra los porcionamientos
+         ANTERIORES del mismo corte, y lejos también de los gramos del
+         nombre; corrige la merma y pesa en el impacto. La COSTUMBRE —un
+         corte que se registra siempre a 2,6 veces su nombre— no es marca.
+      3. LO QUE ARRASTRA: el precio con el peso habitual y los platos
+         ACTIVOS que lo llevan, con su costo corregido.
+      4. LOS SALTOS desde Recetas: el último porcionamiento de un corte y si
+         su peso es raro; el rail y las vistas que nombran existen, y el
+         grupo Porcionamientos va de lo general a lo particular.
+    """
+    import re
+
+    import pandas as pd
+
+    from graficos import carta_costeada as cc
+    from graficos import movimientos as mov
+    from graficos import movimientos_merma as mm
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    cortes #647 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA cortes #647 · {nombre}: {got!r} != {exp!r}")
+
+    filas = []
+
+    def porc(doc, dia, cod, prod, cant, merma, costo, cortes):
+        # Cada corte: (nombre, código, cantidad, peso). El precio lo pone el
+        # Almacén: lo que costó ÷ la suma de los pesos × su peso por unidad.
+        ckg = costo / sum(p for *_, p in cortes)
+        for fin, cod_fin, cant_fin, peso in cortes:
+            filas.append({
+                "COD PORC": doc, "FEC REGIST": pd.Timestamp(dia),
+                "SUB ALMACEN": "PRODUCCION", "USUARIO REG": "CARLOS",
+                "COD PROD INIC": cod, "PROD INICIAL": prod,
+                "UNID PROD INIC": "KILOS", "CANT A PORCIONAR": cant,
+                "CANT MERMA": merma, "PROD FINAL RESULT": fin,
+                "COD PROD FINAL": cod_fin, "CANT RESULT": cant_fin,
+                "UNID PROD FIN": "UND", "PREC PROM PROD FIN": ckg * peso / cant_fin,
+                "PESO RESULT": peso})
+
+    dias = pd.date_range("2026-06-01", periods=8, freq="10D")
+    # D, el lomo: antes a 60 el kg y 20 % de merma; desde el 21 de julio a
+    # 70 y 30 %. El medallón pesa siempre 0,17 y los retazos se registran
+    # con el 30 % de su peso.
+    for i, dia in enumerate(dias):
+        if dia < pd.Timestamp("2026-07-20"):
+            porc(f"D{i}", dia, "D", "Lomo", 10.0, 2.0, 600.0,
+                 [("(P) Lomo Medallon 170gr x und (produccion)", "D1", 40.0, 6.8),
+                  ("(P) Retazos de carne lomo x Kg (produccion)", "D2", 4.0, 1.2)])
+        else:
+            porc(f"D{i}", dia, "D", "Lomo", 10.0, 3.0, 700.0,
+                 [("(P) Lomo Medallon 170gr x und (produccion)", "D1", 34.0, 5.78),
+                  ("(P) Retazos de carne lomo x Kg (produccion)", "D2", 1.22 / 0.3, 1.22)])
+    # C, el pulpo: ocho normales (50 % de merma) y uno con 7 kg tipeados
+    # en los 20 de 70 g (lo habitual: 1,4). El collar de 125 g se registra
+    # SIEMPRE a 0,325 kg por unidad: costumbre.
+    for i, dia in enumerate(dias):
+        porc(f"C{i}", dia + pd.Timedelta(days=1), "C", "Pulpo entero", 10.0,
+             5.0, 400.0,
+             [("(P) Pulpo cocido 70gr x und (produccion)", "C1", 20.0, 1.4),
+              ("(Rs) Collar 125gr x und DD", "C2", 4.0, 1.3),
+              ("(P) Pulpo cocido 120gr x und (produccion)", "C3", 20.0, 2.3)])
+    porc("2609000009", "2026-09-15 20:57", "C", "Pulpo entero", 10.0, 0.7,
+         400.0, [("(P) Pulpo cocido 70gr x und (produccion)", "C1", 20.0, 7.0),
+                 ("(Rs) Collar 125gr x und DD", "C2", 4.0, 1.3),
+                 ("(P) Pulpo cocido 120gr x und (produccion)", "C3", 10.0, 1.0)])
+    d = pd.DataFrame(filas)
+    cols = dict(fecha="FEC REGIST", doc="COD PORC", area="SUB ALMACEN",
+                tipo="USUARIO REG", prod="PROD INICIAL", cod="COD PROD INIC",
+                unid="UNID PROD INIC", cant="CANT A PORCIONAR",
+                merma="CANT MERMA", fin="PROD FINAL RESULT",
+                cant_fin="CANT RESULT", unid_fin="UNID PROD FIN",
+                pprom="PREC PROM PROD FIN", peso="PESO RESULT",
+                cod_fin="COD PROD FINAL")
+    base, cortes = mm.porcionamientos(d, cols)
+    fin = pd.Timestamp("2026-10-15")
+
+    # ── 1. El precio de los cortes y su desglose ──────────────────────────
+    xs = mm.valorizar(base[base["cod"] == "D"], mm.VALOR_DIA)
+    pc = mm.precios_de_cortes(xs, cortes, fin)
+    med = pc.set_index("clave").loc["D1"]
+    check("los cortes del de más valor al de menos, por su código",
+          pc["clave"].tolist(), ["D1", "D2"])
+    check("el precio de antes y el de los 90 días: costo ÷ lo que quedó × peso",
+          (round(med["a"]["P"], 4), round(med["b"]["P"], 4)), (12.75, 17.0))
+    des = med["desglose"]
+    check("los cuatro factores suman EXACTO el cambio",
+          round(sum(des.values()), 9), round(17.0 - 12.75, 9))
+    check("sin cambio de gramaje ni de mezcla, esos dos dan cero",
+          (round(des["gramaje"], 9), round(des["otros"], 9)), (0.0, 0.0))
+    check("el insumo pesó más que la merma, y es la causa",
+          (des["insumo"] > des["merma"] > 0, med["causa"]), (True, "insumo"))
+    filas_d1 = cortes[cortes["doc"].isin(xs["doc"])
+                      & (mm.clave_corte(cortes) == "D1")]
+    pm = mm.precio_corte_por_mes(xs, filas_d1, 0.2).set_index("mes")
+    ago = pm.loc[pd.Timestamp("2026-08-15")]
+    check("mes a mes: el precio y el precio con la merma normal",
+          (round(float(ago["precio"]), 4), round(float(ago["normal"]), 4)),
+          (17.0, round(17.0 * 0.7 / 0.8, 4)))
+    check("el nombre corto de un corte",
+          [mm.nombre_corto(n) for n in (
+              "(P) Lomo trozos saltado 180gr x und (produccion)",
+              "(Rs) Collar / Charela 125gr x und DD")],
+          ["Lomo trozos saltado 180gr", "Collar / Charela 125gr"])
+
+    # ── 2. La marca del peso ──────────────────────────────────────────────
+    pesos = mm.pesos_por_unidad(base, cortes)
+    raros = pesos[pesos["raro"]]
+    check("sólo el 70 g tipeado ×5 es raro; el collar de siempre, no",
+          sorted(zip(raros["doc"], raros["cod_fin"])), [("2609000009", "C1")])
+    sep = mm.valorizar(base[base["fecha"] >= "2026-09-01"].reset_index(drop=True),
+                       mm.VALOR_DIA)
+    hist = base[base["fecha"] < "2026-09-01"]
+    b = mm.marcar(sep, mm.normales(hist), cortes, pesos)
+    f = b.iloc[0]
+    check("la marca, la merma con el peso habitual y lo que escondió",
+          (bool(f["m_peso"]), round(float(f["pct_corr"]), 4),
+           round(float(f["dpeso"]), 4)), (True, 0.63, 5.6))
+    check("el impacto: lo registrado menos lo del peso habitual",
+          round(float(mm.impacto(b, ["peso"]).iloc[0]), 2), round(-5.6 * 40.0, 2))
+    check("sin `pesos`, ninguna marca de peso",
+          bool(mm.marcar(sep, mm.normales(hist), cortes)["m_peso"].any()), False)
+    check("la marca abre prendida", "peso" in mm.MARCAS_DE_ENTRADA, True)
+
+    # ── 3. Lo que arrastra ────────────────────────────────────────────────
+    linea = pesos[(pesos["doc"] == "2609000009") & (pesos["cod_fin"] == "C1")].iloc[0]
+    p_corr = mm.precio_con_peso_habitual(f, linea)
+    check("el precio con el peso habitual: lo que costó ÷ lo que habría "
+          "quedado × su peso", round(p_corr, 4), round(400.0 / 3.7 * 0.07, 4))
+    p_dia = float(linea["pprom"])
+    rv = pd.DataFrame({
+        "COD PLATO": ["P1", "P1", "P2", "P3"],
+        "NOMB PLATO": ["Fideua", "Fideua", "Arroz", "Viejo"],
+        "ITEM VENTA ACTIVO": ["ACTIV", "ACTIV", "ACTIV", "INACTIV"],
+        "COD INS": ["C1", "X", "C1", "C1"],
+        "TOTAL": [p_dia, 10.0, 2 * p_dia, p_dia],
+        "CST SALON": [40.0, 40.0, 50.0, 30.0],
+        "%CST SALON": [0.4, 0.4, 0.5, 0.3]})
+    pl = mm.platos_con_insumo(rv, "C1", p_corr / p_dia)
+    check("los platos activos que lo llevan, con su costo corregido",
+          (pl["plato"].tolist(), [round(v, 4) for v in pl["costo_corr"]],
+           round(float(pl.set_index("plato").loc["Fideua", "pct_corr"]), 4)),
+          (["Arroz", "Fideua"], [round(50 - 2 * p_dia + 2 * p_corr, 4),
+                                 round(40 - p_dia + p_corr, 4)],
+           round((40 - p_dia + p_corr) * 0.4 / 40, 4)))
+
+    # ── 4. Los saltos y el orden ──────────────────────────────────────────
+    u = cc.ultimo_porcionamiento(d, "C1")
+    check("desde Recetas: el último porcionamiento del corte y su peso raro",
+          (u["doc"], u["cod_de"], u["raro"], round(u["kgu"], 3), round(u["hab"], 3)),
+          ("2609000009", "C", True, 0.35, 0.07))
+    check("el collar de siempre no se marca; un código sin porcionamientos, None",
+          (cc.ultimo_porcionamiento(d, "C2")["raro"],
+           cc.ultimo_porcionamiento(d, "ZZ"), cc.ultimo_porcionamiento(None, "C1")),
+          (False, None, None))
+    src = open("graficos/movimientos.py", encoding="utf-8").read()
+    rail = re.search(r'_render_rail\(_RAIL_CATEGORIAS,\s*"([^"]+)"', src)
+    check("el rail al que salta Recetas es el de Movimientos",
+          rail.group(1) if rail else None, mm.RAIL_MOVIMIENTOS)
+    pila = dict(mov._PILA)
+    check("las vistas y secciones a las que se salta existen en la pila",
+          (pila.get(mm.SEC_REND), pila.get(mm.SEC_REV), pila.get(mm.SEC_PROV) is not None),
+          (mm.VISTA_REND, mm.VISTA_REV, True))
+    orden = [s for s, _ in mov._PILA if s in ("mov_sec_porc", mm.SEC_REND,
+                                              mm.SEC_PROV, mm.SEC_REV)]
+    check("Porcionamientos, de lo general a lo particular",
+          orden, ["mov_sec_porc", mm.SEC_REND, mm.SEC_PROV, mm.SEC_REV])
+    check("la consulta trae el código de cada corte",
+          mov._COLS_PORC.get("cod_fin"), "COD PROD FINAL")
+    return fallos
+
+
+def _pruebas_rastro_proveedor():
+    """Movimientos › «Proveedor por kg útil»: el rastro de cada número
+    (regla #655).
+
+      1. LA VENTANA termina a las 00:00 del día siguiente al último
+         porcionamiento, no a su hora: «6 meses» no deja fuera la mañana del
+         primer día.
+      2. «PAGADO DE MÁS», partido por proveedor, suma lo mismo que
+         `resumen_proveedores`, y el que tiene pocos porcionamientos no
+         compite aunque sea el más barato.
+      3. EL RASTRO de un proveedor: la compra asignada a cada porcionamiento,
+         si su costo del día difiere de lo pagado, y quién más vendía cerca
+         —sólo donde la atribución no es «única»—.
+    """
+    import pandas as pd
+
+    from graficos import movimientos_merma as mm
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    rastro #655 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA rastro #655 · {nombre}: {got!r} != {exp!r}")
+
+    # ── 1. La ventana ─────────────────────────────────────────────────────
+    d = pd.DataFrame({"_fecha": pd.to_datetime(["2026-04-10 10:11",
+                                                "2026-10-09 14:51"])})
+    fin = mm.fin_de_ventana(d)
+    ini = fin - pd.DateOffset(months=6)
+    check("termina a las 00:00 del día siguiente al último",
+          fin, pd.Timestamp("2026-10-10"))
+    check("y la mañana del primer día entra", bool(d["_fecha"].min() >= ini), True)
+    check("con un rango, manda el rango",
+          mm.fin_de_ventana(d, (pd.Timestamp("2026-09-01"),
+                                pd.Timestamp("2026-10-01"))),
+          pd.Timestamp("2026-10-01"))
+
+    # ── 2. Pagado de más ──────────────────────────────────────────────────
+    # A (el mejor, 5), B (más caro, 6) y C (el más barato, pero con 4).
+    filas = []
+    for prov, n, costo, merma in (("A", 5, 500.0, 5.0), ("B", 6, 600.0, 6.0),
+                                  ("C", 4, 300.0, 4.0)):
+        for i in range(n):
+            filas.append({"doc": f"{prov}{i}", "cod": "X", "prov": prov,
+                          "unico": True, "dias": 1.0, "cant": 10.0,
+                          "merma_cant": merma, "costo_dia": costo / n * 10 / 10})
+    q = pd.DataFrame(filas)
+    t = mm.por_proveedor(q)
+    pm = mm.partes_pagado_de_mas(t)
+    r = mm.resumen_proveedores(q.assign(costo_dia=q["costo_dia"]))
+    check("el mejor y el más caro, entre los de 5 o más",
+          (pm["mejor"], pm["peor"]), ("A", "B"))
+    check("C, el más barato, no compite: tiene 4",
+          (bool(t.loc["C", "util"] < pm["minimo"]), "C" in pm["de_mas"].index),
+          (True, False))
+    check("partido por proveedor suma lo mismo que el resumen",
+          round(pm["extra"], 6), round(float(r.loc["X", "extra"]), 6))
+    check("lo de B: (su útil − el del mejor) × lo que le quedó",
+          round(float(pm["de_mas"]["B"]), 6),
+          round((t.loc["B", "util"] - t.loc["A", "util"]) * (60 - 36), 6))
+    check("con un solo proveedor que compita, no hay cuenta",
+          mm.partes_pagado_de_mas(t.loc[["A", "C"]]), None)
+
+    # ── 3. El rastro ──────────────────────────────────────────────────────
+    x = pd.DataFrame({
+        "doc": ["P1", "P2", "P3"], "cod": ["X"] * 3, "prov": ["B"] * 3,
+        "fecha": pd.to_datetime(["2026-05-22 10:00", "2026-05-31 08:37",
+                                 "2026-08-15 16:52"]),
+        "dias": [1.0, 1.0, 5.0], "unico": [False, False, True],
+        "cant": [10.0, 10.0, 6.0], "merma_cant": [5.0, 5.0, 3.0],
+        "costo_dia": [600.0, 570.0, 306.0], "pcompra": [60.0, 68.0, 51.0]})
+    compras = pd.DataFrame({
+        "cod": ["X"] * 5,
+        "f": pd.to_datetime(["2026-05-18", "2026-05-21", "2026-05-30",
+                             "2026-05-30", "2026-08-10"]).astype("datetime64[ns]"),
+        "prov": ["A", "B", "A", "B", "B"],
+        "pu": [48.0, 60.0, 55.0, 68.0, 51.0]})
+    rs = mm.rastro_proveedor(x, compras, "B").set_index("doc")
+    check("la compra asignada: el día del porcionamiento menos sus días",
+          [f"{v:%d/%m}" for v in rs["compra"]], ["21/05", "30/05", "10/08"])
+    check("el costo del día lejos de lo pagado (57 contra 68)",
+          rs["difiere"].tolist(), [False, True, False])
+    check("quién más vendía cerca, sólo donde no es «único»",
+          [o if isinstance(o, str) else None for o in rs["otro"]],
+          ["A", "A", None])
+    return fallos
+
+
+def _pruebas_salidas_comparar():
+    """Movimientos › salidas: la causa y los años anteriores (regla #614).
 
       1. LA CAUSA sale del motivo escrito, con erratas y sin tildes, y lo
          que sólo dice «producto de baja» no inventa una.
@@ -7389,14 +7997,13 @@ def _pruebas_salidas_comparar_y_destino():
          semana). Lo anulado tampoco suma el año pasado.
       3. EL AVISO DE POCO REGISTRO: sólo meses enteros, cerrados y con menos
          de la mitad de la mediana de los doce anteriores.
-      4. EL DESTINO cierra: entró − vendido − preparaciones − notas + ajuste
-         es lo que quedó, las bajas salen de las notas y no se cuentan dos
-         veces, y lo que va entre áreas no infla lo que entró.
+
+    El «destino de lo que entra», que también vivía acá, pasó a
+    `_pruebas_sin_plato` con las dos vistas que lo reemplazaron (#645).
     """
     import pandas as pd
 
     from graficos import movimientos as mov
-    from graficos import movimientos_destino as md
     from graficos import movimientos_periodo as mp
 
     fallos = 0
@@ -7548,45 +8155,856 @@ def _pruebas_salidas_comparar_y_destino():
               pd.Timestamp("2026-09-15")),
           [(pd.Period("2026-08", "M"), 10, 40.0)])
 
-    # ── 4) El destino de lo que entra ─────────────────────────────────────
-    m = pd.Timestamp("2026-09-01")
-    kx = pd.DataFrame([
+    return fallos
+
+
+def _pruebas_sin_plato():
+    """Movimientos › las dos vistas de cierre a cierre (regla #645):
+    `sin_plato.py` sobre un kardex de mentira con cada caso real.
+
+      1. LOS PERÍODOS van de cierre a cierre: el día después del último
+         conteo del cierre anterior hasta el último conteo de este, y los
+         conteos del 1 al 7 se juntan en un cierre (#632).
+      2. LA CUENTA CIERRA: había + entró − a un plato − preparaciones −
+         bajas − otras + ajuste = quedó, producto por producto.
+      3. LO VENDIDO SE PARTE con el POS: la cortesía y los eventos por
+         receta, el plato DIRECTO por su enlace, lo que el POS no explica
+         queda en combos, y nunca se reparte más de lo que el kardex
+         descontó. Una línea POR INSUMO baja por su receta base (#648).
+      4. EL RESTAURANTE CIERRA: compras = a un plato + bajas + otras +
+         faltante neto + operación + Δ stock, con valorización cero cuando
+         los precios no cambian; los insumos de operación van aparte.
+      5. LO QUE LEEN LAS VISTAS: sin salida registrada, la pareja del
+         otro lado del conteo, el % de los cierres anteriores.
+      6. LA PILA: las dos vistas en el rail y en la pila, la vieja en
+         ninguno, y ningún módulo sigue leyendo el kardex por mes.
+    """
+    import datetime as dt
+    import pathlib
+
+    import pandas as pd
+
+    import cortes
+    import definicion_venta as dv
+    import sin_plato as sp
+    from graficos import movimientos as mov
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    sin plato #645 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA sin plato #645 · {nombre}: got={got!r} exp={exp!r}")
+
+    # ── 1) Los períodos ────────────────────────────────────────────────
+    dias = pd.to_datetime(["2025-09-02", "2025-10-01", "2025-10-02",
+                           "2025-10-15", "2025-11-03", "2025-11-05",
+                           "2025-12-02"])
+    per = sp.periodos(cortes.sesiones_inventario(pd.Series(dias)))
+    check("dos períodos desde el cierre de setiembre 2025",
+          [(p["corto"], str(p["desde"]), str(p["hasta"])) for p in per],
+          [("oct 25", "2025-10-03", "2025-11-05"),
+           ("nov 25", "2025-11-06", "2025-12-02")])
+    check("el parcial del 15 de octubre no corta un período",
+          [p["nombre"] for p in per], ["Octubre 2025", "Noviembre 2025"])
+    check("las fotos: antes del primero y al final de cada uno",
+          sp.momentos(per),
+          [dt.datetime(2025, 10, 2, 23), dt.datetime(2025, 11, 5, 23),
+           dt.datetime(2025, 12, 2, 23)])
+
+    # ── 2-4) Un período con todo lo que pasa ─────────────────────────────
+    per1 = per[:1]
+    PR = {"T": 1.2, "Q": 20.0, "C": 2.0, "M": 30.0, "L": 25.0}
+    filas_kx = [
         # cod, tipo, entra, sale
         ("T", "94", 100.0, 0.0),   # la orden produjo 100 tartas
-        ("T", "95", 0.0, 70.0),    # se vendieron 70
+        ("T", "95", 0.0, 70.0),    # el POS descontó 70
         ("T", "98", 0.0, 25.0),    # 25 en notas: 20 bajas + 5 personal
         ("T", "93", 0.0, 2.0),     # faltaron 2 en el cierre
-        ("T", "99", 50.0, 50.0),   # un requerimiento: no entra
         ("Q", "01", 10.0, 0.0),    # el queso, comprado
-        ("Q", "07", 0.0, 1.0),     # una nota de crédito
+        ("Q", "07", 0.0, 1.0),     # su nota de crédito
         ("Q", "94", 0.0, 6.0),     # usado en la orden de la tarta
-    ], columns=["cod", "tipo", "cant_in", "cant_out"]).assign(mes=m)
-    kx = kx[kx["tipo"] != "99"]   # `sql_movimientos_mes` ya los saca
-    bajas = pd.DataFrame({"cod": ["T"], "mes": [m], "cant": [20.0],
-                          "valor": [190.0]})
-    r = md.armar_destino(kx, bajas).set_index("cod")
-    check("tarta: entró, vendido, baja, otras, ajuste, quedó",
-          [round(float(r.loc["T", c]), 2) for c in
-           ("entro", "vendido", "baja", "otras", "ajuste", "quedo")],
-          [100.0, 70.0, 20.0, 5.0, -2.0, 3.0])
-    check("tarta: % baja sobre lo que entró", round(r.loc["T", "pct_baja"], 1),
-          20.0)
-    check("queso: lo comprado neto de la nota de crédito y lo usado",
-          [float(r.loc["Q", c]) for c in ("entro", "prep", "quedo")],
-          [9.0, 6.0, 3.0])
-    check("queso: entró y no se dio de baja, 0 %",
-          float(r.loc["Q", "pct_baja"]), 0.0)
-    s = pd.DataFrame({
-        "FECHA PROCESADO": pd.to_datetime(["2026-09-02", "2026-09-03",
-                                           "2026-09-04", "2026-10-01"]),
+        ("C", "01", 50.0, 0.0),    # carbón
+        ("C", "93", 0.0, 40.0),    # se usó, y sólo lo dice el conteo
+        ("M", "95", 0.0, 10.0),    # medallón, vendido DIRECTO
+        ("M", "93", 5.0, 0.0),     # sobrante
+        ("L", "93", 0.0, 4.0),     # lomo trozos: faltante, nada más
+    ]
+    kx = pd.DataFrame(filas_kx, columns=["cod", "tipo", "cant_in", "cant_out"])
+    kx["k"] = 0
+    kx["val_in"] = kx["cant_in"] * kx["cod"].map(PR)
+    kx["val_out"] = kx["cant_out"] * kx["cod"].map(PR)
+    t_ini = pd.Timestamp("2025-10-01 10:00")
+    t_fin = pd.Timestamp("2025-11-04 10:00")
+    fotos = pd.DataFrame([
+        # area, cod, fecha, correlativo, stock
+        ("A", "Q", t_ini, 1, 2.0), ("A", "M", t_ini, 2, 20.0),
+        ("A", "L", t_ini, 3, 10.0),
+        ("A", "T", t_fin, 10, 3.0), ("A", "Q", t_fin, 11, 5.0),
+        ("A", "C", t_fin, 12, 10.0), ("A", "M", t_fin, 13, 15.0),
+        ("A", "L", t_fin, 14, 6.0),
+    ], columns=["area", "cod", "fecha", "correlativo", "stock"])
+    fotos["precio"] = fotos["cod"].map(PR)
+    salidas = pd.DataFrame({
+        "FECHA PROCESADO": pd.to_datetime(["2025-10-10", "2025-10-11",
+                                           "2025-10-12", "2025-12-20"]),
         "NOMBRE ESTADO SALIDA": ["PROCESADO", "ANULADO", "PROCESADO",
                                  "PROCESADO"],
         "COD PRODUCTO": ["T", "T", "T", "T"],
         "TIPO DESCARGO": ["Bajas", "Bajas", "Comida Personal", "Bajas"],
-        "CANT SALIDA": [1.0, 2.0, 4.0, 8.0], "VALOR NETO": [1.0] * 4})
-    b = md.bajas_de(s, pd.Timestamp("2026-09-01"), pd.Timestamp("2026-10-01"))
-    check("bajas: sólo Bajas, sin anuladas, en el rango", b["cant"].tolist(),
-          [1.0])
+        "CANT SALIDA": [20.0, 9.0, 5.0, 8.0],
+        "VALOR NETO": [24.0, 10.8, 6.0, 9.6]})
+    vend = pd.DataFrame({
+        "producto": ["P1", "P1", "P1", "P2", "P1"],
+        "dia": pd.to_datetime(["2025-10-05", "2025-10-06", "2025-10-07",
+                               "2025-10-08", "2025-12-25"]),
+        "grupo": ["Alimentos", "Alimentos", "Eventos", "Alimentos",
+                  "Alimentos"],
+        "clase": [dv.VENTA, dv.CORTESIA, dv.VENTA, dv.VENTA, dv.VENTA],
+        "unidades": [60.0, 5.0, 2.0, 10.0, 99.0]})
+    recetas = pd.DataFrame({"COD PLATO": ["P1", "P9"], "COD INS": ["T", "Q"],
+                            "CANTIDAD": [1.0, 500.0], "FACTOR": [1.0, 1000.0],
+                            "DESCARG": ["SI", "NO"]})
+    carta = pd.DataFrame({"COD PLATO": ["P2", "P1"],
+                          "TIPO DESC": ["DIRECTO", "DIRECTO"],
+                          "COD ITEM O RECETA": ["M", "Q"]})
+    maestro = pd.DataFrame({
+        "CODIGO PRODUCTO": ["T", "Q", "C", "M", "L"],
+        "NOMBRE PRODUCTO": ["(Rs) Tarta de queso", "Queso crema",
+                            "Carbon Vegetal", "(P) Lomo Medallon 170gr",
+                            "(P) Lomo trozos saltado 170gr"],
+        "UNIDAD KARDEX": ["UND", "KILOS", "KILOS", "UND", "UND"],
+        "NOMBRE FAMILIA": ["ALIMENTOS", "ALIMENTOS", "COSTOS PRODUCCION",
+                           "ALIMENTOS", "ALIMENTOS"]})
+    r = sp.calcular(per1, kx, fotos, salidas, vend, recetas, carta, maestro)
+    f = r["filas"].set_index("cod")
+    cuadre = (f["ini_q"] + f["entro_q"] - f["plato_q"] - f["prep_q"]
+              - f["baja_q"] - f["otras_q"] + f["aj_q"] - f["fin_q"])
+    check("la cuenta de cada producto cierra contra el kardex",
+          {c: round(float(v), 6) for c, v in cuadre.items()},
+          {c: 0.0 for c in cuadre.index})
+    check("tarta: entró, bajas (sin la anulada), otras, faltante",
+          [round(float(f.loc["T", c]), 2) for c in
+           ("entro_q", "baja_q", "otras_q", "falt_q", "sinplato_q")],
+          [100.0, 20.0, 5.0, 2.0, 27.0])
+    check("tarta: venta, cortesía, eventos y lo de combos",
+          [round(float(f.loc["T", c]), 2) for c in
+           ("venta_q", "cort_q", "evvi_q", "combos_q", "plato_q")],
+          [63.0, 5.0, 2.0, 3.0, 70.0])
+    check("tarta: % sin plato sobre todo lo que salió",
+          round(float(f.loc["T", "pct"]), 4), round(27 / 97, 4))
+    check("queso: lo comprado neto de la nota y lo usado en la orden",
+          [float(f.loc["Q", c]) for c in ("entro_q", "prep_q", "compra_v")],
+          [9.0, 6.0, 180.0])
+    check("el plato DIRECTO no pisa una receta (P1 sigue por la tarta)",
+          float(f.loc["Q", "plato_q"]), 0.0)
+    check("medallón: vendido directo, sobrante",
+          [float(f.loc["M", c]) for c in ("venta_q", "sobr_q", "fin_q")],
+          [10.0, 5.0, 15.0])
+    check("carbón: insumo de operación", f.loc["C", "clase"], sp.OPERACION)
+    t = r["totales"].iloc[0]
+    check("el restaurante: compras, a un plato, faltante y sobrante",
+          [round(float(t[c]), 2) for c in
+           ("compras", "venta", "cort", "evvi", "falt", "sobr", "operacion")],
+          [280.0, 375.6, 6.0, 2.4, 102.4, 150.0, 80.0])
+    check("y cierra: la valorización es cero con los precios quietos",
+          round(float(t["valorizacion"]), 6), 0.0)
+    # Más cortesía que lo que el kardex descontó: se reparte a escala.
+    vend2 = vend.assign(unidades=[60.0, 50.0, 2.0, 10.0, 0.0])
+    f2 = sp.calcular(per1, kx, fotos, salidas, vend2, recetas, carta,
+                     maestro)["filas"].set_index("cod")
+    check("nunca se reparte más de lo que el kardex descontó",
+          round(float(f2.loc["T", "venta_q"] + f2.loc["T", "cort_q"]
+                      + f2.loc["T", "evvi_q"]), 6), 70.0)
+
+    # ── 3b) La descarga POR INSUMO (#648) ───────────────────────────────
+    # P3 lleva 500 g de la salsa S «por insumo»: el POS no toca S sino su
+    # ajo A y su caldo B, y el caldo —también por insumo— baja a sus huesos
+    # H. La línea de T pide «por insumo» pero T no tiene receta: queda como
+    # producto. P4 lleva la misma salsa como PRODUCTO: ésa descuenta S.
+    rv_ins = pd.DataFrame({
+        "COD PLATO": ["P3", "P3", "P4"], "COD INS": ["S", "T", "S"],
+        "CANTIDAD": [500.0, 1.0, 250.0], "FACTOR": [1000.0, 1.0, 1000.0],
+        "DESCARG": ["SI"] * 3, "T DESCARG": ["INSUMO", "INSUMO", "PRODUCTO"]})
+    rb_ins = pd.DataFrame({
+        # S: 200 g de ajo y 300 ml de caldo por kilo; la receta vieja de S,
+        # inactiva, llevaba Z. B: 2 huesos por litro.
+        "COD PROD RB": ["S", "S", "S", "B"],
+        "COD INS RB": ["A", "B", "Z", "H"],
+        "CANT": [200.0, 300.0, 50.0, 2.0],
+        "FACTOR INS": [1000.0, 1000.0, 1000.0, 1.0],
+        "T DESCARG": ["PRODUCTO", "INSUMO", "PRODUCTO", "PRODUCTO"],
+        "RB ACT": ["RB.ACTIV", "RB.ACTIV", "RB.INACT", "RB.ACTIV"],
+        "DESCARGA": ["DESC"] * 4})
+
+    def _mapa(m):
+        return {(a, b): round(float(q), 6) for a, b, q in
+                m[["cp", "ci", "q"]].itertuples(index=False)}
+    check("por insumo: la salsa no se descuenta, su ajo y los huesos del "
+          "caldo sí; T sin receta y la línea PRODUCTO, como producto",
+          _mapa(sp.mapa_descargo(rv_ins, None, rb_ins)),
+          {("P3", "A"): 0.1, ("P3", "H"): 0.3, ("P3", "T"): 1.0,
+           ("P4", "S"): 0.25})
+    check("sin recetabase, cada línea descuenta lo que nombra",
+          _mapa(sp.mapa_descargo(rv_ins)),
+          {("P3", "S"): 0.5, ("P3", "T"): 1.0, ("P4", "S"): 0.25})
+    rb_ciclo = pd.concat([rb_ins, pd.DataFrame({
+        "COD PROD RB": ["B"], "COD INS RB": ["S"], "CANT": [100.0],
+        "FACTOR INS": [1000.0], "T DESCARG": ["INSUMO"],
+        "RB ACT": ["RB.ACTIV"], "DESCARGA": ["DESC"]})], ignore_index=True)
+    check("una receta que se nombra a sí misma termina, y ahí queda como "
+          "producto", _mapa(sp.mapa_descargo(rv_ins, None, rb_ciclo)).get(
+              ("P3", "S")), round(0.5 * 0.3 * 0.1, 6))
+    # En el kardex: 10 P3 vendidos descontaron 1 kg de ajo y 3 huesos, y
+    # nada de salsa. Leída como producto, el ajo quedaba entero en combos.
+    kx3 = pd.DataFrame({"cod": ["A", "H"], "tipo": ["95", "95"],
+                        "cant_in": [0.0, 0.0], "cant_out": [1.0, 3.0],
+                        "val_in": [0.0, 0.0], "val_out": [10.0, 6.0], "k": 0})
+    vend3 = pd.DataFrame({"producto": ["P3"],
+                          "dia": pd.to_datetime(["2025-10-05"]),
+                          "grupo": ["Alimentos"], "clase": [dv.VENTA],
+                          "unidades": [10.0]})
+    for nombre, rb_, exp in (("abierta por sus insumos", rb_ins,
+                              [1.0, 0.0, 3.0, 0.0]),
+                             ("sin recetabase (como hasta la #645)", None,
+                              [1.0, 1.0, 3.0, 3.0])):
+        f3 = sp.calcular(per1, kx3, None, None, vend3, rv_ins, None, None,
+                         recetabase=rb_).get("filas").set_index("cod")
+        check(f"ajo y huesos: venta y combos, {nombre}",
+              [round(float(f3.loc[c, p]), 6) for c in ("A", "H")
+               for p in ("venta_q", "combos_q")], exp)
+
+    # ── 5) Lo que leen las vistas ───────────────────────────────────────
+    fk = r["filas"]
+    fa = fk[fk["clase"] == sp.ALIMENTOS]
+    check("lomo trozos: sin salida registrada; la tarta no",
+          sorted(fa.loc[sp.sin_salida_registrada(fa), "cod"]), ["L"])
+    check("la palabra que dice qué es", sp.palabra_clave(
+        "(P) Lomo trozos saltado 170gr x und"), "lomo")
+    check("del otro lado del conteo: el medallón con sobrante",
+          sp.parejas(fk, "L")["cod"].tolist(), ["M"])
+    fp = pd.DataFrame({"cod": ["X"] * 3, "k": [0, 1, 2],
+                       "sinplato_v": [10.0, 30.0, 5.0],
+                       "salio_v": [100.0, 100.0, 50.0]})
+    check("el % de los cierres anteriores, sumados",
+          round(float(sp.pct_previo(fp, 2)["X"]), 4), 0.2)
+
+    # ── 6) La pila ──────────────────────────────────────────────────────
+    ids = [v[0] for _c, vs in mov._RAIL_CATEGORIAS for v in vs]
+    from graficos import movimientos_destino as md
+    nuevas = ("Sin plato por cierre", "En qué se fue cada producto")
+    check("los ids escritos son los del salto entre las dos",
+          (md.VISTA_CIERRE, md.VISTA_PRODUCTO), nuevas)
+    check("las dos vistas en el rail", [x in ids for x in nuevas],
+          [True, True])
+    check("y en la pila, una tras otra",
+          [v for _c, v in mov._PILA if v in nuevas], list(nuevas))
+    check("la vieja en ninguno",
+          "Destino de lo que entra" in ids
+          or any(v == "Destino de lo que entra" for _c, v in mov._PILA), False)
+    raiz = pathlib.Path(__file__).parent
+    usan_mes = [str(p.relative_to(raiz)) for p in
+                [*raiz.glob("*.py"), *(raiz / "graficos").rglob("*.py")]
+                if "movimientos_kardex_mes" in p.read_text(encoding="utf-8")
+                and p.name != "test_graficos.py"]
+    check("nadie lee ya el kardex por mes", usan_mes, [])
+    return fallos
+
+
+def _pruebas_diferencias_ajuste():
+    """Ajuste › «Análisis de diferencias» (regla #650): `diferencias_ajuste.py`
+    sobre un conteo de mentira con cada caso real del cierre de setiembre
+    2026.
+
+      1. LA CUENTA DE CADA LÍNEA CIERRA contra SU conteo anterior (aquí, un
+         parcial), y entró y salió van POR MOTIVO: el requerimiento dice de
+         qué área vino; la nota de salida se parte por su tipo.
+      2. LAS PISTAS: el traslado entre áreas, la producción sin orden (el
+         insumo falta, lo que se hace con él sobra en negativo y la receta
+         base no se produce), el sistema en negativo, el conteo que revierte
+         al anterior, lo que ninguna receta usa y los platos que no se
+         vendieron.
+      3. «DESCARGA POR INSUMO» (#648): una receta base DD que los platos
+         abren por insumo no lleva orden, así que su insumo faltante y ella
+         sobrante NO son una producción sin registrar.
+      4. LA VISTA está en el rail de Ajuste.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+    from graficos import ajuste as aj
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #650 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #650 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {0: "ALMACEN CENTRAL", 1: "COCINA"}
+    PROD = {10: ("Langostino x und", "UND", 6.6),
+            20: ("(P) Milanesa x und (produccion)", "UND", 23.0),
+            21: ("(Rs) Milanesa x und (calientes)", "UND", 25.0),
+            30: ("(Rs) Zumo de limon DD", "LITROS", 8.0),
+            31: ("Limon", "KILOS", 4.0), 40: ("Pan x Kg", "KILOS", 9.0),
+            50: ("Bolsas al vacio", "UND", 0.2), 60: ("Goma Xantana", "KILOS", 5.0),
+            70: ("Aceite Frituras", "LITROS", 7.0)}
+
+    def fila(t, a, c, s, k):
+        n, u, p = PROD[c]
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "ALIMENTOS", "SUBFAMILIA": "ABARROTES",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": u,
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": p, "AJUSTE VALORIZADO": (k - s) * p}
+    t0, t1 = "2026-09-16 17:30", "2026-10-01 17:35"
+    antes = [(0, 10, 36, 36), (1, 10, 0, 0), (1, 20, 0, 0), (1, 21, 0, 0), (1, 30, 0, 0),
+             (1, 31, 10, 10), (1, 40, 10, 10), (1, 50, 100, 100), (1, 60, 3, 2),
+             (1, 70, 10, 10)]
+    ahora = [(0, 10, 36, 0), (1, 10, -17, 22), (1, 20, 44, 0), (1, 21, -40, 5),
+             (1, 30, 0, 3), (1, 31, 2, 0), (1, 40, 7, 6), (1, 50, 100, 80), (1, 60, 2, 3),
+             (1, 70, 10, 5)]
+    ajuste = pd.DataFrame([fila(t0, *x) for x in antes] + [fila(t1, *x) for x in ahora])
+
+    def kx(t, a, c, tipo, ent, sal, stock, movs=1):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": tipo, "CANT INGRESO": ent,
+                "CANT SALIDA": sal, "MOVIMIENTOS": movs, "STOCK DESPUES": stock}
+    kardex = pd.DataFrame([
+        kx("2026-09-20 12:00", 1, 10, "95", 0, 17, -17),
+        kx("2026-09-18 10:00", 0, 20, "99", 0, 44, 0),
+        kx("2026-09-18 10:00", 1, 20, "99", 44, 0, 44),
+        kx("2026-09-22 13:00", 1, 21, "95", 0, 40, -40),
+        kx("2026-09-21 13:00", 1, 31, "95", 0, 8, 2),
+        kx("2026-09-25 09:00", 1, 40, "98", 0, 3, 7, movs=2),
+    ])
+    rv = pd.DataFrame([
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI", "COD PLATO": cp,
+         "NOMB PLATO": pl, "COD INS": f"{ci:07d}", "CANTIDAD": q, "FACTOR": 1.0,
+         "SUBALM INS": "COCINA", "T DESCARG": t, "FECH MODIF": pd.Timestamp("2026-05-01")}
+        for cp, pl, ci, q, t in (("0000900", "Cotoletta", 21, 1.0, "PRODUCTO"),
+                                 ("0000901", "Mojito", 30, 0.05, "INSUMO"),
+                                 ("0000902", "Huevo frito", 70, 0.1, "PRODUCTO"))])
+    rb = pd.DataFrame([
+        {"RB ACT": "RB.ACTIV", "COD PROD RB": f"{p:07d}", "RB NOMBRE": PROD[p][0],
+         "COD INS RB": f"{c:07d}", "INSUMO": PROD[c][0], "CANT": q, "FACTOR INS": 1.0,
+         "AREA DESC RB": "COCINA", "T DESCARG": "PRODUCTO",
+         "FECH REG": pd.Timestamp("2026-05-01")}
+        for p, c, q in ((21, 20, 1.0), (30, 31, 1.2))])
+    carta = pd.DataFrame(columns=["TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA"])
+    porc = pd.DataFrame(columns=["COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT",
+                                 "PROD INICIAL", "COD PORC", "FEC REGIST", "CANT A PORCIONAR"])
+    ordenes = pd.DataFrame(columns=["NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO",
+                                    "CANTIDAD"])
+    salidas = pd.DataFrame([
+        {"NOMBRE ESTADO SALIDA": "PROCESADO", "AREA": "COCINA", "COD PRODUCTO": "0000040",
+         "FECHA PROCESADO": pd.Timestamp("2026-09-25 09:10"), "CANT SALIDA": q,
+         "TIPO DESCARGO": tp}
+        for q, tp in ((2.0, "Bajas"), (1.0, "Comida Personal"))])
+    venta = pd.DataFrame([
+        {"producto": cp, "dia": pd.Timestamp(d), "unidades": u, "costo": 0.0,
+         "unidades_costeadas": 0.0}
+        for cp, d, u in (("0000900", "2026-09-22", 40), ("0000901", "2026-09-21", 160))])
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, salidas,
+                    venta)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+
+    def pistas(a, c):
+        return [(p["t"], p["f"]) for p in F[de[(a, c)]["id"]]["pistas"]]
+
+    def ti(a, c, t):
+        return [p["ti"] for p in F[de[(a, c)]["id"]]["pistas"] if p["t"] == t]
+
+    # 1 — la cuenta y los motivos
+    check("una línea por producto y área con diferencia", len(L), 10)
+    check("contado antes + entró − salió = sistema, en todas",
+          sorted(L["gap"].abs().round(6).unique().tolist()), [0.0])
+    check("el conteo anterior es el parcial, no un cierre",
+          sorted(set(L["ses0"])), ["Parcial · 16 set"])
+    check("el requerimiento dice de qué área vino",
+          F[de[(1, "20")]["id"]]["ent"], [["Requerimiento de Almacen Central", 44.0, 1]])
+    check("la nota de salida se parte por su tipo",
+          F[de[(1, "40")]["id"]]["sal"],
+          [["Nota de salida · Bajas", 2.0, 1], ["Nota de salida · Comida Personal", 1.0, 1]])
+    # 2 — las pistas
+    check("el traslado: falta en el Almacén lo que sobra en Cocina",
+          ("area", 1) in pistas(0, "10"), True)
+    check("Cocina: el sobrante corrige un negativo", ("neg", 1) in pistas(1, "10"), True)
+    check("el insumo falta y lo que se hace con él sobra", ("prod", 1) in pistas(1, "20"), True)
+    check("y su receta base se vendió sin orden",
+          ti(1, "20", "nada"), ["Su receta base no se produjo"])
+    check("la receta base que nadie produce", ti(1, "21", "receta"),
+          ["Receta base sin órdenes"])
+    check("a la receta base le faltan sus insumos", ti(1, "21", "prod"),
+          ["Faltan sus insumos"])
+    check("lo que ninguna receta usa", de[(1, "50")]["pista_t"], "nadie")
+    check("el conteo que revierte al anterior", ("rev", 1) in pistas(1, "60"), True)
+    check("los platos que no se vendieron", ti(1, "70", "nada"),
+          ["No se vendió nada que lo lleve"])
+    # 3 — descarga por insumo
+    check("una DD por insumo no es una producción sin registrar",
+          [t for t, _ in pistas(1, "31") + pistas(1, "30") if t == "prod"], [])
+    check("cobertura: soles del faltante y del sobrante",
+          tuple(round(x, 2) for x in da.cobertura(L)[:2]),
+          (round(36 * 6.6 + 44 * 23 + 2 * 4 + 9 + 20 * 0.2 + 5 * 7, 2),
+           round(39 * 6.6 + 45 * 25 + 3 * 8 + 5, 2)))
+    check("los números como el resto de Ajuste", (da.es(1135.8), da.es(-2.0)),
+          ("1,135.8", "−2"))
+    # 4 — la vista
+    check("la vista está en el rail de Ajuste",
+          [v[0] for _, vs in aj._AJUSTE_RAIL_CATEGORIAS for v in vs if v[0] == "Diferencias"],
+          ["Diferencias"])
+    return fallos
+
+
+def _pruebas_diferencias_combos():
+    """Ajuste › «Análisis de diferencias», los combos y los productos sin
+    precio (regla #651), con el caso real del cierre de setiembre 2026:
+
+      1. VENDIDO CON EL CÓDIGO DEL OTRO: entran 6 Sauvignon Blanc a Cava y no
+         sale ninguna; se venden 6 Chardonnay que nunca entraron (el sistema
+         queda en −6 y la Chardonnay, sin precio, sobra por S/ 0). La línea
+         de S/ 0 entra a la lista —como sobrante, por la CANTIDAD— y las dos
+         se señalan una a la otra, como pista fuerte.
+      2. LA COPA A ELEGIR DEL COMBO: el Menu Sapiens se vende 16 veces y ese
+         día no se descuenta el Reto Malbec, una de sus dos copas: pista
+         posible, «hasta» 16 × 0,2.
+      3. EL PLATO FIJO DEL COMBO: el pan va siempre, y si el combo se vende
+         sin descontarlo, la pista es fuerte y reemplaza a «Nada lo
+         descargó» (sus platos sólo se vendieron dentro del combo).
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #651 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #651 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {1: "COCINA", 2: "CAVA"}
+    PROD = {80: ("Cinco Sentidos Sauvignon Blanc 750ml", "UND", 38.0),
+            81: ("Cinco Sentidos Chardonnay 750ml", "UND", 0.0),
+            90: ("Reto Malbec 750ml", "UND", 60.0), 91: ("Pan de la casa", "UND", 1.5)}
+
+    def fila(t, a, c, s, k):
+        n, u, p = PROD[c]
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "VINOS Y ESPUMANTES", "SUBFAMILIA": "VINO",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": u,
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": p, "AJUSTE VALORIZADO": (k - s) * p}
+    t0, t1 = "2026-09-16 17:30", "2026-10-01 17:35"
+    ajuste = pd.DataFrame(
+        [fila(t0, *x) for x in ((2, 80, 0, 0), (2, 81, 0, 0), (2, 90, 10, 10), (1, 91, 20, 20))]
+        + [fila(t1, *x) for x in ((2, 80, 6, 0), (2, 81, -6, 0), (2, 90, 9, 5.8),
+                                  (1, 91, 20, 4))])
+
+    def kx(t, a, c, tipo, ent, sal, stock):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": tipo, "CANT INGRESO": ent,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
+    kardex = pd.DataFrame([kx("2026-09-18 10:00", 2, 80, "99", 6, 0, 6),
+                           kx("2026-09-21 13:00", 2, 81, "95", 0, 6, -6),
+                           kx("2026-09-19 13:00", 2, 90, "95", 0, 1, 9)])
+    rv = pd.DataFrame([
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+         "COD PLATO": f"{cp:07d}", "NOMB PLATO": pl, "COD INS": f"{ci:07d}", "CANTIDAD": q,
+         "FACTOR": 1.0, "SUBALM INS": ar, "T DESCARG": "PRODUCTO",
+         "FECH MODIF": pd.Timestamp("2026-05-01")}
+        for cp, pl, ci, q, ar in ((903, "(Cp) Cinco Sentidos Sauvignon Blanc", 80, 0.2, "CAVA"),
+                                  (904, "(Bt) Cinco Sentidos Chardonnay", 81, 1.0, "CAVA"),
+                                  (905, "(Cp) Reto Malbec", 90, 0.2, "CAVA"),
+                                  (907, "(Cp) Otro vino", 92, 0.2, "CAVA"),
+                                  (908, "Pan a la brasa", 91, 1.0, "COCINA"))])
+    rb = pd.DataFrame(columns=["RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO",
+                               "CANT", "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG"])
+    carta = pd.DataFrame(columns=["TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA"])
+    porc = pd.DataFrame(columns=["COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT",
+                                 "PROD INICIAL", "COD PORC", "FEC REGIST", "CANT A PORCIONAR"])
+    ordenes = pd.DataFrame(columns=["NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO",
+                                    "CANTIDAD"])
+    combos = pd.DataFrame([
+        {"COD COMBO": "0000906", "COMBO": "Menu Sapiens Sept2026", "COMBO ACTIVO": 1,
+         "GRUPO": g, "COD PRODUCTO": f"{cp:07d}", "PRODUCTO": "", "PRODUCTO ACTIVO": 1,
+         "CANTIDAD": 1.0, "FIJO": fijo}
+        for g, cp, fijo in (("g", 905, 0), ("g", 907, 0), ("a", 908, 1))])
+    venta = pd.DataFrame([
+        {"producto": f"{cp:07d}", "dia": pd.Timestamp(d), "unidades": u, "costo": 0.0,
+         "unidades_costeadas": 0.0}
+        for cp, d, u in ((904, "2026-09-21", 6), (906, "2026-09-24", 16), (905, "2026-09-19", 5))])
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta,
+                    combos=combos)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+
+    def pistas(a, c):
+        return F[de[(a, c)]["id"]]["pistas"]
+
+    # 1 — vendido con el código del otro, con un lado sin precio
+    check("la línea sin precio entra a la lista", (2, "81") in de, True)
+    check("y es un sobrante por la cantidad aunque valga S/ 0",
+          (de[(2, "81")]["q"], de[(2, "81")]["v"]), (6.0, 0.0))
+    check("lo que falta: vendido con el código del otro, fuerte",
+          [(p["ti"], p["f"]) for p in pistas(2, "80")][:1],
+          [("Vendido con el código del otro", 1)])
+    check("lo que sobra apunta al que falta",
+          [(p["ti"], p["f"], p.get("r")) for p in pistas(2, "81")][:1],
+          [("Vendido con el código del otro", 1, de[(2, "80")]["id"])])
+    # 2 — la copa a elegir del combo
+    combo = [p for p in pistas(2, "90") if p["t"] == "combo"]
+    check("la copa a elegir del combo que no se descontó",
+          [(p["ti"], p["f"]) for p in combo], [("Combo que no lo descontó", 0)])
+    check("dice hasta cuánto, si todos la eligieron", "hasta 3.2 und" in combo[0]["tx"], True)
+    usos = [u for u in F[de[(2, "90")]["id"]]["usos"] if u["via"] == "combo"]
+    check("y el combo está en «Dónde se usa»",
+          [(u["n"], u["g"], u["fijo"], u["nv"], round(u["hasta"], 6)) for u in usos],
+          [("Menu Sapiens Sept2026", "G", False, 16.0, 3.2)])
+    # 3 — el plato fijo del combo
+    check("el pan fijo del combo: pista fuerte y la principal",
+          [(p["t"], p["f"]) for p in pistas(1, "91")][:1], [("combo", 1)])
+    check("reemplaza a «Nada lo descargó»",
+          [p["t"] for p in pistas(1, "91") if p["t"] == "nada"], [])
+    check("y dice que no salió nada con un documento",
+          pistas(1, "91")[0]["tx"].startswith("Desde el conteo del 16 set no salió nada"), True)
+    return fallos
+
+
+def _pruebas_diferencias_req_sunat():
+    """Ajuste › «Análisis de diferencias», los requerimientos y las facturas de
+    SUNAT sin ingresar (regla #652), con los casos reales del cierre de
+    setiembre 2026:
+
+      1. QUIÉN LO PIDE: el hueso de pollo no lo usa ninguna receta, y
+         Producción lo pide por requerimiento. Un requerimiento no es
+         consumo, pero dice qué área lo usa: la pista lo nombra, y la ficha
+         lista lo pedido en 90 días por área (no lo de DESPUÉS del conteo).
+      2. LA FACTURA SIN INGRESAR: el Caelum Malbec sobra 12 en Cava y una
+         factura de 12 que SUNAT tiene y el Almacén no lo nombra: pista
+         fuerte. Y no se emparejan nombres que sólo se parecen: «ají
+         amarillo en polvo» no es «ají amarillo».
+      3. EL REQUERIMIENTO SIN PROCESAR: falta en el Almacén lo que Barra
+         pidió y nadie procesó.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #652 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #652 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {0: "ALMACEN CENTRAL", 2: "CAVA", 6: "PRODUCCION"}
+    PROD = {95: ("Hueso De Pollo", "KILOS", 4.0),
+            96: ("Caelum Terroir Malbec 750ml", "UND", 30.0),
+            97: ("Aji Amarillo En Polvo", "KILOS", 20.0), 98: ("Limon", "KILOS", 3.0)}
+
+    def fila(t, a, c, s, k):
+        n, u, p = PROD[c]
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "ALIMENTOS", "SUBFAMILIA": "VARIOS",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": u,
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": p, "AJUSTE VALORIZADO": (k - s) * p}
+    t0, t1 = "2026-09-16 17:30", "2026-10-01 17:35"
+    ajuste = pd.DataFrame(
+        [fila(t0, *x) for x in ((6, 95, 39.05, 39.05), (2, 96, 0, 0), (6, 97, 1, 1),
+                                (0, 98, 20, 20))]
+        + [fila(t1, *x) for x in ((6, 95, 47.05, 0), (2, 96, -2, 10), (6, 97, 1, 1.2),
+                                  (0, 98, 20, 15))])
+
+    def kx(t, a, c, tipo, ent, sal, stock):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": tipo, "CANT INGRESO": ent,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
+    kardex = pd.DataFrame([kx("2026-09-27 14:00", 6, 95, "99", 8, 0, 47.05),
+                           kx("2026-09-27 14:00", 0, 95, "99", 0, 8, 0),
+                           kx("2026-09-27 14:00", 0, 95, "01", 8, 0, 8),
+                           kx("2026-10-06 14:00", 0, 95, "01", 10.2, 0, 10.2),
+                           kx("2026-09-25 13:00", 2, 96, "95", 0, 2, -2)])
+    vacia = lambda *cols: pd.DataFrame(columns=list(cols))
+    rv = vacia("ITEM VENTA ACTIVO", "RV ACTIV", "DESCARG", "COD PLATO", "NOMB PLATO", "COD INS",
+               "CANTIDAD", "FACTOR", "SUBALM INS", "T DESCARG", "FECH MODIF")
+    rb = vacia("RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO", "CANT",
+               "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG")
+    carta = vacia("TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA")
+    porc = vacia("COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT", "PROD INICIAL",
+                 "COD PORC", "FEC REGIST", "CANT A PORCIONAR")
+    ordenes = vacia("NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO", "CANTIDAD")
+    venta = vacia("producto", "dia", "unidades", "costo", "unidades_costeadas")
+    reqs = pd.DataFrame([
+        {"CODIGO PRODUCTO": f"{c:07d}", "SUB ALMACEN": a, "FECHA REGISTRO": pd.Timestamp(f),
+         "COD REQUERIMIENTO": n, "NOMBRE ESTADO REQUERIMIENTO": e, "CANTIDAD": q}
+        for c, a, f, n, e, q in (
+            (95, "PRODUCCION", "2026-09-27 14:42", "R1", "PROCESADO", 8.0),
+            (95, "PRODUCCION", "2026-09-15 13:31", "R2", "PROCESADO", 19.5),
+            (95, "COCINA", "2026-09-15 09:01", "R3", "PROCESADO", 12.0),
+            (95, "PRODUCCION", "2026-10-06 14:03", "R4", "PROCESADO", 10.2),
+            (98, "BARRA", "2026-09-30 10:00", "R5", "GENERADO", 5.0))])
+    sunat = pd.DataFrame([
+        {"doc": d, "ruc": "20000000001", "prov": "PROVEEDOR S.A.C.",
+         "fecha": pd.Timestamp(f), "descripcion": ds, "cantidad": q, "unidad": u}
+        for d, f, ds, q, u in (
+            ("E001-3599", "2026-09-20", "CAELUM VINO TINTO MALBEC TERROIRS 750ML", 12.0, "unidad"),
+            ("FC01-115", "2026-09-20", "AJI AMARILLO", 2.0, "kg"))])
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta,
+                    requerimientos=reqs, sunat=sunat)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+
+    def pistas(a, c):
+        return F[de[(a, c)]["id"]]["pistas"]
+
+    # 1 — quién lo pide
+    check("lo pedido por área en 90 días, sin lo de después del conteo",
+          [(a, q, n, w) for a, q, n, _f, w in F[de[(6, "95")]["id"]]["pide"]],
+          [("PRODUCCION", 27.5, 2, 8.0), ("COCINA", 12.0, 1, 0.0)])
+    check("la última compra es la de ANTES del conteo, no la que llegó después",
+          F[de[(6, "95")]["id"]]["viene"]["compra"], pd.Timestamp("2026-09-27 14:00"))
+    check("ninguna receta lo usa, y lo pide Producción",
+          [("Produccion lo pidió por requerimiento: 27.5 kg en 2 requerimientos" in p["tx"])
+           for p in pistas(6, "95") if p["t"] == "nadie"], [True])
+    # 2 — la factura sin ingresar
+    check("el sobrante que nombra una factura sin ingresar, con la misma cantidad",
+          [(p["t"], p["f"]) for p in pistas(2, "96")][:1], [("sunat", 1)])
+    check("y dice qué factura es", "E001-3599" in pistas(2, "96")[0]["tx"], True)
+    check("«ají amarillo en polvo» no es «ají amarillo»",
+          [p["t"] for p in pistas(6, "97") if p["t"] == "sunat"], [])
+    check("las palabras: sin tildes, sin paréntesis, los números aparte",
+          da.palabras("(Rs) Chocolate 72% Cacao x Kg"),
+          (frozenset({"chocolate", "cacao"}), frozenset({"72"})))
+    check("un número distinto no empareja",
+          da.parecido(da.palabras("Chocolate 60% Cacao"),
+                      da.palabras("CHOCOLATE AL 45% DE CACAO CON LECHE")), None)
+    check("ni un prefijo parecido", da.parecido(da.palabras("Membrillo"),
+                                                da.palabras("MEMBRESIA PLUXEE")), None)
+    # 3 — el requerimiento sin procesar
+    check("falta en el Almacén lo que Barra pidió y nadie procesó",
+          [(p["t"], p["f"]) for p in pistas(0, "98") if p["t"] == "req"], [("req", 1)])
+    return fallos
+
+
+def _pruebas_diferencias_area_descargo():
+    """Ajuste › «Análisis de diferencias», el ÁREA DE DESCARGO (regla #654),
+    con el caso real del cierre de setiembre 2026: Cocina Personal descontó
+    54 Pollito bb confitado —los 54 Pollito Bebe Tostado vendidos— sin
+    recibirlo nunca, y el 7 oct esa receta pasó a descargarlo desde Cocina.
+    Con las recetas de HOY, desde Cocina Personal sólo saldrían los 25 del
+    Sarten (50 × 0,5): la pista lo dice, nombra el plato editado y el área
+    de antes. Y no acusa cuando lo que salió calza con las recetas de hoy.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #654 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #654 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {1: "COCINA", 10: "COCINA PERSONAL"}
+
+    def fila(t, a, c, n, s, k):
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "ALIMENTOS", "SUBFAMILIA": "AVES",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": "UND",
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": 14.7, "AJUSTE VALORIZADO": (k - s) * 14.7}
+    t0, t1 = "2026-09-02 10:00", "2026-10-01 17:35"
+    n60, n61 = "(Rb) Pollito bb confitado x und (parrilla)", "Pato confitado x und"
+    ajuste = pd.DataFrame([fila(t0, 10, 60, n60, 0, 0), fila(t0, 1, 61, n61, 0, 0),
+                           fila(t1, 10, 60, n60, -54, 0), fila(t1, 1, 61, n61, -10, 0)])
+
+    def kx(t, a, c, sal, stock):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": "95", "CANT INGRESO": 0.0,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
+    kardex = pd.DataFrame([kx("2026-09-20 09:00", 10, 60, 54.0, -54.0),
+                           kx("2026-09-20 09:00", 1, 61, 10.0, -10.0)])
+    rv = pd.DataFrame([
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+         "COD PLATO": f"{cp:07d}", "NOMB PLATO": pl, "COD INS": f"{ci:07d}", "CANTIDAD": q,
+         "FACTOR": 1.0, "SUBALM INS": ar, "T DESCARG": "PRODUCTO",
+         "FECH MODIF": pd.Timestamp(fm)}
+        for cp, pl, ci, q, ar, fm in (
+            (701, "Pollito Bebe Tostado", 60, 1.0, "COCINA", "2026-10-07 09:19"),
+            (702, "Sarten de Arroz con Pollo", 60, 0.5, "COCINA PERSONAL", "2026-05-01"),
+            (703, "Pato a la brasa", 61, 1.0, "COCINA", "2026-10-07 09:00"))])
+    vacia = lambda *cols: pd.DataFrame(columns=list(cols))
+    rb = vacia("RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO", "CANT",
+               "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG")
+    carta = vacia("TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA")
+    porc = vacia("COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT", "PROD INICIAL",
+                 "COD PORC", "FEC REGIST", "CANT A PORCIONAR")
+    ordenes = vacia("NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO", "CANTIDAD")
+    venta = pd.DataFrame([
+        {"producto": f"{cp:07d}", "dia": pd.Timestamp("2026-09-19"), "unidades": u,
+         "costo": 0.0, "unidades_costeadas": 0.0}
+        for cp, u in ((701, 54.0), (702, 50.0), (703, 10.0))])
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+    p60 = [p for p in F[de[(10, "60")]["id"]]["pistas"] if p["t"] == "desc"]
+    check("se descontó desde un área a la que ya no apunta su receta",
+          [(p["ti"], p["f"]) for p in p60], [("Se descontó desde otra área", 1)])
+    check("nombra el plato editado y el área de hoy",
+          "Pollito Bebe Tostado se editó el 7 oct y hoy lo descarga desde Cocina" in p60[0]["tx"],
+          True)
+    check("y que con las recetas de hoy desde aquí saldrían 25",
+          "desde aquí saldrían 25 (Sarten de Arroz con Pollo)" in p60[0]["tx"], True)
+    check("no acusa cuando lo que salió calza con las recetas de hoy",
+          [p["t"] for p in F[de[(1, "61")]["id"]]["pistas"] if p["t"] == "desc"], [])
+    return fallos
+
+
+def _pruebas_diferencias_perfil():
+    """Ajuste › «Análisis de diferencias», el PERFIL DE SALIDA (regla #650, el anexo del perfil):
+    cómo salió cada producto en los 180 días antes de la sesión decide qué se
+    dice de lo que nada descargó, con los casos reales de setiembre 2026.
+
+      1. LO QUE SALE POR NOTAS: la zanahoria sale por «Comida Personal» (1 kg
+         por día) y entre los dos conteos no se registró ninguna: lo que falta
+         calza, pista fuerte. Las bolsas al vacío salen sólo por «Uso en el
+         Area»: «Sale sólo por notas», no «Ninguna receta lo usa».
+      2. LO QUE EL KARDEX DESCUENTA SIN RECETA: los bowls no están en ninguna
+         receta y el kardex los descuenta por ventas: «Se descuenta sin
+         receta visible», posible.
+      3. NADA EN 180 DÍAS: «Ninguna receta lo usa», como antes.
+      4. UNA BEBIDA que no se vendió no «falta en una receta»: el consejo es
+         el de las bebidas, y dice que antes sí se vendía.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #650 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #650 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {1: "COCINA", 2: "CAVA", 6: "PRODUCCION"}
+    PROD = {70: ("Bolsas Al Vacio 20x33x70", "UND", 0.13, "ENVASES Y EMBALAJES"),
+            71: ("Zanahoria", "KILOS", 2.0, "ALIMENTOS"),
+            72: ("Bowl Ensaladera Bio 1300 Ml", "UND", 1.0, "ENVASES Y EMBALAJES"),
+            73: ("Hueso De Pollo", "KILOS", 4.0, "ALIMENTOS"),
+            74: ("Varietal Malbec Roble 750ml", "UND", 55.0, "VINOS Y ESPUMANTES")}
+
+    def fila(t, a, c, s, k):
+        n, u, p, fam = PROD[c]
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": fam, "SUBFAMILIA": "VARIOS",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": u,
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": p, "AJUSTE VALORIZADO": (k - s) * p}
+    t0, t1 = "2026-09-16 17:30", "2026-10-01 17:35"
+    lineas = ((1, 70, 500, 200), (6, 71, 30, 16), (1, 72, 50, 30), (6, 73, 40, 0), (2, 74, 6, 0))
+    ajuste = pd.DataFrame([fila(t0, a, c, s, s) for a, c, s, _ in lineas]
+                          + [fila(t1, *x) for x in lineas])
+
+    def kx(t, a, c, tipo, sal):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": tipo, "CANT INGRESO": 0.0,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": 0.0}
+    # La historia: los 180 días antes de la sesión (desde el 4 abr).
+    kardex = pd.DataFrame([kx("2026-06-15 10:00", 1, 70, "98", 1750.0),
+                           kx("2026-06-15 10:00", 6, 71, "98", 180.0),
+                           kx("2026-06-15 10:00", 1, 72, "95", 1190.0),
+                           kx("2026-06-15 10:00", 2, 74, "95", 23.0)])
+    salidas = pd.DataFrame([
+        {"NOMBRE ESTADO SALIDA": "PROCESADO", "AREA": a, "COD PRODUCTO": f"{c:07d}",
+         "FECHA PROCESADO": pd.Timestamp("2026-06-15 10:00"), "CANT SALIDA": q,
+         "TIPO DESCARGO": tp}
+        for a, c, q, tp in (("COCINA", 70, 1750.0, "Uso en el Area"),
+                            ("PRODUCCION", 71, 180.0, "Comida Personal"))])
+    rv = pd.DataFrame([
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+         "COD PLATO": "0000801", "NOMB PLATO": "(Bt) Varietal Malbec Roble",
+         "COD INS": "0000074", "CANTIDAD": 1.0, "FACTOR": 1.0, "SUBALM INS": "CAVA",
+         "T DESCARG": "PRODUCTO", "FECH MODIF": pd.Timestamp("2026-05-01")},
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+         "COD PLATO": "0000802", "NOMB PLATO": "Ensalada de la casa",
+         "COD INS": "0000071", "CANTIDAD": 0.1, "FACTOR": 1.0, "SUBALM INS": "PRODUCCION",
+         "T DESCARG": "PRODUCTO", "FECH MODIF": pd.Timestamp("2026-05-01")}])
+    vacia = lambda *cols: pd.DataFrame(columns=list(cols))
+    rb = vacia("RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO", "CANT",
+               "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG")
+    carta = vacia("TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA")
+    porc = vacia("COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT", "PROD INICIAL",
+                 "COD PORC", "FEC REGIST", "CANT A PORCIONAR")
+    ordenes = vacia("NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO", "CANTIDAD")
+    venta = vacia("producto", "dia", "unidades", "costo", "unidades_costeadas")
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, salidas, venta)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+
+    def pistas(a, c):
+        return [(p["t"], p["ti"], p["f"]) for p in F[de[(a, c)]["id"]]["pistas"]]
+
+    # 1 — lo que sale por notas
+    check("la zanahoria suele salir por comida de personal, y esta vez no",
+          [p for p in pistas(6, "71") if p[0] == "uso"],
+          [("uso", "Suele salir por «Comida Personal»", 1)])
+    check("el perfil en la ficha, con el tipo de nota",
+          F[de[(6, "71")]["id"]]["perfil"]["notas"], [["Comida Personal", 180.0]])
+    check("las bolsas salen sólo por notas",
+          [p[1] for p in pistas(1, "70") if p[0] == "nadie"], ["Sale sólo por notas"])
+    # 2 — lo que el kardex descuenta sin receta
+    check("los bowls se descuentan sin receta visible",
+          [p for p in pistas(1, "72") if p[0] == "nadie"],
+          [("nadie", "Se descuenta sin receta visible", 0)])
+    # 3 — nada en 180 días
+    check("sin salidas en 180 días: ninguna receta lo usa",
+          [p[1] for p in pistas(6, "73") if p[0] == "nadie"], ["Ninguna receta lo usa"])
+    # 4 — una bebida que no se vendió
+    vino = [p for p in F[de[(2, "74")]["id"]]["pistas"] if p["t"] == "nada"]
+    check("una bebida: «No se vendió nada que lo lleve»",
+          [p["ti"] for p in vino], ["No se vendió nada que lo lleve"])
+    check("con el consejo de las bebidas y lo que antes sí se vendía",
+          ("vendido con otro código" in vino[0]["tx"], "sí se vendió (23 und)" in vino[0]["tx"]),
+          (True, True))
     return fallos
 
 
@@ -7664,10 +9082,13 @@ def _pruebas_detalle_salidas():
           float(validas["VALOR NETO"].sum()),
           float(mp._validas(bl)["valor"].sum()))
     # El texto con que la tarjeta de salidas cuenta sus anuladas
-    # (`Lado.anulados`), sobre SU cuenta: la guarda compara contra ella.
+    # (`Lado.anulados`), sobre SU cuenta: la guarda compara contra ella. Va
+    # en la fila TOTAL («TOTAL · sin 2 anuladas», regla #641).
     check("cuenta las anuladas por salida, como la fila de KPI de su vecina",
-          nota[0], f"{mp.SALIDAS.anulados(mp.no_suman(bl)[0])} no suman")
+          nota[0], f"sin {mp.SALIDAS.anulados(mp.no_suman(bl)[0])}")
     check("el tooltip dice cuánto no suma", "S/ 30" in nota[1], True)
+    check("el tooltip nombra a la vecina como el rail",
+          "«Salidas por Período»" in nota[1], True)
     _sin_anuladas, _nota_vacia = mov.salidas_que_suman(
         d[d["COD SALIDA"] != "S2"].iloc[:2], col_estado="NOMBRE ESTADO SALIDA",
         col_prod="NOMBRE PRODUCTO", col_doc="COD SALIDA", col_val="VALOR NETO")
@@ -7734,6 +9155,166 @@ def _pruebas_detalle_salidas():
     check("«Top productos · salidas» ya no está",
           ("Top productos · salidas" in ids_rail
            or "Top productos · salidas" in ids_pila), False)
+    return fallos
+
+
+def _pruebas_requerimientos_por_area():
+    """Movimientos › «Requerimientos por Área» suma lo que «por Período»
+    (regla #641).
+
+    Hasta el 2026-10-11 la cadena de tablas sumaba también los anulados:
+    S/ 238.884 contra los 238.118 de su vecina en los mismos 30 días. Tres
+    cosas que se rompen sin que nada avise:
+
+      1. QUÉ SUMA. El total de `requerimientos_que_suman` tiene que ser el
+         de `_validas` de la tarjeta «por Período» para las mismas líneas
+         —sin anulados ni líneas sin producto—, y la nota tiene que contar
+         los anulados por CÓDIGO, como su fila de KPI.
+      2. LA FILA TOTAL. La nota va en el rótulo de la fila TOTAL del primer
+         cuadro (`tabla_ranking(nota_total=)`), con el largo de tooltip: en
+         el renglón del título, desde el botón de fecha (#617), a 1323px no
+         se veía. Se arma con un AgGrid de mentira que guarda lo que recibe.
+      3. EL CABLEADO. `_dib_cadena` le pasa a `seccion_cadena` lo que
+         devuelve `requerimientos_que_suman`, con su nota; y las dos
+         secciones de `drill_tablas` usan la nota SÓLO para la fila TOTAL
+         (si vuelve al título, vuelve a quedar fuera de la vista).
+    """
+    import ast
+    import inspect
+    import sys
+    import textwrap
+    import types
+
+    from graficos import drill_tablas as dt
+    from graficos import movimientos as mov
+    from graficos import movimientos_periodo as mp
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    requerimientos por área · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA requerimientos por área · {nombre}: "
+                  f"got={got!r} exp={exp!r}")
+
+    # ── 1) Qué suma ───────────────────────────────────────────────────────
+    # R1 de Cocina con dos líneas; R2 ANULADO con valor; R3 de GASTOS SIN
+    # ÍTEMS (la forma de los 57 de esos 30 días); R4 de Barra; R5 anulado Y
+    # sin ítems (cuenta como anulado, una sola vez).
+    d = pd.DataFrame({
+        "FECHA REGISTRO": pd.to_datetime(
+            ["2026-09-12 10:00", "2026-09-12 10:00", "2026-09-13 11:00",
+             "2026-09-14 12:00", "2026-09-15 09:00", "2026-09-16 10:00"]),
+        "COD REQUERIMIENTO": ["R1", "R1", "R2", "R3", "R4", "R5"],
+        "NOMBRE ESTADO REQUERIMIENTO": ["PROCESADO", "PROCESADO", "ANULADO",
+                                        "PROCESADO", "GENERADO", " anulado"],
+        "SUB ALMACEN": ["COCINA", "COCINA", "PRODUCCION", "GASTOS", "BARRA",
+                        "COCINA"],
+        "NOMBRE FAMILIA": ["ALIMENTOS", "ALIMENTOS", "ALIMENTOS", None,
+                           "BEBIDAS SIN ALCOHOL", None],
+        "NOMBRE PRODUCTO": ["A", "B", "C", None, "D", " "],
+        "CANTIDAD": [1.0, 2.0, 3.0, None, 4.0, None],
+        "VALOR ITEM": [10.0, 20.0, 30.0, None, 40.0, None],
+    })
+    validas, nota = mov.requerimientos_que_suman(
+        d, col_estado="NOMBRE ESTADO REQUERIMIENTO",
+        col_prod="NOMBRE PRODUCTO", col_doc="COD REQUERIMIENTO",
+        col_val="VALOR ITEM")
+    check("suma sin anulados ni líneas sin producto (el generado con ítems "
+          "sí suma)", sorted(validas["COD REQUERIMIENTO"]), ["R1", "R1", "R4"])
+    bl = mp.lineas_documentos(
+        d, fecha="FECHA REGISTRO", doc="COD REQUERIMIENTO", area="SUB ALMACEN",
+        estado="NOMBRE ESTADO REQUERIMIENTO", fam="NOMBRE FAMILIA",
+        prod="NOMBRE PRODUCTO", cant="CANTIDAD", val="VALOR ITEM")
+    check("el total es el de «Requerimientos por Período»",
+          float(validas["VALOR ITEM"].sum()),
+          float(mp._validas(bl, mp.REQUERIMIENTOS)["valor"].sum()))
+    check("cuenta los anulados por código, como la fila de KPI de su vecina",
+          nota[0],
+          f"sin {mp.REQUERIMIENTOS.anulados(mp.no_suman(bl, mp.REQUERIMIENTOS)[0])}")
+    check("el tooltip dice cuánto no suma y nombra a la vecina como el rail",
+          ("S/ 30" in nota[1], "«Requerimientos por Período»" in nota[1]),
+          (True, True))
+    _, _sin_nota = mov.requerimientos_que_suman(
+        d[d["COD REQUERIMIENTO"].isin(["R1", "R3"])],
+        col_estado="NOMBRE ESTADO REQUERIMIENTO", col_prod="NOMBRE PRODUCTO",
+        col_doc="COD REQUERIMIENTO", col_val="VALOR ITEM")
+    check("sin anulados en el recorte no hay nota (los sin ítems no se "
+          "nombran: valen cero)", _sin_nota, None)
+
+    # ── 2) La fila TOTAL ──────────────────────────────────────────────────
+    recibido = {}
+
+    def _aggrid_falso(tabla, gridOptions=None, **kw):
+        recibido["opciones"] = gridOptions
+        return types.SimpleNamespace(selected_rows=None)
+
+    st_aggrid = sys.modules.get("st_aggrid") or __import__("st_aggrid")
+    _original = st_aggrid.AgGrid
+    st_aggrid.AgGrid = _aggrid_falso
+    try:
+        for con_nota in (True, False):
+            dt.tabla_ranking(
+                validas, "SUB ALMACEN", "VALOR ITEM", "sub almacén",
+                key="prueba_rank_641", nota_total=nota if con_nota else None)
+            op = recibido["opciones"]
+            total = op["pinnedBottomRowData"][0]
+            col_nombre = op["columnDefs"][0]
+            if con_nota:
+                check("con nota, la fila TOTAL la dice",
+                      total["Sub almacén"], f"TOTAL · {nota[0]}")
+                check("y su tooltip es el largo (la fila lo lleva en `_tip`)",
+                      (total.get("_tip"), "tooltipValueGetter" in col_nombre),
+                      (nota[1], True))
+                check("el TOTAL suma lo que suma la vista",
+                      total["Valorizado"], 70.0)
+            else:
+                check("sin nota, la fila TOTAL y su tooltip como siempre",
+                      (total["Sub almacén"], "_tip" in total,
+                       col_nombre.get("tooltipField")),
+                      ("TOTAL", False, "Sub almacén"))
+    finally:
+        st_aggrid.AgGrid = _original
+
+    # ── 3) El cableado ────────────────────────────────────────────────────
+    arbol = ast.parse(textwrap.dedent(
+        inspect.getsource(mov.renderizar_graficos_movimientos)))
+    dib = next((n for n in ast.walk(arbol) if isinstance(n, ast.FunctionDef)
+                and n.name == "_dib_cadena"), None)
+    asign = [n for n in ast.walk(dib) if isinstance(n, ast.Assign)
+             and isinstance(n.value, ast.Call)
+             and getattr(n.value.func, "id", None) == "requerimientos_que_suman"]
+    llamadas = [n for n in ast.walk(dib) if isinstance(n, ast.Call)
+                and getattr(n.func, "attr", None) == "seccion_cadena"]
+    nombres = ([e.id for e in asign[0].targets[0].elts]
+               if asign and isinstance(asign[0].targets[0], ast.Tuple) else [])
+    if len(nombres) == 2 and len(llamadas) == 1:
+        _c = llamadas[0]
+        _kw = {k.arg: k.value for k in _c.keywords}
+        check("`_dib_cadena` le pasa a la cadena lo que suma y su nota",
+              (getattr(_c.args[0], "id", None),
+               getattr(_kw.get("nota"), "id", None)), tuple(nombres))
+    else:
+        fallos += 1
+        print("FALLA requerimientos por área · `_dib_cadena` no arma "
+              "`validas, nota = requerimientos_que_suman(...)` ni llama una "
+              "vez a `seccion_cadena`")
+
+    fuente_dt = ast.parse(inspect.getsource(dt))
+    for fn in ("seccion_cadena", "seccion_cuadros"):
+        nodo = next(n for n in fuente_dt.body
+                    if isinstance(n, ast.FunctionDef) and n.name == fn)
+        usos = [n for n in ast.walk(nodo) if isinstance(n, ast.Name)
+                and n.id == "nota" and isinstance(n.ctx, ast.Load)]
+        al_total = [k for n in ast.walk(nodo) if isinstance(n, ast.Call)
+                    and getattr(n.func, "id", None) == "tabla_ranking"
+                    for k in n.keywords if k.arg == "nota_total"
+                    and getattr(k.value, "id", None) == "nota"]
+        check(f"`{fn}` usa la nota sólo para la fila TOTAL",
+              (len(al_total), len(usos)), (1, 1))
     return fallos
 
 
@@ -8360,8 +9941,10 @@ def _pruebas_costo_recetas_base():
     # ── El rail: el orden y los nombres que se pidieron (2026-09-30) ──────
     visibles = [v for _cat, vistas in rec._RAIL_CATEGORIAS for v in vistas
                 if not v[1].startswith("Tabla")]
+    # «Alza Insumo» se sumó el 2026-10-15, al lado de la carta (regla #656).
     check("el rail, en el orden pedido",
-          [v[1] for v in visibles], ["Costo Carta", "Costo Recetas Base", "Revisar", "Nuevo Costeo"])
+          [v[1] for v in visibles],
+          ["Costo Carta", "Alza Insumo", "Costo Recetas Base", "Revisar", "Nuevo Costeo"])
     check("la pila, en el mismo orden",
           [s for _k, s in rec._PILA if not s.startswith("Tabla")],
           [v[0] for v in visibles])
@@ -8883,17 +10466,16 @@ def _pruebas_carta_costeada():
     check("sin resumen de ventas la vista sigue, en cero",
           (cc.con_ventas(t, None)[1], float(cc.con_ventas(t, None)[0]["Vendidos"].sum())),
           (None, 0.0))
-    # La ventana de «Vendidos» se elige (regla #572): con 30 días, lo del
-    # 1 de julio queda fuera y lo del 27 de setiembre dentro.
-    t30, r30 = cc.con_ventas(t, agg, cc.VENTANAS_VENDIDOS["30 días"])
+    # Los días de lo vendido (los de «¿Y si sube un insumo?»; la Carta
+    # elige un rango con su fecha, regla #657): con 30 días, lo del 1 de
+    # julio queda fuera y lo del 27 de setiembre dentro.
+    t30, r30 = cc.con_ventas(t, agg, 30)
     check("con 30 días, sólo lo vendido en esos 30",
           (r30, float(t30.set_index("Cod").loc["0000010", "Vendidos"])),
           ((date(2026, 8, 29), date(2026, 9, 27)), 3.0))
-    t365, _ = cc.con_ventas(t, agg, cc.VENTANAS_VENDIDOS["1 año"])
+    t365, _ = cc.con_ventas(t, agg, 365)
     check("con un año, también lo de junio",
           float(t365.set_index("Cod").loc["0000010", "Vendidos"]), 105.0)
-    check("la ventana por defecto sigue en 90 días",
-          cc.VENTANAS_VENDIDOS["90 días"], cc.DIAS_VENDIDOS)
     # Lo vendido puede llegar ya cargado o como la función que lo carga
     # (regla #573): cargado, pasa tal cual.
     check("lo vendido ya cargado pasa tal cual",
@@ -8915,26 +10497,22 @@ def _pruebas_carta_costeada():
     check("el mes se escribe en castellano", cc._etiqueta_mes(pd.Period("2026-09")),
           "set 26")
 
-    # Las columnas de la tabla (regla #570): primero lo que ubica al
-    # producto, y lo que no hace falta para decidir, detrás de «Más
-    # columnas» — sin eso no entra el producto elegido al costado.
+    # Las columnas de la tabla: primero lo que ubica al producto, y desde la
+    # regla #657 TODAS —antes la mitad iba detrás de «Más columnas»—.
     base = cc.columnas_carta()
     check("la tabla empieza por Grupo, Subgrupo y Producto", base[:3],
           ["Grupo", "Subgrupo", "Producto"])
-    # «P. neto» se sumó a las opcionales en la regla #574.
-    _opcionales = {"Tipo", "Actualizado", "UltimaVenta", "Margen", "Vendidos",
-                   "Neto"}
-    check("sin «Más columnas» no están las seis opcionales",
-          sorted(_opcionales & set(base)), [])
-    check("con «Más columnas» están las seis",
-          sorted(_opcionales - set(cc.columnas_carta(mas=True))), [])
+    _todas = {"Tipo", "Actualizado", "UltimaVenta", "Margen", "Vendidos",
+              "Neto", "VendidoNeto", "PctVendido", "SinCostoNeto", "Oferta"}
+    check("están todas, también las que antes se escondían",
+          sorted(_todas - set(base)), [])
     check("y todas existen en la carta preparada",
-          sorted(set(cc.columnas_carta(mas=True)) - set(tv.columns)
-                 - {"Actualizado"}), [])
+          sorted(set(base) - set(tv.columns) - {"Actualizado"}), [])
     check("en el teléfono el nombre va primero",
           cc.columnas_carta(movil=True)[:3], ["Producto", "Grupo", "Subgrupo"])
-    check("sin ventas no hay «Vendidos», ni con «Más columnas»",
-          "Vendidos" in cc.columnas_carta(mas=True, con_ventas_=False), False)
+    check("sin ventas no hay lo vendido",
+          sorted(set(cc.COLUMNAS_RANGO) & set(cc.columnas_carta(con_ventas_=False))),
+          [])
     check("la banda de los combos existe en la carta preparada",
           sorted(set(cc._BANDA) - set(t.columns)), [])
 
@@ -8982,9 +10560,6 @@ def _pruebas_carta_costeada():
     check("marca la receta base que tiene adentro", list(tb["EsBase"]), [True, False])
     check("el % es sobre el total de la receta base",
           round(float(tb["%"].sum()), 6), 100.0)
-    fil = cc._filas_clic(tb, bases)
-    check("abrir la de adentro: su escala es su cantidad ÷ su factor",
-          round(fil[0]["escala"], 6), 0.12)
     check("un artículo sin receta base, tabla vacía",
           (cc.receta_base(rb, "0000460", 1.0, bases).empty,
            cc.receta_base(None, "0003215").empty, cc.codigos_base(None)),
@@ -9021,13 +10596,6 @@ def _pruebas_carta_costeada():
           (cc.costo_de_origen(1.705, 0.034, 1.705), cc.costo_de_origen(21.0, 21.0, 28.0),
            cc.costo_de_origen(5.0, None, 4.0), cc.costo_de_origen(5.0, None, None)),
           ("porc", "base", "porc", None))
-    fp = cc._filas_clic(pd.DataFrame({"Cod": ["0004117", "0000460"],
-                                      "Insumo": ["(P) Pesca", "Sal"],
-                                      "Cantidad": [1.0, 3.0], "Factor": [1.0, 1000.0],
-                                      "Costo": [26.78, 0.01]}),
-                        frozenset(), cc.codigos_porcionados(po))
-    check("un porcionado se puede abrir; un insumo de compra, no",
-          [cc._abre(x) for x in fp], [True, False])
 
     rv = pd.DataFrame({"COD PLATO": ["0000010", "0000010", "0000030"],
                        "FECH MODIF": pd.to_datetime(["2022-09-23", "2022-09-23",
@@ -10117,8 +11685,12 @@ def _pruebas_movimientos_periodo():
 
     from graficos import alturas
     from graficos.compras._comun import _periodo_serie
+    import pathlib
+
     from graficos import movimientos_periodo as mp
-    from tema import GRIS_TEXTO_SUAVE, PALETA_SERIES
+    from tema import (
+        GRIS_TEXTO_SUAVE, PALETA_SERIES, SERIE_PRINCIPAL, SERIE_TRAMOS,
+    )
 
     fallos = 0
 
@@ -10242,15 +11814,69 @@ def _pruebas_movimientos_periodo():
           fr.loc[fr["codigo"] == "R1", "registro"].tolist(),
           ["2026-09-07 10:00"])
 
+    # La barra es LISA con UNA parte resaltada (regla #649, la receta de
+    # «Compras por período»): sin resaltar, una barra del color de la serie
+    # y, encima, la capa transparente que lleva hover, clic y etiqueta.
     fig = mp.figura_periodos(v, alturas.COMPACTO, titulo="t", foco="2026-S37")
-    check("figura: un trazo por tramo y sin leyenda (la fila de KPI lo es)",
-          (len(fig.data), fig.layout.showlegend), (4, False))
-    check("figura: la etiqueta va en el tramo de más arriba con valor",
-          [i for i, t in enumerate(fig.data) if t.text and t.text[1]], [3])
+    check("figura: sin resaltar, la barra lisa y la capa de arriba, sin "
+          "leyenda (la fila de KPI lo es)",
+          (len(fig.data), fig.layout.showlegend, fig.layout.barmode,
+           fig.data[-1].marker.color, fig.data[0].hoverinfo),
+          (2, False, "overlay", "rgba(0,0,0,0)", "skip"))
+    check("figura: la etiqueta va en la capa, no en las franjas",
+          [i for i, t in enumerate(fig.data) if t.text and t.text[1]], [1])
     check("figura: el foco atenúa las otras barras por COLOR",
           isinstance(fig.data[0].marker.color, tuple)
-          and fig.data[0].marker.color[0] == PALETA_SERIES[1]
+          and fig.data[0].marker.color[0] == SERIE_PRINCIPAL
           and fig.data[0].marker.color[1].startswith("rgba("), True)
+    fr_ = mp.figura_periodos(v, alturas.COMPACTO, resaltado="COCINA")
+    _coc = next(t[2] for t in tr if t[0] == "COCINA")
+    check("figura: la parte resaltada va en el piso, oscura, y lo demás de "
+          "la barra encima, en lavanda",
+          (len(fr_.data), list(fr_.data[0].y), fr_.data[0].marker.color,
+           list(fr_.data[1].base), fr_.data[1].marker.color),
+          (3, _coc, SERIE_TRAMOS[0], _coc, SERIE_TRAMOS[2]))
+    check("figura: la barra resaltada cierra con su total",
+          [round(a + b, 2) for a, b in zip(fr_.data[0].y, fr_.data[1].y)],
+          [450.0, 55.0])
+    _hov = " ".join(str(cd[1]) for cd in fr_.data[-1].customdata)
+    check("figura: el hover nombra TODAS las partes, la resaltada en "
+          "negrita y el «Resto» contado como en la fila de KPI",
+          ("<b>Cocina: S/" in _hov, "<br>Produccion: S/" in _hov,
+           "2 áreas más" in _hov, "Resto" in _hov),
+          (True, True, True, False))
+    check("figura: el detalle del hover sigue en customdata[3]",
+          "req." in str(fr_.data[-1].customdata[0][3]), True)
+    check("figura: un tramo que no existe deja la barra lisa",
+          len(mp.figura_periodos(v, alturas.COMPACTO,
+                                 resaltado="NO EXISTE").data), 2)
+    check("resaltables: los tramos con nombre, sin «Resto»",
+          mp.resaltables(v), ["PRODUCCION", "COCINA", "BARRA"])
+    check("resaltables: con un solo tramo no hay qué resaltar",
+          mp.resaltables({"trazas": [("COCINA", SERIE_PRINCIPAL, [1.0])]}), [])
+    _est = {}
+    _ops = ["PRODUCCION", "COCINA"]
+    check("lo resaltado abre en el mayor de la vista",
+          mp.resaltado_vigente(_est, mp.PARTIR_AREA, _ops), "PRODUCCION")
+    _est[mp.PARTIR_AREA] = None
+    check("…soltado (None), se respeta",
+          mp.resaltado_vigente(_est, mp.PARTIR_AREA, _ops), None)
+    _est[mp.PARTIR_AREA] = "BARRA"
+    check("…si lo elegido dejó de estar, vuelve al mayor",
+          mp.resaltado_vigente(_est, mp.PARTIR_AREA, _ops), "PRODUCCION")
+    check("…y una entrada por forma de partir",
+          (mp.resaltado_vigente(_est, mp.PARTIR_TIPO, ["Bajas"]),
+           _est[mp.PARTIR_AREA]), ("Bajas", "PRODUCCION"))
+    _kr = mp._html_kpi(505.0, 5, tr, pd.Series([1.0] * 5), None,
+                       mp.REQUERIMIENTOS, resaltables=mp.resaltables(v),
+                       resaltado="COCINA")
+    check("fila de KPI: los tramos son botones y el resaltado va apretado; "
+          "el «Resto» no se resalta",
+          ('data-res="COCINA" aria-pressed="true"' in _kr,
+           'data-res="PRODUCCION" aria-pressed="false"' in _kr,
+           'data-res="Resto"' in _kr, "2 áreas más" in _kr,
+           "background:" in _kr),
+          (True, True, False, True, False))
     for gran in ("Día", "Mes", "Año"):
         _l = base.copy()
         _l["clave"] = _periodo_serie(_l["fecha"], gran)
@@ -10261,6 +11887,16 @@ def _pruebas_movimientos_periodo():
             check(f"figura en {gran}", True, True)
         except Exception as e:  # que se vea el tipo
             check(f"figura en {gran}", f"{type(e).__name__}: {e}", True)
+
+    import ast as _ast
+    _arbol = _ast.parse(pathlib.Path(mp.__file__).read_text(encoding="utf-8"))
+    _llamadas = [n for n in _ast.walk(_arbol)
+                 if isinstance(n, _ast.Call)
+                 and getattr(n.func, "id", None) == "figura_periodos"]
+    check("la tarjeta le pasa `resaltado=` a la figura (#649)",
+          bool(_llamadas) and all(
+              any(kw.arg == "resaltado" for kw in c.keywords)
+              for c in _llamadas), True)
 
     # ── SALIDAS: el mismo código, el otro lado ───────────────────────────
     # S1 de Cocina (Bajas) con dos líneas, S2 de Cocina personal (Comida
@@ -10401,6 +12037,13 @@ def _pruebas_movimientos_periodo():
           (True, True, False))
     check("porc.: el hover cuenta porcionamientos y cortes",
           "2 porc. · 4 cortes" in str(fig_p.data[-1].customdata[0][3]), True)
+    _fpr = mp.figura_periodos(vp, alturas.SEMANAL_SOLO,
+                              resaltado=vp["trazas"][0][0])
+    _etq_r = " ".join(t for t in (_fpr.data[-1].text or []) if t)
+    check("porc.: con una parte resaltada el 2º renglón sigue siendo el % "
+          "de merma (#510, #649)",
+          (len(_fpr.data), "20% merma" in _etq_r, "25% merma" in _etq_r),
+          (3, True, True))
     amb_p = bp[bp["clave"] == "2026-S37"]
     check("porc.: el Detalle abre en el de mayor merma", mp._mayor_valido(amb_p),
           "P1")
@@ -10690,6 +12333,7 @@ def main():
 
     # ── Movimientos: cada vista con su propia fecha (regla #617) ─────────
     fallos += _pruebas_fecha_por_vista()
+    fallos += _pruebas_ajustes_compartidos()
 
     # ── Compras por período: «Partir por» (regla #620) ───────────────────
     fallos += _pruebas_partir_por()
@@ -10709,6 +12353,7 @@ def main():
 
     # ── Inventario › Productos: el grano y el despliegue de áreas ────────
     fallos += _pruebas_listado_inventario()
+    fallos += _pruebas_analisis_stock()
     fallos += _pruebas_inventario_activos()
     fallos += _pruebas_kardex()
 
@@ -10742,8 +12387,17 @@ def main():
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()
-    fallos += _pruebas_salidas_comparar_y_destino()
+    fallos += _pruebas_requerimientos_por_area()
+    fallos += _pruebas_salidas_comparar()
+    fallos += _pruebas_sin_plato()
+    fallos += _pruebas_diferencias_ajuste()
+    fallos += _pruebas_diferencias_combos()
+    fallos += _pruebas_diferencias_req_sunat()
+    fallos += _pruebas_diferencias_area_descargo()
+    fallos += _pruebas_diferencias_perfil()
     fallos += _pruebas_merma()
+    fallos += _pruebas_cortes_y_peso()
+    fallos += _pruebas_rastro_proveedor()
 
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
     fallos += _pruebas_carta_costeada()
@@ -10768,11 +12422,8 @@ def main():
     # ── Grilla horizontal: que todas las filas partan en el mismo sitio ──
     fallos += _pruebas_grilla_horizontal()
 
-    # ── Drill Familia › Subfamilia › Producto: que los 3 niveles cuadren ─
-    fallos += _pruebas_drill_familia_subfamilia()
-
-    # ── Lo que dice cada barra de la Evolución de Producto ──────────────
-    fallos += _pruebas_etiqueta_barras_producto()
+    # ── Producto: la lista cuadra, y la marca «revisar» no entra al precio
+    fallos += _pruebas_producto_lista_y_ficha()
 
     # ── Compras: que no vuelvan los bucles por grupo (regla #537) ───────
     fallos += _pruebas_compras_sin_bucles_por_grupo()
@@ -10803,6 +12454,7 @@ def main():
 
     # ── El simulador de receta: que nadie vuelva a ordenar el borrador ─
     fallos += _pruebas_simulador_receta()
+    fallos += _pruebas_costo_carta_ficha()
 
     # ── Nuevo Costeo: lo que el almacén todavía no tiene (#597) ─────────
     fallos += _pruebas_articulos_nuevos()

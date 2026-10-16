@@ -324,6 +324,38 @@ def seleccion_en_panel(widget, rotulo, clave, opciones, **kw):
                   on_change=_copiar, **kw)
 
 
+def eleccion_compartida(clave, rotulo, opciones, defecto, wprefijo,
+                        recarga=None, **kw):
+    """`st.segmented_control` de UNA opción cuyo valor vive en `clave` y se
+    dibuja en VARIOS sitios: al pie del panel de fecha de cada vista que
+    gobierna, o en cada tarjeta (regla #644). Devuelve el valor vigente.
+
+    Un widget por sitio, porque dos no pueden compartir key; y la key de
+    cada uno lleva el VALOR (`{wprefijo}_{valor}`): cambiado en una vista,
+    el de la vecina —que puede estar en un popover cerrado, que no se entera
+    de lo que Python le escribe (#467)— nace de nuevo con el valor nuevo.
+    `recarga` es la clave que se enciende al cambiar, para pedir una corrida
+    completa: el widget vive en el fragment de UNA sección y el valor manda
+    sobre varias."""
+    actual = st.session_state.get(clave, defecto)
+    if actual not in opciones:
+        actual = defecto
+    wkey = f"{wprefijo}_{_slug(actual)}"
+
+    def _copiar():
+        v = st.session_state.get(wkey)
+        if v in opciones and v != actual:
+            st.session_state[clave] = v
+            if recarga:
+                st.session_state[recarga] = True
+
+    st.segmented_control(rotulo, list(opciones), default=actual,
+                         required=True, key=wkey,
+                         label_visibility="collapsed", on_change=_copiar,
+                         **kw)
+    return actual
+
+
 def seleccion_multiple(key, opciones, conservar=False, soltar=()):
     """`(elegidos, opciones)` de un `st.multiselect` de FILTRO en la fila de
     una tarjeta, leídos ANTES de dibujarlo (regla #625).
@@ -960,7 +992,8 @@ def ctx_rango_propio(ctx=None):
 
 
 def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
-                           label=None, categoria=None, ctx=None, pie=None):
+                           label=None, categoria=None, ctx=None, pie=None,
+                           pie_al_costado=False):
     """Trigger + panel de fecha para UNA tarjeta, en cualquier dashboard.
 
     El TRIGGER es el atajo vigente y sus fechas («Últimos 30 días · 8 set –
@@ -1018,6 +1051,13 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
     del panel: un ajuste de cómo se leen las fechas que tiene sentido al lado
     de ellas —«Mes del cierre» de Ajuste, regla #632—. Callable por lo mismo
     que `extra`: el contenedor se elige entrando en él.
+
+    `pie_al_costado` lo pone a la DERECHA del panel y no debajo (regla
+    #644): el panel con atajos mide ~400px y el popover tiene techo de 70vh
+    —433px en la pantalla del usuario, 619 de alto—, así que un pie de dos
+    ajustes debajo quedaba fuera de la vista, tras un scroll. Al costado el
+    popover se ensancha (~780px) y no crece; en una pantalla angosta el pie
+    baja solo (el contenedor envuelve).
     """
     ctx = ctx if ctx is not None else franja_fecha.contexto()
     if not ctx:
@@ -1065,11 +1105,15 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
             # tiempo con línea deslizante (reglas #211-#222, borrada en la
             # #618). El contenedor conserva su key, que es de donde cuelga
             # el CSS del popover.
-            with st.container(key=f"{clave}_escala_panel"):
-                panel_fecha(clave, ctx, bandera)
-            if pie is not None:
-                with st.container(key=f"{clave}_pie"):
-                    pie()
+            cuerpo = (st.container(key=f"{clave}_cuerpo", horizontal=True,
+                                   gap="medium")
+                      if pie is not None and pie_al_costado else nullcontext())
+            with cuerpo:
+                with st.container(key=f"{clave}_escala_panel"):
+                    panel_fecha(clave, ctx, bandera)
+                if pie is not None:
+                    with st.container(key=f"{clave}_pie"):
+                        pie()
     return ctx
 
 

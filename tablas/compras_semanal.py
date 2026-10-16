@@ -9,18 +9,16 @@ de barras por período. Las reparten DOS vistas.
   · «Resumen» — UNA grilla con una fila por BARRA del gráfico
     (`renderizar_periodos`), más su fila TOTAL.
 
-Y desde el 2026-09-20 la Evolución de Producto (graficos/compras/
-producto.py) alterna los mismos dos modos dentro de la tarjeta de su
-gráfico: reusa `renderizar_periodos` en su juego de anchos estrecho
-(`estrecha=True`, 433px contra los 1240 de allá) y tiene grilla propia para
-el detalle, `renderizar_compras_producto` — una fila por COMPRA, porque con
-el producto ya elegido cada comprobante trae una sola línea suya. El nombre
-del módulo quedó de cuando era de una sola vista; ver la regla #480.
+Desde el 2026-09-20 hasta el 2026-10-13 la Evolución de Producto
+(graficos/compras/producto.py) las usó también, con el juego de anchos
+estrecho de `renderizar_periodos` (`estrecha=True`) y dos grillas propias
+—una fila por compra y una por proveedor— que se borraron ese día: la
+ficha de Producto dibuja sus tablas en HTML, como la de Proveedor (regla
+#653). `estrecha` queda como opción de `renderizar_periodos`.
 
-Y desde el 2026-10-01/02 las dos vistas suman un tercer modo, «Resumen del
-Período», con una fila por PROVEEDOR: `renderizar_proveedores_periodo`
-(«Compras por período», regla #580) y `renderizar_proveedores_producto`
-(la Evolución de Producto, regla #581).
+Desde el 2026-10-01 «Compras por período» suma un tercer modo, «Resumen
+del Período», con una fila por PROVEEDOR: `renderizar_proveedores_periodo`
+(regla #580).
 
 Nacieron el 2026-09-14, a pedido: «que la tabla de abajo se divida en dos,
 una que muestre el documento, y al hacer clic muestre en otra tabla del
@@ -625,154 +623,6 @@ def renderizar_proveedores_periodo(tp, altura, key, total=None,
 
     # `update_on` sólo la selección, como la de documentos: ordenar no le
     # cuesta una corrida a nadie.
-    resp = AgGrid(
-        tp, gridOptions=grid_options, height=altura, theme="material",
-        custom_css=_css(), allow_unsafe_jscode=True, key=key,
-        update_on=["selectionChanged"],
-    )
-    sel = resp.selected_rows
-    if sel is not None and not sel.empty:
-        return str(sel.iloc[0]["__prov"])
-    return None
-
-
-def renderizar_compras_producto(tp, altura, key, total=None):
-    """Una fila por COMPRA del período en foco, para la Evolución de Producto.
-
-    Prima de `renderizar_documentos_semanal` y no la misma función, porque
-    la vista es otra: allá cada fila es un comprobante de un período con
-    MUCHOS productos, y lo que se cuenta son sus líneas; acá el producto ya
-    está elegido y cada comprobante trae UNA línea suya (medido sobre
-    `compras.parquet`: en los 1.295 grupos producto-mes del último
-    trimestre las líneas son exactamente los documentos). Así que «Líneas»
-    no dice nada y su sitio lo ocupan las dos columnas que acá sí importan:
-    cuánto se compró y a cuánto la unidad.
-
-    `tp` trae `fecha` (texto ISO), `prov`, `cant`, `punit` y `valor` en
-    crudo —el formato lo pone la grilla, para que se ordenen— más `__doc`,
-    que es el número de comprobante y viaja al TOOLTIP de la fecha en vez
-    de a una columna propia: en 433px una columna de 104 para «F001-4717»
-    se come el ancho del proveedor, y el número se mira de a uno.
-
-    EL ANCHO, MEDIDO como el de `_COLS_ESTRECHA`: las cuatro fijas suman
-    326 (fecha 92, cantidad 62, precio 72, valor 100) y el proveedor se
-    queda con los ~103 que sobran de los 429 del panel. Es la única de
-    texto libre y por eso la única que se estira, igual que en sus
-    hermanas; el nombre que no entra se corta con «…» y sale entero en el
-    tooltip. Hasta el 2026-10-02 la fecha medía 82 y el valor 84, y se
-    leían «01/09/20…» y, con una compra de cinco cifras, «S/ 11,80…»: la
-    fecha a 13px son ~70 más 8+8 de padding, y el valor lleva además la
-    flecha del orden (regla #581).
-
-    No devuelve nada y no tiene selección: es la hoja del camino. El foco
-    lo mueve el clic en la barra, que es de donde salen estas filas."""
-    gb = GridOptionsBuilder.from_dataframe(tp)
-    gb.configure_default_column(
-        resizable=False, sortable=True, filter=False, editable=False,
-        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
-    )
-    gb.configure_column("fecha", header_name="Fecha",
-                        valueFormatter=_JS_FECHA, tooltipField="__doc",
-                        headerTooltip="Fecha de emisión del comprobante. "
-                                      "Su número, en el tooltip de la celda",
-                        width=92, minWidth=92, suppressSizeToFit=True)
-    gb.configure_column("prov", header_name="Proveedor", minWidth=90,
-                        tooltipField="prov")
-    gb.configure_column("cant", header_name="Cant.", type=["numericColumn"],
-                        valueFormatter=_JS_CANT,
-                        headerTooltip="Cantidad comprada, en la unidad de "
-                                      "medida del producto",
-                        width=62, minWidth=62, suppressSizeToFit=True)
-    gb.configure_column("punit", header_name="Precio",
-                        type=["numericColumn"], valueFormatter=_JS_SOLES,
-                        headerTooltip="Precio unitario de ESTA compra, no el "
-                                      "promedio del período",
-                        width=72, minWidth=72, suppressSizeToFit=True)
-    # Abre ordenada por acá con `initialSort` y no con `sort`: st_aggrid le
-    # vuelve a pasar las `columnDefs` a la grilla en cada corrida y AG Grid
-    # re-aplica `sort` cada vez que las recibe, así que con `sort` el orden
-    # que elija el usuario se perdería en el rerun siguiente (regla #471).
-    gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
-                        valueFormatter=_JS_SOLES, initialSort="desc",
-                        width=100, minWidth=100, suppressSizeToFit=True)
-    gb.configure_column("__doc", hide=True)
-    gb.configure_grid_options(**_con_total(dict(
-        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
-        suppressCellFocus=True,
-        onGridReady=_AL_MONTAR, onRowDataUpdated=_AL_CAMBIAR_FILAS), total))
-    grid_options = gb.build()
-    _parchar_iconos(grid_options)  # arquitectura.md #159
-
-    AgGrid(
-        tp, gridOptions=grid_options, height=altura, theme="material",
-        custom_css=_css(), allow_unsafe_jscode=True, key=key, update_on=[],
-    )
-
-
-def renderizar_proveedores_producto(tp, altura, key, total=None):
-    """Una fila por PROVEEDOR de UN producto: el «Resumen del Período» de la
-    Evolución de Producto (2026-10-02, regla #581).
-
-    Prima de `renderizar_proveedores_periodo` con las columnas que cambian
-    cuando el producto ya está elegido: «Ítems distintos» daría 1 en todas
-    las filas (regla #239), y en su lugar entran las dos que en un solo
-    producto SÍ se comparan entre proveedores — cuánto se le compró y a
-    cuánto la unidad. La cantidad se puede sumar porque es UNA unidad de
-    medida; entre productos no se podría.
-
-    `tp` trae `prov` (el nombre como se muestra), `cant`, `punit` (el
-    PONDERADO, valor/cantidad: un promedio de precios diría uno que nadie
-    pagó), `valor` y `parte` (0-1) crudos, más `__prov` oculta, el
-    nombre CRUDO con el que el drill filtra el Detalle. Abre ordenada por
-    Valor ↓ (`initialSort`, regla #471).
-
-    LOS ANCHOS, MEDIDOS en el panel de 429px a 1358 de ventana: las fijas
-    suman 300 y el proveedor se queda con lo que sobra, cortado con «…» y
-    entero en el tooltip. Valor pide 108 y no los 100 de su vecina
-    de Detalle: es la suma de un proveedor y no de una compra, «S/ 11,804.62»
-    mide ~80 a 13px, más 8+8 de padding y la flecha del orden. Con 84 se
-    leía «S/ 11,80…».
-
-    SIN «Docs.»: la primera versión la llevaba y en 429px no entraba —se
-    leía «Do…»—, y el dato está a un clic: la fila lleva a Detalle, que es
-    una fila por comprobante.
-
-    Devuelve el `__prov` de la fila SELECCIONADA, o None — la selección
-    vigente, no un clic de esta vuelta: el llamador estrena la key después
-    de usarla (un contador)."""
-    gb = GridOptionsBuilder.from_dataframe(tp)
-    gb.configure_default_column(
-        resizable=False, sortable=True, filter=False, editable=False,
-        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
-    )
-    gb.configure_column("prov", header_name="Proveedor", minWidth=100,
-                        tooltipField="prov")
-    gb.configure_column("cant", header_name="Cant.", type=["numericColumn"],
-                        valueFormatter=_JS_CANT,
-                        headerTooltip="Cantidad comprada al proveedor, en "
-                                      "la unidad de medida del producto",
-                        width=60, minWidth=60, suppressSizeToFit=True)
-    gb.configure_column("punit", header_name="Precio",
-                        type=["numericColumn"], valueFormatter=_JS_SOLES,
-                        headerTooltip="Precio unitario PONDERADO: lo pagado "
-                                      "entre lo comprado",
-                        width=74, minWidth=74, suppressSizeToFit=True)
-    gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
-                        valueFormatter=_JS_SOLES, initialSort="desc",
-                        width=108, minWidth=108, suppressSizeToFit=True)
-    gb.configure_column("parte", header_name="%", type=["numericColumn"],
-                        valueFormatter=_JS_PARTE,
-                        headerTooltip="Cuánto pesa el proveedor en lo que se "
-                                      "compró de este producto en el período",
-                        width=58, minWidth=58, suppressSizeToFit=True)
-    gb.configure_column("__prov", hide=True)
-    gb.configure_selection(selection_mode="single", use_checkbox=False)
-    gb.configure_grid_options(**_con_total(dict(
-        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
-        suppressCellFocus=True, onGridReady=_AL_MONTAR), total))
-    grid_options = gb.build()
-    _parchar_iconos(grid_options)  # arquitectura.md #159
-
     resp = AgGrid(
         tp, gridOptions=grid_options, height=altura, theme="material",
         custom_css=_css(), allow_unsafe_jscode=True, key=key,

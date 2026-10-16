@@ -1,54 +1,50 @@
 """graficos.compras.producto - drill de Producto.
 
-Ranking de TODOS los productos comprados (valor, cantidad, UM, precio real
-de inicio/fin de periodo y su variación) con el mismo patrón de tabla-
-ranking + clic-para-enfocar que graficos/compras/proveedor.py. El producto
-en foco muestra su evolución: una barra por período (Semana / Mes / Año)
-con el precio promedio y el valor comprado escritos encima. Esa tarjeta va
-a la IZQUIERDA y tiene VENTANA PROPIA elegible (Rango/3m/12m/24m/Todo) que
-abre en los últimos 3 meses (2026-09-12; antes abría en 12m). La fecha de
-la sección vive en la fila del título de «Compras por familia» y manda
-sobre las tablas. Filtro de proveedores no hay: se pidió fuera el mismo día
-(regla #382).
+Desde el 2026-10-13 (regla #653) tiene la forma de Proveedor (#646): UNA
+fila de dos tarjetas, la lista a la izquierda y la ficha del producto
+elegido a la derecha — elegida sobre una maqueta clicable con datos reales.
 
-DEBAJO DEL GRÁFICO, EN SU MISMA TARJETA, LA ZONA (2026-09-20, regla #480).
-Alterna sola, sin control propio: sin foco es el RESUMEN —una fila por
-barra, en el orden del eje— y un clic en una barra la pasa al DETALLE de
-ese período, una fila por compra con su proveedor; tocar la misma barra
-vuelve al resumen. Es el patrón de «Compra por período» (#476) y la misma
-grilla. El alto de la figura sale de restarle la zona a la tarjeta, no de
-un rol: ver `_CROMO_CARD_EVO`.
+    [ Ranking de productos   ][ Ficha del producto elegido                ]
+    [ fecha · buscador · Ver ][  nombre · ventana · grano                 ]
+    [ familias, subfamilias  ][  cifras del rango                         ]
+    [ (a toda la altura)     ][  curva: cantidad en barras, precio línea  ]
+    [                        ][  Proveedores | Compras | Períodos         ]
 
-Reemplaza a los antiguos drills "Precio top 10", "Precio por compra" y
-"Cantidad por producto" (graficos/compras/cantidad.py, eliminado 2026-08-17):
-las tres separaban precio-promedio, precio-real y cantidad/valor de UN mismo
-producto en tres pantallas distintas — acá conviven en una, con selectores
-aplanados a texto en vez de tabs/pills con caja (a pedido, para no ocupar
-sitio).
+Hasta ese día era [Evolución | Familia + Subfamilia + Ranking] (reglas
+#381, #480, #581 a #583), con el orden al revés que Proveedor —la sección de
+arriba— y cuatro AgGrid (1,28 MB y 1-2 s de navegador cada una, regla
+#540). Lo que se conserva, con su sitio nuevo:
 
-ENCIMA del ranking, en su misma tarjeta, el drill jerárquico: Familia |
-Subfamilia (2026-09-09, a pedido). Un clic en una familia repuebla las
-subfamilias y recorta el ranking a esa familia; un clic en una subfamilia
-lo recorta a ella. Cada % es sobre su padre, no sobre el total.
+- Familia y Subfamilia → botones encima del ranking, y «Ver por: Producto |
+  Subfamilia | Familia» cambia la lista a los totales de cada grupo, con su
+  monto, %, Δ y «vs. hab.»; un clic baja a sus productos.
+- El ranking → el mismo, con % sobre el ámbito, Δ contra el período
+  anterior de igual largo («nuevo» / «vuelve») y «vs. hab.». Se van Inicio,
+  Fin y Var (primera contra última compra): 91 de 313 productos del rango
+  tenían una sola compra y la Var daba 0 sin importar nada, y la de cinco
+  vinos era un error de carga.
+- La Evolución → la CURVA de la ficha: ventana (abre en 3 meses, a pedido
+  del 2026-09-12), grano Semana / Mes / Año / Documento, clic en una barra.
+- «Resumen Total» → Períodos; «Resumen del Período» → Proveedores (con
+  «La curva» o la barra elegida como ámbito); «Detalle» → Compras.
 
-Hasta el 2026-09-12 había un TERCER panel —los productos del grupo
-elegido— y el ranking vivía en otra tarjeta, debajo, al lado de la
-Evolución. Se pidió fuera el panel y que el ranking hiciera su papel: dos
-tablas de productos una encima de la otra eran la misma pregunta con dos
-respuestas. Con eso la fila queda [paneles + ranking] | Evolución, como el
-drill de Proveedor. Ver regla #381.
+Dos reglas que la maqueta midió y la vista cumple en todos lados:
 
-Las tres tablas se ven como el Ranking de Proveedores: mismo
-`CSS_RANKING_GRID` (franja en vez de caja, todo blanco, sin líneas
-verticales, cuerpo 11.5 y el texto en violeta), mismas filas de 24px y la
-misma capitalización de nombre propio (regla #380). Y sin captions debajo:
-lo que decían vive en los `headerTooltip` de las columnas, que no gastan
-alto.
+- UN SOLO PRECIO, el PONDERADO (soles ÷ cantidad; el costo promedio
+  ponderado de la NIC 2, §25). La barra de antes promediaba las facturas
+  sin pesar: lomo fino de setiembre decía S/ 67,17 arriba y S/ 70,80 en la
+  tabla de abajo. Pasaba en 728 de 4.007 producto-mes.
+- LAS COMPRAS MARCADAS «revisar» (`marcar_revisar`) no entran en ningún
+  PRECIO; sí en la cantidad y el valor, que es lo que se registró. Sin eso
+  el lomo fino mostraba un «ahorro» de S/ 861 que era, entero, una compra
+  cargada a S/ 15,85 el kilo.
 """
 
 import html
 import unicodedata
+import zlib
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -56,1056 +52,138 @@ import streamlit as st
 from st_aggrid import AgGrid, JsCode
 
 from cortes import MESES_ABR_ES
-from tema import (
-    ACENTO, ACENTO_TEXTO, ERROR, EXITO, GRIS_TEXTO, LAVANDA_FOCO,
-    TEXTO_PRINCIPAL,
-)
+from tema import (ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, GRIS_BORDE,
+                  GRIS_TEXTO, GRIS_TEXTO_MEDIO, LAVANDA_BORDE, LAVANDA_CHIP,
+                  TEXTO_PRINCIPAL)
+from inyecciones import inyectar_html
 from graficos.base import (
-    _compras_layout, _compras_truncar, _slug, preservar_widgets,
-    rango_tarjeta, scope_rerun,
+    _compras_layout, _compras_truncar, paso_etiquetas,
+    preservar_widgets, rango_tarjeta, scope_rerun,
 )
-from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import (
-    ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL_PRODUCTO,
-    CROMO_GRID_RANK, GAP_DRILL, moda_por_grupo, selector_fecha_tarjeta,
-    # Las de la variación contra la barra anterior (#470): nacieron en
-    # Semanal y viven en `_comun` desde que esta tarjeta pidió lo mismo.
-    _clave_grilla, _first_point, _fmt_variacion,
-    _hover_variacion, _nota_variacion, _periodo_serie, _variaciones,
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL_FICHA,
+    CROMO_GRID_RANK, GAP_DRILL, _clave_grilla, _first_point,
+    documento_legible, inicio_de_periodo, moda_por_grupo,
+    selector_fecha_tarjeta, tramo_parcial, unidad_corta,
 )
-from graficos.compras._css_proveedor import CSS_RANKING_GRID
-# LA TABLA DE ABAJO ES LA MISMA QUE LA DE «Compra por período», y por eso su
-# módulo dejó de llamarse `_semanal` el 2026-09-20: es la tabla de «el
-# gráfico escrito» —una fila por barra, en el orden del eje— y la usan las
-# dos vistas. `ALTO_FILA` viaja con ella porque el alto de la tarjeta se
-# despeja contra el alto de SU fila, no contra un número copiado.
-from tablas.compras_semanal import (
-    ALTO_FILA, renderizar_compras_producto, renderizar_periodos,
-    renderizar_proveedores_producto,
+from graficos.compras._css_proveedor import (
+    CSS as CSS_PROVEEDOR, CSS_FICHA, CSS_RANKING_PROV, clonar_prefijo,
 )
 from graficos.compras._etiquetas_proveedor import nombre_propio
+from graficos.compras.semanal import precio_habitual
 from graficos import alturas, periodo
 
-_FILAS_PROD = 11
-"""Filas que reserva el Ranking de productos. Un techo, no un alto: lo que
-sobra scrollea adentro.
 
-Desde el 2026-09-12 las dibuja a 24px (`ALTO_FILA_RANK`) y no a los 28 que
-tenía: entró en la tarjeta de los paneles de Familia, que ya estaban a 24,
-y dos altos de fila en la misma tarjeta se leían como dos tablas pegadas.
-
-7, a pedido (2026-09-12, «quitemos dos filas al ranking de productos, para
-que se reduzca la tarjeta»). Esa misma mañana había subido a 9 para
-aprovechar el alto de una pantalla de 768; con la tarjeta ya sin techo
-(regla #382) el alto que manda es el que el usuario quiere ver, no el que
-cabe.
-
-11 desde el 2026-10-02, a pedido: «que la tabla de debajo del gráfico
-muestre 6 filas y alarguemos la tarjeta hacia abajo, también la del lado
-derecho». La tarjeta de la Evolución mide lo que mide ésta (ver
-`_ALTO_EVO`), así que las tres filas que suma la zona de allá (81px) las
-tiene que pagar algo de acá, o se las come la figura: cuatro filas de 24
-son 96, y los 15 que sobran le quedan a la figura para el tercer renglón
-de sus etiquetas (la cantidad). Regla #582."""
-
-_ALTO_FRAME = alturas.por_filas(
-    _FILAS_PROD, px_fila=ALTO_FILA_RANK, extra=CROMO_GRID_RANK, minimo=0)
-
-_FILAS_FAM = 6
-"""Filas que RESERVAN los dos paneles de arriba (Familia | Subfamilia).
-
-Los dos el mismo número a propósito: se leen como UNA grilla de dos
-columnas, así que una altura por panel los dejaría terminando a dos
-alturas distintas. Y es un techo, no un alto: lo que sobra scrollea
-adentro.
-
-6 desde el 2026-09-12, a pedido («una fila [menos] a la tabla de
-subfamilias»). El pedido nombró sólo a Subfamilia, y bajan LAS DOS: van
-lado a lado en la misma fila de columnas, que mide lo que la más alta, así
-que achicar sólo la B no achicaba la tarjeta — dejaba la B terminando 24px
-antes que la A. El panel A no pierde nada: las 8 familias del parquet son
-5 con el filtro de entrada (medido sobre R2 el 2026-09-11) y las 5 entran
-en 6 filas. El B scrollea, como ya lo hacía con 7: ALIMENTOS tiene 10
-subfamilias. Venía de 8 (hasta el 2026-09-11) y de 7."""
-
-_ALTO_FRAME_FAM = alturas.por_filas(
-    _FILAS_FAM, px_fila=ALTO_FILA_RANK, extra=CROMO_GRID_RANK, minimo=0)
-"""El `height=` de los dos AgGrid de Familia y Subfamilia."""
-
-# La Evolución mide contra la tarjeta DE AL LADO, el mismo arreglo que
-# `_ALTO_EVO` en proveedor.py: su alto no sale de los datos, así que si se
-# pidiera por su cuenta la fila saldría en escalón y el piso `:has()` de
-# estilos/_80_cards.py rellenaría la diferencia con blanco al pie.
-#
-# Las dos constantes son el CROMO de cada tarjeta —todo lo que mide y no
-# son sus grids ni su figura—, MEDIDAS en el navegador el 2026-09-12
-# (1280x650, con el layout final de ese día), no deducidas. Se miden las
-# TARJETAS, no la suma de sus hijos: los hijos traen fracciones de px y
-# la suma redondeada se pasaba por 2.
-#   Ranking:   600 de tarjeta − 207 − 255 de grids = 138 (padding 32 +
-#              fila de títulos con la fecha 30 + 8 del wrapper del grid de
-#              paneles + título del ranking 14, por el `margin-bottom:
-#              -16px` de `st.markdown` de la regla #162 + 8 del wrapper del
-#              grid + tres gaps de 16)
-#   Evolución: 528 de tarjeta − 384 de figura = 144 (padding 32 + nombre
-#              del producto 6, por la misma #162 + ventana y granularidad
-#              32 + las dos líneas de cifras 26 + tres gaps de 16)
-# Con una sola línea de cifras (un producto que no fluctuó) la Evolución
-# pide menos y el piso `:has()` rellena esos px al pie: es el caso raro.
-_CROMO_CARD_RANK = 138
-
-_FILAS_ZONA = 7
-"""Cuántas filas de la zona de abajo se ven sin deslizar.
-
-Es un TECHO, no un alto: lo que sobra scrollea DENTRO de la grilla, que es
-el único sitio de esta vista donde se permite una barra (las tarjetas de
-Producto no tienen techo desde la regla #382).
-
-SIETE desde el 2026-10-02 (regla #582): seis filas de datos más la fila
-TOTAL, que es fija y ocupa una — con cuatro se veían TRES compras, y se
-pidió ver seis. Lo que cuestan lo paga ahora el Ranking de al lado, que
-creció lo mismo (ver `_FILAS_PROD`): la tarjeta se alarga hacia abajo y
-la figura no pierde nada.
-
-Hasta ese día eran CUATRO, porque cada fila se la sacaba a la figura: la tarjeta mide lo
-que mide la del Ranking de al lado y ese total no cambia, así que la zona y
-el gráfico se reparten el mismo presupuesto. Cuatro cubre el caso que se ve
-de verdad —la ventana por defecto son 3 meses agrupados por Mes, o sea 3 ó
-4 barras, y entran todas sin deslizar— y le deja 237px a la figura. Con
-cinco la figura caía a 210 y con seis a 183.
-
-La zona mide LO MISMO en sus tres modos (regla #581): si midiera
-distinto, tocar una barra o cambiar de modo cambiaría el alto de la
-tarjeta y la fila entera bailaría con cada clic (es la #398, la misma razón por la que las dos
-tablas de Semanal miden igual)."""
-
-_ALTO_ZONA = alturas.por_filas(_FILAS_ZONA, px_fila=ALTO_FILA,
-                               extra=CROMO_GRID_RANK, minimo=0)
-
-_ZONA_TOTAL = "Resumen Total"
-_ZONA_PROVS = "Resumen del Período"
-_ZONA_DETALLE = "Detalle"
-_ZONA_OPCIONES = (_ZONA_TOTAL, _ZONA_PROVS, _ZONA_DETALLE)
-"""Lo que puede mostrar la zona de abajo del gráfico (2026-10-02, regla
-#581). Los mismos tres nombres que «Compras por período», y por la misma
-razón que las dos tablas comparten grilla: es la misma pregunta.
-
-  · «Resumen Total» — el gráfico escrito: una fila por BARRA. Abre acá.
-  · «Resumen del Período» — una fila por PROVEEDOR del producto, en la
-    barra en foco o, sin barra, en la ventana entera. Un clic en uno lleva
-    a Detalle con sus compras.
-  · «Detalle» — una fila por COMPRA, con el mismo ámbito (barra y, si vino
-    de ahí, proveedor).
-
-Hasta ese día la zona tenía dos estados y ningún control: los cambiaba el
-clic en la barra, y la única forma de volver era tocar la MISMA barra —
-lo que obligaba a escribir la instrucción en el rótulo («tocá la misma
-barra para volver al resumen»), que se pidió quitar."""
-
-_K_ZONA_MODO = "compras_prod_zona_modo"
-
-# La tarjeta de la Evolución cambió de forma el 2026-09-20: la tabla «una
-# fila por barra» dejó de vivir a lo ancho de la vista y bajó ADENTRO de
-# esta tarjeta, a pedido. El cromo se recalcula, y son 157 + la zona,
-# MEDIDO bloque por bloque en el navegador a 1366x768:
-#
-#   padding                                       32
-#   fila 1 (nombre + ventana + granularidad)      22
-#   las dos líneas de cifras                      26,4
-#   rótulo de la zona                              5,2  (la #162 se come 16)
-#   el wrapper de la grilla, por encima del iframe 7,6
-#   CUATRO gaps de 16                             64
-#                                                ────
-#                                                157,2
-#
-# Y 178 desde el 2026-10-02 (regla #581): el rótulo de la zona pasó a ser
-# la fila del control de sus tres modos, que mide 26 y no 5,2 — MEDIDO, la
-# tarjeta saltó de 528 a 549 hasta que la figura devolvió esos 21.
-#
-# Los tres números que no se pueden deducir y hay que medir, porque la
-# primera cuenta los erró y la tarjeta salió 13px más alta que su vecina:
-# la fila de controles mide **22 y no 32** (los dos selectores van aplanados
-# a texto, ver `_CSS_SELECTOR_TEXTO`), el bloque de la grilla suma **7,6
-# propios** al alto del iframe, y los gaps son **cuatro y no tres** — la
-# zona agregó uno.
-_CROMO_CARD_EVO = 178 + _ALTO_ZONA
-
-# El piso ya no es `alturas.MINI`: ver su docstring en `alturas.py`. Con los
-# números de hoy la resta da 237 y el piso no ata — está para el día en que
-# la tarjeta de al lado se achique.
-_ALTO_EVO = max(alturas.FIG_CON_SU_TABLA,
-                _ALTO_FRAME_FAM + _ALTO_FRAME + _CROMO_CARD_RANK
-                - _CROMO_CARD_EVO)
-
-_ETIQ_VENTANA_EVO = {
-    periodo.HEREDA: "Rango de las tablas",
-    "3m": "Últimos 3 meses",
-    "12m": "Últimos 12 meses",
-    "24m": "Últimos 24 meses",
-    "Todo": "Todo el histórico",
-}
-"""Lo que muestra el desplegable de ventana del gráfico de Producto.
-
-Sólo el TEXTO: el valor sigue siendo la cadena de `periodo.OPCIONES`, que
-es contra lo que se compara (`== periodo.HEREDA`). «Rango de las tablas» y
-no el «Rango» pelado de las otras tarjetas: acá el rango que hereda vive
-en la tarjeta de AL LADO (el selector de «Compras por familia»), y
-«Rango» a secas no dice cuál."""
-
-_KEYS_WIDGET = ("compras_prod_gran_sel", "compras_prod_periodo",
-                "compras_prod_zona_modo", "compras_prod_q")
+_KEYS_WIDGET = ("compras_prod_q", "cp_prod_ver", "cp_prod_fam",
+                "cp_prod_sub", "compras_prod_periodo", "cp_prod_gran",
+                "cp_prod_tab", "cp_prod_pw")
 """Los controles de esta sección, para que la escalada no se los lleve.
 
-La consume `preservar_widgets` en el `st.rerun(scope="app")` de más abajo:
-ese rerun aborta la corrida antes de dibujarlos y Streamlit recolecta lo
-que no se dibujó, así que sin esta tupla mover la fecha de la cabecera
-devolvía la granularidad a «Mes» y la ventana a «Últimos 3 meses». Ver
-`graficos/base.py::preservar_widgets` y `arquitectura.md` regla #373.
-Hasta el 2026-09-12 había dos más, las del filtro de proveedores
-(`cp_prod_prov_q`, `cp_prod_prov_cb::*`), que se fue ese día. Desde el
-2026-10-02 suma el modo de la zona (`_K_ZONA_MODO`) y el buscador del
-Ranking (regla #581).
+La consume `preservar_widgets` en los `st.rerun` de más abajo: el rerun
+aborta la corrida antes de dibujarlos y Streamlit recolecta lo que no se
+dibujó (regla #373). Todas como TEXTO: la guarda de `test_graficos.py` lee
+esta tupla con `ast.literal_eval`."""
 
-Todas como TEXTO, también la del modo, que tiene su constante: la guarda
-de `test_graficos.py` lee esta tupla con `ast.literal_eval`, y un nombre
-adentro la vuelve ilegible — la guarda la da por vacía y canta todos los
-controles de la sección."""
+_KEYS_FICHA = ("compras_prod_periodo", "cp_prod_gran", "cp_prod_tab",
+               "cp_prod_pw")
+"""Los de la FICHA, que se dibujan después de la lista. El clic en una
+familia o subfamilia de la lista pide un rerun DESPUÉS de dibujar los
+controles de la lista y ANTES de los de la ficha: se preservan sólo éstos.
+Reescribir uno ya dibujado en la corrida es un StreamlitAPIException
+(«cannot be modified after the widget … is instantiated»)."""
 
-# Eje X por granularidad: forzado a propósito. Con pocos puntos (rango de
-# fecha corto, o un producto con 1-2 compras) Plotly no tiene de dónde sacar
-# un paso de tick razonable y cae en sub-segundos ("23:59:59.9995 Jul 31,
-# 2026") — visto en vivo con un solo bucket de Mes. `dtick` fija el paso al
-# calendario real (mes/año) y `tickformat` la etiqueta, sin importar cuántos
-# puntos haya.
-_EJE_X_GRAN = {
-    "Semana": dict(dtick=7 * 24 * 60 * 60 * 1000, tickformat="%d %b"),
-    "Mes": dict(dtick="M1", tickformat="%b %Y"),
-    "Año": dict(dtick="M12", tickformat="%Y"),
-}
+_GRANOS = ("Semana", "Mes", "Año", "Documento")
+_VER = {"prod": "Producto", "sub": "Subfamilia", "fam": "Familia"}
+_TODAS = "__todas__"
+_TABS = ("prov", "comp", "per")
+_PW = ("rango", "90", "ven")
 
+_VECES_REVISAR = 2.5
+"""Una compra a `_VECES_REVISAR` veces su precio habitual, o a menos de su
+inversa (0,4), se marca «revisar». Regla PROPIA, no un estándar: medida
+sobre 12 meses de compras el 2026-10-13 — con 40 % de desvío marcaba el
+11 % de las líneas (verduras y hierbas de un día a otro), con 2,5 veces 54
+líneas de 11.374."""
 
-def _eje_x_kwargs(gran, agg):
-    """Un tick por BARRA, rotulado en español.
+_MINIMO_REVISAR = 50.0
+"""Y sólo si la línea vale al menos esto (S/): una ramita de hierba a otro
+precio no cambia nada que se mida."""
 
-    Hasta el 2026-09-20 esto era `_EJE_X_GRAN[gran]` —un `dtick` de
-    calendario más un `tickformat`— y el eje decía «Aug 2026»: Plotly
-    rotula en INGLÉS con su locale por defecto, que es la regla #241. Con
-    `tickvals`/`ticktext` el rótulo lo escribe Python
-    (`_rotulo_periodo`, sobre `cortes.MESES_ABR_ES`) y de paso se va la
-    razón de ser del `dtick`: los ticks caen sobre los buckets REALES, así
-    que ni hay que anclar un `tick0` semanal ni Plotly puede irse a
-    sub-segundos ("23:59:59.9995 Jul 31, 2026") cuando hay un solo punto.
+_UND_ENTERAS = frozenset({"UND", "UNID", "UNIDAD", "UNIDADES", "UN"})
+"""Las unidades que se cuentan enteras. Una cantidad con decimales en una
+de ellas es la otra marca: Grupo Idali cargó el 29/09/2026 seis botellas
+como 4,5 (6 × 0,75 L) y la vista leía cinco vinos «+33 %»."""
 
-    `_EJE_X_GRAN` queda como respaldo del caso vacío, que no tiene buckets
-    de los que sacar los ticks."""
-    if agg.empty:
-        return dict(_EJE_X_GRAN[gran])
-    _vals = list(agg.index)
-    return dict(tickmode="array", tickvals=_vals,
-                ticktext=[_rotulo_periodo(_t, gran) for _t in _vals])
+_FILAS_LISTA = 8
+"""Filas a la vista en las tablas de la ficha antes de scrollear: lo que
+deja la curva hasta el alto del ranking de al lado."""
 
+_ALTO_FILA = 24
+_FILAS_RANK = 12
+"""Filas a la vista del ranking: lo que entra en `--alto-util` (575 px en
+la laptop de 1323×619) con la fila de familias en dos renglones. Con la
+de subfamilias abierta, dos menos (mide 27 + 6 de aire)."""
 
-# LOS DOS CONTROLES DE LA CABECERA SON EL MISMO WIDGET desde el
-# 2026-09-20: `st.selectbox` aplanado a texto con su chevron. La
-# granularidad era un `st.pills` de tres cápsulas sin cápsula (Semana | Mes
-# | Año, texto suelto); pasó a desplegable a pedido —«hagamos minimalista
-# la granulación de semana mes año, en una línea desplegable y pongámosla
-# en la misma fila del título»— y eso paga la fila entera: los tres
-# rótulos en línea medían ~146px y el desplegable mide 74, que es lo que
-# deja sitio para el nombre del producto al lado.
-#
-# Un selector cerrado dice UNA opción y las pills dicen las tres: se pierde
-# saber qué más hay sin abrirlo. Es el precio del renglón que se ahorra, y
-# el renglón se lo lleva la tabla de abajo.
-_CSS_SELECTOR_TEXTO = f"""
-<style>
-/* Los dos selectores de la cabecera del gráfico («Últimos 3 meses ▾» y
-   «Mes ▾»), APLANADOS A TEXTO: son texto suelto, no una caja contra unas
-   palabras — al lado del nombre del producto una caja se leería como el
-   dato principal. Misma receta que `cp_evo_ctrl` en _css_proveedor.py; se
-   conserva el chevron, que es la única señal de que eso despliega. La
-   ventana se fue y volvió el 2026-09-12: ver su comentario en
-   `compras_prod_card_evo`. */
-.st-key-compras_prod_ctrl [data-testid="stSelectbox"] div[role="group"] {{
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    min-height: 0 !important;
-    height: 22px !important;
-}}
-.st-key-compras_prod_ctrl [data-testid="stSelectbox"] input {{
-    padding: 0 !important;
-    height: auto !important;
-    font-size: 12.5px !important;
-    font-weight: 400 !important;
-    color: {GRIS_TEXTO} !important;
-    cursor: pointer !important;
-}}
-.st-key-compras_prod_ctrl [data-testid="stSelectbox"]:hover input {{
-    color: {ACENTO} !important;
-}}
-.st-key-compras_prod_ctrl [data-testid="stSelectbox"] svg {{
-    width: 13px !important;
-    height: 13px !important;
-    fill: {ACENTO} !important;
-    color: {ACENTO} !important;
-}}
-.st-key-compras_prod_ctrl [data-testid="stSelectbox"]
-    button[aria-haspopup] {{
-    width: 16px !important;
-    min-width: 0 !important;
-    height: 22px !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    flex: 0 0 auto !important;
-}}
-/* El nombre del producto en foco. Recorta con puntos suspensivos y el
-   nombre entero va en el `title`: un corte fijo en N caracteres no sigue
-   al ancho de la columna.
 
-   AZUL Y A 15px desde el 2026-10-02 (regla #582), a pedido: «el nombre del
-   producto debe ser levemente más visible [...] quizás en letra azul». El
-   azul es `ACENTO_TEXTO`, el mismo del nombre del ítem en «Vs año pasado»
-   (`_nombre_serie_html`): en las dos vistas de Compras el producto en
-   foco se nombra igual. A 15 y no a los 16 del título del Ranking: es el
-   NOMBRE de lo que se mira, no el título de la tarjeta, y entra en los 22px
-   del renglón de los selectores sin moverlo. */
-.cp-prod-evo-tit {{
-    font-size: 15px;
-    font-weight: 700;
-    color: {ACENTO_TEXTO};
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    /* Comparte renglón con los dos selectores desde el 2026-09-20, así que
-       se alinea con ELLOS y no con el borde de arriba de su columna: los
-       22px son el alto del selector aplanado de acá arriba. No se centra
-       en la TARJETA (regla #449) porque no es un título centrado — es la
-       primera cosa del renglón, y lo que sigue a su derecha son controles
-       suyos. */
-    line-height: 22px;
-}}
-/* EL RÓTULO DE LA ZONA DE ABAJO. Dice qué se está viendo —«Resumen» o el
-   período en foco— y cómo volver. Va con el mismo peso que las cifras de
-   arriba y no con el del título: es un pie, no una cabecera. */
-.cp-prod-zona-rot {{
-    font-size: 12px;
-    color: {GRIS_TEXTO};
-    margin: 0 0 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}}
-.cp-prod-zona-rot b {{ color: var(--text-primary); font-weight: 600; }}
-/* LA FILA DE LA ZONA (regla #581): el control de los tres modos y, al
-   lado, el rótulo del ámbito. Comparten renglón por lo mismo que en
-   «Compras por período» (`cp_sem_pie`): un renglón propio para cada uno se
-   lo comería la figura. A 26px y no a los 32 de allá: esta tarjeta tiene
-   media página y la figura paga cada píxel (`_CROMO_CARD_EVO`). */
-.st-key-compras_prod_zona_modo [data-testid="stButtonGroup"] button {{
-    min-height: 26px !important;
-    height: 26px !important;
-    padding: 0 10px !important;
-    font-size: 12px !important;
-}}
-.st-key-cp_prod_zona_pie {{ align-items: center !important; }}
-.st-key-cp_prod_zona_pie > [data-testid="stElementContainer"]:has(
-        .cp-prod-zona-rot) {{
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-}}
-.st-key-cp_prod_zona_pie [data-testid="stMarkdownContainer"] {{
-    margin-bottom: 0 !important;
-}}
-.st-key-cp_prod_zona_pie .cp-prod-zona-rot {{ margin: 0; }}
-/* LA FILA DEL TÍTULO DEL RANKING, con su buscador (regla #581). El título
-   se queda con lo que sobra y se corta con «…» —el ámbito («· Vinos
-   Tinto») puede ser largo—; el buscador mide lo que su placeholder. A 26px
-   como los de las cabeceras de Volatilidad y «Vs año pasado»: sin esto el
-   campo se queda en los 40 de Streamlit y la tarjeta crece. */
-.st-key-cp_prod_rank_hdr {{ align-items: center !important; }}
-/* Y la fila le devuelve a la tabla los 12px que el título solo no pedía:
-   solo, el título es un `st.markdown`, y la regla #162 le come 16 de los
-   29,6 que mide — la tabla abría a 29,6 de él. La fila mide 26 + el gap,
-   y sin esto la tarjeta crecía 12 (MEDIDO: 528 → 541). Con el margen la
-   tabla abre a la misma distancia que antes del buscador. */
-.st-key-cp_prod_rank_hdr {{ margin-bottom: -12.4px !important; }}
-.st-key-cp_prod_rank_hdr > [data-testid="stElementContainer"]:has(
-        .cp-prod-rank-tit) {{
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-}}
-.st-key-cp_prod_rank_hdr [data-testid="stMarkdownContainer"] {{
-    margin-bottom: 0 !important;
-}}
-.st-key-cp_prod_rank_hdr .cp-prod-rank-tit {{
-    margin: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}}
-.st-key-cp_prod_rank_hdr > [data-testid="stLayoutWrapper"]:has(
-        > .st-key-cp_prod_rank_buscar) {{
-    flex: 0 0 auto !important;
-    width: 170px !important;
-}}
-.st-key-cp_prod_rank_buscar [data-testid="stTextInputRootElement"] {{
-    min-height: 26px !important;
-    height: 26px !important;
-}}
-.st-key-cp_prod_rank_buscar [data-testid="stTextInputRootElement"] input {{
-    padding: 0 8px !important;
-    font-size: 12px !important;
-}}
-/* Título sobre cada tabla-ranking: mismo lenguaje visual que
-   `.cp-rank-tit` de graficos/compras/_css_proveedor.py, pero declarado acá
-   — ese CSS solo se inyecta cuando se renderiza el drill de Proveedor, así
-   que reusar la clase sin redeclararla dejaría el título sin estilo en
-   Producto. Nombre propio a propósito (evita cualquier acople). */
-.cp-prod-rank-tit {{
-    /* 16px, en sync con `.cp-rank-tit` de _css_proveedor.py — el
-       comentario de arriba explica por que son dos declaraciones. */
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-primary);
-    padding-left: 2px;
-    margin: 0 0 4px;
-}}
-/* El ÁMBITO del Ranking de productos («· Vinos Tinto»): lo pone un clic en
-   los paneles de Familia/Subfamilia de arriba. Más liviano que el título
-   porque lo califica, no lo reemplaza. */
-.cp-prod-rank-amb {{
-    font-weight: 400;
-    color: {GRIS_TEXTO};
-}}
-</style>
-"""
+# ── Formato ────────────────────────────────────────────────────────────
 
 
-# ── AgGrid: los dos rankings de este drill, sin checkbox ──────────────────
-# 2026-08-24, a pedido ("como en Proveedor, sin el check de selección, y
-# con filas delgadas"): mismo patrón que la regla #136/#192 de
-# arquitectura.md — `st.dataframe` dibuja su columna de selección en un
-# CANVAS (glide-data-grid), no hay nodo DOM por celda, así que no hay CSS
-# que apunte "sólo esa columna". Cambiar a AgGrid es la única salida.
-#
-# Los dos rankings de este archivo (Producto y Familia) comparten el mismo
-# toggle y los mismos formatters — se definen UNA vez a nivel de módulo
-# (mismo criterio que `_EJE_X_GRAN`, arriba) en vez de recrear los `JsCode`
-# en cada corrida del fragment.
-_js_toggle_prod = JsCode(
-    "function(e){ e.node.setSelected(!e.node.isSelected(), true); }")
+def _esc(t):
+    return html.escape(str(t), quote=True)
 
-# La barra es el FONDO de la celda (regla #136): un `linear-gradient`
-# cortado en el % de LLENADO contra el MAYOR valor de la lista (`_barra`,
-# columna oculta) — no contra el total, que es lo que ya muestra la
-# columna "%".
-_js_barra_prod = JsCode(
-    "function(p){"
-    " var w = Math.max(0, Math.min(100, p.data._barra||0))"
-    " * 0.62;"
-    " return {'background': 'linear-gradient(90deg,"
-    f" {ACENTO} 0 ' + w + '%, transparent ' + w"
-    " + '% 100%)',"
-    " 'display':'flex','alignItems':'center',"
-    " 'justifyContent':'flex-end',"
-    f" 'color':'{TEXTO_PRINCIPAL}'"
-    "};"
-    "}")
 
-# Montos GRANDES (Valor): redondeado, CON separador de miles.
-_js_soles0_prod = JsCode(
-    "function(p){ return p.value==null ? '' :"
-    " 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+def _var_pct(cur, prev):
+    """Variación % de `cur` contra `prev`; `inf` sin contra qué."""
+    if prev is None or pd.isna(prev) or float(prev) <= 0 or cur is None \
+            or pd.isna(cur):
+        return np.inf
+    return (float(cur) - float(prev)) / float(prev) * 100
 
-# Precios UNITARIOS (Inicio/Fin): 2 decimales, SIN separador de miles —
-# mismo criterio que el `format="S/ %.2f"` que tenían como
-# `column_config.NumberColumn`: un precio unitario no necesita agrupar.
-_js_soles2_prod = JsCode(
-    "function(p){ return p.value==null ? '' :"
-    " 'S/ ' + p.value.toFixed(2); }")
 
-_js_pct_prod = JsCode(
-    "function(p){ return p.value==null ? '' :"
-    " Math.round(p.value) + '%'; }")
+def _fmt_var(v):
+    """«▲ 12.3%», «▼ 4.0%», «0.0%» o «—»."""
+    if v is None or not np.isfinite(v):
+        return "—"
+    if abs(v) < 0.05:
+        return "0.0%"
+    return f"{'▲' if v > 0 else '▼'} {abs(v):.1f}%"
 
-# Var: con signo y 1 decimal (`%+.1f%%` en Python). `toFixed` ya antepone
-# el signo "-" en un negativo; sólo hace falta el "+" del lado positivo.
-_js_pct_signed_prod = JsCode(
-    "function(p){ if(p.value==null) return '';"
-    " return (p.value>=0?'+':'') + p.value.toFixed(1) + '%'; }")
 
-# Conteos (Cant./Productos): redondeado, CON separador de miles — mismo
-# criterio que "Valor", consistente con el resto de las tablas AgGrid de
-# este drill (Proveedor).
-_js_num0_prod = JsCode(
-    "function(p){ return p.value==null ? '' :"
-    " Math.round(p.value).toLocaleString('es-PE'); }")
+def _cls_var(v):
+    """Rojo si subió, verde si bajó, sin color debajo del 0,5 %: el código
+    de todo Compras."""
+    if v is None or not np.isfinite(v) or abs(v) < 0.5:
+        return "igual"
+    return "sube" if v > 0 else "baja"
 
 
-# ── Funciones puras ───────────────────────────────────────────────────────
+def _soles(v):
+    if v is None or pd.isna(v):
+        return "—"
+    return f"{'−' if v < 0 else ''}S/ {abs(v):,.0f}"
 
-def _prod_ranking(dd, col_prod, col_fecha, col_valor, col_cant, col_punit, col_um):
-    """Un producto por fila: valor y cantidad totales del rango, UM (moda),
-    y precio real de la primera y última compra del período (sin promediar
-    — mismo criterio que "Por compra") con su % de variación. Ordenado por
-    valor descendente.
 
-    TODO DE UNA VEZ, NO PRODUCTO POR PRODUCTO (2026-09-26, regla #537). Era
-    un bucle que armaba un sub-DataFrame por producto —suma, moda, dropna,
-    filtro y `sort_values` cada uno— y se llevaba el 90 % de la sección:
-    2,3-2,5 s por llamada en la laptop con un mes de compras. Así, 30 ms, y
-    el mismo resultado columna por columna, verificado sobre el parquet
-    real (el histórico entero, cada año y cada trimestre).
+def _precio(v):
+    return "—" if v is None or pd.isna(v) else f"S/ {v:,.2f}"
 
-    Dos cosas que el bucle hacía sin decirlo y que acá se escriben:
-      · «la primera y la última compra»: por fecha y, entre compras del
-        MISMO día, en el orden del parquet (orden estable);
-      · MONTOS IGUALES AL CÉNTIMO van por nombre. En el bucle su orden
-        dependía del último decimal de la suma (164,00000000000003 contra
-        164,0): dos productos de S/ 164 podían salir en cualquier orden, y
-        salían distinto según cómo se sumara.
-    """
-    g = dd.groupby(col_prod)                     # claves ordenadas, sin NaN
-    valor = g[col_valor].sum().astype(float)
-    prods = valor.index
-    cantidad = (g[col_cant].sum().astype(float).reindex(prods)
-                if col_cant else pd.Series(0.0, index=prods))
-    if col_um and col_um in dd.columns:
-        um = (moda_por_grupo(dd[[col_prod, col_um]].dropna(subset=[col_um]),
-                             col_prod, col_um)
-              .map(str).reindex(prods).fillna(""))
-    else:
-        um = pd.Series("", index=prods)
-    # Precio de la primera y la última compra VÁLIDA del período.
-    v = dd[[col_prod, col_fecha, col_punit]]
-    v = v[v[col_prod].notna() & v[col_punit].notna()]
-    v = v[v[col_punit] > 0].sort_values([col_prod, col_fecha], kind="stable")
-    gv = v.groupby(col_prod, sort=False)[col_punit]
-    inicio = gv.first().reindex(prods)
-    fin = gv.last().reindex(prods)
-    out = pd.DataFrame({
-        "producto": [str(p) for p in prods],
-        "valor": valor.to_numpy(),
-        "cantidad": cantidad.to_numpy(dtype=float),
-        "um": um.to_numpy(dtype=object),
-        "inicio": inicio.to_numpy(dtype=float),
-        "fin": fin.to_numpy(dtype=float),
-        "var_pct": ((fin - inicio) / inicio * 100).to_numpy(dtype=float),
-    })
-    out["_orden"] = out["valor"].round(2)
-    out = (out.sort_values(["_orden", "producto"], ascending=[False, True],
-                           kind="stable")
-              .drop(columns="_orden").reset_index(drop=True))
-    tot = out["valor"].sum() or 1.0
-    out["pct"] = out["valor"] / tot * 100
-    return out
 
+def _cant(c, um=""):
+    """«112 kg», «2.5 und», «0.75»: sin ceros de más."""
+    if c is None or pd.isna(c):
+        return "—"
+    t = (f"{c:,.1f}".rstrip("0").rstrip(".") if abs(c) < 100
+         else f"{c:,.0f}")
+    return f"{t} {um}" if um else t
 
-def _prod_serie_periodo(g, col_fecha, col_punit, col_cant, col_valor, gran,
-                        col_docu=None, col_prov=None):
-    """Serie por período (Semana/Mes/Año) de UN producto ya filtrado: precio
-    promedio (relleno hacia adelante y hacia atrás en los huecos, para que
-    la línea no corte), cantidad total, valor total, CUÁNTOS DOCUMENTOS lo
-    respaldan y QUÉ PROVEEDORES lo atendieron. Indexada por la fecha
-    de INICIO del período (eje real, no etiquetas de texto), así el
-    promedio y las compras reales conviven en el mismo eje sin importar la
-    granularidad elegida.
 
-    `docs` y `provs` son del 2026-09-20, a pedido («que las barras tengan
-    también el total de documentos, y ver los proveedores que atendieron
-    esa barra»). Las dos son opcionales: sin `col_docu`/`col_prov` la
-    columna sale vacía y la etiqueta la omite sola, que es lo que pasa con
-    un parquet al que le falte la columna.
+def _um_corta(um):
+    s = str(um or "").strip()
+    return "" if s.lower() in ("", "nan", "none") else unidad_corta(s)
 
-    UN DOCUMENTO ES (número, proveedor), NO EL NÚMERO SOLO. Medido sobre
-    compras.parquet el 2026-09-20: 14.555 `NUM_DOCUMENTO` distintos contra
-    17.988 pares (número, proveedor) — o sea que contar el número pelado se
-    come el 19% de los comprobantes, porque dos proveedores numeran su
-    "F001-123" cada uno por su cuenta. El TIPO no agrega nada (los mismos
-    14.555 con o sin él), así que no se pide.
 
-    `provs` es una lista de `(proveedor, valor)` ordenada de mayor a menor,
-    no un número: el hover los NOMBRA. Caben porque son pocos — de los
-    1.409 grupos producto-mes del último trimestre, 1.063 tienen UN solo
-    proveedor y el máximo es 7."""
-    fe = pd.to_datetime(g[col_fecha], errors="coerce")
-    if gran == "Semana":
-        bucket = (fe - pd.to_timedelta(fe.dt.weekday, unit="D")).dt.normalize()
-    elif gran == "Año":
-        bucket = pd.to_datetime(fe.dt.year.astype("Int64").astype(str) + "-01-01",
-                                errors="coerce")
-    else:  # Mes
-        bucket = fe.dt.to_period("M").dt.to_timestamp()
-    _hay_prov = bool(col_prov and col_prov in g.columns)
-    _cols = {
-        "bucket": bucket,
-        "precio": pd.to_numeric(g[col_punit], errors="coerce"),
-        "cantidad": (pd.to_numeric(g[col_cant], errors="coerce").fillna(0)
-                     if col_cant else 0.0),
-        "valor": pd.to_numeric(g[col_valor], errors="coerce").fillna(0),
-    }
-    if _hay_prov:
-        _cols["prov"] = g[col_prov].astype(str).str.strip()
-    if col_docu and col_docu in g.columns:
-        _doc = g[col_docu].astype(str).str.strip()
-        # La llave, no el número: ver el docstring.
-        _cols["doc"] = (_doc + "|" + _cols["prov"]) if _hay_prov else _doc
-    base = pd.DataFrame(_cols).dropna(subset=["bucket"])
-    if base.empty:
-        out = base.set_index("bucket")
-        out["docs"] = pd.Series(dtype="float")
-        out["provs"] = pd.Series(dtype="object")
-        return out
-    agg = base.groupby("bucket").agg(precio=("precio", "mean"),
-                                     cantidad=("cantidad", "sum"),
-                                     valor=("valor", "sum")).sort_index()
-    agg["precio"] = agg["precio"].ffill().bfill()
-    agg["docs"] = (base.groupby("bucket")["doc"].nunique()
-                   if "doc" in base.columns else pd.NA)
-    if _hay_prov:
-        _pv = base.groupby(["bucket", "prov"], as_index=False)["valor"].sum()
-        _pv = _pv.sort_values(["bucket", "valor"], ascending=[True, False])
-        _pares = {_b: list(zip(_d["prov"].tolist(), _d["valor"].tolist()))
-                  for _b, _d in _pv.groupby("bucket")}
-    else:
-        _pares = {}
-    # `pd.Series(dict)` y no un `map`: con listas adentro, `Index.map`
-    # intenta desempacarlas y devuelve un MultiIndex.
-    agg["provs"] = pd.Series(_pares, dtype="object").reindex(agg.index)
-    return agg
-
-
-# ── LO QUE DICE CADA BARRA ────────────────────────────────────────────────
-# 2026-09-20, a pedido: «que las barras tengan también el porcentaje de
-# variación respecto a la barra anterior, así como el total de documentos, y
-# poder ver en la etiqueta los proveedores que atendieron esa barra».
-#
-# Los tres datos NO van al mismo sitio, y el reparto es el que cabe:
-#
-#   · variación y documentos → ENCIMA de la barra. Son un número corto cada
-#     uno y contestan de un vistazo («subí 10%, en 16 comprobantes»).
-#   · proveedores → al HOVER. Son NOMBRES: el más largo del parquet mide 40
-#     caracteres y la barra da 60px. Ahí también va el detalle fino (el
-#     valor exacto, contra qué barra se comparó, y la variación del PRECIO,
-#     que arriba no entra sin que la etiqueta deje de leerse).
-#
-# LA VARIACIÓN DE LA ETIQUETA ES LA DEL VALOR, o sea la de la ALTURA de la
-# barra: es lo que "respecto a la barra anterior" significa mirando el
-# gráfico. Sale de `_comun._variaciones`, la misma de Semanal, y con ella
-# viene la regla #470: un período que la VENTANA corta dice «parcial» en vez
-# de un porcentaje, y el de al lado calla. No es un detalle acá — la ventana
-# de esta tarjeta es rodante («los últimos 3 meses» terminan el último día
-# con datos), así que la primera y la última barra están cortadas SIEMPRE.
-# Medido el 2026-09-20 con la ventana de 3 meses por Mes: «jul» decía +181%
-# contra un «jun» que eran 11 días de mes.
-#
-# LA DEL PRECIO NO PASA POR AHÍ, y no es un olvido: el valor es una SUMA
-# (medio mes suma la mitad) y el precio un PROMEDIO (medio mes promedia
-# igual de bien). Por eso el precio conserva su variación en las barras
-# cortadas, y por eso vive en el hover pegada a su propio número: dos
-# porcentajes sueltos encima de una barra no dicen de qué son.
-_UMBRAL_BARRAS_ROTADAS = 6
-"""Desde cuántas barras la etiqueta se rota a un solo renglón.
-
-MEDIDO (1366x768, 2026-09-20): el panel del gráfico da 429px de área útil y
-el renglón más ancho de la etiqueta nueva («S/ 74.50 +182%») mide ~57px, así
-que entran 7 — 429/7 = 61px por barra. Con 8 el hueco baja a 53 y las
-etiquetas se pisan. Era 8 cuando la etiqueta medía 38px (dos renglones de
-sólo cifras) y el panel 312: la cuenta es la misma, cambió el numerador.
-
-Rotada, la etiqueta necesita ~13px de ancho, así que arriba de este umbral
-entra siempre. Es la regla #91: Plotly NO oculta ni corta una etiqueta que
-no entra, la ESCALA hasta que deja de leerse — y eso no se ve en el DOM.
-
-La forma completa —probar tres disposiciones contra el slot y contra el alto
-de la figura— es `semanal._plan_etiquetas`. Acá alcanza el umbral: estas
-barras son siempre las de UN producto en una ventana de 3 a 24 meses (4 a 25
-barras), no las 263 de «Por documento»."""
-
-
-def _var_precio(precios):
-    """% de variación del PRECIO de cada barra contra la anterior.
-
-    Sin la guarda de «parcial» de `_comun._variaciones` a propósito: ver el
-    comentario de arriba. El primero no tiene contra qué compararse y una
-    base en cero o negativa tampoco (el % no significaría nada): los dos dan
-    None, que el hover omite en vez de escribir un "+inf%"."""
-    out = []
-    previo = None
-    for v in precios:
-        if previo is not None and previo > 0 and not pd.isna(v):
-            out.append((float(v) - previo) / previo * 100.0)
-        else:
-            out.append(None)
-        previo = (float(v) if not pd.isna(v) else None)
-    return out
-
-
-def _fmt_docs(n, largo=False):
-    """'16 docs' / '1 doc' (o 'documentos', en el hover). Vacío si el parquet
-    no trae columna de documento: la etiqueta se arma igual sin ella."""
-    if n is None or pd.isna(n) or int(n) <= 0:
-        return ""
-    n = int(n)
-    if largo:
-        return f"{n:,} documentos" if n != 1 else "1 documento"
-    return f"{n:,} docs" if n != 1 else "1 doc"
-
-
-def _fmt_cant_um(cant, um):
-    """La cantidad comprada con su unidad: «315 KG», «12.5 LT», «1,240 UN».
-
-    Un decimal sólo si el número es chico y lo tiene: en la etiqueta de una
-    barra «315.00 KG» son tres caracteres de ruido. Sin cantidad, vacío —
-    la etiqueta no escribe un «0 KG» que nadie compró así."""
-    if cant is None or pd.isna(cant) or not cant:
-        return ""
-    cant = float(cant)
-    _dec = 1 if abs(cant) < 100 and cant % 1 else 0
-    _um = f" {um}" if um else ""
-    return f"{cant:,.{_dec}f}{_um}"
-
-
-def _etiquetas_barras(precios, valores, rotada=False, cantidades=None,
-                      um=""):
-    """El texto que Plotly dibuja SOBRE cada barra: precio, valor y, desde
-    el 2026-10-02, la CANTIDAD comprada en la unidad del producto (regla
-    #582, a pedido: «las barras deben mostrar la cantidad comprada según su
-    unidad de medida»). Va ÚLTIMA: el precio sigue siendo la pregunta que
-    trae a este panel.
-
-    ROTADA LLEVA DOS Y NO TRES: precio y cantidad, sin el valor. Con los
-    tres la etiqueta girada medía ~130px —MEDIDO con 13 barras semanales:
-    se salía 19px por arriba de la figura— y no hay techo que la acomode
-    sin aplastar las barras. El valor es el que menos pierde: lo dice el
-    alto de la barra, el hover y la tabla de abajo.
-
-    Sin rotar son dos renglones; rotada es uno solo con los dos separados
-    por «·», porque de costado los renglones se apilan a lo ANCHO y ahí el
-    hueco por barra son 30px.
-
-    DOS DATOS Y NO CUATRO desde el 2026-09-20. El 19 la etiqueta sumó la
-    variación contra la barra anterior y cuántos documentos la forman
-    (regla #479), y al día siguiente volvieron a salir: *«veo que cuando
-    todas son barras altas la etiqueta de datos es bastante larga, hay
-    alguna opción de [...] optativamente hacerlo visible con el paso del
-    cursor»*. Esa es la solución que se aplicó, y ninguno de los dos datos
-    se perdió: los dos están en el hover —que ya los decía— y además
-    escritos en su propia columna en la tabla de abajo, que desde ese mismo
-    día vive DENTRO de esta tarjeta y está siempre a la vista.
-
-    MEDIDO en el navegador (1366x768, 14 barras semanales): la etiqueta
-    girada baja de **144px a 70** sobre un área de trazo de 317, o sea de
-    comerse el 45% del alto del gráfico a un 22%. Que es justo lo que hacía
-    falta, porque en la misma vuelta la figura pasó de 384px a 237 para
-    hacerle sitio a la tabla."""
-    out = []
-    if cantidades is None:
-        cantidades = [None] * len(valores)
-    for pr, val, cant in zip(precios, valores, cantidades):
-        _pr = ("" if pr is None or pd.isna(pr) else f"S/ {pr:,.2f}")
-        _val = _fmt_soles_compacto(val)
-        _q = _fmt_cant_um(cant, um)
-        partes = (_pr, _q) if rotada else (_pr, _val, _q)
-        out.append((" · " if rotada else "<br>").join(x for x in partes
-                                                       if x))
-    return out
-
-
-def _hover_barras(rotulos, precios, valores, docs, provs, variaciones=None,
-                  claves=None, gran=None, rango=None, tope_provs=4):
-    """Una cadena por barra para el `hovertemplate`: lo que no entra arriba.
-
-    El valor va exacto, la variación dice contra QUÉ barra se comparó (o por
-    qué no la hay, que es lo que salva a «parcial» de leerse como un dato
-    faltante), el precio trae SU propia variación y abajo van los
-    proveedores que atendieron el período con cuánto puso cada uno —
-    ordenados de mayor a menor, cortados en `tope_provs` y con el resto
-    contado.
-
-    `provs` es la columna que arma `_prod_serie_periodo`: una lista de
-    `(nombre, valor)` por barra, o NaN si el parquet no trae proveedor."""
-    var_pre = _var_precio(list(precios))
-    out = []
-    for i, rot in enumerate(rotulos):
-        lineas = [f"<b>{rot}</b>", f"valor S/ {valores[i]:,.2f}"]
-        _v = variaciones[i] if variaciones else None
-        if _v:
-            _ant = (rotulos[_v[2]] if _v[2] is not None else "")
-            # Llega con su propio `<br>` adelante, así que no va a `lineas`.
-            lineas[-1] += _hover_variacion(
-                _v, gran, (claves[i] if claves else None), _ant, rango)
-        if not pd.isna(precios[i]):
-            _p = ("" if var_pre[i] is None
-                  else " {}".format(
-                      "<span style='color:{1}'>{0}</span>".format(
-                          *_fmt_variacion(var_pre[i]))))
-            lineas.append(f"precio prom. S/ {precios[i]:,.2f}{_p}")
-        _lista = provs[i] if provs is not None else None
-        if _lista is None or not isinstance(_lista, (list, tuple)):
-            _lista = []
-        _cab = [x for x in (_fmt_docs(None if docs is None else docs[i],
-                                      largo=True),
-                            (f"{len(_lista):,} proveedores" if len(_lista) > 1
-                             else ("1 proveedor" if _lista else "")))
-                if x]
-        if _cab:
-            lineas.append(" · ".join(_cab))
-        for _nom, _val in _lista[:tope_provs]:
-            # 30 y no los 26 de siempre: MEDIDO, el hover con tres
-            # proveedores mide 226px y el renglón más ancho es el del
-            # nombre + su monto, así que hay sitio — con 26 se cortaba
-            # «Compañia Food Retail S.A.C.», que entra entero.
-            _nom = _compras_truncar(nombre_propio(_nom), 30)
-            # El monto VA EXACTO y no compacto como en la barra: acá hay
-            # sitio, y "S/ 4k" por S/ 4,354.51 en el sitio donde se va a
-            # comparar un proveedor contra otro es esconder la diferencia.
-            lineas.append(f"<span style='color:{GRIS_TEXTO}'>{_nom} · "
-                          f"S/ {_val:,.0f}</span>")
-        if len(_lista) > tope_provs:
-            lineas.append(f"<span style='color:{GRIS_TEXTO}'>y "
-                          f"{len(_lista) - tope_provs} más</span>")
-        out.append("<br>".join(lineas))
-    return out
-
-
-def _tabla_periodos(rotulos, precios, valores, docs, variaciones,
-                    claves, gran, rango, cantidades=None, um=""):
-    """Las filas del RESUMEN: una por BARRA, en el orden del eje.
-
-    Es «el gráfico escrito», el mismo trato que la tabla Resumen de «Compra
-    por período» —y la misma grilla, `tablas.compras_semanal.
-    renderizar_periodos`, en su juego de anchos estrecho—: lo que la barra
-    dice arriba, en columnas que se pueden ordenar y leer hacia abajo.
-
-    Devuelve `(filas, total)`. En `total` los valores van ya FORMATEADOS
-    como texto: es una fila fija (`pinnedBottomRowData`), no entra al modelo
-    de filas y no se ordena.
-
-    TRES COLUMNAS QUE NO ESTÁN, y ninguna por olvido:
-
-      · «Proveedores». Estuvo un día. Se fue el 2026-09-20 a pedido
-        —«quitemos la columna de proveedores»— y la vista no perdió el
-        dato: tocando la barra, la zona pasa a Detalle y ahí hay una fila
-        por comprobante CON su proveedor, que es donde el nombre se lee
-        entero en vez de apretado contra otras cinco columnas.
-      · «Líneas». Medido sobre compras.parquet el 2026-09-20: en los 1.295
-        grupos producto-mes del último trimestre las líneas son EXACTAMENTE
-        los documentos (diferencia máxima 0) — un producto entra una vez por
-        comprobante. Una columna que repite a su vecina en el 100% de las
-        filas es ruido (regla #239).
-      · El precio en la fila TOTAL. Un promedio de promedios no mide nada, y
-        el promedio ponderado de verdad (valorizado/cantidad) sería OTRA
-        definición de «precio» en la misma columna. Va «—», que es lo que
-        `_JS_SOLES` escribe con un None.
-    """
-    _tot = float(sum(valores))
-    filas = {"periodo": list(rotulos)}
-    # LA CANTIDAD (regla #582, a pedido: «la tabla en la vista Resumen Total
-    # debe mostrar el total en cantidad también»). Va antes del precio, en
-    # el orden en que se lee una compra: cuánto, a cuánto y cuánto salió. Y
-    # el total SÍ la suma —las barras son de UN producto, así que es una
-    # sola unidad de medida—, escrito con la unidad.
-    if cantidades is not None:
-        filas["cant"] = [(0.0 if c is None or pd.isna(c) else float(c))
-                         for c in cantidades]
-    filas.update({
-        "precio": [(None if pd.isna(pr) else float(pr)) for pr in precios],
-        "valor": [float(v) for v in valores],
-        "parte": [(float(v) / _tot if _tot else 0.0) for v in valores],
-    })
-    if docs is not None:
-        filas["docs"] = [(0 if d is None or pd.isna(d) else int(d))
-                         for d in docs]
-    filas["variacion"] = [(_v[1] if _v and _v[0] == "ok" else None)
-                          for _v in variaciones]
-    # «parcial» no es un dato faltante, es la respuesta: por eso viaja como
-    # texto propio y con su motivo al lado, igual que en el hover.
-    filas["__vtxt"] = [("parcial" if _v and _v[0] == "parcial" else "—")
-                       for _v in variaciones]
-    filas["__nota"] = [
-        _nota_variacion(_v, gran, claves[_i],
-                        (rotulos[_v[2]] if _v and _v[2] is not None else ""),
-                        rango)
-        for _i, _v in enumerate(variaciones)]
-    filas["__sel"] = [False] * len(valores)
-
-    # EL TOTAL SE ESCRIBE CORTO porque su celda mide 97px, no 180: «Total ·
-    # 14 semanas» mide 108 y se cortaría con «…» justo en el número, que es
-    # lo único suyo que hay que leer. La unidad la dice el eje del gráfico
-    # de arriba, que es la misma.
-    # Y desde el 2026-10-02 dice «Total» a secas: la columna se angostó a
-    # 69px para que entrara la cantidad (regla #582), y «Total · 25» ya no
-    # cabía. Cuántas barras hay lo cuenta el gráfico de arriba.
-    total = {
-        "periodo": "Total",
-        "precio": None,
-        "valor": f"S/ {_tot:,.2f}",
-        # «100%» y no «100.0%»: en negrita, en 56px, el decimal se cortaba
-        # («100.…»), y un total de 100 no tiene decimal que decir.
-        "parte": "100%",
-        "variacion": None,
-        "__vtxt": "",
-        "__nota": "",
-    }
-    if "docs" in filas:
-        total["docs"] = f"{sum(filas['docs']):,}"
-    if "cant" in filas:
-        total["cant"] = _fmt_cant_um(sum(filas["cant"]), um) or "—"
-    return pd.DataFrame(filas), total
-
-
-def _periodo_del_clic(pt, claves, momentos):
-    """Clave del período que corresponde al punto de un clic en una barra.
-
-    A diferencia de su prima de Semanal (`_clave_del_clic`), acá el eje NO
-    es lineal: `_eje_x_kwargs` dibuja las barras sobre los timestamps de los
-    buckets, así que la `x` del evento vuelve como fecha y no como índice.
-    Por eso se mira primero la POSICIÓN del punto, que Streamlit manda con
-    el evento y no depende del tipo de eje, y la fecha queda de respaldo.
-
-    Tolerante a propósito: un clic fuera de rango, un formato que cambie o
-    una fecha que no case tienen que ser un no-op, no una excepción en medio
-    del render — el usuario tocó un gráfico, no pidió un traceback."""
-    for _k in ("point_index", "pointIndex", "point_number", "pointNumber"):
-        _i = pt.get(_k)
-        if isinstance(_i, (int, float)) and not isinstance(_i, bool):
-            _i = int(_i)
-            return claves[_i] if 0 <= _i < len(claves) else None
-    try:
-        _x = pd.Timestamp(pt.get("x"))
-    except (TypeError, ValueError):
-        return None
-    for _i, _m in enumerate(momentos):
-        if pd.Timestamp(_m) == _x:
-            return claves[_i] if _i < len(claves) else None
-    return None
-
-
-def _compras_del_periodo(g, clave, gran, col_fecha, col_punit, col_cant,
-                         col_valor, col_docu, col_prov, prov=None):
-    """Las filas del DETALLE: una por COMPRA del período que se tocó.
-
-    `clave` None es la ventana ENTERA (todas las barras) y `prov` acota a un
-    proveedor, con su nombre CRUDO: así llega al Detalle quien viene de un
-    clic en «Resumen del Período» (regla #581), con o sin barra en foco.
-
-    Devuelve `(filas, total)` o `(None, None)` si el parquet no trae la
-    columna de documento — sin ella no hay «una fila por comprobante» que
-    armar, y la zona se queda en Resumen diciéndolo.
-
-    UNA COMPRA ES (NÚMERO, PROVEEDOR) y no el número solo, la misma cuenta
-    que `_prod_serie_periodo` (regla #479): dos proveedores numeran su
-    «F001-123» cada uno por su cuenta, y medido sobre `compras.parquet` son
-    14.555 números distintos contra 17.988 pares. Contar el número pelado se
-    come el 19% de los comprobantes y devuelve un número creíble.
-
-    El precio de la fila es el PONDERADO de esa compra (valor/cantidad) y no
-    el promedio de sus líneas: si un comprobante trae el producto dos veces
-    a precios distintos, el promedio simple diría un precio que nadie pagó.
-    Por eso el total tampoco promedia precios — divide el valor entre la
-    cantidad, que es la única definición que se sostiene al agregar."""
-    if not col_docu or col_docu not in g.columns:
-        return None, None
-    _g = (g if clave is None else
-          g[_periodo_serie(pd.Series(g[col_fecha]), gran) == clave]).copy()
-    _g["__prov"] = (_g[col_prov].astype(str) if col_prov
-                    and col_prov in _g.columns else "")
-    if prov is not None:
-        _g = _g[_g["__prov"] == prov]
-    if _g.empty:
-        return None, None
-    _g["__cant"] = pd.to_numeric(_g[col_cant], errors="coerce").fillna(0.0)
-    _g["__val"] = pd.to_numeric(_g[col_valor], errors="coerce").fillna(0.0)
-    # SE AGRUPA POR DOS COLUMNAS DE VERDAD, y el renombre es POR NOMBRE.
-    # La primera versión agrupaba por `[_g[col_docu].astype(str), "__prov"]`
-    # —una Series suelta y un nombre— y después reescribía `_d.columns` con
-    # una lista de cinco. Funcionaba en la máquina de desarrollo (pandas 3,
-    # que deja la clave-Series como columna) y reventaba en Cloud con un
-    # `ValueError: Length mismatch`, porque ahí corre la versión de
-    # `requirements.txt` (pandas 2.2) y el frame sale con otra forma.
-    # Renombrar por POSICIÓN es apostar a la forma; por nombre, no. Ver la
-    # regla #481, que es sobre el desfase de versiones y no sobre esta
-    # función.
-    _g["__doc"] = _g[col_docu].astype(str)
-    _d = (_g.groupby(["__doc", "__prov"], as_index=False)
-            .agg(fecha=(col_fecha, "min"), cant=("__cant", "sum"),
-                 valor=("__val", "sum"))
-            .rename(columns={"__prov": "prov"}))
-    _d["punit"] = [(_v / _c if _c else None)
-                   for _v, _c in zip(_d["valor"], _d["cant"])]
-    _d["prov"] = [nombre_propio(_n) if _n else "—" for _n in _d["prov"]]
-    _d["fecha"] = pd.to_datetime(_d["fecha"]).dt.strftime("%Y-%m-%d")
-    _d = _d.sort_values("valor", ascending=False).reset_index(drop=True)
-    _d = _d[["fecha", "prov", "cant", "punit", "valor", "__doc"]]
-
-    _cant, _val = float(_d["cant"].sum()), float(_d["valor"].sum())
-    _n = len(_d)
-    total = {
-        "fecha": f"Total · {_n:,}",
-        "prov": "",
-        "cant": _cant,
-        "punit": (f"S/ {_val / _cant:,.2f}" if _cant else None),
-        "valor": f"S/ {_val:,.2f}",
-        "__doc": "",
-    }
-    return _d, total
-
-
-def _proveedores_del_producto(g, clave, gran, col_fecha, col_cant, col_valor,
-                              col_prov):
-    """Las filas del RESUMEN DEL PERÍODO (regla #581): una por PROVEEDOR
-    que vendió el producto en la barra en foco, o en la ventana entera si
-    no hay barra (`clave` None).
-
-    Devuelve `(filas, total)` o `(None, None)` si el parquet no trae
-    proveedor o no hay compras. Las columnas, por NOMBRE (regla #481).
-
-    El precio es el PONDERADO de cada proveedor, por lo mismo que en el
-    Detalle. Sin conteo de documentos: no entraba en el ancho del panel y
-    el dato está a un clic, en Detalle (ver `renderizar_proveedores_producto`).
-
-    La cantidad SÍ se suma en el total: es un solo producto, así que es una
-    sola unidad de medida."""
-    if not col_prov or col_prov not in g.columns:
-        return None, None
-    _g = (g if clave is None else
-          g[_periodo_serie(pd.Series(g[col_fecha]), gran) == clave]).copy()
-    if _g.empty:
-        return None, None
-    _g["__prov"] = _g[col_prov].astype(str)
-    _g["__cant"] = pd.to_numeric(_g[col_cant], errors="coerce").fillna(0.0)
-    _g["__val"] = pd.to_numeric(_g[col_valor], errors="coerce").fillna(0.0)
-    _p = (_g.groupby("__prov", as_index=False)
-            .agg(cant=("__cant", "sum"), valor=("__val", "sum"))
-            .sort_values(["valor", "__prov"], ascending=[False, True],
-                         kind="stable")
-            .reset_index(drop=True))
-    _val = float(_p["valor"].sum())
-    _cant = float(_p["cant"].sum())
-    filas = pd.DataFrame({
-        "prov": [nombre_propio(_n) if _n else "—" for _n in _p["__prov"]],
-        "cant": _p["cant"].astype(float),
-        "punit": [(_v / _c if _c else None)
-                  for _v, _c in zip(_p["valor"], _p["cant"])],
-        "valor": _p["valor"].astype(float),
-        "parte": (_p["valor"].astype(float) / _val if _val else 0.0),
-        "__prov": _p["__prov"],
-    })
-    _n = len(filas)
-    total = {
-        "prov": f"Total · {_n:,}",
-        "cant": _cant,
-        "punit": (f"S/ {_val / _cant:,.2f}" if _cant else None),
-        "valor": f"S/ {_val:,.2f}",
-        "parte": "100%",
-        "__prov": "",
-    }
-    return filas, total
+def _fecha_corta(f):
+    f = pd.Timestamp(f)
+    return f"{f.day} {MESES_ABR_ES[f.month - 1]}"
 
 
 def _sin_tildes(texto):
@@ -1115,9 +193,8 @@ def _sin_tildes(texto):
 
 
 def _coincide(nombres, consulta):
-    """Máscara del buscador del Ranking de productos (regla #581): cada
-    PALABRA de la consulta tiene que aparecer en el nombre, en cualquier
-    orden — «pato magret» encuentra «Magret De Pato Macho x Kg»."""
+    """Máscara del buscador (regla #581): cada PALABRA de la consulta tiene
+    que aparecer en el nombre, en cualquier orden."""
     _pal = _sin_tildes(consulta).split()
     _nom = nombres.astype(str).map(_sin_tildes)
     _m = pd.Series(True, index=nombres.index)
@@ -1126,1278 +203,1499 @@ def _coincide(nombres, consulta):
     return _m
 
 
-def _rotulo_periodo(ts, gran):
-    """El período en español, para el hover y para el eje.
-
-    Plotly rotula en INGLÉS con `tickformat` («Aug 2026»): usa su locale por
-    defecto. La lista de meses en español es `cortes.MESES_ABR_ES`, una sola
-    en todo el repo. Ver la regla #241."""
-    ts = pd.Timestamp(ts)
-    if gran == "Año":
-        return str(ts.year)
-    if gran == "Semana":
-        return f"{ts.day:02d} {MESES_ABR_ES[ts.month - 1]}"
-    return f"{MESES_ABR_ES[ts.month - 1]} {ts.year}"
-
-
 def _sin_gritar(nombre):
-    """"CARNES" -> "Carnes"; "Otros Servicios Prestados Por Terceros" ->
-    tal cual.
+    """«CARNES» → «Carnes»; lo que ya viene en nombre propio, tal cual.
 
-    El `nombre_propio` de las reglas #347 y #379, pero SÓLO sobre el texto
-    que llega TODO en mayúsculas. La guarda no es prudencia: es lo que midió el
-    parquet el 2026-09-11, cuando estos tres paneles se pidieron
-    "similares al de Ranking de Proveedores".
-
-      · Las 8 FAMILIAS llegan gritadas, las 8.
-      · De las 95 SUBFAMILIAS, sólo 34 gritan: las otras 61 ya vienen en
-        capitalización de nombre propio desde el ERP ("Otros Servicios
-        Prestados Por Terceros"). O sea que el panel B mezcla los dos
-        estilos según qué familia esté enfocada, y una pasada ciega no
-        arregla eso: lo empareja mal.
-
-    Correrlo sobre las 61 que ya están bien NO es inocuo, y tampoco es
-    teoría — se corrió: "Serv. Analisis Y Certificacion" vuelve como
-    "SERV. Analisis y Certificacion", porque la regla de "token con punto
-    = sigla" está escrita para `S.A.C.`, no para un `Serv.` abreviado. Con
-    la guarda, cada texto se toca una vez o ninguna.
-
-    Es la MISMA que usa el Ranking de Proveedores, que es lo que estos
-    paneles están copiando. Hasta el 2026-09-11 había dos implementaciones
-    conviviendo (`base.py` y ésta) y acá importaba cuál: en dos de las ocho
-    familias dan distinto —"BEBIDAS CON ALCOHOL" sale "Bebidas con Alcohol"
-    o "Bebidas Con Alcohol" según la versión, y "RB ALIMENTOS" conserva el
-    "RB" o lo baja a "Rb"—. La regla #379 las unificó ese mismo día en esta,
-    con las reglas de las dos, así que ya no hay elección que hacer.
-
-    Los PRODUCTOS del ranking quedan fuera de esto a propósito: ya vienen
-    en minúscula y con la medida pegada al nombre ("Bife Ancho Argentino x
-    Kg"), donde capitalizar por palabra devolvería "X Kg".
-    """
+    `nombre_propio` (reglas #347 y #379) sólo sobre el texto que llega TODO
+    en mayúsculas: las 8 familias gritan, y de las 95 subfamilias sólo 34
+    (medido el 2026-09-11). Pasado sobre las otras 61, «Serv. Analisis»
+    vuelve «SERV. Analisis»."""
     s = str(nombre)
     return nombre_propio(s) if not any(c.islower() for c in s) else s
 
 
-def _fam_normalizada(dd, col_fam):
-    """Columna de familia como texto, con vacíos/NaN unificados en "Sin
-    familia" — no se descartan, o el total de este ranking dejaría de
-    cuadrar con el de productos."""
-    return dd[col_fam].astype(str).replace({"": "Sin familia", "nan": "Sin familia"})
+# ── Los datos ──────────────────────────────────────────────────────────
 
 
-def _subfam_normalizada(dd, col_subfam):
-    """Gemela de `_fam_normalizada` para Subfamilia, y por el mismo motivo:
-    los vacíos se unifican en "Sin subfamilia" en vez de descartarse, o el
-    total del panel B dejaría de cuadrar con la fila de su familia en el A.
+def _normalizar(d, col_prod, col_fam, col_subfam, col_valor, col_cant,
+                col_um, col_fecha, col_prov, col_docu):
+    """El df del drill con nombres FIJOS (prod, fam, sub, valor, cant, um,
+    fecha, prov, docu). Las familias y subfamilias vacías se unifican en
+    «Sin familia» / «Sin subfamilia» en vez de descartarse: si no, sus
+    totales dejarían de cuadrar con el del ranking."""
+    n = len(d)
 
-    Medido sobre R2 el 2026-09-09: hoy no hace falta para nada —
-    `compras.parquet` trae `SUBFAMILIA` en las 51.838 filas, 0 nulas y 0
-    vacías, 95 valores distintos. Es una red por si el parquet cambia, no
-    una rama que se recorra."""
-    return dd[col_subfam].astype(str).replace({"": "Sin subfamilia",
-                                               "nan": "Sin subfamilia"})
+    def _txt(col, vacio=""):
+        if col and col in d.columns:
+            s = d[col].astype(str).str.strip()
+            return s.where(~s.isin(("", "nan", "None")), vacio).to_numpy()
+        return np.full(n, vacio, dtype=object)
 
+    def _num(col):
+        if col and col in d.columns:
+            return pd.to_numeric(d[col], errors="coerce").fillna(0).to_numpy(
+                dtype=float)
+        return np.zeros(n)
 
-def _fam_ranking(dd, col_fam, col_valor):
-    """Una familia por fila: valor total y % sobre el total comprado.
-
-    Hasta el 2026-09-12 contaba además las subfamilias de cada una (la
-    columna «Subfam.» del panel) y los productos distintos (la «Prod.» sin
-    panel B). Se pidió fuera la primera y la segunda se fue con ella: un
-    conteo calculado que ninguna tabla muestra es trabajo que nadie lee."""
-    g = dd.copy()
-    g[col_fam] = _fam_normalizada(g, col_fam)
-    out = g.groupby(col_fam).agg(valor=(col_valor, "sum"))
-    out = out.sort_values("valor", ascending=False).reset_index()
-    out = out.rename(columns={col_fam: "familia"})
-    tot = out["valor"].sum() or 1.0
-    out["pct"] = out["valor"] / tot * 100
-    return out
-
-
-def _subfam_ranking(d_fam, col_subfam, col_prod, col_valor):
-    """Una subfamilia por fila, DENTRO de una familia ya recortada: valor,
-    Nº de productos y % SOBRE ESA FAMILIA — no sobre el total comprado.
-
-    El % es sobre el padre a propósito: con % global, las cinco subfamilias
-    de VINOS Y ESPUMANTES darían 4%, 0,5%, 0,2%… y la columna dejaría de
-    servir para comparar las filas que se están viendo. Lo dice el
-    `headerTooltip` de esa columna ("% sobre ALIMENTOS"), que es lo que
-    evita que se lea como el % del panel A — hasta el 2026-09-11 lo decía
-    un caption debajo de la tabla, que se pidió fuera.
-
-    Recibe el df YA filtrado por familia y no `(df, familia)` a propósito:
-    la clave real es el PAR (familia, subfamilia), no la subfamilia sola.
-    Medido sobre R2 el 2026-09-09, 9 de las 95 subfamilias de
-    `compras.parquet` aparecen en más de una familia, así que un
-    `df[col_subfam] == x` suelto mezcla productos de dos familias sin dar
-    error y sin que se note."""
-    g = d_fam.copy()
-    g[col_subfam] = _subfam_normalizada(g, col_subfam)
-    out = g.groupby(col_subfam).agg(valor=(col_valor, "sum"),
-                                    productos=(col_prod, "nunique"))
-    out = out.sort_values("valor", ascending=False).reset_index()
-    out = out.rename(columns={col_subfam: "subfamilia"})
-    tot = out["valor"].sum() or 1.0
-    out["pct"] = out["valor"] / tot * 100
-    return out
+    b = pd.DataFrame({
+        "prod": _txt(col_prod),
+        "fam": _txt(col_fam, "Sin familia"),
+        "sub": _txt(col_subfam, "Sin subfamilia"),
+        "valor": _num(col_valor),
+        "cant": _num(col_cant),
+        "um": _txt(col_um),
+        "fecha": (pd.to_datetime(d[col_fecha], errors="coerce").dt.normalize()
+                  .to_numpy() if col_fecha else pd.NaT),
+        "prov": _txt(col_prov),
+        "docu": _txt(col_docu),
+    })
+    return b[b["fecha"].notna() & (b["prod"] != "")].reset_index(drop=True)
 
 
-def _ambito_ranking(dd, col_fam, col_subfam, familia, subfamilia):
-    """El recorte de compras sobre el que se rankean los PRODUCTOS: todo,
-    una familia, o una subfamilia DE una familia.
+def marcar_revisar(cant, valor, ref, um):
+    """La marca de cada línea: «precio», «um» o «» (regla #653). Pura.
 
-    Nace el 2026-09-12, cuando el tercer panel del drill (los productos del
-    grupo elegido) se fue y su papel lo tomó el Ranking de productos: el
-    clic en Familia o en Subfamilia ahora recorta esa tabla.
+    · «um»: una cantidad con decimales en una unidad que se cuenta entera
+      (`_UND_ENTERAS`) — 33 líneas en 12 meses, casi todas vinos cargados
+      en litros.
+    · «precio»: el precio de la línea a `_VECES_REVISAR` veces su precio
+      habitual o a menos de su inversa, en una línea de `_MINIMO_REVISAR`
+      soles o más — un error de tipeo, de unidad o de producto.
 
-    Se filtra por familia PRIMERO, siempre, aunque la subfamilia sola
-    parezca bastar: la clave es el PAR (familia, subfamilia). 9 de las 95
-    subfamilias de `compras.parquet` aparecen en más de una familia (ver
-    `_subfam_ranking`), así que un `df[col_subfam] == x` suelto rankearía
-    productos de dos familias sin dar error."""
-    if familia is None:
-        return dd
-    d = dd[_fam_normalizada(dd, col_fam) == familia]
-    if subfamilia is not None and col_subfam and col_subfam in d.columns:
-        d = d[_subfam_normalizada(d, col_subfam) == subfamilia]
-    return d
+    La regla es PROPIA, no un estándar (ver las constantes)."""
+    c = pd.to_numeric(pd.Series(cant), errors="coerce").reset_index(drop=True)
+    v = pd.to_numeric(pd.Series(valor), errors="coerce").reset_index(drop=True)
+    r = pd.to_numeric(pd.Series(ref), errors="coerce").reset_index(drop=True)
+    u = pd.Series(um).astype(str).str.strip().str.upper().reset_index(drop=True)
+    pu = (v / c).where(c > 0)
+    q = pu / r.where(r > 0)
+    fracc = u.isin(_UND_ENTERAS) & (c > 0) & ((c - c.round()).abs() > 1e-9)
+    caro = q.notna() & ((q >= _VECES_REVISAR) | (q <= 1 / _VECES_REVISAR)) \
+        & (v >= _MINIMO_REVISAR)
+    return np.where(fracc, "um", np.where(caro, "precio", ""))
 
 
-# ── Vista principal ──────────────────────────────────────────────────────
+def _con_referencia(b):
+    """`b` con el precio habitual de cada línea (`ref`, el de «Compras por
+    período»: la mediana de los 90 días anteriores) y su marca (`flag`)."""
+    if b.empty:
+        return b.assign(ref=pd.Series(dtype=float), flag="")
+    ref = precio_habitual(b["prod"], b["fecha"], b["valor"], b["cant"])
+    b = b.assign(ref=ref.to_numpy())
+    b["flag"] = marcar_revisar(b["cant"], b["valor"], b["ref"], b["um"])
+    return b
 
-@st.fragment
-def _prod_stats(g, col_fecha, col_punit, col_cant, col_valor, col_um):
-    """Las cifras del encabezado del panel de detalle, sobre EL MISMO df
-    que dibujan los puntos.
 
-    Nace el 2026-08-26 con la ventana propia de la tarjeta: antes salían de
-    la fila del ranking, que se calcula sobre el rango de la franja. Con
-    dos ventanas distintas eso sería un número describiendo un período y
-    unos puntos dibujando otro.
+def _resumen(rng, keys, prev, antes):
+    """Una fila por `keys` (producto, familia o familia + subfamilia) con lo
+    que muestran la lista y la ficha. Todo de una vez, sin un bucle por
+    grupo (regla #537); se agrupa por columnas y se nombra por nombre
+    (regla #481).
 
-    Devuelve también `minimo`/`maximo`, que el ranking no tiene: con
-    `var` = primera contra última compra, un producto que arrancó y terminó
-    en el mismo precio da 0.0% aunque en el medio haya oscilado 39% — el
-    caso real que motivó el pedido. El rango min-max es lo que la persona
-    está viendo en los puntos, así que se dice.
-    """
-    _r = g.dropna(subset=[col_punit])
-    _r = _r[_r[col_punit] > 0].sort_values(col_fecha)
-    if _r.empty:
+    · valor, cant, ult, docs, n (productos), nflag (líneas marcadas).
+    · var / est: contra `prev` (el período anterior de igual largo);
+      «nuevo» si nunca se compró antes, «vuelve» si sí pero no en `prev`.
+    · pp, hab, ppv: precio ponderado, % contra el habitual y su impacto en
+      soles — los tres SIN las líneas marcadas."""
+    g = rng.groupby(keys, sort=False)
+    out = g.agg(valor=("valor", "sum"), cant=("cant", "sum"),
+                ult=("fecha", "max"), n=("prod", "nunique"))
+    ok = rng[(rng["flag"] == "") & (rng["cant"] > 0)]
+    out = out.join(ok.groupby(keys).agg(v_ok=("valor", "sum"),
+                                        c_ok=("cant", "sum")))
+    okr = ok[ok["ref"].notna()].assign(rc=lambda t: t["ref"] * t["cant"])
+    out = out.join(okr.groupby(keys).agg(vref=("valor", "sum"),
+                                         refc=("rc", "sum")))
+    out = out.join(prev.groupby(keys).agg(prev=("valor", "sum")))
+    out = out.join(rng[rng["flag"] != ""].groupby(keys)
+                   .agg(nflag=("valor", "size")))
+    _d = rng[rng["docu"] != ""].drop_duplicates(list(keys) + ["docu", "prov"])
+    out = out.join(_d.groupby(keys).agg(docs=("docu", "size")))
+    out[["prev", "nflag", "docs"]] = out[["prev", "nflag", "docs"]].fillna(0)
+    out["var"] = np.where(out["prev"] > 0,
+                          (out["valor"] / out["prev"].where(out["prev"] > 0)
+                           - 1) * 100, np.nan)
+    _vistos = set(antes)
+    _idx = [tuple(i) if isinstance(i, tuple) else i for i in out.index]
+    out["est"] = ["" if p > 0 else ("vuelve" if i in _vistos else "nuevo")
+                  for i, p in zip(_idx, out["prev"])]
+    out["pp"] = np.where(out["c_ok"] > 0, out["v_ok"] / out["c_ok"].where(
+        out["c_ok"] > 0), out["valor"] / out["cant"].where(out["cant"] > 0))
+    out["hab"] = (out["vref"] / out["refc"].where(out["refc"] > 0) - 1) * 100
+    out["ppv"] = out["vref"] - out["refc"]
+    return out.sort_values(["valor"], ascending=False, kind="stable")
+
+
+def _ambito(res_p, fam, sub):
+    """Los productos de `res_p` (un `_resumen` por producto, con `fam` y
+    `sub`) que caen en la familia y la subfamilia elegidas.
+
+    Siempre por la familia PRIMERO: la clave es el PAR (familia,
+    subfamilia). 9 de las 95 subfamilias del parquet se repiten entre
+    familias (medido el 2026-09-09), y un recorte por la subfamilia sola
+    mezclaría productos de dos familias sin dar error."""
+    amb = res_p
+    if fam is not None:
+        amb = amb[amb["fam"] == fam]
+        if sub is not None:
+            amb = amb[amb["sub"] == sub]
+    return amb
+
+
+def _ultimo_precio(rng):
+    """El precio de la ÚLTIMA compra de cada producto en el rango
+    (ponderado si ese día hubo varias)."""
+    u = rng[rng["cant"] > 0]
+    if u.empty:
+        return pd.Series(dtype=float)
+    u = u[u["fecha"] == u.groupby("prod")["fecha"].transform("max")]
+    a = u.groupby("prod").agg(v=("valor", "sum"), c=("cant", "sum"))
+    return a["v"] / a["c"]
+
+
+def _cada_cuanto(h90):
+    """Cada cuántos días se compra cada producto: la mediana de los saltos
+    entre días con compra, en los últimos 90."""
+    x = (h90[["prod", "fecha"]].drop_duplicates()
+         .sort_values(["prod", "fecha"], kind="stable"))
+    if x.empty:
+        return pd.Series(dtype=float)
+    x["gap"] = x.groupby("prod")["fecha"].diff().dt.days
+    return x.groupby("prod")["gap"].median()
+
+
+# ── Los períodos de la curva ──────────────────────────────────────────
+
+
+def _clave(fechas, gran):
+    f = pd.to_datetime(fechas)
+    if gran == "Mes":
+        return f.dt.to_period("M").astype(str)
+    if gran == "Semana":
+        return (f - pd.to_timedelta(f.dt.weekday, unit="D")).dt.strftime(
+            "%Y-%m-%d")
+    return f.dt.year.astype(str)
+
+
+def _secuencia(ini, fin, gran):
+    """TODOS los períodos entre `ini` y `fin`, también los sin compras: el
+    eje es el tiempo, y un mes vacío se ve como un hueco, no desaparece."""
+    ini, fin = pd.Timestamp(ini), pd.Timestamp(fin)
+    if gran == "Mes":
+        return [str(p) for p in pd.period_range(ini, fin, freq="M")]
+    if gran == "Semana":
+        lun = ini - pd.Timedelta(days=ini.weekday())
+        return [x.strftime("%Y-%m-%d")
+                for x in pd.date_range(lun, fin, freq="7D")]
+    return [str(y) for y in range(ini.year, fin.year + 1)]
+
+
+def _etq(k, gran, largo=False):
+    """El rótulo de un período a partir de su clave."""
+    k = str(k)
+    try:
+        if gran == "Mes":
+            f = pd.Timestamp(k + "-01")
+            m = MESES_ABR_ES[f.month - 1]
+            return f"{m} {f.year}" if largo else f"{m} {str(f.year)[2:]}"
+        if gran == "Semana":
+            f = pd.Timestamp(k)
+            return (f"sem. del {_fecha_corta(f)}" if largo
+                    else _fecha_corta(f))
+        if gran == "Documento":
+            fec, doc, prov = (k.split("|") + ["", "", ""])[:3]
+            corto = _fecha_corta(fec)
+            if not largo:
+                return corto
+            leg = documento_legible(pd.Series([doc])).iat[0] if doc \
+                and not doc.startswith("#") else ""
+            return " · ".join(x for x in (corto, nombre_propio(prov), leg) if x)
+    except (ValueError, IndexError):
+        pass
+    return k
+
+
+def _serie(h, gran, op, ultimo, rango):
+    """La curva del producto: un dict con `keys` (en orden), `agg` (una fila
+    por período: c, v, pc, pv, rc, cr, docs, fl), `lineas` (las del
+    ámbito, con su clave `k`), `parc` (`tramo_parcial` o None) y `refq` (la
+    cantidad de los mismos días del período anterior). `None` sin compras.
+
+    La ventana arranca al INICIO de su período (`inicio_de_periodo`): «3
+    meses» al 11 de octubre empezaba el 12 de julio y la primera barra era
+    un mes de 20 días (regla #646)."""
+    if h.empty:
         return None
-    _p = _r[col_punit]
-    _ini, _fin = float(_p.iloc[0]), float(_p.iloc[-1])
-    return {
-        "inicio": _ini, "fin": _fin,
-        "var_pct": ((_fin - _ini) / _ini * 100.0) if _ini else None,
-        "minimo": float(_p.min()), "maximo": float(_p.max()),
-        "n": int(len(_r)),
-        "um": (str(_r[col_um].iloc[-1]) if col_um and col_um in _r.columns
-               else ""),
-        "cantidad": (float(pd.to_numeric(g[col_cant], errors="coerce")
-                           .fillna(0).sum()) if col_cant else 0.0),
-        "valor": float(pd.to_numeric(g[col_valor], errors="coerce")
-                       .fillna(0).sum()),
-    }
+    if op == periodo.HEREDA and rango is not None:
+        ini, fin = pd.Timestamp(rango[0]), pd.Timestamp(rango[1])
+    else:
+        v = periodo.ventana(op, ultimo, minimo=h["fecha"].min())
+        if v is None:
+            return None
+        ini, fin = v
+    if gran != "Documento":
+        ini = inicio_de_periodo(ini, gran)
+    w = h[(h["fecha"] >= ini) & (h["fecha"] <= fin)].copy()
+    if w.empty:
+        return None
+    if gran == "Documento":
+        _doc = w["docu"].where(w["docu"] != "", "#" + w.index.astype(str))
+        w["k"] = (w["fecha"].dt.strftime("%Y-%m-%d") + "|" + _doc + "|"
+                  + w["prov"])
+        keys = sorted(w["k"].unique())
+    else:
+        w["k"] = _clave(w["fecha"], gran).to_numpy()
+        keys = _secuencia(ini, fin, gran)
+    ok = (w["flag"] == "") & (w["cant"] > 0)
+    okr = ok & w["ref"].notna()
+    w["pc"] = w["cant"].where(ok, 0.0)
+    w["pv"] = w["valor"].where(ok, 0.0)
+    w["rc"] = (w["ref"] * w["cant"]).where(okr, 0.0)
+    w["cr"] = w["cant"].where(okr, 0.0)
+    w["fl"] = (w["flag"] != "").astype(int)
+    agg = (w.groupby("k").agg(c=("cant", "sum"), v=("valor", "sum"),
+                              pc=("pc", "sum"), pv=("pv", "sum"),
+                              rc=("rc", "sum"), cr=("cr", "sum"),
+                              fl=("fl", "sum"), docs=("valor", "size"))
+           .reindex(keys).fillna(0.0))
+    parc = tramo_parcial(gran, ultimo) if gran != "Documento" else None
+    if parc is not None and _clave(pd.Series([parc["ini"]]), gran).iat[0] \
+            != keys[-1]:
+        parc = None
+    refq = None
+    if parc is not None:
+        _r = h[(h["fecha"] >= parc["ref_ini"]) & (h["fecha"] <= parc["ref_fin"])]
+        refq = float(_r["cant"].sum())
+    return {"keys": keys, "agg": agg, "lineas": w, "parc": parc,
+            "refq": refq, "ini": ini, "fin": fin}
 
 
-def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor,
-                     fecha=None):
-    """Los dos paneles de arriba de la tarjeta —Familia | Subfamilia— y el
-    ÁMBITO que dejan elegido, como `(familia, subfamilia)` para
-    `_ambito_ranking`.
+def _precios(agg):
+    """El precio ponderado y el habitual de cada período, SIN las líneas
+    marcadas (regla #653)."""
+    p = agg["pv"] / agg["pc"].where(agg["pc"] > 0)
+    hab = agg["rc"] / agg["cr"].where(agg["cr"] > 0)
+    return p, hab
 
-    El ámbito NO es el foco de los paneles, y la diferencia importa: sin
-    ningún clic el panel B igual muestra las subfamilias de la familia de
-    arriba (para no abrir vacío), pero el ranking de abajo tiene que seguir
-    siendo el de TODO lo comprado, que es lo que fue siempre. Por eso:
 
-      · nada elegido     → (None, None): todo lo comprado
-      · una familia      → (familia, None)
-      · una subfamilia   → (la familia que muestra el panel B, subfamilia),
-                           aunque esa familia no se haya clicado.
+def _fig_producto(S, gran, um, sel):
+    """La curva de la ficha: la CANTIDAD en barras (eje izquierdo) y el
+    PRECIO ponderado en línea (eje derecho), con el habitual punteado.
 
-    Sin columna de Subfamilia en el parquet, el panel B no se dibuja y la
-    mitad derecha de la fila queda vacía: es una red, no un caso real
-    (`SUBFAMILIA` viene en las 51.838 filas, ver `_subfam_normalizada`).
+    La barra del valor de antes mezclaba precio y cantidad: subía igual si
+    se compraba más o si se pagaba más. Separadas, la pregunta «¿compré más
+    o pagué más?» se contesta mirando.
 
-    `fecha` es un callable `fecha(titulo_html)` que dibuja el selector de
-    fecha de la sección con ese título a su izquierda. Va en la fila del
-    título del panel A, «Compras por familia» (2026-09-12, a pedido, y
-    repetido: «el selector de fecha debe estar al lado de la primera tabla
-    de familia»). Una primera versión lo había puesto del lado del panel B
-    —el borde derecho de la tarjeta, donde está en las otras cuatro que lo
-    usan— y no era lo pedido: el selector se lee como parte de la tabla que
-    tiene al lado. Es un callable y no un valor por la misma razón que el
-    `extra=` de `selector_fecha_tarjeta`: en Streamlit el sitio se elige
-    entrando."""
-    hay_sub = bool(col_subfam and col_subfam in dd.columns)
-    fam_ranking = _fam_ranking(dd, col_fam, col_valor)
-    fam_focus = st.session_state.get("compras_prod_fam_focus")
-    if fam_focus not in set(fam_ranking["familia"]):
-        fam_focus = None
+    El período en curso va RAYADO, con una raya en la cantidad de los
+    mismos días del anterior y el último tramo del precio punteado (regla
+    #646). Un período con compras marcadas lleva un punto naranja: su
+    precio es el de las otras; si no hay otras, el punto va en el precio
+    marcado, recortado al borde del eje."""
+    keys, agg = S["keys"], S["agg"]
+    n = len(keys)
+    cant = agg["c"].tolist()
+    precio, hab = _precios(agg)
+    pr = [None if pd.isna(x) else float(x) for x in precio]
+    hb = [None if pd.isna(x) else float(x) for x in hab]
+    parc = S["parc"] is not None
+    fig = go.Figure()
 
-    # DOS filas de columnas y no una, desde el 2026-09-12: los títulos en
-    # una y los grids en otra. Con el título de cada panel dentro de su
-    # columna, el que comparte fila con la píldora de la fecha (hoy el del
-    # A; ese día, el del B) medía distinto que el otro, texto suelto con el
-    # margen negativo de la #162, y los grids arrancaban a 16px de
-    # distancia (medido, 1280px).
-    # En filas separadas Streamlit alinea las dos columnas solo. El título B
-    # se escribe DESPUÉS del grid A (depende de su clic) en una columna
-    # creada antes: en Streamlit el sitio lo decide el contenedor, no el
-    # orden de escritura.
-    # columnas-internas: títulos de los dos niveles del drill.
-    tit_fam, tit_sub = st.columns(2, gap=GAP_DRILL,
-                                  vertical_alignment="center")
-    # columnas-internas: los dos niveles del drill, mitad y mitad, dentro
-    # de la tarjeta del ranking. No es una fila de drill.
-    col_famtabla, col_subtabla = st.columns(2, gap=GAP_DRILL)
+    _col = [(ACENTO if k == sel else LAVANDA_CHIP) if sel else LAVANDA_BORDE
+            for k in keys]
+    _pat = ["/" if parc and i == n - 1 else "" for i in range(n)]
+    _hover = []
+    for i, k in enumerate(keys):
+        a = agg.iloc[i]
+        _l = [f"<b>{_esc(_etq(k, gran, largo=True))}"
+              + (" (en curso)" if parc and i == n - 1 else "") + "</b>",
+              _cant(a["c"], um) + (f" · {_precio(pr[i])} por {um or 'unidad'}"
+                                    if pr[i] is not None else ""),
+              f"{_soles(a['v'])} · {int(a['docs'])} "
+              + ("compra" if int(a["docs"]) == 1 else "compras")]
+        if a["fl"]:
+            _l.append(f"{int(a['fl'])} para revisar, fuera del precio")
+        _hover.append("<br>".join(_l))
+    fig.add_bar(x=keys, y=cant, marker=dict(
+        color=_col, line=dict(width=0),
+        pattern=dict(shape=_pat, fgcolor=GRIS_BORDE, size=6, solidity=0.35)),
+        customdata=_hover, hovertemplate="%{customdata}<extra></extra>",
+        showlegend=False)
+    if parc and S["refq"]:
+        fig.add_scatter(
+            x=[keys[-1]], y=[S["refq"]], mode="markers",
+            marker=dict(symbol="line-ew-open", size=26, color=GRIS_TEXTO_MEDIO,
+                        line=dict(color=GRIS_TEXTO_MEDIO, width=2)),
+            hoverinfo="skip", showlegend=False)
 
-    with tit_fam:
-        # Título y fecha en UNA fila (`cp_prod_fila`, flex): el título cede
-        # con puntos suspensivos y el trigger conserva su ancho.
-        _tit_fam = '<div class="cp-prod-rank-tit">Compras por familia</div>'
-        if fecha is not None:
-            fecha(_tit_fam)
+    # El eje del precio: con un mínimo de alto (8 % del máximo), si no una
+    # variación de 0,4 % se dibujaba como una montaña.
+    _nums = [x for x in pr + hb if x is not None]
+    if _nums:
+        _lo, _hi = min(_nums), max(_nums)
+        _pad = (_hi - _lo) * 0.18
+        _min = _hi * 0.08 or 1.0
+        if _hi - _lo + 2 * _pad < _min:
+            _mid = (_hi + _lo) / 2
+            y2 = [max(0.0, _mid - _min / 2), _mid + _min / 2]
         else:
-            st.markdown(_tit_fam, unsafe_allow_html=True)
-
-    with col_famtabla:
-
-        disp_fam = fam_ranking.rename(columns={
-            "familia": "Familia", "valor": "Valor", "pct": "%",
-        })
-        _val_max_fam = (float(fam_ranking["valor"].max())
-                       if len(fam_ranking) else 1.0)
-        disp_fam["_barra"] = disp_fam["Valor"] / _val_max_fam * 100
-        # El nombre CRUDO viaja en una columna oculta y es el que se
-        # lee de vuelta: la columna visible pasa por `_sin_gritar` y
-        # ya no matchea contra los datos. Mismo patrón —y mismo
-        # motivo— que `_prov_raw` en el Ranking de Proveedores.
-        disp_fam["_fam_raw"] = disp_fam["Familia"]
-        disp_fam["Familia"] = disp_fam["Familia"].map(_sin_gritar)
-        # Sin columna de conteo desde el 2026-09-12, a pedido: la
-        # «Subfam.» (cuántas subfamilias abre el clic) se fue, y con ella
-        # la «Prod.» que la reemplazaba sin panel B. El número de puertas
-        # se ve igual —es el alto del panel de al lado— y lo que no se
-        # ve, no se estaba leyendo.
-        _resp_fam = AgGrid(
-            disp_fam[["Familia", "Valor", "%", "_barra", "_fam_raw"]],
-            gridOptions={
-                # Sin `flex`: mismo motivo que el Ranking de productos
-                # (`st_aggrid` le clava `width: 200` a toda columna sin
-                # `width` propio, y ese `width` le gana al `flex`).
-                #
-                # Los anchos se eligieron con la regla #349 en la mano:
-                # AG Grid reescala las columnas para llenar la grilla.
-                # El reparto prioriza "Valor", porque un número
-                # recortado por la izquierda es plausible y falso
-                # ("S/ 1,452,437" → "452,437"), mientras que un nombre
-                # recortado se ve recortado — y encima tiene tooltip.
-                # Familia se queda con los 52px de la columna que se fue,
-                # así el total declarado es el mismo que el del panel B
-                # y los dos escalan igual.
-                "columnDefs": [
-                    {"field": "Familia", "width": 156,
-                     "tooltipField": "Familia"},
-                    {"field": "Valor", "width": 108, "minWidth": 100,
-                     "type": "numericColumn",
-                     "cellStyle": _js_barra_prod,
-                     "valueFormatter": _js_soles0_prod},
-                    # El `headerTooltip` es donde se fue a vivir el
-                    # caption que había debajo de la tabla. Los tres
-                    # paneles tenían el suyo y el 2026-09-11 se
-                    # pidieron fuera ("eliminemos el texto que está
-                    # abajo de ellos"); lo que decían no era adorno
-                    # —de qué es % esta columna— así que en vez de
-                    # borrarse se movió al rótulo, que no gasta alto.
-                    {"field": "%", "width": 38, "minWidth": 44,
-                     "type": "numericColumn",
-                     "headerTooltip": "% sobre el total comprado "
-                                      "en el rango",
-                     "valueFormatter": _js_pct_prod},
-                    {"field": "_barra", "hide": True},
-                    {"field": "_fam_raw", "hide": True},
-                ],
-                "rowSelection": {"mode": "singleRow",
-                                 "checkboxes": False,
-                                 "enableClickSelection": False},
-                "onRowClicked": _js_toggle_prod,
-                # Que las columnas LLENEN el panel, que es la otra
-                # mitad de parecerse al Ranking de Proveedores: sin
-                # esto los 302px declarados no entraban en los 255 de
-                # un panel a 1024px de ventana (con tres paneles, hasta
-                # el 2026-09-12) y la tabla salía con scroll horizontal
-                # y la última columna cortada.
-                #
-                # `fitGridWidth` y NO `colDef.flex`, y eso está
-                # medido en la regla #350: los grids de esta tarjeta se
-                # construyen dentro de una `seccion_perezosa`, o sea
-                # FUERA de pantalla, y `flex` calculado sobre un
-                # cuerpo de ancho 0 se queda clavado en los 200px
-                # por defecto para siempre. `fitGridWidth` reintenta
-                # (0 → 100 → 500ms). El `minWidth` de "Valor" sigue
-                # mandando: un monto recortado por la izquierda es
-                # plausible y falso (#349).
-                "autoSizeStrategy": {"type": "fitGridWidth"},
-                "rowHeight": ALTO_FILA_RANK,
-                "headerHeight": ALTO_HEADER_RANK,
-                "suppressCellFocus": True,
-                "suppressMovableColumns": True,
-            },
-            allow_unsafe_jscode=True,
-            theme="streamlit",
-            # El look del Ranking de Proveedores, a pedido
-            # (2026-09-11): franja en vez de caja, todo blanco, sin
-            # líneas verticales, cuerpo 11.5 y el texto en violeta.
-            # Es el MISMO dict, no una copia — un grid vive en un
-            # iframe y el `<style>` del padre no lo alcanza, así que
-            # `custom_css=` es la única vía (ver `_css_proveedor.py`).
-            custom_css=CSS_RANKING_GRID,
-            height=_ALTO_FRAME_FAM,
-            update_on=["selectionChanged"],
-            key="compras_prod_fam_rank_tab",
-        )
-        _sel_fam = getattr(_resp_fam, "selected_rows", None)
-        if _sel_fam is not None and len(_sel_fam):
-            _fila_fam = (_sel_fam.iloc[0] if hasattr(_sel_fam, "iloc")
-                        else _sel_fam[0])
-            _clicked_fam = str(_fila_fam["_fam_raw"])
+            y2 = [max(0.0, _lo - _pad), _hi + _pad]
+    else:
+        y2 = [0.0, 1.0]
+    _ult = n - 2 if parc else n - 1
+    fig.add_scatter(x=keys, y=hb, mode="lines", yaxis="y2", connectgaps=True,
+                    line=dict(color=GRIS_TEXTO, width=1.6, dash="dash"),
+                    hoverinfo="skip", showlegend=False)
+    fig.add_scatter(x=keys[:_ult + 1], y=pr[:_ult + 1], mode="lines+markers",
+                    yaxis="y2", connectgaps=True,
+                    line=dict(color=ACENTO_TEXTO_OSCURO, width=2.4),
+                    marker=dict(color=ACENTO_TEXTO_OSCURO, size=5),
+                    hoverinfo="skip", showlegend=False)
+    if parc and n > 1 and pr[-1] is not None:
+        _k = next((i for i in range(n - 2, -1, -1) if pr[i] is not None), None)
+        if _k is not None:
+            fig.add_scatter(x=[keys[_k], keys[-1]], y=[pr[_k], pr[-1]],
+                            mode="lines", yaxis="y2",
+                            line=dict(color=ACENTO_TEXTO_OSCURO, width=2,
+                                      dash="dot"),
+                            hoverinfo="skip", showlegend=False)
+        fig.add_scatter(x=[keys[-1]], y=[pr[-1]], mode="markers", yaxis="y2",
+                        marker=dict(symbol="circle-open", size=9,
+                                    color=ACENTO_TEXTO_OSCURO,
+                                    line=dict(color=ACENTO_TEXTO_OSCURO,
+                                              width=2)),
+                        hoverinfo="skip", showlegend=False)
+    _fx, _fy = [], []
+    for i, k in enumerate(keys):
+        a = agg.iloc[i]
+        if not a["fl"]:
+            continue
+        if pr[i] is not None:
+            _fy.append(pr[i])
+        elif a["c"] > 0:
+            _fy.append(min(max(a["v"] / a["c"], y2[0]), y2[1]))
         else:
-            _clicked_fam = None
-        if _clicked_fam != fam_focus:
-            fam_focus = _clicked_fam
-            st.session_state["compras_prod_fam_focus"] = fam_focus
-            # Cambiar de familia INVALIDA la subfamilia: sin esto,
-            # elegir CARNES y saltar a VINOS deja el ranking de
-            # abajo mostrando carne. El guard de más abajo lo
-            # ataja igual (la subfamilia vieja no está en el ranking
-            # de la familia nueva), pero se limpia también acá para
-            # que el estado y la key del grid del medio —que lleva
-            # el slug de la familia— cuenten lo mismo en la MISMA
-            # pasada, sin depender del orden de lectura.
-            st.session_state.pop("compras_prod_subfam_focus", None)
+            continue
+        _fx.append(k)
+    if _fx:
+        fig.add_scatter(x=_fx, y=_fy, mode="markers", yaxis="y2",
+                        marker=dict(color=ADVERTENCIA, size=8,
+                                    line=dict(color="white", width=1)),
+                        hoverinfo="skip", showlegend=False)
 
-    # El foco se resuelve DESPUÉS del panel A y antes del B: así el clic
-    # de esta corrida ya manda, sin un rerun de por medio. Sin selección
-    # el panel B muestra la familia de arriba, que es lo que evita que
-    # abra vacío — pero eso es el FOCO, no el ámbito del ranking (ver el
-    # docstring).
-    fam_foco = (fam_focus if fam_focus is not None
-                else fam_ranking.iloc[0]["familia"])
-    d_fam = dd[_fam_normalizada(dd, col_fam) == fam_foco]
+    _etqs = [_etq(k, gran) for k in keys]
+    _paso = paso_etiquetas(n, max((len(e) for e in _etqs), default=1),
+                           ancho=560, px_fuente=11)
+    _tv = [k for i, k in enumerate(keys) if (n - 1 - i) % _paso == 0]
+    _ymax = max(cant + [S["refq"] or 0, 0]) * 1.18 or 1.0
+    _compras_layout(fig, alto=alturas.CURVA_FICHA)
+    fig.update_layout(
+        margin=dict(l=40, r=52, t=6, b=22),
+        xaxis=dict(type="category", tickangle=0, tickmode="array",
+                   tickvals=_tv, ticktext=[_etq(k, gran) for k in _tv],
+                   tickfont=dict(size=11), categoryorder="array",
+                   categoryarray=list(keys), fixedrange=True),
+        yaxis=dict(showticklabels=True, range=[0, _ymax], nticks=3,
+                   tickformat="~s", ticksuffix=f" {um}" if um else "",
+                   tickfont=dict(size=10, color=GRIS_TEXTO), fixedrange=True),
+        yaxis2=dict(overlaying="y", side="right", range=y2, showgrid=False,
+                    nticks=3, tickprefix="S/ ",
+                    tickformat=",.0f" if y2[1] >= 100 else ",.1f",
+                    tickfont=dict(size=10, color=ACENTO_TEXTO_OSCURO),
+                    fixedrange=True, zeroline=False),
+        showlegend=False, hovermode="closest", bargap=0.35,
+    )
+    return fig
 
-    sub_focus = None
-    _tit_sub = (f'<div class="cp-prod-rank-tit">'
-                f'{html.escape(_sin_gritar(fam_foco))}</div>')
-    if hay_sub:
-        with tit_sub:
-            st.markdown(_tit_sub, unsafe_allow_html=True)
-    if hay_sub:
-        with col_subtabla:
-            sub_ranking = _subfam_ranking(d_fam, col_subfam, col_prod,
-                                          col_valor)
-            sub_focus = st.session_state.get("compras_prod_subfam_focus")
-            if sub_focus not in set(sub_ranking["subfamilia"]):
-                sub_focus = None
-            if sub_ranking.empty:
-                st.info("Sin subfamilias para esta familia.")
-            else:
-                disp_sub = sub_ranking.rename(columns={
-                    "subfamilia": "Subfamilia", "valor": "Valor",
-                    "pct": "%", "productos": "Productos",
-                })
-                _val_max_sub = float(sub_ranking["valor"].max())
-                disp_sub["_barra"] = disp_sub["Valor"] / _val_max_sub * 100
-                # Cruda en una columna oculta: es la que se lee de
-                # vuelta y la que recorta el ranking. Ver el panel A.
-                disp_sub["_sub_raw"] = disp_sub["Subfamilia"]
-                disp_sub["Subfamilia"] = disp_sub["Subfamilia"].map(
-                    _sin_gritar)
-                _resp_sub = AgGrid(
-                    disp_sub[["Subfamilia", "Valor", "%", "Productos",
-                             "_barra", "_sub_raw"]],
-                    gridOptions={
-                        # Mismo total declarado que el panel A (302px):
-                        # lado a lado, los dos escalan igual y se leen
-                        # como una grilla, no como dos tablas parecidas.
-                        "columnDefs": [
-                            {"field": "Subfamilia", "width": 104,
-                             "tooltipField": "Subfamilia",
-                             "headerTooltip": "Otro clic en la misma "
-                                              "subfamilia la suelta"},
-                            {"field": "Valor", "width": 108, "minWidth": 100,
-                             "type": "numericColumn",
-                             "cellStyle": _js_barra_prod,
-                             "valueFormatter": _js_soles0_prod},
-                            # Sobre la FAMILIA, no sobre el total:
-                            # es la decisión de diseño del drill y lo
-                            # decía el caption que se fue. Ver el
-                            # docstring de `_subfam_ranking`.
-                            # `minWidth` 44 (también en los otros dos
-                            # grids): a 1280px, con la barra vertical de
-                            # este panel, `fitGridWidth` la dejaba en 39px
-                            # y «11%» salía «1…» — la regla #349.
-                            {"field": "%", "width": 38, "minWidth": 44,
-                             "type": "numericColumn",
-                             "headerTooltip":
-                                 f"% sobre {_sin_gritar(fam_foco)}",
-                             "valueFormatter": _js_pct_prod},
-                            {"field": "Productos", "headerName": "Prod.",
-                             "width": 52, "type": "numericColumn",
-                             "headerTooltip": "Productos distintos",
-                             "valueFormatter": _js_num0_prod},
-                            {"field": "_barra", "hide": True},
-                            {"field": "_sub_raw", "hide": True},
-                        ],
-                        "rowSelection": {"mode": "singleRow",
-                                         "checkboxes": False,
-                                         "enableClickSelection": False},
-                        "onRowClicked": _js_toggle_prod,
-                        # Ver el panel A: `fitGridWidth`, no `flex`.
-                        "autoSizeStrategy": {"type": "fitGridWidth"},
-                        "rowHeight": ALTO_FILA_RANK,
-                        "headerHeight": ALTO_HEADER_RANK,
-                        "suppressCellFocus": True,
-                        "suppressMovableColumns": True,
-                    },
-                    allow_unsafe_jscode=True,
-                    theme="streamlit",
-                    custom_css=CSS_RANKING_GRID,
-                    height=_ALTO_FRAME_FAM,
-                    update_on=["selectionChanged"],
-                    # La key lleva el slug de la FAMILIA a propósito:
-                    # al cambiar de familia el componente se remonta y
-                    # nace sin selección, así que la fila marcada del
-                    # panel viejo no puede sobrevivir a la de al lado.
-                    key=f"compras_prod_subfam_tab_{_slug(fam_foco)}",
-                )
-                _sel_sub = getattr(_resp_sub, "selected_rows", None)
-                if _sel_sub is not None and len(_sel_sub):
-                    _fila_sub = (_sel_sub.iloc[0]
-                                if hasattr(_sel_sub, "iloc")
-                                else _sel_sub[0])
-                    _clicked_sub = str(_fila_sub["_sub_raw"])
-                else:
-                    _clicked_sub = None
-                if _clicked_sub != sub_focus:
-                    sub_focus = _clicked_sub
-                    st.session_state["compras_prod_subfam_focus"] = sub_focus
 
-    if sub_focus:
-        return fam_foco, sub_focus
-    return fam_focus, None
+# ── La ficha: cifras y tablas en HTML ─────────────────────────────────
+
+
+def _html_kpis(fila, um, dias, ant_txt):
+    """Las cinco cifras del RANGO del ranking."""
+    if fila["est"]:
+        _ayuda = ("Primera compra de este producto" if fila["est"] == "nuevo"
+                  else "No se compró en el período anterior")
+        _v = (f'<span class="cp-fi-chip {fila["est"]}" title="{_esc(_ayuda)}">'
+              f'{fila["est"]}</span>')
+    else:
+        _v = f'<b class="{_cls_var(fila["var"])}">{_fmt_var(fila["var"])}</b>'
+    # `<i>` y no `<span>`: `.cp-fi-kpis span` es el rótulo, en bloque.
+    _warn = ('<i class="cpp-warn" title="Sin las compras marcadas para '
+             'revisar">⚠</i>' if fila["nflag"] else "")
+    _ppv = fila["ppv"]
+    if _ppv is None or pd.isna(_ppv):
+        _p = '<b class="igual">—</b>'
+    elif abs(_ppv) < 1:
+        _p = '<b class="igual">S/ 0</b>'
+    else:
+        _p = (f'<b class="{"sube" if _ppv > 0 else "baja"}">'
+              f'{"+" if _ppv > 0 else "−"}S/ {abs(_ppv):,.0f}</b>'
+              f'<small>{"de más" if _ppv > 0 else "de ahorro"}</small>')
+    _ayuda_hab = ("El precio pagado en el rango contra el habitual de cada "
+                  "compra: la mediana de los 90 días anteriores, la misma "
+                  "de «Compras por período» y de Proveedor")
+    _ayuda_ppv = ("(precio pagado − precio habitual) × cantidad, sobre las "
+                  "compras del rango: la variación de precio de compra de "
+                  "la contabilidad de costos estándar")
+    return ('<div class="cp-fi-kpis">'
+            f'<div><span>Compra en el rango</span><b>{_soles(fila["valor"])}</b>'
+            f'<small>{_esc(_cant(fila["cant"], um))}</small></div>'
+            f'<div title="{_esc(ant_txt)}"><span>vs. los {dias} días antes'
+            f'</span>{_v}</div>'
+            f'<div><span>Precio ponderado</span><b>{_precio(fila["pp"])}</b>'
+            f'<small>/ {_esc(um or "unidad")}</small>{_warn}</div>'
+            f'<div title="{_esc(_ayuda_hab)}"><span>vs. precio habitual</span>'
+            f'<b class="{_cls_var(fila["hab"])}">{_fmt_var(fila["hab"])}</b></div>'
+            f'<div title="{_esc(_ayuda_ppv)}"><span>Impacto del precio</span>'
+            f'{_p}</div></div>')
+
+
+def _fila_html(clase, celdas, acc=None, extra=""):
+    _a = f' data-acc="{_esc(acc)}"' if acc else ""
+    return (f'<div class="cpp-f {clase} {extra}"{_a}>' + "".join(celdas)
+            + "</div>")
+
+
+def _por_documento(L):
+    """Las líneas de `L` juntadas por documento: un producto entra una vez
+    por comprobante, pero un comprobante puede traerlo en dos líneas."""
+    if L.empty:
+        return L
+    return (L.groupby(["fecha", "docu", "prov"], as_index=False, sort=False)
+             .agg(cant=("cant", "sum"), valor=("valor", "sum"),
+                  ref=("ref", "mean"), flag=("flag", "max")))
+
+
+def _html_proveedores(L, um, alto):
+    """Proveedores: el precio PONDERADO de cada uno en el mismo ámbito, el
+    más barato marcado y cuánto más caro sale el resto. El precio va sin
+    las compras marcadas; la cantidad y el valor, con ellas."""
+    if L.empty:
+        return ('<div class="cp-modo-nota">Sin compras en esos días.</div>',
+                0)
+    ok = (L["flag"] == "") & (L["cant"] > 0)
+    t = L.assign(pc=L["cant"].where(ok, 0.0), pv=L["valor"].where(ok, 0.0),
+                 fl=(L["flag"] != "").astype(int))
+    g = (t.groupby("prov").agg(c=("cant", "sum"), v=("valor", "sum"),
+                               pc=("pc", "sum"), pv=("pv", "sum"),
+                               ult=("fecha", "max"), fl=("fl", "sum"))
+          .sort_values("v", ascending=False, kind="stable"))
+    g["p"] = np.where(g["pc"] > 0, g["pv"] / g["pc"].where(g["pc"] > 0),
+                      g["v"] / g["c"].where(g["c"] > 0))
+    _min = g["p"].min() if g["p"].notna().any() else None
+    _tot = float(g["v"].sum()) or 1.0
+    filas = []
+    for prov, a in g.iterrows():
+        _cheap = len(g) > 1 and _min is not None and a["p"] == _min
+        if _cheap:
+            _d = '<span class="cpp-chip barato">más barato</span>'
+        elif len(g) > 1 and pd.notna(a["p"]) and _min:
+            _dif = (a["p"] / _min - 1) * 100
+            _d = (f'<span class="{"sube" if _dif > 10 else ""}">'
+                  f'+{_dif:.1f}%</span>')
+        else:
+            _d = '<span class="igual">—</span>'
+        _w = (' <span class="cpp-warn" title="Incluye una compra para '
+              'revisar">⚠</span>' if a["fl"] else "")
+        filas.append(_fila_html("cpp-pv", [
+            f'<span class="nm" title="{_esc(nombre_propio(prov))}">'
+            f'{_esc(nombre_propio(prov))}{_w}</span>',
+            f'<span class="r">{_esc(_cant(a["c"], um))}</span>',
+            f'<span class="r">{_precio(a["p"])}</span>',
+            f'<span class="r">{_d}</span>',
+            f'<span class="r">{_soles(a["v"])}</span>',
+            f'<span class="r gr">{a["v"] / _tot * 100:.0f}%</span>',
+            f'<span class="r gr">{_fecha_corta(a["ult"])}</span>'],
+            acc=f"prov:{prov}"))
+    _pc, _pv = float(g["pc"].sum()), float(g["pv"].sum())
+    _p = _pv / _pc if _pc else (float(g["v"].sum()) / float(g["c"].sum())
+                               if float(g["c"].sum()) else None)
+    tot = _fila_html("cpp-pv tot", [
+        f'<span class="nm">Total · {len(g)} '
+        f'{"proveedor" if len(g) == 1 else "proveedores"}</span>',
+        f'<span class="r">{_esc(_cant(float(g["c"].sum()), um))}</span>',
+        f'<span class="r">{_precio(_p)}</span>', "<span></span>",
+        f'<span class="r">{_soles(float(g["v"].sum()))}</span>',
+        '<span class="r">100%</span>', "<span></span>"])
+    cab = _fila_html("cpp-pv cpp-h", [
+        "<span>Proveedor</span>", '<span class="r">Cant.</span>',
+        '<span class="r">Precio</span>',
+        '<span class="r" title="Cuánto más caro sale que el más barato, en '
+        'los mismos días">vs. más barato</span>',
+        '<span class="r">Valor</span>', '<span class="r">%</span>',
+        '<span class="r">Última</span>'])
+    return (f'<div class="cpp-t">{cab}<div class="cpp-l" style="max-height:'
+            f'{alto}px">' + "".join(filas) + f"</div>{tot}</div>", len(g))
+
+
+def _ayuda_marca(flag, cant, valor, ref, um):
+    if flag == "um":
+        _b = cant / 0.75
+        _6 = (f" {round(_b)} botellas × 0,75 L = {_cant(cant)}: ¿se cargó en "
+              "litros?") if abs(_b - round(_b)) < 0.01 else \
+            " ¿Se cargó en otra unidad?"
+        return (f"{_cant(cant, um)}: una unidad que se cuenta entera viene "
+                f"con decimales.{_6}")
+    if flag == "precio" and cant and ref:
+        _pu = valor / cant
+        return (f"Precio {_precio(_pu)} contra un habitual de {_precio(ref)} "
+                f"({_pu / ref:.1f} veces): ¿error de tipeo, de unidad o de "
+                "producto?")
+    return ""
+
+
+def _html_compras(L, um, alto):
+    """Compras: una fila por documento, de la más nueva a la más vieja,
+    con su precio contra el habitual y la marca «revisar»."""
+    D = _por_documento(L)
+    if D.empty:
+        return ('<div class="cp-modo-nota">Sin compras en este ámbito.</div>',
+                0)
+    D = D.sort_values("fecha", ascending=False, kind="stable")
+    filas = []
+    for _, a in D.iterrows():
+        _pu = a["valor"] / a["cant"] if a["cant"] else None
+        _h = (_pu / a["ref"] - 1) * 100 if _pu and pd.notna(a["ref"]) \
+            and a["ref"] > 0 else np.inf
+        _m = ""
+        if a["flag"]:
+            _m = (f'<span class="cpp-chip revisar" title="'
+                  f'{_esc(_ayuda_marca(a["flag"], a["cant"], a["valor"], a["ref"], um))}'
+                  '">revisar</span>')
+        _doc = (documento_legible(pd.Series([a["docu"]])).iat[0]
+                if a["docu"] else "—")
+        filas.append(_fila_html("cpp-cp", [
+            f'<span>{_fecha_corta(a["fecha"])}</span>',
+            f'<span class="nm">{_esc(nombre_propio(a["prov"]))}</span>',
+            f'<span class="nm gr">{_esc(_doc)}</span>',
+            f'<span class="r">{_esc(_cant(a["cant"]))}</span>',
+            f'<span class="r">{_precio(_pu)}</span>',
+            f'<span class="r {_cls_var(_h)}">{_fmt_var(_h)}</span>',
+            f'<span class="r">{_soles(a["valor"])}</span>',
+            f'<span class="r">{_m}</span>']))
+    ok = (D["flag"] == "") & (D["cant"] > 0)
+    _pc, _pv = float(D.loc[ok, "cant"].sum()), float(D.loc[ok, "valor"].sum())
+    okr = ok & D["ref"].notna()
+    _rc = float((D.loc[okr, "ref"] * D.loc[okr, "cant"]).sum())
+    _cr = float(D.loc[okr, "cant"].sum())
+    _ph = (_pv / _pc) / (_rc / _cr) * 100 - 100 if _pc and _rc and _cr \
+        else np.inf
+    _w = (' <span class="cpp-warn" title="Sin las compras marcadas para '
+          'revisar">⚠</span>' if (D["flag"] != "").any() else "")
+    tot = _fila_html("cpp-cp tot", [
+        f'<span class="nm">Total · {len(D)}</span>', "<span></span>",
+        "<span></span>",
+        f'<span class="r">{_esc(_cant(float(D["cant"].sum()), um))}</span>',
+        f'<span class="r">{_precio(_pv / _pc if _pc else None)}{_w}</span>',
+        f'<span class="r {_cls_var(_ph)}">{_fmt_var(_ph)}</span>',
+        f'<span class="r">{_soles(float(D["valor"].sum()))}</span>',
+        "<span></span>"])
+    cab = _fila_html("cpp-cp cpp-h", [
+        "<span>Fecha</span>", "<span>Proveedor</span>",
+        "<span>Documento</span>", '<span class="r">Cant.</span>',
+        '<span class="r">Precio</span>',
+        '<span class="r" title="El precio de esa compra contra el habitual '
+        'de ese día">vs. hab.</span>',
+        '<span class="r">Valor</span>', "<span></span>"])
+    return (f'<div class="cpp-t">{cab}<div class="cpp-l" style="max-height:'
+            f'{alto}px">' + "".join(filas) + f"</div>{tot}</div>", len(D))
+
+
+def _html_periodos(S, gran, um, alto, sel):
+    """Períodos: la curva escrita, una fila por barra en el orden del eje.
+    Un clic en una fila abre sus compras."""
+    keys, agg = S["keys"], S["agg"]
+    precio, hab = _precios(agg)
+    _tot = float(agg["v"].sum()) or 1.0
+    filas, prev = [], None
+    n = len(keys)
+    for i, k in enumerate(keys):
+        a = agg.iloc[i]
+        p, h = precio.iat[i], hab.iat[i]
+        _h = (p / h - 1) * 100 if pd.notna(p) and pd.notna(h) and h else np.inf
+        _dp = _var_pct(p, prev) if pd.notna(p) else np.inf
+        if pd.notna(p):
+            prev = p
+        _parc = S["parc"] is not None and i == n - 1
+        _lab = _etq(k, gran, largo=True) + (
+            f' (1–{S["parc"]["fin"].day})' if _parc and gran == "Mes" else
+            (" (en curso)" if _parc else ""))
+        _w = (' <span class="cpp-warn" title="Precio sin las compras '
+              'marcadas para revisar">⚠</span>' if a["fl"] else "")
+        filas.append(_fila_html("cpp-pe", [
+            f'<span class="nm{" cpp-parc" if _parc else ""}">{_esc(_lab)}</span>',
+            f'<span class="r">{_esc(_cant(a["c"], um)) if a["c"] else "—"}</span>',
+            f'<span class="r">{_precio(p)}{_w}</span>',
+            f'<span class="r {_cls_var(_h)}">{_fmt_var(_h)}</span>',
+            f'<span class="r">{_soles(a["v"]) if a["v"] else "—"}</span>',
+            f'<span class="r gr">{a["v"] / _tot * 100:.0f}%</span>'
+            if a["v"] else '<span class="r gr">—</span>',
+            f'<span class="r">{int(a["docs"]) or "—"}</span>',
+            f'<span class="r {_cls_var(_dp)}">{_fmt_var(_dp)}</span>'],
+            acc=f"per:{k}", extra="sel" if k == sel else ""))
+    _pc, _pv = float(agg["pc"].sum()), float(agg["pv"].sum())
+    _rc, _cr = float(agg["rc"].sum()), float(agg["cr"].sum())
+    _ph = (_pv / _pc) / (_rc / _cr) * 100 - 100 if _pc and _rc and _cr \
+        else np.inf
+    tot = _fila_html("cpp-pe tot", [
+        '<span class="nm">Total</span>',
+        f'<span class="r">{_esc(_cant(float(agg["c"].sum()), um))}</span>',
+        f'<span class="r">{_precio(_pv / _pc if _pc else None)}</span>',
+        f'<span class="r {_cls_var(_ph)}">{_fmt_var(_ph)}</span>',
+        f'<span class="r">{_soles(_tot)}</span>',
+        '<span class="r">100%</span>',
+        f'<span class="r">{int(agg["docs"].sum())}</span>', "<span></span>"])
+    cab = _fila_html("cpp-pe cpp-h", [
+        "<span>Período</span>", '<span class="r">Cant.</span>',
+        '<span class="r">Precio</span>', '<span class="r">vs. hab.</span>',
+        '<span class="r">Valor</span>',
+        '<span class="r" title="% del valor de la curva">%</span>',
+        '<span class="r">Docs</span>',
+        '<span class="r" title="El precio contra el período anterior">'
+        'Δ precio</span>'])
+    return (f'<div class="cpp-t">{cab}<div class="cpp-l" style="max-height:'
+            f'{alto}px">' + "".join(filas) + f"</div>{tot}</div>")
+
+
+# ── El clic en una fila de la ficha (HTML, sin widget) ────────────────
+
+
+_K_RELEVO = "cp_prod_relevo"
+"""El `st.text_input` oculto por el que un clic en una fila de Proveedores
+o de Períodos llega a Python (regla #217, como en Proveedor)."""
+
+_SEP_RELEVO = "@@"
+
+
+def _relevo():
+    """`on_change` del relevo: «prov:<nombre>» acota Compras a ese
+    proveedor, «per:<clave>» a ese período. Los dos llevan a Compras.
+    Corre ANTES de dibujar nada, así que puede escribir la pestaña."""
+    raw = (st.session_state.get(_K_RELEVO) or "").rsplit(_SEP_RELEVO, 1)[0]
+    tipo, _, val = raw.partition(":")
+    if not val:
+        return
+    if tipo == "prov":
+        st.session_state["cp_prod_cprov"] = val
+        if st.session_state.get("cp_prod_pw") != "ven":
+            st.session_state["cp_prod_per"] = None
+    elif tipo == "per":
+        _act = st.session_state.get("cp_prod_per")
+        st.session_state["cp_prod_per"] = None if _act == val else val
+        st.session_state["cp_prod_cprov"] = None
+    st.session_state["cp_prod_tab"] = "comp"
+
+
+def _soltar():
+    st.session_state["cp_prod_per"] = None
+    st.session_state["cp_prod_cprov"] = None
+
+
+_JS_CLIC = f"""<script>
+(function () {{
+  // Un clic en una fila con `data-acc` de la ficha escribe su acción en el
+  // relevo y la confirma con un Enter de verdad (regla #217). Delegado en
+  // el DOCUMENTO: la tabla se rehace en cada corrida.
+  var w = window.parent, doc = w.document;
+  if (w.__cppClic) doc.removeEventListener('click', w.__cppClic, true);
+  w.__cppClic = function (ev) {{
+    var t = ev.target && ev.target.closest && ev.target.closest('[data-acc]');
+    if (!t || !t.closest('.st-key-compras_prod_card_ficha')) return;
+    var relevo = doc.querySelector('.st-key-{_K_RELEVO} input');
+    if (!relevo) return;
+    var setter = w.Object.getOwnPropertyDescriptor(
+      w.HTMLInputElement.prototype, 'value').set;
+    relevo.focus({{preventScroll: true}});
+    setter.call(relevo, t.getAttribute('data-acc') + '{_SEP_RELEVO}' + w.Date.now());
+    relevo.dispatchEvent(new w.Event('input', {{bubbles: true}}));
+    var o = {{key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+             bubbles: true, cancelable: true}};
+    relevo.dispatchEvent(new w.KeyboardEvent('keydown', o));
+    relevo.dispatchEvent(new w.KeyboardEvent('keyup', o));
+  }};
+  doc.addEventListener('click', w.__cppClic, true);
+}})();
+</script>"""
+
+
+# ── CSS ────────────────────────────────────────────────────────────────
+# La ficha es la de Proveedor: sus reglas se CLONAN con los prefijos de
+# acá (`clonar_prefijo`, el mismo mecanismo que `cp_docs`), así un retoque
+# allá llega solo. Lo propio —las tres tablas y la fila de familias— va
+# abajo, escrito.
+_CSS_PROPIO = """
+        .st-key-compras_prod_card_ficha {
+            container-type: inline-size; container-name: cpprods;
+        }
+        .st-key-cpp_ficha_cab .cp-fi-nom { line-height: 28px; }
+        .cpp-sub {
+            font-size: 11.5px; color: var(--text-secondary); line-height: 16px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            margin-top: -4px;
+        }
+        .cpp-warn { color: var(--warning-text); margin-left: 4px; font-size: 11px;
+                    font-style: normal; }
+        /* El desplegable de la ventana dice «Últimos 3 meses»: el ancho de
+           Proveedor (56 px, para «12m») lo cortaba en «Últim…». */
+        .st-key-cpp_evo_ctrl > .st-key-compras_prod_periodo { width: 128px !important; }
+        .st-key-cpp_pw_fila {
+            display: flex !important; flex-direction: row !important;
+            align-items: center !important; gap: 8px !important;
+            width: auto !important; flex-wrap: nowrap !important;
+        }
+        .st-key-cpp_pw_fila > * { width: auto !important; flex: 0 0 auto; margin: 0 !important; }
+        .st-key-cpp_pw_fila .cp-modo-nota { margin: 0 !important; padding: 0 !important;
+                                            line-height: 22px; height: 22px; }
+        .st-key-cpp_pw_fila [data-testid="stMarkdownContainer"] { margin: 0 !important; }
+        .st-key-cpp_pw_fila div[class*="st-key-cp_modo_"] {
+            position: static !important; height: auto !important;
+        }
+        .cpp-ley { display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+                   font-size: 11px; color: var(--text-secondary); min-height: 18px; }
+        .cpp-ley span { display: inline-flex; align-items: center; gap: 5px; }
+        .cpp-ley i { display: inline-block; flex: 0 0 auto; }
+        .cpp-ley i.bar { width: 10px; height: 9px; border-radius: 2px;
+                         background: var(--border-lavender); }
+        .cpp-ley i.lin { width: 14px; height: 0; border-top: 2.5px solid var(--accent-deep); }
+        .cpp-ley i.hab { width: 14px; height: 0; border-top: 2px dashed var(--text-secondary); }
+        .cpp-ley i.raya { width: 14px; height: 2px; background: var(--text-secondary); }
+        .cpp-ley i.mar { width: 8px; height: 8px; border-radius: 50%;
+                         background: var(--warning); }
+        .cpp-ley .var { font-weight: 600; color: var(--text-primary); }
+        .cpp-t { font-size: 12px; line-height: 1.25; overflow-x: auto; }
+        /* En una ventana angosta la tabla se desliza de costado en vez de
+           aplastar la columna del nombre (a 860 px «Proveedor» salía letra
+           por letra). En la laptop mide más que esto y no se nota. */
+        .cpp-t > * { min-width: 600px; }
+        .cpp-f > span { min-width: 0; overflow: hidden; text-overflow: ellipsis;
+                        white-space: nowrap; }
+        .cpp-f {
+            display: grid; align-items: center; column-gap: 8px; padding: 0 8px;
+            height: 24px; border-bottom: 1px solid var(--border);
+            font-variant-numeric: tabular-nums; color: var(--text-primary);
+        }
+        .cpp-f.cpp-h { height: 22px; font-size: 11px; color: var(--text-secondary); }
+        .cpp-f[data-acc] { cursor: pointer; }
+        .cpp-f[data-acc]:hover { background: var(--bg-primary); }
+        .cpp-f.sel { background: var(--accent-tint); }
+        .cpp-f.tot { background: var(--bg-primary); font-weight: 700;
+                     border-bottom: none; border-radius: 8px; }
+        .cpp-l { overflow-y: auto; }
+        .cpp-l::-webkit-scrollbar { width: 6px; }
+        .cpp-l::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 3px; }
+        .cpp-t .r { text-align: right; white-space: nowrap; }
+        .cpp-t .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                     min-width: 0; }
+        .cpp-t .gr { color: var(--text-secondary); }
+        .cpp-t .sube { color: var(--danger-text); font-weight: 600; }
+        .cpp-t .baja { color: var(--success-text); font-weight: 600; }
+        .cpp-t .igual { color: var(--text-muted); }
+        .cpp-t .cpp-parc { background: repeating-linear-gradient(45deg,
+            var(--border) 0 2px, transparent 2px 6px); border-radius: 4px; }
+        .cpp-pv { grid-template-columns: minmax(0, 1fr) 72px 72px 92px 80px 40px 52px; }
+        .cpp-cp { grid-template-columns: 48px minmax(0, 1fr) 92px 60px 70px 62px 76px 56px; }
+        .cpp-pe { grid-template-columns: minmax(0, 1fr) 80px 76px 62px 80px 40px 38px 66px; }
+        .cpp-chip { display: inline-block; font-size: 10px; font-weight: 600;
+                    border-radius: 999px; padding: 0 6px; line-height: 16px; }
+        .cpp-chip.barato { color: var(--success-text); background: var(--success-bg); }
+        .cpp-chip.revisar { color: var(--warning-text); background: var(--warning-bg); }
+        .st-key-cp_prod_relevo {
+            position: absolute !important;
+            width: 1px !important; height: 1px !important;
+            overflow: hidden !important; opacity: 0 !important;
+            margin: 0 !important; padding: 0 !important;
+        }
+        .st-key-cpp_ficha_tabs .cp-modo-nota { font-size: 11px; color: var(--text-secondary); }
+        .st-key-cp_prod_soltar button {
+            min-height: 22px !important; height: 22px !important;
+            padding: 0 8px !important; font-size: 11.5px !important;
+            color: var(--accent-deep) !important;
+        }
+        /* La fila del buscador y «Ver por», y los botones de familia y
+           subfamilia: chicos, para que las cinco familias entren en dos
+           renglones y la lista no pierda filas. */
+        .st-key-cp_prod_busca {
+            display: flex !important; flex-direction: row !important;
+            align-items: center !important; gap: 6px !important;
+            flex-wrap: nowrap !important;
+        }
+        .st-key-cp_prod_busca > *:first-child { flex: 1 1 auto; min-width: 0; }
+        .st-key-cp_prod_busca > * { width: auto !important; flex: 0 0 auto; }
+        .st-key-cp_prod_busca [data-testid="stTextInputRootElement"] {
+            height: 28px !important; min-height: 28px !important;
+        }
+        .st-key-cp_prod_busca input { font-size: 12px !important; padding: 0 10px !important; }
+        .st-key-cp_prod_busca [data-testid="stButtonGroup"] button,
+        .st-key-cp_prod_chips [data-testid="stButtonGroup"] button,
+        .st-key-cp_prod_subchips [data-testid="stButtonGroup"] button,
+        .st-key-cpp_fi_grano [data-testid="stButtonGroup"] button {
+            min-height: 24px !important; height: 24px !important;
+            padding: 0 8px !important; font-size: 11.5px !important;
+        }
+        /* El texto va en un `<p>` con su propio cuerpo (14 px): sin esto
+           el botón se achica y la letra no, y las familias van en tres
+           renglones. */
+        .st-key-cp_prod_busca [data-testid="stButtonGroup"] button p,
+        .st-key-cp_prod_chips [data-testid="stButtonGroup"] button p,
+        .st-key-cp_prod_subchips [data-testid="stButtonGroup"] button p,
+        .st-key-cpp_fi_grano [data-testid="stButtonGroup"] button p {
+            font-size: 11.5px !important; line-height: 1 !important;
+        }
+        .st-key-cp_prod_chips [data-testid="stButtonGroup"] > div,
+        .st-key-cp_prod_subchips [data-testid="stButtonGroup"] > div { gap: 4px !important; }
+        .st-key-cp_prod_subchips [data-testid="stButtonGroup"] > div {
+            flex-wrap: nowrap !important; overflow-x: auto; padding-bottom: 3px;
+        }
+        .st-key-cp_prod_subchips [data-testid="stButtonGroup"] button {
+            flex: 0 0 auto !important; max-width: none !important;
+        }
+        .st-key-cp_prod_busca [data-testid="stElementToolbar"],
+        .st-key-cp_prod_chips [data-testid="stElementToolbar"],
+        .st-key-cp_prod_subchips [data-testid="stElementToolbar"] { display: none; }
+        .st-key-compras_prod_card_ranking [data-testid="stVerticalBlock"] {
+            gap: 6px !important;
+        }
+        .st-key-compras_prod_card_ranking .st-key-cp_prod_fila {
+            flex-wrap: wrap !important; row-gap: 4px !important;
+        }
+"""
+
+_CSS_PRODUCTO = (
+    "<style>"
+    + clonar_prefijo(CSS_FICHA, "compras_prov_card_ficha",
+                     "compras_prod_card_ficha")
+    + clonar_prefijo(CSS_FICHA, "cp_ficha_", "cpp_ficha_")
+    + clonar_prefijo(CSS_FICHA, "cp_fi_grano", "cpp_fi_grano")
+    + clonar_prefijo(CSS_PROVEEDOR, "cp_evo_ctrl", "cpp_evo_ctrl",
+                     extra=(("cp_evo_periodo", "compras_prod_periodo"),))
+    + _CSS_PROPIO + "</style>")
+"""El CSS de la sección. Supone el de Proveedor (`CSS_PROVEEDOR`) en la
+página —la fila de la fecha, las pestañas `cp_modo_*`—, que inyecta la
+sección de arriba; con la lista vacía se inyecta acá también."""
+
+
+# ── El ranking (AgGrid) ────────────────────────────────────────────────
+
+_JS_BARRA = JsCode(
+    "function(p){"
+    " if (p.node.rowPinned) return {'display':'flex','alignItems':'center',"
+    " 'justifyContent':'flex-end','fontWeight':'700'};"
+    " var sel = p.node.isSelected() || (p.context &&"
+    " p.data._raw === p.context.defecto && p.api.getSelectedNodes().length === 0);"
+    " var w = Math.max(0, Math.min(100, p.data._barra||0)) * 0.62;"
+    f" var c = sel ? '{ACENTO}' : '{LAVANDA_BORDE}';"
+    " return {'background': 'linear-gradient(90deg, ' + c + ' 0 ' + w +"
+    " '%, transparent ' + w + '% 100%)', 'display':'flex',"
+    " 'alignItems':'center','justifyContent':'flex-end',"
+    f" 'color':'{TEXTO_PRINCIPAL}'"
+    "};}")
+_JS_FILA_TOTAL = JsCode(
+    "function(p){ if(p.node.rowPinned){ return {"
+    f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
+    f"'color':'{ACENTO_TEXTO_OSCURO}'"
+    "}; } }")
+_JS_SOLES = JsCode(
+    "function(p){ return p.value==null ? '' :"
+    " 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+_JS_PCT = JsCode(
+    "function(p){ if (p.value==null) return '';"
+    " return (p.value >= 10 || p.value === 0 ? Math.round(p.value)"
+    " : p.value.toFixed(1)) + '%'; }")
+_JS_VAR = JsCode(
+    "function(p){ if (p.data && p.data._estado) return p.data._estado;"
+    " if (p.value==null) return '—'; var a = Math.abs(p.value);"
+    " if (a < 0.05) return '0.0%';"
+    " return (p.value > 0 ? '▲ ' : '▼ ') + (a >= 100 ? Math.round(a)"
+    " : a.toFixed(1)) + '%'; }")
+_JS_HAB = JsCode(
+    "function(p){ if (p.value==null) return '—'; var a = Math.abs(p.value);"
+    " if (a < 0.05) return '0.0%';"
+    " return (p.value > 0 ? '▲ ' : '▼ ') + a.toFixed(1) + '%'; }")
+_JS_ENTERO = JsCode(
+    "function(p){ return p.value==null ? '' : Math.round(p.value); }")
+_REGLAS_VAR = {
+    "cp-rk-sube": JsCode(
+        "function(p){ return !!(p.data && !p.data._estado &&"
+        " p.value != null && p.value >= 0.5); }"),
+    "cp-rk-baja": JsCode(
+        "function(p){ return !!(p.data && !p.data._estado &&"
+        " p.value != null && p.value <= -0.5); }"),
+    "cp-rk-nuevo": JsCode(
+        "function(p){ return !!(p.data && p.data._estado === 'nuevo'); }"),
+    "cp-rk-vuelve": JsCode(
+        "function(p){ return !!(p.data && p.data._estado === 'vuelve'); }"),
+}
+_REGLAS_HAB = {
+    "cp-rk-sube": JsCode(
+        "function(p){ return p.value != null && p.value >= 0.5; }"),
+    "cp-rk-baja": JsCode(
+        "function(p){ return p.value != null && p.value <= -0.5; }"),
+}
+_REGLAS_FILA = {
+    "cp-rank-defecto": JsCode(
+        "function(p){ return !!(p.data && p.context &&"
+        " p.data._raw === p.context.defecto &&"
+        " p.api.getSelectedNodes().length === 0); }"),
+}
+_JS_TOGGLE = JsCode(
+    "function(e){ if (e.node.rowPinned) return;"
+    " e.node.setSelected(!e.node.isSelected(), true);"
+    " e.api.redrawRows(); }")
+
+
+def _grilla(filas, total, nombre_col, con_n, defecto, alto, key):
+    """El AgGrid del ranking: Producto (o Familia / Subfamilia) | Valor |
+    % | Δ | vs. hab. Devuelve la clave `_raw` de la fila elegida o None."""
+    cols = [
+        {"field": "Nombre", "headerName": nombre_col, "flex": 2.4,
+         "minWidth": 110, "tooltipField": "_ayuda_nom"},
+        {"field": "Valor", "flex": 1.7, "minWidth": 84,
+         "type": "numericColumn",
+         "cellStyle": _JS_BARRA, "valueFormatter": _JS_SOLES},
+        {"field": "%", "width": 50, "type": "numericColumn",
+         "valueFormatter": _JS_PCT, "headerTooltip": filas.attrs.get(
+             "ayuda_pct", "")},
+    ]
+    if con_n:
+        cols.append({"field": "n", "headerName": "Prod.", "width": 50,
+                     "type": "numericColumn", "valueFormatter": _JS_ENTERO,
+                     "headerTooltip": "Productos distintos comprados"})
+    cols += [
+        {"field": "_var", "headerName": "Δ", "width": 70,
+         "type": "numericColumn", "valueFormatter": _JS_VAR,
+         "cellClassRules": _REGLAS_VAR, "tooltipField": "_ayuda",
+         "headerTooltip": "El valor contra el período anterior de igual largo"},
+        {"field": "_hab", "headerName": "vs. hab.", "width": 66,
+         "type": "numericColumn", "valueFormatter": _JS_HAB,
+         "cellClassRules": _REGLAS_HAB,
+         "headerTooltip": "El precio pagado contra el habitual (la mediana de "
+                          "los 90 días anteriores), sin las compras marcadas"},
+        {"field": "_estado", "hide": True}, {"field": "_ayuda", "hide": True},
+        {"field": "_ayuda_nom", "hide": True}, {"field": "_barra", "hide": True},
+        {"field": "_raw", "hide": True},
+    ]
+    resp = AgGrid(
+        filas,
+        gridOptions={
+            "columnDefs": cols,
+            "context": {"defecto": defecto or ""},
+            "rowClassRules": _REGLAS_FILA,
+            "rowSelection": {"mode": "singleRow", "checkboxes": False,
+                             "enableClickSelection": False},
+            "onRowClicked": _JS_TOGGLE,
+            "rowHeight": ALTO_FILA_RANK, "headerHeight": ALTO_HEADER_RANK,
+            "suppressCellFocus": True, "suppressMovableColumns": True,
+            "tooltipShowDelay": 300,
+            "pinnedBottomRowData": [total],
+            "getRowStyle": _JS_FILA_TOTAL,
+        },
+        allow_unsafe_jscode=True, theme="streamlit",
+        custom_css=CSS_RANKING_PROV, height=alto,
+        update_on=["selectionChanged"], key=key,
+    )
+    _sel = getattr(resp, "selected_rows", None)
+    if _sel is not None and len(_sel):
+        _f = _sel.iloc[0] if hasattr(_sel, "iloc") else _sel[0]
+        return str(_f["_raw"])
+    return None
+
+
+def _filas_grilla(res, nombres, raws, base_pct, ayudas_nom):
+    """El df de la grilla a partir de un `_resumen`."""
+    _max = float(res["valor"].max()) if len(res) else 1.0
+    df = pd.DataFrame({
+        "Nombre": nombres,
+        "Valor": res["valor"].astype(float).to_numpy(),
+        "%": (res["valor"] / (base_pct or 1.0) * 100).round(1).to_numpy(),
+        "n": res["n"].astype(int).to_numpy(),
+        "_var": [None if pd.isna(v) else round(float(v), 2)
+                 for v in res["var"]],
+        "_hab": [None if pd.isna(v) else round(float(v), 2)
+                 for v in res["hab"]],
+        "_estado": res["est"].to_numpy(),
+        "_ayuda": [("Primera compra en este rango" if e == "nuevo" else
+                    ("No se compró en el período anterior" if e == "vuelve"
+                     else "")) for e in res["est"]],
+        "_ayuda_nom": ayudas_nom,
+        "_barra": (res["valor"] / (_max or 1.0) * 100).to_numpy(),
+        "_raw": raws,
+    })
+    return df
+
+
+def _total_grilla(res, n, etiqueta, base_pct, prev_tot):
+    _v = float(res["valor"].sum())
+    _vr, _rc = float(res["vref"].sum()), float(res["refc"].sum())
+    _var = _var_pct(_v, prev_tot) if prev_tot is not None else np.inf
+    return {"Nombre": f"Total · {n}{etiqueta}", "Valor": round(_v, 2),
+            "%": round(_v / (base_pct or 1.0) * 100, 1),
+            "n": int(res["n"].sum()) if "n" in res else None,
+            "_var": round(_var, 2) if np.isfinite(_var) else None,
+            "_hab": round((_vr / _rc - 1) * 100, 2) if _rc else None}
+
+
+# ── El drill ───────────────────────────────────────────────────────────
+
+
+def _aplicar_pendiente():
+    """El clic en una familia o subfamilia de la lista llega DESPUÉS de
+    dibujar sus botones: deja el pedido acá y un rerun lo aplica antes de
+    que vuelvan a dibujarse (un widget no se escribe una vez dibujado)."""
+    p = st.session_state.pop("_cp_prod_ir", None)
+    if not p:
+        return
+    st.session_state["cp_prod_ver"] = "prod"
+    st.session_state["cp_prod_fam"] = p.get("fam") or _TODAS
+    st.session_state["cp_prod_sub"] = p.get("sub") or _TODAS
+    st.session_state["compras_prod_q"] = ""
+    st.session_state["cp_prod_gclic"] = st.session_state.get("cp_prod_gclic", 0) + 1
+
+
+def _al_cambiar_familia():
+    st.session_state["cp_prod_sub"] = _TODAS
+
+
+def _al_cambiar_ver():
+    if st.session_state.get("cp_prod_ver") == "fam":
+        st.session_state["cp_prod_fam"] = _TODAS
+        st.session_state["cp_prod_sub"] = _TODAS
+    elif st.session_state.get("cp_prod_ver") == "sub":
+        st.session_state["cp_prod_sub"] = _TODAS
 
 
 def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit,
                             col_um, col_fecha, col_prov=None, d_full=None,
                             col_subfam=None, col_docu=None):
-    """Una fila de dos tarjetas: a la izquierda Familia | Subfamilia y,
-    debajo, el ranking de productos que esos dos recortan; a la derecha la
-    evolución del producto en foco.
+    """Dashboard de Producto: el ranking y la ficha del producto elegido.
+    Ver el docstring del módulo y `arquitectura.md` regla #653.
 
-    `col_subfam` va al FINAL y con default: el resto de la firma es
-    posicional en el llamador, y en Cloud un commit que le cambia el orden
-    a algo ya importado deja el `app.py` nuevo hablando con el paquete
-    viejo (regla #357). Con default, la firma vieja sigue siendo válida.
-
-    `d_full` es el histórico sin la fecha de la sección: de ahí sale la
-    ventana fija de 3 meses del gráfico, que no depende del rango elegido.
-
-    `col_docu` va DESPUÉS de `col_subfam` y con default, por lo mismo que
-    aquélla (regla #357): sólo la usa la etiqueta de las barras, y sin ella
-    la etiqueta se arma igual, sin la línea de documentos."""
-    if not (col_prod and col_valor and col_punit and col_fecha):
-        st.info("Faltan columnas (Producto, Valor, Precio unitario o Fecha) "
-                "para este gráfico.")
-        return
-
-    # La bandera del selector de fecha de la tarjeta: el filtro que lee el
-    # rango vive en app.py, FUERA de este fragment, así que sin escalar a
-    # `st.rerun(scope="app")` el estado cambiaría y la pantalla no. Se
-    # consume al entrar, antes de dibujar nada. Mismo mecanismo que el
-    # Ranking de Proveedores.
-    # `preservar_widgets` porque el rerun aborta ACÁ, antes de que los
-    # controles de la sección se registren, y Streamlit recolecta el estado
-    # de todo widget de este fragment que no se dibujó (ver `_KEYS_WIDGET`).
+    La firma es la de antes, con `col_punit` sin usar (el precio sale de
+    valor ÷ cantidad) y los opcionales al final: en Cloud un commit que le
+    cambia el orden a algo ya importado deja el `app.py` nuevo hablando con
+    el paquete viejo (regla #357)."""
+    # La escalada del selector de fecha: el filtro que lee el rango vive en
+    # app.py, FUERA de este fragment (regla #180), con `preservar_widgets`
+    # porque el rerun aborta acá (#373).
     if st.session_state.pop("_cp_prod_atajo_pendiente", False):
         preservar_widgets(_KEYS_WIDGET)
         st.rerun(scope="app")
-
-    dd = d.copy()
-    dd[col_fecha] = pd.to_datetime(dd[col_fecha], errors="coerce")
-    dd[col_punit] = pd.to_numeric(dd[col_punit], errors="coerce")
-    dd[col_valor] = pd.to_numeric(dd[col_valor], errors="coerce").fillna(0)
-    dd = dd.dropna(subset=[col_fecha, col_prod])
-    dd = dd[dd[col_prod].astype(str).str.strip() != ""]
-    if dd.empty:
-        # Gemelo del cartel vacío del Ranking de Proveedores, y por el mismo
-        # motivo: este `return` salía antes de la cabecera, que es donde
-        # vive el ÚNICO control de rango de la sección desde que la franja
-        # no dibuja calendario. La tarjeta se dibuja siempre; lo que se
-        # decide adentro es el contenido (regla #115, y ver #354).
-        #
-        # DOS blobs de CSS, y los dos hacen falta acá arriba: la fila del
-        # selector la estila `CSS_PROVEEDOR` (lo inyecta el drill de
-        # Proveedor, la sección de ARRIBA, que con `d` vacío cae en su
-        # propia rama vacía — y por eso ahí también se inyecta), y el
-        # título `.cp-prod-rank-tit` vive en `_CSS_SELECTOR_TEXTO`, que
-        # este módulo inyectaba DESPUÉS de esta guarda.
-        st.markdown(_CSS_SELECTOR_TEXTO, unsafe_allow_html=True)
+    if not (col_prod and col_valor and col_fecha):
+        st.info("Faltan columnas (Producto, Valor o Fecha) para este gráfico.")
+        return
+    _aplicar_pendiente()
+    cols = (col_prod, col_fam, col_subfam, col_valor, col_cant, col_um,
+            col_fecha, col_prov, col_docu)
+    b_rng = _normalizar(d, *cols)
+    if b_rng.empty or b_rng["valor"].sum() == 0:
+        # SIN FILAS SE VACÍA EL CONTENIDO, NO LA VISTA (regla #354): la
+        # tarjeta se dibuja con su selector de fecha, que es la salida.
+        st.markdown(CSS_PROVEEDOR, unsafe_allow_html=True)
+        st.markdown(_CSS_PRODUCTO, unsafe_allow_html=True)
         with st.container(border=True, key="compras_prod_card_vacio"):
             selector_fecha_tarjeta(
                 "cp_prod", "_cp_prod_atajo_pendiente",
-                titulo_html='<div class="cp-prod-rank-tit">'
-                            'Ranking de productos</div>',
+                titulo_html='<div class="cp-prod-rank-tit">Ranking de '
+                            'productos</div>',
                 categoria=CATEGORIA_SEC["compras_sec_producto"])
             st.info("Sin compras en el rango seleccionado. Ampliá el rango "
                     "desde la fecha de la cabecera.")
         return
+    hist = _normalizar(d_full, *cols) if d_full is not None else b_rng
+    _rango = rango_tarjeta(CATEGORIA_SEC["compras_sec_producto"])
+    if _rango is None or any(x is None for x in _rango):
+        _rango = (b_rng["fecha"].min(), b_rng["fecha"].max())
+    r0 = pd.Timestamp(_rango[0]).normalize()
+    r1 = pd.Timestamp(_rango[1]).normalize()
+    dias = (r1 - r0).days + 1
+    ultimo = hist["fecha"].max()
 
-    st.markdown(_CSS_SELECTOR_TEXTO, unsafe_allow_html=True)
+    # El precio habitual y la marca de cada línea del rango: la mediana se
+    # toma de los 90 días ANTERIORES a cada compra, así que entran al
+    # cálculo los 90 días previos al rango (y después se descartan).
+    _ant90 = hist[(hist["fecha"] >= r0 - pd.Timedelta(days=90))
+                  & (hist["fecha"] < r0)]
+    _x = _con_referencia(pd.concat([_ant90.assign(_en=False),
+                                    b_rng.assign(_en=True)],
+                                   ignore_index=True))
+    rng = _x[_x["_en"]].drop(columns="_en").reset_index(drop=True)
+    prev = hist[(hist["fecha"] >= r0 - pd.Timedelta(days=dias))
+                & (hist["fecha"] < r0)]
+    antes = hist[hist["fecha"] < r0]
 
-    # (Acá vivió el filtro de proveedores de esta sección —el mismo
-    # `_comun.py::filtro_proveedores` del Ranking de Proveedores, clave
-    # "cp_prod_prov"—, que recortaba `dd` a "los productos que le compro a
-    # estos proveedores". Nació el 2026-09-02 y se fue el 2026-09-12, a
-    # pedido: «eliminemos el filtro de proveedores, ya no lo necesitaremos
-    # en este grupo de vista». `col_prov` sigue en la firma por la #357.
-    # Su CSS NO se borró: las reglas `cp_prod_prov_*` de `_css_proveedor.py`
-    # son el molde del que se clona el filtro de «Detalle de documentos»
-    # (`cp_docs_prov_*`), que sigue vivo. Ver regla #382.)
+    res_p = _resumen(rng, ["prod"], prev, antes["prod"].unique())
+    res_p["um"] = (moda_por_grupo(rng[rng["um"] != ""][["prod", "um"]],
+                                  "prod", "um").reindex(res_p.index)
+                   .fillna("").map(_um_corta))
+    res_p["fam"] = rng.groupby("prod")["fam"].first().reindex(res_p.index)
+    res_p["sub"] = rng.groupby("prod")["sub"].first().reindex(res_p.index)
+    res_p["ultp"] = _ultimo_precio(rng).reindex(res_p.index)
+    res_p["cada"] = _cada_cuanto(
+        hist[(hist["fecha"] > r1 - pd.Timedelta(days=90))
+             & (hist["fecha"] <= r1)]).reindex(res_p.index)
+    res_f = _resumen(rng, ["fam"], prev, antes["fam"].unique())
+    res_s = _resumen(rng, ["fam", "sub"], prev,
+                     list(antes[["fam", "sub"]].drop_duplicates()
+                          .itertuples(index=False, name=None)))
+    _tot = float(res_p["valor"].sum()) or 1.0
+    _acum = res_p["valor"].cumsum() / _tot * 100
+    _n80 = int((_acum < 80).sum() + 1)
+    _nflag = int((res_p["nflag"] > 0).sum())
 
-    # ── UNA fila: Evolución | [Familia | Subfamilia + Ranking de productos] ─
-    # 2026-09-12, a pedido. Hasta ese día eran DOS filas: arriba una tarjeta
-    # de ancho completo con tres paneles en cascada (Familia › Subfamilia ›
-    # Productos del grupo), y debajo el Ranking de productos al lado de la
-    # Evolución. El pedido fue en cuatro partes: sacarle al panel de Familia
-    # su columna «Subfam.», eliminar el tercer panel, que el clic en
-    # Subfamilia recorte el RANKING en su lugar, y meter el ranking en la
-    # tarjeta de Familia/Subfamilia — con lo que la Evolución sube a la
-    # altura de los paneles.
-    #
-    # El tercer panel y el Ranking eran dos tablas de productos una encima
-    # de la otra: la de arriba mostraba los del grupo elegido, la de abajo
-    # los de todo el rango. Ahora hay una sola y el grupo la RECORTA — ver
-    # `_paneles_familia` para qué ámbito deja cada combinación de clics.
-    #
-    # El contenedor de afuera es MARCO, no tarjeta: las dos tarjetas son las
-    # columnas (el mismo movimiento que hizo el drill de Proveedor el
-    # 2026-08-18). Su key NO empieza con `compras_prod_card_`, que es un
-    # wildcard por familia en estilos/_80_cards.py: si lo llevara, se
-    # pintaría de blanco con padding y sombra ENCIMA de las dos tarjetas.
-    #
-    # 2026-09-12, segunda vuelta del mismo día: el gráfico pasa a la
-    # IZQUIERDA y las tablas a la derecha, a pedido — con la proporción de
-    # Proveedor al revés, que el 2026-10-02 pasó a ser una propia
-    # (`_comun.py::COLUMNAS_DRILL_PRODUCTO`, regla #583). Las
-    # tablas se siguen escribiendo PRIMERO en el código: el gráfico necesita
-    # el ranking y el foco que ellas resuelven, y en Streamlit la posición la
-    # decide la columna, no el orden del `with`. En esa misma vuelta la
-    # fecha pasó a la fila de títulos de las tablas, el gráfico a una
-    # ventana fija de 3 meses, el filtro de proveedores se fue del segmento,
-    # y las dos tarjetas dejaron de scrollear por dentro (ver
-    # estilos/_80_cards.py y la regla #382).
-    hay_fam = bool(col_fam and col_fam in dd.columns)
-    # LA TABLA DE DETALLE SE ARMA ARRIBA Y SE DIBUJA ABAJO. Se arma donde
-    # están los datos —dentro de la tarjeta del gráfico, que es quien sabe
-    # qué barras hay— y se dibuja DESPUÉS de la fila, a lo ancho: sus siete
-    # columnas piden 744px de anchos fijos y el panel del gráfico da 429.
-    # Meterla adentro habría sido elegir entre cortar columnas o angostar
-    # el gráfico que describe.
-    _detalle = None
+    # ── Los controles de la lista, validados ANTES de dibujarlos ──────────
+    _fams = list(res_f.index)
+    if st.session_state.get("cp_prod_ver") not in (None, *_VER):
+        del st.session_state["cp_prod_ver"]
+    if st.session_state.get("cp_prod_fam") not in (None, _TODAS, *_fams):
+        st.session_state["cp_prod_fam"] = _TODAS
+    ver = st.session_state.get("cp_prod_ver") or "prod"
+    fam = st.session_state.get("cp_prod_fam") or _TODAS
+    fam = None if fam == _TODAS else fam
+    _subs = (list(res_s.loc[fam].index) if fam is not None
+             and fam in res_s.index.get_level_values(0) else [])
+    if st.session_state.get("cp_prod_sub") not in (None, _TODAS, *_subs):
+        st.session_state["cp_prod_sub"] = _TODAS
+    sub = st.session_state.get("cp_prod_sub") or _TODAS
+    sub = None if (sub == _TODAS or ver != "prod" or fam is None) else sub
+    q = str(st.session_state.get("compras_prod_q") or "").strip()
+
+    # ── El ámbito y la lista ──────────────────────────────────────────────
+    amb = _ambito(res_p, fam, sub)
+    vis = amb[_coincide(pd.Series(amb.index, index=amb.index), q)] if q \
+        else amb
+    foco = st.session_state.get("compras_prod_focus")
+    if foco not in set(vis.index):
+        foco = None
+    prod_sel = foco or (vis.index[0] if len(vis) else
+                        (amb.index[0] if len(amb) else res_p.index[0]))
+
+    st.markdown(_CSS_PRODUCTO, unsafe_allow_html=True)
     with st.container(key="compras_prod_marco"):
-        # 1 : 1.25 desde el 2026-10-02 (regla #583); antes, el espejo de
-        # Proveedor. Ver `_comun.py::COLUMNAS_DRILL_PRODUCTO`.
-        col_detalle, col_tabla = st.columns(COLUMNAS_DRILL_PRODUCTO,
-                                            gap=GAP_DRILL)
-        with col_tabla:
+        _c_rank, _c_ficha = st.columns(COLUMNAS_DRILL_FICHA, gap=GAP_DRILL)
+
+        # ═══ RANKING ════════════════════════════════════════════════════
+        with _c_rank:
             with st.container(border=True, key="compras_prod_card_ranking"):
-                # El `if` y no un `return`: sin columna de Familia se va la
-                # fila de paneles, no la sección entera.
-                # El selector de fecha de la sección. `clave` propio
-                # ("cp_prod") porque Compras se lee APILADA y la tarjeta de
-                # Proveedores está en la página a la vez.
-                def _fecha(titulo_html):
-                    selector_fecha_tarjeta(
-                        "cp_prod", "_cp_prod_atajo_pendiente",
-                        titulo_html=titulo_html,
-                        categoria=CATEGORIA_SEC["compras_sec_producto"])
+                selector_fecha_tarjeta(
+                    "cp_prod", "_cp_prod_atajo_pendiente",
+                    titulo_html='<div class="cp-prod-rank-tit">Ranking de '
+                                'productos</div>',
+                    categoria=CATEGORIA_SEC["compras_sec_producto"])
+                with st.container(key="cp_prod_busca"):
+                    st.text_input("Buscar", key="compras_prod_q",
+                                  placeholder="Buscar…",
+                                  label_visibility="collapsed")
+                    st.segmented_control(
+                        "Ver por", list(_VER), key="cp_prod_ver",
+                        default=None if "cp_prod_ver" in st.session_state
+                        else "prod", required=True,
+                        format_func=_VER.get, on_change=_al_cambiar_ver,
+                        label_visibility="collapsed")
+                if ver != "fam":
+                    with st.container(key="cp_prod_chips"):
+                        st.pills(
+                            "Familia", [_TODAS] + _fams, key="cp_prod_fam",
+                            default=None if "cp_prod_fam" in st.session_state
+                            else _TODAS, required=True,
+                            format_func=lambda o: ("Todas" if o == _TODAS
+                                                   else _sin_gritar(o)),
+                            on_change=_al_cambiar_familia,
+                            label_visibility="collapsed")
+                if ver == "prod" and fam is not None and _subs:
+                    with st.container(key="cp_prod_subchips"):
+                        st.pills(
+                            "Subfamilia", [_TODAS] + _subs, key="cp_prod_sub",
+                            default=None if "cp_prod_sub" in st.session_state
+                            else _TODAS, required=True,
+                            format_func=lambda o: (
+                                "Todas" if o == _TODAS else _sin_gritar(o)),
+                            label_visibility="collapsed")
 
-                fam_amb = sub_amb = None
-                if hay_fam:
-                    fam_amb, sub_amb = _paneles_familia(dd, col_fam, col_subfam,
-                                                        col_prod, col_valor,
-                                                        fecha=_fecha)
-                d_rank = _ambito_ranking(dd, col_fam, col_subfam, fam_amb,
-                                         sub_amb)
-                ranking = _prod_ranking(d_rank, col_prod, col_fecha, col_valor,
-                                        col_cant, col_punit, col_um)
-                # EL BUSCADOR SE LEE ANTES DE DIBUJARSE: decide qué filas
-                # tiene la tabla y qué producto puede seguir en foco, y su
-                # widget va en la fila del título, más abajo. `key` se lee
-                # sin dibujarla, como el modo de la zona.
-                _q_prod = str(st.session_state.get("compras_prod_q")
-                              or "").strip()
-                ranking_vis = ranking
-                if _q_prod:
-                    ranking_vis = ranking[_coincide(ranking["producto"],
-                                                    _q_prod)]
-                prod_focus = st.session_state.get("compras_prod_focus")
-                if prod_focus not in set(ranking_vis["producto"]):
-                    prod_focus = None
-
-                # El ámbito se DICE en el título: el recorte lo decide un
-                # clic en otro panel, y una tabla que cambia de contenido
-                # sin decir por qué se lee como un bug.
-                _amb = sub_amb or fam_amb
-                _amb_txt = (html.escape(_compras_truncar(_sin_gritar(_amb), 30))
-                            if _amb else "")
-                _amb_html = (f'<span class="cp-prod-rank-amb"> · {_amb_txt}'
-                             f'</span>' if _amb else "")
-                # Título solo, sin controles: el filtro de proveedores y la
-                # fecha compartían esta fila hasta el 2026-09-12. El filtro
-                # se fue del segmento y la fecha a la fila de títulos de
-                # arriba (ver `_paneles_familia`). Sólo sin
-                # columna de Familia —sin fila de arriba— la fecha vuelve
-                # acá: la sección no puede quedarse sin control de rango.
-                #
-                # 2026-10-02, a pedido: «que la tabla Ranking de productos
-                # tenga un buscador en la misma fila de su título» (regla
-                # #581). Filtra por nombre, sin tildes ni mayúsculas; el %
-                # sigue siendo sobre el ámbito ENTERO —el buscador elige
-                # qué filas se ven, no cambia contra qué se miden—.
-                _tit_rank = ('<div class="cp-prod-rank-tit">'
-                             f'Ranking de productos{_amb_html}</div>')
-
-                def _buscador():
-                    with st.container(key="cp_prod_rank_buscar"):
-                        st.text_input("Buscar producto", key="compras_prod_q",
-                                      placeholder="Buscar producto…",
-                                      label_visibility="collapsed")
-
-                if hay_fam:
-                    with st.container(horizontal=True, gap="small",
-                                      vertical_alignment="center",
-                                      key="cp_prod_rank_hdr"):
-                        st.markdown(_tit_rank, unsafe_allow_html=True)
-                        _buscador()
+                _filas_rk = _FILAS_RANK - (2 if ver == "prod" and fam is not None
+                                           and _subs else 0)
+                _alto_rk = alturas.por_filas(
+                    _filas_rk, px_fila=ALTO_FILA_RANK,
+                    extra=CROMO_GRID_RANK + ALTO_FILA_RANK, minimo=0)
+                _amb_v = float(amb["valor"].sum()) or 1.0
+                if ver == "prod":
+                    _prev_amb = prev
+                    if fam is not None:
+                        _prev_amb = _prev_amb[_prev_amb["fam"] == fam]
+                    if sub is not None:
+                        _prev_amb = _prev_amb[_prev_amb["sub"] == sub]
+                    filas = _filas_grilla(
+                        vis, [("⚠ " if n_ else "") + p for p, n_
+                              in zip(vis.index, vis["nflag"])],
+                        list(vis.index), _amb_v,
+                        [p + (" · tiene una compra para revisar" if n_ else "")
+                         for p, n_ in zip(vis.index, vis["nflag"])])
+                    _ayuda_pct = (f"% sobre {_sin_gritar(sub or fam)}"
+                                  if fam is not None else
+                                  "% sobre el total comprado en el rango")
+                    total = _total_grilla(
+                        vis, len(vis), f" de {len(res_p)}" if len(vis) != len(res_p)
+                        else "", _amb_v,
+                        None if q else float(_prev_amb["valor"].sum()))
+                    _k = ("compras_prod_rank_"
+                          + _clave_grilla(fam or "", sub or "", _sin_tildes(q)))
+                    nombre_col, defecto = "Producto", prod_sel
                 else:
-                    # Sin Familia el título comparte fila con la FECHA, que
-                    # no se puede ir a otro lado (la sección se quedaría sin
-                    # control de rango): el buscador baja a un renglón suyo.
-                    _fecha(_tit_rank)
-                    _buscador()
-
-                # SIN el punto en "Cant": AG Grid resuelve `field` con notación
-                # de PATH ("a.b" -> row.a.b), así que un campo "Cant." se parte
-                # en ["Cant", ""] y la celda sale vacía en silencio, sin ningún
-                # error (arquitectura.md regla #192). El punto vuelve como
-                # `headerName` en el columnDef, así que el rótulo no cambia.
-                disp = ranking_vis.rename(columns={
-                    "producto": "Producto", "valor": "Valor", "pct": "%",
-                    "cantidad": "Cant", "um": "UM", "inicio": "Inicio",
-                    "fin": "Fin", "var_pct": "Var",
-                })
-                _val_max_prod = float(ranking["valor"].max()) if len(ranking) else 1.0
-                disp["_barra"] = disp["Valor"] / _val_max_prod * 100
-                _resp_prod = AgGrid(
-                    disp[["Producto", "Valor", "%", "Cant", "UM", "Inicio",
-                         "Fin", "Var", "_barra"]],
-                    gridOptions={
-                        # Ancho fijo en las OCHO columnas, ninguna con `flex`:
-                        # `st_aggrid` le clava `width: 200` a cada columna sin
-                        # `width` propio y ese `width` le gana al flex
-                        # (verificado con `api.getColumnDefs()`).
-                        #
-                        # Lo que decía el caption de debajo de la tabla («UM =
-                        # unidad de kardex · Inicio/Fin = primera y última
-                        # compra real del período · % es sobre el total del
-                        # rango») se mudó a los `headerTooltip`, igual que los
-                        # de los paneles de arriba el 2026-09-11: en la misma
-                        # tarjeta que ellos, el renglón de alto era el que
-                        # no alcanzaba.
-                        "columnDefs": [
-                            {"field": "Producto", "width": 150,
-                             "tooltipField": "Producto"},
-                            {"field": "Valor", "width": 96, "minWidth": 90,
-                             "type": "numericColumn",
-                             "cellStyle": _js_barra_prod,
-                             "valueFormatter": _js_soles0_prod},
-                            {"field": "%", "width": 44, "minWidth": 44,
-                             "type": "numericColumn",
-                             "headerTooltip": (f"% sobre {_sin_gritar(_amb)}"
-                                               if _amb else
-                                               "% sobre el total comprado "
-                                               "en el rango"),
-                             "valueFormatter": _js_pct_prod},
-                            {"field": "Cant", "headerName": "Cant.",
-                             "width": 60, "type": "numericColumn",
-                             "headerTooltip": "Cantidad en la UM del "
-                                              "producto; no se suma "
-                                              "entre productos",
-                             "valueFormatter": _js_num0_prod},
-                            {"field": "UM", "width": 52,
-                             "headerTooltip": "Unidad de kardex"},
-                            {"field": "Inicio", "width": 72, "minWidth": 64,
-                             "type": "numericColumn",
-                             "headerTooltip": "Precio de la PRIMERA compra "
-                                              "real del período",
-                             "valueFormatter": _js_soles2_prod},
-                            {"field": "Fin", "width": 72, "minWidth": 64,
-                             "type": "numericColumn",
-                             "headerTooltip": "Precio de la ÚLTIMA compra "
-                                              "real del período",
-                             "valueFormatter": _js_soles2_prod},
-                            # `minWidth` por la regla #349: «+176.9%» mide
-                            # 51px y recortado por la izquierda se lee
-                            # «76.9%», un número plausible y falso.
-                            {"field": "Var", "width": 60, "minWidth": 56,
-                             "type": "numericColumn",
-                             "headerTooltip": "Variación de Fin contra "
-                                              "Inicio",
-                             "valueFormatter": _js_pct_signed_prod},
-                            {"field": "_barra", "hide": True},
-                        ],
-                        "rowSelection": {"mode": "singleRow",
-                                         "checkboxes": False,
-                                         "enableClickSelection": False},
-                        "onRowClicked": _js_toggle_prod,
-                        # El look de los paneles de arriba —que es el del
-                        # Ranking de Proveedores—, y no el suyo de antes: con
-                        # las tres tablas en la misma tarjeta, dos idiomas de
-                        # grilla se leían como dos tarjetas pegadas. Eso trae
-                        # las filas de 24px, la cabecera de 32 y el
-                        # `fitGridWidth` (ver el panel A de `_paneles_familia`
-                        # sobre por qué no `flex`).
-                        "autoSizeStrategy": {"type": "fitGridWidth"},
-                        "rowHeight": ALTO_FILA_RANK,
-                        "headerHeight": ALTO_HEADER_RANK,
-                        "suppressCellFocus": True,
-                        "suppressMovableColumns": True,
-                    },
-                    allow_unsafe_jscode=True,
-                    theme="streamlit",
-                    custom_css=CSS_RANKING_GRID,
-                    height=_ALTO_FRAME,
-                    update_on=["selectionChanged"],
-                    # El ámbito en la key, como la tenía el panel que esto
-                    # reemplaza: fuerza el remonte con los datos nuevos (con
-                    # key estable y el `client_wins` de fábrica el navegador
-                    # puede quedarse con la tabla anterior, regla #227). De
-                    # paso el remonte nace sin fila elegida, así que al
-                    # cambiar de grupo la Evolución pasa al primero del grupo
-                    # nuevo en vez de quedarse en un producto de otro.
-                    # La búsqueda también: con otras filas, la grilla
-                    # estrena (y nace sin fila elegida, así que la Evolución
-                    # pasa al primero de lo que se ve).
-                    key=("compras_prod_rank_tab_"
-                         f"{_slug(fam_amb or 'todo')}_{_slug(sub_amb or 'todo')}"
-                         + (f"_{_clave_grilla(_sin_tildes(_q_prod))}"
-                            if _q_prod else "")),
-                )
-                # AgGrid devuelve la selección VIGENTE en cada corrida (no un
-                # evento) — comparar contra `prod_focus` alcanza, sin dedup.
-                # Selección vacía (reclic en la fila ya elegida, el toggle de
-                # `_js_toggle_prod`) TAMBIÉN limpia el foco.
-                _sel_prod = getattr(_resp_prod, "selected_rows", None)
-                if _sel_prod is not None and len(_sel_prod):
-                    _fila_sel = (_sel_prod.iloc[0] if hasattr(_sel_prod, "iloc")
-                                else _sel_prod[0])
-                    _clicked = str(_fila_sel["Producto"])
-                else:
-                    _clicked = None
-                if _clicked != prod_focus:
-                    prod_focus = _clicked
-                    st.session_state["compras_prod_focus"] = prod_focus
-
-        with col_detalle:
-            with st.container(border=True, key="compras_prod_card_evo"):
-                # Sin foco, el primero de lo que se VE: con el buscador
-                # puesto, el primero del ranking entero podría no estar en
-                # la tabla. Una búsqueda sin resultados no deja la tarjeta
-                # vacía: sigue con el primero del ranking.
-                _base_foco = ranking_vis if len(ranking_vis) else ranking
-                prod_foco = (prod_focus if prod_focus is not None
-                             else _base_foco.iloc[0]["producto"])
-
-                # ── CABECERA: el producto en foco ────────────────────────────
-                # Sin controles de sección, y eso es lo que quedó de tres
-                # vueltas del 2026-09-12: la fecha y el filtro de proveedores
-                # llegaron a vivir acá; la fecha se pidió en la fila del
-                # título de «Compras por familia» —que es sobre lo que manda;
-                # este gráfico tiene su ventana fija— y el filtro se pidió
-                # fuera del segmento.
-                #
-                # Recorte por CSS (ellipsis) y el nombre entero en el
-                # `title`: el ancho de la tarjeta cambia con la ventana, y
-                # un corte fijo en N caracteres o sobra o no alcanza.
-                # ── CABECERA: el producto, su ventana y su granularidad ─
-                # UN SOLO RENGLÓN desde el 2026-09-20, a pedido: «hagamos
-                # minimalista la granulación de semana mes año, en una línea
-                # desplegable y pongámosla en la misma fila del título». El
-                # renglón que se ahorra es lo que paga la tabla de abajo —
-                # ver el reparto en `_CROMO_CARD_EVO`.
-                #
-                # Sin controles de sección, y eso es lo que quedó de tres
-                # vueltas del 2026-09-12: la fecha y el filtro de proveedores
-                # llegaron a vivir acá; la fecha se pidió en la fila del
-                # título de «Compras por familia» —que es sobre lo que manda—
-                # y el filtro se pidió fuera del segmento.
-                #
-                # El nombre recorta por CSS (ellipsis) y va entero en el
-                # `title`: el ancho de la tarjeta cambia con la ventana, y un
-                # corte fijo en N caracteres o sobra o no alcanza.
-                #
-                # 2.6 / 1.75 / 1.0 son los 433px del panel repartidos según
-                # lo que mide el peor caso de cada uno a 12.5px: «Últimos 24
-                # meses» pide ~116 con su chevron y «Semana» ~61, así que al
-                # nombre le quedan ~196 — unos 26 caracteres antes del «…».
-                #
-                # columnas-internas: el nombre del producto y sus dos
-                # selectores, dentro de la tarjeta. No es una fila de drill.
-                _nom = html.escape(str(prod_foco))
-                # La key del contenedor es el ANCLA del CSS que aplana los
-                # dos selectores a texto (`_CSS_SELECTOR_TEXTO`). Es una
-                # regla por contenedor, así que captura a todo selectbox que
-                # se meta acá dentro: si algún día entra un tercero que SÍ
-                # tiene que verse como caja, acotarla a su key propia.
-                with st.container(key="compras_prod_ctrl"):
-                    # columnas-internas: el nombre del producto y sus dos
-                    # selectores, dentro de la tarjeta. No es una fila de
-                    # drill (el reparto y su medición, doce líneas arriba).
-                    _c_tit, _c_win, _c_gran = st.columns(
-                        [2.6, 1.75, 1.0], vertical_alignment="center")
-                    with _c_tit:
-                        st.markdown(
-                            f'<div class="cp-prod-evo-tit" title="{_nom}">'
-                            f'{_nom}</div>', unsafe_allow_html=True)
-                    with _c_win:
-                        # ── VENTANA PROPIA, ELEGIBLE, ABRIENDO EN 3 MESES ─
-                        # Historia corta, porque cambió tres veces:
-                        #   · 2026-08-26 → 2026-09-12: ventana propia
-                        #     ELEGIBLE (`periodo.selector`), abría en 12m.
-                        #     Nació porque el rango de la franja era de ~24
-                        #     días y cualquier granularidad daba UN período.
-                        #   · 2026-09-12: se quitó, para que la fecha del
-                        #     segmento (entonces en esta tarjeta) mandara
-                        #     también acá —si no, era la regla #330, un
-                        #     control de fecha sentado sobre un gráfico que
-                        #     lo ignora—, y el mismo día volvió como ventana
-                        #     FIJA de 3 meses, sin selector, a pedido.
-                        #   · 2026-09-12, más tarde, a pedido: «no permite
-                        #     cambiar las opciones de "Últimos 3 meses",
-                        #     recuerdo que se podía personalizar». Vuelve el
-                        #     desplegable, abriendo en 3m. Lo que se quiso
-                        #     fijar era el DEFAULT, no quitar la elección.
-                        #
-                        # La #330 ya no muerde: la fecha del segmento vive en
-                        # la OTRA tarjeta, así que ésta tiene un solo control
-                        # de fecha y es el suyo. Con «Rango» el gráfico sigue
-                        # a esa fecha.
-                        _op_prod = periodo.selector(
-                            "compras_prod_periodo", default="3m",
-                            widget="lista",
-                            format_func=lambda o: _ETIQ_VENTANA_EVO.get(o, o))
-                    with _c_gran:
-                        gran = st.selectbox(
-                            "Agrupar por", ("Semana", "Mes", "Año"), index=1,
-                            key="compras_prod_gran_sel",
-                            label_visibility="collapsed",
-                            help="Cada barra es un período de este tamaño. "
-                                 "La tabla de abajo lleva una fila por "
-                                 "barra, en el mismo orden.")
-
-                # El ancla es el último día CON DATOS del parquet, no `hoy`
-                # (ver el docstring de `graficos/periodo.py`). La ventana se
-                # recorta de `d_full`, el histórico sin la fecha de la
-                # sección: con `dd` quedaría dentro del rango elegido.
-                if _op_prod != periodo.HEREDA and d_full is not None:
-                    _src_evo = periodo.recortar(d_full, col_fecha,
-                                                _op_prod).copy()
-                    _src_evo[col_fecha] = pd.to_datetime(_src_evo[col_fecha],
-                                                         errors="coerce")
-                    _src_evo[col_punit] = pd.to_numeric(_src_evo[col_punit],
-                                                        errors="coerce")
-                    _src_evo[col_valor] = pd.to_numeric(
-                        _src_evo[col_valor], errors="coerce").fillna(0)
-                    _src_evo = _src_evo.dropna(subset=[col_fecha, col_prod])
-                else:
-                    _src_evo = dd
-                # EL RANGO QUE SE ESTÁ MIRANDO, como dos `date`. Lo necesita
-                # la variación contra la barra anterior para saber qué
-                # período quedó CORTADO (#470), y sale del mismo sitio que
-                # recortó el df — si saliera de los datos, un mes con
-                # compras sólo hasta el 12 se leería como mes entero.
-                #
-                # Las dos ramas son las dos fuentes de `_src_evo`: la
-                # ventana propia de esta tarjeta, o el rango de la sección
-                # (el selector de la tarjeta de al lado) cuando hereda.
-                if _op_prod != periodo.HEREDA and d_full is not None:
-                    _f_full = pd.to_datetime(d_full[col_fecha],
-                                             errors="coerce")
-                    _rng_evo = periodo.ventana(_op_prod, _f_full.max(),
-                                               minimo=_f_full.min())
-                else:
-                    _rng_evo = rango_tarjeta(
-                        CATEGORIA_SEC["compras_sec_producto"])
-                _rng_evo = (tuple(pd.Timestamp(_x).date() for _x in _rng_evo)
-                            if _rng_evo and all(_x is not None
-                                                for _x in _rng_evo) else None)
-
-                g = _src_evo[_src_evo[col_prod].astype(str) == prod_foco]
-                # Las cifras del encabezado salen de `g`, o sea de la MISMA
-                # ventana que las barras. Si salieran de `ranking` —que mira
-                # el rango de la sección— serían un número describiendo un
-                # período y unas barras dibujando otro.
-                fila = _prod_stats(g, col_fecha, col_punit, col_cant, col_valor,
-                                   col_um)
-                agg = _prod_serie_periodo(g, col_fecha, col_punit, col_cant,
-                                          col_valor, gran, col_docu=col_docu,
-                                          col_prov=col_prov)
-
-                if agg.empty or fila is None:
-                    # Con la ventana propia es un caso NORMAL, no un borde:
-                    # el Ranking mira el rango de la sección (12 meses de
-                    # entrada) y un producto que se compró en enero no tiene
-                    # nada en los últimos 3. El mensaje dice cuál ventana,
-                    # o se lee como un producto sin datos.
-                    _en = _ETIQ_VENTANA_EVO.get(_op_prod, _op_prod).lower()
-                    st.info("Sin compras con precio válido de este producto "
-                            f"en «{_en}».")
-                else:
-                    var_pct = fila["var_pct"]
-                    color_var = (ERROR if var_pct and var_pct > 0.05
-                                else (EXITO if var_pct and var_pct < -0.05 else GRIS_TEXTO))
-                    _um = f"/{fila['um']}" if fila["um"] else ""
-                    # Dos líneas, no una: la de una sola línea obligaba a leer
-                    # "1ª → última" sin decir última QUÉ, y mezclaba
-                    # precio+variación con el rango mín-máx en la misma
-                    # respiración. 2026-09-03, a pedido.
-                    _rango_txt = ""
-                    if fila["maximo"] > fila["minimo"]:
-                        _rango_txt = (
-                            f'<div style="font-size:12px;color:{GRIS_TEXTO};'
-                            f'margin:0 0 2px;">fluctuó entre '
-                            f'<b>S/ {fila["minimo"]:,.2f}</b> y '
-                            f'<b>S/ {fila["maximo"]:,.2f}</b></div>')
-                    # DICE "última compra" Y NO "actual" desde el
-                    # 2026-09-20. Se preguntó qué era («dice actual y un
-                    # valor, ¿a qué se refiere, al precio actual?») y la
-                    # pregunta estaba bien hecha: son DOS cosas distintas.
-                    # Esta cifra es el precio unitario de la ÚLTIMA compra
-                    # dentro de la ventana del gráfico — no un promedio, no
-                    # el precio de hoy, y no lo que dicen las barras (que es
-                    # el promedio del período). Con una compra suelta a otra
-                    # unidad de medida las dos cifras se separan tanto que
-                    # parecen de productos distintos: medido en vivo, «actual
-                    # S/ 15.85» debajo de barras de S/ 74.50.
+                    if ver == "fam":
+                        rg = res_f
+                        nombres = [_sin_gritar(f) for f in rg.index]
+                        raws = list(rg.index)
+                        ayudas = nombres
+                        base_pct = _tot
+                        _ayuda_pct = "% sobre el total comprado en el rango"
+                        _cur = res_p.at[prod_sel, "fam"]
+                    else:
+                        rg = res_s if fam is None else res_s.loc[[fam]]
+                        rg = rg.sort_values("valor", ascending=False,
+                                            kind="stable")
+                        nombres = [_sin_gritar(s) for _f, s in rg.index]
+                        raws = [f"{_f}\x1f{s}" for _f, s in rg.index]
+                        ayudas = [f"{_sin_gritar(s)} · {_sin_gritar(_f)}"
+                                  for _f, s in rg.index]
+                        base_pct = (_tot if fam is None
+                                    else float(res_f.at[fam, "valor"]))
+                        _ayuda_pct = (f"% sobre {_sin_gritar(fam)}" if fam
+                                      else "% sobre el total comprado en el rango")
+                        _cur = (f"{res_p.at[prod_sel, 'fam']}\x1f"
+                                f"{res_p.at[prod_sel, 'sub']}")
+                    if q:
+                        _m = _coincide(pd.Series(nombres, index=rg.index), q)
+                        rg = rg[_m.to_numpy()]
+                        nombres = [x for x, m in zip(nombres, _m) if m]
+                        raws = [x for x, m in zip(raws, _m) if m]
+                        ayudas = [x for x, m in zip(ayudas, _m) if m]
+                    filas = _filas_grilla(rg, nombres, raws, base_pct, ayudas)
+                    _prev_g = float(rg["prev"].sum())
+                    total = _total_grilla(rg, len(rg), "", base_pct,
+                                          None if q else _prev_g)
+                    _k = ("compras_prod_grupo_" + ver + "_"
+                          + _clave_grilla(fam or "", _sin_tildes(q),
+                                          st.session_state.get("cp_prod_gclic", 0)))
+                    nombre_col = _VER[ver]
+                    defecto = _cur
+                filas.attrs["ayuda_pct"] = _ayuda_pct
+                _clic = _grilla(filas, total, nombre_col, ver != "prod",
+                                defecto, _alto_rk, _k)
+                if ver == "prod":
                     st.markdown(
-                        f'<div style="font-size:12px;color:{GRIS_TEXTO};margin:0 0 2px;"'
-                        f' title="Precio unitario de la última compra dentro de'
-                        f' la ventana del gráfico. Las barras muestran el'
-                        f' promedio de cada período.">'
-                        f'última compra <b>S/ {fila["fin"]:,.2f}{_um}</b> · '
-                        f'<b style="color:{color_var};">'
-                        f'{"+" if (var_pct or 0) >= 0 else "−"}{abs(var_pct or 0):.1f}%'
-                        f'</b> desde la 1ª del período</div>'
-                        f'{_rango_txt}',
+                        f'<div class="cp-rank-pie">{_n80} productos hacen el '
+                        f'80 % de lo comprado · <span class="cpp-warn">⚠</span>'
+                        f' {_nflag} con una compra para revisar</div>',
+                        unsafe_allow_html=True)
+                    if _clic != foco:
+                        st.session_state["compras_prod_focus"] = _clic
+                        st.session_state["cp_prod_per"] = None
+                        st.session_state["cp_prod_cprov"] = None
+                        prod_sel = _clic or prod_sel
+                        if _clic is None:
+                            prod_sel = (vis.index[0] if len(vis)
+                                        else prod_sel)
+                else:
+                    st.markdown(
+                        '<div class="cp-rank-pie">Clic en una '
+                        f'{"familia" if ver == "fam" else "subfamilia"}: sus '
+                        'productos · Δ contra el período anterior</div>',
+                        unsafe_allow_html=True)
+                    if _clic is not None:
+                        _f, _, _s = _clic.partition("\x1f")
+                        st.session_state["_cp_prod_ir"] = {
+                            "fam": _f, "sub": _s or None}
+                        preservar_widgets(_KEYS_FICHA)
+                        st.rerun(scope=scope_rerun())
+
+        # ═══ FICHA ══════════════════════════════════════════════════════
+        with _c_ficha:
+            with st.container(border=True, key="compras_prod_card_ficha"):
+                _ficha(prod_sel, res_p.loc[prod_sel], hist, (r0, r1), ultimo,
+                       dias)
+
+
+def _ficha(prod, fila, hist, rango, ultimo, dias):
+    """La ficha del producto: cabecera, cifras del rango, curva y las
+    pestañas Proveedores | Compras | Períodos."""
+    um = fila["um"] or ""
+    h = _con_referencia(hist[hist["prod"] == prod].reset_index(drop=True))
+    r0, r1 = rango
+
+    # ── Cabecera: nombre, ventana y grano ────────────────────────────────
+    if st.session_state.get("cp_prod_gran") not in (None, *_GRANOS):
+        del st.session_state["cp_prod_gran"]
+    gran = st.session_state.get("cp_prod_gran") or "Mes"
+    with st.container(key="cpp_ficha_cab"):
+        st.markdown(f'<div class="cp-fi-nom" title="{_esc(prod)}">'
+                    f'{_esc(_compras_truncar(prod, 44))}</div>',
+                    unsafe_allow_html=True)
+        with st.container(key="cpp_evo_ctrl"):
+            op = periodo.selector(
+                "compras_prod_periodo", default="3m", widget="lista",
+                format_func=lambda o: ("Rango de las tablas"
+                                       if o == periodo.HEREDA else
+                                       ("Todo el histórico" if o == "Todo"
+                                        else f"Últimos {o[:-1]} meses")))
+        with st.container(key="cpp_fi_grano"):
+            st.segmented_control(
+                "Grano", list(_GRANOS), key="cp_prod_gran",
+                default=None if "cp_prod_gran" in st.session_state else "Mes",
+                required=True,
+                format_func=lambda g: "Doc." if g == "Documento" else g,
+                label_visibility="collapsed")
+    _sub = [_sin_gritar(fila["sub"]), _sin_gritar(fila["fam"])]
+    if pd.notna(fila["ult"]):
+        _u = f"última compra {_fecha_corta(fila['ult'])}"
+        if pd.notna(fila["ultp"]):
+            _u += f" a {_precio(fila['ultp'])} / {um or 'unidad'}"
+        if pd.notna(fila["cada"]):
+            _c = int(round(fila["cada"]))
+            _u += f", cada {_c} {'día' if _c == 1 else 'días'}"
+        _sub.append(_u)
+    _n = int(fila["docs"])
+    _sub.append(f"{_n} {'compra' if _n == 1 else 'compras'} en el rango")
+    st.markdown(f'<div class="cpp-sub" title="{_esc(" · ".join(_sub))}">'
+                f'{_esc(" · ".join(_sub))}</div>', unsafe_allow_html=True)
+
+    # ── Las cifras del rango ─────────────────────────────────────────────
+    _ant = (f"{(r0 - pd.Timedelta(days=dias)):%d/%m} – "
+            f"{(r0 - pd.Timedelta(days=1)):%d/%m}")
+    st.markdown(_html_kpis(fila, um, dias, _ant), unsafe_allow_html=True)
+
+    # ── La curva ─────────────────────────────────────────────────────────
+    S = _serie(h, gran, op, ultimo, rango)
+    if S is None:
+        st.info("Sin compras de este producto en «"
+                + ("el rango" if op == periodo.HEREDA else
+                   periodo.etiqueta(op) or "la ventana") + "».")
+        return
+    keys = S["keys"]
+    per = st.session_state.get("cp_prod_per")
+    if per not in keys:
+        per = None
+    st.session_state["cp_prod_per"] = per
+    # EL CLIC EN UNA BARRA, ANTES DE DIBUJARLA (regla #399): la selección
+    # persiste mientras la key no cambie, así que se lee la key dibujada la
+    # vez pasada y el contador sube en esta misma corrida. Y va antes de
+    # las pestañas porque puede cambiarlas: en Proveedores acota los
+    # proveedores a esa barra; en las otras dos abre sus compras.
+    _base = f"cp_prod_curva_{zlib.crc32(f'{prod}|{gran}|{op}'.encode()):08x}"
+    _nclic = st.session_state.get("cp_prod_nclic", 0)
+    _pt = _first_point(st.session_state.get(f"{_base}_{_nclic}"))
+    if _pt is not None:
+        _nclic += 1
+        st.session_state["cp_prod_nclic"] = _nclic
+        _kx = str(_pt.get("x")) if _pt.get("x") is not None else None
+        if _kx in keys:
+            per = None if per == _kx else _kx
+            st.session_state["cp_prod_per"] = per
+            st.session_state["cp_prod_cprov"] = None
+            if st.session_state.get("cp_prod_tab", "prov") == "prov":
+                st.session_state["cp_prod_pw"] = "ven"
+            else:
+                st.session_state["cp_prod_tab"] = "comp"
+    st.plotly_chart(_fig_producto(S, gran, um, per), width="stretch",
+                    on_select="rerun", selection_mode="points",
+                    key=f"{_base}_{_nclic}",
+                    config={"displayModeBar": False})
+
+    # ── La leyenda ───────────────────────────────────────────────────────
+    _ley = [f'<span><i class="bar"></i>{_esc(um or "unidades")} comprados</span>',
+            '<span><i class="lin"></i>precio ponderado</span>',
+            '<span><i class="hab"></i>precio habitual</span>']
+    if S["agg"]["fl"].any():
+        _ley.append('<span><i class="mar"></i>con compras para revisar</span>')
+    _p = S["parc"]
+    if _p is not None and (float(S["agg"]["c"].iat[-1]) or S["refq"]):
+        _ult = float(S["agg"]["c"].iat[-1])
+        _ley.append(f'<span>{_esc(_p["rot"])}: {_esc(_cant(_ult, um))} · '
+                    f'<i class="raya"></i>{_esc(_p["rot_ref"])}: '
+                    f'{_esc(_cant(S["refq"], um))} <b class="var">'
+                    f'{_fmt_var(_var_pct(_ult, S["refq"]))}</b></span>')
+    st.markdown('<div class="cpp-ley">' + "".join(_ley) + "</div>",
+                unsafe_allow_html=True)
+
+    # ── Los ámbitos de las pestañas ──────────────────────────────────────
+    if st.session_state.get("cp_prod_tab") not in (None, *_TABS):
+        del st.session_state["cp_prod_tab"]
+    if st.session_state.get("cp_prod_pw") not in (None, *_PW):
+        del st.session_state["cp_prod_pw"]
+    tab = st.session_state.get("cp_prod_tab") or "prov"
+    pw = st.session_state.get("cp_prod_pw") or "90"
+    lin = S["lineas"]
+    bsel = lin[lin["k"] == per] if per else None
+    if pw == "ven":
+        Lp = bsel if bsel is not None else lin
+    else:
+        _p0 = r0 if pw == "rango" else r1 - pd.Timedelta(days=89)
+        Lp = h[(h["fecha"] >= _p0) & (h["fecha"] <= r1)]
+    cprov = st.session_state.get("cp_prod_cprov")
+    if cprov is not None and cprov not in set(h["prov"]):
+        cprov = None
+    if bsel is not None:
+        Lc = bsel
+    elif cprov is not None:
+        Lc = Lp
+    else:
+        Lc = h[(h["fecha"] >= r0) & (h["fecha"] <= r1)]
+    if cprov is not None:
+        Lc = Lc[Lc["prov"] == cprov]
+    _ven = (_etq(per, gran, largo=True) if per else "La curva")
+    _alto = (_FILAS_LISTA - 1) * _ALTO_FILA
+    _html_pv, _npv = _html_proveedores(Lp, um, _alto)
+    _html_cp, _ncp = _html_compras(Lc, um, _alto)
+
+    # ── Pestañas ─────────────────────────────────────────────────────────
+    with st.container(key="cpp_ficha_tabs"):
+        with st.container(key="cp_modo_ptab"):
+            tab = st.pills(
+                "Ver", list(_TABS), key="cp_prod_tab",
+                default=None if "cp_prod_tab" in st.session_state else "prov",
+                required=True,
+                format_func=lambda o: {"prov": f"Proveedores · {_npv}",
+                                       "comp": f"Compras · {_ncp}",
+                                       "per": f"Períodos · {len(keys)}"}[o],
+                label_visibility="collapsed") or "prov"
+        if tab == "prov":
+            with st.container(key="cpp_pw_fila"):
+                st.markdown('<div class="cp-modo-nota">comparar en</div>',
+                            unsafe_allow_html=True)
+                with st.container(key="cp_modo_ppw"):
+                    st.pills(
+                        "Ámbito de los proveedores", list(_PW),
+                        key="cp_prod_pw",
+                        default=None if "cp_prod_pw" in st.session_state
+                        else "90", required=True,
+                        format_func=lambda o: {"rango": "El rango",
+                                               "90": "90 días",
+                                               "ven": _ven}[o],
+                        label_visibility="collapsed")
+        elif tab == "comp":
+            if per or cprov is not None:
+                _t = " · ".join(x for x in (
+                    _etq(per, gran, largo=True) if per else "",
+                    nombre_propio(cprov) if cprov is not None else "",
+                    "" if per or cprov is None else
+                    {"rango": "el rango", "90": "90 días",
+                     "ven": "la curva"}[pw]) if x)
+                st.button(f"{_compras_truncar(_t, 46)} ✕", key="cp_prod_soltar",
+                          type="tertiary", on_click=_soltar)
+            else:
+                st.markdown('<div class="cp-modo-nota">del rango · clic en una '
+                            'barra: ese período</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="cp-modo-nota">una fila por barra de la '
+                        'curva · clic: sus compras</div>',
                         unsafe_allow_html=True)
 
-                    _precio = agg["precio"].tolist()
-                    _valor = agg["valor"].tolist()
-                    _cant = (agg["cantidad"].tolist()
-                             if "cantidad" in agg.columns
-                             else [None] * len(_valor))
-                    _docs = (agg["docs"].tolist() if "docs" in agg.columns
-                             else None)
-                    _provs = (agg["provs"].tolist() if "provs" in agg.columns
-                              else None)
-                    # Las claves («2026-S38», «2026-09») son lo que sabe
-                    # desarmar `_cobertura` para decidir si la VENTANA corta
-                    # ese período. Las arma `_periodo_serie`, la misma que
-                    # las escribe en Semanal: dos formatos distintos de la
-                    # misma clave serían dos definiciones de "un mes".
-                    _claves = list(_periodo_serie(pd.Series(agg.index), gran))
-                    _vars = _variaciones(_claves, _valor, gran, _rng_evo)
-                    _rotulos = [_rotulo_periodo(_t, gran) for _t in agg.index]
-
-                    # ── EL CLIC EN UNA BARRA, ANTES DE DIBUJARLA ─────────
-                    # Regla #399: la selección de `on_select` PERSISTE entre
-                    # corridas mientras la key no cambie, así que se lee la
-                    # key que se DIBUJÓ la vez pasada y el contador sube en
-                    # esta misma corrida — con el foco en la key se perdía un
-                    # clic de cada dos (medido en Semanal). Es la receta de
-                    # Volatilidad (`compras_vol_nclic`).
-                    #
-                    # Y va acá arriba, no después de la figura, porque de qué
-                    # barra está en foco dependen DOS cosas de esta misma
-                    # corrida: el color de las barras y qué dibuja la zona de
-                    # abajo.
-                    #
-                    # ── Y EL MODO DE LA ZONA, también antes (regla #581) ──
-                    # Un clic en una barra desde «Resumen Total» CAMBIA el
-                    # modo (lleva a Detalle), y el modo es la clave de un
-                    # widget que sólo se puede escribir ANTES de dibujarlo.
-                    # Mismo orden que «Compras por período» (#476, #580).
-                    _zmodo = st.session_state.get(_K_ZONA_MODO)
-                    if _zmodo not in _ZONA_OPCIONES:
-                        # Un `segmented_control` con un valor fuera de sus
-                        # opciones revienta: se corrige la CLAVE.
-                        _zmodo = _ZONA_TOTAL
-                        st.session_state[_K_ZONA_MODO] = _zmodo
-                    # El clic en un proveedor de «Resumen del Período»: la
-                    # grilla lo devuelve DESPUÉS de dibujarse, así que deja
-                    # una bandera y un rerun, y se aplica acá. El contador
-                    # estrena esa grilla, para que su selección vieja no
-                    # vuelva a mandar a nadie a Detalle al regresar.
-                    _ir_prov = st.session_state.pop("_compras_prod_ir_prov",
-                                                    None)
-                    if _ir_prov is not None:
-                        st.session_state["compras_prod_prov_det"] = _ir_prov
-                        st.session_state[_K_ZONA_MODO] = _ZONA_DETALLE
-                        _zmodo = _ZONA_DETALLE
-                        st.session_state["compras_prod_pnclic"] = (
-                            st.session_state.get("compras_prod_pnclic", 0)
-                            + 1)
-                    _key_base = f"compras_g_prod_{gran}"
-                    _nclic = st.session_state.get("compras_prod_nclic", 0)
-                    _foco_antes = st.session_state.get("compras_prod_foco_per")
-                    _pt = _first_point(
-                        st.session_state.get(f"{_key_base}_{_nclic}"))
-                    if _pt is not None:
-                        # Todo evento leído se CONSUME, haya movido el foco o
-                        # no: con la key igual, la corrida siguiente lo
-                        # volvería a leer y el clic se repetiría solo.
-                        _nclic += 1
-                        st.session_state["compras_prod_nclic"] = _nclic
-                        _clic = _periodo_del_clic(_pt, _claves, agg.index)
-                        if _clic is not None:
-                            # Una barra vuelve al ámbito de la BARRA: suelta
-                            # el proveedor que había abierto «Resumen del
-                            # Período».
-                            st.session_state["compras_prod_prov_det"] = None
-                            if _zmodo == _ZONA_TOTAL:
-                                # «Resumen Total» son TODAS las barras: el
-                                # gesto sobre una es «mostrame ésta», y eso
-                                # es Detalle. Desde ahí siempre ABRE.
-                                st.session_state[_K_ZONA_MODO] = _ZONA_DETALLE
-                                _zmodo = _ZONA_DETALLE
-                                st.session_state["compras_prod_foco_per"] = (
-                                    _clic)
-                            else:
-                                # En los otros dos la barra ACOTA la tabla, y
-                                # la misma barra la suelta: vuelve a la
-                                # ventana entera, sin cambiar de modo.
-                                st.session_state["compras_prod_foco_per"] = (
-                                    None if _foco_antes == _clic else _clic)
-                    # «Resumen Total» no tiene foco —son todas las barras—,
-                    # y el proveedor sólo acota el Detalle. Volver a uno de
-                    # esos modos los suelta, para que el gráfico no siga
-                    # apagando barras que la tabla ya no nombra.
-                    if _zmodo == _ZONA_TOTAL:
-                        st.session_state["compras_prod_foco_per"] = None
-                    if _zmodo != _ZONA_DETALLE:
-                        st.session_state["compras_prod_prov_det"] = None
-                    _key_graf = f"{_key_base}_{_nclic}"
-                    _foco_per = st.session_state.get("compras_prod_foco_per")
-                    # Un foco que ya no existe (cambió la ventana, la
-                    # granularidad o el producto) no es un error: es que el
-                    # período se fue. La zona vuelve a la ventana entera.
-                    if _foco_per not in _claves:
-                        _foco_per = None
-
-                    # ── BARRAS, con las dos cifras SIEMPRE a la vista ────
-                    # La barra ES el valor comprado del período y encima
-                    # lleva, fijo, el precio promedio de ese período — que es
-                    # la pregunta que traía a este panel ("¿a cuánto me
-                    # salió, y cuánto compré?") respondida de una mirada.
-                    #
-                    # El valor va COMPACTO (`_fmt_soles_compacto`, nacido para
-                    # este mismo problema en ventas_comparativo.py): "S/ 11k"
-                    # entra en una barra angosta donde "S/ 11,268" se corta o
-                    # se pisa con la vecina. El monto exacto sigue en el hover
-                    # y, desde el 2026-09-20, en la tabla de abajo.
-                    fig = go.Figure()
-                    # LA ETIQUETA ROTA SI NO ENTRA, no se encoge: Plotly la
-                    # ESCALA hasta que deja de leerse y sigue en el DOM (regla
-                    # #91). El umbral y su medición, en
-                    # `_UMBRAL_BARRAS_ROTADAS`.
-                    _muchas = len(agg) > _UMBRAL_BARRAS_ROTADAS
-                    _etiquetas = _etiquetas_barras(_precio, _valor,
-                                                   rotada=_muchas,
-                                                   cantidades=_cant,
-                                                   um=fila["um"])
-                    _hover = _hover_barras(
-                        _rotulos, _precio, _valor, _docs, _provs,
-                        variaciones=_vars, claves=_claves, gran=gran,
-                        rango=_rng_evo)
-                    # LA BARRA EN FOCO SE QUEDA CON EL ACENTO y las demás se
-                    # apagan: es lo que dice que la tabla de abajo habla de
-                    # ÉSA y no de todas. Mismo gesto que los meses no
-                    # elegidos de la cascada de «Vs año pasado».
-                    _colores = (ACENTO if _foco_per is None else
-                                [ACENTO if _k == _foco_per else LAVANDA_FOCO
-                                 for _k in _claves])
-                    fig.add_bar(
-                        x=agg.index, y=_valor, marker_color=_colores,
-                        text=_etiquetas, textposition="outside",
-                        textangle=-90 if _muchas else 0,
-                        textfont=dict(size=10, color=GRIS_TEXTO),
-                        cliponaxis=False, constraintext="none",
-                        # El hover se arma ENTERO en Python (nombres de
-                        # proveedor, meses en español, los dos porcentajes):
-                        # `%{x|...}` rotularía el mes en inglés, y un
-                        # `customdata` por dato obligaría a repetir acá el
-                        # formato que ya sabe `_hover_barras`.
-                        customdata=[[h] for h in _hover],
-                        hovertemplate="%{customdata[0]}<extra></extra>",
-                    )
-                    _compras_layout(fig, alto=_ALTO_EVO)
-                    fig.update_layout(showlegend=False,
-                                      yaxis=dict(showticklabels=False),
-                                      bargap=0.35)
-                    # Techo con aire para que la etiqueta quepa encima de
-                    # la barra más alta: `textposition="outside"` no expande
-                    # el rango solo, y sin esto la etiqueta del máximo se
-                    # corta contra el borde.
-                    #
-                    # Rotada la etiqueta ocupa ALTO en vez de ancho, así que
-                    # el techo tiene que dar más aire. Hasta el 2026-10-02
-                    # era un 1.75 fijo, medido para dos cifras; con la
-                    # cantidad (regla #582) el largo cambia con la unidad y
-                    # el número, así que el techo se CALCULA: lo que mide la
-                    # etiqueta más larga (5,6px por carácter a 10px, o tres
-                    # renglones de 12,5 sin rotar) menos los 30 del margen
-                    # de arriba, que también la recibe, sobre el área de
-                    # trazo (el alto menos 30 + 10 de márgenes y ~20 del eje
-                    # X). Nunca menos de 1.28, el aire de siempre.
-                    if max(_valor) > 0:
-                        _area = _ALTO_EVO - 60
-                        _pide = ((max(len(_e) for _e in _etiquetas) * 5.6
-                                  if _muchas else 3 * 12.5) + 6 - 30)
-                        _techo = max(1.28, _area / max(_area - max(_pide, 0),
-                                                       40))
-                        fig.update_yaxes(range=[0, max(_valor) * _techo])
-                    fig.update_xaxes(**_eje_x_kwargs(gran, agg))
-                    # `on_select="rerun"` es lo que hace clickeable la barra.
-                    # El `key` lleva el contador de arriba, no el foco.
-                    st.plotly_chart(fig, use_container_width=True,
-                                    on_select="rerun", key=_key_graf)
-
-                    # ── LA ZONA DE ABAJO: tres tablas y un control ───────
-                    # 2026-09-20, a pedido: «la tabla debe estar debajo del
-                    # gráfico y formar parte de la tarjeta del gráfico». Ese
-                    # día eran dos estados sin control —el clic en la barra
-                    # los cambiaba—; desde el 2026-10-02 son tres, con el
-                    # mismo control que «Compras por período» (regla #581):
-                    # «Resumen Total» (una fila por barra), «Resumen del
-                    # Período» (una por proveedor) y «Detalle» (una por
-                    # compra).
-                    #
-                    # Las tres tablas miden `_ALTO_ZONA`, lo mismo: si
-                    # midieran distinto, cambiar de modo cambiaría el alto de
-                    # la tarjeta y la fila entera bailaría con cada clic
-                    # (#398).
-                    _prov_det = st.session_state.get("compras_prod_prov_det")
-                    if _prov_det is not None and (
-                            not col_prov or col_prov not in g.columns
-                            or _prov_det not in set(g[col_prov].astype(str))):
-                        _prov_det = None
-                    _i_foco = (_claves.index(_foco_per)
-                               if _foco_per in _claves else None)
-
-                    # EL RÓTULO DICE EL ÁMBITO, NO CÓMO SE USA: la barra en
-                    # foco (o la ventana entera) y, en Detalle, el proveedor
-                    # que lo acota. Sin cuentas ni instrucciones, a pedido
-                    # («quitemos este texto: 9 compras · tocá la misma barra
-                    # para volver al resumen»): el control de al lado ya
-                    # dice cómo volver. En «Resumen Total» no hay ámbito que
-                    # nombrar —son todas las barras— y va vacío.
-                    _rot_z = _rot_tit = ""
-                    if _zmodo != _ZONA_TOTAL:
-                        _rot_z = (
-                            f'<b>{html.escape(_rotulos[_i_foco])}</b>'
-                            if _i_foco is not None else
-                            html.escape(_ETIQ_VENTANA_EVO.get(_op_prod,
-                                                              _op_prod)))
-                        if _zmodo == _ZONA_DETALLE and _prov_det is not None:
-                            # El nombre se corta con «…» por CSS (el renglón
-                            # lo comparte con el control) y va entero en el
-                            # `title`.
-                            _rot_tit = html.escape(nombre_propio(_prov_det),
-                                                   quote=True)
-                            _rot_z += f' · {_rot_tit}'
-                    # Lo que devuelve el control se IGNORA a propósito: el
-                    # modo ya se leyó de `session_state` arriba del gráfico,
-                    # porque un clic en una barra puede cambiarlo. Y va SIN
-                    # `default=`: la clave ya viene sembrada desde arriba, y
-                    # con las dos Streamlit avisa en el log en cada sesión.
-                    with st.container(horizontal=True, gap="small",
-                                      key="cp_prod_zona_pie"):
-                        st.segmented_control(
-                            "Qué se ve abajo", _ZONA_OPCIONES,
-                            required=True, key=_K_ZONA_MODO,
-                            label_visibility="collapsed")
-                        st.markdown(
-                            f'<div class="cp-prod-zona-rot" title="{_rot_tit}">'
-                            f'{_rot_z}</div>', unsafe_allow_html=True)
-
-                    # La key la ESTRENA todo lo que cambia las filas: el
-                    # producto, la granularidad, la ventana, el rango, el
-                    # foco y el proveedor. Con key estable la grilla se
-                    # refresca y el navegador puede quedarse con los datos
-                    # de antes (#227).
-                    _k_z = _clave_grilla(prod_foco, gran, _op_prod, _rng_evo,
-                                         _foco_per, len(_claves), _prov_det)
-                    if _zmodo == _ZONA_DETALLE:
-                        _det_filas, _det_total = _compras_del_periodo(
-                            g, _foco_per, gran, col_fecha, col_punit,
-                            col_cant, col_valor, col_docu, col_prov,
-                            prov=_prov_det)
-                        if _det_filas is None:
-                            st.info("Sin compras en este ámbito."
-                                    if col_docu and col_docu in g.columns
-                                    else "El parquet no trae el número de "
-                                         "comprobante: sin él no hay una "
-                                         "fila por compra que armar.")
-                        else:
-                            renderizar_compras_producto(
-                                _det_filas, altura=_ALTO_ZONA,
-                                key=f"compras_prod_zona_det_{_k_z}",
-                                total=_det_total)
-                    elif _zmodo == _ZONA_PROVS:
-                        _pv_filas, _pv_total = _proveedores_del_producto(
-                            g, _foco_per, gran, col_fecha, col_cant,
-                            col_valor, col_prov)
-                        if _pv_filas is None:
-                            st.info("El parquet no trae el proveedor de "
-                                    "cada compra.")
-                        else:
-                            _pnclic = st.session_state.get(
-                                "compras_prod_pnclic", 0)
-                            _prov_clic = renderizar_proveedores_producto(
-                                _pv_filas, altura=_ALTO_ZONA,
-                                key=("compras_prod_zona_provs_"
-                                     + _clave_grilla(_k_z, _pnclic)),
-                                total=_pv_total)
-                            if (_prov_clic is not None and _prov_clic
-                                    in set(_pv_filas["__prov"])):
-                                st.session_state["_compras_prod_ir_prov"] = (
-                                    _prov_clic)
-                                st.rerun(scope=scope_rerun())
-                    else:
-                        # SIN los documentos desde el 2026-10-02 (regla
-                        # #582): en 429px no entraban junto a la cantidad,
-                        # y siguen en el hover de cada barra.
-                        _filas_z, _tot_z = _tabla_periodos(
-                            _rotulos, _precio, _valor, None, _vars,
-                            _claves, gran, _rng_evo, cantidades=_cant,
-                            um=fila["um"])
-                        renderizar_periodos(
-                            _filas_z, altura=_ALTO_ZONA,
-                            key=f"compras_prod_zona_res_{_k_z}",
-                            rotulo_periodo="Período", total=_tot_z,
-                            estrecha=True)
+    st.text_input("Acción", key=_K_RELEVO, label_visibility="collapsed",
+                  on_change=_relevo)
+    if tab == "prov":
+        _html = _html_pv
+    elif tab == "comp":
+        _html = _html_cp
+    else:
+        _html = _html_periodos(S, gran, um, _alto, per)
+    _k = zlib.crc32(_html.encode("utf-8"))
+    with st.container(key=f"cpp_fi_tabla_{_k:08x}"):
+        st.markdown(_html, unsafe_allow_html=True)
+    inyectar_html(_JS_CLIC)

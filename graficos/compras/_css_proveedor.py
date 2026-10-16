@@ -20,8 +20,9 @@ TRES exports, y el primero NO es la misma clase de cosa que los otros:
     ranking de arriba y el pivote de documentos de abajo.
 """
 
-from tema import (ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, BLANCO, GRIS_BORDE,
-                  GRIS_LINEA_GRILLA, GRIS_TEXTO_MEDIO)
+from tema import (ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA_TEXTO, BLANCO,
+                  CELDA_POS_TEXTO, ERROR_TEXTO, GRIS_BORDE, GRIS_LINEA_GRILLA,
+                  GRIS_TEXTO_MEDIO, LAVANDA_SELECCION, TEXTO_PRINCIPAL)
 
 CSS = """        <style>
         .st-key-compras_prov_marco { position: relative; }
@@ -1903,10 +1904,16 @@ CSS = """        <style>
             font-size: 12px; font-weight: 700; border-radius: 4px;
             font-variant-numeric: tabular-nums;
         }
+        /* Siete columnas desde el 2026-10-12 (regla #646): la unidad entró
+           a la cantidad y se sumaron el precio promedio y «vs. habitual». */
         .cp-pl-head, .cp-pl-row > summary {
             display: grid; align-items: center; column-gap: 8px;
-            grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.3fr) 40px 52px 56px 10px;
+            grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) 34px 66px 64px 66px 10px;
         }
+        .cp-pl-row .var { text-align: right; font-size: 11.5px; font-weight: 600;
+                          color: var(--text-muted); font-variant-numeric: tabular-nums; }
+        .cp-pl-row .var.sube { color: var(--danger-text); }
+        .cp-pl-row .var.baja { color: var(--success-text); }
         .cp-pl-head, .cp-pm-head, .cp-dl-head {
             height: 28px; padding: 0 8px;
             font-size: 11.5px; color: var(--text-secondary);
@@ -2082,10 +2089,13 @@ CSS = """        <style>
            proveedores de Productos: más chico y en gris, porque es el
            detalle de la fila que lo abre. */
         .cp-dl { font-size: 12px; line-height: 1.25; }
+        /* «Días» y «Subió de precio» en lugar de la «Var. %» contra la
+           factura anterior, desde el 2026-10-12 (regla #646). */
         .cp-dl-doc .cp-dl-head, .cp-dl-doc .cp-dl-row > summary {
             display: grid; align-items: center; column-gap: 8px;
-            grid-template-columns: 62px minmax(0, 1fr) 40px 76px 70px 10px;
+            grid-template-columns: 60px 76px 38px 72px 36px minmax(0, 1fr) 10px;
         }
+        .cp-dl-row small { font-size: 10px; color: var(--text-muted); }
         .cp-dl-per .cp-dl-head, .cp-dl-per .cp-dl-row > summary {
             display: grid; align-items: center; column-gap: 8px;
             grid-template-columns: minmax(0, 1fr) 44px 90px 70px 10px;
@@ -2152,7 +2162,7 @@ CSS = """        <style>
            Va AL FINAL del bloque: `.cp-pm-fila .sp` pesa lo mismo y, antes,
            le ganaba por orden (medido: la cabecera perdía la columna y las
            filas no, y la grilla salía corrida). */
-        .st-key-chartcard_prov_prods {
+        .st-key-compras_prov_card_ficha {
             container-type: inline-size;
             container-name: cpprods;
         }
@@ -2464,6 +2474,202 @@ CSS = CSS.replace("        </style>",
                   CSS_CP_DOCS + "\n        </style>")
 
 
+# ── La FICHA del proveedor (2026-10-12, regla #646) ─────────────────
+# La tarjeta de la derecha de la «opción A»: nombre, cifras del rango,
+# curva, y Productos | Documentos. Va al FINAL de la hoja: pisa el
+# `position: absolute` con que flotaban las pastillas `cp_modo_*` en la
+# fila del título de las tarjetas de antes.
+CSS_FICHA = """
+        .st-key-compras_prov_card_ficha [data-testid="stVerticalBlock"] {
+            gap: 6px !important;
+        }
+        .st-key-cp_ficha_cab, .st-key-cp_ficha_ctrl,
+        .st-key-cp_ficha_ley, .st-key-cp_ficha_tabs {
+            display: flex !important; flex-direction: row !important;
+            align-items: center !important; justify-content: space-between;
+            gap: 8px !important; flex-wrap: wrap; width: 100% !important;
+        }
+        .st-key-cp_ficha_cab > *, .st-key-cp_ficha_ctrl > *,
+        .st-key-cp_ficha_ley > *, .st-key-cp_ficha_tabs > * {
+            width: auto !important; flex: 0 0 auto; margin: 0 !important;
+        }
+        .st-key-cp_ficha_cab > *:first-child,
+        .st-key-cp_ficha_ctrl > *:first-child,
+        .st-key-cp_ficha_ley > *:first-child {
+            flex: 1 1 auto; min-width: 0;
+        }
+        .st-key-cp_ficha_tabs {
+            border-bottom: 1px solid var(--border); padding-bottom: 2px;
+        }
+        .cp-fi-nom {
+            font-size: 18px; font-weight: 700; color: var(--accent-deep);
+            line-height: 28px; white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cp-fi-nom span {
+            font-size: 12px; font-weight: 500; color: var(--text-secondary);
+            margin-left: 8px;
+        }
+        .cp-fi-kpis {
+            display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .cp-fi-kpis > div {
+            background: var(--bg-primary); border-radius: 10px;
+            padding: 4px 10px; min-width: 0;
+        }
+        .cp-fi-kpis span {
+            display: block; font-size: 10.5px; color: var(--text-secondary);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .cp-fi-kpis b {
+            font-size: 15px; font-weight: 700; color: var(--text-primary);
+            white-space: nowrap; font-variant-numeric: tabular-nums;
+        }
+        .cp-fi-kpis b.sube { color: var(--danger-text); }
+        .cp-fi-kpis b.baja { color: var(--success-text); }
+        .cp-fi-kpis b.igual { color: var(--text-muted); }
+        .cp-fi-kpis small {
+            font-size: 10.5px; color: var(--text-secondary); margin-left: 5px;
+            white-space: nowrap;
+        }
+        .cp-fi-chip {
+            display: inline-block !important; font-size: 11px !important;
+            font-weight: 600; border-radius: 999px; padding: 0 8px;
+            margin-top: 2px; line-height: 18px;
+        }
+        .cp-fi-chip.nuevo { color: var(--accent-deep) !important;
+                            background: var(--accent-light); }
+        .cp-fi-chip.vuelve { color: var(--warning-text) !important;
+                             background: var(--warning-bg); }
+        .cp-fi-curva {
+            font-size: 12px; color: var(--text-secondary); line-height: 26px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .cp-fi-curva b { color: var(--accent-deep); }
+        .st-key-cp_fi_medida [data-testid="stButtonGroup"] button,
+        .st-key-cp_fi_grano [data-testid="stButtonGroup"] button {
+            min-height: 24px !important; height: 24px !important;
+            padding: 0 9px !important; font-size: 11.5px !important;
+        }
+        .st-key-cp_fi_medida [data-testid="stElementToolbar"],
+        .st-key-cp_fi_grano [data-testid="stElementToolbar"] { display: none; }
+        .cp-fi-ley {
+            display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+            font-size: 11px; color: var(--text-secondary); min-height: 18px;
+        }
+        .cp-fi-ley .var { font-weight: 600; }
+        .cp-fi-ley .var.sube { color: var(--danger-text); }
+        .cp-fi-ley .var.baja { color: var(--success-text); }
+        .cp-fi-ley i.hueco {
+            display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+            border: 2px solid var(--accent); box-sizing: border-box;
+            margin-right: 5px; vertical-align: -1px;
+        }
+        .cp-fi-ley i.raya {
+            display: inline-block; width: 14px; height: 2px;
+            background: var(--text-secondary); margin-right: 5px;
+            vertical-align: 3px;
+        }
+        .st-key-cp_prov_volver button {
+            min-height: 22px !important; height: 22px !important;
+            padding: 0 8px !important; font-size: 11.5px !important;
+            color: var(--accent-deep) !important;
+        }
+        .st-key-cp_ficha_tabs div[class*="st-key-cp_modo_"] {
+            position: static !important; height: auto !important;
+        }
+        .st-key-cp_modo_tab [data-testid="stButtonGroup"]
+            button[data-variant="pills"] {
+            font-size: 13px !important;
+        }
+        /* El ranking es más angosto que antes (0.92 de 2.42): el título
+           va en su renglón y el filtro y la fecha debajo. En la fila
+           compartida se cortaba a «R…». */
+        .st-key-compras_prov_card_ranking .st-key-cp_rank_fila {
+            flex-wrap: wrap !important; row-gap: 4px !important;
+        }
+        .st-key-compras_prov_card_ranking .st-key-cp_rank_fila
+            > [data-testid="stElementContainer"]:first-child {
+            flex: 1 0 100% !important; min-height: 26px !important;
+        }
+        .st-key-compras_prov_card_ranking .cp-rank-tit { line-height: 26px; }
+        /* Los controles de la curva en UN renglón: con un nombre largo
+           («Doble G Representaciones S.A.C.») el grano bajaba a otra línea
+           y la ficha pasaba el techo. Cede el rótulo («…»), no el control. */
+        .st-key-cp_ficha_ctrl { flex-wrap: nowrap !important; }
+        .cp-pm-head span, .cp-dl-head span {
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .cp-dl-doc .cp-dl-row > summary > .var { text-align: left; }
+        /* En Productos los números van en negro y la barra en lavanda: el
+           violeta queda para el nombre, que es lo que se clickea. */
+        .cp-pl-row .n { color: var(--text-primary); }
+        .cp-pl-row .vb .bar {
+            background: color-mix(in srgb, var(--accent) 28%, white);
+        }
+        .cp-pl-row.foco .vb .bar { background: var(--accent); }
+        .cp-rank-pie {
+            font-size: 11px; color: var(--text-secondary); line-height: 16px;
+        }
+        /* El Desglose: la tendencia es un SVG que escala sin proporción. */
+        .cp-pm-head, .cp-pm-fila {
+            grid-template-columns: minmax(0, 1.3fr) 58px
+                repeat(var(--n), minmax(0, 1fr)) 72px;
+        }
+        .cp-pm-fila .sp, .cp-pm-head .sp { padding-right: 6px; }
+        .cp-pm-fila .sp svg { width: 100%; height: 18px; display: block; }
+        .cp-pm-fila .sp rect { fill: var(--accent-tint); }
+        .cp-pm-fila .sp path.l {
+            fill: none; stroke: var(--accent); stroke-width: 1.5;
+            vector-effect: non-scaling-stroke;
+        }
+        .cp-pm-fila .sp path.d {
+            fill: none; stroke: var(--accent); stroke-width: 1.3;
+            stroke-dasharray: 2 2; vector-effect: non-scaling-stroke;
+        }
+        .cp-pm-fila .c.parc, .cp-dl-row .nm.parc {
+            background: repeating-linear-gradient(45deg, var(--border) 0 2px,
+                                                  transparent 2px 6px);
+        }
+        .cp-pm-fila .c.sube { background: var(--danger-bg); }
+        .cp-pm-fila .c.baja { background: var(--success-bg); }
+        .cp-pm-fila.tot {
+            background: var(--bg-primary); font-weight: 700; cursor: default;
+        }
+        .cp-pm-fila.tot .nm { color: var(--text-primary); }
+        .cp-pm-fila .var.igual, .cp-dl .var.igual { color: var(--text-muted); }
+        /* Los proveedores de los últimos 90 días, en el despliegue de un
+           producto: precio PROMEDIO del período, del más barato al más caro. */
+        .cp-p90 {
+            display: grid; align-items: center; column-gap: 8px;
+            grid-template-columns: minmax(0, 1fr) 150px 70px 60px;
+            height: 20px; padding: 0 8px; font-size: 11.5px;
+            color: var(--text-secondary); font-variant-numeric: tabular-nums;
+        }
+        .cp-p90 .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cp-p90 .r { text-align: right; }
+        .cp-p90 .f { font-size: 11px; color: var(--text-muted); }
+        .cp-p90 .var { font-size: 10.5px; font-weight: 600; margin-left: 4px; }
+        .cp-p90 .var.sube { color: var(--danger-text); }
+        .cp-p90-min {
+            font-size: 9.5px; font-weight: 600; color: var(--success-text);
+            background: var(--success-bg); border-radius: 999px;
+            padding: 0 6px; margin-left: 4px;
+        }
+        /* Ficha angosta (ventana intermedia): las cinco cifras siguen en
+           UNA fila, con la letra más chica. En dos filas, la ficha pasaba
+           el techo de una pantalla. */
+        @container cpprods (max-width: 600px) {
+            .cp-fi-kpis { gap: 4px; }
+            .cp-fi-kpis > div { padding: 4px 6px; }
+            .cp-fi-kpis b { font-size: 12.5px; }
+            .cp-fi-kpis small { display: none; }
+        }
+"""
+CSS = CSS.replace("        </style>", CSS_FICHA + "        </style>")
+
+
 # ── El AgGrid del ranking de proveedores ────────────────────────────
 # Se estila por las VARIABLES del tema (`--ag-*`) y no por selectores
 # propios, por una razon medida y no por gusto: `theme="streamlit"` declara
@@ -2601,6 +2807,30 @@ CSS_RANKING_GRID = {
 # dimensiona en Python a partir de esos mismos numeros. Cambiarlos aca
 # desincronizaria las dos mitades -- misma trampa que ya documenta
 # `_ALTO_FILA_PIVOT`.
+CSS_RANKING_PROV = {
+    **CSS_RANKING_GRID,
+    # El Ranking de Proveedores sobre el look compartido (2026-10-12, regla
+    # #646): los números en NEGRO —el violeta queda para lo elegido—, la
+    # fila de la ficha marcada (la elegida o, sin clic, la primera) y la
+    # columna Δ con el código de color de Compras. Un dict PROPIO y no
+    # `CSS_RANKING_GRID`, que lo comparten seis grillas de la app.
+    ".ag-root-wrapper": {
+        **CSS_RANKING_GRID[".ag-root-wrapper"],
+        "--ag-selected-row-background-color": LAVANDA_SELECCION,
+    },
+    ".ag-cell": {"color": TEXTO_PRINCIPAL},
+    ".ag-row-selected .ag-cell, .ag-row.cp-rank-defecto .ag-cell": {
+        "color": ACENTO_TEXTO_OSCURO, "font-weight": "600"},
+    ".ag-row.cp-rank-defecto": {
+        "background-color": f"{LAVANDA_SELECCION} !important"},
+    ".cp-rk-sube": {"color": f"{ERROR_TEXTO} !important", "font-weight": "600"},
+    ".cp-rk-baja": {"color": f"{CELDA_POS_TEXTO} !important", "font-weight": "600"},
+    ".cp-rk-nuevo": {"color": f"{ACENTO_TEXTO} !important", "font-weight": "600"},
+    ".cp-rk-vuelve": {"color": f"{ADVERTENCIA_TEXTO} !important",
+                      "font-weight": "600"},
+}
+
+
 CSS_PIVOTE_DOCS = {
     ".ag-root-wrapper": {
         "--ag-header-background-color": BLANCO,

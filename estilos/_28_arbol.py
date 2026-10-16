@@ -1051,12 +1051,13 @@ CSS = """
     /* Y LOS CONTROLES CON ELLA. Son fijos y viven fuera de la franja (cada
        uno lo dibuja un sitio distinto), así que no heredan su opacidad: se
        apagan y encienden con la misma marca. El pill de fecha va acotado a
-       `fila_ajuste_top` — la misma key la usa Compras › Documentos SUNAT
-       DENTRO de su tarjeta, donde no es cromo sino el filtro de la tabla
-       (regla #457). El sello ya es `pointer-events: none`. */
+       `fila_ajuste_top` — hasta el 2026-10-11 la misma key la usaba
+       Documentos SUNAT DENTRO de su tarjeta, donde no era cromo sino el
+       filtro de la tabla (reglas #457 y #633). El sello ya es
+       `pointer-events: none`. El stepper del corte (`fecha_corte_nav`) se
+       apagaba y encendía con ellos hasta el mismo día (regla #635). */
     .st-key-chips_ajuste_tabla,
     .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill,
-    .st-key-fecha_corte_nav,
     .st-key-rail_refresh,
     #sello-actualizacion {
         opacity: 0;
@@ -1065,8 +1066,7 @@ CSS = """
     }
     :root[data-capa-cab] :is(.st-key-chips_ajuste_tabla,
         .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill,
-        .st-key-fecha_corte_nav, .st-key-rail_refresh,
-        #sello-actualizacion) {
+        .st-key-rail_refresh, #sello-actualizacion) {
         opacity: 1;
         pointer-events: auto;
         transition: opacity 160ms linear;
@@ -1140,20 +1140,20 @@ CSS = """
          --barra-f      Filtros más 8 de aire, o el margen de 16 si no hay;
          --barra-fecha  el pill de la franja (210 + 8), si este reporte lo
                         dibuja ahí — Compras no (lo lleva cada tarjeta);
-         --barra-corte  el stepper del corte (176 + 8), si hay uno;
          --barra-sello  lo que se le reserva a la hora del dato, que mide su
                         texto: con rótulo 230, sin él 110, oculta 0.
        `--barra-der` es la suma: el relleno derecho de la franja, para que el
        contexto de la izquierda se recorte ANTES de meterse abajo de ellas.
-       Filtros, la fecha, el stepper y la hora viven en `_50_fecha.py`, junto
-       a sus dueños; Actualizar, que es la acción de esta franja, acá abajo. */
+       Filtros, la fecha y la hora viven en `_50_fecha.py`, junto a sus
+       dueños; Actualizar, que es la acción de esta franja, acá abajo.
+       Hasta el 2026-10-11 había otra, `--barra-corte` (el stepper del
+       corte, 176 + 8): se fue con los modos de la franja, regla #635. */
     :root {
         --barra-f: 16px;
         --barra-fecha: 0px;
-        --barra-corte: 0px;
         --barra-sello: 230px;
         --barra-der: calc(var(--barra-f) + 96px + 8px + var(--barra-fecha)
-                          + var(--barra-corte) + var(--barra-sello) + 16px);
+                          + var(--barra-sello) + 16px);
     }
     :root:has(.st-key-chips_ajuste_tabla) {
         --barra-f: calc(var(--filtros-ancho) + 8px);
@@ -1163,11 +1163,6 @@ CSS = """
     }
     :root:has(.st-key-fila_ajuste_top .st-key-fecha_ajuste_pill) {
         --barra-fecha: 218px;
-    }
-    @media (min-width: 1490px) {
-        :root:has(.st-key-fecha_corte_nav) {
-            --barra-corte: 184px;
-        }
     }
     @media (max-width: 1499px) {
         :root { --barra-sello: 110px; }

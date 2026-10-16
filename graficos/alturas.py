@@ -327,7 +327,7 @@ abajo (`VENTAS_MIX_TABLA`)."""
 
 VENTAS_COMP_FIG = 296
 """Alto de la figura de Ventas › Comparativo vs Año Pasado (2026-10-05,
-regla #633). Era 340, literal en el `.py`. La fila del TOTAL de la ventana
+regla #659). Era 340, literal en el `.py`. La fila del TOTAL de la ventana
 que entró arriba del gráfico mide 28 + 16 de separación, y esos 44 los paga
 la figura para que la tarjeta no crezca. El área de trazo igual CRECE 21px
 con etiquetas (232 en Día medido a 1440): el legend de Plotly —que la fila
@@ -387,15 +387,24 @@ doce desde la #574: la pantalla del usuario no es de 768 sino de ~620px
 entrar en ~575."""
 
 CARTA_RECETA = 27 * 5 + 38
-"""Tope de la tabla de la receta en el panel de la Carta costeada (regla
-#572), y de la receta base o los porcionamientos que se abren debajo: cinco
-filas de 27 (seis hasta la #574). La receta más larga se desliza DENTRO de
-la tabla; la tarjeta no crece."""
+"""Tope de la tabla de los porcionamientos de un corte en la ficha de la
+Carta costeada (regla #574; hasta la #657 también de la receta y la receta
+base, que hoy son un árbol): cinco filas de 27. Lo que no entra se desliza
+DENTRO de la tabla."""
 
-CARTA_FIG = 180
-"""El gráfico del panel de la Carta costeada (dona, Sankey, costo en el
-tiempo), regla #572: 60px menos que MINI (200 hasta la #574) para que el
-panel entre en ~575px junto a la receta de cinco filas."""
+CARTA_EVOLUCION = 300
+"""La evolución del costo del plato en la ficha de Costo Carta (regla #657),
+y la dona y el Sankey que comparten su lugar: la ficha baja debajo de la
+tabla y la tarjeta no tiene techo, así que el gráfico ya no paga el alto de
+la receta como los 180px de cuando iba al costado (`CARTA_FIG`, #572).
+300 = lo que mide el árbol de una receta de ocho líneas con su cabecera."""
+
+STOCK_EVOLUCION_FIG = 118
+"""Stock por Producto (2026-10-11, regla #637): el gráfico de la banda de
+arriba de la tabla, lo que valió lo filtrado después de cada cierre. Lo paga
+la tabla, que muestra menos filas con la banda puesta
+(`inventario_productos.FILAS_LISTADO_BANDA`): la tarjeta sigue entrando en
+los 575px de la pantalla del usuario."""
 
 STOCK_MOVIMIENTOS = 340
 """Stock › Movimientos (2026-10-03, regla #602): el alto de la cascada «por
@@ -404,16 +413,34 @@ qué cambió el stock» y el TOPE de la tabla de al lado —y de la de «Por
 y el aviso de ventas sin costo, la tarjeta entra en los ~575px de la
 pantalla del usuario (regla #574)."""
 
-DESTINO_TABLA = 27 * 6 + 38
-"""Tope de la tabla de Movimientos › «A dónde fue lo que entró» (2026-10-08,
-regla #614): seis filas de 27 más la cabecera. El producto elegido se abre
-DEBAJO —su gráfico (`DESTINO_FIG`) y el % de baja mes a mes—, y las dos
-cosas entran en la pantalla del usuario (~575px de tarjeta, regla #574); lo
-que no entra se desliza dentro de la tabla."""
+SIN_PLATO_FIG = 270
+"""Movimientos › «Sin plato, cierre por cierre» (2026-10-12, regla #645): las
+columnas de los cierres y, al lado, la lista de «Dónde se concentra», que
+mide lo mismo. Con la cabecera, la fila de seis cifras y la cuenta del pie,
+la tarjeta entra en los 575px de la pantalla del usuario (regla #574)."""
+
+DESTINO_TABLA = 27 * 12 + 38
+"""Tope de la tabla de Movimientos › «En qué se fue cada producto»
+(2026-10-12, regla #645): doce filas de 27 y la cabecera. El producto elegido
+se abre AL COSTADO —su cuenta y su gráfico (`DESTINO_FIG`)—, no debajo como
+en «A dónde fue lo que entró» (#614): debajo, la tarjeta pasaba de una
+pantalla. Lo que no entra se desliza dentro de la tabla."""
 
 DESTINO_FIG = 140
-"""El gráfico mes a mes del producto elegido en «A dónde fue lo que entró»
-(regla #614): lo que entró, lo vendido y lo dado de baja."""
+"""El gráfico de los cierres del producto elegido en «En qué se fue cada
+producto» (regla #645): lo que salió apilado, el sobrante debajo del cero y
+una raya con lo que entró."""
+
+DIFERENCIAS_TABLA = 27 * 28 + 38
+"""Tope de la lista de Ajuste › «Análisis de diferencias» (2026-10-13, regla
+#650): veintiocho filas de 27 y la cabecera, lo que mide la ficha de una
+línea típica (~980px, medido sobre el cierre de setiembre 2026). La ficha va
+AL COSTADO y es más alta que una pantalla, así que la tarjeta no lleva techo
+(`estilos/_80_cards.py`) y la lista se desliza por dentro."""
+
+DIFERENCIAS_FIG = 120
+"""El stock en el sistema entre los dos conteos de la línea elegida en
+«Análisis de diferencias» (regla #650): una escalera, con el cero marcado."""
 
 # ── Movimientos › las tres vistas de merma (2026-10-08, regla #615) ─────
 # Cada tarjeta entra en la pantalla del usuario (~575px, regla #574); lo
@@ -424,18 +451,27 @@ MERMA_TABLA = 27 * 9 + 38
 MERMA_CORTES = 27 * 6 + 38
 """Tope de los cortes del porcionamiento elegido, en la ficha de al lado."""
 
-MERMA_FIG = 190
+MERMA_FIG = 180
 """«Rendimiento por producto»: el % de merma de cada porcionamiento."""
 
-MERMA_FIG_PRECIO = 150
-"""«Rendimiento por producto»: el costo del día por unidad, debajo."""
+MERMA_FIG_PRECIO = 132
+"""«Rendimiento por producto»: el precio del corte (o el costo del día por
+unidad que entró), debajo. Los dos bajaron el 2026-10-12 (de 190 y 150,
+regla #647) para pagar el renglón de su selector y la nota de debajo, que
+puede ir en dos líneas: con los de antes, la tarjeta medía 584px contra
+los 575 de su techo y se deslizaba por dentro (medido a 1323×619)."""
 
 MERMA_CAMBIOS = 27 * 10 + 38
-"""Tope de «Productos que cambiaron», al lado de los dos gráficos
-(`MERMA_FIG` + `MERMA_FIG_PRECIO` ≈ 340)."""
+"""Tope de «Productos que cambiaron» y de «Cortes de este producto», al
+lado de los dos gráficos."""
 
 MERMA_PROV = 27 * 10 + 38
 """Tope de las dos tablas de «Proveedor por kg útil»."""
+
+MERMA_PROV_DET = 27 * 6 + 38
+"""Tope de la tabla de proveedores del producto elegido, en «Proveedor por kg
+útil»: desde el 2026-10-13 (regla #655) lleva debajo el recuadro «Cómo sale»
+y el botón a sus porcionamientos, y la tarjeta no puede crecer."""
 
 RB_COSTO_TABLA = 27 * 9 + 38
 """Tope de la tabla de Recetas › Costo recetas base (2026-09-30, regla
@@ -739,6 +775,16 @@ una vista (8px). Éste es el precio de ANIDAR: cuando una figura pasa a vivir
 dentro de su propio bloque, sale de su alto — si no, el bloque crece y su eje
 X termina debajo del borde.
 """
+
+CURVA_FICHA = 150
+"""Alto de la curva de la ficha de Compras › Proveedor (2026-10-12, regla
+#646): la del proveedor elegido o, con un producto en foco, la de ese
+producto. FIJO a propósito y no sacado de la tarjeta de al lado: la ficha
+es una pila de cifras, curva y tabla que tiene que entrar en el
+`--alto-util` de la laptop (575px a 1323×619), y lo que se lleva la curva
+es lo que pierde la tabla. 150 deja seis filas de la tabla a la vista. En
+la maqueta, una curva que crecía con el ancho se comía la tabla cuando la
+ficha ocupaba la pantalla entera."""
 
 FRANJA_CTRL_EVO = 30
 """Alto de la fila de controles de tiempo (`cp_evo_ctrl`) de la tarjeta de

@@ -302,6 +302,30 @@ CELDA_ALERTA_TEXTO = "#9a3412"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# EN QUÉ SE FUE CADA PRODUCTO (Movimientos › Salidas, regla #645)
+# ═══════════════════════════════════════════════════════════════════════════
+
+COLORES_DESTINO = {
+    "venta": "#6c5ce7",   # el ACENTO: lo que fue a un plato vendido
+    "cort": "#d04fa0",
+    "evvi": "#4c9a2a",
+    "prep": "#22a6c9",
+    "baja": "#e2561b",
+    "otras": "#3f63c4",
+    "falt": "#a1263a",
+    "sobr": AJUSTE_POS,
+}
+"""Las partes de lo que salió de un producto, en el ORDEN en que se apilan:
+venta, cortesía, eventos y venta interna, en preparaciones | bajas, otras
+salidas, faltante (y el sobrante, debajo del cero). Validados con el
+validador de paleta del skill de gráficos sobre el fondo claro: banda de
+luminosidad, croma y separación entre vecinas para daltonismo (ΔE ≥ 12,
+deutan/protan) y visión normal (≥ 17). El naranja de las bajas y el ámbar de
+`PALETA_SERIES` no se distinguen con deuteranopía (ΔE 5): por eso «otras»
+es azul y no ámbar."""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # NOTAS DE USO
 # ═══════════════════════════════════════════════════════════════════════════
 # - En diccionarios de CSS (custom_css de AgGrid) se usan con f-string:

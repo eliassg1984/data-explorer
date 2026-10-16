@@ -383,7 +383,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         df, df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         k_corte=_K_CORTE, k_familia=_K_FAMILIA, k_area=_K_AREA,
         familias=FAMILIAS_DE_ENTRADA, historial=_N_HISTORIAL,
-        anio_cortes=True)
+        anio_cortes=True, col_producto=col_producto)
     d = _est["d"]
     col_sis = _resolver(d, _COL_SISTEMA)
     col_fis = _resolver(d, _COL_FISICO)

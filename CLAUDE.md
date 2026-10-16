@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -129,6 +129,14 @@ regla #603.
 caso real —el cierre de setiembre registrado el 1 de octubre, el área que
 cuenta dos veces en el mes, la salida anulada, la cortesía, Eventos aparte—
 y que el reporte esté en el dispatcher. Ver `arquitectura.md` regla #622.
+
+`test_tipo_compra.py` vigila QUÉ SE COMPRÓ (`tipo_compra.py`, la columna
+«Tipo» de «Documentos SUNAT»): un Almacén y un SIRE de mentira pasados por
+el cruce de verdad —el banco que factura sin IGV, la inmobiliaria
+exonerada, el supermercado al 92 %, la ferretería que vende de todo, la
+nota exonerada, el RUC con un espacio al final— y, con `ast`, que la vista
+clasifique el cruce y cachee con la versión de las reglas. Ver
+`arquitectura.md` regla #640.
 
 ## El asistente IA no adivina: consulta
 
@@ -290,7 +298,7 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   reporte y la vista en pantalla a la izquierda —sin KPIs desde el
   2026-10-03, a pedido (regla #596)—, y la fecha,
   Filtros, la hora del dato y Actualizar a la derecha, cada uno a la
-  izquierda del anterior (`--barra-f`, `--barra-fecha`, `--barra-corte`).
+  izquierda del anterior (`--barra-f`, `--barra-fecha`, `--barra-sello`).
   **No está en reposo**: deja una tira de 12px contra el borde de arriba y
   aparece —con sus controles— cuando el cursor la toca. Por eso el
   contenido arranca en 20px y no en 52 (regla #473).
@@ -405,12 +413,31 @@ en 450px, así que el alto sale de `fig.layout.height`, o sea de Python.
 Tercera cara del mismo patrón (color / alto / **eje horizontal**). La
 proporción que parte en dos una fila de un drill de Compras sale de
 `graficos/compras/_comun.py::COLUMNAS_DRILL`, no de un literal. Proveedor
-tiene las suyas desde el 2026-10-01, en el mismo sitio: `COLUMNAS_DRILL_TABLAS`
-(Ranking | Productos) y `COLUMNAS_DRILL_ABAJO` (Documentos | Evolución,
-derivada de la de arriba para que las dos filas compartan el eje; los
-proveedores de un producto se despliegan debajo de su fila). Reglas #578 y
-#579. Y Producto la suya, `COLUMNAS_DRILL_PRODUCTO` (1 : 1.25, la
-Evolución a la izquierda), desde el 2026-10-02: regla #583.
+tiene la suya desde el 2026-10-12, en el mismo sitio: `COLUMNAS_DRILL_FICHA`
+(0.92 : 1.5), UNA fila con el Ranking a toda la altura y la ficha del
+proveedor elegido —cifras, curva, Productos | Documentos—; la fila marcada
+del ranking manda sobre toda la ficha (regla #646, que reemplazó las cuatro
+tarjetas de las #578 y #579). **Producto usa la MISMA desde el
+2026-10-13** (regla #653): ranking de productos | ficha del producto, con
+«Ver por: Producto | Subfamilia | Familia» en la lista. Hasta ese día tenía
+la suya al revés (la Evolución a la izquierda, #583), y al bajar de
+Proveedor a Producto la vista saltaba de lado.
+
+**En la ficha de Producto hay UN precio, el ponderado** (soles ÷
+cantidad), y **las compras marcadas «revisar» no entran en ningún precio**
+—sí en la cantidad y el valor— (`producto.py::marcar_revisar`, regla
+propia: S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o decimales
+en UND). Antes la barra promediaba facturas sin pesar y la tabla de abajo
+ponderaba: dos precios para el mismo mes. Y un clic en la LISTA que pide un
+rerun después de dibujar sus controles preserva sólo los que faltan
+dibujar (`_KEYS_FICHA`): reescribir uno ya dibujado es un
+StreamlitAPIException. Regla #653.
+
+**El período en curso no se compara con uno entero**: al 11 de octubre,
+«octubre contra septiembre» da ▼75 % en verde en casi todo, y es el
+calendario. `_comun.tramo_parcial` da el mismo tramo del período anterior
+(1–11 oct contra 1–11 set) y `inicio_de_periodo` alinea el otro borde de
+una ventana («12 meses» arrancaba a mitad de mes). Regla #646.
 
 Nació de un bug con captura: el drill de Proveedor partía la fila de arriba
 con `[1.6, 1]` y la de abajo con `st.columns(2)`. Los dos números son
@@ -487,7 +514,7 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
   come el clic de lo que haya ahí (un botón, un interruptor). Y una tabla sin
   el foco se come el PRIMER clic sobre una fila ya marcada: «soltá la fila
   para cerrar» pide a veces dos clics — mejor un botón de cerrar que estrene
-  la tabla (`graficos/carta_costeada.py::_cerrar_base`). Regla #572.
+  la tabla (lo tuvo la receta base de Costo Carta hasta la #657). Regla #572.
 - **Un `st.toast` seguido de un `st.rerun()` no se ve NUNCA** (medido): el
   rerun se lo lleva antes de pintarlo. El acuse viaja por `session_state`
   y lo pinta la corrida siguiente. Misma #474.
@@ -567,16 +594,20 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
 - **Detección móvil server-side:** para texto que Plotly dibuja en servidor,
   User-Agent vía `st.context.headers`. El layout va por CSS `@media`.
 - **Un widget que deja de renderizarse pierde su estado.** Por eso el
-  `date_input` de la franja se dibuja en los TRES modos: esconderlo
+  `date_input` de la franja se dibujaba también en los modos Corte y
+  Varios que la píldora tuvo hasta el 2026-10-11 (#635): esconderlo
   borraría la clave del rango del reporte. **Compras ya no lo dibuja
   arriba** (2026-09-06): sus tarjetas traen el selector. **Ni Movimientos**
   (2026-10-08): cada vista trae el suyo (regla #617). **Ni Ajuste**
   (2026-10-11): cada vista elige su sesión o sus meses (regla #632). **Ni Documentos
-  SUNAT**, que dibuja el calendario entero DENTRO de su tarjeta — de ahí
-  el espejo `{k_rango}__eco`, que es lo que evita que el rango se pierda
-  si nadie dibuja el widget. Vive en `estado_rango.restaurar_eco` (dueño
-  único) y lo llaman DOS: `app.py` en cada rerun completo y el propio
-  drill antes de leer el rango. Ver `arquitectura.md` #332 y #458.
+  SUNAT**, que trae la fecha DENTRO de su tarjeta — desde el 2026-10-11
+  con el panel de las demás (`selector_fecha_tarjeta` sin `categoria`,
+  regla #633) y no con la píldora de la franja. Del tiempo en que era un
+  `date_input` queda el espejo `{k_rango}__eco`, que evitaba que el rango
+  se perdiera si nadie dibujaba el widget; hoy es una red. Vive en
+  `estado_rango.restaurar_eco` (dueño único) y lo llaman DOS: `app.py` en
+  cada rerun completo y el propio drill antes de leer el rango. Ver
+  `arquitectura.md` #332 y #458.
   **Documentos SUNAT es un reporte propio desde el 2026-09-30** (antes, la
   única vista de Compras fuera de su pila): `graficos/sunat_reporte.py`
   despacha el drill, que sigue en `graficos/compras/documentos_sunat.py`,
@@ -878,11 +909,20 @@ y UNA fecha), y dos cosas inflan cualquier conteo sin sumar un sol: el
 cantidad ni valor, casi todos de GASTOS— y los **anulados**, que valen poco
 pero no cero (S/ 15.868 en 2026). «Requerimientos por período»
 (`graficos/movimientos_periodo.py::tarjeta_requerimientos_periodo`) descarta
-los dos y lo dice en su fila de KPI; el resto de Movimientos los suma. Su
+los dos y lo dice en su fila de KPI. Su
 gemela `tarjeta_salidas_periodo` es la MISMA tarjeta con otro `Lado` (en
 salidas el «sin procesar» no tiene ítems: sus líneas salen del kardex), y
 las dos IMPORTAN las cuentas de «Compras por período» (`semanal.py`): tocar
-una allá la cambia acá, a propósito. Reglas #508 y #509.
+una allá la cambia acá, a propósito. Reglas #508 y #509. Las dos vistas
+«por Área» suman lo mismo que su vecina del mismo lado
+(`graficos/movimientos.py::requerimientos_que_suman` y
+`salidas_que_suman`) y dicen lo que no suma en la fila TOTAL de su primer
+cuadro, «TOTAL · sin 33 anulados» — junto al título, con el botón de fecha,
+no se veía. Siguen con todo las Tablas (ocultas) y el KPI del rail. Regla
+#641. El asistente IA suma como ellas desde la #643: la nota sale de
+`asistente_datos.nota_de_grano`, que reconoce los requerimientos por su
+columna de estado — no de `publicar_contexto_ia`, que no lleva nota para
+`datos` (sólo para las tablas extra, como `nota_salidas_ia`).
 
 La tercera, `porcionamientos.parquet`: **una fila por CORTE, con la cabecera
 del porcionamiento repetida en cada una** — sumar `CANT MERMA` por fila da
@@ -891,7 +931,13 @@ toma la cabecera una vez por `COD PORC`, y la merma en soles sale de los
 cortes: Σ(`CANT RESULT` × `PREC PROM PROD FIN`) es lo que costó lo que
 entró (validado contra lo pagado en compras). Su tarjeta, «Porcionamientos»,
 es la tercera «por período» de Movimientos y la única que mide merma y no
-un valorizado. Regla #510.
+un valorizado. Regla #510. Y el precio de cada CORTE lo arma el Almacén
+repartiendo por PESO: precio = costo por unidad que entró ÷ (1 − merma) ×
+peso asignado por unidad, y la merma ES lo porcionado menos los pesos —un
+peso mal tipeado mueve la merma y el precio de todos los cortes, y el corte
+entra al Almacén a ese precio: así la Fideua llegó al 54 % de costo—. Lo
+marca «Peso por unidad raro» de Para revisar
+(`graficos/movimientos_merma.py::pesos_por_unidad`). Regla #647.
 
 La cuarta, `ventas.parquet`: **una fila por ÍTEM Y POR FORMA DE PAGO**. Un
 plato pagado con cheque + tarjeta sale dos veces con su venta entera: sumar
@@ -977,7 +1023,7 @@ Mes y Año, contra la misma fecha del calendario un año antes. La semana
 ISO da lo mismo casi siempre, pero 2026 tiene 53: en todo 2027 compara
 contra 371 días antes — el Día de la Madre contra un domingo cualquiera.
 Comparativo, Mix › Detalle › «Año pasado» y Por hora lo cuentan igual, y
-`test_graficos.py` los compara día por día de 2025 a 2029. Regla #633.
+`test_graficos.py` los compara día por día de 2025 a 2029. Regla #659.
 
 ## La compra resta las notas de crédito: `definicion_compra.py`
 
@@ -1019,6 +1065,16 @@ sirve las compras como antes.
   `definicion_compra.lineas_restadas`, que trae también las líneas
   devueltas ENTERAS (las que `data.cargar` borra). Un número de nota se
   repite entre proveedores: se cruza por número Y proveedor. Regla #628.
+
+**Qué se compró —Alimentos, Otros bienes, Servicios, Financiero— no lo
+dice SUNAT** (2026-10-11, regla #640). El SIRE tiene el casillero pero lo
+llena el comprador (vacío), y el código de producto del XML viene en el
+15 % de las líneas. La columna «Tipo» de «Documentos SUNAT» sale de
+`tipo_compra.py`, en un orden MEDIDO: entidad financiera primero (los
+bancos facturan sin IGV y si no saldrían comida), después el documento en
+el Almacén, el proveedor (≥ 90 % de un tipo) y recién al final «toda la
+factura sin IGV» → Alimentos. Tocar una regla es subir
+`tipo_compra.VERSION`.
 
 Los otros reportes de compras del Almacén y qué cuenta cada uno (los tres de
 «Ingresos» = `compras.parquet` al céntimo; los Rankings, sólo Mercadería y
@@ -1104,11 +1160,118 @@ y proceso (cuándo movió el stock: el kardex, la «Relación de Salidas» y
 Stock › Movimientos por Tipo). Septiembre 2026: S/ 6.893 contra 7.703, las
 dos cuadradas al céntimo; difieren las notas que cruzan de mes. Las
 secciones de salidas de Movimientos abren por REGISTRO (a pedido) y se
-cambian en «Filtros» (`graficos/movimientos.py::K_FECHA_SAL`), junto al
-selector que las compara con años anteriores. «Destino de lo que entra»
-usa SIEMPRE la del kardex: si no, sus columnas no cierran. Y se registra
+cambian en el panel de fecha de cada una (`graficos/movimientos.py::K_FECHA_SAL`),
+junto a «Comparar con», que las compara con años anteriores. Las dos vistas de
+cierre a cierre (#645) usan SIEMPRE la del kardex: si no, sus columnas no
+cierran. Y se registra
 por lotes —la comida de personal de un mes entero en 27 minutos—, así que
 ninguna de las dos es el día de la merma. Regla #614.
+
+**Un requerimiento también** (2026-10-11, regla #639): `FECHA REGISTRO`
+(cuándo el área lo digitó) y `FECHA PROCESADO` (cuándo el Almacén lo
+procesó); la mitad se procesa otro día. «Fecha de los requerimientos»
+(`graficos/movimientos.py::K_FECHA_REQ`) abre en registro y manda sobre
+las dos vistas de requerimientos. Los topes del botón de fecha de
+Consumo salen de ese parquet y siguen por registro, elija lo que elija.
+
+**«Filtros» tiene sólo lo que vale para TODO el reporte** (2026-10-11,
+regla #644): en Movimientos, Sub Almacén y Familia. Las dos fechas y
+«Comparar con» van en una columna AL COSTADO del panel de fecha de cada
+vista que gobiernan (`graficos/movimientos.py::AJUSTES_PIE`; debajo quedaban tras
+un scroll a 619px de alto), y «Valorizar la merma» dentro de sus tres
+tarjetas. Un valor por ajuste, no por vista —«por Período» y «por Área»
+son cortes del mismo total—: lo pinta en cada sitio
+`graficos/base.py::eleccion_compartida`, y cambiarlo pide una corrida
+completa (`graficos/movimientos_comun.py::recargar_si_cambio`), porque los parquets se
+leen afuera de las secciones. Lo vigila
+`test_graficos.py::_pruebas_ajustes_compartidos`.
+
+## En qué se fue cada producto: de cierre a cierre
+
+Movimientos › Salidas, desde el 2026-10-12 (regla #645): «Sin plato,
+cierre por cierre» (el restaurante entero) y «En qué se fue cada producto»
+(la tabla y la ficha del elegido), en `graficos/movimientos_destino.py`. La
+cuenta es `sin_plato.py` (puro, lo vigila
+`test_graficos.py::_pruebas_sin_plato`) y la carga `data.sin_plato_por_cierre`,
+cacheada con los sellos de siete parquets: la primera vez del día tarda
+~40 s. Reemplazaron a «Destino de lo que entra» (#614), que listaba sólo los
+productos con baja: en setiembre 2026, S/ 1.071 de bajas contra S/ 50.730
+de faltante del conteo.
+
+- **El período va de CIERRE A CIERRE de inventario**, no es un rango de
+  fechas: sin un conteo adentro, el faltante no existe. Por eso no tienen
+  botón de fecha sino la píldora de sesiones de Ajuste
+  (`graficos/ajuste/_comun.py::selector_sesion`, con `meta` y `pie`
+  propios), una por vista.
+- **«A un plato» es el descargo de ventas del kardex (95), y trae las
+  cortesías** (medido: el POS las descuenta; los anulados no). Se parte con
+  lo vendido por plato × su receta y, para los platos que el POS descuenta
+  DIRECTO (cortes de parrilla, aguas, los chorizos de Mayta), con el enlace
+  de `cartacosteada.parquet`; lo que la venta no explica es lo servido
+  dentro de combos y queda en «venta». Sin los directos quedaba sin
+  explicar el 37 %; con ellos, el 12 %.
+- **Una línea de receta «por insumo» (`T DESCARG` = INSUMO) no descuenta
+  su receta base: descuenta SUS insumos**, y cada línea de
+  `recetabase.parquet` dice a su vez cómo se descarga la suya. Leída como
+  producto, lo vendido iba a un código que el kardex no movió y la palta,
+  el ají o el huevo quedaban sin explicar (`sin_plato.mapa_descargo`):
+  abriéndolas, lo sin explicar baja al 10 %. Regla #648.
+- **Los insumos de operación (familia «COSTOS PRODUCCION») van aparte**:
+  ninguna receta los descarga, así que su consumo sólo aparece al contar, y
+  mezclados con la comida eran los faltantes más grandes.
+- **El último renglón de una tarjeta no puede ser un markdown ni un caption
+  sueltos**: Streamlit les pone −16px de margen abajo, que no compensa
+  nadie, y la tarjeta se desliza 8px por dentro. Van en un contenedor con
+  key y una regla que les quita el margen (`mov_sp_pie`, `mov_pr_pie`).
+- **Los ids del rail y de la pila se escriben literales**: `test_graficos.py`
+  los lee con `ast` (un nombre de constante ahí revienta la batería).
+- **Tocar la cuenta es subir `sin_plato.VERSION`.**
+
+## Por qué no cuadra cada línea: Ajuste › «Análisis de diferencias»
+
+Desde el 2026-10-13 (regla #650): la lista de faltantes o sobrantes de
+una sesión con el POSIBLE ORIGEN de cada línea (producto × área) y la
+ficha de la elegida al costado. La cuenta es `diferencias_ajuste.py`
+(puro, lo vigila `test_graficos.py::_pruebas_diferencias_ajuste`); la
+carga, `data.diferencias_ajuste_sesion`, en caché de disco por sesión; la
+vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
+
+- **El conteo anterior de una línea no es el cierre anterior**: es el
+  último de ese producto en esa área (en setiembre 2026, el parcial del
+  15–17 set para 920 de 988 líneas). Con él y la ventana por HORA, el
+  kardex cierra la cuenta en el 97 % de las líneas.
+- **Las recetas se leen línea por línea con `T DESCARG`** (#648): «se
+  produjo sin orden» sólo vale para una receta base que algo descarga
+  COMO PRODUCTO; una DD va por insumo y no lleva orden.
+- **El área de descargo de un plato es `SUBALM INS`**, no `AREA PROD`. Y puede
+  cambiar: si las ventas descontaron desde un área más de lo que las
+  recetas de hoy descargan desde ahí, y un plato se editó y hoy apunta a
+  otra, la pista «Se descontó desde otra área» lo dice (#654).
+- **Mira los combos** (`combosdetalle.parquet`, #651) y los compara por
+  TOTALES del período, no por día: el POS descuenta las ventas en lotes, a
+  la mañana siguiente y juntando días. Lo elegido en un combo a elegir
+  (CPEDIDO) no llega a ningún parquet: esa pista es «posible».
+- **Dice quién PIDE cada producto** (los requerimientos de 90 días, por
+  área) **y qué factura de SUNAT sin ingresar explica un sobrante** (el
+  cruce «Solo SUNAT» de Documentos SUNAT y las líneas de su XML, #652).
+  Emparejar nombres de XML con productos engaña fácil: se piden palabras
+  enteras, los mismos números (60 % no es 45 %) y no sólo genéricas
+  (`diferencias_ajuste.parecido`).
+- **Una línea de S/ 0 también es una diferencia**: un producto que nunca se
+  compró no tiene precio, y su sobrante puede ser la otra mitad de un
+  faltante («Vendido con el código del otro», #651). El lado lo dice la
+  CANTIDAD.
+- **Recetas × vendido no cuadra con el descargo del kardex** (31 % de
+  las líneas a ±10 %): en la ficha va con «≈», sin compararlo.
+- **El 74 % del sobrante de un cierre es el sistema en negativo**: se
+  descargó antes de que entrara nada. No es mercadería que apareció.
+- **«Ninguna receta lo usa» lo decide el PERFIL DE SALIDA de 180 días**
+  (ventas, producción, notas por tipo; anexo de la #650): hay productos que
+  el kardex descuenta por ventas sin estar en ninguna receta (los bowls), y
+  otros que salen siempre por notas (comida de personal, uso en el área).
+  Y lo que no se vendió se aconseja según qué es: un vino no «falta en una
+  receta».
+- **Tocar la cuenta es subir `diferencias_ajuste.VERSION`.**
 
 ## El consumo según recetas baja hasta lo que se COMPRA
 
@@ -1151,27 +1314,68 @@ Lo que ya mordió:
 
 Detalle, trampas y mediciones en `arquitectura.md` regla #558.
 
-## El eje temporal tiene TRES modos, y un solo dueño
+## «Simular» un plato y «¿Y si sube un insumo?»
 
-**Hoy ningún reporte los usa** (2026-10-11, regla #632): Ajuste, el único
-con `"cortes"`, pasó a una sesión por vista. La pieza sigue entera en
-`franja_fecha.py` y `estado_rango.py`.
+Desde el 2026-10-15 (regla #656). «Simular» (botón de la ficha del plato en
+Costo Carta) abre una modal con la receta como ÁRBOL: recetas base editables
+por dentro, precio por la unidad de COMPRA (S/ por kg), merma y peso de los
+cortes, precio de venta y «para quedar en X %». Es un `st.components.v2`
+(`graficos/simulador_plato.js`) porque la cuenta tiene que correr mientras se
+escribe; reemplazó a la `st.data_editor` de `recetaventa.py`. Lo que muerde:
 
-El calendario de la franja tiene tres modos: **Rango** (intervalo),
-**Corte** (el conjunto exacto de días de una sesión de inventario, que no
-tiene por qué ser contiguo) y **Varios** (suma varias sesiones en un
-solo período).
-`cortes.py` calcula los cortes; `estado_rango.py` es el dueño de los tres
-estados (rango, corte, modo) y nadie los escribe fuera.
+- **La cuenta está dos veces**: en el JS (en vivo) y en
+  `simulador_receta.costo_nodo` (lo que se guarda como propuesta). Si se toca
+  una, se toca la otra: el test busca las fórmulas escritas igual.
+- **El árbol se reescala a la receta**: sin eso, abrir una receta base
+  cambiaba el costo del plato sin haber tocado nada.
+- **La modal es un fragment dentro de otro**: `una_vez_por_corrida` y un
+  `on_dismiss` que borra `rec_carta_sim_abierto`
+  (`carta_costeada.py::_modal_simulador`), o el próximo clic la reabre.
+- **Guardar es una propuesta de Nuevo Costeo** (JSON en R2), nunca el POS.
 
-Corte y Varios comparten estado: solo cambia si el clic reemplaza o
-alterna. "Varios" nombra la unidad elegida; el verbo (suma) va en el
-caption de la lista, no en la pastilla. `_fusionar` une N cortes en un estado con la misma forma que uno,
-así el filtro `isin(dias)` no distingue el caso.
+**Costo Carta es «la tabla primero»** desde el mismo día (regla #657): la
+carta a todo el ancho con sus 16 columnas, una fecha de tarjeta con ctx
+PROPIO (`carta_costeada.ctx_fecha`: `franja_fecha.contexto()` trae el del
+último reporte que publicó) y, debajo, la ficha: la receta como árbol de
+lectura (`simulador_plato.receta_lectura`) y la evolución del costo con ▼
+las ediciones de sus recetas base —del log del Almacén, filas
+`recetabaselog`/`recetabaselogdet` del Sheet— y ● los picos con su posible
+causa (`simulador_receta.picos_plato`). En una `go.Bar`, el hover va en
+`hovertext`: `text` se escribe adentro de la barra. **Y lee la auditoría del
+POS** (regla #658, fila `auditoriacostos` del Sheet, de
+`INFSEGURIDAD.DBO.MMOVIMIENTO`): un cambio de factor o de unidad de un
+artículo sin ajustar las recetas explicó el 61 % del costo de más de los
+picos —la Berenjena de factor 1000 a 1—; se marca con ◆. Una fila con ANTES
+vacío es un artículo NUEVO, no un cambio.
 
-`aplicar_corte` escribe el corte **y** el rango — el rango lo leen el
-`date_input`, el label del pill y el loader de R2, que no saben qué es un
-corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
+«¿Y si sube un insumo?» (vista «Alza Insumo») usa
+`simulador_receta.exposicion_carta`: cuánto de cada insumo de compra lleva
+cada plato, con los cortes porcionados contados para su insumo de origen.
+
+## El eje temporal de la franja es un RANGO, con un solo dueño
+
+`estado_rango.py` es el dueño único del rango de la franja (`clave_rango`,
+`asegurar_rango`, `aplicar_atajo`, `restaurar_eco`): nadie escribe esas
+claves fuera de él. `franja_fecha.render()` dibuja atajos y calendario, y
+`app.py` filtra por el intervalo.
+
+**Los modos Corte y Varios de la píldora ya no existen** (2026-10-11,
+regla #635). Filtraban por el CONJUNTO de días de una sesión de
+inventario, o de varias sumadas, con un stepper ‹ n/12 › al lado. Su único
+usuario era Ajuste (`"cortes": True`), que pasó a elegir la sesión en cada
+vista (#632); quedaron sin consumidores y se borraron enteros, CSS
+incluido.
+
+Lo que sigue vivo del corte está en `cortes.py`: las rachas
+(`cortes_por_racha`, el grano «Corte» de Evolución y de la tabla
+dinámica), las sesiones (`sesiones_inventario`, `ultimo_cierre`) y
+`fecha_operativa`. **Un corte sigue siendo un CONJUNTO de días, no un
+intervalo**: se filtra con `isin(sesión["dias"])`, nunca con un `between`
+que arrastre los ajustes de los días del medio. Si otro reporte necesita
+elegir sesiones, el modelo es `graficos/ajuste/_comun.py::selector_sesion`,
+uno por vista — no resucitar el modo de la franja: una píldora arriba que
+manda sobre unas vistas y no sobre otras es lo que dejaba Ajuste en blanco
+(#632). Cómo funcionaba, en `arquitectura.md` reglas #62 a #65.
 
 ## El selector de fecha de una tarjeta: un panel propio
 
@@ -1181,7 +1385,8 @@ de su sección —o el de la franja, si no tiene categoría—. Desde el
 2026-10-08 abre un **panel propio**, `graficos/panel_fecha.py` + su
 `.js` y su `.css`: la «opción A» que eligió el usuario sobre un mockup.
 Atajos escritos enteros y agrupados (en curso / hacia atrás / completos),
-los años como pestañas y los meses —o, con «Días», un calendario— como
+los años como pestañas y los meses —o, con «Semanas», las semanas de lunes
+a domingo como filas (regla #642); con «Días», un calendario— como
 casilleros: un clic elige un mes y un clic en otro suma los del medio,
 aunque estén en años distintos. Regla #616.
 
@@ -1236,8 +1441,13 @@ tres vistas de arriba (Por familia, Familia × Área, Distribución) eligen una
   Venta interna con dos productos, y la vista abría ahí. Las vistas abren
   en el último CIERRE (`cortes.ultimo_cierre`).
 - **El selector de sesión** (`graficos/ajuste/_comun.py::selector_sesion`)
-  es la píldora de Compras con ‹ › a los costados; cada vista el suyo. Son
-  botones con callback, no widgets con estado: viven en un popover (#467).
+  es la píldora de Compras con ‹ › a los costados; cada vista el suyo. Las
+  flechas son botones con callback, no widgets con estado (#467), y el
+  panel es una pieza propia, `graficos/ajuste/panel_sesion.js`, como el de
+  fechas: cada sesión con su neto y su detalle en dos renglones, que en un
+  `st.button` no caben (regla #634). Esos números
+  (`_comun.py::stats_sesiones`) van con las familias de la vista y en
+  caché por el sello del parquet: sin caché eran 218 ms por vista.
 - **Los meses son el panel de Compras**, no una copia:
   `_comun.py::selector_meses` le pasa `ctx["solo_meses"]` y
   `ctx["atajos_fn"] = estado_rango.atajos_meses` (meses enteros).

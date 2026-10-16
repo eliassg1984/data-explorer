@@ -1,0 +1,80 @@
+/* Panel de la sesión de inventario de una vista de Ajuste (reglas #632 y
+   #634). Vive en el shadow root del componente
+   (graficos/ajuste/_comun.py::selector_sesion): ninguna regla de acá sale del
+   panel, y ninguna de estilos/ entra. Los colores son las variables de
+   estilos/_00_base.py, que SÍ cruzan el shadow root. Los segmentados y las
+   pestañas de años copian los de graficos/panel_fecha.css, para que los dos
+   paneles se lean como uno solo. Ningún selector :has (regla #469). */
+
+.ps {
+  width: 400px;
+  max-width: calc(100vw - 72px);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.ps button { font: inherit; }
+.ps button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.tit { font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); }
+.segs { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.seg { display: inline-grid; grid-auto-flow: column; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.seg button { border: 0; background: var(--bg-card); color: var(--text-secondary); padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--accent-light); color: var(--accent-deep); font-weight: 600; }
+
+/* Los años: pestañas de lo que se VE, como en el panel de fechas. */
+.anios {
+  display: flex; margin: 0 0 8px; border-bottom: 1px solid var(--border);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.anios::-webkit-scrollbar { display: none; }
+.anios button {
+  flex: 1 0 auto; min-width: 52px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: transparent; color: var(--text-secondary); padding: 6px 6px 7px; font-size: 13px; cursor: pointer;
+}
+.anios button:hover { color: var(--text-primary); }
+.anios button[aria-pressed="true"] { color: var(--accent-deep); font-weight: 600; border-bottom-color: var(--accent); }
+.anios button.con-sel::after {
+  content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 5px;
+  border-radius: 50%; background: var(--accent); vertical-align: middle;
+}
+
+/* La lista del año: dos renglones por sesión, el neto a la derecha. */
+.lista { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; padding-right: 2px; }
+.fila {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline;
+  text-align: left; border: 0; border-radius: 8px; padding: 6px 9px;
+  background: transparent; color: var(--text-primary); cursor: pointer;
+}
+.fila:hover { background: var(--bg-primary); }
+.fila[aria-pressed="true"] { background: var(--accent-light); }
+.fila .n { font-size: 13px; font-weight: 600; }
+.fila.parcial .n { font-weight: 500; color: var(--text-secondary); }
+.fila[aria-pressed="true"] .n { color: var(--accent-deep); }
+.fila .v { font-size: 12.5px; font-weight: 600; }
+.fila .m { grid-column: 1 / -1; font-size: 11.5px; color: var(--text-muted); }
+.v.pos { color: var(--success-text); }
+.v.neg { color: var(--danger-text); }
+.v.cero { color: var(--text-muted); }
+
+/* Con «Varias», cada fila lleva su casilla. */
+.fila.casilla { grid-template-columns: 18px minmax(0, 1fr) auto; }
+.fila.casilla::before {
+  content: ""; grid-row: 1 / span 2; align-self: center; width: 14px; height: 14px;
+  border: 1.5px solid var(--border-lavender); border-radius: 4px; background: var(--bg-card);
+}
+.fila.casilla[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--bg-card); }
+.fila.casilla .m { grid-column: 2 / -1; }
+
+.vacio { margin: 6px 9px; font-size: 12px; color: var(--text-muted); }
+.pie { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line-soft); }
+.pie p { margin: 0; font-size: 11.5px; color: var(--text-secondary); }
+.pie p + p { margin-top: 2px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .fila { transition: background-color .12s; }
+}

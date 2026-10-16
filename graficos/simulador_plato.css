@@ -1,0 +1,74 @@
+/* Simulador de un plato (regla #656).
+   Vive en el shadow root del componente (graficos/simulador_plato.py):
+   ninguna regla de acá sale, y ninguna de estilos/ entra. Los colores son
+   las variables de estilos/_00_base.py, que SÍ cruzan el shadow root.
+   Ningún selector :has, por la regla #469. */
+
+.sim {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sim button, .sim input { font: inherit; }
+.sim button:focus-visible, .sim input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.cab { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.pestanas { display: inline-flex; gap: 2px; background: var(--line-soft); border-radius: 7px; padding: 2px; }
+.pestanas button { border: 0; background: none; padding: 3px 10px; border-radius: 5px; color: var(--text-muted); cursor: pointer; }
+.pestanas button[aria-pressed="true"] { background: var(--bg-card); color: var(--text-primary); font-weight: 600; box-shadow: var(--shadow); }
+.borr { margin-left: auto; font-size: 11.5px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 999px; padding: 2px 9px; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.kpis > div { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kpis small { color: var(--text-muted); font-size: 11.5px; }
+.kpis b { font-size: 17px; }
+.kpis span { font-size: 11.5px; }
+.kpis .obj { border-color: var(--border-lavender); background: var(--accent-tint); }
+
+.ni {
+  width: 74px; text-align: right; padding: 2px 5px;
+  border: 1px solid var(--border); border-radius: 5px;
+  background: var(--bg-card); color: var(--text-primary);
+}
+.ni.c { width: 52px; }
+.pv-in { width: 84px; font-size: 15px; font-weight: 600; }
+.u { color: var(--text-muted); font-size: 11px; }
+
+.tabla { overflow: auto; max-height: 52vh; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg-card); }
+table { width: 100%; min-width: 680px; border-collapse: collapse; font-size: 12.5px; }
+th { position: sticky; top: 0; z-index: 1; background: var(--bg-primary); color: var(--text-muted); font-weight: 500; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+td { padding: 4px 8px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.r { text-align: right; }
+td.nom { white-space: normal; min-width: 240px; }
+tr.n1 td { background: var(--accent-tint); }
+tr.n2 td, tr.n3 td { background: var(--accent-light); }
+tr.porc td { color: var(--text-muted); font-size: 11.5px; padding-top: 1px; }
+.tog { width: 16px; border: 0; background: none; padding: 0; margin-right: 2px; color: var(--accent); cursor: pointer; }
+.tog.no { color: transparent; cursor: default; }
+.tag { margin-left: 6px; color: var(--text-muted); font-size: 11px; }
+
+.pie { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.pie > div:first-child { flex: 1; min-width: 260px; }
+.pie ul { margin: 4px 0 0; padding-left: 18px; }
+.acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sec, .prim { border-radius: 6px; padding: 4px 11px; cursor: pointer; }
+.sec { border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); }
+.prim { border: 1px solid var(--accent); background: var(--accent); color: var(--bg-card); }
+.por { width: 150px; padding: 3px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); }
+.aviso { margin: 0; font-size: 12px; color: var(--text-secondary); min-height: 1em; }
+.vacio { color: var(--text-muted); }
+.sec.chico { padding: 2px 9px; font-size: 12px; margin-left: auto; }
+.tabla.lectura { max-height: none; }
+/* En la ficha de Costo Carta el árbol mide ~660px: sin el piso de 680 de la
+   modal, que lo hacía deslizarse de costado y cortaba «% del plato». */
+.tabla.lectura table { min-width: 0; }
+.barra { display: inline-block; height: 6px; margin-right: 6px; vertical-align: middle; border-radius: 3px; background: var(--border-lavender); }
+
+.gris { color: var(--text-muted); }
+.ok { color: var(--success-text); font-weight: 600; }
+.amb { color: var(--warning-text); font-weight: 600; }
+.roj { color: var(--danger-text); font-weight: 600; }

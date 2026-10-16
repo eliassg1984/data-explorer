@@ -228,7 +228,7 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
                   monto_corto=False, nombre_bonito=False, abre_en=(),
                   abrir_en_mayor=False, etiqueta_valor="Valorizado",
                   d_ant=None, rotulo_ant="", col_cant=None, col_unidad=None,
-                  vs_sin_verde=False, sin_ceros=False):
+                  vs_sin_verde=False, sin_ceros=False, nota_total=None):
     """El ranking de un nivel, como TABLA con barra de progreso.
 
     Es la tabla-ranking del repo, la misma que el Ranking de proveedores de
@@ -277,6 +277,13 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     un nivel cuyas filas son PRODUCTOS: sumar kilos de dos productos sí,
     kilos con unidades no — la fila de un grupo con dos unidades queda sin
     unidad y la del TOTAL, en blanco.
+
+    `nota_total` (regla #641) es `(corto, largo)`, lo que el recorte NO
+    suma: el corto completa el rótulo de la fila TOTAL («TOTAL · sin 33
+    anulados») y el largo es su tooltip. Va AHÍ y no junto al título, que
+    es donde la puso la #511: desde que el botón de fecha comparte ese
+    renglón (#617), a 1323px el título llena el espacio y la nota quedaba
+    entera fuera de la vista.
     """
     from st_aggrid import AgGrid, JsCode
 
@@ -327,6 +334,12 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     # nombre del ERP sino el rótulo de la fila de cierre.
     fila_total = {col_nombre: "TOTAL", etiqueta_valor: round(total, 2),
                   "%": round(sum(_pcts), 2)}
+    # Lo que no suma, pegado al número que deja afuera (regla #641). El
+    # largo viaja en la fila misma (`_tip`), sin columna: lo lee el tooltip
+    # de la columna del nombre.
+    if nota_total:
+        fila_total[col_nombre] = f"TOTAL · {nota_total[0]}"
+        fila_total["_tip"] = nota_total[1]
     con_ant = d_ant is not None
     col_ant = f"vs {rotulo_ant}".strip()
     if con_ant:
@@ -452,6 +465,13 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     _js_toggle = JsCode(
         "function(e){ if (e.node.rowPinned) return;"
         " e.node.setSelected(!e.node.isSelected(), true); }")
+    # El tooltip del nombre: el nombre entero (para el que se corta con
+    # «…»), salvo en la fila TOTAL con nota, que da el porqué (#641).
+    _tip_nombre = (
+        {"tooltipValueGetter": JsCode(
+            "function(p){ return (p.node && p.node.rowPinned && p.data"
+            " && p.data._tip) ? p.data._tip : p.value; }")}
+        if nota_total else {"tooltipField": col_nombre})
 
     # Ocho filas de datos y el resto por scroll interno, como el Ranking de
     # proveedores. `extra` es todo lo que el grid mide y no son esas filas:
@@ -506,7 +526,7 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
                 # «Tipo De Baja», «Sub Almacén»—, contra el «Precio unitario»
                 # del resto de las tablas del repo (2026-09-24, #511).
                 {"field": col_nombre, "headerName": col_nombre,
-                 "flex": flex_nombre, "tooltipField": col_nombre},
+                 "flex": flex_nombre, **_tip_nombre},
                 *([{"field": "cant", "headerName": "Cant.", "width": 72,
                     "type": "numericColumn", "valueFormatter": _js_cant,
                     "headerTooltip": "Cantidad, en la unidad del kardex"},
@@ -888,7 +908,7 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
                    col_ctx=None, nombre_ctx="Área", col_cant=None,
                    col_punit=None, col_unidad=None, abre_en=(),
                    etiqueta_valor="Valorizado", titulo_ranking=None,
-                   fecha=None):
+                   fecha=None, nota=None):
     """La sección entera: el ranking, sus desgloses y la tabla de hojas.
 
     `niveles` es la cadena de agrupación en pares (columna, nombre): el
@@ -910,7 +930,11 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
 
     `fecha`, si viene, dibuja el título del primer cuadro junto con el botón
     de fecha de la sección (`movimientos.fecha_de_vista`, regla #617):
-    recibe el HTML del título."""
+    recibe el HTML del título.
+
+    `nota` es `(corto, largo)`, lo que `d` ya NO trae porque no suma (los
+    requerimientos anulados, regla #641): va en la fila TOTAL del primer
+    cuadro, como en `seccion_cuadros`."""
     # Sin guard de "inyectar una sola vez": un `st.markdown` de estilos con
     # ese guard DESAPARECE en el rerun siguiente (regla #59).
     st.markdown(CSS_TITULOS_DRILL, unsafe_allow_html=True)
@@ -945,7 +969,7 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
                     key=f"{pref}_rank_grid_{slug}",
                     abre_en=abre_en, abrir_en_mayor=True,
                     nombre_bonito=nombre_grp in CATEGORIAS_NOMBRE_PROPIO,
-                    etiqueta_valor=etiqueta_valor,
+                    etiqueta_valor=etiqueta_valor, nota_total=nota,
                     **FORMATO_RANKING[len(niveles)])
                 ruta.append((col_grp, foco, texto_cat(nombre_grp, foco)))
     for _i, (_col_n, _nombre_n) in enumerate(niveles[1:]):
@@ -1039,8 +1063,10 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
     cuadro sale de la fracción de la fila que ocupa (`formato_por_ancho`).
 
     `titulo` es el del primer cuadro (por defecto, «Valorizado por
-    <nivel>»), y `nota`, un `(corto, largo)` que va pegado a él en letra
-    chica, con el largo de tooltip: lo que el recorte NO suma.
+    <nivel>»), y `nota`, un `(corto, largo)`: lo que el recorte NO suma. Va
+    en la fila TOTAL de ese cuadro, con el largo de tooltip
+    (`tabla_ranking(nota_total=)`); hasta el 2026-10-11 iba pegada al
+    título, donde el botón de fecha la dejaba fuera de la vista (#641).
 
     `d_ant` y `rotulo_ant` (regla #614): el mismo recorte en el año que se
     compara; cada cuadro suma la columna «vs <año>» (`tabla_ranking`), con
@@ -1101,9 +1127,6 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
                                                   f"{nombre_n}")
                                 + (f' <span class="inv-rank-tit-n">{_n:,}</span>'
                                    if _n > FILAS_RANK else "")
-                                + (f' <span class="inv-rank-tit-n" title="'
-                                   f'{escape(nota[1])}">{escape(nota[0])}</span>'
-                                   if nota else "")
                                 + "</div>")
                         # Con `fecha`, el título comparte renglón con el
                         # botón de fecha de la sección (regla #617).
@@ -1116,7 +1139,8 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
                             key=f"{pref}_rank_grid_{slug}",
                             nombre_bonito=nombre_n in CATEGORIAS_NOMBRE_PROPIO,
                             etiqueta_valor=etiqueta_valor, d_ant=_d_ant,
-                            rotulo_ant=rotulo_ant, **_extra, **formato)
+                            rotulo_ant=rotulo_ant, nota_total=nota,
+                            **_extra, **formato)
                     else:
                         # La key lleva la ruta con la POSICIÓN de cada
                         # eslabón: acá se pueden saltar niveles, y sin la

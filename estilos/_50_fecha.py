@@ -457,8 +457,8 @@ CSS = """    /* ================================================================
     @media (min-width: 901px) {
         #sello-actualizacion {
             top: calc((var(--franja-rep-alto) - 30px) / 2) !important;
-            right: calc(var(--barra-f) + 96px + 8px + var(--barra-fecha)
-                        + var(--barra-corte)) !important;
+            right: calc(var(--barra-f) + 96px + 8px
+                        + var(--barra-fecha)) !important;
         }
         #sello-actualizacion .sello-rotulo {
             display: inline !important;
@@ -484,14 +484,12 @@ CSS = """    /* ================================================================
         min-width: 380px !important;
     }
     /* Botones de atajo: compactos, alineados a la izquierda.
-       OJO — esta regla cuelga del CONTENEDOR, así que también captura los
-       botones de la lista de CORTES (misma primera columna, ver
-       app.py::modo Cortes). Es intencional: los dos son listas de un clic
-       y tienen que verse igual. El corte activo se distingue por el
-       type="primary" de Streamlit (relleno acento), que esta regla no
-       toca. Si algún día hay que diferenciarlos, acotar por key
-       (st-key-atajo_ / st-key-corte_), no agregar otra regla al
-       contenedor. Ver CLAUDE.md § "grep estilos/ antes de agregar un
+       OJO — esta regla cuelga del CONTENEDOR, así que captura cualquier
+       botón que se agregue en esa primera columna. Hasta el 2026-10-11
+       capturaba también la lista de CORTES del modo Corte/Varios, y era a
+       propósito (regla #635: los modos se borraron). Para diferenciar un
+       botón nuevo, acotar por key (st-key-atajo_…), no agregar otra regla
+       al contenedor. Ver CLAUDE.md § "grep estilos/ antes de agregar un
        widget". */
     .st-key-fecha_panel [data-testid="stColumn"]:first-child button {
         min-width: 0 !important;
@@ -502,91 +500,10 @@ CSS = """    /* ================================================================
         justify-content: flex-start !important;
         text-align: left !important;
     }
-    /* Segmentado Rango/Corte/Comparar: vive ARRIBA de las columnas, así
-       que la regla de los atajos no lo alcanza — se estiliza aparte y
-       compacto (3 opciones tienen que entrar en los 380px del panel sin
-       partirse en dos filas). */
-    .st-key-fecha_panel [data-testid="stButtonGroup"] button {
-        padding: 3px 10px !important;
-        font-size: 12.5px !important;
-    }
-
-    /* =================================================================== */
-    /* STEPPER DEL CORTE ACTIVO — ‹ 3/8 · 4 días ›                          */
-    /* =================================================================== */
-    /* Ocupa el hueco de `right: 138px`, que quedó libre cuando el pill de
-       fecha se mudó a `left: 85px` en el bloque de desktop de arriba. NO
-       va dentro de .st-key-fecha_ajuste_pill: ese pill tiene ancho FIJO de
-       210px y los chips se anclan a `left: 301px` (= 85 + 210 + 6). Meter
-       botones ahí adentro rompe esos tres números acoplados.
-       Solo se renderiza con un corte activo (app.py), así que aparecer y
-       desaparecer no mueve nada más de la franja.
-       Oculto por defecto y visible recién a partir de 1400px: entre 901 y
-       1400 los chips (que arrancan en 301px y crecen con el reporte) le
-       llegarían encima. Abajo de ese ancho la navegación entre cortes vive
-       en el panel, que siempre tiene la lista completa. */
-    .st-key-fecha_corte_nav {
-        display: none !important;
-    }
-    /* 2026-09-14: de 1400 a 1490, y a la IZQUIERDA pegado al pill (regla
-       #419). Subio con el a la franja de reportes, donde la derecha es del
-       sello y de Filtros. Al lado del pill (19 + 210 + 8 = 237) termina en
-       413, y el grupo centrado de reportes (608px) arranca en
-       (W - 608) / 2: con 24px de aire entra desde W = 1482. */
-    @media (min-width: 1490px) {
-        .st-key-fecha_corte_nav {
-            display: block !important;
-            position: fixed !important;
-            /* 2026-09-19: a la izquierda del pill, que se mudo a la zona de
-               controles de la derecha (regla #472); centrado en los 44. */
-            top: calc((var(--franja-rep-alto) - 28px) / 2) !important;
-            left: auto !important;
-            right: calc(var(--barra-f) + 96px + 8px + var(--barra-fecha)) !important;
-            width: 176px !important;
-            z-index: 1000002 !important;   /* sobre la franja de reportes, ver el pill */
-            margin: 0 !important;
-        }
-        .st-key-fecha_corte_nav [data-testid="stHorizontalBlock"] {
-            gap: 2px !important;
-        }
-        .st-key-fecha_corte_nav button {
-            min-width: 0 !important;
-            width: 100% !important;
-            min-height: 28px !important;   /* mismo alto que el pill y los chips */
-            padding: 0 !important;
-            border: 1.5px solid color-mix(in srgb, var(--accent) 80%, var(--accent-light)) !important;
-            border-radius: 4px !important;
-            background: #ffffff !important;
-            color: var(--accent-deep) !important;
-            font-size: 15px !important;
-            font-weight: 600 !important;
-            line-height: 1 !important;
-        }
-        .st-key-fecha_corte_nav button:hover:not(:disabled) {
-            background: var(--accent-tint) !important;
-            border-color: var(--accent) !important;
-        }
-        .st-key-fecha_corte_nav button:disabled {
-            border-color: var(--border) !important;
-            color: var(--text-muted) !important;
-        }
-        /* Etiqueta central: no es un widget, es markdown — se centra a
-           mano contra el alto de 28px de los botones vecinos. */
-        .corte-nav-etq {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 28px;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--accent-deep);
-            white-space: nowrap;
-        }
-        .corte-nav-etq span {
-            font-weight: 400;
-            color: var(--text-secondary);
-        }
-    }
+    /* Acá vivían el estilo del segmentado Rango / Corte / Varios del panel
+       y el STEPPER del corte activo (`.st-key-fecha_corte_nav`, ‹ n/12 ›,
+       fijo a la izquierda del pill desde 1490px), del 2026-08-09 al
+       2026-10-11. Se fueron con los modos de la franja: regla #635. */
 
     /* 2026-09-25 — el TÍTULO DE VENTAS › COMPARATIVO ya no se ancla acá.
        Del 2026-08-15 a hoy vivió en `ventas_comp_titulo_franja`, un

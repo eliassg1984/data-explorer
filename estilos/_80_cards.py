@@ -1383,7 +1383,11 @@ CSS = """    /* ================================================================
         /* Y `…_izq_costos` (Costos › Costo de ventas), al nacer el          */
         /* 2026-10-09: al abrir una fila la tabla crece una franja; con     */
         /* techo la tarjeta sacaría barra propia. #622.                      */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_mov_prod_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_platos):not(.st-key-ajuste_graf_card_izq_mov_consumo):not(.st-key-ajuste_graf_card_izq_costos),
+        /* Y `…_izq_dif` (Ajuste › Análisis de diferencias), al nacer el     */
+        /* 2026-10-13: la ficha de la línea elegida va al costado de la      */
+        /* lista y pasa de una pantalla; adentro sólo se desliza la lista.   */
+        /* #650.                                                             */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_dif):not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_mov_prod_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_platos):not(.st-key-ajuste_graf_card_izq_mov_consumo):not(.st-key-ajuste_graf_card_izq_costos),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -1466,7 +1470,7 @@ CSS = """    /* ================================================================
         /* sus tarjetas no comparten fila, así que no hay nada que igualar.*/
         /* ─────────────────────────────────────────────────────────────── */
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-compras_prov_card_docs, > .st-key-compras_prov_card_docsprov, > .st-key-compras_prov_card_evo, > .st-key-compras_prov_card_prods, > .st-key-compras_prov_card_ranking, > .st-key-compras_prov_card_vacio),
+        > div:has(> .st-key-compras_prov_card_docs, > .st-key-compras_prov_card_ficha, > .st-key-compras_prov_card_ranking, > .st-key-compras_prov_card_vacio),
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-sunat_card_graf, > .st-key-sunat_card_izq),
         /* Las dos mitades del conversor entraron acá el 2026-08-29, al   */
@@ -1484,11 +1488,11 @@ CSS = """    /* ================================================================
         /* borde inferior de la fila sale en escalón — el mismo síntoma que */
         /* originó esta regla. Desde el 2026-09-12 la tarjeta del ranking   */
         /* lleva ADEMÁS los paneles de Familia/Subfamilia (antes eran una   */
-        /* tarjeta de ancho completo, arriba), y la Evolución se dimensiona */
-        /* contra ella (`_ALTO_EVO` en graficos/compras/producto.py): este  */
-        /* piso queda de red, igual que en Proveedor.                       */
+        /* tarjeta de ancho completo, arriba). Desde el 2026-10-13 la fila  */
+        /* es ranking | ficha, como en Proveedor (regla #653): el piso      */
+        /* iguala la ficha y el ranking, que no miden lo mismo por diseño.  */
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-compras_prod_card_evo, > .st-key-compras_prod_card_ranking, > .st-key-compras_prod_card_vacio),
+        > div:has(> .st-key-compras_prod_card_ficha, > .st-key-compras_prod_card_ranking, > .st-key-compras_prod_card_vacio),
         /* Las tres de arriba de Stock por Área, desde el 2026-10-03: la  */
         /* del ranking suma la fila «Inactivos y servicios» (regla #598)  */
         /* y ya no mide lo mismo que sus vecinas por contenido.           */
@@ -2001,11 +2005,13 @@ CSS = """    /* ================================================================
     /* «Revisar recetas» (`rec_card_revisar`) lleva el mismo look desde la
        regla #574, a pedido: era la última de Recetas con el marco gris; y
        «Costo recetas base» (`rec_card_costo_rb`) desde que nació, con la
-       tarjeta de la receta elegida debajo (`rec_card_rb_detalle`) (#576). */
+       tarjeta de la receta elegida debajo (`rec_card_rb_detalle`) (#576).
+       «¿Y si sube un insumo?» (`rec_card_alza`) desde que nació (#656). */
     .st-key-rec_card_carta,
     .st-key-rec_card_revisar,
     .st-key-rec_card_costo_rb,
-    .st-key-rec_card_rb_detalle {
+    .st-key-rec_card_rb_detalle,
+    .st-key-rec_card_alza {
         background: var(--bg-card) !important;
         border: none !important;
         border-radius: 20px !important;
@@ -2013,6 +2019,7 @@ CSS = """    /* ================================================================
         box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
     }
     .st-key-rec_card_carta > div,
+    .st-key-rec_card_alza > div,
     .st-key-rec_card_revisar > div,
     .st-key-rec_card_costo_rb > div,
     .st-key-rec_card_rb_detalle > div {
@@ -2027,7 +2034,8 @@ CSS = """    /* ================================================================
        base» (`rec_rb_cab`, regla #576) es el mismo renglón. */
     .st-key-rec_carta_cab,
     .st-key-rec_rb_cab,
-    .st-key-rec_rb_det_cab {
+    .st-key-rec_rb_det_cab,
+    .st-key-rec_alza_cab {
         border-bottom: 1px solid var(--border);
         padding-bottom: 6px;
         flex-wrap: nowrap !important;
@@ -2036,7 +2044,8 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab .chart-card-hdr,
     .st-key-rec_rb_cab .chart-card-hdr,
-    .st-key-rec_rb_det_cab .chart-card-hdr {
+    .st-key-rec_rb_det_cab .chart-card-hdr,
+    .st-key-rec_alza_cab .chart-card-hdr {
         border-bottom: none;
         margin: 0 6px 0 0;
         padding: 0;
@@ -2072,21 +2081,23 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab_ver, .st-key-rec_carta_cab_oferta,
     .st-key-rec_carta_cab_grupo, .st-key-rec_carta_cab_tipo,
-    .st-key-rec_carta_cab_buscar, .st-key-rec_carta_cab_vend,
+    .st-key-rec_carta_cab_buscar, .st-key-rec_carta_cab_fecha,
     .st-key-rec_carta_det_modo,
     .st-key-rec_rb_det_cab_ver, .st-key-rec_rb_cab_ventana,
     .st-key-rec_rb_cab_area, .st-key-rec_rb_cab_produccion,
-    .st-key-rec_rb_cab_buscar {
+    .st-key-rec_rb_cab_buscar,
+    .st-key-rec_alza_cab_ins, .st-key-rec_alza_cab_pct {
         position: relative;
         padding-left: 11px !important;
         overflow: visible !important;
     }
     .st-key-rec_carta_cab_ver::after, .st-key-rec_carta_cab_oferta::after,
     .st-key-rec_carta_cab_grupo::after, .st-key-rec_carta_cab_tipo::after,
-    .st-key-rec_carta_cab_buscar::after, .st-key-rec_carta_cab_vend::after,
+    .st-key-rec_carta_cab_buscar::after, .st-key-rec_carta_cab_fecha::after,
     .st-key-rec_rb_det_cab_ver::after, .st-key-rec_rb_cab_ventana::after,
     .st-key-rec_rb_cab_area::after, .st-key-rec_rb_cab_produccion::after,
-    .st-key-rec_rb_cab_buscar::after {
+    .st-key-rec_rb_cab_buscar::after,
+    .st-key-rec_alza_cab_ins::after, .st-key-rec_alza_cab_pct::after {
         content: "";
         position: absolute;
         left: 0;
@@ -2098,10 +2109,11 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab_ver::before, .st-key-rec_carta_cab_oferta::before,
     .st-key-rec_carta_cab_grupo::before, .st-key-rec_carta_cab_tipo::before,
-    .st-key-rec_carta_cab_buscar::before, .st-key-rec_carta_cab_vend::before,
+    .st-key-rec_carta_cab_buscar::before, .st-key-rec_carta_cab_fecha::before,
     .st-key-rec_rb_det_cab_ver::before, .st-key-rec_rb_cab_ventana::before,
     .st-key-rec_rb_cab_area::before, .st-key-rec_rb_cab_produccion::before,
-    .st-key-rec_rb_cab_buscar::before {
+    .st-key-rec_rb_cab_buscar::before,
+    .st-key-rec_alza_cab_ins::before, .st-key-rec_alza_cab_pct::before {
         position: absolute;
         top: calc(100% + 2px);
         left: 11px;
@@ -2122,10 +2134,11 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab_ver:hover::before, .st-key-rec_carta_cab_oferta:hover::before,
     .st-key-rec_carta_cab_grupo:hover::before, .st-key-rec_carta_cab_tipo:hover::before,
-    .st-key-rec_carta_cab_buscar:hover::before, .st-key-rec_carta_cab_vend:hover::before,
+    .st-key-rec_carta_cab_buscar:hover::before, .st-key-rec_carta_cab_fecha:hover::before,
     .st-key-rec_rb_det_cab_ver:hover::before, .st-key-rec_rb_cab_ventana:hover::before,
     .st-key-rec_rb_cab_area:hover::before, .st-key-rec_rb_cab_produccion:hover::before,
-    .st-key-rec_rb_cab_buscar:hover::before {
+    .st-key-rec_rb_cab_buscar:hover::before,
+    .st-key-rec_alza_cab_ins:hover::before, .st-key-rec_alza_cab_pct:hover::before {
         opacity: 1;
     }
     .st-key-rec_carta_cab_ver::before { content: "Ver"; }
@@ -2133,7 +2146,38 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_grupo::before { content: "Grupo"; }
     .st-key-rec_carta_cab_tipo::before { content: "Tipo"; }
     .st-key-rec_carta_cab_buscar::before { content: "Buscar"; }
-    .st-key-rec_carta_cab_vend::before { content: "Ventana de lo vendido"; }
+    .st-key-rec_carta_cab_fecha::before { content: "Fecha de lo vendido"; }
+    .st-key-rec_alza_cab_ins::before { content: "Insumo de compra"; }
+    .st-key-rec_alza_cab_pct::before { content: "Cambio de precio"; }
+    /* El deslizador de «Cambio de precio» con ancho propio: en un
+       contenedor `width="content"` se encoge a 139px y los −30 / +50 de los
+       extremos se le montan. */
+    .st-key-rec_alza_cab_pct { width: 280px; padding-right: 14px !important; }
+    /* «¿Y si sube un insumo?» (regla #656): la fila de cinco cifras, cada
+       una con su rótulo arriba y su pie abajo. */
+    .rec-alza-kpis {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .rec-alza-kpi {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        min-width: 0;
+    }
+    .rec-alza-kpi small { color: var(--text-muted); font-size: 11.5px; }
+    .rec-alza-kpi b { font-size: 17px; font-variant-numeric: tabular-nums; }
+    .rec-alza-kpi span {
+        color: var(--text-muted);
+        font-size: 11.5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
     .st-key-rec_rb_det_cab_ver::before { content: "Ver"; }
     .st-key-rec_rb_cab_ventana::before { content: "Uso y producción en"; }
     .st-key-rec_rb_cab_area::before { content: "Área de la receta"; }
@@ -2223,8 +2267,6 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab [data-baseweb="select"] > div,
     .st-key-rec_carta_cab [data-testid="stTextInputRootElement"],
     .st-key-rec_carta_cab [data-baseweb="input"],
-    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] [role="group"],
-    .st-key-rec_carta_cab_vend [data-baseweb="select"] > div,
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"],
     .st-key-rec_carta_det_modo [data-baseweb="select"] > div,
     .st-key-rec_rb_cab [data-testid="stSelectbox"] [role="group"],
@@ -2245,7 +2287,6 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab [data-baseweb="select"] > div:hover,
     .st-key-rec_carta_cab [data-testid="stTextInputRootElement"]:hover,
     .st-key-rec_carta_cab [data-baseweb="input"]:hover,
-    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] [role="group"]:hover,
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"]:hover,
     .st-key-rec_rb_cab [data-testid="stSelectbox"] [role="group"]:hover,
     .st-key-rec_rb_cab [data-baseweb="select"] > div:hover,
@@ -2257,8 +2298,6 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_cab [data-testid="stSelectbox"] input,
     .st-key-rec_carta_cab [data-baseweb="select"] div[value],
-    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] input,
-    .st-key-rec_carta_cab_vend [data-baseweb="select"] div[value],
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] input,
     .st-key-rec_carta_det_modo [data-baseweb="select"] div[value],
     .st-key-rec_rb_cab [data-testid="stSelectbox"] input,
@@ -2283,19 +2322,16 @@ CSS = """    /* ================================================================
         background: transparent !important;
     }
     .st-key-rec_carta_cab [data-testid="stSelectbox"] [role="group"] button,
-    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] [role="group"] button,
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"] button,
     .st-key-rec_rb_cab [data-testid="stSelectbox"] [role="group"] button,
     .st-key-rec_rb_det_cab [data-testid="stSelectbox"] [role="group"] button {
         width: 22px !important;
         height: 26px !important;
     }
-    /* Las sub-tarjetas de `_card()` del panel —la receta, lo que descarga y
-       el gráfico— sin marco ni relleno: adentro de la tarjeta blanca serían
-       cajas dentro de la caja. */
-    .st-key-rec_card_carta .st-key-chartcard_rv_comp_receta,
-    .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga,
-    .st-key-rec_card_carta .st-key-chartcard_rec_carta_mini {
+    /* La sub-tarjeta de `_card()` de la ficha —lo que descarga un producto
+       sin receta— sin marco ni relleno: adentro de la tarjeta blanca sería
+       una caja dentro de la caja. */
+    .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga {
         border: none !important;
         padding: 0 !important;
         box-shadow: none !important;
@@ -2309,17 +2345,87 @@ CSS = """    /* ================================================================
     .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga {
         padding-bottom: 16px !important;
     }
-    /* Desde la regla #572 la receta va sin título al pie —el nombre del
-       plato ya está arriba—, así que lo que la separa del gráfico, o de la
-       receta base abierta en su lugar, es una línea ENCIMA de ellos. */
-    .st-key-rec_card_carta .st-key-chartcard_rec_carta_mini,
-    .st-key-rec_carta_base_caja {
-        border-top: 1px solid var(--border) !important;
-        padding-top: 10px !important;
-    }
+    /* La ficha del plato elegido va DEBAJO de la tabla desde la regla #657
+       (al costado desde la #570): la separa una línea arriba. */
     .st-key-rec_carta_plato {
-        border-left: 1px solid var(--border);
-        padding-left: 16px;
+        border-top: 1px solid var(--border);
+        padding-top: 12px;
+        margin-top: 4px;
+    }
+    /* Lo que va al lado del nombre: de dónde es (gris) y sus cifras. */
+    .rec-ficha-ruta {
+        margin-left: 8px;
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--text-secondary);
+    }
+    .rec-ficha-cifras {
+        margin: 0;
+        font-size: 12.5px !important;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+    .rec-ficha-aviso {
+        margin: 0;
+        font-size: 12.5px !important;
+        color: var(--warning-text);
+    }
+    /* Debajo de la evolución: las ediciones de sus recetas base y los
+       picos del rango, en palabras. */
+    .rec-evo-lista {
+        margin: 0;
+        padding-left: 0;
+        list-style: none;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--text-secondary);
+    }
+    /* `!important` en el tamaño: el `li` de `.stMarkdown` (1rem) le gana
+       a una clase sola. */
+    .rec-evo-lista li {
+        margin: 0 0 3px 0;
+        font-size: 12px !important;
+        line-height: 1.45 !important;
+    }
+    .rec-evo-lista .rec-evo-marca {
+        color: var(--accent-deep);
+    }
+    .rec-evo-lista .rec-evo-pico {
+        color: var(--danger-text);
+    }
+    /* ◆ los cambios de factor, unidad o descargo de la auditoría (#658). */
+    .rec-evo-lista .rec-evo-cambio {
+        color: var(--warning-text);
+    }
+    /* La fecha de la tarjeta, al final del renglón del título (#657): la
+       píldora de las tarjetas de Compras y Movimientos. */
+    .st-key-rec_carta_f_fila {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        width: auto !important;
+    }
+    .st-key-rec_carta_f_escala button {
+        min-width: 0 !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        padding: 0 10px !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        box-shadow: var(--shadow) !important;
+    }
+    .st-key-rec_carta_f_escala button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-rec_carta_f_escala button > div > div:last-child:not(:first-child) {
+        display: none !important;
     }
     /* El renglón del nombre (#572): el nombre se corta con «…» y «Simular»
        queda a su derecha. La línea de abajo es de la FILA y no del `<p>`:
@@ -2376,9 +2482,12 @@ CSS = """    /* ================================================================
     .st-key-rec_rb_anidada_hdr [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
-    /* «↑ Subir» y «✕» de la receta base: chicos, del alto del título. */
+    /* «↑ Subir» y «✕» de la receta base: chicos, del alto del título. Y
+       «Ver curva» / «Revisar», los saltos a Movimientos (regla #647). */
     .st-key-rec_carta_base_subir button,
     .st-key-rec_carta_base_cerrar button,
+    .st-key-rec_carta_base_curva button,
+    .st-key-rec_carta_base_revisar button,
     .st-key-rec_rb_anidada_subir button,
     .st-key-rec_rb_anidada_cerrar button {
         min-height: 0 !important;
@@ -2386,24 +2495,21 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_carta_base_subir button p,
     .st-key-rec_carta_base_cerrar button p,
+    .st-key-rec_carta_base_curva button p,
+    .st-key-rec_carta_base_revisar button p,
     .st-key-rec_rb_anidada_subir button p,
     .st-key-rec_rb_anidada_cerrar button p {
         font-size: 12px !important;
+        white-space: nowrap !important;
+    }
+    .st-key-rec_carta_base_revisar button p {
+        color: var(--danger-text) !important;
+        font-weight: 600 !important;
     }
     .rec-vend-rot {
         margin: 0;
         font-size: 12px !important;
         color: var(--text-secondary);
-    }
-    /* Debajo de 640px Streamlit apila las columnas: el panel queda abajo de
-       la tabla y la línea pasa de su costado a su borde de arriba. */
-    @media screen and (max-width: 640px) {
-        .st-key-rec_carta_plato {
-            border-left: none;
-            padding-left: 0;
-            border-top: 1px solid var(--border);
-            padding-top: 12px;
-        }
     }
     .st-key-form_receta_card_receta,
     .st-key-form_receta_card_precio {
@@ -2849,7 +2955,7 @@ CSS = """    /* ================================================================
        fila haga también de leyenda. Vive acá y no allá porque ese CSS sólo
        se inyecta en Compras. Desde el 2026-10-05 la usa también el total de
        la ventana de «Comparativo vs Año Pasado» (`ventas_comp_tot`, regla
-       #633), que también hace de leyenda. */
+       #659), que también hace de leyenda. */
     .st-key-ventas_comp_tot [data-testid="stMarkdownContainer"],
     .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"],
     .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"],
@@ -4308,7 +4414,7 @@ CSS = """    /* ================================================================
     }
     /* La fila es un `st.container(horizontal=True, gap=None)` con cada
        grupo a su ancho de contenido y un `st.space("stretch")` que empuja
-       «Vista» a la DERECHA (regla #633). Hasta el 2026-10-05 eran
+       «Vista» a la DERECHA (regla #659). Hasta el 2026-10-05 eran
        `st.columns` proporcionales: el sobrante de cada columna caía a la
        derecha de su grupo y la línea quedaba a 102-113px del anterior y a
        17 del siguiente. Ahora el aire lo pone el `padding-left` del
@@ -5851,7 +5957,7 @@ CSS = """    /* ================================================================
         padding-top: 8px !important;
         gap: 6px !important;
     }
-    .ajf-pie-rot {
+    .ajf-pie-rot, .mov-pie-rot {
         font-size: 10.5px; font-weight: 600; letter-spacing: .07em;
         text-transform: uppercase; color: var(--text-muted);
         white-space: nowrap;
@@ -5859,9 +5965,136 @@ CSS = """    /* ================================================================
     [class*="st-key-ajf_"][class*="_mcfila"] > [data-testid="stElementContainer"] {
         width: auto !important;
     }
-    [class*="st-key-ajf_"][class*="_mescierre_"] [data-testid="stButtonGroup"] button {
+    [class*="st-key-ajf_"][class*="_mescierre_"] [data-testid="stButtonGroup"] button,
+    [class*="st-key-mov_f_"][class*="_aj_"] [data-testid="stButtonGroup"] button {
         min-height: 26px !important; height: 26px !important;
         padding: 0 10px !important; font-size: 12px !important;
+    }
+
+    /* =================================================================== */
+    /* LOS AJUSTES DE LAS FECHAS DE MOVIMIENTOS, AL COSTADO DEL PANEL       */
+    /* (regla #644): «Fecha de las salidas», «Comparar con»… en una columna */
+    /* a la derecha del panel de fecha (`pie_al_costado`). Debajo, el      */
+    /* popover pasaba su techo de 70vh y quedaban tras un scroll. El        */
+    /* popover tiene además un ancho máximo propio que aplastaba el panel: */
+    /* se suelta sólo para éstos, por la clase del rótulo (una clase sola  */
+    /* adentro del :has, regla #469).                                      */
+    /* =================================================================== */
+    [data-testid="stPopoverBody"]:has(.mov-pie-rot) {
+        max-width: calc(100vw - 24px) !important;
+    }
+    [class*="st-key-mov_f_"][class*="_cuerpo"] {
+        flex-wrap: wrap !important;
+        align-items: flex-start !important;
+    }
+    /* Cada hijo mide lo suyo: con el `flex: 1 1` de Streamlit los dos     */
+    /* medían 369px y el panel (476) se metía debajo de la columna.        */
+    [class*="st-key-mov_f_"][class*="_cuerpo"] > * {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+    /* El panel se monta ~1 s después de abrir el popover: sin su ancho    */
+    /* reservado, la columna aparecía a la izquierda y saltaba a su lugar  */
+    /* (lo que abre una capa no se mueve al abrirse, regla #465).          */
+    [class*="st-key-mov_f_"][class*="_cuerpo"] > :first-child {
+        min-width: min(476px, calc(100vw - 72px)) !important;
+    }
+    /* 290px: «Sin comparar · Año pasado · Dos años» mide 271 en un        */
+    /* renglón; con menos, «Dos años» bajaba solo.                         */
+    [class*="st-key-mov_f_"][class*="_pie"] {
+        flex: 0 0 290px !important;
+        width: 290px !important;
+        border-left: 1px solid var(--line-soft) !important;
+        padding-left: 14px !important;
+        gap: 14px !important;
+    }
+    /* Por debajo de ~860px el panel y la columna no caben juntos (782px  */
+    /* más el padding del popover) y la columna baja: la línea va arriba.  */
+    @media (max-width: 860px) {
+        [class*="st-key-mov_f_"][class*="_pie"] {
+            border-left: 0 !important;
+            padding-left: 0 !important;
+            border-top: 1px solid var(--line-soft) !important;
+            padding-top: 8px !important;
+        }
+    }
+    [class*="st-key-mov_f_"][class*="_aj_"] {
+        gap: 6px !important;
+    }
+    /* El rótulo, apilado sobre su control: el -16px de abajo que trae     */
+    /* `stMarkdownContainer` lo dejaba debajo de los botones.              */
+    [class*="st-key-mov_f_"][class*="_aj_"] [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    /* «Valorizar la merma» en «Para revisar», en el renglón del caption   */
+    /* que antes decía dónde cambiarla: compacto, para no estirarlo.       */
+    .st-key-mov_merma_rev_pie [data-testid="stButtonGroup"] button,
+    .st-key-mov_merma_rend_modo [data-testid="stButtonGroup"] button,
+    .st-key-mov_merma_rend_lista [data-testid="stButtonGroup"] button {
+        min-height: 26px !important; height: 26px !important;
+        padding: 0 10px !important; font-size: 12px !important;
+    }
+    /* «Rendimiento» (regla #647): el renglón de arriba del segundo        */
+    /* gráfico —su título y «Precio del corte | Costo del insumo»— y la    */
+    /* nota de debajo. El título se corta con «…» antes que empujar al     */
+    /* selector, y los dos markdown sin el -16px de Streamlit (#162).      */
+    .st-key-mov_merma_rend_g2_cab {
+        flex-wrap: nowrap !important;
+    }
+    .st-key-mov_merma_rend_g2_cab > .stElementContainer:first-child {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+    }
+    .st-key-mov_merma_rend_g2_cab [data-testid="stMarkdownContainer"],
+    .st-key-mov_merma_rend_nota [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .mov-merma-g2-tit {
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .mov-merma-nota {
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--text-secondary);
+    }
+    /* «Proveedor por kg útil» (regla #655): el renglón «‹ Proveedores ·   */
+    /* producto › proveedor» de la lista de porcionamientos, y los dos     */
+    /* botones de ir y volver, chicos como los de la receta base.          */
+    .st-key-mov_merma_prov_det_cab {
+        flex-wrap: nowrap !important;
+    }
+    .st-key-mov_merma_prov_det_cab [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .st-key-mov_merma_prov_det_cab > .stElementContainer:last-child {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+    }
+    .mov-merma-prov-tit {
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .st-key-mov_merma_prov_volver button,
+    .st-key-mov_merma_prov_ver_porc button {
+        min-height: 0 !important;
+        padding: 3px 12px !important;
+    }
+    .st-key-mov_merma_prov_volver button p,
+    .st-key-mov_merma_prov_ver_porc button p {
+        font-size: 12.5px !important;
+        white-space: nowrap !important;
+    }
+    [class*="st-key-mov_f_"][class*="_aj_"] [data-testid="stCaptionContainer"] p {
+        font-size: 11.5px !important;
+        line-height: 1.4 !important;
     }
 
     /* La sesión: ‹ [píldora] ›, sin envolver. */
@@ -5882,7 +6115,7 @@ CSS = """    /* ================================================================
         height: 24px !important;
         min-height: 24px !important;
         padding: 0 !important;
-        border-radius: 999px !important;
+        border-radius: 7px !important;   /* como las flechas del mockup y del panel de fechas */
         border: 1px solid var(--border) !important;
         background: var(--bg-card) !important;
         color: var(--text-secondary) !important;
@@ -5903,44 +6136,14 @@ CSS = """    /* ================================================================
     [class*="st-key-ajses_"][class*="_sig"] button:disabled {
         opacity: .35 !important;
     }
-    /* El panel: opciones y años chicos, la lista a lo ancho. */
-    [class*="st-key-ajses_"][class*="_panel"] {
-        min-width: 320px !important;
-        gap: 8px !important;
-    }
-    [class*="st-key-ajses_"][class*="_o_"] button,
-    [class*="st-key-ajses_"][class*="_a_"] button {
-        min-height: 24px !important;
-        height: 24px !important;
-        padding: 0 10px !important;
-        border-radius: 999px !important;
-    }
-    [class*="st-key-ajses_"][class*="_o_"] button p,
-    [class*="st-key-ajses_"][class*="_a_"] button p {
-        font-size: 12px !important;
-    }
-    /* La lista se desliza adentro: un año trae hasta 19 sesiones. */
-    [class*="st-key-ajses_"][class*="_lista"] {
-        max-height: 300px !important;
-        overflow-y: auto !important;
-        flex-wrap: nowrap !important;
-        gap: 3px !important;
-        padding-right: 4px !important;
-    }
-    [class*="st-key-ajses_"][class*="_l_"] button {
-        justify-content: flex-start !important;
-        min-height: 0 !important;
-        padding: 5px 10px !important;
-        border-radius: 7px !important;
-    }
-    /* El rótulo a la izquierda: Streamlit centra el contenido del botón. */
-    [class*="st-key-ajses_"][class*="_l_"] button > div {
-        justify-content: flex-start !important;
-        width: 100% !important;
-    }
-    [class*="st-key-ajses_"][class*="_l_"] button p {
-        font-size: 12px !important;
-        text-align: left !important;
+    /* El panel es una pieza propia (`graficos/ajuste/panel_sesion.css`,
+       regla #634): acá sólo el botón que lo abre. Abierto, en lavanda, como
+       los demás triggers de Ajuste. */
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"]) button[aria-expanded="true"],
+    [class*="st-key-ajses_"][class*="_pop"] button[aria-expanded="true"] {
+        background: var(--accent-tint) !important;
+        border-color: var(--border-lavender) !important;
+        color: var(--accent-deep) !important;
     }
     /* «Por sesión / Por meses» de Distribución, a la talla de la fila. */
     .st-key-ajdist_por [data-testid="stButtonGroup"] button {
