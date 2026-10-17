@@ -1142,6 +1142,12 @@ devolución del banco» y vive en R2, NO en el repo, que es público
 (`convenios_descuento.py` arranca vacío). Entra también en el «% costo»
 de Mix de carta, que se mide sobre el neto más la devolución.
 
+**El presupuesto de venta** (por mes y servicio) tampoco está en el POS:
+vive en R2 y se edita en Costos › «Presupuesto de venta»
+(`presupuesto_ventas.py`, regla #669). Ventas › Comparación Año Pasado lo
+dibuja con su % de cumplimiento; el día y la semana son un reparto según la
+venta del año anterior, sólo el mes es exacto.
+
 ## El stock también tiene UNA definición: lo ACTIVO
 
 Desde el 2026-10-03 «Stock e Inventario» cuenta sólo lo que el POS da por

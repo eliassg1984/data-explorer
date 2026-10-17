@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-668 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+669 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -564,7 +564,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 
-**Streamlit** (162)
+**Streamlit** (163)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -728,8 +728,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
+- **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
 
-**Datos, R2 y DuckDB** (103)
+**Datos, R2 y DuckDB** (104)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -834,6 +835,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#651** — «Análisis de diferencias» mira los COMBOS, no descarta las líneas sin precio y reconoce lo…
 - **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
 - **#665** — Lo que el banco devuelve de un descuento de convenio: una tabla editable en Costos, guardada…
+- **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
 
 **SUNAT y SIRE** (59)
 
@@ -52121,6 +52123,38 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-17.)
 
+669. **El presupuesto de venta, por mes y servicio, editable en Costos y
+     comparado en Ventas › Comparación Año Pasado
+     (`presupuesto_ventas.py`).** 2026-10-17, a pedido, al revisar las
+     páginas Mensual, Semanal y Diario del Power BI del grupo («vs PPTO»,
+     «%Cump.PPTO»), lo único de ellas que la app no tenía.
+
+     - **El POS no lo tiene**: las tablas de presupuesto del Almacén
+       (`MPRESUPUESTO`, `DPRESUPUESTO`) están vacías. En el modelo de Power
+       BI son dos columnas de `Ventas_Consolidado`, por día y servicio,
+       cargadas por el flujo de cada local. Se transcribieron los 24 meses
+       de 2025–2026 por servicio, sin exportar (el usuario prefirió no dejar
+       un registro de exportación): cuadran al céntimo con los totales
+       anuales del modelo. Viven en R2 (`_config/presupuesto_ventas.json`),
+       no en el repo; el código arranca sin presupuesto.
+     - **El mes es exacto; la semana y el día, una aproximación**: cada mes
+       se reparte según el promedio de venta de cada día de la semana en ese
+       mes del año anterior (`pesos_dia_semana`, de la caché de
+       `data.venta_por_grupo_dia`). El reparto de Power BI no sigue a la
+       venta (su domingo pesa más que el sábado): del 1 al 5 de octubre
+       2026 da 104.764 contra 108.355.
+     - **En el Comparativo**, sólo en Montos: una raya «Presupuesto» sobre
+       cada par de barras (sobre los MISMOS días que la barra actual, así
+       que un período en curso se compara con su parte) y el KPI
+       «Presupuesto · % cumplido» junto al total de la ventana. Con un chip
+       de grupo, subgrupo o canal no aplica (`presupuesto_ventas.aplica`):
+       el presupuesto es de la venta entera; con uno de servicio, usa el de
+       ese servicio. `ventas.py` le pasa los chips en `filtros`.
+     - **El editor** va en Costos, debajo del de convenios, con el mismo
+       patrón (#665): huella en la key, acuse por `session_state`.
+
+     (2026-10-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52133,7 +52167,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#668**; la próxima toma el número siguiente.
+> última regla es la **#669**; la próxima toma el número siguiente.
 
 >
 

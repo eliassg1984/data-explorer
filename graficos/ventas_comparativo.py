@@ -58,10 +58,11 @@ import streamlit as st
 
 import cortes
 import definicion_venta as dv
+import presupuesto_ventas
 from data import REPORTES, cargar_rango, rango_fechas, sello_datos, venta_por_turno
 from tema import (
-    ACENTO, ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
-    LAVANDA_BORDE, PALETA_SERIES,
+    ACENTO, ADVERTENCIA, ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_BORDE,
+    GRIS_TEXTO, LAVANDA_BORDE, PALETA_SERIES,
 )
 from graficos.base import _card, _es_movil, franja_cabecera
 from inyecciones._iframe import inyectar_html
@@ -971,6 +972,24 @@ def _html_totales(tot_act, tot_ap, es_desc, tramo_act, tramo_ap, neto=False,
     return html
 
 
+def _kpi_ppto(ppto, actual, n_con, n_tot, neto=False):
+    """El KPI del presupuesto de la ventana (#669): cuánto se cumplió, sobre
+    los períodos que tienen presupuesto cargado."""
+    _p = actual / ppto * 100 if ppto else 0.0
+    _col = EXITO if _p >= 100 else (ADVERTENCIA_TEXTO if _p >= 90 else ERROR)
+    _que = "neto" if neto else "venta bruta"
+    return _kpi(
+        "Presupuesto", f"{_p:.0f} %", fmt_k(ppto), color_val=_col,
+        muestra=ADVERTENCIA,
+        tip=(f"Cumplimiento del presupuesto ({_que}): S/ {actual:,.0f} de "
+             f"S/ {ppto:,.0f}"
+             + (f", en los {n_con} de {n_tot} períodos que tienen presupuesto"
+                if n_con < n_tot else "")
+             + ". El mes es el cargado; la semana y el día, repartidos según "
+               "la venta de cada día de la semana el año anterior. Se edita "
+               "en Costos › Presupuesto de venta."))
+
+
 def _kpi_a_la_fecha(rot, tot_act, tot_ap, tramo, neto=False):
     """El KPI de «Mes a la fecha» / «Año a la fecha»: el % contra los mismos
     días del calendario un año antes y, chico, el monto de hoy. Vacío si
@@ -989,10 +1008,14 @@ def _kpi_a_la_fecha(rot, tot_act, tot_ap, tramo, neto=False):
 @st.fragment
 def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                         col_prod=None, col_cant=None, col_fam=None,
-                        col_sub=None, filtrar_cb=None, col_neto=None):
+                        col_sub=None, filtrar_cb=None, col_neto=None,
+                        filtros=None):
     """Comparativo Año Pasado vs Actual por día, semana o mes — en montos o
     descompuesto en pax × ticket, con el total de la ventana arriba y, al
-    clickear un período, qué productos explican su diferencia (#659)."""
+    clickear un período, qué productos explican su diferencia (#659).
+
+    `filtros` son los chips de la franja (`{"Grupo": [...], ...}`): con
+    uno de grupo, subgrupo o canal el presupuesto no aplica (#669)."""
     if not (col_venta and col_fecha):
         st.info("Faltan columnas (Venta, Fecha) para el comparativo.")
         return
@@ -1208,6 +1231,16 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
     es_desc = vista == "Descomposición"
 
+    # El presupuesto de cada período, sobre los MISMOS días que la barra
+    # actual (un período en curso, hasta el último día con venta). Sólo en
+    # Montos y sin filtros que parten la venta (#669).
+    ppto = [None] * len(claves)
+    if not es_desc and presupuesto_ventas.aplica(filtros):
+        ppto = presupuesto_ventas.en_rangos(
+            presupuesto_ventas.diario(), [(i, f) for (_k, i, f) in rangos_act],
+            neto=neto, servicios=(filtros or {}).get("Servicio"))
+    hay_ppto = any(v is not None for v in ppto)
+
     # El total de la ventana, en el hueco que dejó la franja (regla #659).
     def _tramo(rangos):
         return f"{rangos[0][1]:%d/%m/%Y} al {rangos[-1][2]:%d/%m/%Y}"
@@ -1237,6 +1270,11 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 _rot, _ta, _tp, f"{_i:%d/%m} al {_f:%d/%m/%Y} contra "
                 f"{_ip:%d/%m} al {_fp:%d/%m/%Y}", neto=neto))
         _alf = [k for k in _alf if k]
+    if hay_ppto:
+        _alf.insert(0, _kpi_ppto(
+            sum(v for v in ppto if v is not None),
+            sum(a for a, v in zip(y_act, ppto) if v is not None),
+            sum(v is not None for v in ppto), len(ppto), neto=neto))
     _ph_tot.markdown(
         _html_totales(tot_act, tot_ap if hay_ap else None, es_desc,
                       _tramo(rangos_act), _tramo(rangos_ap), neto=neto,
@@ -1335,6 +1373,20 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_act],
             hovertemplate="Actual · %{customdata}<br>S/ %{y:,.0f}<extra></extra>",
         )
+        if hay_ppto:
+            # Una raya sobre el par de barras: la meta del período (#669).
+            fig.add_trace(go.Scatter(
+                x=etiquetas, y=ppto, name="Presupuesto", mode="markers",
+                marker=dict(symbol="line-ew", size=46, color=ADVERTENCIA,
+                            line=dict(width=3, color=ADVERTENCIA)),
+                customdata=[[_texto_periodo(k, grano, fin),
+                             (a / v * 100 if v else 0.0)]
+                            for (k, _i, fin), a, v in zip(
+                                rangos_act, y_act, [x or 0.0 for x in ppto])],
+                hovertemplate=("Presupuesto · %{customdata[0]}<br>S/ %{y:,.0f}"
+                               " · cumplido %{customdata[1]:.0f} %"
+                               "<extra></extra>"),
+            ))
     # El período en curso se marca: aunque el año pasado ya viene recortado
     # al mismo tramo (comparación justa), el usuario tiene que saber que esa
     # barra no es un mes/semana entero — si no, la lee como cerrada. Offset

@@ -223,6 +223,45 @@ ok(not any(b in _mod.upper() for b in ("BCP", "BBVA", "INTERBANK", "AMEX"))
    and "0.5," not in _mod,
    "el repo es público: los valores de los convenios no viven en el código")
 
+# ── El presupuesto de venta (regla #669) ────────────────────────────────
+import presupuesto_ventas as pv  # noqa: E402
+
+_pt = pv.normalizar([{"anio": 2026, "mes": 2, "servicio": "Cena", "bruta": 2800, "neta": 2128},
+                     {"anio": 2026, "mes": 2, "servicio": "almuerzo", "bruta": 1400},
+                     {"anio": 2026, "mes": 13, "servicio": "CENA", "bruta": 1},
+                     {"anio": 2026, "mes": 3, "servicio": "", "bruta": 1}])
+igual((list(_pt.columns), sorted(_pt["servicio"])), (list(pv.COLUMNAS), ["ALMUERZO", "CENA"]),
+      "presupuesto: servicio en mayúsculas; sin mes válido o sin servicio, la fila no entra")
+# La venta de febrero 2025: los sábados venden el doble que el resto.
+_dias = pd.date_range("2025-02-01", "2025-02-28", freq="D")
+_vd = pd.DataFrame({"dia": _dias, "neto": [200.0 if x.weekday() == 5 else 100.0 for x in _dias]})
+_pesos = pv.pesos_dia_semana(_vd)
+_pd = pv.por_dia(_pt, _pesos)
+igual(round(float(_pd.loc[_pd["servicio"] == "CENA", "bruta"].sum()), 6), 2800.0,
+      "el mes repartido en días suma exacto lo cargado")
+_sab = float(_pd.loc[(_pd["dia"] == pd.Timestamp("2026-02-07")) & (_pd["servicio"] == "CENA"), "bruta"].iloc[0])
+_lun = float(_pd.loc[(_pd["dia"] == pd.Timestamp("2026-02-09")) & (_pd["servicio"] == "CENA"), "bruta"].iloc[0])
+igual(round(_sab / _lun, 6), 2.0, "el sábado pesa lo que vendió el sábado ese mes del año anterior")
+igual(round(float(pv.por_dia(_pt, None).query("servicio == 'CENA'")["bruta"].iloc[0]), 6),
+      100.0, "sin venta para pesar, parejo (2800 ÷ 28 días)")
+_r = pv.en_rangos(_pd, [(pd.Timestamp("2026-02-01"), pd.Timestamp("2026-02-28")),
+                        (pd.Timestamp("2026-04-01"), pd.Timestamp("2026-04-30"))])
+igual((round(_r[0], 6), _r[1]), (4200.0, None), "por rango: la suma, o None si no hay presupuesto")
+igual(round(pv.en_rangos(_pd, [(pd.Timestamp("2026-02-01"), pd.Timestamp("2026-02-28"))],
+                         neto=True, servicios=["Cena"])[0], 6),
+      2128.0, "un servicio y en neto")
+ok(pv.aplica({"Servicio": ["CENA"]}) and not pv.aplica({"Canal": ["Rappi"]})
+   and not pv.aplica({"Grupo": ["Alimentos"]}),
+   "con un filtro de canal o de grupo, el presupuesto no aplica")
+_mod_pv = (RAIZ / "presupuesto_ventas.py").read_text(encoding="utf-8")
+ok(not re.search(r"\d{3}\.\d{3}|\d{6}", _mod_pv),
+   "el repo es público: los montos del presupuesto no viven en el código")
+_comp = (RAIZ / "graficos" / "ventas_comparativo.py").read_text(encoding="utf-8")
+_vtas = (RAIZ / "graficos" / "ventas.py").read_text(encoding="utf-8")
+ok("presupuesto_ventas.aplica(filtros)" in _comp and '"Canal": canal_sel' in _vtas
+   and "_editor_presupuesto()" in _cos,
+   "el Comparativo lo muestra según los chips, y se edita en Costos")
+
 # ── armar: la tabla entera ───────────────────────────────────────────────
 D = cv.armar(ajuste, compras, salidas, pgd)
 igual([x["k"] for x in D["periodos"]], ["2026-09", "2026-10"], "armar: meses")

@@ -310,7 +310,9 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                 col_pedido=col_pedido, col_prod=col_prod,
                                 col_cant=col_cant, col_fam=col_fam,
                                 col_sub=col_sub, filtrar_cb=_filtrar_items,
-                                col_neto=_col_neto)
+                                col_neto=_col_neto, filtros={
+                                    "Grupo": fam_sel, "Sub Grupo": sub_sel,
+                                    "Canal": canal_sel, "Servicio": serv_sel})
 
         # ── 3) Análisis de platos: el ranking entre hasta 4 períodos
         # (graficos/ventas_platos.py, regla #529). Trae sus períodos aparte

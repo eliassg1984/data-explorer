@@ -34,6 +34,7 @@ import pandas as pd
 import streamlit as st
 
 import convenios_descuento
+import presupuesto_ventas
 import costo_ventas
 import data
 import definicion_venta
@@ -147,9 +148,69 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
         publicar_contexto_ia("Costos", costo_ventas.tabla_larga(mes))
         _TABLA(key="costos_tabla", data=datos, width="stretch")
     _editor_convenios(convenios)
+    _editor_presupuesto()
 
 
 _ACUSE_CONVENIOS = "_costos_conv_acuse"
+_ACUSE_PPTO = "_costos_ppto_acuse"
+_MESES = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set",
+          "Oct", "Nov", "Dic")
+
+
+def _editor_presupuesto():
+    """El presupuesto de venta por mes y servicio (regla #669): lo compara
+    Ventas › Comparación Año Pasado. Mismo patrón que los convenios: se
+    edita acá, se guarda en R2 (`presupuesto_ventas`), el acuse va por
+    `session_state` (#474) y la key del editor lleva la huella."""
+    t = presupuesto_ventas.leer()
+    with st.expander(f"Presupuesto de venta · {t['anio'].nunique()} años"
+                     if len(t) else "Presupuesto de venta · sin cargar",
+                     expanded=False, key="costos_ppto"):
+        acuse = st.session_state.pop(_ACUSE_PPTO, None)
+        if acuse:
+            (st.success if acuse[0] else st.error)(acuse[1])
+        st.caption(
+            "Venta bruta y neta presupuestada, por mes y servicio. Ventas › "
+            "Comparación Año Pasado la muestra al lado de la venta: el mes "
+            "exacto, la semana y el día repartidos según la venta de cada "
+            "día de la semana en ese mes del año anterior.")
+        tabla = pd.DataFrame({
+            "Año": t["anio"].astype(int), "Mes": [_MESES[m - 1] for m in t["mes"]],
+            "Servicio": t["servicio"].str.capitalize(),
+            "Venta bruta": t["bruta"], "Venta neta": t["neta"],
+        })
+        editada = st.data_editor(
+            tabla, key=f"costos_ppto_ed_{presupuesto_ventas.huella(t)}",
+            num_rows="dynamic", hide_index=True, width="stretch",
+            column_config={
+                "Año": st.column_config.NumberColumn(
+                    "Año", min_value=2020, max_value=2100, step=1, format="%d",
+                    required=True),
+                "Mes": st.column_config.SelectboxColumn(
+                    "Mes", options=list(_MESES), required=True),
+                "Servicio": st.column_config.SelectboxColumn(
+                    "Servicio", options=["Almuerzo", "Cena", "Desayuno"],
+                    required=True),
+                "Venta bruta": st.column_config.NumberColumn(
+                    "Venta bruta", min_value=0, format="%,.2f"),
+                "Venta neta": st.column_config.NumberColumn(
+                    "Venta neta", min_value=0, format="%,.2f"),
+            })
+        if not data.secrets_disponibles():
+            st.caption("Sin conexión a R2: la tabla no se puede guardar.")
+            return
+        if st.button("Guardar presupuesto", key="costos_ppto_guardar",
+                     type="primary"):
+            filas = [{"anio": r[0], "mes": _MESES.index(r[1]) + 1
+                      if r[1] in _MESES else None, "servicio": r[2],
+                      "bruta": r[3], "neta": r[4]}
+                     for r in editada.itertuples(index=False)]
+            ok = presupuesto_ventas.guardar(filas)
+            n = len(presupuesto_ventas.normalizar(filas))
+            st.session_state[_ACUSE_PPTO] = (
+                ok, f"Guardadas {n} filas de presupuesto." if ok else
+                "No se pudo guardar en R2. Reintentá en unos segundos.")
+            st.rerun()
 
 
 def _rotulo(cod, nombre):
