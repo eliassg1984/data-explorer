@@ -394,8 +394,13 @@ _JS_ALTERNAR = JsCode(
 
 
 def renderizar_pedidos_venta(tp, altura, key, ver_canal=False,
-                             ver_mesero=True, solo_hora=True, total=None):
-    """Una fila por PEDIDO del día en foco.
+                             ver_mesero=True, solo_hora=True, total=None,
+                             ver_pax=True):
+    """Una fila por PEDIDO del día en foco — o por COMPROBANTE, si `tp`
+    trae la columna `comp` («Ver por» Comprobante, regla #667): el tipo y el
+    número del documento, que en la vista por pedido van en el tooltip de la
+    hora. Ahí `ver_pax` va en False: una cuenta dividida son dos boletas con
+    los mismos clientes, y sumarlos por fila los contaría dos veces.
 
     `tp` trae `hora` (fecha y hora en ISO, que ordena bien como texto; la
     celda dice sólo la hora con `solo_hora`, o «03/09 14:16»), `mesero`, `canal`,
@@ -427,12 +432,15 @@ def renderizar_pedidos_venta(tp, altura, key, ver_canal=False,
                         width=72 if solo_hora else 104,
                         minWidth=72 if solo_hora else 104,
                         suppressSizeToFit=True)
+    if "comp" in tp.columns:
+        gb.configure_column("comp", header_name="Comprobante", width=170,
+                            minWidth=120, tooltipField="comp")
     gb.configure_column("mesero", header_name="Mesero", hide=not ver_mesero,
                         width=130, minWidth=80, tooltipField="mesero")
     gb.configure_column("canal", header_name="Canal", hide=not ver_canal,
                         width=100, minWidth=80, tooltipField="canal")
     gb.configure_column("pax", header_name="Pax", type=["numericColumn"],
-                        valueFormatter=_JS_ENTERO,
+                        valueFormatter=_JS_ENTERO, hide=not ver_pax,
                         width=60, minWidth=60, suppressSizeToFit=True)
     gb.configure_column("platos", header_name="Platos",
                         type=["numericColumn"], valueFormatter=_JS_ENTERO,
@@ -471,4 +479,97 @@ def renderizar_pedidos_venta(tp, altura, key, ver_canal=False,
     sel = resp.selected_rows
     if sel is not None and not sel.empty:
         return str(sel.iloc[0]["__ped"])
+    return None
+
+
+_JS_PCT = JsCode(
+    "function(p){ var v = p.value; if (typeof v !== 'number')"
+    " return v == null ? '' : String(v);"
+    " return (v * 100).toFixed(1) + '%'; }")
+"""«38.4%»: el peso de una fila en la venta del período."""
+
+
+def renderizar_grupos_venta(tp, altura, key, rotulo, total=None):
+    """Una fila por MESERO o por SERVICIO del período en foco («Ver por» del
+    Detalle, regla #667).
+
+    `tp` trae `nombre`, `pedidos`, `pax` (clientes, con la regla de
+    `definicion_venta.pax_por`), `venta`, `pct` (su peso en la venta del
+    período, 0-1) y `ticket` —números crudos— y, si la vista la tiene,
+    `propina`; ocultas, `__clave` (lo que devuelve) y `__sel`.
+
+    LOS SOLES SIN CÉNTIMOS (`_JS_SOLES0`), como el Resumen: en la fila de
+    un mesero no dicen nada, y con ellos las siete columnas medían 666px
+    contra los 589 de la tabla en la pantalla del usuario (1323px). Los
+    anchos son lo que mide el peor caso —«S/ 412,930», un mes entero—
+    más el relleno y la flecha de ordenar; el nombre se lleva el resto.
+
+    El clic alterna como en la de pedidos (`_JS_ALTERNAR`): elegir una fila
+    deja al costado sólo sus platos, y otro clic vuelve a los del período."""
+    gb = GridOptionsBuilder.from_dataframe(tp)
+    gb.configure_default_column(
+        resizable=False, sortable=True, filter=False, editable=False,
+        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
+    )
+    # Sin `width` y sin `flex`, como el «periodo» del Resumen: el ancho lo
+    # pone el `sizeColumnsToFit` de `_AL_MONTAR`, que descuenta la barra
+    # vertical (con `flex`, medido, desbordaba 15px).
+    gb.configure_column("nombre", header_name=rotulo, minWidth=90,
+                        tooltipField="nombre")
+    gb.configure_column("pedidos", header_name="Pedidos",
+                        type=["numericColumn"], valueFormatter=_JS_ENTERO,
+                        width=70, minWidth=70, suppressSizeToFit=True)
+    gb.configure_column("pax", header_name="Clientes", type=["numericColumn"],
+                        valueFormatter=_JS_ENTERO,
+                        width=74, minWidth=74, suppressSizeToFit=True)
+    gb.configure_column("venta", header_name="Venta", type=["numericColumn"],
+                        valueFormatter=_JS_SOLES0, initialSort="desc",
+                        width=100, minWidth=100, suppressSizeToFit=True)
+    gb.configure_column("pct", header_name="% venta", type=["numericColumn"],
+                        valueFormatter=_JS_PCT,
+                        width=66, minWidth=66, suppressSizeToFit=True)
+    gb.configure_column("ticket", header_name="Ticket", type=["numericColumn"],
+                        valueFormatter=_JS_SOLES0,
+                        headerTooltip="Venta de los canales que registran "
+                                      "clientes ÷ clientes, como el ticket "
+                                      "del gráfico",
+                        width=76, minWidth=76, suppressSizeToFit=True)
+    if "propina" in tp.columns:
+        gb.configure_column("propina", header_name="Propina",
+                            type=["numericColumn"], valueFormatter=_JS_SOLES0,
+                            headerTooltip="Una propina por pago",
+                            width=80, minWidth=80, suppressSizeToFit=True)
+    for oculta in ("__clave", "__sel"):
+        gb.configure_column(oculta, hide=True)
+    gb.configure_selection(selection_mode="single", use_checkbox=False)
+    gb.configure_grid_options(**_con_total(dict(
+        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
+        suppressCellFocus=True, rowClassRules=REGLAS_FILA,
+        onGridReady=_AL_MONTAR), total))
+    grid_options = gb.build()
+    _parchar_iconos(grid_options)  # arquitectura.md #159
+    for _legado in ("rowMultiSelectWithClick", "suppressRowDeselection",
+                    "suppressRowClickSelection", "groupSelectsChildren",
+                    "groupSelectsFiltered"):
+        grid_options.pop(_legado, None)
+    grid_options["rowSelection"] = {"mode": "singleRow", "checkboxes": False,
+                                    "enableClickSelection": False}
+    grid_options["onRowClicked"] = _JS_ALTERNAR
+
+    # SIN EL CANAL DE LA BARRA VERTICAL (`compras_volatilidad`, misma
+    # trampa): `sizeColumnsToFit` reparte el ancho entero y sus 15px quedan
+    # fuera de la cuenta — medido, la Propina terminaba en 589 con la vista
+    # cortando en 574, y un número alineado a la derecha pierde así sus
+    # últimos dígitos. Con más filas de las que entran desliza
+    # `.ag-body-viewport`, que tiene su propio `overflow-y`.
+    css = _css()
+    css[".ag-body-vertical-scroll"] = {"display": "none !important"}
+    resp = AgGrid(
+        tp, gridOptions=grid_options, height=altura, theme="material",
+        custom_css=css, allow_unsafe_jscode=True, key=key,
+        update_on=["selectionChanged"],
+    )
+    sel = resp.selected_rows
+    if sel is not None and not sel.empty:
+        return str(sel.iloc[0]["__clave"])
     return None

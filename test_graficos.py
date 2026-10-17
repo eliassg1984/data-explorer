@@ -11037,6 +11037,92 @@ def _pruebas_ventas_platos():
 
 
 
+def _pruebas_ventas_ver_por():
+    """«Ver por» del Detalle de Venta por Período (regla #667): por mesero
+    y por servicio, las filas suman el período —la venta, los clientes con
+    `pax_por` (el canje de boleta por factura cuenta a la mesa una vez) y
+    la propina por pago—, y las columnas se leen por NOMBRE: Cloud corre
+    pandas 2.2 y esta máquina la 3 (CLAUDE.md, regla #481)."""
+    import pandas as pd
+
+    import definicion_venta as dv
+    from graficos import ventas_resumen as vr
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · ver por · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · ver por · {nombre}: got={got!r} exp={exp!r}")
+
+    V, NC = dv.VENTA, dv.NOTA_CREDITO
+    # P1: mesa de 4 de Ana. P2: canje de Ana —boleta, factura y la nota que
+    # anula la boleta—. P3: Rappi, sin mesero ni clientes. P4: mesa de 3 de
+    # Beto.
+    filas = [
+        # ped, ldoc, pax, venta, mesero, serv, canal, clase
+        ("P1", "B1", 4, 100.0, "Ana", "Cena", "En el Local", V),
+        ("P1", "B1", 4, 50.0, "Ana", "Cena", "En el Local", V),
+        ("P2", "B2", 2, 80.0, "Ana", "Almuerzo", "En el Local", V),
+        ("P2", "F1", 2, 80.0, "Ana", "Almuerzo", "En el Local", V),
+        ("P2", "N1", -2, -80.0, "Ana", "Almuerzo", "En el Local", NC),
+        ("P3", "B3", 0, 40.0, "", "Cena", "Rappi", V),
+        ("P4", "B4", 3, 120.0, "Beto", "Cena", "En el Local", V),
+    ]
+    amb = pd.DataFrame(filas, columns=["ped", "ldoc", "pax", "venta",
+                                       "mesero", "serv", "canal", "clase"])
+    amb["cli"] = dv.con_clientes(amb, "canal", "pax")
+    prop = pd.DataFrame({"clave": ["k", "k", "k", "otro"],
+                         "mesero": ["Ana", "Beto", "", "Ana"],
+                         "prop": [10.0, 5.0, 0.0, 99.0]})
+
+    g = vr._grupos_detalle(amb, "mesero", prop, "k", vr._SIN_MESERO)
+    check("columnas por nombre", set(g.columns),
+          {"nombre", "venta", "pedidos", "pax", "ticket", "propina", "pct"})
+    f = {r["nombre"]: r for r in g.to_dict("records")}
+    check("meseros, con «Sin mesero»", sorted(f),
+          ["Ana", "Beto", vr._SIN_MESERO])
+    check("Ana: la venta, con la nota restando", round(f["Ana"]["venta"], 2),
+          230.0)
+    check("Ana: dos pedidos (la nota no es un pedido)",
+          int(f["Ana"]["pedidos"]), 2)
+    check("Ana: el canje cuenta a la mesa una vez", f["Ana"]["pax"], 6.0)
+    check("Ana: ticket = venta ÷ clientes", round(f["Ana"]["ticket"], 2),
+          round(230 / 6, 2))
+    check("Ana: la propina SÓLO del período en foco", f["Ana"]["propina"],
+          10.0)
+    check("Sin mesero: cero clientes, no vacío", f[vr._SIN_MESERO]["pax"], 0.0)
+    check("Sin mesero: sin ticket", pd.isna(f[vr._SIN_MESERO]["ticket"]), True)
+    check("las filas suman la venta del período", round(g["venta"].sum(), 2),
+          round(amb["venta"].sum(), 2))
+    check("las filas suman los clientes del período", g["pax"].sum(),
+          dv.pax_por(amb, "ped", "pax", doc="ldoc"))
+    check("los pesos suman 1", round(g["pct"].sum(), 6), 1.0)
+    check("ordenado por venta", g["nombre"].tolist()[0], "Ana")
+
+    s = vr._grupos_detalle(amb, "serv", None, "k", vr._SIN_SERVICIO)
+    check("por servicio, sin columna de propina", "propina" in s.columns,
+          False)
+    fs = dict(zip(s["nombre"], s["venta"].round(2)))
+    check("por servicio, la venta de cada uno", fs,
+          {"Cena": 310.0, "Almuerzo": 80.0})
+
+    et = vr._etiqueta_comprobante(
+        pd.Series(["Boleta Electronica", "Factura Electronica",
+                   "NC F Electronica", "Ticket"]),
+        pd.Series([V, V, NC, V]), pd.Series(["B1", "F1", "N1", "T1"]))
+    check("el comprobante dice su tipo corto y su número", et.tolist(),
+          ["Boleta B1", "Factura F1", "Nota de crédito N1", "Ticket T1"])
+
+    check("sin la columna, la opción no se ofrece",
+          vr._ver_disponibles(amb.drop(columns="serv")),
+          [vr._VER_PEDIDO, vr._VER_MESERO, vr._VER_COMPROBANTE])
+    return fallos
+
+
 def _pruebas_ventas_meseros():
     """Ventas › Meseros (regla #553): las propinas por mesero.
 
@@ -12543,6 +12629,7 @@ def main():
 
     # ── Ventas › Meseros: propinas, pozo común, planilla y Excel ────────
     fallos += _pruebas_ventas_meseros()
+    fallos += _pruebas_ventas_ver_por()
 
     # ── Ventas › Por hora: las filas «Platos» y «Grupos» ─────────────────
     fallos += _pruebas_por_hora_filas()

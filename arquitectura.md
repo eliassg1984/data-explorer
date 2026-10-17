@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-666 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+667 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -466,7 +466,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#659** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
 - **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
 
-**AgGrid y tablas** (94)
+**AgGrid y tablas** (95)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -562,6 +562,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#636** — Stock por Producto: Código · Familia · Subfamilia · Producto, y abre de la A a la Z en ese…
 - **#637** — Stock por Producto dice qué mirar: chips de estado, la evolución de lo filtrado y cinco…
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
+- **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 
 **Streamlit** (162)
 
@@ -966,7 +967,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (186)
+**Decisiones de diseño y UX** (187)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1154,6 +1155,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 - **#665** — Lo que el banco devuelve de un descuento de convenio: una tabla editable en Costos, guardada…
 - **#666** — Mix de carta: lo vendido SIN COSTO CARGADO sale de todo % de costo, y la zona «Cálculo»…
+- **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -52054,6 +52056,39 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-17.)
 
+667. **«Ver por» en el Detalle de Venta por Período: Pedido, Mesero,
+     Servicio o Comprobante.** 2026-10-17, a pedido («el Detalle me
+     muestra sólo agrupación por mesero»; eran pedidos con el mesero en la
+     primera columna). Un `segmented_control` (`vt_resumen_ver`) en el
+     renglón del pie, sólo en Detalle y con eco, como las subvistas del
+     Resumen (#519). La tabla de al lado son siempre los platos de la fila
+     elegida (#525).
+
+     - **Mesero y Servicio cuentan como el período**, y sumadas las filas
+       lo dan: los clientes con `definicion_venta.pax_por`, el ticket con
+       la venta de los canales que registran clientes (#591), la propina
+       una por pago (#517). Medido en setiembre 2026: S/ 412.929,80, 2.747
+       clientes y ticket S/ 147,43 por mesero y por servicio. Lo arma
+       `ventas_resumen._grupos_detalle`.
+     - **Por documento no hay Pax**: una cuenta dividida son dos boletas
+       con los mismos clientes. Cada fila dice tipo y número
+       (`_etiqueta_comprobante`) y «· por cobrar» si lo está; la nota de
+       crédito, su propia fila.
+     - **Lo elegido es de UN «Ver por»** (`vt_resumen_ped_ver`): cambiarlo
+       lo suelta. Si quedara un pedido puesto con la vista en Mesero, el
+       clic en una barra «subiría un nivel» en vez de mover el foco.
+     - **El canal de la barra vertical, fuera** (`renderizar_grupos_venta`),
+       como en la grilla AG Grid de Volatilidad: `sizeColumnsToFit` reparte el ancho entero y
+       esos 15px quedaban fuera — la Propina terminaba en 589 con la vista
+       cortando en 574, y un número alineado a la derecha pierde así sus
+       últimos dígitos. Con `flex` en la primera columna pasaba lo mismo.
+       Y los soles van sin céntimos: con ellos las siete columnas pedían
+       666px contra 589 en la pantalla del usuario.
+     - El mesero va en Title Case en las dos tablas, como «Análisis de
+       Meseros»: el POS escribe «Luis Arroyo» y «DAVID GARCIA».
+
+     (2026-10-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52066,7 +52101,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#666**; la próxima toma el número siguiente.
+> última regla es la **#667**; la próxima toma el número siguiente.
 
 >
 

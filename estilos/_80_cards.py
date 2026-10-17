@@ -3216,6 +3216,10 @@ CSS = """    /* ================================================================
         padding: 0 14px !important;
         font-size: 12px !important;
     }
+    /* El «Ver por» del Detalle (regla #667) va en el mismo renglón y con
+       la misma medida que las columnas del Resumen: los dos nunca están
+       a la vez, uno por modo. */
+    .st-key-vt_resumen_ver [data-testid="stButtonGroup"] button,
     .st-key-vt_resumen_sub [data-testid="stButtonGroup"] button {
         min-height: 32px !important;
         height: 32px !important;
