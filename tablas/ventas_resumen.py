@@ -386,6 +386,35 @@ def renderizar_dias_venta(tp, altura, key, columnas, rotulo_periodo="Día",
     return None
 
 
+_JS_HORARIO = JsCode(
+    "function(p){ var a = p.value, b = p.data ? p.data.hora : null;"
+    " if (typeof a !== 'string' || a.length < 16 || a.charAt(4) !== '-')"
+    " return a == null ? '' : String(a);"
+    " var t = a.slice(11, 16);"
+    " if (typeof b === 'string' && b.length >= 16) t += '\u2013' + b.slice(11, 16);"
+    " return t; }")
+"""«12:48–14:14»: cuándo se abrió el pedido y cuándo se emitió su
+comprobante. El valor es el INICIO en ISO (ordena como texto) y el cierre
+sale de la columna oculta `hora` de la misma fila."""
+
+_JS_HORARIO_DIA = JsCode(
+    "function(p){ var a = p.value, b = p.data ? p.data.hora : null;"
+    " if (typeof a !== 'string' || a.length < 16 || a.charAt(4) !== '-')"
+    " return a == null ? '' : String(a);"
+    " var t = a.slice(8, 10) + '/' + a.slice(5, 7) + ' ' + a.slice(11, 16);"
+    " if (typeof b === 'string' && b.length >= 16) t += '\u2013' + b.slice(11, 16);"
+    " return t; }")
+"""El de arriba con el día delante («03/09 12:48–14:14»), para Semana, Mes
+y Año: las filas no son todas del mismo día."""
+
+_JS_TIEMPO = JsCode(
+    "function(p){ var v = p.value; if (typeof v !== 'number')"
+    " return v == null ? '' : String(v);"
+    " var m = Math.round(v); if (m < 60) return m + ' min';"
+    " var r = m % 60; return Math.floor(m / 60) + ' h ' + (r < 10 ? '0' : '') + r; }")
+"""Minutos → «45 min» o «2 h 07». Numérico por debajo, para que ordene."""
+
+
 # Clic en una fila = elegirla o SOLTARLA. `rowPinned` afuera: la fila Total
 # no es un pedido.
 _JS_ALTERNAR = JsCode(
@@ -401,6 +430,14 @@ def renderizar_pedidos_venta(tp, altura, key, ver_canal=False,
     número del documento, que en la vista por pedido van en el tooltip de la
     hora. Ahí `ver_pax` va en False: una cuenta dividida son dos boletas con
     los mismos clientes, y sumarlos por fila los contaría dos veces.
+
+    LA VISTA POR PEDIDO (regla #668, a pedido): si `tp` trae `inicio`, cada
+    fila dice el número del pedido (`pedido`), su horario —de la apertura al
+    comprobante, con `hora` como el cierre—, el `tiempo` en minutos, el
+    `docn` (el comprobante como lo imprime SUNAT, «B001-56777») y la venta en
+    soles enteros. «Platos» no va: contaba líneas, y lo que se pidió lo da
+    la tabla de al lado con un clic. Así entran ocho columnas en los 589px
+    de la pantalla del usuario.
 
     `tp` trae `hora` (fecha y hora en ISO, que ordena bien como texto; la
     celda dice sólo la hora con `solo_hora`, o «03/09 14:16»), `mesero`, `canal`,
@@ -424,36 +461,76 @@ def renderizar_pedidos_venta(tp, altura, key, ver_canal=False,
         resizable=False, sortable=True, filter=False, editable=False,
         suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
     )
-    gb.configure_column("hora", header_name="Hora" if solo_hora else "Registro",
-                        valueFormatter=_JS_HORA if solo_hora else _JS_FECHA_HORA,
-                        tooltipField="__doc",
-                        headerTooltip="Hora del comprobante. Su número, en "
-                                      "el tooltip de la celda",
-                        width=72 if solo_hora else 104,
-                        minWidth=72 if solo_hora else 104,
-                        suppressSizeToFit=True)
+    por_pedido = "inicio" in tp.columns
+    if por_pedido:
+        gb.configure_column("pedido", header_name="Pedido",
+                            headerTooltip="Número del pedido en el POS",
+                            width=88, minWidth=88, suppressSizeToFit=True)
+        _ancho_h = 96 if solo_hora else 132
+        gb.configure_column("inicio", header_name="Horario",
+                            valueFormatter=(_JS_HORARIO if solo_hora
+                                            else _JS_HORARIO_DIA),
+                            headerTooltip="Desde que se abrió el pedido hasta "
+                                          "que se emitió su comprobante",
+                            width=_ancho_h, minWidth=_ancho_h,
+                            suppressSizeToFit=True)
+        gb.configure_column("tiempo", header_name="Tiempo",
+                            type=["numericColumn"], valueFormatter=_JS_TIEMPO,
+                            headerTooltip="Cuánto estuvo abierto el pedido. En "
+                                          "la fila Total, la mediana de las "
+                                          "mesas (pedidos con clientes)",
+                            width=62, minWidth=62, suppressSizeToFit=True)
+        gb.configure_column("hora", hide=True)
+    else:
+        gb.configure_column("hora",
+                            header_name="Hora" if solo_hora else "Registro",
+                            valueFormatter=(_JS_HORA if solo_hora
+                                            else _JS_FECHA_HORA),
+                            tooltipField="__doc",
+                            headerTooltip="Hora del comprobante. Su número, "
+                                          "en el tooltip de la celda",
+                            width=72 if solo_hora else 104,
+                            minWidth=72 if solo_hora else 104,
+                            suppressSizeToFit=True)
     if "comp" in tp.columns:
         gb.configure_column("comp", header_name="Comprobante", width=170,
                             minWidth=120, tooltipField="comp")
     gb.configure_column("mesero", header_name="Mesero", hide=not ver_mesero,
-                        width=130, minWidth=80, tooltipField="mesero")
-    gb.configure_column("canal", header_name="Canal", hide=not ver_canal,
-                        width=100, minWidth=80, tooltipField="canal")
+                        width=130, minWidth=64 if por_pedido else 80,
+                        tooltipField="mesero")
+    gb.configure_column("canal", header_name="Tipo" if por_pedido else "Canal",
+                        hide=not ver_canal, width=100,
+                        minWidth=60 if por_pedido else 80,
+                        headerTooltip="Canal de venta: en el local, Rappi, "
+                                      "para llevar",
+                        tooltipField="canal")
+    if "docn" in tp.columns:
+        gb.configure_column("docn", header_name="Documento", width=100,
+                            minWidth=88, tooltipField="__doc",
+                            headerTooltip="El comprobante, como lo imprime "
+                                          "SUNAT. Tipo y número completo, "
+                                          "en el tooltip")
     gb.configure_column("pax", header_name="Pax", type=["numericColumn"],
                         valueFormatter=_JS_ENTERO, hide=not ver_pax,
-                        width=60, minWidth=60, suppressSizeToFit=True)
-    gb.configure_column("platos", header_name="Platos",
-                        type=["numericColumn"], valueFormatter=_JS_ENTERO,
-                        headerTooltip="Líneas del pedido: un plato es una "
-                                      "línea, con su cantidad",
-                        width=76, minWidth=76, suppressSizeToFit=True)
+                        width=46 if por_pedido else 60,
+                        minWidth=46 if por_pedido else 60,
+                        suppressSizeToFit=True)
+    if "platos" in tp.columns:
+        gb.configure_column("platos", header_name="Platos",
+                            type=["numericColumn"], valueFormatter=_JS_ENTERO,
+                            headerTooltip="Líneas del pedido: un plato es una "
+                                          "línea, con su cantidad",
+                            width=76, minWidth=76, suppressSizeToFit=True)
     # `initialSort` y no `sort` (regla #471): st_aggrid le vuelve a pasar
     # las `columnDefs` en cada corrida y `sort` pisaría el orden elegido.
+    # Por pedido, en soles enteros: «S/ 13,608» del total de un día entra en
+    # 90. Por comprobante, con céntimos —se cuadra contra el POS—: 120 para
+    # «S/ 35,730.90» de una semana, más el padding y la flecha de ordenar.
+    _ancho_v = 90 if por_pedido else 120
     gb.configure_column("valor", header_name="Venta", type=["numericColumn"],
-                        valueFormatter=_JS_SOLES, initialSort="desc",
-                        # 120: «S/ 35,730.90» del total de una semana, a
-                        # 13px, más el padding y la flecha de ordenar.
-                        width=120, minWidth=120, suppressSizeToFit=True)
+                        valueFormatter=_JS_SOLES0 if por_pedido else _JS_SOLES,
+                        initialSort="desc", width=_ancho_v, minWidth=_ancho_v,
+                        suppressSizeToFit=True)
     for oculta in ("__doc", "__ped", "__sel"):
         gb.configure_column(oculta, hide=True)
     gb.configure_selection(selection_mode="single", use_checkbox=False)

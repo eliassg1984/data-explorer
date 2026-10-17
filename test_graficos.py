@@ -11120,6 +11120,54 @@ def _pruebas_ventas_ver_por():
     check("sin la columna, la opción no se ofrece",
           vr._ver_disponibles(amb.drop(columns="serv")),
           [vr._VER_PEDIDO, vr._VER_MESERO, vr._VER_COMPROBANTE])
+
+    # La vista por pedido (regla #668): el número como lo imprime SUNAT...
+    check("el número, como el comprobante impreso",
+          vr._numero_sunat("B00001000056777"), "B001-56777")
+    check("el número, completo como SUNAT",
+          vr._numero_sunat("F00001000009405", completo=True), "F001-00009405")
+    check("una cortesía no tiene serie: va tal cual",
+          vr._numero_sunat("000001000007948"), "000001000007948")
+    check("un vacío no revienta", vr._numero_sunat(None), "")
+    # ...y el horario: de la apertura al ÚLTIMO comprobante.
+    ts = pd.Timestamp
+    peds = pd.DataFrame({
+        "ped": ["P1", "P2", "P3", "P1 · NC"],
+        "pcod": ["2600000001", "2600000002", "2600000003", "2600000001"],
+        "inicio": [ts("2026-10-14 19:51"), ts("2026-10-14 13:14"),
+                   ts("2026-10-14 20:00"), ts("2026-10-14 19:51")],
+        "cierre": [ts("2026-10-14 23:12"), ts("2026-10-14 15:16"),
+                   ts("2026-10-14 20:03"), ts("2026-10-16 10:00")],
+        "doc": ["B00001000056795", "F00001000009405", "B00001000056800",
+                "C00001000000033"],
+        "tdoc": ["Boleta Electronica", "Factura Electronica",
+                 "Boleta Electronica", "NC B Electronica"],
+        "clase": [V, V, V, NC],
+        "mesero": ["Ana", "", "", "Ana"],
+        "canal": ["En el Local", "En el Local", "Rappi", "En el Local"],
+        "pax": [4, 2, 0, -4],
+        "valor": [100.0, 50.0, 30.0, -100.0],
+    })
+    tp, tot = vr._pedidos_con_horario(peds, "ped", "P2", "4 pedidos")
+    check("columnas por nombre", [c for c in tp.columns if c[:2] != "__"],
+          ["pedido", "inicio", "tiempo", "mesero", "canal", "docn", "pax",
+           "valor", "hora"])
+    check("el tiempo en minutos", tp["tiempo"].tolist()[:3],
+          [201.0, 122.0, 3.0])
+    check("una nota de crédito no tiene tiempo",
+          pd.isna(tp["tiempo"].iloc[3]), True)
+    check("la apertura y el cierre, en ISO",
+          (tp["inicio"].iloc[0], tp["hora"].iloc[0]),
+          ("2026-10-14 19:51", "2026-10-14 23:12"))
+    check("el documento corto en la celda y completo en el tooltip",
+          (tp["docn"].iloc[1], tp["__doc"].iloc[1]),
+          ("F001-9405", "Factura Electronica F001-00009405"))
+    check("sin mesero, una raya", tp["mesero"].iloc[1], "—")
+    check("la fila elegida", tp["__sel"].tolist(),
+          [False, True, False, False])
+    check("la mediana, sólo de las mesas (Rappi afuera)", tot["tiempo"],
+          161.5)
+    check("el total en soles enteros", tot["valor"], "S/ 80")
     return fallos
 
 

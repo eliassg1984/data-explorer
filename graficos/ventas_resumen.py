@@ -699,6 +699,15 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         cols["serv"] = _sv.where(_sv != "", _SIN_SERVICIO)
     if col_tdoc and col_tdoc in d.columns:
         cols["tdoc"] = _texto_limpio(d[col_tdoc])
+    # El número del pedido y cuándo se ABRIÓ, para la vista por pedido del
+    # Detalle (regla #668). La apertura es la hora real: el día del turno
+    # (#593) sólo mueve la fecha del documento.
+    _c_pcod = _resolver(d, ["Codigo Pedido Ddocumento"])
+    if _c_pcod:
+        cols["pcod"] = _texto_limpio(d[_c_pcod])
+    _c_ini = _resolver(d, ["Fecha Registro Pedido"])
+    if _c_ini:
+        cols["inicio"] = pd.to_datetime(d[_c_ini], errors="coerce")
     _c_est = dv.columna(d, dv.ESTADO)
     if _c_est:
         cols["estado"] = d[_c_est].astype(str).str.strip().str.upper()
@@ -2329,6 +2338,76 @@ def _etiqueta_comprobante(tdoc, clase, num):
     return (corto + " " + num).str.strip()
 
 
+_RE_NUMERO_SUNAT = re.compile(r"([A-Z])(\d{5})(\d{9})")
+
+
+def _numero_sunat(num, completo=False):
+    """«B00001000056777» → «B001-56777», como lo imprime el comprobante
+    (regla #668): la letra, la serie en tres dígitos y el correlativo.
+    `completo` lo deja con sus ocho dígitos, «B001-00056777», que es como lo
+    escribe SUNAT (lo confirma la respuesta que guarda el POS en
+    `MDOCUMENTO.tRespFacturacion`: «F00001000009405» es la F001-00009405).
+    Lo que no tiene esa forma —una cortesía, «000001000007948»— va tal
+    cual."""
+    t = "" if num is None or (isinstance(num, float) and pd.isna(num)) \
+        else str(num).strip()
+    m = _RE_NUMERO_SUNAT.fullmatch(t)
+    if not m:
+        return t
+    corr = int(m[3])
+    return f"{m[1]}{int(m[2]):03d}-" + (f"{corr:08d}" if completo
+                                         else str(corr))
+
+
+def _pedidos_con_horario(peds, k_fila, sel, txt_n):
+    """La tabla «Ver por» Pedido con lo que pidió el usuario (regla #668):
+    el número del pedido, su horario —de la apertura al último
+    comprobante—, el tiempo que estuvo abierto, el tipo (el canal) y el
+    documento. Devuelve `(tp, total)` para `renderizar_pedidos_venta`.
+
+    Una nota de crédito no es una mesa: su «cierre» es el día de la nota, y
+    su tiempo queda vacío. El total dice la MEDIANA del tiempo: un pedido
+    que quedó abierto de un día al otro no mueve la típica. Y sólo de los
+    pedidos CON CLIENTES —las mesas—: un Rappi se abre y se cobra en
+    minutos, y con ellos el 14/10/2026 la mediana daba 1 h 49 con las
+    mesas de la noche en 2-3 h."""
+    idx = peds.index
+    nc = (peds["clase"] == dv.NOTA_CREDITO) if "clase" in peds \
+        else pd.Series(False, index=idx)
+    minutos = (peds["cierre"] - peds["inicio"]).dt.total_seconds() / 60
+    minutos = minutos.where(~nc & (minutos >= 0)).round(0)
+    num = (peds["doc"].astype(str) if "doc" in peds
+           else pd.Series("", index=idx))
+    tipo = (_texto_limpio(peds["tdoc"]) if "tdoc" in peds
+            else pd.Series("", index=idx))
+    tp = pd.DataFrame({
+        "pedido": peds["pcod"] if "pcod" in peds else peds[k_fila],
+        "inicio": peds["inicio"].dt.strftime("%Y-%m-%d %H:%M"),
+        "tiempo": minutos,
+        "mesero": (peds["mesero"].replace("", "—") if "mesero" in peds
+                   else "—"),
+        "canal": peds["canal"] if "canal" in peds else "",
+        "docn": num.map(_numero_sunat),
+        "pax": (peds["pax"].fillna(0).astype(int) if "pax" in peds else 0),
+        "valor": peds["valor"].astype(float).round(2),
+        "hora": peds["cierre"].dt.strftime("%Y-%m-%d %H:%M"),
+        "__doc": (tipo + " " + num.map(
+            lambda x: _numero_sunat(x, completo=True))).str.strip(),
+        "__ped": peds[k_fila],
+        "__sel": peds[k_fila] == sel,
+    })
+    _mesas = (minutos[peds["pax"].fillna(0) > 0] if "pax" in peds
+              else minutos)
+    _med = _mesas.median()
+    total = {
+        "pedido": "Total", "mesero": txt_n,
+        "tiempo": float(_med) if pd.notna(_med) else "",
+        "pax": f"{int(tp['pax'].sum()):,}",
+        "valor": f"S/ {float(peds['valor'].sum()):,.0f}",
+    }
+    return tp, total
+
+
 def _grupos_detalle(amb, col, propinas, foco, vacio):
     """Una fila por valor de `col` (mesero, servicio) con sus pedidos,
     clientes, venta, peso, ticket y —por mesero— la propina (regla #667).
@@ -2450,12 +2529,17 @@ def _zona_detalle(tabla, foco, nombre, gran, partida, ctx, nclic, pie,
         if "propina" in grp.columns:
             tot_izq["propina"] = f"S/ {float(grp['propina'].sum()):,.0f}"
     else:
-        agg = {"fecha": ("emision" if "emision" in amb.columns else "fecha",
-                         "min"),
+        _f_em = "emision" if "emision" in amb.columns else "fecha"
+        # `cierre`: el ÚLTIMO comprobante del pedido (una cuenta dividida
+        # se cobra en dos). `inicio`: cuándo se abrió.
+        agg = {"fecha": (_f_em, "min"), "cierre": (_f_em, "max"),
                "platos": ("venta", "size"), "valor": ("venta", "sum")}
-        for _c in ("doc", "mesero", "canal", "tdoc", "clase", "estado"):
+        for _c in ("doc", "mesero", "canal", "tdoc", "clase", "estado",
+                   "pcod"):
             if _c in amb.columns and _c != k_fila:
                 agg[_c] = (_c, "first")
+        if "inicio" in amb.columns:
+            agg["inicio"] = ("inicio", "min")
         if "pax" in amb.columns:
             agg["pax"] = ("pax", "max")
         peds = (amb.groupby(k_fila, as_index=False).agg(**agg)
@@ -2493,7 +2577,8 @@ def _zona_detalle(tabla, foco, nombre, gran, partida, ctx, nclic, pie,
                 else pd.Series("", index=peds.index),
                 peds["clase"] if "clase" in peds
                 else pd.Series(dv.VENTA, index=peds.index),
-                pd.Series(_doc, index=peds.index).astype(str))
+                pd.Series(_doc, index=peds.index).astype(str)
+                .map(_numero_sunat))
             if "estado" in peds:
                 _comp = _comp.where(peds["estado"] != _POR_COBRAR,
                                     _comp + " · por cobrar")
@@ -2514,6 +2599,8 @@ def _zona_detalle(tabla, foco, nombre, gran, partida, ctx, nclic, pie,
         if ver == _VER_COMPROBANTE:
             # La columna Mesero sigue, pero el conteo va en la del documento.
             tot_izq.update(comp=_txt_n, mesero="")
+        elif "inicio" in peds and peds["inicio"].notna().any():
+            tp_izq, tot_izq = _pedidos_con_horario(peds, k_fila, sel, _txt_n)
 
     # QUÉ muestra la tabla de al lado: los platos de la fila elegida con un
     # clic o, sin elección, los del PERÍODO ENTERO (regla #525, a pedido: se
@@ -2565,7 +2652,13 @@ def _zona_detalle(tabla, foco, nombre, gran, partida, ctx, nclic, pie,
                 clic = renderizar_pedidos_venta(
                     tp_izq, altura=_ALTO_TABLA_VR,
                     key=f"vt_resumen_ped_grid_{k_tablas}",
-                    ver_canal=partida, ver_mesero="mesero" in amb,
+                    # El canal, sólo si EL PERÍODO EN FOCO tiene más de
+                    # uno (#239): con Rappi en otro día del rango, la
+                    # columna decía «En el Local» en cada fila y le quitaba
+                    # el ancho al mesero (regla #668).
+                    ver_canal=partida and "canal" in amb
+                    and amb["canal"].nunique() > 1,
+                    ver_mesero="mesero" in amb,
                     solo_hora=gran == "Día", total=tot_izq,
                     ver_pax=ver == _VER_PEDIDO)
         with c_lin:

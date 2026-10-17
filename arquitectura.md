@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-667 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+668 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -835,7 +835,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
 - **#665** — Lo que el banco devuelve de un descuento de convenio: una tabla editable en Costos, guardada…
 
-**SUNAT y SIRE** (58)
+**SUNAT y SIRE** (59)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -895,6 +895,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#633** — Documentos SUNAT elige su fecha con el panel de las demás tarjetas, no con la píldora de la…
 - **#640** — «Tipo» en Documentos SUNAT: QUÉ se compró —Alimentos, Otros bienes, Servicios o Financiero—.…
 - **#652** — «Análisis de diferencias» dice QUIÉN PIDE cada producto y qué factura de SUNAT sin ingresar…
+- **#668** — La vista por pedido del Detalle dice el pedido, su horario y su documento
 
 **Fechas, rangos y cortes** (17)
 
@@ -967,7 +968,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (187)
+**Decisiones de diseño y UX** (188)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1156,6 +1157,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#665** — Lo que el banco devuelve de un descuento de convenio: una tabla editable en Costos, guardada…
 - **#666** — Mix de carta: lo vendido SIN COSTO CARGADO sale de todo % de costo, y la zona «Cálculo»…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
+- **#668** — La vista por pedido del Detalle dice el pedido, su horario y su documento
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -52089,6 +52091,36 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-17.)
 
+668. **La vista por pedido del Detalle dice el pedido, su horario y su
+     documento.** 2026-10-17, a pedido («debería ver el número del pedido,
+     la hora de inicio y de cierre, el tipo de pedido, el documento
+     enlazado»), viendo que «Pedido» y «Mesero» parecían lo mismo: las dos
+     dejaban al costado los mismos platos.
+
+     - **Ocho columnas**: Pedido (`CODIGO PEDIDO DDOCUMENTO`), Horario
+       (de `FECHA REGISTRO PEDIDO` al ÚLTIMO comprobante: una cuenta
+       dividida se cobra en dos), Tiempo, Mesero, Tipo (el canal),
+       Documento, Pax y Venta. «Platos» salió: contaba líneas, y lo pedido
+       lo da la tabla de al lado. La venta, en soles enteros. Lo arma
+       `ventas_resumen._pedidos_con_horario`.
+     - **El documento como lo imprime SUNAT** (`_numero_sunat`):
+       `B00001000056777` es la B001-56777 —letra, serie de cinco dígitos y
+       correlativo de nueve—. Lo confirma la respuesta de SUNAT que guarda
+       el POS en `MDOCUMENTO.tRespFacturacion` («F001-00009405 ha sido
+       ACEPTADA» para `F00001000009405`). Completo, en el tooltip. También
+       en «Ver por» Comprobante.
+     - **La mediana del Total es de las mesas** (pedidos con clientes): un
+       Rappi se abre y se cobra en minutos, y con ellos el 14/10/2026 daba
+       1 h 49 con las mesas de la noche en 2-3 h. Una nota de crédito no
+       tiene tiempo.
+     - **El Tipo se ve sólo si el PERÍODO EN FOCO tiene más de un canal**
+       (#239). Antes bastaba con el rango: con Rappi otro día, la columna
+       decía «En el Local» en cada fila. Medido: a 1416px entran las ocho
+       sin cortar; a 1323, Mesero y Tipo se cortan con «…» (tooltip
+       entero).
+
+     (2026-10-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52101,7 +52133,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#667**; la próxima toma el número siguiente.
+> última regla es la **#668**; la próxima toma el número siguiente.
 
 >
 
