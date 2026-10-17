@@ -74,6 +74,12 @@ _ZONA_RESUMEN, _ZONA_DETALLE = "Resumen", "Detalle"
 _COMP_ANT, _COMP_AP = "Período anterior", "Año pasado"
 _CAMBIO_MONTO, _CAMBIO_MIX = "Monto", "Mix (pp)"
 _CELDAS_VENTA, _CELDAS_COSTO = "Venta", "% costo"
+_SIN_DESC = "% sin desc."
+_AYUDA_SIN_DESC = (
+    "El costo ÷ la venta neta que habría dado a precio de CARTA, sin "
+    "descuentos. La distancia con «% costo» es lo que pesan los "
+    "descuentos: el plato cuesta lo mismo y se cobra menos. Power BI lo "
+    "llama «%FC Receta».")
 """Qué dicen las celdas de la tabla del Resumen (regla #544). «% costo» no
 cambia la barra: el costo no se apila, y la barra es de lo vendido."""
 
@@ -142,6 +148,8 @@ def columnas(d):
         "cant": _resolver(d, ["Cantidad Item Ddocumento", "Cantidad"]),
         "costo": _resolver(d, ["Costo Venta", "Costo Item Ddocumento"]),
         "neto": _resolver(d, ["Neto Total Item Ddocumento"]),
+        # El precio de CARTA por unidad: de él sale «% sin desc.» (#664).
+        "carta": _resolver(d, ["Precio Oficial Item Ddocumento"]),
         # De él sale la tasa de IGV, que marca el período en que cambió y
         # movió el % de costo sin tocar ningún costo (regla #590).
         "igv": _resolver(d, ["Igv Item Ddocumento"]),
@@ -182,6 +190,7 @@ def base(d, cols, eje=_EJE_CARTA):
         "neto": _num(cols["neto"]),
         "igv": _num(cols.get("igv")),
     })
+    b["neto_carta"] = neto_a_carta(b, _num(cols.get("carta")))
     if eje == _EJE_AREA:
         b["grupo"] = (nombre_area(d[cols["area"]])
                       if cols.get("area") and cols["area"] in d.columns
@@ -211,15 +220,42 @@ def ruta_valida(b, ruta):
     return ruta
 
 
+_SUMAS = ("venta", "cant", "costo", "neto", "neto_carta")
+"""Lo que `matriz` suma por período (no confundir con `_MEDIDAS`, lo que
+mide el gráfico)."""
+
+
+def neto_a_carta(b, carta_unit):
+    """La venta neta que habría dado cada línea A PRECIO DE CARTA, sin
+    descuentos: carta × cantidad, sin IGV ni recargo (#664). Es el
+    denominador de «% sin desc.», que con «% costo» al lado dice cuánto
+    del costo pesa por los descuentos: un plato al 50 % cuesta lo mismo y
+    se cobra la mitad.
+
+    Los impuestos salen de la propia línea (neto ÷ venta: el IGV y el
+    recargo no son parejos, Aceite Quemado no lleva recargo); una línea
+    regalada entera no tiene venta de dónde sacarlos y usa los de todo `b`.
+    Sin la columna del precio de carta, cero: `pct_costo` lo escribe «—».
+
+    Es lo que Power BI llama «%FC Receta» en su página de Productos: costo
+    ÷ esto, cuadrado al décimo en 11 de 11 platos (febrero 2026)."""
+    carta = carta_unit * b["cant"]
+    con_venta = b["venta"].abs() > 0.005
+    tasa = (b["neto"] / b["venta"]).where(con_venta)
+    v = float(b.loc[con_venta, "venta"].sum())
+    general = float(b.loc[con_venta, "neto"].sum()) / v if v else 0.0
+    return (carta * tasa.fillna(general)).fillna(0.0)
+
+
 def matriz(b, col, claves):
     """Por miembro del nivel (`col`) y período: `{medida: DataFrame}`, con los
     miembros en filas y las claves de período en columnas, EN ORDEN y con
     cero donde no hubo venta. Agrupa por dos columnas de verdad y arma cada
     tabla por nombre (regla #481)."""
     ag = (b.groupby([col, "clave"], as_index=False)
-          [["venta", "cant", "costo", "neto"]].sum())
+          [list(_SUMAS)].sum())
     salida = {}
-    for m in ("venta", "cant", "costo", "neto"):
+    for m in _SUMAS:
         t = ag.pivot_table(index=col, columns="clave", values=m,
                            aggfunc="sum")
         salida[m] = t.reindex(columns=list(claves)).fillna(0.0)
@@ -767,6 +803,11 @@ def _html_cab(gran, medida, pct_modo, M, b_todo, b, claves, eje, rango,
     partes.append(_tarjeta(
         "% costo", f"{c / n:.1%}" if n else "—", "",
         tip="Costo de la línea ÷ venta neta, como el Resumen"))
+    _pc_carta = pct_costo(c, _sel(M["neto_carta"].sum(axis=0)))
+    partes.append(_tarjeta(
+        "% sin desc.", "—" if pd.isna(_pc_carta) else f"{_pc_carta:.1%}", "",
+        tip="El % de costo si todo se hubiera cobrado a precio de carta. "
+            "La distancia con «% costo» es lo que pesan los descuentos"))
     partes.append(_tarjeta("Unidades", f"{q:,.0f}"))
     _bp = b if i is None else b[b["clave"] == claves[i]]
     n_prod = int((_bp.groupby(["sub", "prod"])["venta"].sum() > 0).sum())
@@ -991,6 +1032,10 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
     c, n = M["costo"].loc[orden], M["neto"].loc[orden]
     pc_fila = pct_costo(c.sum(axis=1), n.sum(axis=1))
     pc_todo = pct_costo(float(c.to_numpy().sum()), float(n.to_numpy().sum()))
+    nc = M["neto_carta"].loc[orden]
+    pcc_fila = pct_costo(c.sum(axis=1), nc.sum(axis=1))
+    pcc_todo = pct_costo(float(c.to_numpy().sum()),
+                         float(nc.to_numpy().sum()))
     # El período en foco lleva «●» y uno cortado por el rango, «*»: el
     # nombre de la columna es lo único de la cabecera que se puede marcar.
     per_cols = [("● " if j == foco_ix else "") + e
@@ -1015,19 +1060,21 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
     tabla["Mix"] = (t_fila / float(tot.sum())).to_numpy() if tot.sum() else 0.0
     if not costo_modo:
         tabla["% costo"] = pc_fila.to_numpy()
+        tabla[_SIN_DESC] = pcc_fila.to_numpy()
     tabla["Tendencia"] = [_serie(r) for r in
                           (cuerpo if costo_modo else vals).to_numpy()]
     fila_total = {nombre_nivel: "Total",
                   **{col: float(t) for col, t in zip(per_cols, cuerpo_tot)},
                   "Total": pc_todo if costo_modo else float(tot.sum()),
                   "Mix": 1.0,
-                  **({} if costo_modo else {"% costo": pc_todo}),
+                  **({} if costo_modo else {"% costo": pc_todo,
+                                            _SIN_DESC: pcc_todo}),
                   "Tendencia": _serie(cuerpo_tot if costo_modo else tot)}
     tabla = pd.concat([pd.DataFrame([fila_total]), tabla], ignore_index=True)
     # La tabla no lleva vacíos: un NaN viaja a la grilla como nulo y se pinta
     # «None» aunque el Styler diga otra cosa (regla #529). Va 0, que se
     # escribe «—»; un % de costo de verdad nunca es 0 (`pct_costo`).
-    _pcts = per_cols + ["Total"] if costo_modo else ["% costo"]
+    _pcts = per_cols + ["Total"] if costo_modo else ["% costo", _SIN_DESC]
     tabla[_pcts] = tabla[_pcts].fillna(0.0)
     st.session_state["_vt_mix_filas_tabla"] = (
         [None] + list(orden), nivel, tuple(ruta))
@@ -1056,12 +1103,14 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
         sty = sty.apply(_heat, axis=1, subset=pd.IndexSlice[1:, per_cols])
     sty = (sty.apply(_total_fila, axis=1)
            .map(_estilo_costo,
-                subset=per_cols + ["Total"] if costo_modo else ["% costo"])
+                subset=(per_cols + ["Total"] if costo_modo
+                        else ["% costo", _SIN_DESC]))
            .format(_num, subset=per_cols)
            .format(_pct if costo_modo
                    else (lambda v: "—" if pd.isna(v) else _fmt(v, unidades)),
                    subset=["Total"])
-           .format(_pct, subset=["Mix"] if costo_modo else ["Mix", "% costo"]))
+           .format(_pct, subset=(["Mix"] if costo_modo
+                                 else ["Mix", "% costo", _SIN_DESC])))
     config = {
         nombre_nivel: st.column_config.TextColumn(
             nombre_nivel, pinned=True, width="medium"),
@@ -1084,6 +1133,8 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
         config["% costo"] = st.column_config.Column(
             "% costo", help="Costo de la línea ÷ venta neta, como el "
             "Resumen. «—»: sin costo cargado.")
+        config[_SIN_DESC] = st.column_config.Column(
+            _SIN_DESC, help=_AYUDA_SIN_DESC)
     st.dataframe(
         sty, key=_key("vt_mix_tabla"), on_select="rerun",
         selection_mode="single-row", hide_index=True, row_height=27,
@@ -1222,7 +1273,7 @@ def _zona_detalle(M, med, orden, claves, eje, largo, i, comp, cambio, gran,
     with c_der:
         bp = b[b["clave"] == claves[i]]
         prods = (bp.groupby(["grupo", "sub", "prod"], as_index=False)
-                 [["venta", "cant", "costo", "neto"]].sum())
+                 [list(_SUMAS)].sum())
         prods = prods[(prods["venta"] > 0) | (prods["cant"] > 0)]
         prods = prods.sort_values(med, ascending=False).head(_TOP_PRODUCTOS)
         st.session_state["_vt_mix_filas_top"] = list(
@@ -1234,6 +1285,8 @@ def _zona_detalle(M, med, orden, claves, eje, largo, i, comp, cambio, gran,
             "Venta": prods["venta"].to_numpy(),
             "% costo": (prods["costo"].where(prods["costo"] > 0)
                         / prods["neto"].replace(0, np.nan)).to_numpy(),
+            _SIN_DESC: pct_costo(prods["costo"],
+                                 prods["neto_carta"]).to_numpy(),
         })
         if nivel == 2:
             tabla = tabla.drop(columns=["Subgrupo"])
@@ -1253,4 +1306,6 @@ def _zona_detalle(M, med, orden, claves, eje, largo, i, comp, cambio, gran,
                     format="percent", width="small",
                     help="Costo de la línea ÷ venta neta. Vacío: sin costo "
                          "cargado."),
+                _SIN_DESC: st.column_config.NumberColumn(
+                    format="percent", width="small", help=_AYUDA_SIN_DESC),
             })

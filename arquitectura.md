@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-663 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+664 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -965,7 +965,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (183)
+**Decisiones de diseño y UX** (184)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1150,8 +1150,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
 - **#661** — El costo de los DESCUENTOS es un consumo no vendido, y se resta de los dos lados: «Costo de…
 - **#662** — Las bajas explican la Diferencia, y el POS tiene dos costos: sin y con descuento
+- **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 
-**Mantenimiento y trampas del lenguaje** (16)
+**Mantenimiento y trampas del lenguaje** (17)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -1169,6 +1170,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#595** — La venta por ÁREA DE PRODUCCIÓN: dónde se prepara, no qué grupo de la carta es
 - **#618** — La escala de tiempo vieja se borró entera, y con ella la Evolución de Movimientos: «sin…
 - **#654** — «Análisis de diferencias» reconoce lo descontado desde un ÁREA a la que la receta ya no apunta
+- **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 
 **Sin tema asignado** (2)
 
@@ -51944,6 +51946,39 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-16.)
 
+664. **Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el
+     costo a precio de CARTA.** 2026-10-17, a pedido, al comparar la página
+     «Productos» del Power BI del grupo (SAPIENS, febrero 2026, En el
+     Local) contra la app.
+
+     - **Su «%FC Receta» no es la receta**: es el costo de la venta ÷ la
+       venta neta que habría dado cada línea a precio de carta, sin
+       descuentos. Cuadrado al décimo en 11 de 11 platos, Aceite Quemado
+       (408,2 %) incluido. Su «%FC Venta» no se dejó reproducir: queda
+       entre ese y el nuestro (Lomo Rostizado 36,8 contra 38,8), y sin la
+       DAX de la medida no se sabe qué descuentos resta.
+     - **La pareja es lo que sirve**: el costo de un plato no baja con el
+       descuento, así que la distancia entre «% costo» (÷ el neto
+       cobrado, el de siempre) y «% sin desc.» es lo que pesan los
+       descuentos en cada fila. Del 1 al 15 de octubre 2026: 35,7 %
+       contra 32,0 %.
+     - **El neto a carta lleva los impuestos de SU línea**
+       (`ventas_mix.neto_a_carta`: carta × cantidad × neto ÷ venta): el
+       IGV y el recargo no son parejos —Aceite Quemado no lleva recargo, y
+       dividir todo por 1,18 lo dejaba en 436 %—. Una línea regalada entera
+       no tiene venta de dónde sacarlos y usa los de todo el rango.
+     - Va en la fila de KPIs, en la tabla del Resumen (columna propia, con
+       el color del Resumen) y en «Lo más vendido» del Detalle. En el modo
+       «% costo» de las celdas no: ahí cada celda ya es un % por período.
+     - **Trampa que costó una vuelta**: la tupla de lo que suma `matriz`
+       se llamó primero `_MEDIDAS`, que ya era lo que ofrece «Medir»
+       (Soles / Unidades), y el control pasó a ofrecer «venta», «cant»,
+       «neto_carta»… ruff con sólo `F` no ve una constante redefinida
+       (F811 es para funciones e imports). Ahora es `_SUMAS`, y
+       `test_graficos.py` fija las opciones de «Medir».
+
+     (2026-10-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51956,7 +51991,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#663**; la próxima toma el número siguiente.
+> última regla es la **#664**; la próxima toma el número siguiente.
 
 >
 

@@ -9538,9 +9538,12 @@ def _pruebas_ventas_mix():
         "IGV ITEM DDOCUMENTO": [8.1, 3.24, 2.43, 0.405, 4.86],
         # Dónde se prepara (#595): como lo escribe el POS, con un vacío.
         "AREA PRODUCCION": ["COCINA", "PASTELERIA", "BAR", None, "COCINA"],
+        # El precio de carta (#664): el Lomo de la semana 32 iba al 20 % de
+        # descuento (2 × 62,5 = 125 a carta, se cobró 100).
+        "PRECIO OFICIAL ITEM DDOCUMENTO": [62.5, 40.0, 10.0, 5.0, 60.0],
     })
     cols = _m.columnas(d)
-    check("resuelve las diez columnas", all(cols.values()), True)
+    check("resuelve las once columnas", all(cols.values()), True)
     b = _m.base(d, cols)
     check("y la base trae el IGV", round(float(b["igv"].sum()), 3), 19.035)
     check("sin la columna del IGV, la base sigue (en cero)",
@@ -9552,7 +9555,10 @@ def _pruebas_ventas_mix():
     claves = sorted(b["clave"].unique())
     check("una clave por semana ISO", claves, ["2026-S32", "2026-S33"])
     M = _m.matriz(b, "grupo", claves)
-    check("las cuatro medidas", sorted(M), ["cant", "costo", "neto", "venta"])
+    check("las cinco medidas", sorted(M),
+          ["cant", "costo", "neto", "neto_carta", "venta"])
+    check("y no pisan lo que ofrece «Medir» (pasó: el control ofrecía "
+          "«neto_carta»)", _m._MEDIDAS, ("Soles", "Unidades"))
     check("las columnas son los períodos, por nombre",
           list(M["venta"].columns), claves)
     check("Alimentos por semana", M["venta"].loc["Alimentos"].tolist(),
@@ -9581,6 +9587,23 @@ def _pruebas_ventas_mix():
           (bool(pd.isna(_m.pct_costo(pd.Series([1023.35]),
                                      pd.Series([0.0082]))[0])),
            bool(pd.isna(_m.pct_costo(1023.35, 0.0082)))), (True, True))
+    # ── «% sin desc.»: el costo a precio de carta (#664) ──────────────────
+    check("el neto a carta lleva los impuestos de SU línea (125 × 0,81)",
+          round(float(M["neto_carta"].loc["Alimentos", "2026-S32"]), 4),
+          round(125 * 0.81 + 32.4, 4))
+    check("sin descuento, neto a carta = neto",
+          float(M["neto_carta"].loc["Bebidas", "2026-S33"]),
+          float(M["neto"].loc["Bebidas", "2026-S33"]))
+    check("con descuento, el % sin desc. queda DEBAJO del % costo",
+          bool(_m.pct_costo(47.0, 133.65) < _m.pct_costo(47.0, 113.4)), True)
+    _regalo = pd.DataFrame({"venta": [100.0, 0.0], "neto": [80.0, 0.0],
+                            "cant": [1.0, 2.0]})
+    check("una línea regalada entera usa los impuestos de las demás",
+          _m.neto_a_carta(_regalo, pd.Series([100.0, 50.0])).tolist(),
+          [80.0, 80.0])
+    check("sin el precio de carta, cero (que se escribe «—»)",
+          float(_m.base(d, {k: v for k, v in cols.items() if k != "carta"})
+                ["neto_carta"].sum()), 0.0)
     check("y con números sueltos, lo mismo",
           (_m.pct_costo(47.0, 113.4) == 47.0 / 113.4,
            bool(pd.isna(_m.pct_costo(0.0, 113.4)))), (True, True))
