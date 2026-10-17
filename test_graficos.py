@@ -9099,6 +9099,135 @@ def _pruebas_diferencias_perfil():
     return fallos
 
 
+def _pruebas_bajas():
+    """Movimientos › las dos vistas de salidas, regla #670.
+
+    Lo que se sumó el 2026-10-17 y no se ve roto en la pantalla —se ve
+    plausible—:
+
+      1. LA FRECUENCIA: crónico (salida en 10+ de 52 semanas) manda sobre
+         puntual (una nota hace la mitad o más); el resto, ocasional.
+      2. «% DE LO QUE ENTRÓ» sobre las 52 semanas de la ventana, no sobre el
+         rango: lo que salió en la ventana ÷ lo que entró en ella, y None
+         sin entradas (no 0 ni infinito).
+      3. EL FALTANTE DEL CIERRE: por mes operativo (el cierre de setiembre
+         se cuenta en octubre y sus conteos se juntan), sin los parciales y
+         sólo lo negativo.
+      4. LO REGISTRADO: las bajas del mes ÷ ese faltante, sólo del tipo
+         «Bajas» y sin anuladas.
+      5. «PARTIR POR» sigue al filtro de tipo: sin «Por tipo» con un tipo,
+         «Por causa» sólo con «Bajas», y la barra baja un nivel sola.
+    """
+    from graficos import movimientos_bajas as mb
+    from graficos import movimientos_periodo as mp
+    from tema import ADVERTENCIA, ERROR, GRIS_FONDO_CABECERA
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    bajas · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA bajas · {nombre}: got={got!r} exp={exp!r}")
+
+    # ── 1) La frecuencia ──────────────────────────────────────────────────
+    check("crónico desde 10 semanas", mb.grupo_de(10, 0.1), mb.CRONICO)
+    check("crónico manda sobre puntual", mb.grupo_de(12, 0.9), mb.CRONICO)
+    check("puntual: una nota hace la mitad", mb.grupo_de(3, 0.5), mb.PUNTUAL)
+    check("ocasional el resto", mb.grupo_de(9, 0.49), mb.OCASIONAL)
+
+    # ── 2) Productos: grupo, % de lo que entró ────────────────────────────
+    fin = pd.Timestamp("2026-10-01")
+    vent = mb.ventana(fin)
+    check("la ventana son 52 semanas que terminan en el fin",
+          (vent[1] - vent[0]).days, 364)
+    filas = []
+    # A: una nota por semana, 12 semanas -> crónico.
+    for i in range(12):
+        filas.append(((vent[1] - pd.Timedelta(days=7 * i + 1))
+                      .strftime("%Y-%m-%d"), f"A{i}", "A", 1.0, 10.0))
+    # B: una nota grande y dos chicas -> puntual.
+    filas += [("2026-09-20", "B1", "B", 8.0, 80.0),
+              ("2026-05-02", "B2", "B", 1.0, 10.0),
+              ("2026-03-02", "B3", "B", 1.0, 10.0)]
+    # C: cuatro notas parejas -> ocasional; sin entradas.
+    filas += [(f"2026-0{m}-10", f"C{m}", "C", 1.0, 5.0) for m in (3, 5, 7, 9)]
+    vt = pd.DataFrame(filas, columns=["fecha", "doc", "cod", "cant", "valor"])
+    vt["fecha"] = pd.to_datetime(vt["fecha"])
+    vt["prod"] = vt["cod"]
+    vt["unid"] = "UND"
+    vt["causa"] = "Tiempo de vida"
+    ent = pd.DataFrame({"cod": ["A", "A", "B", "A"],
+                        "fecha": pd.to_datetime(["2026-02-01", "2026-08-01",
+                                                 "2026-06-01", "2024-01-01"]),
+                        "cant": [60.0, 60.0, 50.0, 999.0]})
+    rango = vt[vt["fecha"] >= "2026-09-01"]
+    t = mb.productos_bajas(rango, vt, ent, vent).set_index("cod")
+    check("sólo los productos del RANGO", sorted(t.index), ["A", "B", "C"])
+    check("grupos", (t.loc["A", "grupo"], t.loc["B", "grupo"],
+                     t.loc["C", "grupo"]),
+          (mb.CRONICO, mb.PUNTUAL, mb.OCASIONAL))
+    check("% de lo que entró sobre la VENTANA (12 de 120), sin lo de 2024",
+          round(float(t.loc["A", "tasa"]), 6), 10.0)
+    check("sin entradas, sin %", pd.isna(t.loc["C", "tasa"]), True)
+    check("semanas con salida", int(t.loc["A", "semanas"]), 12)
+    check("el valor y el % son del rango",
+          (float(t.loc["B", "valor"]), round(float(t["pct"].sum()), 6)),
+          (80.0, 100.0))
+
+    # ── 3) El faltante del cierre ─────────────────────────────────────────
+    aj = pd.DataFrame({
+        "F": pd.to_datetime(["2026-10-01", "2026-10-06", "2026-10-06",
+                             "2026-09-16", "2025-08-02", "2026-09-02"]),
+        "V": [-100.0, -50.0, 30.0, -999.0, -77.0, -20.0]})
+    falt = mb.faltante_por_mes(aj, "F", "V")
+    check("setiembre junta el 1 y el 6 de octubre, sólo lo negativo",
+          falt.get("2026-09"), 150.0)
+    check("el parcial de mitad de mes no cuenta y agosto 2025 tampoco",
+          sorted(falt), ["2026-08", "2026-09"])
+
+    # ── 4) Lo registrado ──────────────────────────────────────────────────
+    bh = mp.lineas_documentos(
+        pd.DataFrame({
+            "F": pd.to_datetime(["2026-09-03", "2026-09-04", "2026-09-05",
+                                 "2026-08-05"]),
+            "D": ["S1", "S2", "S3", "S4"],
+            "E": ["PROCESADO", "ANULADO", "PROCESADO", "PROCESADO"],
+            "T": ["Bajas", "Bajas", "Comida Personal", "Bajas"],
+            "P": ["x", "y", "z", "w"], "Q": [1, 1, 1, 1],
+            "V": [3.0, 50.0, 40.0, 1.0]}),
+        fecha="F", doc="D", area=None, estado="E", fam=None, prod="P",
+        cant="Q", val="V", tipo="T")
+    reg = mp.registro_por_mes(bh, ["2026-08", "2026-09", "2026-10"],
+                              {"2026-09": 150.0, "2026-08": 100.0})
+    check("sólo Bajas y sin anuladas, en % del faltante",
+          [None if r is None else round(r[1], 6) for r in reg],
+          [1.0, 2.0, None])
+    check("los colores sólo marcan la excepción",
+          [mp.color_registro(p)[0] for p in (1.0, 3.0, 9.0)],
+          [ERROR, ADVERTENCIA, GRIS_FONDO_CABECERA])
+
+    # ── 5) Partir por ─────────────────────────────────────────────────────
+    check("sin tipo: área, tipo y producto",
+          mp.opciones_partir([], True),
+          (mp.PARTIR_AREA, mp.PARTIR_TIPO, mp.PARTIR_PRODUCTO))
+    _b = mp.opciones_partir(["Bajas"], True)
+    check("con Bajas: sin «Por tipo», con «Por causa»", _b,
+          (mp.PARTIR_AREA, mp.PARTIR_PRODUCTO, mp.PARTIR_CAUSA))
+    check("con Bajas baja a causa", mp.partir_siguiente(["Bajas"], _b),
+          mp.PARTIR_CAUSA)
+    _c = mp.opciones_partir(["Comida Personal"], True)
+    check("con otro tipo baja a producto",
+          mp.partir_siguiente(["Comida Personal"], _c), mp.PARTIR_PRODUCTO)
+    check("sin la columna de causa no se ofrece",
+          mp.PARTIR_CAUSA in mp.opciones_partir(["Bajas"], False), False)
+    check("dos tipos: «Por tipo» vuelve",
+          mp.PARTIR_TIPO in mp.opciones_partir(["Bajas", "Evento"], True), True)
+    return fallos
+
+
 def _pruebas_detalle_salidas():
     """Movimientos › «Detalle de salidas» (regla #511).
 
@@ -9200,8 +9329,8 @@ def _pruebas_detalle_salidas():
     check("formato · desglose de tres cuadros (1 de 3.2)",
           dt.formato_por_ancho(1 / 3.2), dt.FORMATO_DETALLE[3])
     filas = mov._FILAS_DETALLE_SAL
-    check("seis cuadros en las filas del Detalle (la causa, #614)",
-          sum(len(f) for f in filas), 6)
+    check("cinco cuadros en las filas del Detalle (el producto, aparte, #670)",
+          sum(len(f) for f in filas), 5)
     check("las dos filas cortan la primera columna en el mismo sitio",
           len({round(f[0] / sum(f), 6) for f in filas}), 1)
 
@@ -9230,7 +9359,7 @@ def _pruebas_detalle_salidas():
             llamadas.append((py.name, pref, slug, n))
     check("hay UNA llamada a seccion_cuadros (la de Movimientos)",
           [(a, p, s, n) for a, p, s, n in llamadas],
-          [("movimientos.py", "mov", "detsal", 6)])
+          [("movimientos.py", "mov", "detsal", 5)])
     faltan = [k for _a, p, s, n in llamadas
               for k in dt.claves_tarjetas_cuadros(p, s, n)
               if f".st-key-{k}," not in cards and f".st-key-{k})" not in cards]
@@ -12687,6 +12816,7 @@ def main():
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()
+    fallos += _pruebas_bajas()
     fallos += _pruebas_requerimientos_por_area()
     fallos += _pruebas_salidas_comparar()
     fallos += _pruebas_sin_plato()

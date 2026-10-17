@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-669 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+670 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -730,7 +730,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 - **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
 
-**Datos, R2 y DuckDB** (104)
+**Datos, R2 y DuckDB** (105)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -836,6 +836,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
 - **#665** — Lo que el banco devuelve de un descuento de convenio: una tabla editable en Costos, guardada…
 - **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
+- **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
 
 **SUNAT y SIRE** (59)
 
@@ -970,7 +971,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (188)
+**Decisiones de diseño y UX** (189)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1160,6 +1161,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#666** — Mix de carta: lo vendido SIN COSTO CARGADO sale de todo % de costo, y la zona «Cálculo»…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 - **#668** — La vista por pedido del Detalle dice el pedido, su horario y su documento
+- **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -52155,6 +52157,65 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-17.)
 
+670. **Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto
+     se deja de anotar (`graficos/movimientos_bajas.py`).** 2026-10-17, a
+     pedido: «sugiéreme cómo enriquecerlas […] no aumentando otra vista,
+     sino sumando a las que ya hay». Aprobado sobre un mockup clickeable con
+     doce meses reales (oct 2025 – sep 2026: S/ 34.431 de bajas, el 1,7 % de
+     lo comprado).
+
+     - **«Salidas por Período» suma «Por causa»**, que se ofrece SÓLO con el
+       filtro de tipo en «Bajas» solo: en lo demás el motivo dice para qué
+       salió (#626). Y **la barra baja de nivel sola** al elegir un tipo
+       (`opciones_partir` / `partir_siguiente`): con UN tipo «Por tipo» sería
+       un tramo solo y no se ofrece; Bajas → causa, otro tipo → producto. Se
+       escribe en la key ANTES de dibujar el `segmented_control`, y sin
+       `default=`: los dos juntos son un aviso de Streamlit.
+     - **«Registrado»**: por MES y sin otro filtro que «Bajas», una franja
+       bajo los meses (anotaciones con `xref="x"`, en las x de sus barras) y
+       dos columnas del Resumen: el faltante que contó el cierre de ese mes
+       operativo (`faltante_por_mes`: los ajustes negativos de los conteos
+       del 1 al 7 del mes siguiente, juntados; sin los parciales; desde sep
+       2025, #612) y qué parte quedó registrada como baja. Hasta junio de
+       2026, entre 3 y 19 %; agosto, 0,7 % con S/ 82.798 de faltante. Sólo
+       se pinta la excepción: rojo bajo 2 %, ámbar bajo 5 % (#239). Con esas
+       dos columnas la tabla no entraba a 1323px: se angostan los tramos y
+       se esconden el monto del año comparado y el Estado.
+     - **El Detalle lleva Tipo y Causa** lado a lado: con «Bajas» la tabla
+       se parte por causa y el tipo dejaba de verse. La causa va vacía en lo
+       que no es baja (`movimientos.COL_CAUSA_DET`): «No es baja» en cada
+       fila de comida de personal era ruido. Con un tipo elegido, el pie del
+       Resumen dice qué parte es de todas las salidas.
+     - **El producto salió de los cuadros** de «Salidas por Área» a una
+       tarjeta a todo el ancho: en un tercio de fila no entraban sus
+       columnas. `seccion_cuadros` devuelve ahora la RUTA elegida, y la
+       tarjeta recorta igual (`drill_tablas.recorte`). Suma **«% de lo que
+       entró»** —lo que salió ÷ lo producido (órdenes PROCESADAS), porcionado
+       (cortes) y comprado, todo en la unidad del kardex— y **la
+       frecuencia**: crónico con salida en 10+ de 52 semanas, puntual si una
+       nota hace la mitad o más, ocasional el resto. Las dos SOBRE 52
+       SEMANAS que terminan con el rango, sea cual sea el rango: con 30 días
+       se tropieza con el stock de antes (así «Destino de lo que entra»,
+       #614, daba más salida que entrada en 20 de 57 filas; con 52 semanas,
+       2 de 359). Ordena distinto que los soles: la Entraña es la 5ª en
+       soles y se pierde el 0,9 %; la Tarta de queso, el 20,9 %.
+     - **Los tres botones de frecuencia** son el componente de la fila de
+       KPI (`movimientos_kpi.js`, #649) con CSS propio: un clic filtra la
+       lista, otro lo suelta. La lista es un `st.dataframe` con la selección
+       de Costo Carta (#556: firma de filas en la key,
+       `single-row-required`), y la fila elegida abre debajo **la ficha**
+       —salió mes a mes contra lo que entró, las 52 semanas en casilleros,
+       por qué salió— y **sus notas**. «Por qué salió» es la causa en las
+       bajas y el TIPO en lo demás (`lineas_salidas`): la pierna de cerdo de
+       la comida de personal no es «sin causa escrita».
+     - **Lo que se descartó**: «a los cuántos días se tiró». Sin lotes, la
+       última producción antes de la baja no es la que se tiró (la Tarta de
+       queso daría 0 días), y la vida útil de las recetas base
+       (`DIAS VENCIMIENTO` de `ordenesproduccion.parquet`) viene en 0 en
+       todas las órdenes del POS.
+
+     (2026-10-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52167,7 +52228,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#669**; la próxima toma el número siguiente.
+> última regla es la **#670**; la próxima toma el número siguiente.
 
 >
 

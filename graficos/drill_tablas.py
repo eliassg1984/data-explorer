@@ -1079,7 +1079,10 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
     `aviso` es `(texto, tooltip)` del poco registro: va en ámbar en un
     renglón arriba de los cuadros y apaga el verde de las caídas en todos. `cantidad` es `(col_cant, col_unidad)`: la columna «Cant.» del
     ÚLTIMO nivel —el de los productos, el único donde sumar cantidades
-    tiene sentido—."""
+    tiene sentido—.
+
+    Devuelve la RUTA —tríos (columna, clave elegida o None, texto)— para
+    que quien dibuje debajo recorte lo mismo (`recorte`, regla #670)."""
     if sum(len(f) for f in filas) != len(niveles):
         raise ValueError(f"`filas` reparte {sum(len(f) for f in filas)} "
                          f"cuadros y `niveles` trae {len(niveles)}")
@@ -1156,3 +1159,7 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
                             d_ant=_d_ant, rotulo_ant=rotulo_ant, **_extra)
             ruta.append((col_n, foco, texto_cat(nombre_n, foco)))
             i += 1
+    # La ruta elegida: quien dibuja algo DEBAJO de los cuadros lo recorta
+    # igual que el último (`recorte`). La usa la tarjeta de productos de
+    # «Salidas por Área» (regla #670).
+    return ruta

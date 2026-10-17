@@ -42,8 +42,8 @@ pasa al tooltip— y su fila va apagada. Ver `arquitectura.md` reglas #508 y
 
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
-from tema import (ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_TEXTO,
-                  GRIS_TEXTO_SUAVE)
+from tema import (ADVERTENCIA, ADVERTENCIA_TEXTO, BLANCO, ERROR, EXITO,
+                  GRIS_TEXTO, GRIS_TEXTO_SUAVE)
 from tablas._config import _parchar_iconos
 # Privados de allá, y a propósito: son el look y los formatos de las
 # grillas de «Compra por período», que estas tarjetas calcan. Mismo criterio
@@ -193,6 +193,27 @@ baja), salvo una CAÍDA en una barra de un mes con poco registro
 se perdió menos. Regla #626."""
 
 
+_JS_REGISTRO = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'number') return v == null ? '\u2014' : String(v);"
+    " return v.toFixed(1) + '%'; }")
+"""Lo registrado como baja, en % del faltante del cierre (regla #670):
+«5.7%», y «—» en un mes sin cierre comparable. La fila TOTAL llega ya
+escrita."""
+
+_STYLE_REGISTRO = JsCode(
+    "function(p){ if (p.node && p.node.rowPinned) return null;"
+    " var v = p.value, b = {textAlign: 'right', fontWeight: '600'};"
+    f" if (typeof v !== 'number') {{ b.color = '{GRIS_TEXTO_SUAVE}';"
+    " b.fontWeight = '400'; return b; }"
+    f" if (v < 2) {{ b.background = '{ERROR}'; b.color = '{BLANCO}'; }}"
+    f" else if (v < 5) {{ b.background = '{ADVERTENCIA}'; b.color = '{BLANCO}'; }}"
+    f" else {{ b.color = '{GRIS_TEXTO}'; b.fontWeight = '400'; }}"
+    " return b; }")
+"""El color de «Registrado»: sólo la excepción, con los cortes de
+`graficos.movimientos_periodo.color_registro` (2 % y 5 %)."""
+
+
 def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                             rotulo_docs="Requerimientos", ver_variacion=True,
                             total=None, rotulo_ant="", tramos=(), unidad=""):
@@ -216,6 +237,10 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
     `tramos` son `(campo, rótulo)` de las columnas de cada tramo de la barra
     cuando se parte por tipo o por producto (#614): van con su monto, y
     para que entren se esconden «Áreas» y «% del total».
+
+    Regla #670: si `tp` trae `falt` y `reg` —el faltante del cierre de cada
+    mes y qué parte quedó registrada como baja—, van como dos columnas más,
+    y se esconde la variación contra la barra anterior para que entren.
 
     Regla #626: si `tp` trae `cant` —la vista es de UNA unidad, `unidad`
     («kg»)—, va la columna «Cantidad» antes del valorizado. Y `__poco`
@@ -241,12 +266,19 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
     gb.configure_column("periodo", header_name=rotulo_periodo,
                         minWidth=120 if tramos else 180,
                         tooltipField="periodo")
+    # Con «Registrado» (regla #670) van dos columnas más y la tabla no
+    # entraba sin scroll a 1323px: se angostan la cuenta y los tramos, y se
+    # esconden el monto del año comparado (queda su «vs») y el Estado (los
+    # anulados los nombra la fila de KPI).
+    con_reg = "falt" in tp.columns and "reg" in tp.columns
     gb.configure_column("docs", header_name=rotulo_docs,
                         type=["numericColumn"], valueFormatter=_JS_ENTERO,
                         headerTooltip=f"{rotulo_docs} del período. No cuenta "
                                       "los anulados ni los que vienen sin "
                                       "ítems",
-                        width=132, minWidth=132, suppressSizeToFit=True)
+                        width=96 if con_reg else 132,
+                        minWidth=96 if con_reg else 132,
+                        suppressSizeToFit=True)
     con_ant = "ant" in tp.columns and "vs_ant" in tp.columns
     gb.configure_column("lineas", header_name="Líneas", type=["numericColumn"],
                         hide=con_ant, valueFormatter=_JS_ENTERO,
@@ -276,7 +308,7 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                                       "de la vista",
                         width=104, minWidth=104, suppressSizeToFit=True)
     gb.configure_column("variacion", header_name="Variación",
-                        hide=(not ver_variacion) or con_ant,
+                        hide=(not ver_variacion) or con_ant or con_reg,
                         type=["numericColumn"],
                         valueFormatter=_JS_VARIACION,
                         cellStyle=_STYLE_VARIACION, tooltipField="__nota",
@@ -288,9 +320,12 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
         gb.configure_column(campo, header_name=rotulo, headerTooltip=rotulo,
                             type=["numericColumn"],
                             valueFormatter=_JS_VALOR_MOV,
-                            width=112, minWidth=112, suppressSizeToFit=True)
+                            width=92 if con_reg else 112,
+                            minWidth=92 if con_reg else 112,
+                            suppressSizeToFit=True)
     if con_ant:
         gb.configure_column("ant", header_name=rotulo_ant or "Año pasado",
+                            hide=con_reg,
                             type=["numericColumn"],
                             valueFormatter=_JS_VALOR_MOV,
                             headerTooltip="El mismo período, en el año "
@@ -304,7 +339,22 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                                           "período del año comparado. Rojo: "
                                           "subió",
                             width=96, minWidth=96, suppressSizeToFit=True)
-    gb.configure_column("estado", header_name="Estado",
+    if con_reg:
+        gb.configure_column("falt", header_name="Faltante cierre",
+                            type=["numericColumn"],
+                            valueFormatter=_JS_VALOR_MOV,
+                            headerTooltip="Lo que faltó en el conteo del cierre "
+                                          "de ese mes, en soles (Ajuste)",
+                            width=116, minWidth=116, suppressSizeToFit=True)
+        gb.configure_column("reg", header_name="Registrado",
+                            type=["numericColumn"],
+                            valueFormatter=_JS_REGISTRO,
+                            cellStyle=_STYLE_REGISTRO,
+                            headerTooltip="Las bajas del mes, en % del faltante "
+                                          "de su cierre. Rojo: menos de 2 %; "
+                                          "ámbar: menos de 5 %",
+                            width=100, minWidth=100, suppressSizeToFit=True)
+    gb.configure_column("estado", header_name="Estado", hide=con_reg,
                         cellClassRules=REGLAS_ESTADO,
                         headerTooltip="Sólo se escribe la excepción: "
                                       "anulados o sin procesar. «✓» es que "
@@ -336,7 +386,7 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
 
 
 def renderizar_documentos_mov(tp, altura, key, rotulo_tipo="", total=None,
-                              rotulo_fecha="Registro"):
+                              rotulo_fecha="Registro", rotulo_causa=""):
     """Una fila por DOCUMENTO del período en foco.
 
     `tp` trae `registro` (fecha y hora en ISO, «2026-09-22 14:24»; la
@@ -350,7 +400,9 @@ def renderizar_documentos_mov(tp, altura, key, rotulo_tipo="", total=None,
 
     La columna `tipo` —el tipo de descargo de las salidas— se ve sólo con
     `rotulo_tipo`: los requerimientos no lo tienen, y una columna vacía en
-    cada fila sería ruido (regla #239).
+    cada fila sería ruido (regla #239). La `causa` de una baja, sólo con
+    `rotulo_causa` (salidas, regla #670): va al lado del tipo, vacía en lo
+    que no es baja, y así el tipo no desaparece al filtrar por «Bajas».
 
     Se LISTAN también los que no suman, apagados: quien abre un período con
     «3 anuladas» en el Resumen tiene que poder ver cuáles fueron. La fila
@@ -378,6 +430,10 @@ def renderizar_documentos_mov(tp, altura, key, rotulo_tipo="", total=None,
     gb.configure_column("tipo", header_name=rotulo_tipo or "Tipo",
                         hide=not rotulo_tipo, width=120, minWidth=80,
                         tooltipField="tipo")
+    if "causa" in tp.columns:
+        gb.configure_column("causa", header_name=rotulo_causa or "Causa",
+                            hide=not rotulo_causa, width=120, minWidth=80,
+                            tooltipField="causa")
     gb.configure_column("lineas", header_name="Líneas", type=["numericColumn"],
                         valueFormatter=_JS_ENTERO,
                         width=72, minWidth=72, suppressSizeToFit=True)

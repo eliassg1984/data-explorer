@@ -464,6 +464,18 @@ regla #647) para pagar el renglón de su selector y la nota de debajo, que
 puede ir en dos líneas: con los de antes, la tarjeta medía 584px contra
 los 575 de su techo y se deslizaba por dentro (medido a 1323×619)."""
 
+# ── Movimientos › Salidas por Área: productos y su ficha (regla #670) ──
+BAJAS_TABLA = 27 * 11 + 38
+"""Tope de la lista de productos con su % de lo que entró y su frecuencia:
+once filas de 27 y la cabecera, debajo de los tres botones de frecuencia."""
+
+BAJAS_FICHA_FIG = 190
+"""La ficha del producto elegido: lo dado de baja mes a mes, con la tabla
+de lo que entró debajo."""
+
+BAJAS_NOTAS = 27 * 9 + 38
+"""Tope de las notas de salida del producto elegido."""
+
 MERMA_CAMBIOS = 27 * 10 + 38
 """Tope de «Productos que cambiaron» y de «Cortes de este producto», al
 lado de los dos gráficos."""

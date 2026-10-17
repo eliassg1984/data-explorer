@@ -173,6 +173,9 @@ from graficos.movimientos_periodo import (
     tarjeta_salidas_periodo,
 )
 from graficos import drill_tablas
+from graficos.movimientos_bajas import (
+    faltante_cierres, lineas_salidas, seccion_productos, ventana,
+)
 from graficos.movimientos_consumo import tarjeta_consumo
 from graficos.movimientos_destino import tarjeta_por_producto, tarjeta_sin_plato
 from graficos.movimientos_merma import (
@@ -728,6 +731,11 @@ def con_causa(d, col_motivo, col_tipo=None):
 
 
 _COLS_TIPO_SAL = ["TIPO DESCARGO", "Tipo Descargo"]
+COL_CAUSA_DET = "_causa_det"
+"""La causa como la muestran las dos vistas de salidas (regla #670): la de
+`COL_CAUSA` en las bajas y VACÍA en lo demás —«No es baja» en cada fila de
+comida de personal sería ruido—. Parte la barra con «Por causa» y es la
+columna «Causa» del Detalle y de la ficha del producto."""
 COL_UNIDAD_SAL = "UNIDAD"
 """La unidad del kardex de cada línea de salidas, que `_cargar_salidas` le
 pega desde el maestro (`unidades_kardex`, regla #626)."""
@@ -737,9 +745,14 @@ _COLS_AREA_SALIDAS = ["AREA", "Area", "SUB ALMACEN", "Sub Almacen"]
 su consulta (`vArea.Descripcion` por `MSUBSALIDA.tCodigoArea`, regla #509)
 con el nombre `AREA`; «Sub Almacen» es el del demo de `data.py`."""
 
-_FILAS_DETALLE_SAL = ((1.2, 1, 1), (1.2, 1, 1))
-"""El reparto de los SEIS cuadros de «Detalle de salidas»: tipo de baja,
-causa y área arriba; familia, subfamilia y producto abajo. El 1.2 de las
+_FILAS_DETALLE_SAL = ((1.2, 1, 1), (1.2, 2))
+"""El reparto de los CINCO cuadros de «Detalle de salidas»: tipo de baja,
+causa y área arriba; familia y subfamilia abajo. El PRODUCTO salió de los
+cuadros el 2026-10-17 (regla #670) a una tarjeta propia a todo el ancho,
+debajo, con su % de lo que entró, su frecuencia y la ficha del elegido
+(`graficos/movimientos_bajas.py`): en un tercio de fila no entraban.
+
+Hasta ese día eran seis, tres y tres. El 1.2 de las
 dos filas es el mismo corte —la primera columna termina en el mismo sitio
 arriba y abajo—, y la fila de arriba es la de «Stock por área»
 (`drill_tablas.COLUMNAS_NIVELES[3]`). Regla #511.
@@ -816,6 +829,8 @@ def _cargar_salidas(col_fam_sal, fam_sel, sub_sel=(), fecha=FECHA_REGISTRO):
         return None, None
     d = con_causa(df, _resolver(df, _COLS_MOTIVO_SAL),
                   _resolver(df, _COLS_TIPO_SAL)).copy()
+    if COL_CAUSA in d.columns:
+        d[COL_CAUSA_DET] = d[COL_CAUSA].where(d[COL_CAUSA] != NO_ES_BAJA, "")
     # La UNIDAD de cada cantidad (regla #626): sin ella «cuánto arroz»
     # sólo se contestaba en soles.
     col_cod = _resolver(d, ["COD PRODUCTO", "Cod Producto"])
@@ -1211,7 +1226,9 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                       prod=col_prod_sal,
                       cant=_col_sal("Cant Salida", "CANT SALIDA"),
                       val=col_val_sal, tipo=col_tipo,
-                      unid=_col_sal(COL_UNIDAD_SAL)))
+                      unid=_col_sal(COL_UNIDAD_SAL),
+                      causa=_col_sal(COL_CAUSA_DET)),
+            faltante=faltante_cierres())
 
     def _dib_tabla_req():
         rng, fecha = _rango_y_boton("mov_sec_tabla_req", fechas_req)
@@ -1299,27 +1316,47 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                          f"({aviso[0]}): una caída puede ser que no se "
                          "registró, no menos merma.", aviso[1])
         hay_causa = COL_CAUSA in validas.columns
-        drill_tablas.seccion_cuadros(
+        ruta = drill_tablas.seccion_cuadros(
             validas, pref="mov", slug="detsal",
             niveles=((col_tipo, "tipo de baja"),
                      (COL_CAUSA if hay_causa else None, "causa"),
                      (_col_sal(*_COLS_AREA_SALIDAS), "área"),
                      (_col_sal("Nombre Familia", "NOMBRE FAMILIA"), "familia"),
                      (_col_sal("Nombre Subfamilia", "NOMBRE SUBFAMILIA"),
-                      "subfamilia"),
-                     (col_prod_sal, "producto")),
+                      "subfamilia")),
             filas=_FILAS_DETALLE_SAL, col_val=col_val_sal, nota=nota,
             titulo=titulo, fecha=fecha,
             d_ant=d_ant, rotulo_ant=rot_ant, sin_comparar=sin_comparar,
             aviso=aviso,
-            cantidad=(_col_sal("Cant Salida", "CANT SALIDA"),
-                      _col_sal(COL_UNIDAD_SAL)),
             aviso_falta={"causa": (
                 "La causa sale del motivo escrito en cada nota («PRODUCTO "
                 "DE BAJA / TIEMPO DE VIDA»), y la consulta de salidas "
                 "todavía no lo trae. Se agrega en el Sheet con "
                 "`ALMACEN.DBO.MSUBSALIDA.tMotivo AS 'MOTIVO'` y llega con "
                 "«Refrescar».")})
+        # ── Los PRODUCTOS, a todo el ancho (regla #670) ───────────────────
+        # Con lo elegido en los cinco cuadros (`ruta`). Su % de lo que entró
+        # y su frecuencia se miden sobre 52 semanas que terminan con el
+        # rango, sea cual sea: con 30 días se tropieza con el stock de antes.
+        _fin = rng[1] if rng else pd.Timestamp.today().normalize()
+        vent = ventana(_fin)
+        _h = hist_sal[(hist_sal["_fecha"] >= vent[0])
+                      & (hist_sal["_fecha"] < vent[1])]
+        _h, _ = salidas_que_suman(_h, **_kw_suman)
+        _cols_lin = dict(
+            fecha="_fecha", doc=_kw_suman["col_doc"],
+            cod=_col_sal("COD PRODUCTO", "Cod Producto"), prod=col_prod_sal,
+            cant=_col_sal("Cant Salida", "CANT SALIDA"), valor=col_val_sal,
+            unid=_col_sal(COL_UNIDAD_SAL), causa=_col_sal(COL_CAUSA_DET),
+            area=_col_sal(*_COLS_AREA_SALIDAS), tipo=col_tipo,
+            motivo=_col_sal(*_COLS_MOTIVO_SAL))
+        if _cols_lin["cod"]:
+            seccion_productos(
+                lineas_salidas(drill_tablas.recorte(validas, ruta or ()),
+                               **_cols_lin),
+                lineas_salidas(drill_tablas.recorte(_h, ruta or ()),
+                               **_cols_lin),
+                vent)
 
     def _dib_sin_plato():
         # Carga ACÁ, como Porcionamientos: la cuenta de cierre a cierre

@@ -111,8 +111,9 @@ import streamlit as st
 
 import cortes
 from tema import (
-    AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
-    SERIE_PRINCIPAL, SERIE_TRAMOS, TEXTO_PRINCIPAL,
+    ADVERTENCIA, AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, BLANCO, ERROR,
+    GRIS_FONDO_CABECERA, GRIS_TEXTO, GRIS_TEXTO_SUAVE, SERIE_PRINCIPAL,
+    SERIE_TRAMOS, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
@@ -298,6 +299,13 @@ PARTIR_PRODUCTO = "Por producto"
 Los productos mayores de la vista, cada uno con su color, y el resto junto.
 Con el filtro de tipo en «Bajas», qué productos se tiran mes a mes."""
 
+PARTIR_CAUSA = "Por causa"
+"""La cuarta (2026-10-17, regla #670): la causa escrita en el motivo de cada
+nota de baja (`movimientos.causa_de_baja`). Se ofrece SÓLO con el filtro de
+tipo en «Bajas»: en las demás salidas el motivo dice para qué salió, no por
+qué se perdió (regla #626). Mes a mes contesta si «Tiempo de vida» —la
+mitad de las bajas— baja con el tiempo."""
+
 _TIPOS_TRAZA = 4
 """Tipos con color propio cuando la barra se parte por tipo: los cuatro
 mayores llevan el 90 % (bajas, comida de personal, despacho a Mayta, uso en
@@ -308,16 +316,51 @@ _PRODUCTOS_TRAZA = 4
 a 1323px, la fila de KPI partía en dos renglones (los nombres de producto
 son largos) y el Resumen pedía scroll horizontal."""
 
+_CAUSAS_TRAZA = 4
+"""Causas con nombre propio en la barra: las cuatro mayores llevan el 80 %
+de las bajas de doce meses (tiempo de vida, equipo malogrado, cocción,
+consumo directo); el resto va en «Resto», como los tipos."""
+
 _AREAS_TRAZA = 3
 
 # Qué columna de las líneas parte la barra con cada opción, cuántos tramos
 # lleva y cómo se nombra lo que va en «Resto» (#614).
 _PARTIR_COL = {PARTIR_AREA: "area", PARTIR_TIPO: "tipo",
-               PARTIR_PRODUCTO: "prod"}
+               PARTIR_PRODUCTO: "prod", PARTIR_CAUSA: "causa"}
 _PARTIR_N = {PARTIR_AREA: _AREAS_TRAZA, PARTIR_TIPO: _TIPOS_TRAZA,
-             PARTIR_PRODUCTO: _PRODUCTOS_TRAZA}
+             PARTIR_PRODUCTO: _PRODUCTOS_TRAZA, PARTIR_CAUSA: _CAUSAS_TRAZA}
 _PARTIR_UNIDAD = {PARTIR_AREA: ("área", "áreas"), PARTIR_TIPO: ("tipo", "tipos"),
-                  PARTIR_PRODUCTO: ("producto", "productos")}
+                  PARTIR_PRODUCTO: ("producto", "productos"),
+                  PARTIR_CAUSA: ("causa", "causas")}
+TIPO_BAJAS = "Bajas"
+"""El tipo de descargo de la merma de verdad, como lo escribe el parquet.
+Con él solo en el filtro de tipo se ofrece «Por causa» (regla #670)."""
+
+
+def opciones_partir(tipos_elegidos, con_causa):
+    """Las formas de partir la barra de SALIDAS que tienen sentido con el
+    filtro de tipo puesto (regla #670). «Por tipo» no se ofrece con UN tipo
+    elegido —sería una barra de un solo tramo— y «Por causa» sólo con
+    «Bajas» solo (`con_causa`: la columna llegó). Pura."""
+    ops = [PARTIR_AREA]
+    if len(tipos_elegidos) != 1:
+        ops.append(PARTIR_TIPO)
+    ops.append(PARTIR_PRODUCTO)
+    if con_causa and list(tipos_elegidos) == [TIPO_BAJAS]:
+        ops.append(PARTIR_CAUSA)
+    return tuple(ops)
+
+
+def partir_siguiente(tipos_elegidos, ops):
+    """Con qué se parte la barra cuando lo elegido dejó de ofrecerse: el
+    nivel de ABAJO del filtro de tipo (regla #670). Sin tipo, por tipo —como
+    abre la vista—; con «Bajas», por causa; con otro tipo, por producto.
+    Pura."""
+    if not tipos_elegidos and PARTIR_TIPO in ops:
+        return PARTIR_TIPO
+    if PARTIR_CAUSA in ops:
+        return PARTIR_CAUSA
+    return PARTIR_PRODUCTO
 
 
 def nombre_tramo(nombre, partir=PARTIR_AREA):
@@ -417,7 +460,7 @@ def _texto(d, col, vacio=""):
 
 
 def lineas_documentos(d, *, fecha, doc, area, estado, fam, prod, cant, val,
-                      punit=None, tipo=None, unid=None):
+                      punit=None, tipo=None, unid=None, causa=None):
     """Las líneas de un parquet de Movimientos con los nombres de la tarjeta.
 
     Una fila por línea: `fecha`, `doc` (el código), `area`, `tipo`, `estado`
@@ -434,7 +477,10 @@ def lineas_documentos(d, *, fecha, doc, area, estado, fam, prod, cant, val,
 
     `unid`, la unidad de la cantidad, sólo la trae producción (#575): una
     orden produce kilos de una salsa y unidades de un postre, y «0.304» sin
-    unidad no se lee. Sin ella la columna `unid` va vacía."""
+    unidad no se lee. Sin ella la columna `unid` va vacía.
+
+    `causa` (salidas, regla #670): la causa de la baja, que parte la barra
+    con «Por causa» y es una columna del Detalle. Vacía donde no es baja."""
     idx = d.index
     nan = pd.Series(float("nan"), index=idx)
     valor = pd.to_numeric(d[val], errors="coerce").fillna(0.0)
@@ -449,6 +495,7 @@ def lineas_documentos(d, *, fecha, doc, area, estado, fam, prod, cant, val,
                 else pd.Series(idx.astype(str), index=idx)),
         "area": _texto(d, area, "Sin área"),
         "tipo": _texto(d, tipo),
+        "causa": _texto(d, causa),
         "estado": _texto(d, estado, "PROCESADO").str.upper(),
         "fam": _texto(d, fam),
         "prod": _texto(d, prod),
@@ -798,6 +845,55 @@ def meses_poco_registro(bh, rango_ts, hoy, lado=None, umbral=0.5,
     return salida
 
 
+# ===========================================================================
+# LAS BAJAS REGISTRADAS CONTRA EL FALTANTE DEL CIERRE (2026-10-17, #670)
+# ===========================================================================
+# Una barra de bajas baja cuando se pierde menos… o cuando se deja de
+# anotar. El conteo de notas (`meses_poco_registro`) avisaba lo segundo; esto
+# le pone la cifra del otro lado: el faltante que contó el cierre de cada
+# mes. Hasta junio de 2026 se registraba como baja entre el 3 y el 19 % del
+# faltante; en agosto, el 0,7 %, con el faltante en S/ 82.798.
+
+REGISTRO_POCO = 2.0
+REGISTRO_BAJO = 5.0
+"""Los cortes del color de «Registrado»: menos de 2 % en rojo («casi nada
+se registró»), de 2 a 5 % en ámbar y desde 5 % sin color —lo habitual de
+oct 2025 a jun 2026—. Sólo se pinta la excepción (regla #239)."""
+
+_FRANJA_REGISTRO = 30
+"""Lo que la franja de «Registrado» le agrega al margen de abajo de la
+figura: su renglón de 20px y el aire hasta los rótulos del eje. Lo paga el
+área del trazo, no la tarjeta (la figura mide `alto_fig` igual)."""
+
+
+def registro_por_mes(bh, claves, faltante, lado=None):
+    """`[(faltante, %) o None]`, uno por clave MENSUAL del eje: el faltante
+    que contó el cierre de ese mes (`faltante`, `{"2026-09": soles}`) y qué
+    parte de él quedó registrada como BAJA (tipo «Bajas», válidas). None
+    donde el mes no tiene cierre comparable. `bh` son las líneas del parquet
+    entero: la vista puede estar filtrada, el registro no. Pura."""
+    if bh is None or not faltante:
+        return [None] * len(claves)
+    dv = _validas(bh, lado)
+    dv = dv[dv["tipo"] == TIPO_BAJAS]
+    por = dv.groupby(_periodo_serie(dv["fecha"], "Mes").values)["valor"].sum()
+    salida = []
+    for c in claves:
+        f = faltante.get(str(c))
+        salida.append((float(f), 100.0 * float(por.get(c, 0.0)) / f)
+                      if f else None)
+    return salida
+
+
+def color_registro(pct):
+    """`(fondo, texto)` de un «Registrado» de `pct` %."""
+    if pct < REGISTRO_POCO:
+        return ERROR, BLANCO
+    if pct < REGISTRO_BAJO:
+        return ADVERTENCIA, BLANCO
+    return GRIS_FONDO_CABECERA, GRIS_TEXTO
+
+
 def _validas(bl, lado=None):
     """Las líneas que SUMAN: con producto y de un documento no anulado. En
     producción, además, de una orden PROCESADA (#575)."""
@@ -1007,7 +1103,7 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS,
 
 
 def figura_periodos(v, alto_fig, titulo="", foco=None, comps=(),
-                    resaltado=None):
+                    resaltado=None, registro=None):
     """La figura de la tarjeta a partir de `vista_periodos`.
 
     LA BARRA ES LISA, con UNA parte resaltada (regla #649, la de «Compras
@@ -1187,11 +1283,32 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=(),
         ticks = (tv, tt)
     fig.update_xaxes(type="linear", tickmode="array", tickvals=ticks[0],
                      ticktext=ticks[1], range=[-0.5, n - 0.5])
+
+    # ── Lo registrado contra el faltante del cierre (regla #670) ─────────
+    # Un renglón de casilleros debajo de los meses, en las mismas x que sus
+    # barras (anotaciones con `xref="x"`): así se lee mes por mes sin ir a
+    # la tabla. Sólo se pinta la excepción (`color_registro`).
+    if registro and any(r is not None for r in registro):
+        _b = (fig.layout.margin.b or 0) + _FRANJA_REGISTRO
+        fig.update_layout(margin=dict(b=_b))
+        for i, r in enumerate(registro):
+            if r is None:
+                continue
+            falt, pct = r
+            fondo, tinta = color_registro(pct)
+            fig.add_annotation(
+                x=i, xref="x", y=0, yref="paper", yshift=-24,
+                yanchor="top", showarrow=False, borderpad=3,
+                text=f"<b>{pct:.1f}%</b>", bgcolor=fondo,
+                font=dict(size=11, color=tinta),
+                hovertext=(f"{v['hover'][i]}: las bajas registradas son el "
+                           f"{pct:.1f} % del faltante que contó su cierre "
+                           f"(S/ {falt:,.0f})"))
     return fig
 
 
 def tabla_resumen(v, foco=None, comp=None, tramos=False, unidad="",
-                  poco=None):
+                  poco=None, registro=None):
     """`(filas, total)` de la grilla del Resumen: una fila por barra.
 
     Con `comp` —el año más cercano de `comparacion_periodos`— suma dos
@@ -1234,6 +1351,15 @@ def tabla_resumen(v, foco=None, comp=None, tramos=False, unidad="",
         total["ant"] = f"S/ {comp['total']:,.2f}"
         total["vs_ant"] = ("" if _var is None
                            else f"{'+' if _var > 0 else '−'}{abs(_var):.0f}%")
+    # El faltante del cierre de cada mes y qué parte quedó registrada como
+    # baja (regla #670). `reg` en %, vacío donde no hay cierre comparable.
+    if registro and any(r is not None for r in registro):
+        filas["falt"] = [round(r[0], 2) if r else None for r in registro]
+        filas["reg"] = [round(r[1], 2) if r else None for r in registro]
+        _f = sum(r[0] for r in registro if r)
+        _b = sum(r[0] * r[1] / 100.0 for r in registro if r)
+        total["falt"] = f"S/ {_f:,.2f}"
+        total["reg"] = f"{100.0 * _b / _f:.1f}%" if _f else ""
     filas.attrs["tramos"] = cols_tramo
     filas.attrs["unidad"] = unidad
     return filas, total
@@ -1287,7 +1413,8 @@ def tabla_documentos(amb, sel, lado=REQUERIMIENTOS):
     docs = (amb.assign(_con=~amb["vacio"])
                .groupby("doc", as_index=False)
                .agg(fecha=("fecha", "min"), area=("area", "first"),
-                    tipo=("tipo", "first"), estado=("estado", "first"),
+                    tipo=("tipo", "first"), causa=("causa", "first"),
+                    estado=("estado", "first"),
                     lineas=("_con", "sum"), valor=("valor", "sum")))
     vacio = docs["lineas"] == 0
     anul = docs["estado"] == _ANULADO
@@ -1311,6 +1438,7 @@ def tabla_documentos(amb, sel, lado=REQUERIMIENTOS):
         "codigo": docs["doc"],
         "area": docs["area"].map(_nombre_area),
         "tipo": docs["tipo"],
+        "causa": docs["causa"],
         "lineas": docs["lineas"].astype(int),
         "valor": docs["valor"].astype(float).round(2),
         "__estado": estado,
@@ -1328,7 +1456,7 @@ def tabla_documentos(amb, sel, lado=REQUERIMIENTOS):
         "registro": "Total",
         "codigo": f"{n_val:,} {lado.corto}",
         "area": f"+{n_fuera:,} no suman" if n_fuera else "",
-        "tipo": "",
+        "tipo": "", "causa": "",
         "lineas": f"{int(filas.loc[suman, 'lineas'].sum()):,}",
         "valor": f"S/ {docs.loc[suman, 'valor'].sum():,.2f}",
     }
@@ -1895,7 +2023,8 @@ def tarjeta_requerimientos_periodo(d, *, cols, orden=(), rango=None,
 
 
 def tarjeta_salidas_periodo(d, *, cols, orden=(), hist=None, anios=0,
-                            rot_fecha="", rango=None, fecha=None):
+                            rot_fecha="", rango=None, fecha=None,
+                            faltante=None):
     """Salidas por período: la misma tarjeta sobre `salidas.parquet`, con el
     tipo de descargo como filtro y como columna del Detalle (`cols["tipo"]`).
     Sin precio unitario en el parquet, se despeja de cada línea.
@@ -1903,9 +2032,14 @@ def tarjeta_salidas_periodo(d, *, cols, orden=(), hist=None, anios=0,
     `hist` es el parquet ENTERO con los chips de la franja (sin recorte de
     fecha), y `anios` cuántos años atrás compara: 0, 1 o 2 (regla #614).
     `cols["fecha"]` es la fecha que eligió el usuario —registro o
-    proceso—, y `rot_fecha` cómo se dice en el pie («fecha de registro»)."""
+    proceso—, y `rot_fecha` cómo se dice en el pie («fecha de registro»).
+
+    `faltante` (regla #670): `{"2026-09": soles}`, el faltante que contó el
+    cierre de cada mes operativo. Con él, agrupado por mes y sin filtros
+    que no sean «Bajas», la tarjeta dice qué parte quedó registrada."""
     _tarjeta(d, SALIDAS, cols, orden, hist=hist, anios=anios,
-             rot_fecha=rot_fecha, rango_ts=rango, fecha=fecha)
+             rot_fecha=rot_fecha, rango_ts=rango, fecha=fecha,
+             faltante=faltante)
 
 
 def tarjeta_porcionamientos_periodo(d, *, cols, orden=(), precios=None,
@@ -1942,7 +2076,8 @@ def tarjeta_produccion_periodo(d, *, cols, orden=(), rango=None, fecha=None):
 
 
 def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
-             precios=None, rango_ts=None, fecha=None, control=None):
+             precios=None, rango_ts=None, fecha=None, control=None,
+             faltante=None):
     k, c = lado.k, lado.c
     with st.container(border=True, key=lado.card):
         st.markdown(_css(lado), unsafe_allow_html=True)
@@ -2020,16 +2155,31 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                 # la merma con la comida de personal y el despacho a Mayta,
                 # y el tramo mayor —«Cocina personal»— era otra cosa que
                 # una baja.
+                #
+                # Las opciones siguen al filtro de tipo (regla #670): con UN
+                # tipo elegido «Por tipo» sería un solo tramo y no se ofrece,
+                # y «Por causa» sólo con «Bajas» solo. Si lo elegido deja de
+                # ofrecerse, la barra BAJA un nivel sola —Bajas → causa, otro
+                # tipo → producto—: se escribe en la key ANTES de dibujar el
+                # control, y sin `default=` (los dos juntos son un aviso de
+                # Streamlit).
+                ops_partir = opciones_partir(tipo_sel, bool(cols.get("causa")))
+                k_partir = f"{k}_partir"
+                if st.session_state.get(k_partir) not in ops_partir:
+                    st.session_state[k_partir] = partir_siguiente(
+                        tipo_sel, ops_partir)
                 partir = st.segmented_control(
-                    "Partir por", (PARTIR_AREA, PARTIR_TIPO, PARTIR_PRODUCTO),
-                    default=PARTIR_TIPO, required=True, key=f"{k}_partir",
+                    "Partir por", ops_partir, required=True, key=k_partir,
                     label_visibility="collapsed",
                     help=("Con qué se parte cada barra: **por área**, **por "
                           "tipo** de descargo —bajas, comida de personal, "
-                          "despacho a Mayta…— o **por producto** (los cuatro "
-                          "mayores). La fila de abajo nombra cada tramo con su "
-                          "monto, y el Resumen le da una columna a cada uno."
-                          )) or PARTIR_TIPO
+                          "despacho a Mayta…—, **por producto** (los cuatro "
+                          "mayores) o, con el tipo en «Bajas», **por causa** "
+                          "—la que dice el motivo de la nota—. Al elegir UN "
+                          "tipo, la barra pasa sola al nivel de abajo. La fila "
+                          "de abajo nombra cada tramo con su monto, y el "
+                          "Resumen le da una columna a cada uno."
+                          )) or partir_siguiente(tipo_sel, ops_partir)
             # Otro control de la tarjeta, en el sitio de «Partir por»: la
             # valorización de la merma en Porcionamientos (regla #644).
             if control is not None:
@@ -2178,6 +2328,17 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
             aviso = aviso_poco_registro(meses_poco, lado)
         v["poco"] = periodos_poco_registro(claves, gran, meses_poco)
 
+        # ── Lo registrado contra el faltante del cierre (regla #670) ─────
+        # Sólo por MES (un faltante existe donde hubo un conteo) y sin otro
+        # filtro que «Bajas»: el cierre cuenta el restaurante entero.
+        registro = None
+        if (faltante and bh is not None and gran == "Mes" and not area_sel
+                and not fam_sel and not prod_sel
+                and list(tipo_sel) in ([], [TIPO_BAJAS])):
+            registro = registro_por_mes(bh, claves, faltante, lado)
+            if not any(r is not None for r in registro):
+                registro = None
+
         # ── Lo que NO suma, dicho en la fila de KPI ───────────────────────
         nota = nota_no_suman(
             bl, lado,
@@ -2277,7 +2438,7 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         fig = figura_periodos(
             v, alto_fig, titulo=titulo,
             foco=foco if (foco_ok and modo == _MODO_DETALLE) else None,
-            comps=comps, resaltado=resaltado)
+            comps=comps, resaltado=resaltado, registro=registro)
         # Lo que devuelve se ignora: el clic ya se leyó arriba.
         st.plotly_chart(fig, use_container_width=True, on_select="rerun",
                         selection_mode="points",
@@ -2324,7 +2485,7 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                         v, foco if foco_ok else None,
                         comp=comps[0] if comps else None,
                         tramos=partir != PARTIR_AREA, unidad=unidad_v,
-                        poco=v["poco"])
+                        poco=v["poco"], registro=registro)
                     clic_fila = renderizar_periodos_mov(
                         filas, altura=_ALTO_TABLA, key=k_res,
                         rotulo_periodo=_AGRUPADO_GRAN[gran].capitalize(),
@@ -2333,12 +2494,36 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                         rotulo_ant=comps[0]["rot"] if comps else "",
                         tramos=filas.attrs.get("tramos", ()),
                         unidad=filas.attrs.get("unidad", ""))
+            # Con UN tipo elegido, qué parte es de todas las salidas: con
+            # «Bajas» la tabla se parte por causa y el tipo ya no se ve
+            # (regla #670). Y lo registrado del rango contra sus cierres.
+            extra = ""
+            if con_tipo and len(tipo_sel) == 1:
+                _m = pd.Series(True, index=base.index)
+                if area_sel:
+                    _m &= base["area"].isin(area_sel)
+                if fam_sel:
+                    _m &= base["fam"].isin(fam_sel)
+                if prod_sel:
+                    _m &= base["prod"].isin(prods_sel)
+                _todas = float(_validas(base[_m], lado)["valor"].sum())
+                if _todas:
+                    extra += (f" · «{tipo_sel[0]}»: "
+                              f"{100 * float(dv['valor'].sum()) / _todas:.1f}"
+                              f" % de las {lado.plur}")
+            if registro:
+                extra += (f" · registrado: {total['reg']} del faltante de "
+                          "los cierres")
+            # Con las notas, el pie se acorta para seguir en UN renglón al
+            # lado de «Resumen | Detalle»: la fecha y el grano ya los dicen
+            # los controles de la tarjeta.
             pie.caption(
+                f"**{_del_al(dv['fecha'])}**" + extra if extra else
                 f"**{_del_al(dv['fecha'])}**"
                 + (f" · por {rot_fecha}" if rot_fecha else "")
-                + " · agrupado por "
-                f"{_AGRUPADO_GRAN[gran]} — una fila por barra; un clic en "
-                "una fila (o en su barra) abre su detalle.")
+                + " · agrupado por " + _AGRUPADO_GRAN[gran]
+                + " — una fila por barra; un clic en una fila (o en su "
+                "barra) abre su detalle.")
             if clic_fila in set(claves):
                 st.session_state[f"_{k}_ir_detalle"] = clic_fila
                 st.session_state[f"{k}_nres"] = n_res + 1
@@ -2413,6 +2598,7 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                         filas_doc, altura=_ALTO_TABLA,
                         key=f"{k}_doc_grid_{k_tablas}",
                         rotulo_tipo=lado.rotulo_tipo if con_tipo else "",
+                        rotulo_causa="Causa" if cols.get("causa") else "",
                         rotulo_fecha=("Proceso" if rot_fecha.endswith("proceso")
                                       else "Registro"),
                         total=total_doc)
