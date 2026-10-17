@@ -72,12 +72,14 @@ diaria partida en siete tramos no se lee."""
 _MEDIDAS = ("Soles", "Unidades")
 _ESCALAS = ("Monto", "% del período")
 _ZONA_RESUMEN, _ZONA_DETALLE = "Resumen", "Detalle"
+_ZONA_CALCULO = "Cálculo"
 _COMP_ANT, _COMP_AP = "Período anterior", "Año pasado"
 _CAMBIO_MONTO, _CAMBIO_MIX = "Monto", "Mix (pp)"
 _CELDAS_VENTA, _CELDAS_COSTO = "Venta", "% costo"
 _SIN_DESC = "% sin desc."
 _TIP_COSTO = ("Costo ÷ venta neta más lo que el banco devuelve de los "
-              "descuentos de convenio (Costos › Convenios)")
+              "descuentos de convenio (Costos › Convenios). Lo vendido sin "
+              "costo cargado no entra")
 _AYUDA_SIN_DESC = (
     "El costo ÷ la venta neta que habría dado a precio de CARTA, sin "
     "descuentos. La distancia con «% costo» es lo que pesan los "
@@ -157,6 +159,10 @@ def columnas(d):
         # entra en la base del «% costo» (#665).
         "desc": _resolver(d, ["Descuento Item Ddocumento"]),
         "cod_desc": _resolver(d, ["Codigo Descuento"]),
+        # Sólo para la zona «Cálculo» (#666): de dónde sale cada %.
+        "recargo": _resolver(d, ["Recargo Item Ddcoumento",
+                                 "Recargo Item Ddocumento"]),
+        "nom_desc": _resolver(d, ["Nombre Descuento"]),
         # De él sale la tasa de IGV, que marca el período en que cambió y
         # movió el % de costo sin tocar ningún costo (regla #590).
         "igv": _resolver(d, ["Igv Item Ddocumento"]),
@@ -202,11 +208,21 @@ def base(d, cols, eje=_EJE_CARTA, convenios=None):
         "igv": _num(cols.get("igv")),
     })
     b["neto_carta"] = neto_a_carta(b, _num(cols.get("carta")))
-    b["devol"] = 0.0
+    b["desc"] = _num(cols.get("desc"))
+    b["rec"] = _num(cols.get("recargo"))
+    b["tipo_desc"] = _txt(cols.get("nom_desc"), "")
+    b["dev_pct"] = 0.0
     if convenios is not None and len(convenios) and cols.get("cod_desc"):
-        frac = convenios_descuento.devolucion_por_linea(
+        b["dev_pct"] = convenios_descuento.devolucion_por_linea(
             d[cols["cod_desc"]], b["fecha"], convenios)
-        b["devol"] = _num(cols.get("desc")) * frac * _tasa_neta(b)
+    b["devol"] = b["desc"] * b["dev_pct"] * _tasa_neta(b)
+    # Lo vendido SIN COSTO CARGADO no entra en ningún % de costo (#666): no
+    # saberlo no es costar cero (#524), y su venta en el divisor bajaba el
+    # % de todo su grupo. Una nota de crédito (venta negativa) sí entra.
+    sin_costo = (b["venta"] > 0.005) & (b["costo"] <= 0)
+    b["venta_sin_costo"] = b["venta"].where(sin_costo, 0.0)
+    b["base_costo"] = (b["neto"] + b["devol"]).where(~sin_costo, 0.0)
+    b["neto_carta"] = b["neto_carta"].where(~sin_costo, 0.0)
     if eje == _EJE_AREA:
         b["grupo"] = (nombre_area(d[cols["area"]])
                       if cols.get("area") and cols["area"] in d.columns
@@ -236,7 +252,8 @@ def ruta_valida(b, ruta):
     return ruta
 
 
-_SUMAS = ("venta", "cant", "costo", "neto", "neto_carta", "devol")
+_SUMAS = ("venta", "cant", "costo", "neto", "neto_carta", "devol",
+          "base_costo", "venta_sin_costo")
 """Lo que `matriz` suma por período (no confundir con `_MEDIDAS`, lo que
 mide el gráfico)."""
 
@@ -723,12 +740,14 @@ def _ventas_mix(d, filtrar_cb=None):
     with st.container(horizontal=True, gap="small",
                       vertical_alignment="center", key="vt_mix_pie"):
         zona = st.segmented_control(
-            "Qué se ve abajo", (_ZONA_RESUMEN, _ZONA_DETALLE),
+            "Qué se ve abajo", (_ZONA_RESUMEN, _ZONA_DETALLE, _ZONA_CALCULO),
             required=True, key="vt_mix_zona",
             label_visibility="collapsed",
             help="**Resumen**: una fila por cada uno del nivel y una "
                  "columna por período. **Detalle**: qué movió el período "
-                 "que toques, y lo más vendido en él.") or _ZONA_RESUMEN
+                 "que toques, y lo más vendido en él. **Cálculo**: de dónde "
+                 "sale cada % de costo — por producto o, con uno elegido, "
+                 "venta por venta.") or _ZONA_RESUMEN
         if zona == _ZONA_DETALLE:
             comp = st.segmented_control(
                 "Comparar con", (_COMP_ANT, _COMP_AP), default=_COMP_ANT,
@@ -744,7 +763,7 @@ def _ventas_mix(d, filtrar_cb=None):
                 help="**Mix (pp)**: cuántos puntos del total ganó o perdió "
                      "cada uno. Sirve aunque los dos períodos no midan lo "
                      "mismo.") or _CAMBIO_MONTO
-        else:
+        elif zona == _ZONA_RESUMEN:
             celdas = st.segmented_control(
                 "Qué dicen las celdas", (_CELDAS_VENTA, _CELDAS_COSTO),
                 required=True, key="vt_mix_celdas",
@@ -770,10 +789,106 @@ def _ventas_mix(d, filtrar_cb=None):
         else:
             pie.caption(f"Tocá una barra para ver qué la movió · "
                         f"{_siguiente}." + _nota)
-    else:
+    elif zona == _ZONA_DETALLE:
         _zona_detalle(M, med, orden, claves, eje, largo, i_det, comp, cambio,
                       gran, rango, vars_, ruta, nivel, unidades, b,
                       filtrar_cb, pie, niv=niv, eje_arbol=eje_arbol)
+    else:
+        _zona_calculo(b, claves, eje, foco_ix, prod_foco, pie)
+
+
+CALCULO_LINEAS = ("Fecha", "Cant.", "Venta", "IGV", "Recargo", "Descuento",
+                  "Tipo de descuento", "Devol. banco", "Base", "Costo",
+                  "% costo", "% sin desc.")
+CALCULO_PRODUCTOS = ("Producto", "Cant.", "Venta", "IGV", "Recargo",
+                     "Descuento", "Devol. banco", "Base", "Costo", "% costo",
+                     "% sin desc.", "Sin costo")
+
+
+def calculo(bp, por_linea):
+    """De dónde sale el % de costo (#666): `bp` son las líneas de la base
+    (`base`) que se miran. Con `por_linea`, una fila por venta (el producto
+    en foco); si no, una por producto. La primera fila es el TOTAL.
+
+    Venta − IGV − Recargo = neto; Base = neto + lo que devuelve el banco
+    (#665), cero si la línea se vendió sin costo cargado; % costo = Costo ÷
+    Base; % sin desc. = Costo ÷ el neto a precio de carta (#664). Columnas
+    por nombre (#481)."""
+    cols_num = ["cant", "venta", "igv", "rec", "desc", "devol", "base_costo",
+                "costo", "neto_carta", "venta_sin_costo"]
+    if por_linea:
+        g = bp.sort_values("fecha", ascending=False, kind="stable")
+        g = g.assign(Fecha=g["fecha"].dt.strftime("%d/%m/%Y %H:%M"),
+                     _tipo=g["tipo_desc"].where(g["desc"].abs() > 0.005, ""))
+    else:
+        g = (bp.groupby("prod", as_index=False)[cols_num].sum()
+             .sort_values("venta", ascending=False, kind="stable"))
+    tot = bp[cols_num].sum()
+    pc = lambda c, n: pct_costo(c, n)  # noqa: E731
+    filas = pd.DataFrame({
+        ("Fecha" if por_linea else "Producto"):
+            (g["Fecha"] if por_linea else g["prod"]).to_numpy(),
+        "Cant.": g["cant"].to_numpy(), "Venta": g["venta"].to_numpy(),
+        "IGV": g["igv"].to_numpy(), "Recargo": g["rec"].to_numpy(),
+        "Descuento": g["desc"].to_numpy(),
+        **({"Tipo de descuento": g["_tipo"].to_numpy()} if por_linea else {}),
+        "Devol. banco": g["devol"].to_numpy(), "Base": g["base_costo"].to_numpy(),
+        "Costo": g["costo"].to_numpy(),
+        "% costo": pc(g["costo"], g["base_costo"]).to_numpy(),
+        "% sin desc.": pc(g["costo"], g["neto_carta"]).to_numpy(),
+        **({} if por_linea else {"Sin costo": g["venta_sin_costo"].to_numpy()}),
+    })
+    total = {filas.columns[0]: "Total", "Cant.": tot["cant"], "Venta": tot["venta"],
+             "IGV": tot["igv"], "Recargo": tot["rec"], "Descuento": tot["desc"],
+             "Devol. banco": tot["devol"], "Base": tot["base_costo"],
+             "Costo": tot["costo"],
+             "% costo": pct_costo(float(tot["costo"]), float(tot["base_costo"])),
+             "% sin desc.": pct_costo(float(tot["costo"]), float(tot["neto_carta"]))}
+    if por_linea:
+        total["Tipo de descuento"] = ""
+    else:
+        total["Sin costo"] = tot["venta_sin_costo"]
+    salida = pd.concat([pd.DataFrame([total]), filas], ignore_index=True)
+    return salida[list(CALCULO_LINEAS if por_linea else CALCULO_PRODUCTOS)]
+
+
+def _zona_calculo(b, claves, eje, foco_ix, prod_foco, pie):
+    """La tabla de `calculo` sobre el período en foco (o el rango entero) y
+    el nivel en pantalla; con un producto elegido, sus ventas una por una."""
+    bp = b if foco_ix is None else b[b["clave"] == claves[foco_ix]]
+    por_linea = prod_foco is not None
+    if por_linea:
+        bp = bp[bp["prod"] == prod_foco]
+    if bp.empty:
+        st.info("Sin ventas para mirar en este período.")
+        return
+    t = calculo(bp, por_linea)
+    soles = st.column_config.NumberColumn(format="%,.2f", width="small")
+    pct = st.column_config.NumberColumn(format="percent", width="small")
+    config = {c: soles for c in ("Venta", "IGV", "Recargo", "Descuento",
+                                  "Devol. banco", "Base", "Costo", "Sin costo")}
+    config.update({
+        "Cant.": st.column_config.NumberColumn(format="%.0f", width="small"),
+        "% costo": st.column_config.NumberColumn(
+            format="percent", width="small", help=_TIP_COSTO),
+        "% sin desc.": pct,
+        "Base": st.column_config.NumberColumn(
+            format="%,.2f", width="small",
+            help="Venta − IGV − Recargo + lo que devuelve el banco. Cero si "
+                 "se vendió sin costo cargado: no entra en el %."),
+        "Sin costo": st.column_config.NumberColumn(
+            format="%,.2f", width="small",
+            help="Venta sin costo cargado en el POS: no entra en el %"),
+        "Fecha": st.column_config.TextColumn(width="small", pinned=True),
+        "Producto": st.column_config.TextColumn(width="medium", pinned=True),
+    })
+    st.dataframe(t, key=_key("vt_mix_calculo"), hide_index=True, row_height=27,
+                 height=alturas.VENTAS_MIX_TABLA, column_config=config)
+    cuando = "el rango" if foco_ix is None else eje[foco_ix]
+    que = (f"Cada venta de {prod_foco}" if por_linea
+           else "Un producto por fila; elegí uno para ver sus ventas")
+    pie.caption(f"{que} · {cuando} · Base = Venta − IGV − Recargo + "
+                "devolución del banco.")
 
 
 # ===========================================================================
@@ -797,8 +912,10 @@ def _html_cab(gran, medida, pct_modo, M, b_todo, b, claves, eje, rango,
     v = _sel(M["venta"].sum(axis=0))
     q = _sel(M["cant"].sum(axis=0))
     c = _sel(M["costo"].sum(axis=0))
-    # La base del % de costo: el neto más lo que devuelve el banco (#665).
-    n = _sel((M["neto"] + M["devol"]).sum(axis=0))
+    # La base del % de costo: el neto más lo que devuelve el banco (#665),
+    # sin lo vendido sin costo cargado (#666).
+    n = _sel(M["base_costo"].sum(axis=0))
+    sc = _sel(M["venta_sin_costo"].sum(axis=0))
     cuando = (f"{len(claves)} {per}" + ("" if len(claves) == 1 else
                                          ("es" if per == "mes" else "s"))
               if i is None else eje[i])
@@ -831,6 +948,15 @@ def _html_cab(gran, medida, pct_modo, M, b_todo, b, claves, eje, rango,
         "% sin desc.", "—" if pd.isna(_pc_carta) else f"{_pc_carta:.1%}", "",
         tip="El % de costo si todo se hubiera cobrado a precio de carta. "
             "La distancia con «% costo» es lo que pesan los descuentos"))
+    if sc > 0.5:
+        _bp_sc = (b if i is None else b[b["clave"] == claves[i]])
+        _sc = (_bp_sc.groupby("prod")["venta_sin_costo"].sum()
+               .sort_values(ascending=False))
+        _sc = _sc[_sc > 0.5]
+        partes.append(_tarjeta(
+            "Sin costo cargado", fmt_k(sc), f"{len(_sc)} prod.", "vt-kpi-alerta",
+            "Vendido sin costo en el POS: no entra en ningún % de costo. "
+            + "; ".join(f"{p} S/ {v:,.0f}" for p, v in _sc.head(6).items())))
     partes.append(_tarjeta("Unidades", f"{q:,.0f}"))
     _bp = b if i is None else b[b["clave"] == claves[i]]
     n_prod = int((_bp.groupby(["sub", "prod"])["venta"].sum() > 0).sum())
@@ -1052,7 +1178,7 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
     igv_notas = igv_notas or [None] * len(eje)
     vals = M[med].loc[orden]
     tot = vals.sum(axis=0)
-    c, n = M["costo"].loc[orden], (M["neto"] + M["devol"]).loc[orden]
+    c, n = M["costo"].loc[orden], M["base_costo"].loc[orden]
     pc_fila = pct_costo(c.sum(axis=1), n.sum(axis=1))
     pc_todo = pct_costo(float(c.to_numpy().sum()), float(n.to_numpy().sum()))
     nc = M["neto_carta"].loc[orden]
@@ -1306,8 +1432,7 @@ def _zona_detalle(M, med, orden, claves, eje, largo, i, comp, cambio, gran,
             "Unid.": prods["cant"].to_numpy(),
             "Venta": prods["venta"].to_numpy(),
             "% costo": (prods["costo"].where(prods["costo"] > 0)
-                        / (prods["neto"] + prods["devol"]).replace(0, np.nan)
-                        ).to_numpy(),
+                        / prods["base_costo"].replace(0, np.nan)).to_numpy(),
             _SIN_DESC: pct_costo(prods["costo"],
                                  prods["neto_carta"]).to_numpy(),
         })

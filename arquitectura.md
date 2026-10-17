@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-665 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+666 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -966,7 +966,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (185)
+**Decisiones de diseño y UX** (186)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1153,6 +1153,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#662** — Las bajas explican la Diferencia, y el POS tiene dos costos: sin y con descuento
 - **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 - **#665** — Lo que el banco devuelve de un descuento de convenio: una tabla editable en Costos, guardada…
+- **#666** — Mix de carta: lo vendido SIN COSTO CARGADO sale de todo % de costo, y la zona «Cálculo»…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -52025,6 +52026,34 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-17.)
 
+666. **Mix de carta: lo vendido SIN COSTO CARGADO sale de todo % de
+     costo, y la zona «Cálculo» muestra de dónde sale cada %.**
+     2026-10-17, a pedido, después de cuadrar «ComparativoFC» del Power BI
+     del grupo, que mide sólo las líneas con costo.
+
+     - **Una venta sin costo en el POS no costó cero** (#524), pero su
+       neto seguía en el divisor y bajaba el % de su grupo: setiembre 2026,
+       Alimentos En el Local, S/ 5.712 de dos cortes de parrilla que tienen
+       ventas con costo y otras sin él (huecos de `PRECIO COSTO`). Ahora
+       `base` arma `base_costo` (neto + devolución del banco, #665, en cero
+       para esas líneas), `neto_carta` también va en cero ahí, y la venta
+       queda en `venta_sin_costo`. Una nota de crédito (venta negativa) sí
+       entra. Con eso, setiembre da 39,21 % contra el 39,3 % de Power BI
+       (la diferencia es la devolución del 061, que Power BI no cuenta) y
+       «% sin desc.» 35,68 % contra 35,7 %.
+     - **El KPI «Sin costo cargado»** (clase `vt-kpi-alerta`) dice cuánto
+       se vendió así y, en el tooltip, qué productos. Sólo aparece si hay.
+     - **«Cálculo» es la tercera zona de abajo** (Resumen · Detalle ·
+       Cálculo), en el mismo alto que las otras: sin producto elegido, una
+       fila por producto del nivel; con uno, cada venta. Venta, IGV,
+       recargo, descuento, devolución, Base, Costo, % costo y % sin desc.,
+       con el TOTAL arriba (`ventas_mix.calculo`, columnas por nombre).
+       Es el «Detalle Cálculo» de Power BI, que no tenía la app.
+     - El «Costo / neto» de la franja de KPIs de Ventas sigue sobre todo el
+       neto: su nombre dice qué divide.
+
+     (2026-10-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52037,7 +52066,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#665**; la próxima toma el número siguiente.
+> última regla es la **#666**; la próxima toma el número siguiente.
 
 >
 

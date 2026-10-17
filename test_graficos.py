@@ -9544,9 +9544,11 @@ def _pruebas_ventas_mix():
         # El descuento y su código (#665): el del Lomo es de un convenio.
         "DESCUENTO ITEM DDOCUMENTO": [25.0, 0.0, 0.0, 0.0, 0.0],
         "CODIGO DESCUENTO": ["15", None, None, None, None],
+        "RECARGO ITEM DDCOUMENTO": [10.9, 4.36, 3.27, 0.545, 6.54],
+        "NOMBRE DESCUENTO": ["Convenio", None, None, None, None],
     })
     cols = _m.columnas(d)
-    check("resuelve las trece columnas", all(cols.values()), True)
+    check("resuelve las quince columnas", all(cols.values()), True)
     b = _m.base(d, cols)
     check("y la base trae el IGV", round(float(b["igv"].sum()), 3), 19.035)
     check("sin la columna del IGV, la base sigue (en cero)",
@@ -9558,8 +9560,9 @@ def _pruebas_ventas_mix():
     claves = sorted(b["clave"].unique())
     check("una clave por semana ISO", claves, ["2026-S32", "2026-S33"])
     M = _m.matriz(b, "grupo", claves)
-    check("las seis sumas", sorted(M),
-          ["cant", "costo", "devol", "neto", "neto_carta", "venta"])
+    check("las ocho sumas", sorted(M),
+          ["base_costo", "cant", "costo", "devol", "neto", "neto_carta",
+           "venta", "venta_sin_costo"])
     check("y no pisan lo que ofrece «Medir» (pasó: el control ofrecía "
           "«neto_carta»)", _m._MEDIDAS, ("Soles", "Unidades"))
     check("las columnas son los períodos, por nombre",
@@ -9614,10 +9617,41 @@ def _pruebas_ventas_mix():
                                              "hasta": "2026-08-01"}])["devol"].sum()),
           0.0)
     _src_mix = inspect.getsource(_m)
-    check("el % costo de Mix se mide sobre neto + devolución (KPI, tabla y top)",
-          (_src_mix.count('M["neto"] + M["devol"]'),
-           'prods["neto"] + prods["devol"]' in _src_mix,
+    check("el % costo de Mix se mide sobre la base (KPI, tabla y top)",
+          (_src_mix.count('M["base_costo"]'),
+           'prods["base_costo"]' in _src_mix,
            "convenios_descuento.leer()" in _src_mix), (2, True, True))
+    # ── Lo vendido sin costo cargado no entra en el % (#666) ─────────────
+    _d_sc = d.assign(**{"COSTO VENTA": [35.0, 0.0, 9.0, 1.0, 21.0]})
+    _b_sc = _m.base(_d_sc, cols)
+    check("una venta sin costo va aparte y fuera de la base",
+          (float(_b_sc["venta_sin_costo"].sum()),
+           round(float(_b_sc["base_costo"].sum()), 4)),
+          (40.0, round(81.0 + 24.3 + 4.05 + 48.6, 4)))
+    check("y fuera también de la base a carta",
+          float(_b_sc.loc[_b_sc["prod"] == "Ceviche", "neto_carta"].sum()), 0.0)
+    _nc = _m.base(d.assign(**{"VENTA ITEM DDOCUMENTO": [100.0, -40.0, 30.0, 5.0, 60.0],
+                              "COSTO VENTA": [35.0, -12.0, 9.0, 1.0, 21.0]}), cols)
+    check("una nota de crédito (venta negativa) sí entra en la base",
+          float(_nc["venta_sin_costo"].sum()), 0.0)
+    # ── «Cálculo»: de dónde sale cada % (#666) ───────────────────────────
+    _cp = _m.calculo(_b_sc.assign(clave="x"), por_linea=False)
+    check("Cálculo por producto: columnas por nombre y el TOTAL arriba",
+          (list(_cp.columns), _cp.iloc[0]["Producto"]),
+          (list(_m.CALCULO_PRODUCTOS), "Total"))
+    _fila = _cp[_cp["Producto"] == "Lomo"].iloc[0]
+    check("Base = Venta − IGV − Recargo (+ devolución) y % costo = Costo ÷ Base",
+          (round(_fila["Venta"] - _fila["IGV"] - _fila["Recargo"], 2),
+           round(_fila["% costo"], 6)),
+          (round(160.0 - 12.96 - 17.44, 2), round(56.0 / 129.6, 6)))
+    check("el producto sin costo dice cuánto se vendió así",
+          float(_cp.loc[_cp["Producto"] == "Ceviche", "Sin costo"].iloc[0]), 40.0)
+    _cl = _m.calculo(_b_sc[_b_sc["prod"] == "Lomo"], por_linea=True)
+    check("Cálculo de un producto: una fila por venta, la más nueva arriba",
+          (list(_cl.columns), len(_cl), _cl.iloc[1]["Fecha"][:10]),
+          (list(_m.CALCULO_LINEAS), 3, "12/08/2026"))
+    check("la zona Cálculo está entre las de abajo",
+          "_ZONA_CALCULO)" in _src_mix and "_zona_calculo(" in _src_mix, True)
     check("sin el precio de carta, cero (que se escribe «—»)",
           float(_m.base(d, {k: v for k, v in cols.items() if k != "carta"})
                 ["neto_carta"].sum()), 0.0)
