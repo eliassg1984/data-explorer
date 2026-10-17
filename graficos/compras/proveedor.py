@@ -586,6 +586,13 @@ def _html_productos_total(base, prov, todo, color_map, alto_lista,
             f'<span class="n">{_cant_txt(r.cant)}{" " + _esc(u) if u else ""}</span>'
             f'<span class="n">{pp}</span>{_hab}</summary>'
             f'<div class="cp-pl-provs">{cuerpo}</div></details>')
+    # El TOTAL al pie, fuera del scroll y en las columnas de la tabla: el
+    # mismo número que «Compra en el rango» y que la fila del Ranking.
+    _n = len(agg)
+    total = (f'<div class="cp-pl-total"><span>TOTAL · {_n:,} '
+             f'{"producto" if _n == 1 else "productos"}</span>'
+             f'<span class="r">S/ {float(sub["valor"].sum()):,.0f}</span>'
+             '<span class="r">100%</span></div>')
     return ('<div class="cp-modo-nota">El rango del Ranking · clic en un '
             'producto: sus proveedores y su curva</div>'
             '<div class="cp-pl"><div class="cp-pl-head"><span>Producto</span>'
@@ -594,7 +601,7 @@ def _html_productos_total(base, prov, todo, color_map, alto_lista,
             '<span class="r" title="Contra la mediana del precio de los 90 días '
             'anteriores a cada compra">vs. habitual</span><span></span></div>'
             f'<div class="cp-pl-lista" style="max-height:{alto_lista}px">'
-            + "".join(filas) + '</div></div>')
+            + "".join(filas) + '</div>' + total + '</div>')
 
 
 # ── Productos: «Desglose» ──────────────────────────────────────────────
@@ -1499,6 +1506,12 @@ def _ficha(base, d_full, cols, prov, prod_foco, gran, medida, rango, ant,
                    ' · todo lo comprado')
         st.markdown(f'<div class="cp-fi-curva">Curva de {_sujeto}</div>',
                     unsafe_allow_html=True)
+        # «Volver» va al lado del nombre que cierra, no en un renglón propio:
+        # ahí empujaba la lista de abajo al elegir un producto (regla #663).
+        if prod_foco:
+            st.button("✕", key="cp_prov_volver", type="tertiary",
+                      help="Volver a todo el proveedor",
+                      on_click=_soltar_producto)
         with st.container(key="cp_fi_medida"):
             st.segmented_control(
                 "Medida", list(_MEDIDAS), key="cp_evo_medida",
@@ -1520,29 +1533,28 @@ def _ficha(base, d_full, cols, prov, prod_foco, gran, medida, rango, ant,
     else:
         st.caption("Sin compras de este proveedor en la ventana.")
 
-    # La leyenda de la curva, y «volver» con un producto en foco.
-    with st.container(key="cp_ficha_ley"):
-        _ley = []
-        if parc is not None and _vals:
-            _ley.append(f'<span><i class="hueco"></i>{_esc(parc["rot"])} en curso: '
-                        f'{_esc(_fmt_medida(_vals[-1], _med_curva, _um))}</span>')
-            if _med_curva == "precio":
-                _ley.append(f'<span>contra el período anterior entero: '
-                            f'{_fila_var(_var_pct(_vals[-1], _vals[-2] if len(_vals) > 1 else None))}</span>')
-            else:
-                _ley.append(f'<span><i class="raya"></i>{_esc(parc["rot_ref"])}: '
-                            f'{_esc(_fmt_medida(_ref, _med_curva, _um))} '
-                            f'{_fila_var(_var_pct(_vals[-1], _ref))}</span>')
-        if medida != "valor" and not prod_foco:
-            _ley.append('<span>en soles: la cantidad y el precio van por '
-                        'producto (clic en uno)</span>')
-        if _evo_hist:
-            _ley.append(f'<span>{_esc(periodo.etiqueta(_op_evo))}</span>')
-        st.markdown('<div class="cp-fi-ley">' + "".join(_ley) + '</div>',
-                    unsafe_allow_html=True)
-        if prod_foco:
-            st.button("✕ volver a todo el proveedor", key="cp_prov_volver",
-                      type="tertiary", on_click=_soltar_producto)
+    # La leyenda de la curva, sólo si tiene algo que decir: un renglón vacío
+    # se comía uno de la lista de abajo (regla #663).
+    _ley = []
+    if parc is not None and _vals:
+        _ley.append(f'<span><i class="hueco"></i>{_esc(parc["rot"])} en curso: '
+                    f'{_esc(_fmt_medida(_vals[-1], _med_curva, _um))}</span>')
+        if _med_curva == "precio":
+            _ley.append(f'<span>contra el período anterior entero: '
+                        f'{_fila_var(_var_pct(_vals[-1], _vals[-2] if len(_vals) > 1 else None))}</span>')
+        else:
+            _ley.append(f'<span><i class="raya"></i>{_esc(parc["rot_ref"])}: '
+                        f'{_esc(_fmt_medida(_ref, _med_curva, _um))} '
+                        f'{_fila_var(_var_pct(_vals[-1], _ref))}</span>')
+    if medida != "valor" and not prod_foco:
+        _ley.append('<span>en soles: la cantidad y el precio van por '
+                    'producto (clic en uno)</span>')
+    if _evo_hist:
+        _ley.append(f'<span>{_esc(periodo.etiqueta(_op_evo))}</span>')
+    if _ley:
+        with st.container(key="cp_ficha_ley"):
+            st.markdown('<div class="cp-fi-ley">' + "".join(_ley) + '</div>',
+                        unsafe_allow_html=True)
 
     # ── Pestañas ─────────────────────────────────────────────────────────
     _n_prod = int(sub["prod"].nunique())
@@ -1577,10 +1589,10 @@ def _ficha(base, d_full, cols, prov, prod_foco, gran, medida, rango, ant,
                                                else _GRAN_POR.get(gran, "Por período")),
                         label_visibility="collapsed") or "doc"
 
-    # «Total del rango» lleva sólo su cabecera; el Desglose y los
-    # Documentos, además, la fila de total: una fila menos a la vista.
-    _alto_lista = (_FILAS_LISTA - (0 if _tab == "prod" and _modo == "tot" else 1)
-                   ) * _ALTO_FILA
+    # Las cuatro listas llevan cabecera y fila de total: una fila menos a la
+    # vista. «Total del rango» la tiene desde el 2026-10-16 (regla #663);
+    # su renglón lo paga la leyenda, que ya no ocupa lugar si está vacía.
+    _alto_lista = (_FILAS_LISTA - 1) * _ALTO_FILA
     st.text_input("Producto en foco", key=_K_RELEVO_PROD,
                   label_visibility="collapsed", on_change=_relevo_producto)
     if _tab == "prod" and _modo == "per":

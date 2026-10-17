@@ -1904,9 +1904,20 @@ CSS = """        <style>
             font-size: 12px; font-weight: 700; border-radius: 4px;
             font-variant-numeric: tabular-nums;
         }
+        /* El TOTAL de «Total del rango» (regla #663): el mismo look, pero
+           en las columnas de la tabla, para que el monto caiga bajo «Valor»
+           y el 100 % bajo «%». */
+        .cp-pl-total {
+            height: 22px; margin-top: 2px; padding: 0 8px;
+            background: var(--accent-tint); color: var(--accent-deep);
+            font-size: 12px; font-weight: 700; border-radius: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+        .cp-pl-total > span { white-space: nowrap; overflow: hidden; }
+        .cp-pl-total .r { text-align: right; }
         /* Siete columnas desde el 2026-10-12 (regla #646): la unidad entró
            a la cantidad y se sumaron el precio promedio y «vs. habitual». */
-        .cp-pl-head, .cp-pl-row > summary {
+        .cp-pl-head, .cp-pl-row > summary, .cp-pl-total {
             display: grid; align-items: center; column-gap: 8px;
             grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) 34px 66px 64px 66px 10px;
         }
@@ -2573,8 +2584,18 @@ CSS_FICHA = """
         }
         .st-key-cp_prov_volver button {
             min-height: 22px !important; height: 22px !important;
-            padding: 0 8px !important; font-size: 11.5px !important;
+            padding: 0 6px !important; font-size: 12px !important;
             color: var(--accent-deep) !important;
+        }
+        /* La ✕ va pegada al nombre del producto en foco, en la línea
+           «Curva de…», y no en un renglón propio bajo la curva: ahí empujaba
+           la lista de abajo (regla #663). El rótulo deja de estirarse y la
+           ✕ se lleva el hueco hasta los controles. */
+        .st-key-cp_ficha_ctrl:has(.st-key-cp_prov_volver) > *:first-child {
+            flex: 0 1 auto;
+        }
+        .st-key-cp_ficha_ctrl > .st-key-cp_prov_volver {
+            margin-right: auto !important;
         }
         .st-key-cp_ficha_tabs div[class*="st-key-cp_modo_"] {
             position: static !important; height: auto !important;

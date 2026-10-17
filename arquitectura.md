@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-662 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+663 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (213)
+**CSS y estilos** (214)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -247,8 +247,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#649** — La barra de las tarjetas «por período» de Movimientos es LISA y resalta UNA parte, elegida…
 - **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
 - **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
+- **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
 
-**Layout y alturas** (93)
+**Layout y alturas** (94)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -343,6 +344,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
 - **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
 - **#655** — «Costo por kg útil» muestra de dónde sale cada número: la ventana dice sus días y empieza a…
+- **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
 
 **Plotly y figuras** (117)
 
@@ -51910,6 +51912,38 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-16.)
 
+663. **Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕
+     del producto en foco va en la línea «Curva de…».** 2026-10-16, a
+     pedido, con dos capturas: «que en la vista de producto se pueda ver
+     el total del valor» y «la parte que dice ✕ volver a todo el
+     proveedor empuja hacia abajo, me reduce el espacio para ver
+     proveedores».
+
+     - **El TOTAL** (`TOTAL · 89 productos · S/ 25,860 · 100%`) va al pie,
+       fuera del scroll, como en Desglose y Documentos — que la tenían
+       desde la #579 — y como en el Ranking de al lado. Es el mismo número
+       que «Compra en el rango». A diferencia de `.cp-docs-total`, la fila
+       usa la MISMA grilla que `.cp-pl-head` (`.cp-pl-total`): el monto
+       cae bajo «Valor» y el 100 % bajo «%».
+     - **La ✕ vivía en el renglón de la leyenda, bajo la curva**
+       (`cp_ficha_ley`), y con ella el renglón crecía: elegir un producto
+       bajaba las pestañas y la lista, y el despliegue de sus proveedores
+       quedaba más corto. Ahora es un botón `✕` (tooltip «Volver a todo el
+       proveedor») pegado al nombre en «Curva de <b>Producto</b> ·
+       Proveedor», la línea que dice qué está en foco: cierra lo que esa
+       línea nombra. El rótulo deja de estirarse sólo cuando la ✕ está
+       (`:has(.st-key-cp_prov_volver)`, una clase sola, #469) y la ✕ se
+       lleva el hueco hasta los controles. Medido: las pestañas quedan a
+       330px del tope de la tarjeta con producto y sin él.
+     - **El renglón de la leyenda se dibuja sólo si tiene algo que
+       decir** (período en curso, «últimos 12 meses», la nota de
+       cantidad). Vacío ocupaba 18px + el gap: es lo que paga la fila
+       TOTAL, así que las cuatro listas de la ficha muestran ahora
+       `_FILAS_LISTA − 1` filas y la tarjeta no crece (574px, sin scroll
+       interno).
+
+     (2026-10-16.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51922,7 +51956,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#662**; la próxima toma el número siguiente.
+> última regla es la **#663**; la próxima toma el número siguiente.
 
 >
 
