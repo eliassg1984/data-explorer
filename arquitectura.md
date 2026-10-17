@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-664 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+665 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -728,7 +728,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
-**Datos, R2 y DuckDB** (102)
+**Datos, R2 y DuckDB** (103)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -832,6 +832,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#650** — Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de diferencias», con el posible…
 - **#651** — «Análisis de diferencias» mira los COMBOS, no descarta las líneas sin precio y reconoce lo…
 - **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
+- **#665** — Lo que el banco devuelve de un descuento de convenio: una tabla editable en Costos, guardada…
 
 **SUNAT y SIRE** (58)
 
@@ -965,7 +966,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (184)
+**Decisiones de diseño y UX** (185)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1151,6 +1152,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#661** — El costo de los DESCUENTOS es un consumo no vendido, y se resta de los dos lados: «Costo de…
 - **#662** — Las bajas explican la Diferencia, y el POS tiene dos costos: sin y con descuento
 - **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
+- **#665** — Lo que el banco devuelve de un descuento de convenio: una tabla editable en Costos, guardada…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -51979,6 +51981,50 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-17.)
 
+665. **Lo que el banco devuelve de un descuento de convenio: una tabla
+     editable en Costos, guardada en R2 (`convenios_descuento.py`).**
+     2026-10-17, a pedido, al cuadrar las páginas «ComparativoFC» y
+     «Productos» del Power BI del grupo.
+
+     - **El «FC Venta» de Power BI no se medía sobre el neto**: le sumaba
+       la parte de cada descuento de convenio que el banco le devuelve al
+       restaurante. Lo sacaba de una tabla escrita a mano en el modelo
+       (tipo de descuento, porcentaje, % de devolución, tope). El POS no
+       tiene ese dato: `TMOTIVODESCUENTO` trae el porcentaje (`nRatio`) y
+       el tope (`nTope`) del descuento, nada de la devolución.
+     - **Cuadre**, setiembre 2026, Alimentos, En el Local: base 223.584
+       contra 223.660 de Power BI, FC Venta 39,27 % contra 39,3 %, FC a
+       carta 35,68 % contra 35,7 %. Power BI además mide SÓLO las líneas
+       con costo cargado: en setiembre deja fuera S/ 5.712 de dos cortes
+       vendidos con costo 0 en el POS. La app no los saca.
+     - **Dónde vive la tabla**: ni en el repo (es público, y son términos
+       de un convenio con un banco) ni en el Sheet (el ETL no corre en esta
+       máquina y el cambio se vería al otro día). Se edita en Costos ›
+       «Convenios con devolución del banco» y va a R2
+       (`_config/convenios_descuento.json`). El código arranca VACÍO:
+       sin convenios, todo se mide como antes. `test_costo_ventas.py`
+       revisa que el módulo no nombre bancos.
+     - **Por CÓDIGO del POS y con VIGENCIA** (desde/hasta, opcionales;
+       gana la fila que empieza más tarde). Los nombres no calzan entre
+       Power BI y el POS, y cambiar el % de hoy no puede reescribir los
+       meses pasados.
+     - **En Costos**, el costo de la parte regalada baja en lo que
+       devuelve el banco (`costo_ventas.descuentos_por(..., convenios)`).
+       Para no rehacer la venta al editar la tabla, `por_grupo_dia` lleva
+       el código del descuento (`cod_desc`, `definicion_venta.VERSION` 7)
+       y la tabla se aplica después; su contenido va en la clave de
+       `graficos/costos.py::_datos`. Setiembre 2026: S/ 12.297 → 9.315.
+     - **En Mix de carta**, «% costo» = costo ÷ (neto + devolución sin
+       impuestos), en el KPI, la tabla y «Lo más vendido». El «Costo /
+       neto» de la franja de KPIs de Ventas NO cambia: su nombre dice qué
+       divide.
+     - **El acuse del guardado va por `session_state`** (un `st.toast`
+       antes de `st.rerun` no se ve, #474) y la key del editor lleva la
+       huella de la tabla, para que después de guardar arranque de lo
+       guardado.
+
+     (2026-10-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51991,7 +52037,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#664**; la próxima toma el número siguiente.
+> última regla es la **#665**; la próxima toma el número siguiente.
 
 >
 

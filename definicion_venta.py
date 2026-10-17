@@ -60,7 +60,7 @@ consumen los dos lados — `data.py` y las vistas —, igual que `cortes.py`.
 import numpy as np
 import pandas as pd
 
-VERSION = 6
+VERSION = 7
 """Entra en la clave de la caché de `data.py`. Subirla al cambiar la
 definición: la caché vive en disco y, sin esto, seguiría sirviendo el df
 preparado con la regla anterior hasta que cambie el parquet.
@@ -71,7 +71,9 @@ siguió mostrando el FoodCost con el costo unitario. La 3 es el costo de
 los combos (regla #542); la 4, los niños de las notas de crédito, que
 restan como los adultos (regla #591); la 5, la nota que toma la fecha de
 su propia fila, y la venta por día del turno de caja (regla #593); la 6,
-el costo de la parte DESCONTADA en `por_grupo_dia` (regla #661)."""
+el costo de la parte DESCONTADA en `por_grupo_dia` (regla #661); la 7,
+el código del descuento en `por_grupo_dia`, para la devolución de los
+convenios bancarios (regla #665)."""
 
 CLASE = "CLASE VENTA"
 VENTA = "Venta"
@@ -126,6 +128,7 @@ VENTA_ITEM = "VENTA ITEM DDOCUMENTO"
 NETO_ITEM = "NETO TOTAL ITEM DDOCUMENTO"
 CARTA_UNIT = "PRECIO OFICIAL ITEM DDOCUMENTO"
 DESCUENTO_ITEM = "DESCUENTO ITEM DDOCUMENTO"
+COD_DESCUENTO = "CODIGO DESCUENTO"
 COSTO_UNIT = "PRECIO COSTO"
 COSTO = "COSTO VENTA"
 """La columna que agrega `preparar`: el costo de la LÍNEA (unitario × cantidad)."""
@@ -182,7 +185,7 @@ _REFERENCIA_NC = (NC_NUMERO, NC_FECHA, "NETO NC", NC_TOTAL, "FECH REG NC")
 COLUMNAS = (
     FECHA, COD_TIPO, TIPO, ESTADO, MOTIVO_CORTESIA, NUMERO, LLAVE_DOC,
     LLAVE_ITEM, LLAVE_PAGO, NC_NUMERO, NC_FECHA, NC_TOTAL, TOTAL_DOC, PAX,
-    NINOS, CANAL, DIA, CARTA_UNIT, COSTO_UNIT, PRODUCTO, ES_COMBO,
+    NINOS, CANAL, DIA, CARTA_UNIT, COSTO_UNIT, PRODUCTO, ES_COMBO, COD_DESCUENTO,
     *_MONTOS_LINEA, *_DEL_PAGO, *_CABECERA, *_REFERENCIA_NC,
 )
 """Todo lo que `preparar()` lee —y el canal, que pide el ticket de
@@ -724,7 +727,8 @@ def unidades_por_clase_dia(df):
         g[c] = g[c].astype(object)
     return g[list(POR_CLASE_DIA)]
 
-POR_GRUPO_DIA = ("dia", "grupo", "clase", "neto", "costo", "costo_descuento")
+POR_GRUPO_DIA = ("dia", "grupo", "clase", "cod_desc", "neto", "costo",
+                 "costo_descuento")
 """Las columnas de `por_grupo_dia`, con nombre fijo (regla #481)."""
 
 
@@ -744,7 +748,12 @@ def por_grupo_dia(df):
     50 % deja la mitad de su costo—. Es como una media cortesía, y el
     reporte Costos la resta de los dos lados (regla #661). El descuento es
     el del Reporte de Descuentos del POS (`spRep_Descuento`, «Precio
-    Venta»): septiembre 2026 cuadra al céntimo, S/ 50.481,50."""
+    Venta»): septiembre 2026 cuadra al céntimo, S/ 50.481,50.
+
+    `cod_desc` es el código del descuento del POS («015»; vacío sin
+    descuento): con él el reporte resta lo que el banco devuelve de un
+    convenio (`convenios_descuento`, regla #665) sin rehacer esta cuenta
+    cuando cambia la tabla de convenios."""
     vacio = pd.DataFrame(columns=list(POR_GRUPO_DIA))
     if df is None or df.empty:
         return vacio
@@ -770,6 +779,7 @@ def por_grupo_dia(df):
         "clase": d[c_clase].where(d[c_clase] == CORTESIA, VENTA).astype(object),
         "neto": _num(NETO_ITEM),
         "costo": _num(COSTO),
+        "cod_desc": _cod_descuento(d),
     })
     # La parte descontada: descuento ÷ carta, entre 0 y 1. En una nota de
     # crédito los dos van en negativo y la parte sale positiva; el costo,
@@ -781,10 +791,21 @@ def por_grupo_dia(df):
     b = b.dropna(subset=["dia", "grupo"])
     if b.empty:
         return vacio
-    g = b.groupby(["dia", "grupo", "clase"], as_index=False)[
+    g = b.groupby(["dia", "grupo", "clase", "cod_desc"], as_index=False)[
         ["neto", "costo", "costo_descuento"]].sum()
     g["grupo"] = g["grupo"].astype(object)
-    return g
+    return g[list(POR_GRUPO_DIA)]
+
+
+def _cod_descuento(d):
+    """El código del descuento de cada línea, con tres dígitos («015») y
+    vacío donde no hay. Sin la columna, vacío entero."""
+    c = columna(d, COD_DESCUENTO)
+    if c is None:
+        return pd.Series("", index=d.index, dtype=object)
+    s = d[c].astype("string").str.strip().fillna("")
+    s = s.str.replace(r"\.0$", "", regex=True)
+    return s.where(~s.str.fullmatch(r"\d+"), s.str.zfill(3)).astype(object)
 
 
 def resumir(df, kpis, col_ped=None, col_item=None):

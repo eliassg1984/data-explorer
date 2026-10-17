@@ -85,10 +85,11 @@ import pandas as pd
 
 from cortes import MESES_ABR_ES, fecha_operativa
 
-VERSION = 4
+VERSION = 5
 """Subirla cuando cambie QUÉ se calcula. 2: semanas y quincenas. 3: los
 rótulos de los períodos sin «cierre»/«kardex» (lo dice la cabecera). 4: el
-costo de descuentos (regla #661)."""
+costo de descuentos (regla #661). 5: lo que devuelve el banco de un
+convenio (regla #665)."""
 
 DESDE = pd.Period("2025-10", freq="M")
 """El primer mes que se muestra: antes los cierres no sirven (regla #612)."""
@@ -376,10 +377,15 @@ def ventas_por(por_grupo_dia, clave):
     return venta, pos, cortesias, v_ap, c_ap
 
 
-def descuentos_por(por_grupo_dia, clave):
+def descuentos_por(por_grupo_dia, clave, convenios=None):
     """El costo de la parte descontada (`costo_descuento` de
     `definicion_venta.por_grupo_dia`): `(período × CUBETAS, período × grupo
-    aparte)`. Sin la columna —una caché de antes de la regla #661—, vacío."""
+    aparte)`. Sin la columna —una caché de antes de la regla #661—, vacío.
+
+    Con `convenios` (la tabla de `convenios_descuento`), la parte que el
+    banco devuelve no está regalada: si el banco devuelve la mitad del
+    descuento, un plato al 50 % regala un cuarto de su costo y no la mitad
+    (regla #665)."""
     vacio = pd.DataFrame(columns=list(CUBETAS), dtype=float)
     if (por_grupo_dia is None or por_grupo_dia.empty
             or "costo_descuento" not in por_grupo_dia.columns):
@@ -389,6 +395,12 @@ def descuentos_por(por_grupo_dia, clave):
     grupo = d["grupo"].map(_norm)
     cort = d["clase"].astype(str).str.upper().str.startswith("CORTES")
     v = _num(d["costo_descuento"])
+    if convenios is not None and len(convenios) and "cod_desc" in d.columns:
+        # Import local: este módulo es puro, y aquél trae streamlit por su
+        # lectura de R2 (sólo se usa su cuenta).
+        import convenios_descuento
+        v = v * (1.0 - convenios_descuento.devolucion_por_linea(
+            d["cod_desc"], d["dia"], convenios))
     por_cub = _por_clave_y_cubeta(k[~cort], grupo.map(GRUPOS_VENTA)[~cort], v[~cort])
     ap = grupo.map(GRUPOS_APARTE)
     m = ap.notna() & ~cort
@@ -420,11 +432,12 @@ def meses_del_reporte(inv):
 
 # ── La tabla ─────────────────────────────────────────────────────────────
 
-def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave):
+def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave,
+           convenios=None):
     """Lo común a los tres granos: las series de cada fila en el orden de
     `claves`, con los inventarios ya calculados."""
     venta, pos, cortesias, v_ap, c_ap = ventas_por(por_grupo_dia, clave)
-    descuentos, d_ap = descuentos_por(por_grupo_dia, clave)
+    descuentos, d_ap = descuentos_por(por_grupo_dia, clave, convenios)
 
     def serie(df):
         r = df.reindex(claves).reindex(columns=list(CUBETAS)).fillna(0.0)
@@ -452,7 +465,7 @@ def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave):
     }
 
 
-def armar(ajuste, compras, salidas, por_grupo_dia):
+def armar(ajuste, compras, salidas, por_grupo_dia, convenios=None):
     """El grano MES, con el inventario de los cierres. Devuelve `grano`,
     `inventario` («cierre»), `periodos` (`k` «2025-10», `rot` «oct 25»,
     `sub` con la fecha del cierre) y las series de `_tabla`. Sin dos cierres
@@ -471,11 +484,13 @@ def armar(ajuste, compras, salidas, por_grupo_dia):
             sub = _dia_mes(a) if a == z else f"{a.day}–{_dia_mes(z)}"
         out["periodos"].append({"k": str(m), "rot": f"{MESES_ABR_ES[m.month - 1]} {str(m.year)[2:]}",
                                 "sub": sub})
-    out.update(_tabla(meses, prev, inv, compras, salidas, por_grupo_dia, clave_mes))
+    out.update(_tabla(meses, prev, inv, compras, salidas, por_grupo_dia, clave_mes,
+                      convenios))
     return out
 
 
-def armar_kardex(grano, fotos, base, compras, salidas, por_grupo_dia, hasta):
+def armar_kardex(grano, fotos, base, compras, salidas, por_grupo_dia, hasta,
+                 convenios=None):
     """El grano QUINCENA o SEMANA, con el inventario del kardex al final de
     cada período. `hasta` es el último día con datos completos: un período
     que lo pasa no entra. Misma forma que `armar`, con `inventario`
@@ -496,7 +511,7 @@ def armar_kardex(grano, fotos, base, compras, salidas, por_grupo_dia, hasta):
         out["periodos"].append({"k": a.isoformat(), "rot": rotulo_periodo(a, b),
                                 "sub": f"al {_dia_mes(b)}"})
     out.update(_tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia,
-                      clave_de(pers)))
+                      clave_de(pers), convenios))
     return out
 
 

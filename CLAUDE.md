@@ -1135,6 +1135,13 @@ antes). Sale de `definicion_venta.por_grupo_dia`
 Descuentos del POS (`spRep_Descuento`): septiembre 2026, S/ 50.481,50.
 Regla #661.
 
+**Y de un descuento de convenio, el banco devuelve una parte** (regla
+#665): esa parte no está regalada. El POS no lo sabe; la tabla (código del
+descuento, % de devolución, vigencia) se edita en Costos › «Convenios con
+devolución del banco» y vive en R2, NO en el repo, que es público
+(`convenios_descuento.py` arranca vacío). Entra también en el «% costo»
+de Mix de carta, que se mide sobre el neto más la devolución.
+
 ## El stock también tiene UNA definición: lo ACTIVO
 
 Desde el 2026-10-03 «Stock e Inventario» cuenta sólo lo que el POS da por

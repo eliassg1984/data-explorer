@@ -23,6 +23,7 @@ Se ejecuta solo:  python test_costo_ventas.py
 """
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -177,6 +178,50 @@ igual(round(float(desc_ap.loc[P("2026-09"), "Eventos"]), 6), 4.0,
       "el descuento de Eventos va aparte, como su costo")
 igual(cv.descuentos_por(pgd.drop(columns=["costo_descuento"]), cv.clave_mes)[0].empty, True,
       "sin la columna (una caché vieja), el costo de descuentos va vacío")
+
+# ── Lo que devuelve el banco de un convenio (regla #665) ────────────────
+import convenios_descuento as cd  # noqa: E402
+
+igual([cd.codigo(x) for x in ("15", 15, 15.0, "015", None, "")],
+      ["015", "015", "015", "015", "", ""], "el código del POS, con tres dígitos")
+_t = cd.normalizar([{"codigo": "15", "devolucion": 0.5},
+                    {"codigo": "", "devolucion": 0.5},
+                    {"codigo": "061", "devolucion": 1.5}])
+igual(list(_t["codigo"]), ["015"], "sin código o con devolución fuera de 0–1, la fila no entra")
+igual(list(_t.columns), list(cd.COLUMNAS), "la tabla, con sus columnas por nombre")
+_cods = pd.Series(["015", "015", "015", "061", ""])
+_dias = pd.Series(pd.to_datetime(["2026-08-31", "2026-09-01", "2026-09-30", "2026-09-15",
+                                  "2026-09-15"]))
+_vig = [{"codigo": "015", "devolucion": 0.5},
+        {"codigo": "015", "devolucion": 0.4, "desde": "2026-09-01", "hasta": "2026-09-30"}]
+igual(list(cd.devolucion_por_linea(_cods, _dias, _vig)), [0.5, 0.4, 0.4, 0.0, 0.0],
+      "la vigencia: gana la fila que empieza más tarde, y «hasta» es inclusivo")
+ok(cd.huella(_vig) != cd.huella(_vig[:1]) and cd.huella(_vig) == cd.huella(list(_vig)),
+   "la huella cambia con la tabla (va en la clave de la caché de Costos)")
+igual(cd.como_json(_vig)[1]["desde"], "2026-09-01", "en R2, las fechas en ISO")
+
+vd_c = vd.assign(**{dv.COD_DESCUENTO: ["15", "15", None, None, None, "61"]})
+pgd_c = dv.por_grupo_dia(vd_c)
+igual(sorted(set(pgd_c["cod_desc"])), ["", "015", "061"],
+      "por_grupo_dia lleva el código del descuento, con tres dígitos")
+igual(round(float(cv.descuentos_por(pgd_c, cv.clave_mes)[0].loc[P("2026-09"), "Alimentos"]), 6),
+      13.0, "sin convenios, el costo de descuentos es el de siempre")
+igual(round(float(cv.descuentos_por(pgd_c, cv.clave_mes, _vig[:1])[0]
+                  .loc[P("2026-09"), "Alimentos"]), 6),
+      5.5, "con el banco devolviendo la mitad: 30 × 50 % × ½ − 10 × 20 % (la nota, sin convenio)")
+igual(round(float(cv.descuentos_por(pgd_c, cv.clave_mes, [
+    {"codigo": "015", "devolucion": 0.5, "desde": "2026-10-01"}])[0]
+                  .loc[P("2026-09"), "Alimentos"]), 6),
+      13.0, "un convenio que todavía no estaba vigente no devuelve nada")
+_cos = (RAIZ / "graficos" / "costos.py").read_text(encoding="utf-8")
+ok("_datos(ajuste, sellos, version, convenios)" in _cos
+   and re.search(r"ventas,\s+convenios\)", _cos) is not None
+   and "hasta, convenios)" in _cos,
+   "Costos pasa los convenios a la caché y a los tres granos")
+_mod = (RAIZ / "convenios_descuento.py").read_text(encoding="utf-8")
+ok(not any(b in _mod.upper() for b in ("BCP", "BBVA", "INTERBANK", "AMEX"))
+   and "0.5," not in _mod,
+   "el repo es público: los valores de los convenios no viven en el código")
 
 # ── armar: la tabla entera ───────────────────────────────────────────────
 D = cv.armar(ajuste, compras, salidas, pgd)

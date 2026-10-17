@@ -33,6 +33,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import convenios_descuento
 import costo_ventas
 import data
 import definicion_venta
@@ -75,7 +76,7 @@ def _ultimo_dia_completo(fotos, ventas):
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _datos(_ajuste, sellos, version):
+def _datos(_ajuste, sellos, version, convenios=None):
     """Los tres granos de la tabla: `{"granos": {"mes": …, "quincena": …,
     "semana": …}}`. El mes, con los cierres (`costo_ventas.armar`); la
     quincena y la semana, con el kardex (`armar_kardex`). Si falta compras,
@@ -85,7 +86,10 @@ def _datos(_ajuste, sellos, version):
     `_ajuste` no entra en la clave (el guion bajo): lo identifica su sello,
     que va en `sellos` junto con los de los demás, y `version` lleva las de
     la cuenta, la definición de venta y el kardex. Sólo en memoria: lo
-    pesado —cada parquet— ya está en la caché de disco de `data.py`."""
+    pesado —cada parquet— ya está en la caché de disco de `data.py`.
+
+    `convenios` es la tabla de `convenios_descuento` (regla #665): entra en
+    la clave, así que guardarla recalcula la tabla, sin volver a la venta."""
     compras = data.cargar("compras.parquet")
     salidas = data.cargar("salidas.parquet")
     ventas = data.venta_por_grupo_dia()
@@ -93,7 +97,8 @@ def _datos(_ajuste, sellos, version):
                              ("ventas", ventas)) if d is None]
     if faltan:
         raise RuntimeError("no se pudo leer: " + ", ".join(faltan))
-    granos = {"mes": costo_ventas.armar(_ajuste, compras, salidas, ventas)}
+    granos = {"mes": costo_ventas.armar(_ajuste, compras, salidas, ventas,
+                                        convenios)}
     fotos = data.kardex_fotos()
     maestro = data.cargar("inventariovalorizado.parquet")
     if fotos is not None and not fotos.empty and maestro is not None and not ventas.empty:
@@ -104,7 +109,7 @@ def _datos(_ajuste, sellos, version):
         if hasta:
             for grano in ("quincena", "semana"):
                 granos[grano] = costo_ventas.armar_kardex(
-                    grano, fotos, base, compras, salidas, ventas, hasta)
+                    grano, fotos, base, compras, salidas, ventas, hasta, convenios)
     return {"granos": granos}
 
 
@@ -120,12 +125,13 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
     sellos = (data.sello_datos("ajusteinventario.parquet"),
               *(data.sello_datos(a) for a in _ARCHIVOS))
     version = (costo_ventas.VERSION, definicion_venta.VERSION, kardex.VERSION)
+    convenios = convenios_descuento.leer()
     with st.container(border=True, key="ajuste_graf_card_izq_costos"):
         try:
             # La primera vez de cada versión de los parquets baja la venta
             # entera para agruparla (unos 15 s); después sale de la caché.
             with st.spinner("Calculando el costo de ventas…"):
-                datos = _datos(ajuste, sellos, version)
+                datos = _datos(ajuste, sellos, version, convenios)
             mes = datos["granos"]["mes"]
         except Exception as e:
             st.warning(f"No se pudo armar el costo de ventas ({e}). "
@@ -140,3 +146,82 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
         # cierres sueltos que llegan en `df_f`.
         publicar_contexto_ia("Costos", costo_ventas.tabla_larga(mes))
         _TABLA(key="costos_tabla", data=datos, width="stretch")
+    _editor_convenios(convenios)
+
+
+_ACUSE_CONVENIOS = "_costos_conv_acuse"
+
+
+def _rotulo(cod, nombre):
+    return f"{cod} · {nombre}" if nombre else cod
+
+
+def _editor_convenios(convenios):
+    """La tabla de convenios con devolución del banco (regla #665): qué
+    parte de un descuento le devuelve el banco al restaurante. Se edita
+    acá y se guarda en R2 (`convenios_descuento`); el costo de descuentos
+    de la tabla de arriba ya la descuenta.
+
+    El acuse del guardado viaja por `session_state` y lo pinta la corrida
+    siguiente: un `st.toast` antes de un `st.rerun` no se ve nunca (#474).
+    La key del editor lleva la huella de la tabla, así que después de
+    guardar arranca de lo guardado y no de lo que quedó tipeado."""
+    cat = convenios_descuento.catalogo()
+    for r in convenios.itertuples():
+        cat.setdefault(r.codigo, r.nombre)
+    rotulos = [_rotulo(c, n) for c, n in sorted(cat.items())]
+    por_rotulo = {_rotulo(c, n): (c, n) for c, n in cat.items()}
+    n = len(convenios)
+    with st.expander(f"Convenios con devolución del banco · {n}",
+                     expanded=False, key="costos_conv"):
+        acuse = st.session_state.pop(_ACUSE_CONVENIOS, None)
+        if acuse:
+            (st.success if acuse[0] else st.error)(acuse[1])
+        st.caption(
+            "Lo que el banco le devuelve al restaurante de un descuento de "
+            "convenio: si devuelve la mitad, un plato al 50 % regala un "
+            "cuarto de su costo y no la mitad. Baja el «Costo de descuentos» de la tabla "
+            "y entra en el «% costo» de Ventas › Mix de carta. «Desde» y "
+            "«Hasta» vacíos: sin límite. El POS no guarda este dato.")
+        tabla = pd.DataFrame({
+            "Descuento": [_rotulo(r.codigo, cat.get(r.codigo) or r.nombre)
+                          for r in convenios.itertuples()],
+            "% devolución": [round(float(r.devolucion) * 100, 2)
+                             for r in convenios.itertuples()],
+            "Desde": [r.desde for r in convenios.itertuples()],
+            "Hasta": [r.hasta for r in convenios.itertuples()],
+        })
+        tabla["Desde"] = pd.to_datetime(tabla["Desde"])
+        tabla["Hasta"] = pd.to_datetime(tabla["Hasta"])
+        editada = st.data_editor(
+            tabla, key=f"costos_conv_ed_{convenios_descuento.huella(convenios)}",
+            num_rows="dynamic", hide_index=True, width="stretch",
+            column_config={
+                "Descuento": st.column_config.SelectboxColumn(
+                    "Descuento", options=rotulos, required=True, width="large",
+                    help="El descuento del POS, por su código"),
+                "% devolución": st.column_config.NumberColumn(
+                    "% devolución", min_value=0, max_value=100, step=1,
+                    format="%.0f %%", required=True,
+                    help="Qué parte del descuento devuelve el banco"),
+                "Desde": st.column_config.DateColumn("Desde", format="DD/MM/YYYY"),
+                "Hasta": st.column_config.DateColumn("Hasta", format="DD/MM/YYYY"),
+            })
+        if not data.secrets_disponibles():
+            st.caption("Sin conexión a R2: la tabla no se puede guardar.")
+            return
+        if st.button("Guardar convenios", key="costos_conv_guardar",
+                     type="primary"):
+            filas = []
+            for r in editada.itertuples(index=False):
+                cod, nombre = por_rotulo.get(r[0], (None, None))
+                if cod is None or pd.isna(r[1]):
+                    continue
+                filas.append({"codigo": cod, "nombre": nombre,
+                              "devolucion": float(r[1]) / 100.0,
+                              "desde": r[2], "hasta": r[3]})
+            ok = convenios_descuento.guardar(filas)
+            st.session_state[_ACUSE_CONVENIOS] = (
+                ok, f"Guardados {len(filas)} convenios." if ok else
+                "No se pudo guardar en R2. Reintentá en unos segundos.")
+            st.rerun()

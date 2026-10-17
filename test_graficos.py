@@ -9541,9 +9541,12 @@ def _pruebas_ventas_mix():
         # El precio de carta (#664): el Lomo de la semana 32 iba al 20 % de
         # descuento (2 × 62,5 = 125 a carta, se cobró 100).
         "PRECIO OFICIAL ITEM DDOCUMENTO": [62.5, 40.0, 10.0, 5.0, 60.0],
+        # El descuento y su código (#665): el del Lomo es de un convenio.
+        "DESCUENTO ITEM DDOCUMENTO": [25.0, 0.0, 0.0, 0.0, 0.0],
+        "CODIGO DESCUENTO": ["15", None, None, None, None],
     })
     cols = _m.columnas(d)
-    check("resuelve las once columnas", all(cols.values()), True)
+    check("resuelve las trece columnas", all(cols.values()), True)
     b = _m.base(d, cols)
     check("y la base trae el IGV", round(float(b["igv"].sum()), 3), 19.035)
     check("sin la columna del IGV, la base sigue (en cero)",
@@ -9555,8 +9558,8 @@ def _pruebas_ventas_mix():
     claves = sorted(b["clave"].unique())
     check("una clave por semana ISO", claves, ["2026-S32", "2026-S33"])
     M = _m.matriz(b, "grupo", claves)
-    check("las cinco medidas", sorted(M),
-          ["cant", "costo", "neto", "neto_carta", "venta"])
+    check("las seis sumas", sorted(M),
+          ["cant", "costo", "devol", "neto", "neto_carta", "venta"])
     check("y no pisan lo que ofrece «Medir» (pasó: el control ofrecía "
           "«neto_carta»)", _m._MEDIDAS, ("Soles", "Unidades"))
     check("las columnas son los períodos, por nombre",
@@ -9601,6 +9604,20 @@ def _pruebas_ventas_mix():
     check("una línea regalada entera usa los impuestos de las demás",
           _m.neto_a_carta(_regalo, pd.Series([100.0, 50.0])).tolist(),
           [80.0, 80.0])
+    # ── Lo que devuelve el banco entra en la base del % costo (#665) ──────
+    check("sin convenios no hay devolución", float(b["devol"].sum()), 0.0)
+    _bc = _m.base(d, cols, convenios=[{"codigo": "015", "devolucion": 0.5}])
+    check("con convenio, la devolución va sin impuestos (25 × ½ × 0,81)",
+          round(float(_bc["devol"].sum()), 4), round(25 * 0.5 * 0.81, 4))
+    check("y fuera de su vigencia, nada",
+          float(_m.base(d, cols, convenios=[{"codigo": "015", "devolucion": 0.5,
+                                             "hasta": "2026-08-01"}])["devol"].sum()),
+          0.0)
+    _src_mix = inspect.getsource(_m)
+    check("el % costo de Mix se mide sobre neto + devolución (KPI, tabla y top)",
+          (_src_mix.count('M["neto"] + M["devol"]'),
+           'prods["neto"] + prods["devol"]' in _src_mix,
+           "convenios_descuento.leer()" in _src_mix), (2, True, True))
     check("sin el precio de carta, cero (que se escribe «—»)",
           float(_m.base(d, {k: v for k, v in cols.items() if k != "carta"})
                 ["neto_carta"].sum()), 0.0)
