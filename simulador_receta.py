@@ -45,7 +45,7 @@ import math
 import numpy as np
 import pandas as pd
 
-VERSION = 1
+VERSION = 2
 
 UNIDADES = {
     "GRAMOS": "g", "GRAMO": "g", "MILILITROS": "ml", "MILILITRO": "ml",
@@ -374,6 +374,70 @@ def exposicion_carta(df_rv, df_rb, df_po, platos=None):
     return out
 
 
+def alzas(exposiciones, carta, cambios):
+    """Impacto conjunto de {insumo: cambio %} sobre las ventas del período.
+
+    Cada plato aparece una vez, incluso si lleva varios insumos elegidos.
+    Vendidos y VendidoNeto vienen de `carta_costeada.con_ventas`: el neto
+    conserva descuentos y canales. Los costos son los de la receta actual,
+    no el costo histórico al vender. Sin ventas se conserva la simulación
+    por unidad, con impacto del período cero.
+    """
+    cols = ["Cod", "Producto", "Grupo", "Subgrupo", "Lleva", "Parte", "Precio",
+            "Neto", "Costo", "CostoNuevo", "PctHoy", "PctNuevo",
+            "PrecioMantener", "Vendidos", "DeltaUnitario", "DeltaPeriodo",
+            "CostoPeriodo", "CostoNuevoPeriodo", "NetoPeriodo",
+            "MargenPeriodo", "MargenNuevoPeriodo"]
+    cambios = {str(c).strip(): float(p) / 100 for c, p in cambios.items()}
+    if any(not math.isfinite(p) or p < -1 for p in cambios.values()):
+        raise ValueError("El cambio de precio debe ser finito y no menor que −100 %.")
+    if carta is None or carta.empty or not cambios:
+        return pd.DataFrame(columns=cols)
+    filas = []
+    for r in carta.itertuples(index=False):
+        exposicion = exposiciones.get(str(r.Cod).strip(), {})
+        lleva = sum(exposicion.get(c, 0.0) for c in cambios)
+        if lleva <= 0 or not math.isfinite(r.Neto) or r.Neto <= 0:
+            continue
+        costo = float(r.Costo) if pd.notna(r.Costo) and r.Costo > 0 else sum(exposicion.values())
+        delta = sum(exposicion.get(c, 0.0) * p for c, p in cambios.items())
+        nuevo = costo + delta
+        vend = getattr(r, "Vendidos", 0.0)
+        vend = float(vend) if pd.notna(vend) else 0.0
+        neto = getattr(r, "VendidoNeto", 0.0)
+        neto = float(neto) if pd.notna(neto) else 0.0
+        filas.append({
+            "Cod": r.Cod, "Producto": r.Producto, "Grupo": r.Grupo,
+            "Subgrupo": r.Subgrupo, "Lleva": lleva,
+            "Parte": lleva / costo * 100 if costo else 0.0,
+            "Precio": float(r.Precio), "Neto": float(r.Neto), "Costo": costo,
+            "CostoNuevo": nuevo, "PctHoy": costo / r.Neto * 100,
+            "PctNuevo": nuevo / r.Neto * 100,
+            "PrecioMantener": float(r.Precio) * nuevo / costo if costo else float(r.Precio),
+            "Vendidos": vend, "DeltaUnitario": delta, "DeltaPeriodo": delta * vend,
+            "CostoPeriodo": costo * vend, "CostoNuevoPeriodo": nuevo * vend,
+            "NetoPeriodo": neto, "MargenPeriodo": neto - costo * vend,
+            "MargenNuevoPeriodo": neto - nuevo * vend,
+        })
+    out = pd.DataFrame(filas, columns=cols)
+    return out.sort_values(["DeltaPeriodo", "Lleva"], ascending=False,
+                           key=lambda s: s.abs()).reset_index(drop=True)
+
+
+def resumen_alzas(carta, impacto):
+    """Costo y margen de toda la carta evaluada, incluyendo lo no afectado.
+
+    Es margen de recetas (neto vendido menos costo teórico); no utilidad
+    final: no descuenta personal, alquiler ni otros gastos.
+    """
+    costo = float((carta["Costo"] * carta["Vendidos"]).sum())
+    neto = float(carta["VendidoNeto"].sum())
+    delta = float(impacto["DeltaPeriodo"].sum())
+    return {"neto": neto, "costo": costo, "costo_nuevo": costo + delta,
+            "delta": delta, "margen": neto - costo,
+            "margen_nuevo": neto - costo - delta}
+
+
 def alza(exposiciones, carta, insumo, pct):
     """Cada plato que lleva `insumo`, con su costo y su % de costo si el
     insumo sube `pct` %. `carta`: DataFrame con Cod, Producto, Grupo,
@@ -382,33 +446,9 @@ def alza(exposiciones, carta, insumo, pct):
     cols = ["Cod", "Producto", "Grupo", "Subgrupo", "Lleva", "Parte", "Precio",
             "Neto", "Costo", "CostoNuevo", "PctHoy", "PctNuevo",
             "PrecioMantener", "Vendidos", "DeltaMes"]
-    if carta is None or carta.empty:
-        return pd.DataFrame(columns=cols)
-    k = pct / 100.0
-    filas = []
-    for r in carta.itertuples(index=False):
-        e = exposiciones.get(str(r.Cod).strip(), {}).get(insumo, 0.0)
-        if e <= 0 or not r.Neto or r.Neto <= 0:
-            continue
-        costo = float(r.Costo) if r.Costo and r.Costo > 0 else sum(
-            exposiciones.get(str(r.Cod).strip(), {}).values())
-        nuevo = costo + e * k
-        vend = float(getattr(r, "Vendidos", 0.0) or 0.0)
-        filas.append({
-            "Cod": r.Cod, "Producto": r.Producto, "Grupo": r.Grupo,
-            "Subgrupo": r.Subgrupo, "Lleva": e,
-            "Parte": e / costo * 100 if costo else 0.0,
-            "Precio": float(r.Precio), "Neto": float(r.Neto), "Costo": costo,
-            "CostoNuevo": nuevo, "PctHoy": costo / r.Neto * 100,
-            "PctNuevo": nuevo / r.Neto * 100,
-            "PrecioMantener": float(r.Precio) * nuevo / costo if costo else float(r.Precio),
-            "Vendidos": vend, "DeltaMes": e * k * vend / 3.0,
-        })
-    out = pd.DataFrame(filas, columns=cols)
-    if out.empty:
-        return out
-    return out.sort_values(["DeltaMes", "Lleva"], ascending=False,
-                           key=lambda s: s.abs()).reset_index(drop=True)
+    out = alzas(exposiciones, carta, {insumo: pct})
+    out["DeltaMes"] = out["DeltaPeriodo"] / 3.0
+    return out[cols]
 
 
 # ─── El log de las recetas base (MRECETABASE_LOG / DRECETABASE_LOG) ──────

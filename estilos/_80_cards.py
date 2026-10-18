@@ -2087,7 +2087,7 @@ CSS = """    /* ================================================================
     .st-key-rec_rb_det_cab_ver, .st-key-rec_rb_cab_ventana,
     .st-key-rec_rb_cab_area, .st-key-rec_rb_cab_produccion,
     .st-key-rec_rb_cab_buscar,
-    .st-key-rec_alza_cab_ins, .st-key-rec_alza_cab_pct {
+    .st-key-rec_alza_cab_fecha {
         position: relative;
         padding-left: 11px !important;
         overflow: visible !important;
@@ -2098,7 +2098,7 @@ CSS = """    /* ================================================================
     .st-key-rec_rb_det_cab_ver::after, .st-key-rec_rb_cab_ventana::after,
     .st-key-rec_rb_cab_area::after, .st-key-rec_rb_cab_produccion::after,
     .st-key-rec_rb_cab_buscar::after,
-    .st-key-rec_alza_cab_ins::after, .st-key-rec_alza_cab_pct::after {
+    .st-key-rec_alza_cab_fecha::after {
         content: "";
         position: absolute;
         left: 0;
@@ -2114,7 +2114,7 @@ CSS = """    /* ================================================================
     .st-key-rec_rb_det_cab_ver::before, .st-key-rec_rb_cab_ventana::before,
     .st-key-rec_rb_cab_area::before, .st-key-rec_rb_cab_produccion::before,
     .st-key-rec_rb_cab_buscar::before,
-    .st-key-rec_alza_cab_ins::before, .st-key-rec_alza_cab_pct::before {
+    .st-key-rec_alza_cab_fecha::before {
         position: absolute;
         top: calc(100% + 2px);
         left: 11px;
@@ -2139,7 +2139,7 @@ CSS = """    /* ================================================================
     .st-key-rec_rb_det_cab_ver:hover::before, .st-key-rec_rb_cab_ventana:hover::before,
     .st-key-rec_rb_cab_area:hover::before, .st-key-rec_rb_cab_produccion:hover::before,
     .st-key-rec_rb_cab_buscar:hover::before,
-    .st-key-rec_alza_cab_ins:hover::before, .st-key-rec_alza_cab_pct:hover::before {
+    .st-key-rec_alza_cab_fecha:hover::before {
         opacity: 1;
     }
     .st-key-rec_carta_cab_ver::before { content: "Ver"; }
@@ -2148,14 +2148,9 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_tipo::before { content: "Tipo"; }
     .st-key-rec_carta_cab_buscar::before { content: "Buscar"; }
     .st-key-rec_carta_cab_fecha::before { content: "Fecha de lo vendido"; }
-    .st-key-rec_alza_cab_ins::before { content: "Insumo de compra"; }
-    .st-key-rec_alza_cab_pct::before { content: "Cambio de precio"; }
-    /* El deslizador de «Cambio de precio» con ancho propio: en un
-       contenedor `width="content"` se encoge a 139px y los −30 / +50 de los
-       extremos se le montan. */
-    .st-key-rec_alza_cab_pct { width: 280px; padding-right: 14px !important; }
-    /* «¿Y si sube un insumo?» (regla #656): la fila de cinco cifras, cada
-       una con su rótulo arriba y su pie abajo. */
+    .st-key-rec_alza_cab_fecha::before { content: "Período de ventas"; }
+    .st-key-rec_alza_cab { flex-wrap: wrap !important; }
+    /* Escenario de varios insumos: las cifras se reacomodan en móvil. */
     .rec-alza-kpis {
         display: grid;
         grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2178,6 +2173,9 @@ CSS = """    /* ================================================================
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+    @media (max-width: 900px) {
+        .rec-alza-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     .st-key-rec_rb_det_cab_ver::before { content: "Ver"; }
     .st-key-rec_rb_cab_ventana::before { content: "Uso y producción en"; }
@@ -2400,13 +2398,15 @@ CSS = """    /* ================================================================
     }
     /* La fecha de la tarjeta, al final del renglón del título (#657): la
        píldora de las tarjetas de Compras y Movimientos. */
-    .st-key-rec_carta_f_fila {
+    .st-key-rec_carta_f_fila,
+    .st-key-rec_alza_f_fila {
         display: flex !important;
         flex-direction: row !important;
         align-items: center !important;
         width: auto !important;
     }
-    .st-key-rec_carta_f_escala button {
+    .st-key-rec_carta_f_escala button,
+    .st-key-rec_alza_f_escala button {
         min-width: 0 !important;
         height: 24px !important;
         min-height: 24px !important;
@@ -2421,11 +2421,13 @@ CSS = """    /* ================================================================
         white-space: nowrap !important;
         box-shadow: var(--shadow) !important;
     }
-    .st-key-rec_carta_f_escala button:hover {
+    .st-key-rec_carta_f_escala button:hover,
+    .st-key-rec_alza_f_escala button:hover {
         background: var(--accent-tint) !important;
         color: var(--accent-deep) !important;
     }
-    .st-key-rec_carta_f_escala button > div > div:last-child:not(:first-child) {
+    .st-key-rec_carta_f_escala button > div > div:last-child:not(:first-child),
+    .st-key-rec_alza_f_escala button > div > div:last-child:not(:first-child) {
         display: none !important;
     }
     /* El renglón del nombre (#572): el nombre se corta con «…» y «Simular»

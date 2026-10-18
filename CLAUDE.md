@@ -1386,6 +1386,16 @@ vacío es un artículo NUEVO, no un cambio.
 «¿Y si sube un insumo?» (vista «Alza Insumo») usa
 `simulador_receta.exposicion_carta`: cuánto de cada insumo de compra lleva
 cada plato, con los cortes porcionados contados para su insumo de origen.
+Desde el 2026-10-18 permite varios insumos a la vez, editando % o precio
+absoluto por unidad de almacén (promedio vigente; última compra como
+respaldo identificado). El calendario compartido tiene rango propio
+`alza`: días, semanas, meses o intervalos, sin dividir 90 días entre tres.
+`simulador_receta.alzas` suma los cambios por plato una sola vez;
+`resumen_alzas` compara costo y margen de toda la carta activa costeada,
+incluidos los platos no afectados. Usa las unidades y el neto real del
+período con recetas actuales; es margen sobre recetas, no utilidad final.
+Se verifica con `python -m unittest test_recetas_alza` (incluye AppTest de
+la edición sincronizada), además del smoke de gráficos.
 
 ## El eje temporal de la franja es un RANGO, con un solo dueño
 
