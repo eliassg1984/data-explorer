@@ -289,7 +289,7 @@ details.metodo p { margin: 6px 0 0; max-width: 120ch; }
 <div class="app">
   <section class="resumen" aria-label="Resumen del período">
     <div>
-      <div class="eyebrow">Costo de los insumos de compra</div>
+      <div class="eyebrow">Consumo estimado · precios promedio actuales</div>
       <div class="grande num" id="k-costo"></div>
       <div class="sub num" id="k-sub"></div>
     </div>
@@ -497,7 +497,7 @@ function pintarResumen() {
   const costo = suma(A.lista.map(a => a.costo));
   document.getElementById('k-costo').textContent = sol(costo);
   document.getElementById('k-sub').textContent =
-    `${n0(A.lista.length)} insumos · recetas abiertas hasta ${D.resumen.niveles} niveles` + (UI.vi ? '' : ' · sin venta interna');
+    `${n0(A.lista.length)} insumos · fecha del pedido · recetas abiertas hasta ${D.resumen.niveles} niveles` + (UI.vi ? ' · venta interna con fecha de producción cuando corresponde' : ' · sin venta interna');
   const g = new Map();
   for (const a of A.lista) for (const [k, q] of a.cam) g.set(k, (g.get(k) || 0) + q * D.insumos[a.cod][2]);
   const gr = [...g.entries()].sort((x, y) => y[1] - x[1]);
@@ -1028,6 +1028,7 @@ function notaProduccion() {
 {
   const R = D.resumen;
   const partes = [
+    '<b>Referencia en Inforest.</b> Paloteo de Insumos (spRep_PaloteoInsumo): aporta el primer nivel de consumo según recetas. La webapp lo amplía hasta los insumos de compra con recetas base y porcionamientos. Es consumo estimado según recetas, valorizado con precios promedio actuales. El consumo operativo de inventarios —inventario inicial + compras − inventario final— se consulta en Costos; el costo histórico de lo vendido, en Ventas.',
     '<b>El árbol.</b> Cada plato vendido se abre en los insumos de su receta de venta —el primer nivel, el del POS—. Un insumo que es una preparación baja por su receta base, y así hasta llegar a lo que se compra (hasta ' + R.niveles + ' niveles en el rango). Un corte que sale de un porcionamiento pasa al insumo entero con el rendimiento REAL: los porcionamientos de los 90 días que terminan el último día de cada mes; si no hubo, su receta base; y sólo si tampoco tiene receta, los 10 porcionamientos más cercanos. El reparto entre los cortes de un porcionamiento es por su peso, la regla del propio Almacén.',
     '<b>Unidades y precios.</b> Todo en la unidad del kardex (la de compra), con el factor de cada producto. Recetas y precios promedio: los de HOY — editar una receta cambia el consumo de meses pasados, como en el POS.',
     `<b>El costo.</b> Al primer nivel, el del POS, el período suma ${sol(R.costo_nivel1)}; bajando hasta lo que se compra, ${sol(R.costo)}. Por las recetas base cierra: el Almacén recuesta cada preparación con sus insumos. La diferencia sale de los porcionamientos: las hojas llevan el rendimiento real, y el corte, el costo que le puso el Almacén.`,

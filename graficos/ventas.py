@@ -123,10 +123,11 @@ def _selector_dia_venta():
         default=dv.DIA_TURNO, required=True, key=dv.CLAVE_DIA,
         label_visibility="collapsed",
         on_change=lambda: st.session_state.__setitem__(_K_DIA_RECARGA, True),
-        help=("**Turno de caja**: lo cobrado pasada la medianoche cuenta en "
-              "el día del turno, como el cierre de caja. **Emisión · SUNAT**: "
-              "en el día del comprobante, como el Registro de Ventas. Sólo "
-              "cambia lo cobrado después de las 00:00 (unos 5 cobros al mes)."))
+        help=("**Turno de caja**: usa el día contable del comprobante. "
+              "**Emisión · SUNAT**: usa su fecha de registro, referencia "
+              "para comparar con el Registro de Ventas de Inforest. Incluye "
+              "comprobantes pagados y por cobrar, menos notas de crédito; "
+              "la fecha de cada pago pertenece a la conciliación de caja."))
     if st.session_state.pop(_K_DIA_RECARGA, False):
         st.rerun(scope="app")
 

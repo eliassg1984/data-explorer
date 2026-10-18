@@ -88,8 +88,8 @@ function porFamilia(st, data, w, b) {
   // lo mismo con lo mismo (regla #661).
   r.pos_aj = resta(r.pos, r.desc);
   r.dif = resta(r.carta, r.pos_aj);
-  // Lo que la diferencia trae adentro: lo registrado como baja y lo que
-  // ningún documento explica.
+  // Separar las bajas registradas deja un saldo pendiente de conciliar;
+  // por sí solo, ese saldo no identifica su causa.
   r.falt = resta(r.dif, r.bajas);
   return r;
 }
@@ -97,11 +97,11 @@ function porFamilia(st, data, w, b) {
 function filas(st) {
   const f = [
     // La venta arriba, como en un estado de resultados: es la base de cada %.
-    { k: 'v', nom: 'Venta neta', tipo: 'suma', sentido: 'bien', calc: true },
+    { k: 'v', nom: 'Venta neta documentada', nota: 'comprobantes pagados y por cobrar − notas de crédito, sin IGV ni recargo', tipo: 'suma', sentido: 'bien', calc: true },
     { k: 'ii', nom: 'Inventario inicial', tipo: 'ini', sentido: 'neutro', fuerte: true },
     { k: 'c', nom: 'Compras', signo: '+', tipo: 'suma', sentido: 'mal' },
     { k: 'fi', nom: 'Inventario final', signo: '−', tipo: 'fin', sentido: 'neutro' },
-    { k: 'operativo', nom: 'Consumo operativo', nota: 'inventario inicial + compras − inventario final', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true },
+    { k: 'operativo', nom: 'Consumo operativo valorizado', nota: 'inventario inicial + compras − inventario final', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true },
     { k: 'p_operativo', nom: '% costo operativo', tipo: 'pct', sentido: 'mal', num: 'operativo', den: 'v' },
     // El grupo (a pedido, 2026-10-09): lo consumido que no se vendió, en su
     // nombre de control de costos. Cerrado es UNA fila con el total; abierto
@@ -116,22 +116,22 @@ function filas(st) {
     f.push({ agregar: true });
     f.push({ tramo: 'Sistema Restaurante' });
     f.push({ k: 'cort', nom: 'Costo de cortesías', tipo: 'suma', sentido: 'mal', hijo: true });
-    f.push({ k: 'desc', nom: 'Costo de descuentos', nota: 'costo del plato × % de descuento: la parte regalada', tipo: 'suma', sentido: 'mal', hijo: true });
+    f.push({ k: 'desc', nom: 'Costo de descuentos', nota: 'costo del plato × proporción descontada, ajustado por devolución de convenios', tipo: 'suma', sentido: 'mal', hijo: true });
   }
   f.push({ k: 'carta', nom: 'Consumo carta', nota: 'consumo operativo − consumos no vendidos', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
   f.push({ k: 'p_carta', nom: '% costo carta real', tipo: 'pct', sentido: 'mal', num: 'carta', den: 'v', calc: true });
   f.push({ k: 'margen', nom: 'Margen bruto', nota: 'venta − consumo carta', signo: '=', tipo: 'suma', sentido: 'bien', calc: true, fuerte: true });
-  f.push({ sec: 'Contra el Sistema Restaurante (Paloteo comparativo)' });
+  f.push({ sec: 'Conciliación con el costo histórico del Sistema Restaurante' });
   // Dos costos del POS, como el «Teórico S/ DSCTO» y «C/ DSCTO» del cuadro
   // de costos del usuario (regla #662): el del Paloteo tal cual, para
   // cotejarlo, y el que se compara, sin la parte regalada de los descuentos.
-  f.push({ k: 'pos', nom: 'Costo sin descuento', nota: 'el costo de lo vendido según el Paloteo, tal cual', tipo: 'suma', sentido: 'mal' });
-  f.push({ k: 'p_pos_sd', nom: '% costo sin descuento', tipo: 'pct', sentido: 'mal', num: 'pos', den: 'v' });
-  f.push({ k: 'pos_aj', nom: 'Costo con descuento', nota: 'costo sin descuento − costo de descuentos (la parte regalada)', tipo: 'suma', sentido: 'mal', fuerte: true });
-  f.push({ k: 'p_pos', nom: '% costo con descuento', tipo: 'pct', sentido: 'mal', num: 'pos_aj', den: 'v' });
-  f.push({ k: 'dif', nom: 'Diferencia', nota: 'consumo carta − costo con descuento', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
-  f.push({ k: 'bajas', nom: 'Bajas registradas', nota: 'notas de salida de tipo baja: la pérdida con documento', tipo: 'suma', sentido: 'mal', hijo: true });
-  f.push({ k: 'falt', nom: 'Faltante no registrado', nota: 'diferencia − bajas: lo que ningún documento explica', tipo: 'suma', sentido: 'mal', hijo: true });
+  f.push({ k: 'pos', nom: 'Costo histórico de lo vendido', nota: 'costo registrado de platos, combos y propiedades, antes del ajuste por descuentos', tipo: 'suma', sentido: 'mal' });
+  f.push({ k: 'p_pos_sd', nom: '% costo histórico', tipo: 'pct', sentido: 'mal', num: 'pos', den: 'v' });
+  f.push({ k: 'pos_aj', nom: 'Costo POS ajustado', nota: 'costo histórico de lo vendido − costo de descuentos', tipo: 'suma', sentido: 'mal', fuerte: true });
+  f.push({ k: 'p_pos', nom: '% costo POS ajustado', tipo: 'pct', sentido: 'mal', num: 'pos_aj', den: 'v' });
+  f.push({ k: 'dif', nom: 'Diferencia', nota: 'consumo carta − costo POS ajustado', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
+  f.push({ k: 'bajas', nom: 'Bajas registradas', nota: 'valor de las notas de salida procesadas de tipo baja', tipo: 'suma', sentido: 'mal', hijo: true });
+  f.push({ k: 'falt', nom: 'Diferencia pendiente de conciliación', nota: 'diferencia − bajas registradas; revisar fechas, alcance, clasificación y registros antes de atribuir una pérdida física', tipo: 'suma', sentido: 'mal', hijo: true });
   f.push({ k: 'p_dif', nom: 'Diferencia en puntos', tipo: 'pp', sentido: 'mal', calc: true });
   return f;
 }
@@ -225,10 +225,20 @@ function dibujar(raiz) {
   const famTxt = F.length === BUCK.length ? 'Todas' : F.length === 1 ? F[0] : `${F.length} de ${BUCK.length}`;
   html += `<details class="dd"${st.ddAbierto ? ' open' : ''}><summary><span class="cv-rot">Familias</span><span class="dd-val">${famTxt}</span><span class="dd-fl">▾</span></summary>
       <div class="dd-panel">${BUCK.map((b) => `<label class="dd-op"><input type="checkbox" data-fam-chk="${b}" ${st.fams.has(b) ? 'checked' : ''}><span class="pt" style="background:var(${COLOR[b]})"></span>${b}</label>`).join('')}
-      <span class="dd-nota">Para comparar contra el Sistema Restaurante, sin Envases: no los costea.</span></div></details>
+      <span class="dd-nota">Familias de insumos del Almacén. La venta se agrupa por grupos de carta; Envases no tiene venta ni costo POS propio en esta selección.</span></div></details>
     <span class="cv-campo"><span class="cv-rot">Sumar a la venta</span>${EXTRAS.map((g) =>
       `<label class="interruptor"><input type="checkbox" data-extra="${g}" ${st.extra.has(g) ? 'checked' : ''}> ${g}</label>`).join('')}</span>
     </div></div>`;
+  const estadoExtra = EXTRAS.map((g) => {
+    const incluido = F.includes('Alimentos') && st.extra.has(g);
+    return `${g} ${g === 'Eventos' ? (incluido ? 'incluidos' : 'excluidos') : (incluido ? 'incluida' : 'excluida')}`;
+  });
+  html += `<div class="cv-contexto" role="status" aria-live="polite" aria-atomic="true">
+    <span>${esMes ? 'Mes operativo · inventario contado' : `${st.grano === 'semana' ? 'Semana' : 'Quincena'} · inventario del kardex`}</span>
+    <span>Venta y costo POS: día contable del turno</span>
+    <span>Familias: ${esc(F.join(', '))}</span>
+    <span>${esc(estadoExtra.join(' · '))}</span></div>`;
+  html += notas(st, data, w);
 
   // La tabla
   const cols = `<col class="c-lab">${w.per.map(() => '<col class="c-mes">').join('')}<col class="c-tot">`;
@@ -242,7 +252,7 @@ function dibujar(raiz) {
     const abierta = st.abierta === fila.k;
     const cls = ['fila', fila.calc ? 'calc' : '', fila.fuerte ? 'fuerte' : '', abierta ? 'abierta' : '',
       fila.hijo ? 'hijo' : '', fila.grupo ? 'grupo' : '', fila.grupo && st.grupoAbierto ? 'grupo-abierto' : ''].join(' ');
-    const tip = fila.nota ? ` title="${esc(`${fila.nom}: ${fila.nota}`)}"` : '';
+    const tip = ` title="${esc(fila.nota ? `${fila.nom}: ${fila.nota}` : fila.nom)}"`;
     cuerpo += `<tr class="${cls}"><td class="lab"><div class="fila-lab">`
       + (fila.grupo ? `<button type="button" class="chev" data-grupo aria-expanded="${!!st.grupoAbierto}" aria-label="${st.grupoAbierto ? 'Cerrar' : 'Abrir'} el detalle de ${esc(fila.nom)}">${st.grupoAbierto ? '▾' : '▸'}</button>` : '')
       + `<button type="button" class="fila-btn" data-fila="${esc(fila.k)}" aria-expanded="${abierta}"${tip}><span class="signo">${fila.signo || ''}</span>`
@@ -254,7 +264,6 @@ function dibujar(raiz) {
   }
   html += `<div class="desliza" role="region" aria-label="Tabla de costos con desplazamiento horizontal por períodos"><table><colgroup>${cols}</colgroup><thead><tr><th class="lab" scope="col">Concepto<span class="sub">${esMes ? 'mes operativo · cierre' : 'kardex'}</span></th>${ths}<th class="tot" scope="col">${n} ${plural(st.grano)}<span class="sub">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)}</span></th></tr></thead><tbody>${cuerpo}</tbody></table></div>`;
   html += `<div class="estado-desliza"><span>← Períodos anteriores · recientes →</span><span class="periodos-visibles"></span></div>`;
-  html += notas(data, w);
 
   raiz.innerHTML = html;
   prepararDesplazamiento(raiz, w);
@@ -428,26 +437,41 @@ function detalle(st, data, w, fila, F, val) {
   </div></td></tr>`;
 }
 
-function notas(data, w) {
+function notas(st, data, w) {
   const tot = (arr) => cortar(arr, w).reduce((a, x) => a + x, 0);
   const vEx = data.venta_extra || {}, cEx = data.costo_extra || {};
-  const ev = 'Eventos', vi = 'Venta interna';
+  const abiertos = st.notasAbiertas ||= new Set();
+  const inventario = st.grano === 'mes'
+    ? 'Inventario contado: último cierre de cada área en su mes operativo, valorizado como stock declarado × precio promedio. Los cierres registrados del 1 al 7 inclusive se asignan al mes anterior.'
+    : 'Inventario del kardex al final del último día de cada período, sólo de productos activos, según la regla del Histórico del Almacén. El ajuste de un cierre cae en el período en que se registró: las semanas o quincenas pueden no sumar el resultado mensual basado en conteos.';
+  const extras = EXTRAS.map((g) => {
+    const incluido = st.fams.has('Alimentos') && st.extra.has(g);
+    const estado = g === 'Eventos' ? (incluido ? 'incluidos' : 'excluidos') : (incluido ? 'incluida' : 'excluida');
+    return `<li><b>${g}: ${estado} en la selección actual.</b> En la ventana completa: venta neta S/ ${mil(tot(vEx[g]))} y costo histórico S/ ${mil(tot(cEx[g]))}. Sus casillas suman ambos importes a Alimentos; sólo tienen efecto cuando esa familia está seleccionada. Si se excluyen, su consumo puede seguir presente en inventarios y compras.</li>`;
+  }).join('');
   return `<div class="notas">
-  <details class="nota"><summary>De dónde sale cada fila</summary><dl>
-    <dt>Venta neta</dt><dd>Sin IGV ni recargo, sin cortesías ni anulados, con las notas de crédito restando, por día del turno de caja. Grupos Alimentos, Bebidas con alcohol, sin alcohol y calientes, y Vinos y Espumantes.</dd>
-    <dt>Inventario inicial y final</dt><dd>Por mes, el cierre de inventario de cada área en su mes operativo: el que se registra del 1 al 6 cuenta para el mes anterior. Se toma el último cierre de cada área en el mes, valorizado como se contó (stock declarado × precio promedio). Por quincena o semana no hay conteo: es el stock del kardex al final del último día, sólo de lo activo, con la regla del Histórico del Almacén. El inicial de un período es el final del anterior. Alimentos, Bebidas, Vinos y Envases.</dd>
-    <dt>Compras</dt><dd>Valor neto, sin IGV, con las notas de crédito de los proveedores restadas, por fecha del documento.</dd>
-    <dt>Bajas y las otras salidas</dt><dd>Notas de salida procesadas, a su valor neto, por fecha de registro, como la «Relación de Notas de Salidas» del Almacén. Las bajas no se restan del consumo: son pérdida, se quedan en el consumo carta y aparecen debajo de la Diferencia, que explican junto con el faltante que no registró nadie.</dd>
-    <dt>Costo de cortesías</dt><dd>Lo que el Sistema Restaurante facturó como cortesía en Alimentos, Bebidas y Vinos, a precio costo. Se resta porque su costo, «(a) Ventas en el rango», no las incluye: en el Paloteo son otro origen, «(b) Cortesías».</dd>
-    <dt>Costo de descuentos</dt><dd>La parte regalada de los platos con descuento: su costo × el % de descuento de la línea (un plato al 50 % deja la mitad de su costo, como media cortesía). El descuento es el del Reporte de Descuentos del Sistema Restaurante, a precio venta. Ese plato sí se vendió y el Sistema Restaurante lo costea entero, así que se resta de los dos lados: del consumo y del costo del Sistema Restaurante, que por eso tiene dos filas, sin descuento (el Paloteo tal cual) y con descuento (el que se compara).</dd>
-    <dt>Consumo operativo, consumos no vendidos y consumo carta</dt><dd>Consumo operativo = inventario inicial + compras − inventario final: todo lo que salió del almacén; no se compara con el Sistema Restaurante. Consumos no vendidos: lo consumido que no se vendió —las notas de salida que no son bajas (entran todas; abierto el grupo, la × quita una), el costo de las cortesías y el de los descuentos—; en control de costos, las deducciones que llevan del costo de lo consumido al costo de lo vendido. Consumo carta = consumo operativo − consumos no vendidos: lo que costó lo vendido, y es el que se compara con el Sistema Restaurante.</dd>
-    <dt>Costo sin descuento (Sistema Restaurante)</dt><dd>El costo a precio costo de lo vendido en esos grupos: lo del Paloteo de Producción, tipo Comparativo, con origen «(a) Ventas en el rango». El Paloteo fecha por la apertura de la mesa y esta tabla por el turno: un pedido de medianoche del último día puede caer en otro mes.</dd>
+  <details class="nota" data-nota="calculo"${abiertos.has('calculo') ? ' open' : ''}><summary>Cómo se calcula</summary><dl>
+    <dt>Venta neta documentada</dt><dd>Comprobantes pagados y por cobrar − notas de crédito, sin IGV ni recargo; excluye cortesías y anulados. Se agrupa por día contable del turno de caja, no por fecha del cobro. La selección de familias y las casillas de Eventos y Venta interna determinan el alcance.</dd>
+    <dt>Inventario inicial y final</dt><dd>${inventario} El inicial de un período es el final del anterior. El total de la ventana muestra el primer inventario inicial y el último final, sin sumarlos.</dd>
+    <dt>Compras y salidas</dt><dd>Compras a valor neto, sin IGV, con las notas de crédito de proveedores restadas, por fecha del documento. Notas de salida procesadas a valor neto, por fecha de registro. Todas las salidas que no son bajas entran como deducción inicialmente; la × permite quitar una.</dd>
+    <dt>Consumo operativo valorizado</dt><dd>Inventario inicial + compras − inventario final. Es la variación valorizada disponible para analizar el consumo del período; incluye los efectos de registros, ajustes de inventario y valorización.</dd>
+    <dt>Consumos no vendidos</dt><dd>Notas de salida seleccionadas que no son bajas + costo de cortesías + costo de descuentos. Las bajas permanecen dentro del consumo carta y se presentan aparte para conciliar la diferencia.</dd>
+    <dt>Cortesías y descuentos</dt><dd>Las cortesías se valorizan al costo histórico registrado y se excluyen de la venta documentada. Costo de descuentos = costo del plato × proporción descontada de la línea; se ajusta por la devolución de convenios bancarios configurada. Este costo se resta tanto del consumo como del costo POS.</dd>
+    <dt>Consumo carta</dt><dd>Consumo operativo valorizado − consumos no vendidos seleccionados. Es la base de consumo que se compara con el costo POS ajustado; puede contener diferencias pendientes de explicar.</dd>
+    <dt>Costo histórico de lo vendido</dt><dd>Costo guardado en el pedido, incluidos componentes de combos y propiedades, respetando cantidades y ajustes positivos o negativos. Las notas de crédito revierten la parte correspondiente del costo de la venta. No se recalcula con la receta ni los precios actuales.</dd>
+    <dt>Costo POS ajustado</dt><dd>Costo histórico de lo vendido − costo de descuentos. Es la base comparable con consumo carta después de aplicar la misma deducción por descuentos a ambos lados.</dd>
+    <dt>Diferencia y saldo pendiente</dt><dd>Diferencia = consumo carta − costo POS ajustado. Diferencia pendiente de conciliación = diferencia − bajas registradas. El saldo por sí solo no demuestra una pérdida física: requiere revisar fechas, alcance, clasificación, recetas, valorización y registros.</dd>
+    <dt>Porcentajes y margen</dt><dd>Cada % de costo divide su costo o consumo entre la venta neta documentada de la misma selección. Margen bruto = venta neta documentada − consumo carta. Diferencia en puntos = % consumo carta − % costo POS ajustado.</dd>
   </dl></details>
-  <details class="nota alerta"><summary>Antes de leer la diferencia</summary><ul>
-    <li><b>Envases entra en inventario, compras y salidas, pero el Sistema Restaurante no lo costea.</b> Para comparar en igualdad, desmarcá Envases.</li>
-    <li><b>Eventos y Venta interna gastan inventario y no están en la venta.</b> En estos períodos vendieron S/ ${mil(tot(vEx[ev]))} y S/ ${mil(tot(vEx[vi]))}, con un costo de S/ ${mil(tot(cEx[ev]))} y S/ ${mil(tot(cEx[vi]))}. Fuera de la venta, su consumo agranda la diferencia: Eventos se suma a Alimentos por defecto, y Venta interna con su casilla.</li>
+  <details class="nota alerta" data-nota="referencias"${abiertos.has('referencias') ? ' open' : ''}><summary>Referencias Inforest y alcance</summary><ul>
+    <li><b>Referencia del costo: Paloteo de Producción → Comparativo → «(a) Ventas en el rango» → Precio costo.</b> Sin «Evaluar por Día Contable», el comparativo revisado exige que tanto el pedido como el comprobante estén dentro del rango. Esta vista agrupa venta y costo por día contable del turno: para comparar deben conciliarse ambas fechas, las notas de crédito y los filtros.</li>
+    <li><b>Referencia de venta: Registro de Ventas.</b> En modo por fecha de emisión, selecciona comprobantes por emisión y puede incluir cuentas por cobrar; aquí se agrupan por turno. La venta documentada no representa necesariamente cobros del período.</li>
+    <li><b>Referencias del Almacén:</b> cierres de inventario o Histórico del Almacén para existencias, compras netas y «Relación de Notas de Salidas» para salidas. El consumo y su conciliación combinan esas fuentes en la webapp; no equivalen por sí solos a un reporte único de Inforest.</li>
+    <li><b>Familias de insumos y grupos de carta son clasificaciones distintas.</b> Inventario, compras y salidas usan familias del Almacén; venta y costo POS usan grupos de carta. Una receta puede consumir insumos de otra familia, por lo que cada fila familiar requiere conciliar su composición.</li>
+    <li><b>Envases:</b> entra en inventario, compras y salidas, pero no tiene venta ni costo POS propio en esta agrupación. Su inclusión puede ampliar la diferencia; quitarlo no corrige por sí solo las diferencias de clasificación de ingredientes.</li>
+    ${extras}
     <li><b>Costos de producción queda fuera</b> de inventarios, compras y salidas.</li>
-    <li><b>Desde octubre 2025.</b> Antes, los cierres y el kardex no cuadran (setiembre 2025 tuvo un ajuste de S/ 627 mil al limpiar el inventario).</li>
+    <li><b>Desde octubre 2025.</b> Los períodos anteriores no se presentan por inconsistencias históricas entre cierres y kardex.</li>
   </ul></details></div>`;
 }
 
@@ -506,6 +530,10 @@ function enlazar(raiz) {
   // (cada cambio redibuja) y se cierra con un clic fuera de él.
   raiz.addEventListener('toggle', (ev) => {
     if (ev.target.matches && ev.target.matches('details.dd')) raiz.__st.ddAbierto = ev.target.open;
+    if (ev.target.matches && ev.target.matches('details[data-nota]')) {
+      const abiertas = raiz.__st.notasAbiertas, clave = ev.target.dataset.nota;
+      if (ev.target.open) abiertas.add(clave); else abiertas.delete(clave);
+    }
   }, true);
   document.addEventListener('click', (ev) => {
     const dd = raiz.querySelector('details.dd');
@@ -535,6 +563,7 @@ export default function (component) {
       agregadas: [],
       abierta: null, modo: 'total', menu: false, grano: leer('costos_grano', 'mes'),
       grupoAbierto: leer('costos_grupo_abierto', false) === true,
+      notasAbiertas: new Set(),
       ini: { mes: Number.MAX_SAFE_INTEGER, quincena: Number.MAX_SAFE_INTEGER, semana: Number.MAX_SAFE_INTEGER },
     };
     if (data?.desde_resumen) {

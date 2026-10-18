@@ -42,10 +42,12 @@ class ContextoHorario(unittest.TestCase):
         from datetime import date
         df = self.df.assign(**{"Fecha Registro Pedido": pd.Timestamp("2026-10-01"),
                                "Fec Reg Documento": pd.Timestamp("2026-10-02")})
-        with patch.object(franja, "cargar_rango", return_value=df) as cargar:
-            franja._cargar(date(2026, 10, 1), date(2026, 10, 2), False,
-                           lambda x:x, df, base="Hora del cobro")
-        self.assertEqual(cargar.call_args.args[1], "FEC REG DOCUMENTO")
+        for base in ("Hora del comprobante", "Hora del cobro"):
+            with self.subTest(base=base):
+                with patch.object(franja, "cargar_rango", return_value=df) as cargar:
+                    franja._cargar(date(2026, 10, 1), date(2026, 10, 2), False,
+                                   lambda x:x, df, base=base)
+                self.assertEqual(cargar.call_args.args[1], "FEC REG DOCUMENTO")
 
 
 if __name__ == "__main__":

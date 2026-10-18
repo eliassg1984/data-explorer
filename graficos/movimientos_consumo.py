@@ -316,7 +316,7 @@ def tarjeta_consumo(fam_sel=(), sub_sel=(), rango=None, fecha=None):
     de fecha junto al título (regla #617)."""
     ini, fin = rango_de_la_vista(rango)
     with st.container(border=True, key=CARD):
-        _tit = ('<p class="chart-card-hdr">Consumo según recetas · lo que usaron las ventas '
+        _tit = ('<p class="chart-card-hdr">Consumo según recetas · consumo estimado de las ventas '
                 'en insumos de compra, bajando por recetas base y porcionamientos</p>')
         if fecha is not None:
             fecha(_tit)

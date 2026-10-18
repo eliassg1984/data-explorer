@@ -2090,7 +2090,7 @@ def nombre_area(s):
     s = s.str.capitalize().replace(_TILDES_AREA)
     return s.mask(s == "", "Sin área")
 _COLS_FILAS = ("Hora", "Día de semana")
-_HORA_OP = ("Hora del pedido", "Hora del cobro")
+_HORA_OP = ("Hora del pedido", "Hora del comprobante")
 _LECTURAS = ("Lado a lado", "Diferencia")
 _ESCALAS = ("Total", "Por día")
 _TOP_PLATOS = 20
@@ -3216,7 +3216,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             "fam": col_fam, "sub": col_sub, "desc": col_desc,
             "tipo_desc": col_tipo,
             "area": _resolver(d, ["Area Produccion"])}
-    # LA HORA DEL PEDIDO (regla #530). `FEC REG DOCUMENTO` es la del COBRO,
+    # LA HORA DEL PEDIDO (regla #530). `FEC REG DOCUMENTO` es la del comprobante,
     # que llega 1 h 38 min después (mediana, medido el 2026-09-25) y corría
     # el pico de la noche de las 7 pm a las 10 pm. La del pedido es cuando
     # se ABRIÓ la mesa: un postre pedido después queda en esa misma hora.
@@ -3493,7 +3493,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # 2026-08-14. Va DENTRO de la tarjeta y después de la franja para que
         # el mensaje aparezca donde va a aparecer el mapa.
         # Cada panel se CARGA por la misma fecha que lo UBICA (regla #552).
-        # Cargado por el cobro y ubicado por el pedido, un pedido abierto el
+        # Cargado por el comprobante y ubicado por el pedido, un pedido abierto el
         # último día y cobrado pasada la medianoche no caía en ningún panel:
         # el de junio no lo traía y el de julio lo descartaba por ser de
         # junio (Evento Fagor, S/ 58.500). Y un día de más no alcanza: hay

@@ -15,11 +15,15 @@ LA CUENTA, período por período y por familia:
                             quitar una)
     Consumo carta     = consumo operativo − consumos no vendidos
     Diferencia        = consumo carta − costo del POS con descuento
-                      = bajas registradas + faltante no registrado
+                      = bajas registradas + diferencia pendiente de conciliación
 
 Las BAJAS no son un consumo no vendido: son pérdida, se quedan en el
 consumo carta y explican la diferencia, como en el cuadro de costos que el
 usuario llevaba antes (regla #662).
+
+La diferencia después de bajas es un residuo por conciliar entre fechas,
+alcance, clasificación de insumos, recetas y valorización. Su importe por
+sí solo no demuestra un faltante físico.
 
 El costo de descuentos es la parte REGALADA de los platos con descuento
 (costo × descuento ÷ precio de carta, `definicion_venta.por_grupo_dia`): un

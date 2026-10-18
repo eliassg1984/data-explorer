@@ -551,6 +551,65 @@ def formas_de_pago(d_pagos, col_fecha, gran, claves_ok,
     return out
 
 
+def _contexto_periodo(d, subvista, filtros):
+    """Explica la base efectiva del dato sin cambiar su fecha ni sus cuentas."""
+    turno = dv.columna(d, dv.FECHA_EMISION) is not None
+    base = "Día del turno del comprobante" if turno else "Emisión del comprobante"
+    nombres = {
+        "Venta": "Venta documentada",
+        "Costo": "Costo histórico de lo vendido",
+        "Pagos": "Pagos registrados de comprobantes",
+        "Cuadre": "Conciliación de venta documentada",
+        "Cortesías": "Cortesías y su costo histórico",
+        "Descuentos": "Descuentos sobre precio de carta",
+        "Propinas": "Propinas de los comprobantes seleccionados",
+    }
+    valores = ("Importes de pagos en soles" if subvista == "Pagos" else
+               "Neto sin IGV ni recargo" if subvista == "Costo" else
+               "Venta con impuestos · neto sin IGV ni recargo")
+    seleccion = [f"{rotulo}: {', '.join(map(str, elegidos))}"
+                 for rotulo, elegidos in filtros if elegidos]
+    ambito = " · ".join(seleccion) if seleccion else "Todos los grupos y canales"
+    with st.container(horizontal=True, gap="small", key="vt_resumen_contexto"):
+        st.caption(f"{nombres.get(subvista, 'Venta documentada')} · {base} · "
+                   f"{valores} · {ambito}")
+        with st.popover("Cómo se calcula", icon=":material/info:"):
+            st.markdown(
+                "**Fecha y alcance**\n\n"
+                f"Base temporal: **{base.lower()}**. {ambito}. "
+                "Los filtros de esta vista se combinan con los de Ventas.\n\n"
+                "**Venta documentada**\n\n"
+                "Comprobantes pagados y por cobrar, menos notas de crédito. "
+                "Cortesías y anulados se muestran aparte. «Venta» incluye "
+                "impuestos y recargo; «Neto» los excluye. Cada ítem se cuenta "
+                "una vez aunque tenga varias formas de pago.\n\n"
+                "**Costo histórico de lo vendido**\n\n"
+                "Costo guardado en el pedido, incluidos componentes de combos "
+                "y propiedades, por la cantidad vendida. Las notas de crédito "
+                "revierten el costo correspondiente. **% costo = costo histórico "
+                "÷ venta neta**. Es la valorización registrada al vender, "
+                "distinta del costo actual de la carta.\n\n"
+                "**Pagos registrados**\n\n"
+                "Cada pago se suma una vez, en soles y con la propina aparte. "
+                "Aquí se agrupan los pagos asociados a los comprobantes del "
+                "período por la fecha del comprobante. «Por cobrar» refleja "
+                "el estado de esos documentos en la última actualización. "
+                "Las notas de crédito y canjes se concilian con la venta "
+                "documentada en «Cuadre».\n\n"
+                "**Referencias en Inforest**\n\n"
+                "**Registro de Ventas:** comprobantes y notas de crédito; "
+                "para comparar por emisión, elegir «Emisión · SUNAT» en los "
+                "filtros de Ventas.\n\n"
+                "**Paloteo de Producción → Comparativo → Ventas en el rango:** "
+                "referencia para el costo histórico. Sin Día Contable exige "
+                "que pedido y comprobante estén dentro del rango.\n\n"
+                "**Liquidación de Cajero:** referencia para pagos y cuentas "
+                "por cobrar; sus bloques pueden seleccionarse por fecha "
+                "propia del pago o por turno. La comparación requiere "
+                "coincidir en fechas, filtros, estados y tratamiento de notas."
+            )
+
+
 @st.fragment
 def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                     col_cant, col_fam=None, col_serv=None, col_canal=None,
@@ -1481,6 +1540,14 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             with st.container(key="vt_resumen_leyenda"):
                 _pie = st.empty()
 
+        _contexto_periodo(d, _sub if _modo == _MODO_RESUMEN else "Detalle", (
+            ("Grupos", grupo_sel or st.session_state.get("ventas_graf_filtro_fam", [])),
+            ("Subgrupos", st.session_state.get("ventas_graf_filtro_sub", [])),
+            ("Canales", canal_sel or st.session_state.get("ventas_graf_filtro_canal", [])),
+            ("Servicios", serv_sel or st.session_state.get("ventas_graf_filtro_serv", [])),
+            ("Documentos", tdoc_sel),
+        ))
+
         if _modo == _MODO_RESUMEN:
             _zona_resumen(g, claves, fila, _vars, foco if _foco_ok else None,
                           vol_label, por_canal, canales if _partida else [],
@@ -1975,11 +2042,11 @@ def _subvistas(vol_label, canales, hay, formas=(), otras=()):
     venta = [
         ("carta", "Carta", "soles0", S, "Venta a precio de CARTA: lo que se "
                                          "habría cobrado sin descuentos"),
-        ("valor", "Venta", "celda", 118, "Venta cobrada, con IGV y recargo. "
+        ("valor", "Venta", "celda", 118, "Venta documentada, con IGV y recargo. "
                                          "Sin cortesías ni anulados"),
         ("neto", "Neto", "soles0", S, "Venta sin IGV ni recargo: la base del "
                                       "% de costo"),
-        ("costo", "Costo", "soles0", S, "Costo de receta de lo vendido"),
+        ("costo", "Costo histórico", "soles0", 132, "Costo histórico de lo vendido, incluidos combos y propiedades"),
         ("pcosto", "% costo", "celda", _ANCHO_PCOSTO, "Costo ÷ Neto, y su cambio en pp "
                                             "contra la barra anterior"),
     ]
@@ -2005,7 +2072,7 @@ def _subvistas(vol_label, canales, hay, formas=(), otras=()):
         # CLIENTES (regla #591, a pedido: «¿podemos indicar ticket sin niños
         # y con niños?»). Los adultos son «Clientes», como el POS; los
         # niños, si la consulta los trae, dan el ticket por persona.
-        cols = [("valor", "Venta", "celda", 118, "Venta cobrada")]
+        cols = [("valor", "Venta", "celda", 118, "Venta documentada: pagados y por cobrar, menos notas de crédito")]
         if "sin_cli" in hay:
             cols.append(("sin_cli", "Fuera del ticket", "celda", 128,
                          "Venta de los canales que no registran clientes "
@@ -2035,7 +2102,7 @@ def _subvistas(vol_label, canales, hay, formas=(), otras=()):
             "Ticket por adulto. Los niños no vienen todavía en la consulta "
             "de ventas."))
     if len(canales) > 1:
-        cols = [("valor", "Venta", "celda", 118, "Venta cobrada")]
+        cols = [("valor", "Venta", "celda", 118, "Venta documentada: pagados y por cobrar, menos notas de crédito")]
         for k, cn in enumerate(canales):
             cols += [(f"c{k}_v", cn, "celda", 128,
                       f"Venta de {cn} y su variación contra la barra anterior"),
@@ -2043,7 +2110,7 @@ def _subvistas(vol_label, canales, hay, formas=(), otras=()):
                       f"Qué parte de la venta fue de {cn}, y su cambio en pp")]
         out["Canales"] = (cols, "Venta y peso de cada canal.")
     if "propina" in hay:
-        cols = [("valor", "Venta", "celda", 118, "Venta cobrada"),
+        cols = [("valor", "Venta", "celda", 118, "Venta documentada: pagados y por cobrar, menos notas de crédito"),
                 ("propina", "Propina", "celda", 118,
                  "Propinas del período (una por pago) y su variación"),
                 ("pprop", "% de la venta", "celda", 132,
@@ -2060,23 +2127,22 @@ def _subvistas(vol_label, canales, hay, formas=(), otras=()):
         # PAGOS (regla #592): lo cobrado por forma, con la marca de cada
         # tarjeta. Forma por forma + lo por cobrar = los comprobantes del
         # período (venta + las notas de crédito, que se pagan con la nota).
-        cols = [("valor", "Venta", "celda", 118, "Venta cobrada")]
+        cols = [("valor", "Venta", "celda", 118, "Venta documentada: pagados y por cobrar, menos notas de crédito")]
         for k, fm in enumerate(formas):
             _con = (", ".join(otras) if fm == _OTRAS_FORMAS and otras
                     else fm)
             cols.append((f"f{k}_v", fm, "celda", 112,
-                         f"Cobrado con {_con} y su parte de lo cobrado en "
-                         "el período"))
-        cols += [("cobrado", "Cobrado", "celda", 112,
-                  "Todo lo cobrado en el período, sumando las formas"),
+                         f"Pagado con {_con} y su parte de los pagos de comprobantes "
+                         "del período"))
+        cols += [("cobrado", "Pagos registrados", "celda", 150,
+                  "Pagos de los comprobantes seleccionados, agrupados por la fecha del comprobante"),
                  ("por_cobrar", "Por cobrar", "celda", 112,
-                  "Comprobantes que se cobran después (cuentas por cobrar): "
-                  "son venta y todavía no tienen pago")]
-        out["Pagos"] = (cols, "Lo cobrado por forma de pago, una vez cada "
-                              "pago; por cobrar, aparte.")
+                  "Importe de comprobantes en estado por cobrar, según la última actualización")]
+        out["Pagos"] = (cols, "Pagos asociados a los comprobantes del período; "
+                              "un pago una vez y por cobrar aparte.")
     if "pdesc" in hay:
         cols = [("carta", "Carta", "soles0", S, "Venta a precio de carta"),
-                ("valor", "Venta", "celda", 118, "Venta cobrada"),
+                ("valor", "Venta", "celda", 118, "Venta documentada: pagados y por cobrar, menos notas de crédito"),
                 ("desc", "Descuento", "celda", 118,
                  "Carta − Venta, y su variación"),
                 ("pdesc", "% desc.", "celda", 132,
@@ -2102,8 +2168,8 @@ def _subvistas(vol_label, canales, hay, formas=(), otras=()):
         out["Cortesías"] = (cols, "A precio carta; no suman a la venta.")
     if "pcosto" in hay:
         cols = [("neto", "Neto", "soles0", S, "Venta sin IGV ni recargo"),
-                ("costo_v", "Costo", "celda", 118,
-                 "Costo de receta de lo vendido, y su variación"),
+                ("costo_v", "Costo histórico", "celda", 142,
+                 "Costo histórico de lo vendido, incluidos combos y propiedades, y su variación"),
                 ("pcosto", "% costo", "celda", _ANCHO_PCOSTO,
                  "Costo ÷ Neto, y su cambio en pp. «revisar»: un plato con "
                  "costo mayor a su precio infla el período")]

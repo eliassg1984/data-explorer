@@ -14,11 +14,21 @@
   border: 1px solid var(--border-lavender); padding: 8px 12px; border-radius: 8px; max-width: 100%; }
 .re a { color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 600; }
 .re a:hover { text-decoration: underline; }
-.re a:focus-visible, .re select:focus-visible, .re button:focus-visible {
+.re a:focus-visible, .re select:focus-visible, .re button:focus-visible, .re summary:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 3px; }
 .re-note { background: var(--accent-tint); color: var(--accent-deep); padding: 9px 12px;
   border-radius: 8px; font-size: 12px; }
 .re-note.warning { color: var(--warning-text); background: var(--warning-bg); }
+.re-data-context { border: 1px solid var(--border); border-radius: 10px; padding: 11px 15px;
+  color: var(--text-secondary); background: var(--bg-card); font-size: 11px; }
+.re-context-columns, .re-method-body { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 24px; }
+.re-context-columns strong { display: block; color: var(--text-primary); font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+.re-context-columns span { display: block; }
+.re-method { margin-top: 9px; }
+.re-method summary { width: fit-content; cursor: pointer; color: var(--accent-deep); font-size: 12px; font-weight: 600; }
+.re-method-body { padding-top: 12px; margin-top: 9px; border-top: 1px solid var(--border); }
+.re-method-body h2 { font-size: 12px; margin-bottom: 5px; color: var(--text-primary); }
+.re-method-body p + p { margin-top: 6px; }
 .re-kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
 .re-kpi, .re-panel { background: var(--bg-card); border: 1px solid var(--border);
   border-radius: 12px; padding: 17px 18px; min-width: 0; }
@@ -87,6 +97,7 @@
 }
 @container (max-width: 700px) {
   .re-grid, .re-lower { grid-template-columns: minmax(0,1fr); }
+  .re-context-columns, .re-method-body { grid-template-columns: minmax(0,1fr); }
   .re-kpi, .re-panel { padding: 14px; }
   .re-head { align-items: flex-start; }
 }
@@ -100,5 +111,6 @@
 }
 @media (pointer: coarse) {
   .re a, .re-toggle button { display: inline-flex; align-items: center; min-height: 44px; }
+  .re-method summary { min-height: 44px; align-content: center; }
   .re select { min-height: 44px; font-size: 16px; }
 }

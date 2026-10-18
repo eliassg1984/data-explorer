@@ -31,9 +31,9 @@ TRES COSAS QUE NO SON OBVIAS:
 
   · LA HORA ES LA DEL PEDIDO (`FECHA REGISTRO PEDIDO`), cuando se abrió la
     mesa o entró el pedido de Rappi, como el default de «Por hora» (regla
-    #530): la del cobro llega 1 h 38 min después. Y se CARGA por esa misma
-    fecha (regla #552): cargado por el cobro, un pedido del último día
-    cobrado pasada la medianoche no entraría.
+    #530): la del comprobante llega 1 h 38 min después. Y se CARGA por esa misma
+    fecha (regla #552): cargado por el comprobante, un pedido del último día
+    documentado pasada la medianoche no entraría.
   · UN HORARIO QUE CRUZA LA MEDIANOCHE ES DEL DÍA EN QUE EMPEZÓ: con
     «20:00 → 01:00», el pedido del domingo a las 00:30 es de la noche del
     SÁBADO, como lo cierra la caja. Por eso se carga un día de más.
@@ -459,7 +459,7 @@ def cuerpo(d, filtrar_cb=None, interruptor=None):
                  else "Todos los canales.")
     if cols_d["hora"] is None:
         notas.append("Sin la hora del pedido en el parquet: va por la "
-                     "del cobro.")
+                     "del comprobante.")
     notas.append("Los Filtros de arriba también aplican. Un combo cuenta "
                  "como una unidad.")
     st.caption(" ".join(notas))

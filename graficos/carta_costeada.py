@@ -33,7 +33,9 @@ las dos mitades:
 De Ventas trae sólo lo que hace falta para decidir sobre la carta —cuánto
 se vendió en 90 días y a qué % de costo—, con la definición de venta de
 siempre (`data.venta_por_producto_dia`, que llama a `definicion_venta`) y
-el `pct_costo` del Mix importado: una cifra de Ventas se ve igual acá.
+la validación de `pct_costo` del Mix importada. Acá el histórico se fecha
+por el comprobante y se divide entre el neto completo: no usa la base del
+Mix ajustada por devolución del banco y venta sin costo.
 
 Dos modos en UNA tarjeta, y no dos tarjetas: la carta completa y la banda de
 los combos no entran juntas en una pantalla de laptop, y una tarjeta con
@@ -106,7 +108,7 @@ OFERTAS = ("Carta impresa", "Carta no impresa")
 también las opciones de su desplegable, detrás de «Toda la carta». Sin la
 columna —un parquet de antes de la regla— el desplegable no se dibuja."""
 
-SUBTITULO = "% de costo sobre el precio neto de Salón, combos incluidos"
+SUBTITULO = "Costo actual de carta y % de costo sobre el precio neto de Salón"
 """Lo que decía el título al lado del nombre; desde la regla #574 aparece
 al pasar el cursor sobre «Carta costeada»."""
 
@@ -1580,6 +1582,31 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
 
         rango = rango_tarjeta(CATEGORIA_FECHA, ctx) if ctx is not None else None
         carta, rango = con_ventas(carta, agg, rango=rango)
+
+        st.caption("Costo actual de carta · Precio neto de Salón · "
+                   "Histórico por emisión del comprobante")
+        with st.expander("Cómo se calcula · Referencia en Inforest"):
+            st.markdown(
+                "**Referencia en Inforest:** recetas y costo vigente de los "
+                "productos del POS. La columna **Costo** usa el costo actual "
+                "al actualizar los datos; **% costo** = costo actual ÷ precio "
+                "neto de Salón. **Margen** = precio neto − costo actual.\n\n"
+                "En los combos, la consulta usa las cantidades de su ficha y "
+                "el costo actual de los componentes; cuando hay opciones, "
+                "aplica el método indicado en «Combos». **Real 90 días** "
+                "muestra por separado el costo registrado de lo servido.\n\n"
+                "La fecha afecta **Vendidos**, **Venta neta**, **% vendido** "
+                "y **Sin costo**, por la fecha de emisión/registro del "
+                "comprobante. Las notas de crédito restan en su fecha. "
+                "**% vendido** = costo histórico de lo vendido ÷ venta neta "
+                "completa del rango × 100. Esta base incluye lo vendido sin "
+                "costo y no suma la devolución del banco; por eso puede "
+                "diferir del **% costo** del Mix de Ventas. «—» indica costo "
+                "no positivo o venta neta de S/ 0,50 o menos.\n\n"
+                "Para conciliar el histórico con Inforest, consultar "
+                "**Ventas → Venta por Periodo → Cuadre** y sus referencias "
+                "a los reportes. La comparación requiere las mismas fechas, "
+                "operaciones y filtros.")
 
         # Encima de la tabla, lo que cambia QUÉ filas tiene. A la IZQUIERDA:
         # a la derecha lo taparía la barrita de íconos que `st.dataframe`

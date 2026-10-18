@@ -7,13 +7,16 @@
 .cv { display: grid; gap: 8px; min-width: 0; color: var(--text-primary); font-size: 13px; line-height: 1.3;
   --cv-concepto: 236px; --cv-periodo: 104px; --cv-total: 108px; }
 .cv button, .cv select { font: inherit; }
-.cv button:focus-visible, .cv select:focus-visible, .dd summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cv button:focus-visible, .cv select:focus-visible, .cv summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* UNA fila: título y rango a la izquierda, controles a la derecha. */
 .cv-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; }
 .cv-tit { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; }
 .cv-tit h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .cv-rango { color: var(--text-secondary); font-size: 12.5px; }
+.cv-contexto { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 1px 2px;
+  color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.cv-contexto span:first-child { color: var(--text-primary); font-weight: 500; }
 .cv-kardex { color: var(--warning-text); font-size: 12px; cursor: help; white-space: nowrap; }
 .cv-ventana { display: inline-flex; gap: 4px; }
 .cv-ventana button { border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
@@ -70,7 +73,7 @@ tbody td.lab { padding: 0; }
 .fila-btn { color: var(--text-primary); background: none; border: 0; flex: 1; min-width: 0; text-align: left;
   padding: 6px 8px 6px 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
 .fila-btn .signo { width: 12px; color: var(--text-muted); font-weight: 600; text-align: center; flex: none; }
-.fila-btn .nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fila-btn .nom { flex: 1; min-width: 0; white-space: normal; line-height: 1.25; }
 .fila-btn .flecha { color: var(--text-muted); font-size: 10px; transition: transform .15s; }
 tr.abierta .fila-btn .flecha { transform: rotate(180deg); color: var(--accent); }
 tr.fila:hover td, tr.fila:hover td.lab { background: var(--accent-tint); }
@@ -151,7 +154,7 @@ tr.detalle > td { background: var(--accent-light); border-bottom: 1px solid var(
 .comp .fila-c { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; color: var(--text-secondary); }
 .comp .fila-c b { color: var(--text-primary); font-weight: 600; }
 
-.notas { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; }
+.notas { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; align-items: start; }
 .nota { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; min-width: 0; background: var(--bg-card); }
 .nota summary { cursor: pointer; font-weight: 600; font-size: 13px; }
 .nota dl { margin: 8px 0 0; display: grid; gap: 7px; }
@@ -169,6 +172,7 @@ tr.detalle > td { background: var(--accent-light); border-bottom: 1px solid var(
 .cv.cv-movil { --cv-concepto: 168px; }
 .cv.cv-movil td.tot, .cv.cv-movil thead th.tot { position: static; }
 .cv.cv-movil .notas { grid-template-columns: minmax(0, 1fr); }
+.cv.cv-movil .cv-contexto { gap: 3px 12px; font-size: 11.5px; }
 .cv.cv-movil .evolucion-periodos span:not(:nth-child(3n + 1)):not(:last-child) { visibility: hidden; }
 .cv.cv-movil .evolucion-panel .variaciones { display: none; }
 @media (pointer: coarse) { .enlace-origen { min-width: 32px; min-height: 40px; text-align: center; } }

@@ -16,7 +16,7 @@ from graficos.base import (_resolver, ctx_rango_propio, rango_tarjeta,
 from inyecciones._iframe import inyectar_html
 
 CATEGORIA = "vt_hora"
-BASES = ("Hora del pedido", "Hora del cobro")
+BASES = ("Hora del pedido", "Hora del comprobante")
 TODOS = "Toda la carta"
 KEYS = ("vh_canal", "vh_ambito", "vh_op_hora", "vh_raros")
 
@@ -76,6 +76,11 @@ def cabecera(d, col_fecha, col_pedido, ancla, filtrar_cb, interruptor):
         ancla.replace(day=1), ancla)
     rng = (rng[0], min(rng[1], ancla))
     ss = st.session_state
+    # Conserva la base y las marcas de las sesiones abiertas antes del cambio
+    # de nombre: esa hora siempre fue la del comprobante, no la del pago.
+    for key in ("vh_op_hora", "vh_hora_aplicada"):
+        if ss.get(key) == "Hora del cobro":
+            ss[key] = BASES[1]
     if ss.get("vh_op_hora") not in BASES:
         ss["vh_op_hora"] = BASES[0] if col_pedido else BASES[1]
     if not col_pedido:
@@ -127,7 +132,8 @@ def cabecera(d, col_fecha, col_pedido, ancla, filtrar_cb, interruptor):
             hora = st.selectbox("Base temporal", BASES, key="vh_op_hora",
                                 disabled=not col_pedido,
                                 help="Pedido: apertura del pedido, no la hora "
-                                     "de cada plato. Cobro: momento del pago.")
+                                     "de cada plato. Comprobante: fecha y "
+                                     "hora de registro del documento.")
     with st.container(horizontal=True, vertical_alignment="center",
                       gap="medium", key="vh_contexto"):
         incluir = st.toggle("Incluir Venta Interna y Eventos",
@@ -135,7 +141,7 @@ def cabecera(d, col_fecha, col_pedido, ancla, filtrar_cb, interruptor):
                             key="vh_raros")
         ss["_vh_raros_valor"] = incluir
         st.caption("Venta atribuida a la apertura del pedido" if hora == BASES[0]
-                   else "Venta atribuida al momento del pago")
+                   else "Venta atribuida al registro del comprobante")
     filtros = dict(canales=tuple(canal_sel), ambito=ambito, incluir=incluir)
     return {"rango": rng, "hora": hora, "incluir": incluir,
             "filtrar": partial(_aplicar, original=filtrar_cb, **filtros),
