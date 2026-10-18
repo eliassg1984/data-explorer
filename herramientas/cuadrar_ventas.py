@@ -29,8 +29,9 @@ QUÉ COMPARA, por día (fecha de registro del comprobante):
                                         `definicion_venta.pax_por`
     costo (lo vendido − las notas)      cada línea del comprobante con SU
     costo de las cortesías              línea de DPEDIDO (mismo pedido y
-                                        tItem): nInsumo × cantidad; en un
-                                        combo, Σ CPEDIDO nCantidad × nInsumo
+                                        tItem): costo histórico más sus
+                                        propiedades, por la cantidad; en
+                                        combos, componentes más propiedades
 
 Y aparte, que `definicion_venta.COMBOS` tenga todos los combos del POS
 (`TPRODUCTO.lCombinacion`): uno que falte vuelve a contar su costo por la
@@ -111,34 +112,100 @@ WHERE n.fRegistro >= ? AND n.fRegistro < ? AND n.tEstadoDocumento <> '04'
 # El costo de una línea de comprobante. `DDOCUMENTO.tItem` ES el ítem del
 # pedido, y la cantidad de la línea es la del pedido: el POS no reparte una
 # línea entre comprobantes (regla #542). El combo guarda 0 en su
-# `DPEDIDO.nInsumo`; lo servido está en CPEDIDO.
+# `DPEDIDO.nInsumo`; lo servido está en CPEDIDO. La marca de combo es la
+# histórica de DPEDIDO, como `ES COMBO` en el parquet, no la del maestro.
+# Las propiedades guardan su costo con signo y con su cantidad ya aplicada:
+# se suma nInsumo + nGasto + nManoObra, sin multiplicar otra vez nCantidad
+# de la propiedad. En un combo sólo las propiedades se multiplican por la
+# cantidad del padre: CPEDIDO ya guarda los componentes de la línea entera.
+# Es la misma cuenta que spRep_PaloteoProduccion y la consulta del Sheet.
 _COSTO_LINEA = """
-  CASE WHEN t.lCombinacion = 1 THEN ISNULL(c.costo, 0)
-       ELSE ISNULL(dp.nInsumo, 0) * dd.nCantidad END"""
+  CASE
+    WHEN INFOREST.DBO.DPEDIDO.lCombinacion = 0 THEN
+      (INFOREST.DBO.DPEDIDO.nInsumo
+       + ISNULL(COSTOS_PROPIEDADES_PRODUCTOS.[COSTO PROPIEDADES PRODUCTO], 0))
+      * INFOREST.DBO.DDOCUMENTO.nCantidad
+    WHEN INFOREST.DBO.DPEDIDO.lCombinacion = 1 THEN
+      COSTOS_COMBINACIONES.[COSTO COMBINACION]
+      + INFOREST.DBO.DPEDIDO.nCantidad
+        * ISNULL(COSTOS_PROPIEDADES_COMBINACIONES.[COSTO PROPIEDADES COMBINACION], 0)
+    ELSE NULL
+  END"""
 _UNIR_COSTO = """
-  JOIN TPRODUCTO t ON t.tCodigoProducto = dd.tCodigoProducto
-  LEFT JOIN DPEDIDO dp ON dp.tCodigoPedido = dd.tCodigoPedido
-                      AND dp.tItem = dd.tItem
-  LEFT JOIN (SELECT tCodigoPedido, tItem, SUM(nCantidad * nInsumo) AS costo
-             FROM CPEDIDO GROUP BY tCodigoPedido, tItem) c
-    ON c.tCodigoPedido = dd.tCodigoPedido AND c.tItem = dd.tItem"""
+  LEFT JOIN INFOREST.DBO.DPEDIDO
+    ON INFOREST.DBO.DPEDIDO.tCodigoPedido = INFOREST.DBO.DDOCUMENTO.tCodigoPedido
+   AND INFOREST.DBO.DPEDIDO.tItem = INFOREST.DBO.DDOCUMENTO.tItem
+  LEFT JOIN (
+    SELECT
+      INFOREST.DBO.CPEDIDO.tCodigoPedido,
+      INFOREST.DBO.CPEDIDO.tItem,
+      SUM(INFOREST.DBO.CPEDIDO.nCantidad * INFOREST.DBO.CPEDIDO.nInsumo)
+        AS [COSTO COMBINACION]
+    FROM INFOREST.DBO.CPEDIDO
+    GROUP BY INFOREST.DBO.CPEDIDO.tCodigoPedido, INFOREST.DBO.CPEDIDO.tItem
+  ) AS COSTOS_COMBINACIONES
+    ON COSTOS_COMBINACIONES.tCodigoPedido = INFOREST.DBO.DDOCUMENTO.tCodigoPedido
+   AND COSTOS_COMBINACIONES.tItem = INFOREST.DBO.DDOCUMENTO.tItem
+  LEFT JOIN (
+    SELECT
+      INFOREST.DBO.TPRODUCTOPROPIEDAD.tCodigoPedido,
+      INFOREST.DBO.TPRODUCTOPROPIEDAD.tItem,
+      SUM(ISNULL(INFOREST.DBO.TPRODUCTOPROPIEDAD.nInsumo, 0)
+          + ISNULL(INFOREST.DBO.TPRODUCTOPROPIEDAD.nGasto, 0)
+          + ISNULL(INFOREST.DBO.TPRODUCTOPROPIEDAD.nManoObra, 0))
+        AS [COSTO PROPIEDADES PRODUCTO]
+    FROM INFOREST.DBO.TPRODUCTOPROPIEDAD
+    GROUP BY INFOREST.DBO.TPRODUCTOPROPIEDAD.tCodigoPedido,
+             INFOREST.DBO.TPRODUCTOPROPIEDAD.tItem
+  ) AS COSTOS_PROPIEDADES_PRODUCTOS
+    ON COSTOS_PROPIEDADES_PRODUCTOS.tCodigoPedido = INFOREST.DBO.DDOCUMENTO.tCodigoPedido
+   AND COSTOS_PROPIEDADES_PRODUCTOS.tItem = INFOREST.DBO.DDOCUMENTO.tItem
+  LEFT JOIN (
+    SELECT
+      INFOREST.DBO.TCOMBOPROPIEDAD.tCodigoPedido,
+      INFOREST.DBO.TCOMBOPROPIEDAD.tItem,
+      SUM(ISNULL(INFOREST.DBO.TCOMBOPROPIEDAD.nInsumo, 0)
+          + ISNULL(INFOREST.DBO.TCOMBOPROPIEDAD.nGasto, 0)
+          + ISNULL(INFOREST.DBO.TCOMBOPROPIEDAD.nManoObra, 0))
+        AS [COSTO PROPIEDADES COMBINACION]
+    FROM INFOREST.DBO.TCOMBOPROPIEDAD
+    WHERE EXISTS (
+      SELECT 1
+      FROM INFOREST.DBO.CPEDIDO
+      WHERE INFOREST.DBO.CPEDIDO.tCodigoPedido = INFOREST.DBO.TCOMBOPROPIEDAD.tCodigoPedido
+        AND INFOREST.DBO.CPEDIDO.tItem = INFOREST.DBO.TCOMBOPROPIEDAD.tItem
+        AND INFOREST.DBO.CPEDIDO.tItemCombo = INFOREST.DBO.TCOMBOPROPIEDAD.tItemCombo
+    )
+    GROUP BY INFOREST.DBO.TCOMBOPROPIEDAD.tCodigoPedido,
+             INFOREST.DBO.TCOMBOPROPIEDAD.tItem
+  ) AS COSTOS_PROPIEDADES_COMBINACIONES
+    ON COSTOS_PROPIEDADES_COMBINACIONES.tCodigoPedido = INFOREST.DBO.DDOCUMENTO.tCodigoPedido
+   AND COSTOS_PROPIEDADES_COMBINACIONES.tItem = INFOREST.DBO.DDOCUMENTO.tItem"""
 _SQL_COSTO = f"""
 SELECT dia, SUM(costo) AS costo, SUM(costo_cortesias) AS costo_cortesias
 FROM (
-  SELECT CONVERT(varchar(10), m.fRegistro, 120) AS dia,
-    CASE WHEN m.tTipoDocumento <> '00' AND m.tEstadoDocumento IN ('02', '03')
+  SELECT CONVERT(varchar(10), INFOREST.DBO.MDOCUMENTO.fRegistro, 120) AS dia,
+    CASE WHEN INFOREST.DBO.MDOCUMENTO.tTipoDocumento <> '00'
+          AND INFOREST.DBO.MDOCUMENTO.tEstadoDocumento IN ('02', '03')
          THEN {_COSTO_LINEA} ELSE 0 END AS costo,
-    CASE WHEN m.tTipoDocumento = '00' AND m.tEstadoDocumento <> '04'
+    CASE WHEN INFOREST.DBO.MDOCUMENTO.tTipoDocumento = '00'
+          AND INFOREST.DBO.MDOCUMENTO.tEstadoDocumento <> '04'
          THEN {_COSTO_LINEA} ELSE 0 END AS costo_cortesias
-  FROM DDOCUMENTO dd
-  JOIN MDOCUMENTO m ON m.tDocumento = dd.tDocumento {_UNIR_COSTO}
-  WHERE m.fRegistro >= ? AND m.fRegistro < ?
+  FROM INFOREST.DBO.DDOCUMENTO
+  JOIN INFOREST.DBO.MDOCUMENTO
+    ON INFOREST.DBO.MDOCUMENTO.tDocumento = INFOREST.DBO.DDOCUMENTO.tDocumento
+  {_UNIR_COSTO}
+  WHERE INFOREST.DBO.MDOCUMENTO.fRegistro >= ? AND INFOREST.DBO.MDOCUMENTO.fRegistro < ?
   UNION ALL
-  SELECT CONVERT(varchar(10), n.fRegistro, 120), -({_COSTO_LINEA}), 0
-  FROM MNOTACREDITO n
-  JOIN DDOCUMENTO dd ON dd.tDocumento = n.tDocumento {_UNIR_COSTO}
-  WHERE n.fRegistro >= ? AND n.fRegistro < ? AND n.tEstadoDocumento <> '04'
-) lineas
+  SELECT CONVERT(varchar(10), INFOREST.DBO.MNOTACREDITO.fRegistro, 120),
+    -({_COSTO_LINEA}), 0
+  FROM INFOREST.DBO.MNOTACREDITO
+  JOIN INFOREST.DBO.DDOCUMENTO
+    ON INFOREST.DBO.DDOCUMENTO.tDocumento = INFOREST.DBO.MNOTACREDITO.tDocumento
+  {_UNIR_COSTO}
+  WHERE INFOREST.DBO.MNOTACREDITO.fRegistro >= ? AND INFOREST.DBO.MNOTACREDITO.fRegistro < ?
+    AND INFOREST.DBO.MNOTACREDITO.tEstadoDocumento <> '04'
+) AS COSTOS_POR_DOCUMENTO
 GROUP BY dia
 """
 _SQL_COMBOS = "SELECT tCodigoProducto FROM TPRODUCTO WHERE lCombinacion = 1"
