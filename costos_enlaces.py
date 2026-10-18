@@ -121,6 +121,10 @@ def aplicar_contexto(reporte, df=None):
 
     familias = _lista(params, "familias", cv.CUBETAS)
     extras = _lista(params, "extras", cv.GRUPOS_APARTE.values())
+    # Costos asigna estos dos grupos a Alimentos: al mirar sólo bebidas
+    # o vinos, su venta tampoco debe aparecer en la pestaña de origen.
+    if "Alimentos" not in familias:
+        extras = []
     if reporte == "Movimientos":
         import data
         fuente = data.cargar("salidas.parquet")

@@ -177,6 +177,8 @@ function sentidoVar(fila, delta) {
 }
 
 function enlaceOrigen(st, fila, periodo) {
+  if (['v', 'pos', 'pos_aj', 'cort', 'desc'].includes(fila.k)
+      && [...st.fams].every(f => f === 'Envases')) return '';
   const enlace = st.todo.enlaces?.[st.grano]?.[periodo.k]?.[fila.k];
   if (!enlace) return '';
   const href = enlace.url + '&familias=' + encodeURIComponent(JSON.stringify([...st.fams]))
