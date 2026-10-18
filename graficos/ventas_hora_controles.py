@@ -65,10 +65,13 @@ def medir_cabecera():
 
 def cabecera(d, col_fecha, col_pedido, ancla, filtrar_cb, interruptor):
     """Dibuja título, modo y filtros, y devuelve su contexto para el cuerpo."""
-    st.markdown('<h3 class="vh-titulo">Análisis por hora</h3>',
-                unsafe_allow_html=True)
-    with st.container(key="vh_navegacion"):
-        interruptor()
+    with st.container(horizontal=True, vertical_alignment="center",
+                      gap="medium", key="vh_cabecera"):
+        with st.container(key="vh_titulo_caja", width="content"):
+            st.markdown('<h3 class="vh-titulo">Análisis por hora</h3>',
+                        unsafe_allow_html=True)
+        with st.container(key="vh_navegacion", width="content"):
+            interruptor()
 
     ctx = ctx_rango_propio()
     st.session_state.pop("vh_fecha_cambio", None)

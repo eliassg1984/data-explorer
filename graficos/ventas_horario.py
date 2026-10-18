@@ -316,8 +316,10 @@ _DOM_MAPA_MAX = 0.78
 # La tablita de los totales por hora: el rótulo de cada columna y dónde
 # termina cada una de las de texto en el eje `x2` (la barra ocupa de 0 a 1).
 _ROT_TOT = {"venta": "Venta", "pax": "Pax", "cant": "Unid.",
-            "desc": "Dscto.", "ticket": "Gasto/persona"}
-_X_TOT_COLS = (1.68, 2.36)
+            "desc": "Dscto.", "ticket": "S/ por pax"}
+# El gasto por persona necesita más ancho que Pax. La cabecera usa su
+# unidad corta y el tooltip conserva el nombre completo de la medida.
+_X_TOT_COLS = (1.65, 2.65)
 
 # EL CLIC SUELTO LO TRAE ESTE PUENTE (regla #536). Con `dragmode="select"`
 # Streamlit fuerza `clickmode="event"` y descarta el clic —también en la
@@ -1544,7 +1546,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
                 fig.add_trace(go.Scatter(
                     x=_tx, y=_ty, mode="text", text=_tt, hoverinfo="skip",
                     textposition="middle center", showlegend=False,
-                    textfont=dict(size=10, color=_tc)))
+                    textfont=dict(size=11, color=_tc)))
     else:
         # PUNTOS. El área del punto es la cantidad (el diámetro va con la
         # raíz), con tope en el percentil 95: lo que pasa de ahí no crece
@@ -1902,7 +1904,7 @@ def _totales_al_margen(fig, medida, y_cat, total, geo, offs, por_hora,
 
     def _tooltip(nombre, tabla, i):
         return f"<b>{nombre}</b><br>" + " · ".join(
-            f"{_ROT_TOT[m]} {_largo(tabla[k][i], m)}" for k, m in cols)
+            f"{_MED_LABEL[m]} {_largo(tabla[k][i], m)}" for k, m in cols)
 
     # Las columnas de hueco entre paneles no son columnas: sin barra.
     _es_col = np.zeros(total, dtype=bool)
@@ -1928,7 +1930,7 @@ def _totales_al_margen(fig, medida, y_cat, total, geo, offs, por_hora,
             xaxis="x2", yaxis="y", mode="text", hoverinfo="skip",
             text=[_corto(v, m) for v in hor[k]], showlegend=False,
             textposition="middle right" if k == "med" else "middle left",
-            textfont=dict(size=10, color=(MAPA_TINTA if k == "med"
+            textfont=dict(size=11, color=(MAPA_TINTA if k == "med"
                                           else GRIS_TEXTO))))
     # La cifra de cada columna, sólo si la columna es ancha (pocos días): con
     # un mes no entra, y queda en el tooltip con los clientes y el ticket.
@@ -1966,12 +1968,12 @@ def _totales_al_margen(fig, medida, y_cat, total, geo, offs, por_hora,
         fig.add_annotation(
             xref="x2", x=_x, yref="paper", y=1.0, xanchor=_anc,
             yanchor="bottom", showarrow=False, text=_ROT_TOT[m],
-            font=dict(size=10, color=GRIS_TEXTO))
+            font=dict(size=11, color=GRIS_TEXTO))
         fig.add_annotation(
             xref="x2", x=_x, yref="y3 domain", y=0.5, xanchor=_anc,
             yanchor="middle", showarrow=False,
             text=f"<b>{_corto(gen[k], m)}</b>",
-            font=dict(size=10, color=TEXTO_PRINCIPAL))
+            font=dict(size=11, color=TEXTO_PRINCIPAL))
     if not desliza:
         fig.add_annotation(
             xref="paper", x=0, yref="y3 domain", y=0.5, xanchor="right",
@@ -3621,6 +3623,12 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             # componente de Plotly respeta en la 1.59 local y en la 1.64 de
             # Cloud: con `use_container_width` se estira al contenedor.
             with st.container(key="vh_desliza"):
+                # La tabla lateral necesita un ancho legible incluso en
+                # móvil; CSS permite deslizar el mapa cuando no alcanza.
+                st.markdown(
+                    '<span class="vh-mapa-opciones'
+                    + (' vh-totales-margen' if totales else '') + '"></span>',
+                    unsafe_allow_html=True)
                 if desliza:
                     st.plotly_chart(
                         _fig_eje_horas(horas, _alto,

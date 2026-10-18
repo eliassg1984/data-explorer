@@ -49350,7 +49350,15 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      por persona se nombra distinto de la venta por pedido. Las etiquetas
      son permanentes; el alto real de la cabecera se mide con un
      `ResizeObserver` para que la resta del detalle soporte filas que
-     envuelven. Lo que sigue describe el diseño anterior y su origen.
+     envuelven. La cabecera compacta agrupa título y modos en una sola
+     fila; sus espacios y controles se ajustan por altura disponible, con
+     una densidad mayor bajo 800px de alto en escritorio y campos amplios
+     en móvil. Los rótulos y valores conservan su tamaño de letra. Los
+     totales laterales reservan más ancho al gasto por persona y muestran
+     «S/ por pax», con el nombre completo en el tooltip. Cuando falta
+     ancho, el mapa con totales desplaza horizontalmente su contenido para
+     conservar las cifras y sus encabezados legibles. Lo que sigue
+     describe el diseño anterior y su origen.
 
      El
      interruptor del renglón del título alterna el mapa de calor simple,

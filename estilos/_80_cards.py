@@ -6165,17 +6165,34 @@ CSS = """    /* ================================================================
         color: var(--text-primary) !important;
         margin: 0 0 4px !important;
     }
+    .st-key-vh_controles {
+        --vh-control-alto: 32px;
+        --vh-tab-alto: 32px;
+        --vh-control-gap: 7px;
+        --vh-presentacion-relleno: 5px;
+    }
     div[class*="st-key-chartcard_ventas_horario_"] .st-key-vh_controles,
-    .st-key-chartcard_vh_a_medida .st-key-vh_controles { gap: 12px !important; }
+    .st-key-chartcard_vh_a_medida .st-key-vh_controles {
+        gap: var(--vh-control-gap) !important;
+    }
     .st-key-chartcard_vh_a_medida {
         padding-top: 2px !important;
         padding-bottom: 4px !important;
         gap: 4px !important;
     }
-    .st-key-vh_navegacion {
-        padding-bottom: 6px !important;
+    .st-key-vh_cabecera {
+        flex-wrap: wrap !important;
+        gap: 18px !important;
+        padding-bottom: 2px !important;
         border-bottom: 1px solid var(--border) !important;
     }
+    .st-key-vh_cabecera > div {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    .st-key-vh_cabecera .vh-titulo,
+    .st-key-vh_cabecera .vh-titulo > span { margin: 0 !important; }
+    .st-key-vh_navegacion { padding: 0 !important; border: none !important; }
     .st-key-vh_navegacion .st-key-vh_modo [data-testid="stButtonGroup"] {
         background: transparent !important;
         border: none !important;
@@ -6188,8 +6205,8 @@ CSS = """    /* ================================================================
         color: var(--text-secondary) !important;
         font-size: 14px !important;
         font-weight: 500 !important;
-        padding: 7px 12px !important;
-        min-height: 34px !important;
+        padding: 3px 12px !important;
+        min-height: var(--vh-tab-alto) !important;
         height: auto !important;
     }
     .st-key-vh_navegacion .st-key-vh_modo [data-testid="stButtonGroup"] button[data-selected="true"] {
@@ -6197,7 +6214,7 @@ CSS = """    /* ================================================================
         border-bottom-color: var(--accent) !important;
     }
     .st-key-vh_filtros, .st-key-vh_presentacion, .st-key-vh_comparar,
-    .st-key-vt_frj_fila { flex-wrap: wrap !important; gap: 12px !important; }
+    .st-key-vt_frj_fila { flex-wrap: wrap !important; gap: 8px !important; }
     /* Los anchos Python son la referencia de escritorio. Se dejan crecer
        y envolver aquí para que una selección larga o el móvil quepan. */
     .st-key-vh_filtros > div {
@@ -6211,7 +6228,11 @@ CSS = """    /* ================================================================
         width: 100% !important;
         min-width: 0 !important;
     }
-    .st-key-vh_filtro_fecha { gap: 5px !important; }
+    .st-key-vh_filtro_fecha {
+        gap: 2px !important;
+        min-height: calc(var(--vh-control-alto) + 18px) !important;
+        justify-content: space-between !important;
+    }
     .st-key-vh_filtro_fecha .st-key-vh_fecha_fila {
         padding-left: 0 !important;
         width: 100% !important;
@@ -6228,13 +6249,53 @@ CSS = """    /* ================================================================
         text-transform: none !important;
         letter-spacing: normal !important;
         margin-bottom: 3px !important;
+        line-height: 1.2 !important;
     }
-    .st-key-vh_filtros .stSelectbox [role="group"],
+    .st-key-vh_filtros [data-testid="stWidgetLabel"],
+    .st-key-vh_presentacion [data-testid="stWidgetLabel"],
+    .st-key-vh_comparar [data-testid="stWidgetLabel"] {
+        min-height: 0 !important;
+        margin-bottom: 2px !important;
+    }
+    .st-key-vh_filtro_fecha [data-testid="stCaptionContainer"] p {
+        margin: 0 !important;
+    }
+    .st-key-vh_filtros [data-testid="stSelectbox"] [role="group"],
     .st-key-vh_filtros [data-baseweb="select"] > div {
-        min-height: 34px !important;
+        min-height: var(--vh-control-alto) !important;
         border: 1px solid var(--border) !important;
         border-radius: 6px !important;
         background: var(--bg-card) !important;
+    }
+    .st-key-vh_filtros [data-testid="stSelectbox"] [role="group"],
+    .st-key-vh_filtros .react-aria-Select > button {
+        height: var(--vh-control-alto) !important;
+    }
+    /* Multiselect: ambas versiones del DOM. Los chips pueden envolver;
+       se compacta el estado vacío sin recortar selecciones múltiples. */
+    .st-key-vh_filtro_canal .react-aria-ComboBox > div {
+        min-height: var(--vh-control-alto) !important;
+        height: auto !important;
+    }
+    .st-key-vh_filtro_canal [data-testid="stMultiSelectTagsContainer"] {
+        min-height: calc(var(--vh-control-alto) - 2px) !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        align-items: center !important;
+    }
+    .st-key-vh_filtros [data-testid="stSelectbox"] input,
+    .st-key-vh_filtro_canal .react-aria-ComboBox input {
+        height: calc(var(--vh-control-alto) - 4px) !important;
+        min-height: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        font-size: 13px !important;
+    }
+    .st-key-vh_filtro_fecha .st-key-vh_fecha_escala button {
+        height: var(--vh-control-alto) !important;
+        min-height: var(--vh-control-alto) !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
     }
     .st-key-vh_contexto { flex-wrap: wrap !important; align-items: center !important; }
     .st-key-vh_contexto [data-testid="stCaptionContainer"] p,
@@ -6243,8 +6304,10 @@ CSS = """    /* ================================================================
         text-transform: none !important;
         letter-spacing: normal !important;
     }
+    .st-key-vh_contexto [data-testid="stCaptionContainer"] p,
+    .st-key-vh_contexto [data-testid="stWidgetLabel"] p { margin: 0 !important; }
     .st-key-vh_presentacion {
-        padding: 10px 12px !important;
+        padding: var(--vh-presentacion-relleno) 12px !important;
         border-radius: 8px !important;
         background: var(--bg-card-tenue) !important;
         align-items: flex-end !important;
@@ -6258,23 +6321,23 @@ CSS = """    /* ================================================================
         flex: 0 0 auto !important;
         width: auto !important;
     }
-    .st-key-vh_presentacion .stSelectbox [role="group"],
+    .st-key-vh_presentacion [data-testid="stSelectbox"] [role="group"],
     .st-key-vh_presentacion [data-baseweb="select"] > div,
-    .st-key-vh_comparar .stSelectbox [role="group"],
+    .st-key-vh_comparar [data-testid="stSelectbox"] [role="group"],
     .st-key-vh_comparar [data-baseweb="select"] > div,
-    .st-key-vt_frj_fila .stSelectbox [role="group"],
+    .st-key-vt_frj_fila [data-testid="stSelectbox"] [role="group"],
     .st-key-vt_frj_fila [data-baseweb="select"] > div {
-        height: 30px !important;
-        min-height: 30px !important;
+        height: var(--vh-control-alto, 32px) !important;
+        min-height: var(--vh-control-alto, 32px) !important;
         border: none !important;
         border-radius: 4px !important;
         background: transparent !important;
         box-shadow: none !important;
     }
-    .st-key-vh_presentacion .stSelectbox input,
+    .st-key-vh_presentacion [data-testid="stSelectbox"] input,
     .st-key-vh_presentacion [data-baseweb="select"] div[value],
-    .st-key-vh_comparar .stSelectbox input,
-    .st-key-vt_frj_fila .stSelectbox input {
+    .st-key-vh_comparar [data-testid="stSelectbox"] input,
+    .st-key-vt_frj_fila [data-testid="stSelectbox"] input {
         color: var(--text-primary) !important;
         font-size: 13px !important;
         font-weight: 400 !important;
@@ -6282,8 +6345,8 @@ CSS = """    /* ================================================================
     }
     .st-key-vh_apariencia { margin-left: auto !important; }
     .st-key-vh_apariencia .stPopover button {
-        height: 32px !important;
-        min-height: 32px !important;
+        height: var(--vh-control-alto) !important;
+        min-height: var(--vh-control-alto) !important;
         border: 1px solid var(--border) !important;
         border-radius: 6px !important;
         background: var(--bg-card) !important;
@@ -6297,7 +6360,39 @@ CSS = """    /* ================================================================
         min-width: 0 !important;
     }
     .st-key-vt_frj_cabfila { flex-wrap: wrap !important; }
+    .st-key-vh_desliza .stElementContainer:has(.vh-mapa-opciones) {
+        display: none !important;
+    }
+    /* El mapa conserva su ancho disponible en escritorio. Con totales y
+       menos espacio, desliza: 980px dejan al menos 170px a la tabla lateral
+       y mantienen separados Pax y el gasto por persona a 11px de letra.
+       El mapa con eje pegado ya tiene su propio ancho y desplazamiento. */
+    .st-key-vh_desliza:has(.vh-totales-margen):not(:has(.st-key-vh_eje_horas)) {
+        overflow-x: auto !important;
+    }
+    .st-key-vh_desliza:has(.vh-totales-margen):not(:has(.st-key-vh_eje_horas))
+        > .stElementContainer,
+    .st-key-vh_desliza:has(.vh-totales-margen):not(:has(.st-key-vh_eje_horas))
+        [data-testid="stPlotlyChart"] {
+        min-width: 980px !important;
+    }
+    /* La densidad depende del alto disponible, no de una resolución fija.
+       Se mantiene el tamaño de letra; sólo se reduce el cromo en laptops. */
+    @media (min-width: 769px) and (max-height: 800px) {
+        .st-key-vh_controles {
+            --vh-control-alto: 28px;
+            --vh-tab-alto: 28px;
+            --vh-control-gap: 4px;
+            --vh-presentacion-relleno: 4px;
+        }
+    }
     @media (max-width: 768px) {
+        .st-key-vh_controles { --vh-control-alto: 40px; --vh-tab-alto: 36px; }
+        .st-key-vh_controles .st-key-vh_cabecera {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 4px !important;
+        }
         /* La regla móvil general convierte filas en columnas. Una base
            flex en px pasaría a ser un ALTO: aquí los campos tienen su alto
            natural y ocupan todo el ancho, sin huecos de 145px. */
