@@ -10979,7 +10979,7 @@ def _pruebas_ventas_franja():
     check("«Por hora» le pasa su filtrar_cb al modo «A medida»",
           "_franja.cuerpo(d, filtrar_cb," in src, True)
     check("el interruptor tiene los tres modos",
-          _h.MODOS_VISTA, ("Mapa", "Comparar", "A medida"))
+          _h.MODOS_VISTA, ("Patrones", "Comparar", "Franjas"))
     # «Mapa» elige solo cómo partir las fechas: un día, meses o años.
     check("Mapa · un solo día va en Día",
           _h.grano_automatico(date(2026, 10, 4), date(2026, 10, 4)), "Día")
@@ -12054,8 +12054,10 @@ def _pruebas_cabecera_por_hora():
         _h.st = real
 
     src = pathlib.Path(_h.__file__).read_text(encoding="utf-8")
-    check("el interruptor de Ajustes lleva su valor en `value=` (#467)",
-          "value=bool(st.session_state.get(_K_RAROS_VALOR, True))" in src,
+    from graficos import ventas_hora_controles as _hc
+    src_contexto = pathlib.Path(_hc.__file__).read_text(encoding="utf-8")
+    check("el filtro compartido lleva su valor en `value=` (#467)",
+          'value=bool(ss.get("_vh_raros_valor", True))' in src_contexto,
           True)
     check("y Python no le escribe la key",
           "setdefault(\n                        _K_RAROS" in src
@@ -12066,12 +12068,12 @@ def _pruebas_cabecera_por_hora():
           and "Hora" in _h._COLS_FILAS, True)
 
     from estilos._80_cards import CSS as _css
-    check("los rótulos de la cabecera",
-          all(f'content: "{x}"' in _css
-              for x in ("Filas", "Columnas", "Valor", "Un panel por")), True)
-    check("el rótulo es el ::before y el separador el ::after",
-          ".st-key-vh_cab_filas::before" in _css
-          and ".st-key-vh_cab_cols::after" in _css, True)
+    check("contexto y presentación tienen contenedores propios",
+          ".st-key-vh_filtros" in _css
+          and ".st-key-vh_presentacion" in _css, True)
+    check("los rótulos del mapa son visibles sin hover",
+          'visible=True' in src
+          and '.st-key-vh_cab_filas::before' not in _css, True)
 
     # «Promedio por día» en el hover sólo si la celda ES un promedio.
     celdas = pd.DataFrame({"col": [5], "hora": [19], "venta": [100.0],

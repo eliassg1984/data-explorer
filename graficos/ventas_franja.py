@@ -1,5 +1,5 @@
 """
-graficos.ventas_franja — el modo «A medida» de Ventas › Análisis por Hora
+graficos.ventas_franja — el modo «Franjas» de Ventas › Análisis por Hora
 (2026-10-10, regla #627): el interruptor «Mapa | A medida» del renglón del
 título de esa tarjeta alterna el mapa de calor y esto.
 
@@ -53,15 +53,13 @@ import streamlit as st
 
 import cortes
 from data import REPORTES, cargar_rango, rango_fechas
-from estado_rango import atajos_tarjeta
 from graficos import alturas
-from graficos.base import (_resolver, ctx_rango_propio, rango_tarjeta,
-                           selector_fecha_tarjeta)
-from graficos.ventas_platos import TODA_LA_CARTA, opciones_ambito
+from graficos.base import _resolver
+from graficos import ventas_hora_controles as _hc
 from tema import GRIS_TEXTO_SUAVE
 
-CATEGORIA = "vt_franja"
-"""La clave del rango PROPIO de la tarjeta (`ctx_rango_propio`, regla
+CATEGORIA = _hc.CATEGORIA
+"""La clave del rango compartido con Patrones y Comparar (`ctx_rango_propio`, regla
 #531): mover su fecha no toca la de la franja ni recarga el reporte."""
 
 MODOS = ("Días de la semana", "Días sueltos")
@@ -72,7 +70,7 @@ HORAS_HASTA = HORAS[1:] + ("24:00",)
 AGRUPAR = ("Plato", "Subgrupo", "Grupo")
 
 _KEYS_WIDGET = ("vt_frj_modo", "vt_frj_dias", "vt_frj_sueltos", "vt_frj_desde",
-         "vt_frj_hasta", "vt_frj_canal", "vt_frj_amb", "vt_frj_agrupar")
+         "vt_frj_hasta", "vt_frj_agrupar")
 """Los controles de este modo, para que el mapa los conserve mientras está
 en pantalla (`base.preservar_widgets`): un widget que no se dibuja en una
 corrida pierde su valor."""
@@ -194,20 +192,20 @@ def _base(df, cols, col_hora):
     })
 
 
-def _cargar(ini, fin, cruza, filtrar_cb, d_demo):
+def _cargar(ini, fin, cruza, filtrar_cb, d_demo, base="Hora del pedido"):
     """El tramo de R2 por la fecha del PEDIDO (regla #552), con un día de
     más si el horario cruza la medianoche, y filtrado como el resto de
     Ventas (`filtrar_cb`: los chips, un ítem una vez y sólo venta)."""
     cfg = REPORTES.get("Ventas", {})
     archivo = cfg.get("archivo", "ventas.parquet")
     cols_d = _columnas(d_demo) if d_demo is not None else {}
-    col_carga = cols_d.get("hora") or cfg.get("carga_por_rango",
+    col_carga = (cols_d.get("hora") if base == "Hora del pedido" else None) or cfg.get("carga_por_rango",
                                               "FEC REG DOCUMENTO")
     fin_carga = fin + _dt.timedelta(days=1) if cruza else fin
     df = cargar_rango(archivo, col_carga, ini, fin_carga)
-    if df is None or df.empty:
+    if df is None:
         df = d_demo     # modo demo: el loader no trae nada
-    elif filtrar_cb is not None:
+    if df is not None and filtrar_cb is not None:
         df = filtrar_cb(df)
     return df
 
@@ -254,7 +252,7 @@ def _html_cab(tit, kpis):
 
 
 def cuerpo(d, filtrar_cb=None, interruptor=None):
-    """El modo «A medida»: un total de venta, unidades y pedidos para los
+    """El modo «Franjas»: un total de venta, unidades y pedidos para los
     días y el horario que se elijan, con el detalle por día y por plato.
 
     Se dibuja ADENTRO de la tarjeta y del fragment de «Por hora»;
@@ -269,55 +267,30 @@ def cuerpo(d, filtrar_cb=None, interruptor=None):
         return
     lim = rango_fechas(cfg.get("archivo", "ventas.parquet"),
                        cfg.get("carga_por_rango", "FEC REG DOCUMENTO"))
-    _fd = pd.to_datetime(d[col_hora], errors="coerce").dropna()
-    primer, ancla = lim if lim else (_fd.min().date(), _fd.max().date())
-
-    # ── El renglón del título: el interruptor y, a su derecha, los KPI,
-    # que se escriben al final ─────────────────────────────────────────
+    fd = pd.to_datetime(d[col_hora], errors="coerce").dropna()
+    ancla = lim[1] if lim else fd.max().date()
+    with st.container(key="vh_controles"):
+        contexto = _hc.cabecera(d, cols_d["cobro"], cols_d["hora"], ancla,
+                                filtrar_cb, interruptor or (lambda: None))
+    ini, fin = contexto["rango"]
+    filtrar_cb = contexto["filtrar"]
+    base = contexto["hora"]
+    canal_sel = contexto["canales"]
+    # El horario se elige después del contexto común; el desglose no filtra.
+    fila1 = st.container(horizontal=True, gap="medium",
+                         vertical_alignment="bottom", key="vt_frj_fila")
     cab = st.container(horizontal=True, gap="medium",
                        vertical_alignment="center", key="vt_frj_cabfila")
-    if interruptor is not None:
-        with cab:
-            interruptor()
-
-    # ── La fila de controles: fecha · días · horario ─────────────────
-    # Abre en «Últimos 30 días» hasta el último día con venta, el
-    # mínimo de un mes de todas las tarjetas (regla #616).
-    ctx = ctx_rango_propio()
-    if ctx:
-        _d30 = dict((c, r) for c, _n, _g, r in
-                    atajos_tarjeta(ancla, (primer, ancla))).get("d30")
-        if _d30:
-            ctx = {**ctx, "rango_default_cat": {
-                **(ctx.get("rango_default_cat") or {}), CATEGORIA: _d30}}
-    ss.pop("vt_frj_fecha_flag", None)
-    rng = (rango_tarjeta(CATEGORIA, ctx) if ctx else None) or (
-        ancla - _dt.timedelta(days=29), ancla)
-    ini, fin = rng[0], min(rng[1], ancla)
-
-    # ── Los controles, en DOS filas compactas como la del mapa ─────────
-    # Hasta el 2026-10-10 eran columnas con los controles de Streamlit a su
-    # tamaño (40 px de alto, la fecha como cápsula de 50) y el modo se veía
-    # desproporcionado al lado del mapa, que usa desplegables sin caja de
-    # 28 px (regla #627). Las dos filas se crean juntas y la segunda se
-    # llena después de cargar: sus opciones dependen de lo cargado.
-    fila1 = st.container(horizontal=True, gap="small",
-                         vertical_alignment="center", key="vt_frj_fila")
-    fila2 = st.container(horizontal=True, gap="small",
-                         vertical_alignment="center", key="vt_frj_fila2")
     with fila1:
-        if ctx:
-            selector_fecha_tarjeta("vt_frjf", "vt_frj_fecha_flag",
-                                   categoria=CATEGORIA, ctx=ctx)
         if ss.get("vt_frj_modo") not in MODOS:
             ss["vt_frj_modo"] = MODOS[0]
         modo = st.selectbox("Días", MODOS, key="vt_frj_modo",
-                            label_visibility="collapsed", width=150)
+                            label_visibility="visible", width=165)
         # ── Qué días, según el modo ──────────────────────────────────
         if modo == MODOS[0]:
             sel = st.pills("Días de la semana", DIAS, selection_mode="multi",
                            default=list(DIAS), key="vt_frj_dias",
-                           label_visibility="collapsed") or []
+                           label_visibility="visible") or []
             dias_semana = [DIAS.index(x) for x in sel]
             dias = dias_elegidos(ini, fin, dias_semana)
         else:
@@ -328,19 +301,17 @@ def cuerpo(d, filtrar_cb=None, interruptor=None):
             ss["vt_frj_sueltos"] = _validos
             dias = sorted(st.multiselect(
                 "Días sueltos", todas, key="vt_frj_sueltos",
-                format_func=_fecha_corta, label_visibility="collapsed",
+                format_func=_fecha_corta, label_visibility="visible",
                 placeholder="Elegí los días…", width=300))
         # El horario: «de 17:30» «a 23:30». La palabra va en el valor y no
         # en un rótulo: con el rótulo oculto, un `help=` no se ve (#555).
         desde_t = st.selectbox("Desde", HORAS, index=HORAS.index("00:00"),
                                key="vt_frj_desde",
-                               format_func=lambda h: f"de {h}",
-                               label_visibility="collapsed", width=96)
-        hasta_t = st.selectbox("Hasta", HORAS_HASTA,
+                               label_visibility="visible", width=110)
+        hasta_t = st.selectbox("Hasta (sin incluir)", HORAS_HASTA,
                                index=HORAS_HASTA.index("24:00"),
                                key="vt_frj_hasta",
-                               format_func=lambda h: f"a {h}",
-                               label_visibility="collapsed", width=96)
+                               label_visibility="visible", width=130)
     desde, hasta = a_minutos(desde_t), a_minutos(hasta_t)
     cruza = cruza_medianoche(desde, hasta)
 
@@ -354,43 +325,16 @@ def cuerpo(d, filtrar_cb=None, interruptor=None):
         return
 
     with st.spinner("Cargando las ventas…"):
-        df = _cargar(dias[0], dias[-1], cruza, filtrar_cb, d)
+        df = _cargar(dias[0], dias[-1], cruza, filtrar_cb, d, base=base)
     if df is None or df.empty:
         b = None
     else:
         cols = _columnas(df)
-        b = _base(df, cols, cols["hora"] or cols["cobro"])
+        col_t = (cols["hora"] if base == "Hora del pedido" else None) or cols["cobro"]
+        b = _base(df, cols, col_t)
         dentro, dia = en_horario(b["ts"], desde, hasta)
         b = b.assign(dia=dia)[dentro]
         b = b[b["dia"].dt.date.isin(set(dias))]
-
-    # ── Canal, ámbito y detalle, sobre lo que hay en esos días ─────────
-    canales = (sorted(b["canal"].unique()) if b is not None
-               and not b.empty else [])
-    with fila2:
-        # Sin ninguno marcado, todos: un «Todos» como pastilla más se
-        # quedaba prendido al marcar Rappi y había que apagarlo a mano.
-        _prev = [x for x in (ss.get("vt_frj_canal") or []) if x in canales]
-        ss["vt_frj_canal"] = _prev
-        canal_sel = st.pills("Canal", canales, selection_mode="multi",
-                             key="vt_frj_canal",
-                             label_visibility="collapsed") or []
-        if b is not None and canal_sel:
-            b = b[b["canal"].isin(canal_sel)]
-        amb_ops = opciones_ambito(b if b is not None and not b.empty
-                                  else None)
-        if ss.get("vt_frj_amb") not in amb_ops:
-            ss["vt_frj_amb"] = TODA_LA_CARTA
-        amb = st.selectbox("Ámbito", list(amb_ops), key="vt_frj_amb",
-                           label_visibility="collapsed",
-                           width=210) or TODA_LA_CARTA
-        nivel = st.segmented_control(
-            "Detalle por", AGRUPAR, default=AGRUPAR[0], required=True,
-            key="vt_frj_agrupar", label_visibility="collapsed"
-        ) or AGRUPAR[0]
-    col_amb, cual = amb_ops[amb]
-    if b is not None and col_amb is not None:
-        b = b[b[col_amb] == cual]
 
     # ── Las cuentas ──────────────────────────────────────────────────
     pd_dia = por_dia(b, dias)
@@ -434,20 +378,20 @@ def cuerpo(d, filtrar_cb=None, interruptor=None):
             "% del total": peso,
             "Pedidos": ped,
             # Sin vacíos: un NaN se pinta «None» (regla #529); 0 → «—».
-            "Ticket": [v / p if p else 0.0
+            "Venta/pedido": [v / p if p else 0.0
                        for v, p in zip(pd_dia["venta"], ped)],
         }).iloc[::-1]
         sin_venta = (t["Venta"] == 0).to_numpy()
         sty = (t.style
                .format(lambda v: f"S/ {v:,.0f}" if v else "—",
-                       subset=["Venta", "Ticket"])
+                       subset=["Venta", "Venta/pedido"])
                .format(lambda v: f"{v:,.0f}" if v else "—",
                        subset=["Pedidos"])
                # Los días sin venta, en gris: son parte de la respuesta,
                # pero no se tienen que leer como una fila más.
                .apply(lambda c: [f"color: {GRIS_TEXTO_SUAVE}" if x else ""
                                  for x in sin_venta],
-                      subset=["Día", "Venta", "Pedidos", "Ticket"]))
+                      subset=["Día", "Venta", "Pedidos", "Venta/pedido"]))
         st.dataframe(
             sty, hide_index=True, height=alturas.VENTAS_PLATOS_TABLA,
             row_height=27, key="vt_frj_tdia",
@@ -460,11 +404,14 @@ def cuerpo(d, filtrar_cb=None, interruptor=None):
                     help="Cuánto del total de los días elegidos se vendió "
                          "ese día. La barra más larga es el mejor día."),
                 "Pedidos": st.column_config.Column(width=58),
-                "Ticket": st.column_config.Column(
+                "Venta/pedido": st.column_config.Column(
                     width=66, help="Venta ÷ pedidos de ese día, en el "
                                    "horario elegido"),
             })
     with t_grp:
+        nivel = st.segmented_control(
+            "Desglose por", AGRUPAR, default=AGRUPAR[0], required=True,
+            key="vt_frj_agrupar") or AGRUPAR[0]
         g = por_grupo(b, nivel)
         nombre = {"Plato": "prod", "Subgrupo": "sub",
                   "Grupo": "grupo"}[nivel]
@@ -502,7 +449,7 @@ def cuerpo(d, filtrar_cb=None, interruptor=None):
             row_height=27, key="vt_frj_tgrp", column_config=cfg)
 
     notas = [f"{que.capitalize()}: {_lista_dias(dias)}.",
-             "Por la hora del PEDIDO; la hora de «a» no se incluye "
+             f"Por la {base.lower()}; la hora final no se incluye "
              "(«a 22:00» llega a las 21:59) y, si es antes que la de "
              "«de», el horario cruza la medianoche."]
     if cruza:

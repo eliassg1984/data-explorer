@@ -97,7 +97,7 @@ _K_SALON_VALOR = "_vh_mesas_salon_valor"
 # alterna los tres en el MISMO lugar. Su valor sobrevive a cerrar la ficha:
 # quien mira pedidos suele seguir mirando pedidos en la hora siguiente.
 _K_VISTA = "vh_op_ficha"
-VISTAS = ("Contra lo normal", "Mesas del salón", "Pedidos")
+VISTAS = ("Resumen y contexto", "Mesas del salón", "Pedidos")
 
 _INFO = {
     "normal": "Las 8 semanas anteriores, mismo día de la semana y misma "
@@ -836,7 +836,7 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
             f'<span class="vhh-sub" title="{sub_tit}">{sub}</span>'
             f'{ver_html}</p>'
             f'<p class="vhh-kpis"><span>Venta<b>{_soles(v_hora)}</b></span>'
-            f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Ticket<b>'
+            f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Gasto/persona<b>'
             f'{_soles2(v_ticket / pax_hora) if pax_hora else "—"}</b></span>'
             # La frase en esta fila, sólo en la vista de lo normal: es el
             # título de la tira que va debajo.

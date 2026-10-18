@@ -4714,35 +4714,6 @@ CSS = """    /* ================================================================
         gap: 16px !important;
         flex-wrap: nowrap !important;
     }
-    /* Separador colgado de cada grupo a su IZQUIERDA, no por posición: el
-       título es el primero y no lleva. Va en `::after` desde la regla #555:
-       el `::before` es del rótulo. Desde el 2026-09-29 cuelga del LUGAR de
-       la fila (`vh_cab_*`), no del widget: el widget tiene ancho fijo y el
-       relleno se lo comía. «Total» no lleva: se lee con el valor («Venta
-       Total»), y «Lado a lado» tampoco: es de los paneles, como Comparar. */
-    .st-key-vh_cab_grano, .st-key-vh_paneles, .st-key-vh_cab_filas,
-    .st-key-vh_cab_cols, .st-key-vh_cab_valor, .st-key-vh_ajustes {
-        position: relative;
-        /* 11 y no 16 (2026-09-29): con 16 la fila pedía 60px más de los
-           1.172 que tiene la tarjeta a 1366 y se partía en dos. */
-        padding-left: 11px !important;
-    }
-    .st-key-vh_cab, .st-key-vh_paneles {
-        gap: 6px !important;
-    }
-    .st-key-vh_cab_grano::after, .st-key-vh_paneles::after,
-    .st-key-vh_cab_filas::after, .st-key-vh_cab_cols::after,
-    .st-key-vh_cab_valor::after,
-    .st-key-vh_fecha_fila::after, .st-key-vh_ajustes::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 1px;
-        height: 18px;
-        background: var(--border);
-    }
     /* "Comparar" es un botón normal (abre una lista, no alterna un valor),
        así que no lleva subrayado — pero sí tiene que dejar de ser una
        cápsula, o desentona en una fila de tabs. Y sobre todo: medía 55px de
@@ -4912,6 +4883,7 @@ CSS = """    /* ================================================================
     @media screen and (min-width: 769px) {
         div[class*="st-key-vh_panel_drill"] {
             max-height: calc(var(--alto-util)
+                             - var(--vh-cab-alto, 220px)
                              - var(--vh-alto-arriba, 400px)) !important;
             min-height: var(--vh-panel-min, 0px) !important;
             overflow-y: auto !important;
@@ -5458,7 +5430,8 @@ CSS = """    /* ================================================================
        sale en algunas horas; nunca menos de 120. */
     .st-key-chartcard_ventas_horario_hora .vhh-peds {
         max-height: max(120px, calc(var(--alto-util)
-                                    - var(--vh-alto-arriba, 400px)
+                                    - var(--vh-cab-alto, 220px)
+                             - var(--vh-alto-arriba, 400px)
                                     - 222px)) !important;
         overflow-y: auto !important;
         overflow-x: auto !important;
@@ -5678,45 +5651,6 @@ CSS = """    /* ================================================================
 
     /* =================================================================== */
     /* LOS RÓTULOS DE LA CABECERA (Ventas › Por hora, regla #555)           */
-    /* La cabecera se lee como una tabla dinámica: FILAS · COLUMNAS ·       */
-    /* VALOR, y UN PANEL POR arriba. El rótulo es el `::before` del         */
-    /* contenedor de la botonera —no un elemento: no cobra gap ni ocupa un  */
-    /* lugar en la fila de columnas—, y para que quede a la IZQUIERDA de    */
-    /* sus opciones el contenedor pasa a fila.                              */
-    /* =================================================================== */
-    /* Desde el 2026-09-29 (regla #562) el rótulo NO ocupa lugar en la
-       fila: aparece DEBAJO del control al pasar el cursor, como una
-       etiqueta flotante. A pedido, para ahorrar espacio: con los rótulos
-       al costado la fila pedía ~250px más y se partía en dos. Un `:hover`
-       suelto, sin `:has()` (regla #469). */
-    .st-key-vh_cab_grano::before, .st-key-vh_cab_filas::before,
-    .st-key-vh_cab_cols::before, .st-key-vh_cab_valor::before {
-        position: absolute;
-        top: calc(100% + 2px);
-        left: 11px;
-        z-index: 20;
-        padding: 2px 6px;
-        border-radius: 4px;
-        background: var(--bg-card);
-        box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: .09em;
-        text-transform: uppercase;
-        white-space: nowrap;
-        color: var(--text-secondary);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity .12s ease;
-    }
-    .st-key-vh_cab_grano:hover::before, .st-key-vh_cab_filas:hover::before,
-    .st-key-vh_cab_cols:hover::before, .st-key-vh_cab_valor:hover::before {
-        opacity: 1;
-    }
-    .st-key-vh_cab_grano::before { content: "Un panel por"; }
-    .st-key-vh_cab_filas::before { content: "Filas"; }
-    .st-key-vh_cab_cols::before { content: "Columnas"; }
-    .st-key-vh_cab_valor::before { content: "Valor"; }
     /* DESPLEGABLES EN UNA FILA (2026-09-29, a pedido: «ver todo en una
        misma pantalla»). Las botoneras pedían dos renglones; cada grupo es
        ahora un `st.selectbox` que muestra sólo lo elegido. Sin caja: un
@@ -6218,5 +6152,180 @@ CSS = """    /* ================================================================
     }
     .st-key-ajdist_por [data-testid="stButtonGroup"] button p {
         font-size: 12px !important;
+    }
+
+    /* Análisis por Hora: modo → contexto → presentación (2026-10-18).
+       Cada grupo tiene etiquetas permanentes; sólo la navegación lleva
+       acento. Los filtros comparten sus keys en los tres modos. */
+    .vh-titulo, .vh-titulo > span {
+        font-size: 18px !important;
+        font-weight: 500 !important;
+        color: var(--text-primary) !important;
+        margin: 0 0 4px !important;
+    }
+    div[class*="st-key-chartcard_ventas_horario_"] .st-key-vh_controles,
+    .st-key-chartcard_vh_a_medida .st-key-vh_controles { gap: 12px !important; }
+    .st-key-chartcard_vh_a_medida {
+        padding-top: 2px !important;
+        padding-bottom: 4px !important;
+        gap: 4px !important;
+    }
+    .st-key-vh_navegacion {
+        padding-bottom: 6px !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+    .st-key-vh_navegacion .st-key-vh_modo [data-testid="stButtonGroup"] {
+        background: transparent !important;
+        border: none !important;
+    }
+    .st-key-vh_navegacion .st-key-vh_modo [data-testid="stButtonGroup"] button {
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        border-radius: 0 !important;
+        color: var(--text-secondary) !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        padding: 7px 12px !important;
+        min-height: 34px !important;
+        height: auto !important;
+    }
+    .st-key-vh_navegacion .st-key-vh_modo [data-testid="stButtonGroup"] button[data-selected="true"] {
+        color: var(--accent-deep) !important;
+        border-bottom-color: var(--accent) !important;
+    }
+    .st-key-vh_filtros, .st-key-vh_presentacion, .st-key-vh_comparar,
+    .st-key-vt_frj_fila { flex-wrap: wrap !important; gap: 12px !important; }
+    /* Los anchos Python son la referencia de escritorio. Se dejan crecer
+       y envolver aquí para que una selección larga o el móvil quepan. */
+    .st-key-vh_filtros > div {
+        flex: 1 1 170px !important;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+    .st-key-vh_filtros .stVerticalBlock,
+    .st-key-vh_presentacion .stVerticalBlock,
+    .st-key-vh_presentacion .stElementContainer {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+    .st-key-vh_filtro_fecha { gap: 5px !important; }
+    .st-key-vh_filtro_fecha .st-key-vh_fecha_fila {
+        padding-left: 0 !important;
+        width: 100% !important;
+    }
+    .st-key-vh_filtros [data-testid="stWidgetLabel"] p,
+    .st-key-vh_filtro_fecha [data-testid="stCaptionContainer"] p,
+    .st-key-vh_presentacion [data-testid="stWidgetLabel"] p,
+    .st-key-vh_presentacion [data-testid="stCaptionContainer"] p,
+    .st-key-vh_comparar [data-testid="stWidgetLabel"] p,
+    .st-key-vt_frj_fila [data-testid="stWidgetLabel"] p {
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 400 !important;
+        text-transform: none !important;
+        letter-spacing: normal !important;
+        margin-bottom: 3px !important;
+    }
+    .st-key-vh_filtros .stSelectbox [role="group"],
+    .st-key-vh_filtros [data-baseweb="select"] > div {
+        min-height: 34px !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+        background: var(--bg-card) !important;
+    }
+    .st-key-vh_contexto { flex-wrap: wrap !important; align-items: center !important; }
+    .st-key-vh_contexto [data-testid="stCaptionContainer"] p,
+    .st-key-vh_contexto [data-testid="stWidgetLabel"] p {
+        font-size: 12px !important;
+        text-transform: none !important;
+        letter-spacing: normal !important;
+    }
+    .st-key-vh_presentacion {
+        padding: 10px 12px !important;
+        border-radius: 8px !important;
+        background: var(--bg-card-tenue) !important;
+        align-items: flex-end !important;
+    }
+    .st-key-vh_presentacion > div:not(.st-key-vh_apariencia) {
+        flex: 1 1 110px !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    .st-key-vh_presentacion > div:last-child {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    .st-key-vh_presentacion .stSelectbox [role="group"],
+    .st-key-vh_presentacion [data-baseweb="select"] > div,
+    .st-key-vh_comparar .stSelectbox [role="group"],
+    .st-key-vh_comparar [data-baseweb="select"] > div,
+    .st-key-vt_frj_fila .stSelectbox [role="group"],
+    .st-key-vt_frj_fila [data-baseweb="select"] > div {
+        height: 30px !important;
+        min-height: 30px !important;
+        border: none !important;
+        border-radius: 4px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    .st-key-vh_presentacion .stSelectbox input,
+    .st-key-vh_presentacion [data-baseweb="select"] div[value],
+    .st-key-vh_comparar .stSelectbox input,
+    .st-key-vt_frj_fila .stSelectbox input {
+        color: var(--text-primary) !important;
+        font-size: 13px !important;
+        font-weight: 400 !important;
+        padding-left: 2px !important;
+    }
+    .st-key-vh_apariencia { margin-left: auto !important; }
+    .st-key-vh_apariencia .stPopover button {
+        height: 32px !important;
+        min-height: 32px !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        padding: 0 10px !important;
+    }
+    .st-key-vh_comparar { align-items: flex-end !important; }
+    .st-key-vh_paneles { gap: 10px !important; }
+    .st-key-vt_frj_fila > div:first-child {
+        flex: 0 1 auto !important;
+        min-width: 0 !important;
+    }
+    .st-key-vt_frj_cabfila { flex-wrap: wrap !important; }
+    @media (max-width: 768px) {
+        /* La regla móvil general convierte filas en columnas. Una base
+           flex en px pasaría a ser un ALTO: aquí los campos tienen su alto
+           natural y ocupan todo el ancho, sin huecos de 145px. */
+        .st-key-vh_controles .st-key-vh_filtros {
+            flex-direction: column !important;
+            align-items: stretch !important;
+        }
+        .st-key-vh_controles .st-key-vh_filtros > div {
+            flex: 0 0 auto !important;
+            width: 100% !important;
+        }
+        .st-key-vh_controles .st-key-vh_presentacion {
+            flex-direction: row !important;
+            align-items: flex-end !important;
+        }
+        .st-key-vh_controles .st-key-vh_presentacion > div {
+            flex: 1 1 125px !important;
+            width: auto !important;
+        }
+        .st-key-vh_controles .st-key-vh_presentacion > div:last-child {
+            flex: 0 0 auto !important;
+        }
+        .st-key-vh_controles .st-key-vh_contexto {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+        }
+        .st-key-vh_controles .st-key-vh_contexto > div {
+            flex: 0 0 auto !important;
+            width: 100% !important;
+        }
+        .st-key-vt_frj_fila > div { max-width: 100% !important; }
     }
 """

@@ -49338,7 +49338,21 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      (2026-10-10.)
 
 627. **«Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A
-     medida» —el TOTAL de cualquier día y cualquier horario—.** El
+     medida» —el TOTAL de cualquier día y cualquier horario—.**
+     **Actualización del 2026-10-18:** los nombres visibles son
+     **Patrones, Comparar y Franjas**. La jerarquía aprobada separa título
+     y navegación, filtros de datos y presentación del mapa. El módulo
+     `graficos/ventas_hora_controles.py` es dueño del rango compartido
+     (`vt_hora`), canal, ámbito, hora del pedido/cobro e inclusión de Venta
+     Interna y Eventos. Este último filtro conserva su alcance con filas
+     Horas, Platos, Grupos y Áreas. Los controles de representación quedan
+     en «Apariencia», y el desglose de Franjas junto a su tabla. El gasto
+     por persona se nombra distinto de la venta por pedido. Las etiquetas
+     son permanentes; el alto real de la cabecera se mide con un
+     `ResizeObserver` para que la resta del detalle soporte filas que
+     envuelven. Lo que sigue describe el diseño anterior y su origen.
+
+     El
      interruptor del renglón del título alterna el mapa de calor simple,
      el de comparar períodos y `graficos/ventas_franja.py` (2026-10-10). Nació de un pedido real —«cuánto se vendió por Rappi
      los últimos 4 domingos de 5:30 pm a 11:30 pm»— que el mapa no podía
