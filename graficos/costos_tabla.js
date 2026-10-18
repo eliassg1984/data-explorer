@@ -176,6 +176,15 @@ function sentidoVar(fila, delta) {
   return (fila.sentido === 'mal') === sube ? 'mal' : 'bien';
 }
 
+function enlaceOrigen(st, fila, periodo) {
+  const enlace = st.todo.enlaces?.[st.grano]?.[periodo.k]?.[fila.k];
+  if (!enlace) return '';
+  const href = enlace.url + '&familias=' + encodeURIComponent(JSON.stringify([...st.fams]))
+    + '&extras=' + encodeURIComponent(JSON.stringify([...st.extra]));
+  const titulo = `${enlace.nombre} · ${periodo.rot} · abrir en otra pestaña`;
+  return `<a class="enlace-origen" href="${esc(href)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(titulo)}" title="${esc(titulo)}">↗</a>`;
+}
+
 // ── Dibujo ───────────────────────────────────────────────────────────────
 function dibujar(raiz) {
   const st = raiz.__st;
@@ -224,9 +233,9 @@ function dibujar(raiz) {
   const ths = w.per.map((p) => `<th scope="col">${esc(p.rot)}<span class="sub">${esc(p.sub || '')}</span></th>`).join('');
   let cuerpo = '';
   for (const fila of filas(st)) {
-    if (fila.sec) { cuerpo += `<tr class="sec"><td colspan="${n + 2}">${fila.sec}</td></tr>`; continue; }
+    if (fila.sec) { cuerpo += `<tr class="sec"><td colspan="${n + 2}"><div class="fila-fija">${fila.sec}</div></td></tr>`; continue; }
     if (fila.agregar) { cuerpo += filaAgregar(st, data, w, F, n); continue; }
-    if (fila.tramo) { cuerpo += `<tr class="tramo"><td colspan="${n + 2}">${fila.tramo}</td></tr>`; continue; }
+    if (fila.tramo) { cuerpo += `<tr class="tramo"><td colspan="${n + 2}"><div class="fila-fija">${fila.tramo}</div></td></tr>`; continue; }
     const val = valores(st, data, w, fila, F);
     const abierta = st.abierta === fila.k;
     const cls = ['fila', fila.calc ? 'calc' : '', fila.fuerte ? 'fuerte' : '', abierta ? 'abierta' : '',
@@ -237,33 +246,65 @@ function dibujar(raiz) {
       + `<button type="button" class="fila-btn" data-fila="${esc(fila.k)}" aria-expanded="${abierta}"${tip}><span class="signo">${fila.signo || ''}</span>`
       + `<span class="nom">${esc(fila.nom)}</span><span class="flecha">▼</span></button>`
       + (fila.quitar ? `<button type="button" class="quitar" data-quitar="${esc(fila.quitar)}" aria-label="Quitar ${esc(fila.quitar)}">×</button>` : '')
-      + `</div></td>${val.mes.map((x) => `<td class="${claseCelda(fila, x)}">${fmtCelda(fila, x)}</td>`).join('')}`
+      + `</div></td>${val.mes.map((x, i) => `<td class="${claseCelda(fila, x)}">${fmtCelda(fila, x)}${enlaceOrigen(st, fila, w.per[i])}</td>`).join('')}`
       + `<td class="tot ${claseCelda(fila, val.tot)}">${fmtCelda(fila, val.tot)}</td></tr>`;
     if (abierta) cuerpo += detalle(st, data, w, fila, F, val);
   }
-  html += `<div class="desliza"><table><colgroup>${cols}</colgroup><thead><tr><th class="lab" scope="col">Concepto<span class="sub">${esMes ? 'mes operativo · cierre' : 'kardex'}</span></th>${ths}<th class="tot" scope="col">${n} ${plural(st.grano)}<span class="sub">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)}</span></th></tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+  html += `<div class="desliza" role="region" aria-label="Tabla de costos con desplazamiento horizontal por períodos"><table><colgroup>${cols}</colgroup><thead><tr><th class="lab" scope="col">Concepto<span class="sub">${esMes ? 'mes operativo · cierre' : 'kardex'}</span></th>${ths}<th class="tot" scope="col">${n} ${plural(st.grano)}<span class="sub">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)}</span></th></tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+  html += `<div class="estado-desliza"><span>← Períodos anteriores · recientes →</span><span class="periodos-visibles"></span></div>`;
   html += notas(data, w);
 
-  const sx = raiz.querySelector('.desliza') ? raiz.querySelector('.desliza').scrollLeft : 0;
   raiz.innerHTML = html;
-  const d = raiz.querySelector('.desliza');
-  if (d) d.scrollLeft = sx;
-  ajustar(raiz);
+  prepararDesplazamiento(raiz, w);
 }
 
-// Que la tabla entre ENTERA en la pantalla: si no entra con la densidad de
-// siempre, se aprieta un grado (letra y renglones más chicos). Se mide sin
-// la fila abierta —abrir una no tiene que cambiar la densidad— y contra el
-// alto de la ventana menos el cromo de arriba y la fila del título.
-const CROMO_PX = 96;
-function ajustar(raiz) {
-  const t = raiz.querySelector('table');
-  if (!t) return;
-  raiz.classList.remove('apretada');
-  const det = t.querySelector('tr.detalle');
-  const hijos = [...t.querySelectorAll('tr.hijo, tr.tramo, tr.agregar')].reduce((a, r) => a + r.offsetHeight, 0);
-  const alto = t.offsetHeight - (det ? det.offsetHeight : 0) - hijos;
-  if (alto > window.innerHeight - CROMO_PX) raiz.classList.add('apretada');
+function prepararDesplazamiento(raiz, w) {
+  const st = raiz.__st, d = raiz.querySelector('.desliza');
+  const clave = `${st.grano}:${w.per[0].k}:${w.per[w.per.length - 1].k}`;
+  st.scroll ||= {};
+  const aplicarAncho = () => {
+    for (const [clase, activa] of [['cv-angosta', raiz.clientWidth < 760], ['cv-movil', raiz.clientWidth < 640]]) {
+      if (raiz.classList.contains(clase) !== activa) raiz.classList.toggle(clase, activa);
+    }
+    const ancho = `${d.clientWidth}px`;
+    if (raiz.style.getPropertyValue('--cv-ancho') !== ancho) raiz.style.setProperty('--cv-ancho', ancho);
+  };
+  raiz.style.setProperty('--cv-columnas', w.per.length);
+  aplicarAncho();
+  const max = Math.max(0, d.scrollWidth - d.clientWidth);
+  let posicion = d.clientWidth < 640 ? Math.max(0, max - 108) : max;
+  if (st.scroll[clave] != null) posicion = st.scroll[clave] * max;
+  else if (st.todo.mes_inicial && st.grano === 'mes') {
+    const i = w.per.findIndex(p => p.k === st.todo.mes_inicial);
+    if (i >= 0) posicion = i * 104;
+  }
+  d.scrollLeft = Math.max(0, Math.min(max, posicion));
+  st.scroll[clave] = max ? d.scrollLeft / max : 0;
+  const actualizar = () => {
+    const borde = d.getBoundingClientRect();
+    const lab = d.querySelector('th.lab').getBoundingClientRect();
+    const total = d.querySelector('th.tot').getBoundingClientRect();
+    const derecha = total.left > lab.right ? Math.min(borde.right, total.left) : borde.right;
+    const visibles = [...d.querySelectorAll('thead th')].slice(1, -1)
+      .map((el, i) => ({ rect: el.getBoundingClientRect(), p: w.per[i] }))
+      .filter(x => x.rect.right > lab.right + 30 && x.rect.left < derecha - 30);
+    const rango = visibles.length ? `${visibles[0].p.rot} – ${visibles[visibles.length - 1].p.rot} · ` : '';
+    const texto = `${rango}histórico de ${w.per.length} ${plural(st.grano)}`;
+    const etiqueta = raiz.querySelector('.periodos-visibles');
+    if (etiqueta.textContent !== texto) etiqueta.textContent = texto;
+  };
+  d.addEventListener('scroll', () => {
+    const limite = d.scrollWidth - d.clientWidth;
+    st.scroll[clave] = limite ? d.scrollLeft / limite : 0;
+    actualizar();
+  }, { passive: true });
+  st.actualizarAncho = () => {
+    aplicarAncho();
+    const posicionNueva = (d.scrollWidth - d.clientWidth) * st.scroll[clave];
+    if (Math.abs(d.scrollLeft - posicionNueva) > 0.5) d.scrollLeft = posicionNueva;
+    actualizar();
+  };
+  actualizar();
 }
 
 function totalSalida(data, w, F, t) {
@@ -283,7 +324,7 @@ function filaAgregar(st, data, w, F, n) {
       `<button type="button" class="chip" data-agregar="${esc(t)}">${esc(t)} <span class="n">S/ ${mil(totalDe(t))}</span></button>`).join('')}</div>`;
   }
   const btn = `<button type="button" class="btn-agregar" data-menu>${st.menu ? 'Cerrar' : '+ Volver a sumar una salida'}</button>`;
-  return `<tr class="agregar"><td colspan="${n + 2}">${btn}${menu}</td></tr>`;
+  return `<tr class="agregar"><td colspan="${n + 2}"><div class="fila-fija">${btn}${menu}</div></td></tr>`;
 }
 
 function detalle(st, data, w, fila, F, val) {
@@ -378,7 +419,11 @@ function detalle(st, data, w, fila, F, val) {
         + `${partes.map((p) => `<div class="fila-c"><span>${p.b}</span><b>${Math.round((p.t / total) * 100)}%</b></div>`).join('')}</div>`;
     }
   }
-  return `<tr class="detalle"><td class="lab">${stats}</td><td colspan="${n}" class="graf-celda"><div class="graf">${svg}${puntos}</div>${vari}</td><td class="tot">${comp}</td></tr>`;
+  return `<tr class="detalle"><td colspan="${n + 2}"><div class="evolucion-panel">
+    <div class="evolucion-titulo"><b>${esc(fila.nom)}</b><span>Evolución completa · ${n} ${plural(st.grano)}</span></div>
+    <div>${stats}</div><div class="evolucion-grafico"><div class="graf" role="img" aria-label="Evolución de ${esc(fila.nom)} · ${st.modo === 'familia' ? 'por familia' : 'total'}">${svg}${puntos}</div>${vari}
+      <div class="evolucion-periodos">${w.per.map(p => `<span>${esc(p.rot)}</span>`).join('')}</div></div><div>${comp}</div>
+  </div></td></tr>`;
 }
 
 function notas(data, w) {
@@ -464,7 +509,8 @@ function enlazar(raiz) {
     const dd = raiz.querySelector('details.dd');
     if (dd && dd.open && !ev.composedPath().includes(dd)) { dd.open = false; raiz.__st.ddAbierto = false; }
   });
-  window.addEventListener('resize', () => ajustar(raiz));
+  const observador = new ResizeObserver(() => raiz.__st.actualizarAncho?.());
+  observador.observe(raiz);
 }
 
 export default function (component) {

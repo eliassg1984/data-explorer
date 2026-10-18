@@ -36,6 +36,7 @@ import streamlit as st
 import convenios_descuento
 import presupuesto_ventas
 import costo_ventas
+import costos_enlaces
 import data
 import definicion_venta
 import kardex
@@ -152,7 +153,8 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
         desde_resumen = (st.query_params.get("desde_resumen") == "1"
                           and any(p["k"] == mes_enlace for p in mes["periodos"]))
         _TABLA(key="costos_tabla", data=dict(
-            datos, mes_inicial=mes_enlace if desde_resumen else None,
+            datos, enlaces=costos_enlaces.enlaces(datos["granos"]),
+            mes_inicial=mes_enlace if desde_resumen else None,
             desde_resumen=desde_resumen), width="stretch")
     _editor_convenios(convenios)
     _editor_presupuesto()

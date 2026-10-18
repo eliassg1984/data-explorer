@@ -166,6 +166,10 @@ inject_navegacion(REPORTES, reporte, mostrar_inspector=bool(st.query_params.get(
 
 cfg = REPORTES[reporte]
 
+# Los enlaces de Costos siembran el contexto antes de crear sus widgets.
+import costos_enlaces
+costos_enlaces.aplicar_contexto(reporte)
+
 # Marker de reporte activo en el DOM. Div vacio con la clase que Streamlit
 # usaria para st.container(key="..."), inyectado via st.markdown para no
 # ocupar altura. El CSS lo usa con :has() para scopear reglas a un reporte
@@ -351,6 +355,8 @@ if df is None or df.empty:
 # ===========================================================================
 # DETERMINAR COLUMNAS
 # ===========================================================================
+costos_enlaces.aplicar_contexto(reporte, df)
+
 if "fecha" in cfg:
     col_fecha = buscar_columna(df, cfg["fecha"]) if cfg["fecha"] else None
 else:
