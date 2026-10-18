@@ -321,7 +321,12 @@ with perf.phase("cargar()"), st.spinner(f"Cargando {reporte}…"):            # 
         # SEMBRAMOS el default; el recorte a bounds ocurre más abajo.
         _k_rango = clave_rango(reporte, usa_carga_rango=True)
         _k_rango_ok = f"rango_carga_ok_{reporte}"   # último rango 2-tupla válido
-        asegurar_rango(_k_rango, default=(_hoy_c.replace(day=1), _hoy_c))
+        # Los enlaces del Resumen abren una sesión nueva con el mes elegido.
+        # Sólo es el default: al mover la fecha, el estado del usuario manda.
+        from resumen_ejecutivo import rango_del_enlace
+        _default_rango = (rango_del_enlace(st.query_params)
+                          or (_hoy_c.replace(day=1), _hoy_c))
+        asegurar_rango(_k_rango, default=_default_rango)
         _rc = st.session_state.get(_k_rango)
         if isinstance(_rc, (tuple, list)) and len(_rc) == 2 and all(_rc):
             _r_ini, _r_fin = _rc

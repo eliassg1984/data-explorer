@@ -55,6 +55,7 @@ from graficos.costos import renderizar_graficos_costos                # noqa: F4
 from graficos.inventario import renderizar_graficos_inventario        # noqa: F401
 from graficos.movimientos import renderizar_graficos_movimientos      # noqa: F401
 from graficos.recetas import renderizar_graficos_recetas              # noqa: F401
+from graficos.resumen_ejecutivo import renderizar_graficos_resumen     # noqa: F401
 from graficos.sunat_reporte import renderizar_graficos_sunat          # noqa: F401
 from graficos.ventas import renderizar_graficos_ventas                # noqa: F401
 # Los rails de cada dashboard, para `vistas_de` (abajo).
@@ -64,6 +65,7 @@ from graficos.costos import _COSTOS_RAIL_CATEGORIAS
 from graficos.inventario import _INVENTARIO_RAIL_CATEGORIAS
 from graficos.movimientos import _RAIL_CATEGORIAS as _MOV_RAIL
 from graficos.recetas import _RAIL_CATEGORIAS as _REC_RAIL
+from graficos.resumen_ejecutivo import _RESUMEN_RAIL_CATEGORIAS
 from graficos.sunat_reporte import _SUNAT_RAIL_CATEGORIAS
 from graficos.ventas import _VENTAS_RAIL_CATEGORIAS
 
@@ -81,6 +83,7 @@ from graficos.ventas import _VENTAS_RAIL_CATEGORIAS
 # ---------------------------------------------------------------------------
 
 _DASHBOARDS = {
+    "Resumen ejecutivo":    renderizar_graficos_resumen,
     "Ajuste de Inventario": renderizar_graficos_ajuste,
     "Compras":               renderizar_graficos_compras,
     # El costo de ventas por mes operativo (2026-10-09, regla #622).
@@ -107,6 +110,7 @@ _DASHBOARDS = {
 # `_DASHBOARDS`; `test_graficos.py::_pruebas_vistas_de_cada_reporte` falla
 # si falta.
 _RAILS = {
+    "Resumen ejecutivo":    (_RESUMEN_RAIL_CATEGORIAS, "resumen_graf_tipo"),
     "Ajuste de Inventario":  (_AJUSTE_RAIL_CATEGORIAS, "ajuste_graf_tipo"),
     "Compras":               (_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo"),
     "Costos":                (_COSTOS_RAIL_CATEGORIAS, "costos_graf_tipo"),

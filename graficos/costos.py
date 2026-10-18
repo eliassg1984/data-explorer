@@ -146,7 +146,14 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
         # El asistente responde sobre lo que suma la tabla, no sobre los
         # cierres sueltos que llegan en `df_f`.
         publicar_contexto_ia("Costos", costo_ventas.tabla_larga(mes))
-        _TABLA(key="costos_tabla", data=datos, width="stretch")
+        # Enlace del Resumen: abre Mes con el período y los defaults que
+        # resume la portada. No altera las preferencias guardadas de Costos.
+        mes_enlace = st.query_params.get("mes", "")
+        desde_resumen = (st.query_params.get("desde_resumen") == "1"
+                          and any(p["k"] == mes_enlace for p in mes["periodos"]))
+        _TABLA(key="costos_tabla", data=dict(
+            datos, mes_inicial=mes_enlace if desde_resumen else None,
+            desde_resumen=desde_resumen), width="stretch")
     _editor_convenios(convenios)
     _editor_presupuesto()
 

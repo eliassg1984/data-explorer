@@ -98,6 +98,16 @@ REPORTES = {
     # Orden del dict == orden del rail de navegación (navegacion.py::
     # inject_navegacion itera `reportes.items()` tal cual). Reordenar acá
     # reordena los iconos de arriba a abajo.
+    "Resumen ejecutivo": {
+        "label_corto": "Resumen ejecutivo",
+        "label_largo": "Resumen ejecutivo",
+        "label_rail": "Resumen",
+        "archivo": "ajusteinventario.parquet",
+        "archivos_extra": ("compras.parquet", "salidas.parquet"),
+        "icono": ":material/dashboard:",
+        "fecha": None,
+        "filtros_cat": [],
+    },
     "Compras": {
         "label_corto": "Compras",
         "archivo": "compras.parquet",

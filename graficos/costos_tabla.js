@@ -489,6 +489,14 @@ export default function (component) {
       grupoAbierto: leer('costos_grupo_abierto', false) === true,
       ini: { mes: Number.MAX_SAFE_INTEGER, quincena: Number.MAX_SAFE_INTEGER, semana: Number.MAX_SAFE_INTEGER },
     };
+    if (data?.desde_resumen) {
+      const i = (data.granos?.mes?.periodos || []).findIndex(p => p.k === data.mes_inicial);
+      raiz.__st.grano = 'mes';
+      raiz.__st.fams = new Set(BUCK);
+      raiz.__st.extra = new Set(['Eventos']);
+      raiz.__st.quitadas = [];
+      if (i >= 0) raiz.__st.ini.mes = Math.max(0, i - VENTANA + 1);
+    }
     enlazar(raiz);
   }
   const st = raiz.__st;

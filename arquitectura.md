@@ -14,6 +14,34 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 `REPORTES`) vive en **`mapa.md`**, y ése sí se lee entero.
 
+## Resumen ejecutivo mensual — 2026-10-17
+
+La portada `graficos/resumen_ejecutivo.py` reúne ventas y consumo/costo,
+sin indicadores de compras ni stock al día. Las cuentas se resumen en
+`resumen_ejecutivo.py` desde venta preparada y `costo_ventas.armar`, con
+las cuatro familias, Eventos incluido, Venta interna excluida y todas las
+salidas no bajas deducidas (los defaults de Costos). El costo operativo
+usa la venta de ese ámbito; la venta total de la portada incluye todos
+los grupos de Ventas y no se utiliza como su denominador.
+
+El selector abre por defecto el último mes con cierres y ventas completas.
+Un mes en curso muestra ventas hasta el último día completo y deja el
+consumo pendiente del cierre. El año pasado compara el mismo tramo del
+calendario; sin cobertura se muestra sin base, nunca cero inventado.
+Pedidos netos reutiliza `definicion_venta.pax_por` con signos por
+comprobante para evitar duplicar pagos, cuentas divididas y canjes.
+
+Los enlaces abren otra pestaña (`target="_blank"`, `noopener noreferrer`).
+Ventas recibe `desde`/`hasta` ISO como default de `asegurar_rango`; el
+estado elegido después por el usuario manda. Costos recibe `mes` y
+`desde_resumen=1`: abre ese mes y el ámbito de la portada en el componente,
+sin escribir las preferencias guardadas. La caché mensual incluye los
+sellos de cierres, compras, salidas, ventas y notas de crédito, las
+versiones de las cuentas y la tabla de convenios. No carga el kardex.
+
+Lo vigila `test_resumen_ejecutivo.py` (duplicados, canjes, devoluciones,
+base nula, año bisiesto, conciliación y validación de enlaces).
+
 
 
 > Al agregar una regla: `test_docs.py` verifica que no repitas número, que
