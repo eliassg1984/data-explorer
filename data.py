@@ -2209,7 +2209,7 @@ _ARCHIVOS_DIFERENCIAS = ("ajusteinventario.parquet", "recetaventa.parquet",
                          "requerimientos.parquet", "sunat_compras.parquet",
                          "compras.parquet", "notascreditocompras.parquet",
                          "paloteoinsumosnivel1.parquet", "pedidos.parquet",
-                         "inventariovalorizado.parquet")
+                         "inventariovalorizado.parquet", "descargosventas.parquet")
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False, max_entries=12)
@@ -2218,7 +2218,7 @@ def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
     (`diferencias_ajuste.calcular`, regla #650). Si falla, LANZA: no se
     cachea.
 
-    `archivo` es el kardex; `sellos`, los de los otros dieciséis parquets
+    `archivo` es el kardex; `sellos`, los de los otros diecisiete parquets
     (`_ARCHIVOS_DIFERENCIAS`), y `version`, la de la cuenta. Ninguno se usa
     en el cuerpo: son la clave (ver el bloque del sello). Del kardex se bajan
     las filas desde `DIAS_ATRAS` días antes de la sesión hasta `DIAS_TARDE`
@@ -2263,6 +2263,16 @@ def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
         """).df()
     except Exception:
         pal = ped = mae = None
+    # El calendario de los descargos de ventas (TLOG_DESCARGO, la fila
+    # `descargosventas` del Sheet): qué venta tomó cada uno. Sin él, la cuenta
+    # lo deduce de las horas del kardex.
+    try:
+        dsc = con.execute(f"""
+            SELECT "INICIO CORRIDA", "VENTAS DESDE", "VENTAS HASTA"
+            FROM read_parquet('s3://{bucket}/descargosventas.parquet')
+        """).df()
+    except Exception:
+        dsc = None
     vend = _venta_por_producto_dia_cacheable(
         "ventas.parquet", sello_datos("ventas.parquet"),
         definicion=_version_preparar("ventas.parquet"))
@@ -2284,7 +2294,7 @@ def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
         cargar("recetabase.parquet"), cargar("cartacosteada.parquet"),
         cargar("porcionamientos.parquet"), cargar("ordenesproduccion.parquet"),
         cargar("salidas.parquet"), vend, combos=combos, requerimientos=reqs, sunat=su,
-        paloteo=pal, pedidos=ped, maestro=mae)
+        paloteo=pal, pedidos=ped, maestro=mae, descargos=dsc)
 
 
 # Los emisores que no venden mercadería: sus comprobantes no se leen (#652).

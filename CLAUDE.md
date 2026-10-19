@@ -1292,8 +1292,14 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   la hora del conteo sigue en el sistema y falta sin ser pérdida. Y desde
   2026 cada corrida va del 1 del mes a la mañana del día: el ÚLTIMO día del
   mes no lo toma ninguna (el 31 ago y el 30 set 2026, el día antes de cada
-  cierre). Lo dicen una pista y un aviso arriba de la lista; lo que cubrió
-  cada descargo no lo dice el kardex de R2 (`TLOG_DESCARGO` del POS sí).
+  cierre). Lo dicen una pista y un aviso arriba de la lista. Qué venta
+  tomó cada descargo lo dice su calendario (`descargosventas.parquet`, de
+  `TLOG_DESCARGO`): el POS filtra por la hora del PEDIDO.
+- **La ficha va en pestañas y hay «Áreas juntas»** (2026-10-18, anexo de
+  la #650): con el filtro de Área, una fila por producto con las áreas
+  sumadas (`diferencias_ajuste.agrupar_por_producto`) — lo que falta en
+  una y sobra en otra se compensa —. `st.tabs` con `key` conserva la
+  pestaña al cambiar de línea.
 - **Dice quién PIDE cada producto** (los requerimientos de 90 días, por
   área) **y qué factura de SUNAT sin ingresar explica un sobrante** (el
   cruce «Solo SUNAT» de Documentos SUNAT y las líneas de su XML, #652).

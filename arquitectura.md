@@ -51251,6 +51251,52 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-18.)
 
+     **Addendum (2026-10-18, otra ronda): el calendario de descargos, la
+     ficha en pestañas y las áreas juntas (`VERSION` 7).** Tres pedidos del
+     usuario sobre una captura de la vista en su laptop.
+
+     - **El calendario** (`descargosventas.parquet`, la fila
+       `descargosventas` del Sheet, de `INFOREST.DBO.TLOG_DESCARGO`: una fila
+       por corrida, con cuándo se corrió y el rango de PEDIDOS que tomó). El
+       POS filtra por `MPEDIDO.fFecha` —igual a la hora del pedido en el
+       100 % de 2026— y sólo lo que no tiene `DPEDIDO.lTransferido`
+       (`usp_Inforest_DescargoVentaPorInsumo`): una venta la descuenta la
+       PRIMERA corrida que se corre después del plato y cuyo rango contiene
+       la hora del pedido, o ninguna (`cubierto_por`; el paloteo trae las dos
+       horas). Con eso «Vendido y sin descontar al contar» es exacto: lo
+       vendido entre los dos conteos que a la hora del conteo nadie había
+       descontado —lo de antes del conteo anterior ya lo restó ese conteo—,
+       cuánto no lo tomó ninguna corrida y cuándo se descontó el resto. Y el
+       espejo de un sobrante (`descontado_despues`), fuerte si calza. En
+       setiembre 2026 da lo mismo que la regla «desde el 1 del mes» (S/ 3.548
+       y S/ 2.593), con la hora (el 30 set a las 9:08; el siguiente, el 7 oct
+       a las 10:04); en 2025, cuando se corría de noche y día por día, la
+       regla no valía y el calendario sí. Sin el parquet, la cuenta sigue con
+       las horas del kardex y la regla.
+     - **La ficha va en PESTAÑAS** —Posible origen · La cuenta (con el stock
+       entre los dos conteos y los ajustes de los últimos cierres) · De dónde
+       viene (y quién lo pide) · Dónde se usa (y cómo sale)—: «se verá en
+       laptop», y una debajo de otra medía ~980px. `st.tabs` con `key`
+       conserva la pestaña al elegir otra línea (medido); las pestañas son
+       `div[role=tab]`, no botones (para Playwright). La lista baja a
+       dieciséis filas (`alturas.DIFERENCIAS_TABLA`), lo que mide la ficha.
+       Cada pestaña cierra con un contenedor `ajdif_pie_*`: sin él, el
+       último markdown se lleva −16px.
+     - **«Áreas juntas»**: el filtro de Área de las demás vistas
+       (`filtro_area_en_titulo`) y «Por área | Áreas juntas». Juntas es una
+       fila por PRODUCTO con las áreas elegidas sumadas
+       (`agrupar_por_producto`): lo que falta en una y sobra en otra se
+       compensa —setiembre 2026: el faltante pasa de S/ 27.014 a S/ 23.683,
+       y dos productos se compensan enteros y no aparecen—. Sus pistas son
+       las de las áreas del lado de la suma, con el área adelante y UNA vez
+       si se repiten; «Otra área» sale si la otra línea está en el grupo (ya
+       se compensó). La ficha cambia «La cuenta» por «Por área»: la cuenta
+       de cada área, la suma y un botón a cada línea, que vuelve a «Por área»
+       sin soltar el filtro. De dónde viene y dónde se usa son los de su
+       línea más grande.
+
+     (2026-10-18.)
+
 651. **«Análisis de diferencias» mira los COMBOS, no descarta las líneas
      sin precio y reconoce lo vendido con el código de otro producto.**
      2026-10-13, sobre la #650. En `diferencias_ajuste.py`

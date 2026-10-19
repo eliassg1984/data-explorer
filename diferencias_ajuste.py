@@ -42,10 +42,11 @@ LAS PISTAS, en el orden en que se muestran (fuertes primero):
   lote     VENDIDO Y SIN DESCONTAR AL CONTAR (#650): el descargo de ventas se
            corre a mano, por las mañanas, y lo vendido desde el último
            descargo hasta la hora del conteo seguía en el sistema; falta sin
-           ser pérdida. Y su espejo en un sobrante, siempre posible: lo que
-           estaba sin descontar al conteo ANTERIOR, si el POS lo descontó
-           después (el kardex no dice qué días cubrió cada descargo, y el 31
-           ago y el 30 set 2026 se los saltó)
+           ser pérdida. Y su espejo en un sobrante: lo que estaba sin
+           descontar al conteo ANTERIOR y el POS descontó después. Qué venta
+           tomó cada descargo lo dice su calendario (`descargosventas.parquet`,
+           TLOG_DESCARGO: el 31 ago y el 30 set 2026 no los tomó ninguno);
+           sin él, se deduce de las horas del kardex
   prod     falta un insumo y sobra lo que se hace con él (o al revés), por
            receta base o porcionamiento
   combo    va en un combo que se vendió y en sus pedidos no se marcó (#650):
@@ -101,10 +102,11 @@ import pandas as pd
 
 from sin_plato import palabra_clave
 
-VERSION = 6
+VERSION = 7
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula. La 6: el paloteo, las ventas sin descontar al contar
-y los combos por lo marcado (#650)."""
+y los combos por lo marcado (#650). La 7: el calendario de descargos
+(`descargosventas.parquet`) y las áreas juntas (`agrupar_por_producto`)."""
 
 EPS = 0.005
 """Soles: una línea con menos de esto no tiene diferencia."""
@@ -542,8 +544,8 @@ def paloteo_normalizado(paloteo, pedidos=None):
     `pedidos.parquet`: el que mira el descargo; sin él, la fecha del pedido
     seis horas antes, para que lo de la madrugada caiga en su noche), `tp`
     («P» suelto, «C» dentro de un combo, «X» un modificador), `cp`, `plato`,
-    `ci`, `q` (en unidad de SALIDA, como el POS) y `n` (platos vendidos).
-    None sin paloteo."""
+    `ci`, `q` (en unidad de SALIDA, como el POS), `n` (platos vendidos) y
+    `fp` (la hora del PEDIDO: la que mira el descargo). None sin paloteo."""
     if paloteo is None or paloteo.empty:
         return None
     p = paloteo
@@ -564,14 +566,14 @@ def paloteo_normalizado(paloteo, pedidos=None):
                        index=pedidos["CODIGO PEDIDO"].fillna("").astype(str).str.strip())
         dc = P["ped"].map(de[~de.index.duplicated()])
     P["dc"] = pd.to_datetime(dc).fillna((P["fp"] - pd.Timedelta(hours=6)).dt.normalize())
-    return P.drop(columns="fp")
+    return P
 
 
 def descargos_de_pedidos(P, RVD, RB, maestro=None, area_habitual=None):
     """Lo que el POS descuenta por cada pedido del paloteo `P`
     (`paloteo_normalizado`), llevado a lo que mueve el KARDEX: una fila por
-    (`ped`, `fi`, `dc`, `cp`, `plato`, `ci`, `area`) con `q` en la unidad del
-    kardex.
+    (`ped`, `fi`, `fp`, `dc`, `cp`, `plato`, `ci`, `area`) con `q` en la unidad
+    del kardex.
 
       · La unidad: el paloteo habla en la de salida (g, ml); se divide por el
         `FACTOR` del maestro (`inventariovalorizado.parquet`).
@@ -584,7 +586,7 @@ def descargos_de_pedidos(P, RVD, RB, maestro=None, area_habitual=None):
     Pura."""
     if P is None or P.empty:
         return None
-    D = P[["ped", "fi", "dc", "cp", "plato", "ci", "q"]].copy()
+    D = P[["ped", "fi", "fp", "dc", "cp", "plato", "ci", "q"]].copy()
     if maestro is not None and len(maestro):
         m = pd.DataFrame({"ci": _cod(maestro["CODIGO PRODUCTO"]),
                           "f": _num(maestro["FACTOR"])})
@@ -618,6 +620,50 @@ def descargos_de_pedidos(P, RVD, RB, maestro=None, area_habitual=None):
     return D[(D["q"] > 0) & (D["area"] != "")].drop(columns="t").reset_index(drop=True)
 
 
+def corridas_de_descargo(descargos):
+    """`descargosventas.parquet` (`TLOG_DESCARGO` del POS, la fila
+    `descargosventas` del Sheet): una fila por corrida del descargo de
+    ventas, `ini` (cuándo se corrió), `desde` y `hasta` (el rango de PEDIDOS
+    que tomó), en orden. None sin el parquet."""
+    if descargos is None or descargos.empty:
+        return None
+    d = descargos
+    C = pd.DataFrame({"ini": _fecha(d["INICIO CORRIDA"]), "desde": _fecha(d["VENTAS DESDE"]),
+                      "hasta": _fecha(d["VENTAS HASTA"])}).dropna()
+    return C.sort_values("ini", kind="stable").reset_index(drop=True) if len(C) else None
+
+
+def cubierto_por(fp, fi, corridas):
+    """Para cada venta (`fp` la hora del pedido, `fi` la del plato), la
+    corrida que la descontó: la PRIMERA que se corrió después del plato y
+    cuyo rango contiene la hora del pedido. El POS filtra por
+    `MPEDIDO.fFecha` (la hora del pedido, igual a `fRegistro` en el 100 % de
+    2026) y sólo lo que no tiene `DPEDIDO.lTransferido`: lo que una corrida
+    no tomó lo toma la siguiente que lo abarque, o ninguna. NaT si ninguna lo
+    tomó. Arreglos de numpy; se recorre por corrida (cientos), no por venta."""
+    fp = np.asarray(fp, dtype="datetime64[ns]")
+    fi = np.asarray(fi, dtype="datetime64[ns]")
+    out = np.full(len(fp), np.datetime64("NaT"), dtype="datetime64[ns]")
+    if corridas is None or not len(fp):
+        return out
+    pares, inv = np.unique(np.stack([fp.view("int64"), fi.view("int64")], axis=1),
+                           axis=0, return_inverse=True)
+    p_fp, p_fi = pares[:, 0], pares[:, 1]
+    cub = np.full(len(pares), np.iinfo("int64").min, dtype="int64")
+    libre = np.ones(len(pares), dtype=bool)
+    ini = corridas["ini"].to_numpy(dtype="datetime64[ns]").view("int64")
+    de = corridas["desde"].to_numpy(dtype="datetime64[ns]").view("int64")
+    ha = corridas["hasta"].to_numpy(dtype="datetime64[ns]").view("int64")
+    for j in np.flatnonzero(ini >= p_fi.min()):
+        m = libre & (p_fp >= de[j]) & (p_fp <= ha[j]) & (p_fi <= ini[j])
+        if m.any():
+            cub[m] = ini[j]
+            libre &= ~m
+    res = cub.view("datetime64[ns]").copy()
+    res[libre] = np.datetime64("NaT")
+    return res[np.asarray(inv).reshape(-1)]
+
+
 def platos_en_combos(P):
     """Lo servido DENTRO de los combos (lo marcado en el pedido, CPEDIDO):
     `dc`, `cp`, `n` platos. El paloteo trae una fila por INSUMO: los platos
@@ -639,7 +685,8 @@ def platos_en_combos(P):
 
 def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
              carta, porcionamientos, ordenes, salidas, venta_dia, combos=None,
-             requerimientos=None, sunat=None, paloteo=None, pedidos=None, maestro=None):
+             requerimientos=None, sunat=None, paloteo=None, pedidos=None, maestro=None,
+             descargos=None):
     """Todo lo que dibuja la vista para UNA sesión: `{"lineas", "fichas",
     "resumen"}`, o None sin líneas.
 
@@ -655,8 +702,10 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     hay esas pistas. `paloteo` es `paloteoinsumosnivel1.parquet`, `pedidos`
     `pedidos.parquet` (el día contable) y `maestro`
     `inventariovalorizado.parquet` (el factor): sin el paloteo no hay pista de
-    ventas sin descontar ni de combo (#650). El kardex puede seguir unos días
-    después de la sesión: de ahí sale cuándo fue el siguiente descargo. Pura."""
+    ventas sin descontar ni de combo (#650). `descargos` es
+    `descargosventas.parquet`, el calendario de los descargos de ventas: sin
+    él, se deduce de las horas del kardex, que puede seguir unos días después
+    de la sesión para saber cuándo fue el siguiente. Pura."""
     A = ajuste_normalizado(ajuste)
     L = lineas_de_sesion(A, sesion)
     if L.empty:
@@ -811,44 +860,120 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         d_q, d_pl = D["q"].to_numpy(), D["plato"].to_numpy()
     PC = platos_en_combos(PAL)
 
+    # El CALENDARIO de descargos (`descargosventas.parquet`, TLOG_DESCARGO):
+    # qué corrida descontó cada venta. Sin él, se deduce de las horas del
+    # kardex y de la regla de 2026 (`inicio_del_descargo`).
+    COR = corridas_de_descargo(descargos) if D is not None else None
+    exacto = COR is not None
+    if exacto:
+        d_fp = D["fp"].to_numpy(dtype="datetime64[ns]")
+        d_cub = cubierto_por(d_fp, D["fi"].to_numpy(dtype="datetime64[ns]"), COR)
+        cor_ini = COR["ini"].to_numpy(dtype="datetime64[ns]")
+        cor_desde = COR["desde"].to_numpy(dtype="datetime64[ns]")
+        hasta_max = np.datetime64(COR["hasta"].max())
+
+    def ultimo_descargo(t):
+        if not exacto:
+            return ultimo_lote(t)
+        i = int(np.searchsorted(cor_ini, np.datetime64(t), side="right"))
+        return pd.Timestamp(cor_ini[i - 1]) if i else None
+
+    def siguiente_descargo(t):
+        """`(cuándo, desde dónde tomó)` del primer descargo después de `t`."""
+        if not exacto:
+            sig = siguiente_lote(t)
+            return sig, inicio_del_descargo(sig)
+        i = int(np.searchsorted(cor_ini, np.datetime64(t), side="right"))
+        if i >= len(cor_ini):
+            return None, None
+        return pd.Timestamp(cor_ini[i]), pd.Timestamp(cor_desde[i])
+
     def inicio_del_descargo(sig):
-        """Desde dónde toma ventas el descargo `sig`. Desde 2026 cada corrida
-        va del 1 del mes a las 7:00 hasta la mañana del día (`TLOG_DESCARGO`
-        del POS), así que lo vendido antes del 1 de su mes no lo toma nunca:
-        así quedaron sin descontar el 31 ago y el 30 set 2026, el día antes de
-        cada cierre. Antes de 2026 se corría día por día: None, no se sabe."""
+        """Sin el calendario, desde dónde toma ventas el descargo `sig`. Desde
+        2026 cada corrida va del 1 del mes a las 7:00 hasta la mañana del día
+        (`TLOG_DESCARGO` del POS), así que lo vendido antes del 1 de su mes no
+        lo toma nunca: así quedaron sin descontar el 31 ago y el 30 set 2026,
+        el día antes de cada cierre. Antes de 2026 se corría día por día:
+        None, no se sabe."""
         if sig is None or sig < DESCARGO_DESDE_EL_1:
             return None
         return sig.normalize().replace(day=1) + pd.Timedelta(hours=7)
 
-    def sin_descontar(c, area, t):
-        """Lo que pedían los platos vendidos desde el último descargo hasta
-        `t`, que el sistema todavía no había descontado a esa hora: `{"q",
-        "pl"` [(plato, cantidad)], `"b"` el último descargo, `"sig"` el
-        siguiente, `"nunca"` lo que el siguiente no toma (`inicio_del_descargo`)
-        `}`. Un descargo de la mañana cubre hasta el día anterior; uno corrido
-        de noche (desde las 20 h; en abril–julio 2026 los hubo a las 23),
-        también su día."""
-        out = {"q": 0.0, "pl": [], "b": None, "sig": None, "nunca": 0.0}
+    def _por_plato(pl_, q_):
+        por = defaultdict(float)
+        for p_, v_ in zip(pl_, q_):
+            por[p_] += float(v_)
+        return sorted(por.items(), key=lambda t_: -t_[1])
+
+    def sin_descontar(c, area, t, t_ini=None):
+        """Lo vendido entre `t_ini` (el conteo anterior) y `t` que el sistema
+        todavía no había descontado a la hora `t`: `{"q", "pl"` [(plato,
+        cantidad)], `"b"` el último descargo, `"sig"` el siguiente, `"corte"`
+        desde dónde tomó éste, `"nunca"` lo que no tomó ninguno, `"luego"`
+        cuándo se descontó el resto `}`. Lo vendido ANTES del conteo
+        anterior y no descontado, ese conteo ya lo restó: no cuenta.
+
+        Con el calendario es exacto. Sin él: un descargo de la mañana cubre
+        hasta el día anterior; uno de noche (desde las 20 h; en abril–julio
+        2026 los hubo a las 23), también su día; y «nunca» es lo de antes de
+        `inicio_del_descargo` del siguiente."""
+        out = {"q": 0.0, "pl": [], "b": None, "sig": None, "corte": None, "nunca": 0.0,
+               "luego": None, "exacto": exacto}
         if t is None or pd.isna(t):
             return out
-        b, sig = ultimo_lote(t), siguiente_lote(t)
-        out.update(b=b, sig=sig)
+        b = ultimo_descargo(t)
+        sig, corte = siguiente_descargo(t)
+        out.update(b=b, sig=sig, corte=corte)
         h = des_de.get((c, area))
         if b is None or h is None:
             return out
         dc_, fi_, q_, pl_ = d_dc[h], d_fi[h], d_q[h], d_pl[h]
-        desde_ = b.normalize() + pd.Timedelta(days=1 if b.hour >= 20 else 0)
-        m = (dc_ >= np.datetime64(desde_)) & (fi_ <= np.datetime64(t))
+        t64 = np.datetime64(t)
+        m = fi_ <= t64
+        if t_ini is not None and pd.notna(t_ini):
+            m &= fi_ > np.datetime64(t_ini)
+        if exacto:
+            cub_, fp_ = d_cub[h], d_fp[h]
+            sin = np.isnat(cub_)
+            m &= sin | (cub_ > t64)
+            nunca = m & sin & (fp_ < hasta_max)
+            luego = cub_[m & ~sin]
+            out.update(nunca=float(q_[nunca].sum()),
+                       luego=pd.Timestamp(luego.min()) if len(luego) else None)
+        else:
+            desde_ = b.normalize() + pd.Timedelta(days=1 if b.hour >= 20 else 0)
+            m &= dc_ >= np.datetime64(desde_)
+            if corte is not None:
+                out["nunca"] = float(q_[m & (fi_ < np.datetime64(corte))].sum())
+            out["luego"] = sig
         if not m.any():
+            out.update(nunca=0.0, luego=None)
             return out
-        por = defaultdict(float)
-        for p_, v_ in zip(pl_[m], q_[m]):
-            por[p_] += float(v_)
-        corte = inicio_del_descargo(sig)
-        out.update(q=float(q_[m].sum()), pl=sorted(por.items(), key=lambda t_: -t_[1]),
-                   nunca=(0.0 if corte is None
-                          else float(q_[m][fi_[m] < np.datetime64(corte)].sum())))
+        out.update(q=float(q_[m].sum()), pl=_por_plato(pl_[m], q_[m]))
+        return out
+
+    def descontado_despues(c, area, t0, t1):
+        """El ESPEJO, para un sobrante: lo vendido antes del conteo anterior
+        (`t0`) que el sistema todavía no había descontado a esa hora y que se
+        descontó dentro del período (hasta `t1`): ese conteo ya lo había
+        restado. `{"q", "pl", "b"` el último descargo antes de `t0`, `"sig"`
+        el que lo descontó `}`."""
+        if t0 is None or pd.isna(t0):
+            return {"q": 0.0, "pl": [], "b": None, "sig": None, "exacto": exacto}
+        if not exacto:
+            p0 = sin_descontar(c, area, t0)
+            ok = p0["sig"] is not None and p0["sig"] <= t1
+            return dict(p0, q=(p0["q"] - p0["nunca"]) if ok else 0.0)
+        out = {"q": 0.0, "pl": [], "b": ultimo_descargo(t0), "sig": None, "exacto": True}
+        h = des_de.get((c, area))
+        if h is None:
+            return out
+        fi_, q_, pl_, cub_ = d_fi[h], d_q[h], d_pl[h], d_cub[h]
+        m = ((fi_ <= np.datetime64(t0)) & ~np.isnat(cub_) & (cub_ > np.datetime64(t0))
+             & (cub_ <= np.datetime64(t1)))
+        if m.any():
+            out.update(q=float(q_[m].sum()), pl=_por_plato(pl_[m], q_[m]),
+                       sig=pd.Timestamp(cub_[m].min()))
         return out
 
     # Los requerimientos de cada producto: quién lo pide y lo pendiente
@@ -1249,11 +1374,12 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     def ventas_sin_descontar(x):
         """La pista de las ventas sin descontar (#650). En un
         FALTANTE: lo vendido desde el último descargo hasta la hora del conteo
-        seguía en el sistema, y falta sin ser pérdida; y dice si el descargo
-        siguiente lo tomó —volverá como sobrante— o no —el último día del mes,
-        `inicio_del_descargo`—. En un SOBRANTE, su espejo: lo que estaba sin
-        descontar en el conteo ANTERIOR y el POS descontó dentro de este
-        período, cuando ese conteo ya lo había restado."""
+        seguía en el sistema, y falta sin ser pérdida; y dice si un descargo
+        posterior lo tomó —volverá como sobrante— o ninguno —el último día del
+        mes—. En un SOBRANTE, su espejo: lo que estaba sin descontar en el
+        conteo ANTERIOR y el POS descontó dentro de este período, cuando ese
+        conteo ya lo había restado. Con el calendario de descargos, exacto;
+        sin él, con la regla de 2026 (`inicio_del_descargo`)."""
         un = x["u"] or "und"
         q = float(x["q"])
         precio = float(x["precio"])
@@ -1266,7 +1392,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             pl = d["pl"]
             platos = ", ".join(n_ for n_, _ in pl[:2]) + (" y otros" if len(pl) > 2 else "")
             tx = (f"Al contar, el {cuando(x['t1'])}, el POS todavía no había descontado lo "
-                  f"vendido desde su último descargo, el {cuando(d['b'], minutos=False)}: "
+                  f"vendido desde su último descargo, el {cuando(d['b'], minutos=d['exacto'])}: "
                   f"{platos} {'pide' if len(pl) == 1 else 'piden'} ≈ {es(p_)} {un} de aquí. ")
             if 0.5 <= r <= 1.5:
                 tx += "Es casi todo lo que falta: no es pérdida, es venta sin descontar."
@@ -1275,24 +1401,26 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                        "sobraría.")
             else:
                 tx += f"Explica ≈ {es(p_)} de los {es(-q)} {un} que faltan."
-            sig, nunca = d["sig"], d["nunca"]
-            corte = inicio_del_descargo(sig)
-            if sig is None:
-                tx += (" Si el POS lo descuenta después, el próximo conteo lo devolverá como "
-                       "sobrante.")
-            elif corte is None:
+            sig, nunca, corte, luego = d["sig"], d["nunca"], d["corte"], d["luego"]
+            ninguno = ", ni ninguno después," if d["exacto"] else ""
+            if nunca > 1e-9 and nunca >= p_ - 1e-9:
+                tx += (f" El descargo siguiente, el {fecha_corta(sig)}, tomó lo vendido desde el "
+                       f"{cuando(corte, minutos=d['exacto'])}: esa venta no la tomó{ninguno} y "
+                       "no volverá." if sig is not None and corte is not None
+                       else " Ningún descargo la tomó después: no volverá.")
+            elif nunca > 1e-9:
+                tx += (f" El descargo siguiente, el {fecha_corta(sig)}, tomó lo vendido desde el "
+                       f"{cuando(corte, minutos=d['exacto'])}: ≈ {es(nunca)} {un} no los "
+                       f"tomó{ninguno} y no volverán; ≈ {es(p_ - nunca)} sí, y el próximo "
+                       "conteo los devolverá como sobrante.")
+            elif not d["exacto"] and sig is not None and corte is None:
                 tx += (f" El descargo siguiente fue el {fecha_corta(sig)}: si lo tomó, el "
                        "próximo conteo lo devolverá como sobrante.")
-            elif nunca >= p_ - 1e-9:
-                tx += (f" El descargo siguiente, el {fecha_corta(sig)}, empezó el "
-                       f"{fecha_corta(corte)}: esa venta no la tomó, y no volverá.")
-            elif nunca <= 1e-9:
-                tx += (f" Lo descontó el {fecha_corta(sig)}: el próximo conteo lo devolverá "
+            elif luego is not None:
+                tx += (f" Lo descontó el {fecha_corta(luego)}: el próximo conteo lo devolverá "
                        "como sobrante.")
             else:
-                tx += (f" El descargo siguiente, el {fecha_corta(sig)}, empezó el "
-                       f"{fecha_corta(corte)}: ≈ {es(nunca)} {un} no los tomó y no volverán; "
-                       f"≈ {es(p_ - nunca)} sí, y el próximo conteo los devolverá como "
+                tx += (" Si el POS lo descuenta después, el próximo conteo lo devolverá como "
                        "sobrante.")
             return {"t": "lote", "f": int(0.5 <= r <= 1.5), "tx": tx,
                     "ti": "Vendido y sin descontar al contar"}
@@ -1305,7 +1433,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             pl = d["pl"]
             platos = ", ".join(n_ for n_, _ in pl[:2]) + (" y otros" if len(pl) > 2 else "")
             tx = (f"Al conteo anterior, el {cuando(x['t0'])}, el POS no había descontado lo "
-                  f"vendido desde el {cuando(d['b'], minutos=False)}: {platos} "
+                  f"vendido desde el {cuando(d['b'], minutos=d['exacto'])}: {platos} "
                   f"{'pedía' if len(pl) == 1 else 'pedían'} ≈ {es(p_)} {un} de aquí. Ese "
                   f"conteo ya lo restó, y el descargo del {fecha_corta(d['sig'])} lo volvió "
                   "a restar: ")
@@ -1315,8 +1443,9 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                 tx += f"es más de lo que sobra ({es(q)} {un})."
             else:
                 tx += f"explica ≈ {es(p_)} de los {es(q)} {un} que sobran."
-            # Antes de 2026 no se sabe qué días tomaba cada descargo: posible.
-            fu = 0.5 <= r <= 1.5 and inicio_del_descargo(d["sig"]) is not None
+            # Sin el calendario, antes de 2026 no se sabe qué tomaba cada
+            # descargo: posible.
+            fu = 0.5 <= r <= 1.5 and (d["exacto"] or inicio_del_descargo(d["sig"]) is not None)
             return {"t": "lote", "f": int(fu), "tx": tx,
                     "ti": "Descontado después del conteo anterior"}
         return None
@@ -1594,13 +1723,11 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     hace6 = ini - pd.Timedelta(days=DIAS_ATRAS)
     # Lo vendido y sin descontar a la hora de este conteo y a la del anterior.
     for x in lin:
-        x["pend"] = sin_descontar(x["cod"], x["area"], x["t1"])
+        x["pend"] = sin_descontar(x["cod"], x["area"], x["t1"], x["t0w"])
         # Lo pendiente al conteo ANTERIOR que el POS descontó dentro de este
-        # período: el siguiente descargo cayó antes de este conteo y lo tomó.
-        p0 = (sin_descontar(x["cod"], x["area"], x["t0"])
-              if not x["sin_ant"] and pd.notna(x["t0"]) else sin_descontar("", "", None))
-        x["pend0"] = dict(p0, q=(p0["q"] - p0["nunca"]
-                                 if p0["sig"] is not None and p0["sig"] <= x["t1"] else 0.0))
+        # período: ese conteo ya lo había restado.
+        x["pend0"] = descontado_despues(x["cod"], x["area"],
+                                        None if x["sin_ant"] else x["t0"], x["t1"])
     for x in lin:
         i, c, v, u = int(x["id"]), x["cod"], float(x["v"]), x["u"] or "und"
         q, sg = float(x["q"]), np.sign(x["q"])
@@ -1820,11 +1947,75 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     out["pend_v"] = out["pend"] * out["precio"]
     out["pend_nunca_v"] = out["id"].map(nunca).fillna(0.0) * out["precio"]
     t1m = L["t1"].mode().iloc[0]
-    sig_m = siguiente_lote(t1m)
-    lote = {"t1": t1m, "ultimo": ultimo_lote(t1m), "siguiente": sig_m,
-            "desde": inicio_del_descargo(sig_m), "con_paloteo": D is not None}
+    sig_m, corte_m = siguiente_descargo(t1m)
+    lote = {"t1": t1m, "ultimo": ultimo_descargo(t1m), "siguiente": sig_m,
+            "desde": corte_m, "con_paloteo": D is not None, "exacto": exacto}
     return {"lineas": out.reset_index(drop=True), "fichas": fichas,
             "resumen": {"hist": hist_lab, "desde": desde, "lote": lote}}
+
+
+def agrupar_por_producto(lineas, fichas):
+    """Las líneas de las áreas elegidas JUNTAS: una fila por producto
+    (pedido del usuario, 2026-10-18: «es un análisis por área o subalmacén;
+    ¿podemos tener una vista agrupada de las áreas seleccionadas?»).
+
+    `(G, FG)`. `G` tiene las columnas de `lineas` que lee la vista (`acod`
+    va en −1: la fila no es de un área) con `q` y `v` sumados —un faltante
+    en una área y un sobrante en otra se COMPENSAN—, `n_areas`, `areas` y
+    `comp` (True si la suma da cero: se compensó entera). `FG` {id: ficha}
+    con las pistas de las líneas del lado de la suma, cada una con su área
+    adelante, sin «Otra área» si la otra línea también está en el grupo (ya
+    se compensó), y `partes`, las líneas de cada área. Pura."""
+    cols = ["id", "cod", "acod", "producto", "area", "familia", "subfamilia", "u", "s", "k",
+            "q", "v", "precio", "pista", "pista_t", "pista_f", "n_pistas", "fuerte", "tipos",
+            "n_areas", "areas", "comp", "base"]
+    if lineas is None or lineas.empty:
+        return pd.DataFrame(columns=cols), {}
+    por_cod = defaultdict(list)
+    for r in lineas.to_dict("records"):
+        por_cod[r["cod"]].append(r)
+    filas, FG = [], {}
+    for gid, (c, partes) in enumerate(por_cod.items()):
+        partes.sort(key=lambda r: -abs(r["v"]) - 1e-6 * abs(r["q"]))
+        q, v = sum(r["q"] for r in partes), sum(r["v"] for r in partes)
+        comp = abs(v) <= EPS and abs(q) <= 1e-6
+        sg = np.sign(q) if abs(q) > 1e-6 else np.sign(v)
+        ids = {int(r["id"]) for r in partes}
+        varias = len(partes) > 1
+        # La misma pista en dos áreas (el mismo derivado que sobra, la misma
+        # receta) va UNA vez, con las dos áreas adelante.
+        juntas = {}
+        for r in partes:
+            if np.sign(r["q"]) != sg and abs(r["q"]) > 1e-6:
+                continue
+            for p in fichas[int(r["id"])]["pistas"]:
+                if p["t"] == "area" and p.get("r") in ids:
+                    continue
+                k_ = (p["t"], p["ti"], p["tx"])
+                if k_ in juntas:
+                    juntas[k_][1].append(r["area"])
+                else:
+                    juntas[k_] = (p, [r["area"]])
+        P = []
+        for p, areas in juntas.values():
+            pre = (f"En {' y '.join(areas)}: " if varias else "")
+            P.append(dict(p, tx=pre + p["tx"], area=", ".join(areas)))
+        P.sort(key=lambda p_: (-p_["f"], TIPOS.index(p_["t"])))
+        base = partes[0]
+        p0 = P[0] if P else None
+        filas.append({
+            "id": gid, "cod": c, "acod": -1, "producto": base["producto"],
+            "area": base["area"] if not varias else f"{len(partes)} áreas",
+            "familia": base["familia"], "subfamilia": base["subfamilia"], "u": base["u"],
+            "s": sum(r["s"] for r in partes), "k": sum(r["k"] for r in partes), "q": q, "v": v,
+            "precio": v / q if abs(q) > 1e-9 else base["precio"],
+            "pista": p0["ti"] if p0 else "", "pista_t": p0["t"] if p0 else "",
+            "pista_f": bool(p0["f"]) if p0 else False, "n_pistas": len(P),
+            "fuerte": any(p_["f"] for p_ in P), "tipos": ",".join(sorted({p_["t"] for p_ in P})),
+            "n_areas": len(partes), "areas": ", ".join(r["area"] for r in partes),
+            "comp": comp, "base": int(base["id"])})
+        FG[gid] = {"pistas": P, "partes": partes, "base": int(base["id"])}
+    return pd.DataFrame(filas, columns=cols), FG
 
 
 def cobertura(lineas):

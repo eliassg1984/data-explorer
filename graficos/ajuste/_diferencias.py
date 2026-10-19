@@ -7,10 +7,16 @@ aprobado con los datos reales del cierre de setiembre 2026
   · A — POSIBLE ORIGEN. La lista de faltantes o sobrantes, una fila por
     línea (producto × área), con su pista principal, y filtros por tipo de
     pista. Arriba, cuánto del faltante y del sobrante tiene una pista fuerte.
-  · B — LA FICHA de la línea elegida, al costado: sus pistas explicadas, la
-    cuenta entre los dos conteos con entró y salió POR MOTIVO, el stock en el
-    sistema entre ellos, de dónde viene, dónde se usa y sus ajustes en los
-    últimos cierres.
+  · B — LA FICHA de la línea elegida, al costado, en PESTAÑAS desde el
+    2026-10-18 («se verá en laptop»): sus pistas explicadas; la cuenta entre
+    los dos conteos con entró y salió POR MOTIVO, el stock en el sistema entre
+    ellos y sus ajustes en los últimos cierres; de dónde viene y quién lo
+    pide; cómo sale y dónde se usa.
+
+Y desde el mismo día, «Áreas juntas»: una fila por PRODUCTO con las áreas
+elegidas sumadas (`da.agrupar_por_producto`) —lo que falta en una y sobra en
+otra se compensa—, con la cuenta área por área en la ficha y un botón a cada
+línea. El área se elige como en las demás vistas (`filtro_area_en_titulo`).
 
 La cuenta vive en `diferencias_ajuste.py` (puro, con prueba) y la carga en
 `data.diferencias_ajuste_sesion`, en caché de disco por sesión. Acá sólo se
@@ -18,9 +24,9 @@ dibuja.
 
 Como las demás vistas de Ajuste (regla #632), elige SU sesión con la píldora
 ‹ [sesión] › (`_comun.selector_sesion`) y su familia en un popover (las cinco
-de entrada). La tarjeta NO lleva techo (`estilos/_80_cards.py`): la ficha es
-más alta que una pantalla, y lo que sobra lo desliza la página, como en
-Compras › Producto (#382). Dentro, sólo se desliza la lista.
+de entrada). La tarjeta NO lleva techo (`estilos/_80_cards.py`): lo que sobra
+lo desliza la página, como en Compras › Producto (#382). Dentro, sólo se
+desliza la lista.
 """
 
 import hashlib
@@ -34,11 +40,11 @@ import streamlit as st
 import data
 import diferencias_ajuste as da
 from graficos import alturas
-from graficos.base import _compras_layout, filtro_pills, sembrar_seleccion
+from graficos.base import _compras_layout, filtro_pills, poner_seleccion, sembrar_seleccion
 from graficos.drill_tablas import CSS_TITULOS_DRILL
 from graficos.ajuste._comun import (
-    FAMILIAS_DE_ENTRADA, css_filtros_vista, selector_sesion, sesion_vigente,
-    sesiones_de, stats_de_vista, texto_familias,
+    FAMILIAS_DE_ENTRADA, css_filtros_vista, filtro_area_en_titulo, selector_sesion,
+    sesion_vigente, sesiones_de, stats_de_vista, texto_familias,
 )
 from tema import (
     ACENTO, ACENTO_TEXTO, AJUSTE_ALERTA_BORDE, AJUSTE_ALERTA_FONDO,
@@ -56,12 +62,19 @@ K_FAM = "ajdif_filtro_familia"
 K_LADO = "ajdif_lado"
 K_PISTA = "ajdif_pista"
 K_BUSCAR = "ajdif_buscar"
+K_AREA = "ajdif_filtro_area"
+K_VER = "ajdif_ver"
 _K_FOCO = "_ajdif_foco"
 _K_SALTO = "_ajdif_salto"
 _K_TABLA = "_ajdif_key"
 _K_FILAS = "_ajdif_filas"
 
 LADOS = ("fal", "sob")
+VER = ("area", "junto")
+"""Una fila por línea (producto × área) o por producto, con las áreas
+elegidas juntas (`da.agrupar_por_producto`)."""
+TABS = ("Posible origen", "La cuenta", "De dónde viene", "Dónde se usa")
+TABS_JUNTO = ("Posible origen", "Por área", "De dónde viene", "Dónde se usa")
 FILTROS = ("todas", "fuerte", "sin") + da.TIPOS
 _NOMBRE_FILTRO = {"todas": "Todas", "fuerte": "Con pista fuerte",
                   "sin": "Sin pista", **da.NOMBRE_TIPO}
@@ -160,7 +173,22 @@ _CSS = f"""
     font-size: 12px; color: {ACENTO_TEXTO}; }}
 /* El último renglón de la tarjeta: Streamlit le pone −16px abajo a todo
    markdown, y como no sigue nada, la tarjeta se deslizaba por dentro. */
-.st-key-ajdif_pie [data-testid="stMarkdownContainer"] {{ margin-bottom: 0 !important; }}
+[class*="st-key-ajdif_pie"] [data-testid="stMarkdownContainer"] {{ margin-bottom: 0 !important; }}
+/* La cuenta de cada área de un producto con las áreas juntas. */
+.dif-partes {{ font-size: 12px; font-variant-numeric: tabular-nums; margin: 2px 0 6px; }}
+.dif-partes .h, .dif-partes .f {{ display: grid; gap: 2px 8px; align-items: baseline;
+    grid-template-columns: minmax(0, 1.5fr) repeat(5, minmax(0, .8fr)) minmax(0, .9fr); }}
+.dif-partes .h {{ color: {GRIS_TEXTO}; font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: .04em; border-bottom: 1px solid {GRIS_LINEA}; padding-bottom: 3px; }}
+.dif-partes .f {{ padding: 4px 0; border-bottom: 1px solid {GRIS_LINEA}; }}
+.dif-partes span {{ text-align: right; white-space: nowrap; }}
+.dif-partes .h span:first-child {{ text-align: left; }}
+.dif-partes .a {{ text-align: left; font-weight: 600; color: {TEXTO_PRINCIPAL};
+    overflow: hidden; text-overflow: ellipsis; }}
+.dif-partes .x {{ grid-column: 1 / -1; text-align: left; color: {GRIS_TEXTO}; font-size: 11px;
+    white-space: normal; }}
+.dif-partes .f.s {{ border-bottom: none; }}
+.dif-partes .t {{ font-weight: 700; }}
 </style>
 """
 
@@ -263,7 +291,7 @@ _AYUDA = {
 
 # ── la ficha ────────────────────────────────────────────────────────────
 
-def _ir(clave, lado):
+def _ir(clave, lado, soltar_area=True):
     """Callback de «Ver …»: la otra línea, en su lista y sin filtros que la
     escondan. La key de la tabla cambia, así la selección nueva manda."""
     ss = st.session_state
@@ -271,6 +299,10 @@ def _ir(clave, lado):
     ss[K_LADO] = lado
     ss[K_PISTA] = "todas"
     ss[K_BUSCAR] = ""
+    ss[K_VER] = "area"
+    # La otra línea puede ser de un área que el filtro esconde.
+    if soltar_area and ss.get(K_AREA):
+        poner_seleccion(K_AREA, [])
     ss[_K_SALTO] = ss.get(_K_SALTO, 0) + 1
     # Sin esto, `_foco_anterior` leería en la próxima corrida la fila que
     # seguía elegida en la tabla vieja y devolvería el foco a ella.
@@ -494,13 +526,11 @@ def _hist_html(fi):
     return '<div class="dif-hist">' + "".join(out) + "</div>"
 
 
-def _ficha(x, fi, por_clave):
-    st.markdown(_cabecera_ficha(x) + '<div class="dif-h">Posible origen</div>',
-                unsafe_allow_html=True)
+def _pistas(fi, por_clave, vacio):
+    """Las pistas de la ficha, con «Ver …» debajo de las que nombran otra
+    línea (sólo en la vista por área: `por_clave` vacío la apaga)."""
     if not fi["pistas"]:
-        st.markdown('<div class="dif-nota">Ninguna pista: ni otra área, ni la producción, '
-                    'ni el conteo anterior la explican. Es de las que hay que mirar a mano.</div>',
-                    unsafe_allow_html=True)
+        st.markdown(f'<div class="dif-nota">{vacio}</div>', unsafe_allow_html=True)
     for j, p in enumerate(fi["pistas"]):
         st.markdown(_pista_html(p), unsafe_allow_html=True)
         ref = por_clave.get(p.get("r"))
@@ -508,24 +538,103 @@ def _ficha(x, fi, por_clave):
             st.button(f'Ver {ref["producto"]} · {ref["area"]} →', key=f"ajdif_ir_{j}",
                       type="tertiary", on_click=_ir,
                       args=(_clave(ref), "fal" if ref["q"] < 0 else "sob"))
-    st.markdown('<div class="dif-h">La cuenta entre los dos conteos</div>'
-                + _cuenta_html(x, fi), unsafe_allow_html=True)
-    if len(fi["camino"]) >= 2:
-        st.plotly_chart(_fig_camino(x, fi), width="stretch", key="ajdif_camino",
-                        config={"displaylogo": False, "displayModeBar": False})
-    st.markdown('<div class="dif-h">De dónde viene</div>' + _viene_html(x, fi)
-                + f'<div class="dif-h">Cómo sale ({da.DIAS_ATRAS} días antes del conteo)</div>'
-                + _perfil_html(x, fi)
-                + '<div class="dif-h">Quién lo pide (requerimientos, 90 días)</div>'
-                + _pide_html(x, fi)
-                + '<div class="dif-h">Dónde se usa</div>'
-                '<div class="dif-nota">Lo que lo descarga, con lo vendido o producido entre los '
-                'dos conteos. «≈» es recetas × vendido: una referencia, no el kardex. «Receta '
-                'editada» marca las que cambiaron desde el conteo anterior.</div>'
-                + _usos_html(x, fi), unsafe_allow_html=True)
-    with st.container(key="ajdif_pie"):
-        st.markdown('<div class="dif-h">Sus ajustes en los últimos cierres</div>'
-                    + _hist_html(fi), unsafe_allow_html=True)
+
+
+def _viene_y_usos(x, fi, tab_viene, tab_usos):
+    """Las dos pestañas que no cambian entre una línea y un producto con las
+    áreas juntas: de dónde viene (y quién lo pide) y dónde se usa (y cómo
+    sale)."""
+    with tab_viene, st.container(key="ajdif_pie_viene"):
+        st.markdown(_viene_html(x, fi)
+                    + '<div class="dif-h">Quién lo pide (requerimientos, 90 días)</div>'
+                    + _pide_html(x, fi), unsafe_allow_html=True)
+    with tab_usos, st.container(key="ajdif_pie_usos"):
+        st.markdown(f'<div class="dif-h">Cómo sale ({da.DIAS_ATRAS} días antes del conteo)</div>'
+                    + _perfil_html(x, fi)
+                    + '<div class="dif-h">Dónde se usa</div>'
+                    '<div class="dif-nota">Lo que lo descarga, con lo vendido o producido entre '
+                    'los dos conteos. «≈» es recetas × vendido: una referencia, no el kardex. '
+                    '«Receta editada» marca las que cambiaron desde el conteo anterior.</div>'
+                    + _usos_html(x, fi), unsafe_allow_html=True)
+
+
+def _ficha(x, fi, por_clave):
+    """La ficha de una línea, en PESTAÑAS (pedido 2026-10-18: «se verá en
+    laptop», y una debajo de otra desbordaba la pantalla). La pestaña
+    elegida se queda al cambiar de línea: tiene key y los mismos nombres."""
+    st.markdown(_cabecera_ficha(x), unsafe_allow_html=True)
+    t_or, t_cu, t_vi, t_us = st.tabs(list(TABS), key="ajdif_tabs")
+    with t_or, st.container(key="ajdif_pie_origen"):
+        _pistas(fi, por_clave, "Ninguna pista: ni otra área, ni la producción, ni el conteo "
+                "anterior la explican. Es de las que hay que mirar a mano.")
+    with t_cu:
+        st.markdown(_cuenta_html(x, fi), unsafe_allow_html=True)
+        if len(fi["camino"]) >= 2:
+            st.plotly_chart(_fig_camino(x, fi), width="stretch", key="ajdif_camino",
+                            config={"displaylogo": False, "displayModeBar": False})
+        with st.container(key="ajdif_pie_cuenta"):
+            st.markdown('<div class="dif-h">Sus ajustes en los últimos cierres</div>'
+                        + _hist_html(fi), unsafe_allow_html=True)
+    _viene_y_usos(x, fi, t_vi, t_us)
+
+
+def _cabecera_junto(x):
+    lado = "dif-neg" if x["q"] < 0 else "dif-pos"
+    fam = str(x["familia"]).capitalize()
+    sub = str(x["subfamilia"]).capitalize()
+    return (f'<div class="dif-n">{_e(x["producto"])}</div>'
+            f'<div class="dif-s">{_e(x["areas"])} · {_e(fam)}{" › " + _e(sub) if sub else ""}'
+            f' · en {_e(x["u"] or "und")}</div>'
+            f'<div class="dif-monto {lado}">{_soles(x["v"])}'
+            f'<span>{"faltante" if x["q"] < 0 else "sobrante"} con las áreas juntas · '
+            f'{"+" if x["q"] > 0 else ""}{da.es(x["q"])} {_e(x["u"])}</span></div>')
+
+
+def _partes_html(x, fg):
+    """La cuenta de cada área del producto, una fila por área, y la suma."""
+    u = _e(x["u"] or "und")
+    cab = ("<span>Área</span><span>Antes</span><span>Entró</span><span>Salió</span>"
+           "<span>Sistema</span><span>Contado</span><span>Dif.</span>")
+    filas = []
+    for r in fg["partes"]:
+        cls = "dif-neg" if r["q"] < 0 else "dif-pos"
+        filas.append(f'<span class="a">{_e(r["area"])}</span><span>{_cant(r["c0w"])}</span>'
+                     f'<span>{_cant(r["ing"])}</span><span>{_cant(r["sal"])}</span>'
+                     f'<span>{_cant(r["s"])}</span><span>{_cant(r["k"])}</span>'
+                     f'<span class="{cls}">{"+" if r["q"] > 0 else ""}{_cant(r["q"])}</span>'
+                     f'<span class="x">{_e(r["pista"] or "sin pista")}</span>')
+    tot = ("dif-neg" if x["q"] < 0 else "dif-pos")
+    pie = (f'<span class="a t">Juntas</span><span></span><span></span><span></span>'
+           f'<span class="t">{_cant(x["s"])}</span><span class="t">{_cant(x["k"])}</span>'
+           f'<span class="t {tot}">{"+" if x["q"] > 0 else ""}{_cant(x["q"])} {u}</span>')
+    nota = ""
+    if any(np.sign(r["q"]) != np.sign(x["q"]) for r in fg["partes"] if abs(r["q"]) > 1e-6):
+        nota = ('<div class="dif-nota">Un área tiene faltante y otra sobrante: juntas, se '
+                'compensan en parte (un traslado o un requerimiento sin registrar).</div>')
+    return (f'<div class="dif-partes"><div class="h">{cab}</div>'
+            + "".join(f'<div class="f">{f_}</div>' for f_ in filas)
+            + f'<div class="f s">{pie}</div></div>' + nota)
+
+
+def _ficha_junto(x, fg, fichas):
+    """La ficha de un producto con las áreas JUNTAS (2026-10-18): sus pistas
+    —las de las áreas del lado de la suma—, la cuenta área por área con un
+    botón a cada línea, y de dónde viene y dónde se usa (los de su línea
+    más grande)."""
+    st.markdown(_cabecera_junto(x), unsafe_allow_html=True)
+    t_or, t_ar, t_vi, t_us = st.tabs(list(TABS_JUNTO), key="ajdif_tabs_junto")
+    with t_or, st.container(key="ajdif_pie_origen"):
+        _pistas(fg, {}, "Ninguna pista en las áreas del lado de la suma: hay que mirarlo a "
+                "mano, o área por área.")
+    with t_ar:
+        st.markdown(_partes_html(x, fg), unsafe_allow_html=True)
+        with st.container(key="ajdif_pie_partes"):
+            for j, r in enumerate(fg["partes"]):
+                st.button(f'Ver la línea de {r["area"]} →', key=f"ajdif_ir_parte_{j}",
+                          type="tertiary", on_click=_ir,
+                          args=(_clave(r), "fal" if r["q"] < 0 else "sob", False))
+    base = next(r for r in fg["partes"] if int(r["id"]) == fg["base"])
+    _viene_y_usos(base, fichas[fg["base"]], t_vi, t_us)
 
 
 # ── la vista ────────────────────────────────────────────────────────────
@@ -559,13 +668,14 @@ def _aviso_sin_descontar(lin, lote):
     n = int((lin["pend"] > 1e-9).sum())
     nunca = float(lin["pend_nunca_v"].sum()) if "pend_nunca_v" in lin.columns else 0.0
     sig, desde = lote.get("siguiente"), lote.get("desde")
+    exacto = bool(lote.get("exacto"))
     tx = (f"Al contar, el POS no había descontado lo vendido desde su último descargo, el "
-          f"{_e(da.cuando(lote['ultimo'], minutos=False))}: <b>≈ {_soles(v, signo=False)}</b> a "
+          f"{_e(da.cuando(lote['ultimo'], minutos=exacto))}: <b>≈ {_soles(v, signo=False)}</b> a "
           f"costo en {n:,} líneas, que figuran como faltante sin ser pérdida.")
     if sig is not None and desde is not None and nunca >= 1:
-        tx += (f" El descargo siguiente, el {_e(da.fecha_corta(sig))}, empezó el "
-               f"{_e(da.fecha_corta(desde))}: <b>{_soles(nunca, signo=False)}</b> no se "
-               "descontarán nunca; el resto volverá como sobrante en el próximo conteo.")
+        tx += (f" El descargo siguiente, el {_e(da.fecha_corta(sig))}, tomó lo vendido desde el "
+               f"{_e(da.cuando(desde, minutos=exacto))}: <b>{_soles(nunca, signo=False)}</b> no "
+               "se descontarán nunca; el resto volverá como sobrante en el próximo conteo.")
     elif sig is not None:
         tx += (f" El descargo siguiente fue el {_e(da.fecha_corta(sig))}: lo que tomó "
                "volverá como sobrante en el próximo conteo.")
@@ -588,8 +698,8 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         st.markdown(CSS_TITULOS_DRILL + _CSS + "<style>"
                     + css_filtros_vista("ajdif_ctrl_", "ajdif_nolist_") + "</style>",
                     unsafe_allow_html=True)
-        # columnas-internas: título, la sesión y la familia, en UN renglón.
-        c_t, c_s, c_f = st.columns([2.4, 1.7, 1.0], vertical_alignment="center")
+        # columnas-internas: título, la sesión, el área y la familia, en UN renglón.
+        c_t, c_s, c_a, c_f = st.columns([2.2, 1.6, 0.95, 0.95], vertical_alignment="center")
         with c_s:
             if sesiones:
                 selector_sesion(
@@ -625,7 +735,22 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         lin = r["lineas"]
         if fam_sel:
             lin = lin[lin["familia"].isin([f.upper() for f in fam_sel])]
-        st.markdown(_kpis(lin) + _aviso_sin_descontar(lin, r["resumen"].get("lote")),
+        # El área se elige con las líneas de la sesión a la vista: las áreas
+        # que tienen alguna diferencia.
+        lin = filtro_area_en_titulo(c_a, lin, "area", "v", K_AREA, "ajdif_ctrl_area")
+
+        # Por área (una fila por línea) o con las áreas JUNTAS (una por
+        # producto: lo que falta en una y sobra en otra se compensa). Se lee
+        # antes de dibujar el control: los totales de arriba dependen de él.
+        if ss.get(K_VER) not in VER:
+            ss[K_VER] = VER[0]
+        junto = ss[K_VER] == "junto"
+        G = FG = None
+        lista = lin
+        if junto:
+            G, FG = da.agrupar_por_producto(lin, r["fichas"])
+            lista = G[~G["comp"]]
+        st.markdown(_kpis(lista) + _aviso_sin_descontar(lin, r["resumen"].get("lote")),
                     unsafe_allow_html=True)
 
         # El lado, la pista y el buscador. Lo elegido se corrige ANTES de
@@ -635,10 +760,11 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         lado = ss[K_LADO]
         # El lado lo dice la CANTIDAD: una línea sin precio vale S/ 0 y sigue
         # siendo un faltante o un sobrante (#651).
-        base = lin[lin["q"] < 0] if lado == "fal" else lin[lin["q"] > 0]
+        base = lista[lista["q"] < 0] if lado == "fal" else lista[lista["q"] > 0]
         q = (ss.get(K_BUSCAR) or "").strip().lower()
         if q:
-            base = base[(base["producto"].str.lower() + " " + base["area"].str.lower())
+            donde = base["areas"] if junto else base["area"]
+            base = base[(base["producto"].str.lower() + " " + donde.str.lower())
                         .str.contains(q, regex=False)]
         tipos = base["tipos"].str.split(",")
         cuenta = {"todas": len(base), "fuerte": int(base["fuerte"].sum()),
@@ -648,14 +774,20 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         opciones = [o for o in FILTROS if cuenta[o] or o == "todas"]
         if ss.get(K_PISTA) not in opciones:
             ss[K_PISTA] = "todas"
-        # columnas-internas: el lado y el buscador; las pistas, en el renglón
-        # de abajo a lo ancho (en un tercio de la fila se partían en tres).
-        c_l, c_b = st.columns([3.0, 1.0], vertical_alignment="center")
+        # columnas-internas: el lado, por área o juntas y el buscador; las
+        # pistas, en el renglón de abajo a lo ancho.
+        c_l, c_v, c_b = st.columns([2.0, 1.3, 1.0], vertical_alignment="center")
         with c_l:
-            n_fal, n_sob = int((lin["q"] < 0).sum()), int((lin["q"] > 0).sum())
+            n_fal, n_sob = int((lista["q"] < 0).sum()), int((lista["q"] > 0).sum())
             st.segmented_control(
                 "Lado", LADOS, key=K_LADO, required=True, label_visibility="collapsed",
                 format_func=lambda o: f"Faltantes · {n_fal}" if o == "fal" else f"Sobrantes · {n_sob}")
+        with c_v:
+            st.segmented_control(
+                "Ver", VER, key=K_VER, required=True, label_visibility="collapsed",
+                format_func=lambda o: "Por área" if o == "area" else "Áreas juntas",
+                help="«Áreas juntas» suma cada producto en las áreas elegidas: lo que falta "
+                     "en una y sobra en otra se compensa.")
         with c_b:
             st.text_input("Buscar", key=K_BUSCAR, placeholder="Buscar producto o área",
                           label_visibility="collapsed")
@@ -696,17 +828,28 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
                 selection_mode="single-row-required",
                 selection_default={"selection": {"rows": [pos]}},
                 hide_index=True, row_height=27,
-                # El tope es el de la vista y no el de un PROTAGONISTA: la
-                # lista acompaña a la ficha, que mide casi mil píxeles.
+                # Tope de una laptop (`DIFERENCIAS_TABLA`): la ficha de al
+                # lado va en pestañas y mide lo mismo.
                 height=alturas.por_filas(len(tabla), px_fila=27, extra=38, minimo=0,
                                          rol=alturas.DIFERENCIAS_TABLA),
                 column_config={c: st.column_config.Column(width=_ANCHOS.get(c),
                                                           help=_AYUDA.get(c))
                                for c in tabla.columns})
-            st.caption(f"{len(f):,} líneas · {_soles(float(f['v'].sum()))} · ordenada por "
-                       "soles; el círculo de una fila abre su ficha al costado.")
+            if junto:
+                comp = G[G["comp"]]
+                extra = (f" · {len(comp):,} se compensan entre áreas y no aparecen"
+                         if len(comp) else "")
+                st.caption(f"{len(f):,} producto{'s' if len(f) != 1 else ''} · "
+                           f"{_soles(float(f['v'].sum()))}{extra}.")
+            else:
+                st.caption(f"{len(f):,} línea{'s' if len(f) != 1 else ''} · "
+                           f"{_soles(float(f['v'].sum()))} · ordenada por "
+                           "soles; el círculo de una fila abre su ficha al costado.")
         with c_fic, st.container(key="ajdif_ficha"):
             x = f.iloc[pos]
-            por_clave = {int(i): fila for i, fila in
-                         zip(r["lineas"]["id"], r["lineas"].to_dict("records"))}
-            _ficha(x, r["fichas"][int(x["id"])], por_clave)
+            if junto:
+                _ficha_junto(x, FG[int(x["id"])], r["fichas"])
+            else:
+                por_clave = {int(i): fila for i, fila in
+                             zip(r["lineas"]["id"], r["lineas"].to_dict("records"))}
+                _ficha(x, r["fichas"][int(x["id"])], por_clave)

@@ -9262,8 +9262,121 @@ def _pruebas_diferencias_sin_descontar():
     # 4 — una receta base por insumo
     p_ = lote(1, "53")
     check("la DD se abre en sus insumos: el ají sin descontar",
-          (de[(1, "53")]["pend"], "esa venta no la tomó, y no volverá" in p_[0]["tx"]),
+          (de[(1, "53")]["pend"], "esa venta no la tomó y no volverá" in p_[0]["tx"]),
           (0.05, True))
+
+    # 5 — EL CALENDARIO de descargos (`descargosventas.parquet`, TLOG_DESCARGO):
+    # lo mismo, exacto y con la hora, y manda sobre la regla de 2026.
+    def corrida(ini, desde, hasta):
+        return {"INICIO CORRIDA": pd.Timestamp(ini), "VENTAS DESDE": pd.Timestamp(desde),
+                "VENTAS HASTA": pd.Timestamp(hasta)}
+    cal = [corrida("2026-08-31 09:05", "2026-08-01 07:00", "2026-08-31 07:59"),
+           corrida("2026-09-07 17:50", "2026-09-01 07:00", "2026-09-07 07:59"),
+           corrida("2026-09-16 10:25", "2026-09-01 07:00", "2026-09-16 07:59"),
+           corrida("2026-09-18 16:37", "2026-09-01 07:00", "2026-09-18 07:59"),
+           corrida("2026-09-30 09:08", "2026-09-01 07:00", "2026-09-30 07:59"),
+           corrida("2026-10-07 10:04", "2026-10-01 07:00", "2026-10-07 07:59")]
+    rc = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta,
+                     paloteo=paloteo, pedidos=pedidos, maestro=maestro,
+                     descargos=pd.DataFrame(cal))
+    Lc, Fc = rc["lineas"], rc["fichas"]
+    dc_ = {(a, c): x for a, c, x in zip(Lc["acod"], Lc["cod"], Lc.to_dict("records"))}
+
+    def lote_c(a, c, F_=Fc, de_=dc_):
+        return [p for p in F_[de_[(a, c)]["id"]]["pistas"] if p["t"] == "lote"]
+    check("con el calendario, lo mismo y exacto",
+          (dc_[(1, "50")]["pend"], dc_[(1, "50")]["pend_nunca_v"], dc_[(1, "53")]["pend"],
+           lote_c(10, "52")), (3.0, 172.0, 0.05, []))
+    check("con la hora del descargo, y ninguno después lo tomó",
+          ("desde su último descargo, el 30 set a las 9:08" in lote_c(1, "50")[0]["tx"],
+           "no los tomó, ni ninguno después, y no volverán" in lote_c(1, "50")[0]["tx"]),
+          (True, True))
+    check("el resumen dice los descargos de verdad",
+          tuple(rc["resumen"]["lote"][k_] for k_ in ("ultimo", "siguiente", "desde", "exacto")),
+          (pd.Timestamp("2026-09-30 09:08"), pd.Timestamp("2026-10-07 10:04"),
+           pd.Timestamp("2026-10-01 07:00"), True))
+    check("el espejo, fuerte con el calendario",
+          [(p["ti"], p["f"]) for p in lote_c(1, "51")],
+          [("Descontado después del conteo anterior", 1)])
+    # Si el descargo del 7 oct hubiera tomado desde el 30 set, el calendario
+    # manda: todo vuelve como sobrante.
+    cal[-1] = corrida("2026-10-07 10:04", "2026-09-30 07:00", "2026-10-07 07:59")
+    rx = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta,
+                     paloteo=paloteo, pedidos=pedidos, maestro=maestro,
+                     descargos=pd.DataFrame(cal))
+    dx = {(a, c): x for a, c, x in zip(rx["lineas"]["acod"], rx["lineas"]["cod"],
+                                       rx["lineas"].to_dict("records"))}
+    p_ = lote_c(1, "50", rx["fichas"], dx)
+    check("el calendario manda sobre la regla: lo del 30 set se descontó el 7 oct",
+          (dx[(1, "50")]["pend_nunca_v"], "Lo descontó el 7 oct" in p_[0]["tx"]), (0.0, True))
+    return fallos
+
+
+def _pruebas_diferencias_juntas():
+    """Ajuste › «Análisis de diferencias», las ÁREAS JUNTAS (anexo de la regla
+    #650, 2026-10-18): una fila por producto con las áreas elegidas sumadas.
+    El Queso Provolone faltó en Almacén Central y sobró en Cocina: juntas
+    quedan −4,6 kg; la pista «Sobró en Cocina» ya se compensó y sale, y las
+    demás llevan su área adelante. Un producto que se compensa entero no
+    aparece en las listas."""
+    import pandas as pd
+
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #650 · juntas · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #650 · juntas · {nombre}: got={got!r} exp={exp!r}")
+
+    def linea(i, cod, acod, area, q, v, pista):
+        return {"id": i, "cod": cod, "acod": acod, "producto": f"Producto {cod}",
+                "area": area, "familia": "ALIMENTOS", "subfamilia": "LACTEOS", "u": "kg",
+                "s": 10.0, "k": 10.0 + q, "q": q, "v": v, "precio": v / q, "pista": pista,
+                "pista_t": "", "pista_f": True, "n_pistas": 1, "fuerte": True, "tipos": "",
+                "t0": pd.NaT, "t1": pd.NaT, "c0": 0.0, "ing": 0.0, "sal": 0.0, "gap": 0.0,
+                "sin_ant": False, "t0w": pd.NaT, "c0w": 0.0}
+    lineas = pd.DataFrame([linea(0, "10", 1, "Almacen Central", -16.56, -1102.0, "Sobró en Cocina"),
+                           linea(1, "10", 2, "Cocina", 11.96, 795.0, "Faltó en Almacen Central"),
+                           linea(2, "11", 1, "Almacen Central", -2.0, -10.0, "Sobró en Cocina"),
+                           linea(3, "11", 2, "Cocina", 2.0, 10.0, "Faltó en Almacen Central")])
+    fichas = {0: {"pistas": [{"t": "area", "f": 1, "ti": "Sobró en Cocina", "tx": "…", "r": 1},
+                             {"t": "nada", "f": 1, "ti": "Se descarga desde otra área",
+                              "tx": "Provoleta lo descarga desde Cocina."}]},
+              1: {"pistas": [{"t": "area", "f": 1, "ti": "Faltó en Almacen Central",
+                              "tx": "…", "r": 0}]},
+              2: {"pistas": [{"t": "area", "f": 1, "ti": "Sobró en Cocina", "tx": "…", "r": 3}]},
+              3: {"pistas": [{"t": "area", "f": 1, "ti": "Faltó en Almacen Central",
+                              "tx": "…", "r": 2}]}}
+    G, FG = da.agrupar_por_producto(lineas, fichas)
+    g = {c: x for c, x in zip(G["cod"], G.to_dict("records"))}
+    check("una fila por producto, con las áreas sumadas, por nombre de columna",
+          (round(g["10"]["q"], 2), g["10"]["v"], g["10"]["n_areas"], g["10"]["area"],
+           g["10"]["acod"], g["10"]["comp"]),
+          (-4.6, -307.0, 2, "2 áreas", -1, False))
+    check("la pista del traslado ya se compensó: sale; la otra lleva su área",
+          [(p["ti"], p["tx"]) for p in FG[g["10"]["id"]]["pistas"]],
+          [("Se descarga desde otra área",
+            "En Almacen Central: Provoleta lo descarga desde Cocina.")])
+    check("y la principal es la de la línea del lado de la suma",
+          (g["10"]["pista"], g["10"]["fuerte"], g["10"]["n_pistas"]),
+          ("Se descarga desde otra área", True, 1))
+    check("las partes, la más grande primero, y la ficha de base",
+          ([r["area"] for r in FG[g["10"]["id"]]["partes"]], FG[g["10"]["id"]]["base"]),
+          (["Almacen Central", "Cocina"], 0))
+    check("lo que se compensa entero queda marcado", g["11"]["comp"], True)
+    # La misma pista en dos áreas va una vez, con las dos áreas adelante.
+    misma = {"t": "prod", "f": 1, "ti": "Sobra lo que se hace con él", "tx": "Sobra el aderezo."}
+    G2, FG2 = da.agrupar_por_producto(
+        pd.DataFrame([linea(4, "12", 1, "Cocina", -50.0, -380.0, misma["ti"]),
+                      linea(5, "12", 3, "Almacen Central", -10.0, -76.0, misma["ti"])]),
+        {4: {"pistas": [misma]}, 5: {"pistas": [dict(misma)]}})
+    check("la misma pista en dos áreas, una vez",
+          [p["tx"] for p in FG2[0]["pistas"]], ["En Cocina y Almacen Central: Sobra el aderezo."])
     return fallos
 
 
@@ -12996,6 +13109,7 @@ def main():
     fallos += _pruebas_diferencias_area_descargo()
     fallos += _pruebas_diferencias_perfil()
     fallos += _pruebas_diferencias_sin_descontar()
+    fallos += _pruebas_diferencias_juntas()
     fallos += _pruebas_merma()
     fallos += _pruebas_cortes_y_peso()
     fallos += _pruebas_rastro_proveedor()
