@@ -1,4 +1,5 @@
-"""test_tipo_compra.py — QUÉ SE COMPRÓ en cada comprobante (regla #640).
+"""test_tipo_compra.py — QUÉ SE COMPRÓ en cada comprobante (reglas #640
+y #673: Mercadería es lo que lleva kardex).
 
 Tres cosas, sin secrets, sin red y sin navegador:
 
@@ -58,22 +59,47 @@ def igual(got, exp, nombre):
 
 # ── 1. Las reglas sueltas ──────────────────────────────────────────────────
 print("\n── del Almacén al tipo ──")
+print("   (sin marca del maestro: por familia)")
 for fam, sub, exp in (
-    ("ALIMENTOS", "CARNES", tc.ALIMENTOS),
-    ("VINOS Y ESPUMANTES", "VINO TINTO", tc.ALIMENTOS),
-    ("ENVASES Y EMBALAJES", "ENVASE EMB. SERVICIO", tc.OTROS_BIENES),
-    ("COSTOS PRODUCCION", "Compra De Leña Y Carbón", tc.OTROS_BIENES),
+    ("ALIMENTOS", "CARNES", tc.MERCADERIA),
+    ("VINOS Y ESPUMANTES", "VINO TINTO", tc.MERCADERIA),
+    ("ENVASES Y EMBALAJES", "ENVASE EMB. SERVICIO", tc.MERCADERIA),
+    ("COSTOS PRODUCCION", "Compra De Leña Y Carbón", tc.MERCADERIA),
+    ("COSTOS PRODUCCION", "SUMINISTROS DE LIMPIEZA", tc.MERCADERIA),
     ("COSTOS PRODUCCION", "MENAJE COCINA", tc.OTROS_BIENES),   # las dos grafías
     ("COSTOS PRODUCCION", "Menaje Cocina", tc.OTROS_BIENES),
     ("GASTOS VENTAS", "Utiles De Oficina", tc.OTROS_BIENES),
     ("COSTOS PRODUCCION", "Alquiler Local", tc.SERVICIOS),
     ("COSTOS PRODUCCION", "Agua", tc.SERVICIOS),              # Servicio De Agua
     ("GASTOS ADMINISTRATIVOS", "Asesoria Contable", tc.SERVICIOS),
-    ("GASTOS ADMINISTRATIVOS", "Consumo Para El Personal", tc.ALIMENTOS),
+    ("GASTOS ADMINISTRATIVOS", "Consumo Para El Personal", tc.OTROS_BIENES),
     ("ACTIVOS FIJOS", "Hornos", None),     # familia sin regla: NO es servicio
     (None, None, None),
 ):
     igual(tc.tipo_de_linea(fam, sub), exp, f"{fam} › {sub} → {exp}")
+
+print("   (con la marca del maestro: manda el kardex)")
+for fam, sub, tp, exp in (
+    # útiles con kardex (papel, tóner): mercadería aunque la familia sea gasto
+    ("GASTOS VENTAS", "Utiles De Oficina", "MERCADERIA", tc.MERCADERIA),
+    ("ACTIVOS FIJOS", "Hornos", "MERCADERIA", tc.MERCADERIA),
+    # el menaje sin kardex sigue siendo una cosa, no un servicio
+    ("COSTOS PRODUCCION", "Menaje Cocina", "SERVICIO", tc.OTROS_BIENES),
+    # la limpieza registrada como servicio NO es mercadería
+    ("COSTOS PRODUCCION", "Suministros De Limpieza", "SERVICIO", tc.SERVICIOS),
+    ("COSTOS PRODUCCION", "Mantenimiento De Equipos", "SERVICIO", tc.SERVICIOS),
+    ("ALIMENTOS", "CARNES", " mercaderia ", tc.MERCADERIA),
+):
+    igual(tc.tipo_de_linea(fam, sub, tp), exp, f"{sub} [{tp}] → {exp}")
+
+_maestro = pd.DataFrame({
+    "CODIGO PRODUCTO": ["0001", "0001", "0002 ", None],
+    "TIPO PRODUCTO": ["MERCADERIA", "MERCADERIA", "SERVICIO", "MERCADERIA"],
+})
+igual(tc.tipos_de_producto(_maestro), {"0001": "MERCADERIA", "0002": "SERVICIO"},
+      "el maestro → {código: marca}, una vez por código y sin espacios")
+igual(tc.tipos_de_producto(pd.DataFrame({"X": [1]})), {},
+      "un maestro sin las columnas da {}")
 
 print("\n── razón social de una entidad financiera ──")
 for nombre in ("BANCO DE CREDITO DEL PERU", "Diners Club Perú S.A.",
@@ -110,6 +136,14 @@ _ALM = [
 d = pd.DataFrame(_ALM, columns=["NUM_DOCUMENTO", "INDICADOR TRIBUTARIO",
                                 "NOMBRE_PROVEEDOR", "FAMILIA", "SUBFAMILIA",
                                 "VALOR_COMPRA"])
+d["COD_PRODUCTO"] = [f"{i:04d}" for i in range(len(d))]
+# El maestro: sólo la ferretería (fila 6, repuestos) tiene kardex en su
+# línea de gasto; el resto del maestro dice lo que diría su familia.
+_TP = {f"{i:04d}": ("MERCADERIA" if fam in tc.FAMILIAS_MERCADERIA or i == 6
+                    else "SERVICIO")
+       for i, fam in enumerate(d["FAMILIA"])}
+_TP["0004"] = "MERCADERIA"   # la limpieza del supermercado, con kardex
+del _TP["0008"]   # el horno no está en el maestro: decide su familia
 d["TOTAL NETO"] = d.groupby("NUM_DOCUMENTO")["VALOR_COMPRA"].transform("sum")
 d["TOTAL IGV"] = d["TOTAL NETO"] * 0.18
 d["TOTAL DOCUMENTO"] = d["TOTAL NETO"] * 1.18
@@ -147,7 +181,7 @@ sire["situacion"] = "Registrado"
 ini, fin = pd.Timestamp("2026-09-01"), pd.Timestamp("2026-09-30")
 cruce = ds.cruzar_con_parquet(
     sire, ds._parquet_agrupado_por_documento(d, "FECHA_EMISION_DOC", ini, fin))
-out = tc.clasificar(cruce, sire, tc.tablas_almacen(d))
+out = tc.clasificar(cruce, sire, tc.tablas_almacen(d, _TP))
 
 print("\n── el cruce de mentira es el que se quiso armar ──")
 est = dict(zip(out["car"], out["estado"]))
@@ -169,52 +203,61 @@ def caso(car, tipo, frase, nombre):
        f"tipo={t!r} por={por!r} — se esperaba {tipo!r} con «{frase}»")
 
 
-caso("c1", tc.ALIMENTOS, "Cargado en el Almacén como CARNES.",
+caso("c1", tc.MERCADERIA, "Cargado en el Almacén como CARNES.",
      "documento cargado: su familia, sin porcentaje si es puro")
-caso("c2", tc.ALIMENTOS, "100 % Alimentos, sobre todo CARNES",
+caso("c2", tc.MERCADERIA, "100 % Mercadería, sobre todo CARNES",
      "sin cargar: lo que se le compra al proveedor")
 caso("c3", tc.SERVICIOS, "Alquiler Local",
      "el proveedor le GANA a la exoneración (inmobiliaria sin IGV), "
      "y con el RUC del Almacén con un espacio al final")
-caso("c4", tc.ALIMENTOS, "el 92 % del documento es Alimentos",
-     "documento mixto: dice qué parte es del tipo")
-caso("c5", tc.ALIMENTOS, "92 % Alimentos",
-     "supermercado al 92 %: pasa el umbral de 90 % y lo dice")
-caso("c6", "", "no tiene un tipo claro",
-     "proveedor al 85 % y factura con IGV: sin tipo")
-caso("c7", tc.ALIMENTOS, "Toda la factura va sin IGV",
-     "proveedor al 85 % y factura exonerada: la exoneración decide")
+caso("c4", tc.MERCADERIA, "Cargado en el Almacén como ABARROTES.",
+     "supermercado con la limpieza CON kardex: el documento entero es "
+     "mercadería")
+caso("c5", tc.MERCADERIA, "100 % Mercadería",
+     "el supermercado entero es mercadería")
+caso("c6", tc.MERCADERIA, "100 % Mercadería",
+     "la ferretería: sus repuestos llevan kardex, así que el proveedor es "
+     "mercadería entero (antes: 85 % comida, sin tipo)")
+caso("c7", tc.MERCADERIA, "100 % Mercadería",
+     "y su factura exonerada también, por el proveedor")
 caso("c8", tc.FINANCIERO, "razón social",
      "el banco factura sin IGV y NO es comida")
 caso("c9", tc.FINANCIERO, "Documentos emitidos por Adquiriente",
      "el tipo de comprobante 30 es financiero, aunque el nombre no lo diga")
 caso("c10", "", "no tiene un tipo claro", "proveedor nuevo con IGV: sin tipo")
-caso("c11", tc.ALIMENTOS, "Toda la factura va sin IGV",
-     "proveedor nuevo exonerado: Alimentos")
-caso("c12", tc.ALIMENTOS, "Toda la factura va sin IGV",
+caso("c11", tc.MERCADERIA, "Toda la factura va sin IGV",
+     "proveedor nuevo exonerado: Mercadería")
+caso("c12", tc.MERCADERIA, "Toda la factura va sin IGV",
      "una NOTA exonerada (montos negativos) también")
 caso("c13", "", "no tiene un tipo claro",
      "familia sin regla: ni el documento ni el proveedor dicen «Servicios»")
 _ss = out[(out["estado"] == "Solo sistema")
           & (out["documento_sistema"] == "F0F003000000009")]
-ok(len(_ss) == 1 and _ss["tipo"].iloc[0] == tc.OTROS_BIENES
+ok(len(_ss) == 1 and _ss["tipo"].iloc[0] == tc.MERCADERIA
    and "ENVASE EMB. PRODUCCION" in _ss["tipo_por"].iloc[0],
-   "«Solo sistema»: el tipo de su documento en el Almacén",
+   "«Solo sistema»: el tipo de su documento en el Almacén (envases: "
+   "mercadería)",
    f"{_ss[['tipo', 'tipo_por']].to_dict('records')}")
 ok(set(out["tipo"]) <= set(tc.TIPOS) | {""}, "sólo salen los cuatro tipos o vacío")
 ok(len(out) == len(cruce) and list(out.columns[:len(cruce.columns)])
    == list(cruce.columns), "clasificar sólo AGREGA dos columnas al cruce")
 
 print("\n── sin datos ──")
-ok(tc.clasificar(cruce.iloc[0:0], sire, tc.tablas_almacen(d)).empty,
+ok(tc.clasificar(cruce.iloc[0:0], sire, tc.tablas_almacen(d, _TP)).empty,
    "un cruce vacío sale vacío")
+_sin_maestro = tc.clasificar(cruce, sire, tc.tablas_almacen(d))
+_t0 = dict(zip(_sin_maestro["car"], _sin_maestro["tipo"]))
+ok(_t0.get("c4") == tc.MERCADERIA and _t0.get("c6") == "",
+   "sin maestro sale por familia: el supermercado (abarrotes + limpieza) "
+   "sigue mercadería, y la ferretería con repuestos queda sin tipo",
+   f"c4={_t0.get('c4')!r} c6={_t0.get('c6')!r}")
 _vacias = tc.tablas_almacen(pd.DataFrame({"FAMILIA": ["ALIMENTOS"]}))
 ok(_vacias == {"proveedores": {}, "documentos": {}},
    "un Almacén sin las columnas (modo demo) no revienta: tablas vacías")
 _sin_alm = tc.clasificar(cruce, sire, _vacias)
-ok(dict(zip(_sin_alm["car"], _sin_alm["tipo"])).get("c3") == tc.ALIMENTOS,
+ok(dict(zip(_sin_alm["car"], _sin_alm["tipo"])).get("c3") == tc.MERCADERIA,
    "sin Almacén queda lo que dice SUNAT: la inmobiliaria exonerada sale "
-   "Alimentos (por eso el proveedor va antes)")
+   "Mercadería (por eso el proveedor va antes)")
 
 
 # ── 3. El cableado ─────────────────────────────────────────────────────────
@@ -237,6 +280,12 @@ ok(_llama("_tablas_tipo", "tablas_almacen")
    and "tipo_compra.VERSION" in ast.unparse(_funcs["renderizar_documentos_sunat"]),
    "la tabla del Almacén se cachea con la versión de las reglas",
    "sin VERSION en la clave, cambiar una regla sirve la tabla vieja una hora")
+ok(_llama("_tablas_tipo", "tipos_de_producto")
+   and "sello_datos('inventariovalorizado.parquet')"
+   in ast.unparse(_funcs["renderizar_documentos_sunat"]),
+   "la tabla lee el kardex del maestro y lo lleva en la clave de la caché",
+   "sin el sello del maestro, un producto que pasa a tener kardex no "
+   "cambia de tipo hasta que caduque la caché")
 _tabla = ast.unparse(_funcs.get("_tabla_documentos", ast.Module(body=[])))
 ok("'Tipo'" in _tabla and "tooltipField='_tipo_por'" in _tabla,
    "la tabla muestra «Tipo» con su motivo de tooltip")

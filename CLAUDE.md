@@ -1071,14 +1071,17 @@ sirve las compras como antes.
   devueltas ENTERAS (las que `data.cargar` borra). Un número de nota se
   repite entre proveedores: se cruza por número Y proveedor. Regla #628.
 
-**Qué se compró —Alimentos, Otros bienes, Servicios, Financiero— no lo
-dice SUNAT** (2026-10-11, regla #640). El SIRE tiene el casillero pero lo
+**Qué se compró —Mercadería, Otros bienes, Servicios, Financiero— no lo
+dice SUNAT** (2026-10-11, regla #640). **Mercadería es lo que lleva
+KARDEX** (regla #673): el `TIPO PRODUCTO` del maestro
+(`inventariovalorizado.parquet`) por código —comida, bebidas, vinos,
+envases, leña, limpieza—, y la familia sólo si el código no está. El SIRE tiene el casillero pero lo
 llena el comprador (vacío), y el código de producto del XML viene en el
 15 % de las líneas. La columna «Tipo» de «Documentos SUNAT» sale de
 `tipo_compra.py`, en un orden MEDIDO: entidad financiera primero (los
 bancos facturan sin IGV y si no saldrían comida), después el documento en
 el Almacén, el proveedor (≥ 90 % de un tipo) y recién al final «toda la
-factura sin IGV» → Alimentos. Tocar una regla es subir
+factura sin IGV» → Mercadería. Tocar una regla es subir
 `tipo_compra.VERSION`.
 
 Los otros reportes de compras del Almacén y qué cuenta cada uno (los tres de

@@ -1,5 +1,13 @@
-"""tipo_compra.py — QUÉ SE COMPRÓ en cada comprobante: Alimentos, Otros
-bienes, Servicios o Financiero. Regla #640.
+"""tipo_compra.py — QUÉ SE COMPRÓ en cada comprobante: Mercadería, Otros
+bienes, Servicios o Financiero. Reglas #640 y #673.
+
+**Mercadería es lo que tiene KARDEX** (2026-10-19, regla #673, a pedido:
+«alimentos, bebidas, vinos, envases, limpieza: cosas que manejen
+kardex»). Hasta ese día era «Alimentos» —las familias de comida y bebida—
+y dejaba en «Otros bienes» los envases, la leña y la limpieza, que entran
+al Almacén y se descargan igual. La marca es la del maestro del POS
+(`TIPO PRODUCTO` de `inventariovalorizado.parquet`: MERCADERIA o
+SERVICIO), por código de producto; sin código en el maestro, la familia.
 
 Lo usa la columna «Tipo» de «Documentos SUNAT». Puro pandas, sin Streamlit
 ni red, como `definicion_compra.py`: lo vigila `test_tipo_compra.py`.
@@ -17,12 +25,12 @@ sobre las 13.843 facturas del SIRE que también están en el Almacén:
 
 1. **Entidad financiera** (`es_entidad_financiera`, los tipos 30 y 42):
    va PRIMERO porque bancos, cajas y aseguradoras facturan SIN IGV — el
-   BCP, 419 de sus 429 comprobantes — y la regla 4 los llamaría comida.
+   BCP, 419 de sus 429 comprobantes — y la regla 4 los llamaría mercadería.
 2. **El documento ya está en el Almacén**: su familia, que es la verdad.
 3. **El proveedor**: lo que se le compró antes, si es ≥ 90 % de un tipo
    (`PUREZA_PROVEEDOR`). Acierta el 97,3 %, medido SIN contar el
    documento evaluado, que es lo que le pasa a un «Solo SUNAT».
-4. **Factura toda exonerada de IGV** → Alimentos (verdura, fruta,
+4. **Factura toda exonerada de IGV** → Mercadería (verdura, fruta,
    pescado: el Apéndice I de la ley del IGV). Acierta el 98,3 % sola, pero
    va DESPUÉS del proveedor: en las 60 facturas donde los dos discrepan,
    el proveedor acierta el 95 % y la exoneración el 2 % (BBVA, una
@@ -44,65 +52,97 @@ import pandas as pd
 
 from utils import _norm
 
-VERSION = 1
+VERSION = 2
 """Sube cuando cambia QUÉ tipo sale (las listas de abajo, el umbral, el
 orden): va en la clave de la caché de la vista."""
 
-ALIMENTOS = "Alimentos"
+MERCADERIA = "Mercadería"
 OTROS_BIENES = "Otros bienes"
 SERVICIOS = "Servicios"
 FINANCIERO = "Financiero"
-TIPOS = (ALIMENTOS, OTROS_BIENES, SERVICIOS, FINANCIERO)
+TIPOS = (MERCADERIA, OTROS_BIENES, SERVICIOS, FINANCIERO)
+
+TIPO_PRODUCTO_KARDEX = "MERCADERIA"
+"""El valor de `TIPO PRODUCTO` (maestro del POS) de un artículo con kardex.
+El otro es SERVICIO. Medido el 2026-10-19: 3.663 códigos MERCADERIA y 236
+SERVICIO, ninguno con las dos marcas en áreas distintas."""
 
 # ── El Almacén → tipo ──────────────────────────────────────────────────────
-# Las familias del maestro de productos (`compras.parquet`, FAMILIA). Las
-# tres de gasto mezclan bienes y servicios —COSTOS PRODUCCION trae el
-# alquiler, la luz y la leña—, así que ahí decide la SUBFAMILIA.
-FAMILIAS_ALIMENTOS = ("ALIMENTOS", "BEBIDAS CON ALCOHOL",
-                      "BEBIDAS SIN ALCOHOL", "VINOS Y ESPUMANTES")
-FAMILIAS_BIENES = ("ENVASES Y EMBALAJES",)
+# Primero manda el maestro (`TIPO PRODUCTO`, ver `tipo_de_linea`). Las
+# familias son el RESPALDO para un código que el maestro no tiene. Las tres
+# de gasto mezclan de todo —COSTOS PRODUCCION trae el alquiler, la luz y la
+# leña—, así que ahí decide la SUBFAMILIA.
+FAMILIAS_MERCADERIA = ("ALIMENTOS", "BEBIDAS CON ALCOHOL",
+                       "BEBIDAS SIN ALCOHOL", "VINOS Y ESPUMANTES",
+                       "ENVASES Y EMBALAJES")
 FAMILIAS_GASTO = ("COSTOS PRODUCCION", "GASTOS ADMINISTRATIVOS",
                   "GASTOS VENTAS")
 
+SUBFAMILIAS_MERCADERIA = ("Compra De Leña Y Carbón", "Suministros De Limpieza")
+"""Las subfamilias de gasto que en el maestro son MERCADERIA casi enteras
+(12 meses a oct 2026: leña S/ 135.661 contra 153, limpieza 45.735 contra
+21). Sólo cuentan cuando el código no está en el maestro."""
+
 SUBFAMILIAS_BIENES = (
     "Activos Menores 1/4 Uit", "Articulos De Botiquin",
-    "Compra De Leña Y Carbón", "Gas Licuado", "Gastos De Adornos",
-    "Menaje Cocina", "Menaje Salon", "Suministros De Limpieza",
-    "Suministros Y Repuestos Varios", "Uniformes", "Utiles De Oficina",
+    "Consumo Para El Personal", "Gas Licuado", "Gastos De Adornos",
+    "Menaje Cocina", "Menaje Salon", "Suministros Y Repuestos Varios",
+    "Uniformes", "Utiles De Oficina",
 )
-"""Las subfamilias de las familias de gasto que son COSAS. Las demás son
-servicios: alquiler, luz, agua (`Servicio De Agua`), mantenimiento,
-movilidad, asesorías, comisiones, publicidad, copias. «Uniformes» es en su
-mayoría mandiles y polos, con algún servicio de confección adentro."""
+"""Las subfamilias de gasto que son COSAS, aunque no lleven kardex: van a
+«Otros bienes». Las demás son servicios: alquiler, luz, agua (`Servicio De
+Agua`), mantenimiento, movilidad, asesorías, comisiones, publicidad,
+copias. «Uniformes» es en su mayoría mandiles y polos; «Consumo Para El
+Personal», bocaditos y vino que el maestro registra como SERVICIO."""
 
-SUBFAMILIAS_ALIMENTOS = ("Consumo Para El Personal",)
-"""Comida para el personal (bocaditos, vino) que el Almacén guarda en
-GASTOS ADMINISTRATIVOS."""
-
-_FAM_ALIM = {_norm(f) for f in FAMILIAS_ALIMENTOS}
-_FAM_BIEN = {_norm(f) for f in FAMILIAS_BIENES}
+_FAM_MERC = {_norm(f) for f in FAMILIAS_MERCADERIA}
 _FAM_GASTO = {_norm(f) for f in FAMILIAS_GASTO}
+_SUB_MERC = {_norm(s) for s in SUBFAMILIAS_MERCADERIA}
 _SUB_BIEN = {_norm(s) for s in SUBFAMILIAS_BIENES}
-_SUB_ALIM = {_norm(s) for s in SUBFAMILIAS_ALIMENTOS}
 
 
-def tipo_de_linea(familia, subfamilia):
-    """El tipo de una línea del Almacén, o None si su familia no tiene
-    regla. Una familia nueva NO cae en «Servicios» por descarte: queda sin
-    tipo y el documento pasa a las reglas siguientes."""
+def tipo_de_linea(familia, subfamilia, tipo_producto=None):
+    """El tipo de una línea del Almacén, o None si no hay con qué decirlo.
+
+    `tipo_producto` es el `TIPO PRODUCTO` del maestro para el código de la
+    línea (MERCADERIA / SERVICIO), o None si el maestro no lo tiene:
+
+      · MERCADERIA → Mercadería, sea cual sea la familia (tiene kardex).
+      · SERVICIO → Otros bienes si su subfamilia es una cosa
+        (`SUBFAMILIAS_BIENES`), si no Servicios.
+      · Sin marca → por familia: las de `FAMILIAS_MERCADERIA` y las
+        subfamilias de `SUBFAMILIAS_MERCADERIA` son Mercadería, y en las de
+        gasto decide la subfamilia. Una familia nueva NO cae en «Servicios»
+        por descarte: queda sin tipo y el documento pasa a las reglas
+        siguientes."""
     fam = _norm(familia or "")
-    if fam in _FAM_ALIM:
-        return ALIMENTOS
-    if fam in _FAM_BIEN:
-        return OTROS_BIENES
+    sub = _norm(subfamilia or "")
+    marca = str(tipo_producto or "").strip().upper()
+    if marca == TIPO_PRODUCTO_KARDEX:
+        return MERCADERIA
+    if marca:
+        return OTROS_BIENES if sub in _SUB_BIEN else SERVICIOS
+    if fam in _FAM_MERC:
+        return MERCADERIA
     if fam in _FAM_GASTO:
-        sub = _norm(subfamilia or "")
+        if sub in _SUB_MERC:
+            return MERCADERIA
         if sub in _SUB_BIEN:
             return OTROS_BIENES
-        if sub in _SUB_ALIM:
-            return ALIMENTOS
         return SERVICIOS
     return None
+
+
+def tipos_de_producto(maestro):
+    """`{código: TIPO PRODUCTO}` del maestro (`inventariovalorizado.parquet`,
+    una fila por producto y área). Vacío si no trae las columnas."""
+    cols = ("CODIGO PRODUCTO", "TIPO PRODUCTO")
+    if maestro is None or getattr(maestro, "empty", True) or any(
+            c not in maestro.columns for c in cols):
+        return {}
+    m = maestro[list(cols)].dropna().drop_duplicates("CODIGO PRODUCTO")
+    return dict(zip(m["CODIGO PRODUCTO"].astype(str).str.strip().tolist(),
+                    m["TIPO PRODUCTO"].astype(str).str.strip().tolist()))
 
 
 PUREZA_PROVEEDOR = 0.90
@@ -147,22 +187,31 @@ def es_entidad_financiera(razon_social):
 
 
 # ── Las dos tablas que salen del Almacén ───────────────────────────────────
-def _con_tipo(d):
+def _con_tipo(d, tipos_producto=None):
     """Las líneas de `d` con su tipo (`_tipo`), su peso (`_v`, el valor
     absoluto: una nota no resta peso) y el RUC limpio (`_ruc`). Vacío si al
-    parquet le faltan las columnas (el modo demo no trae RUC)."""
+    parquet le faltan las columnas (el modo demo no trae RUC).
+    `tipos_producto` es `tipos_de_producto(maestro)`."""
     cols = ("FAMILIA", "SUBFAMILIA", "VALOR_COMPRA", "INDICADOR TRIBUTARIO",
             "NUM_DOCUMENTO", "NOMBRE_PROVEEDOR")
     if d is None or d.empty or any(c not in d.columns for c in cols):
         return pd.DataFrame(columns=[*cols, "_tipo", "_v", "_ruc"])
-    # Por PAR (familia, subfamilia) y con un `merge`, nunca recorriendo las
-    # filas: son ~150 pares contra ~53.000 líneas, y con el texto en Arrow
-    # (pandas 3) iterar una columna fila por fila costaba 2 s (medido).
-    pares = d[["FAMILIA", "SUBFAMILIA"]].drop_duplicates()
+    x = d[list(cols)].copy()
+    # La marca del maestro por código; sin código o sin maestro, vacía.
+    x["_tp"] = ""
+    if tipos_producto and "COD_PRODUCTO" in d.columns:
+        x["_tp"] = (d["COD_PRODUCTO"].astype(str).str.strip()
+                    .map(tipos_producto).fillna("").astype(str).values)
+    # Por TERNA (familia, subfamilia, marca) y con un `merge`, nunca
+    # recorriendo las filas: son ~200 ternas contra ~53.000 líneas, y con el
+    # texto en Arrow (pandas 3) iterar una columna fila por fila costaba 2 s.
+    llave = ["FAMILIA", "SUBFAMILIA", "_tp"]
+    pares = x[llave].drop_duplicates()
     pares = pares.assign(_tipo=[
-        tipo_de_linea(f, s) for f, s in
-        zip(pares["FAMILIA"].tolist(), pares["SUBFAMILIA"].tolist())])
-    x = d[list(cols)].merge(pares, on=["FAMILIA", "SUBFAMILIA"], how="left")
+        tipo_de_linea(f, s, t) for f, s, t in
+        zip(pares["FAMILIA"].tolist(), pares["SUBFAMILIA"].tolist(),
+            pares["_tp"].tolist())])
+    x = x.merge(pares, on=llave, how="left")
     x["_v"] = pd.to_numeric(x["VALOR_COMPRA"], errors="coerce").abs().fillna(0)
     x["_ruc"] = x["INDICADOR TRIBUTARIO"].fillna("").astype(str).str.strip()
     return x[x["_tipo"].notna()]
@@ -201,7 +250,7 @@ agrupa el cruce (`_parquet_agrupado_por_documento`), que vuelve en
 `documento_sistema`, `ruc_sistema` y `proveedor_sistema`."""
 
 
-def tablas_almacen(d):
+def tablas_almacen(d, tipos_producto=None):
     """Lo que el historial del Almacén sabe de cada proveedor y de cada
     documento, en DOS diccionarios `{clave: (tipo, parte, subfamilia)}`:
 
@@ -209,8 +258,9 @@ def tablas_almacen(d):
       · `documentos` — por `CLAVE_DOCUMENTO`, el tipo que más pesa.
 
     Es lo caro (medio segundo con 53.000 líneas) y no depende del rango:
-    la vista lo cachea por el sello del parquet."""
-    x = _con_tipo(d)
+    la vista lo cachea por el sello del parquet. `tipos_producto` es
+    `tipos_de_producto(maestro)`: sin él, todo sale por familia."""
+    x = _con_tipo(d, tipos_producto)
     prov = _dominante(x, ["_ruc"])
     prov = prov[(prov["_ruc"] != "") & (prov["parte"] >= PUREZA_PROVEEDOR)]
     docs = _dominante(x, list(CLAVE_DOCUMENTO))
@@ -234,7 +284,7 @@ def _sin_igv(s):
 def clasificar(df_cruce, df_sire, tablas):
     """`df_cruce` (el de `cruzar_con_parquet`) con dos columnas más:
 
-      · `tipo` — Alimentos / Otros bienes / Servicios / Financiero, o ""
+      · `tipo` — Mercadería / Otros bienes / Servicios / Financiero, o ""
         si ninguna regla contesta.
       · `tipo_por` — de dónde sale, en una frase: es el tooltip de la celda,
         así que se escribe para leerse.
@@ -293,9 +343,9 @@ def clasificar(df_cruce, df_sire, tablas):
             t = (tp, f"Lo que se le compra a este proveedor es {_pct(parte)} "
                      f"{tp}, sobre todo {sub} (Almacén).")
         elif s and _sin_igv(s):
-            t = (ALIMENTOS, "Toda la factura va sin IGV, como las verduras, "
-                            "frutas y pescados. El Almacén no tiene un tipo "
-                            "claro para este proveedor.")
+            t = (MERCADERIA, "Toda la factura va sin IGV, como las "
+                             "verduras, frutas y pescados. El Almacén no "
+                             "tiene un tipo claro para este proveedor.")
         else:
             t = ("", _sin_tipo)
         tipos.append(t[0])

@@ -1194,8 +1194,13 @@ def _tablas_tipo(sello, version, _d):
     (`tipo_compra.tablas_almacen`): medio segundo con 53.000 líneas y no
     depende del rango, así que se calcula una vez por versión del parquet.
     `version` es `tipo_compra.VERSION`: cambiar las reglas no sirve una
-    tabla vieja. Regla #640."""
-    return tipo_compra.tablas_almacen(_d)
+    tabla vieja. `sello` lleva también el del maestro, de donde sale qué
+    producto tiene kardex (`TIPO PRODUCTO`, regla #673). Regla #640."""
+    import data
+
+    maestro = data.cargar("inventariovalorizado.parquet")
+    return tipo_compra.tablas_almacen(
+        _d, tipo_compra.tipos_de_producto(maestro))
 
 
 def _tabla_documentos(df_cruce, df_sire):
@@ -1218,8 +1223,8 @@ def _tabla_documentos(df_cruce, df_sire):
 
     LAS OCHO, y por qué no son más (NUEVE desde el 2026-10-11, con «Tipo»):
       · Fecha, Documento, Proveedor — la identidad.
-      · Tipo — QUÉ se compró: Alimentos, Otros bienes, Servicios o
-        Financiero (`tipo_compra.py`, regla #640). No es el tipo de
+      · Tipo — QUÉ se compró: Mercadería, Otros bienes, Servicios o
+        Financiero (`tipo_compra.py`, reglas #640 y #673). No es el tipo de
         comprobante, que sigue siendo un chip.
       · Base, IGV, Total — el dinero, con la segunda línea de
         `_JS_IMPORTE` cuando el sistema dice otra cosa.
@@ -1363,7 +1368,8 @@ def _tabla_documentos(df_cruce, df_sire):
     # El tooltip es el motivo; la raya de «sin tipo», en gris.
     gb.configure_column(
         "Tipo", width=88, minWidth=88, tooltipField="_tipo_por",
-        headerTooltip="Qué se compró: Alimentos, Otros bienes, Servicios o "
+        headerTooltip="Qué se compró: Mercadería (lo que lleva kardex), "
+                      "Otros bienes, Servicios o "
                       "Financiero. SUNAT no lo informa: sale de cómo está "
                       "cargado en el Almacén, de lo que se le compra a ese "
                       "proveedor y de si la factura va sin IGV. El cursor "
@@ -3887,8 +3893,9 @@ _SIN_TIPO = "Sin clasificar"
 
 def _panel_por_tipo(resumen):
     """«Por tipo de compra»: lo del período agrupado por QUÉ se compró
-    —Alimentos, Otros bienes, Servicios, Financiero (`tipo_compra.py`,
-    regla #640)— y, en cada tipo, la misma barra de fidelidad que el
+    —Mercadería (lo que tiene kardex), Otros bienes, Servicios, Financiero
+    (`tipo_compra.py`, reglas #640 y #673)— y, en cada tipo, la misma
+    barra de fidelidad que el
     «Resumen del cruce». 2026-10-19, a pedido. Regla #672.
 
     Una fila por tipo y no una torta: lo que se compró de cada uno se lee
@@ -4789,14 +4796,15 @@ def renderizar_documentos_sunat(d, col_fecha):
             g_pq = _parquet_agrupado_por_documento(
                 d, col_fecha, f_ini, f_fin, notas=data.notas_credito_compras())
             df_cruce = cruzar_con_parquet(vis, g_pq)
-            # «Tipo»: qué se compró (Alimentos, Otros bienes, Servicios,
+            # «Tipo»: qué se compró (Mercadería, Otros bienes, Servicios,
             # Financiero). Se agrega ANTES de los filtros para que viaje
             # también al Excel. El SIRE no lo dice: sale del Almacén y de
             # dos señales del registro, en el orden de `tipo_compra.py`.
             # Regla #640.
             df_cruce = tipo_compra.clasificar(
                 df_cruce, vis,
-                _tablas_tipo(data.sello_datos(definicion_compra.ARCHIVO),
+                _tablas_tipo((data.sello_datos(definicion_compra.ARCHIVO),
+                              data.sello_datos("inventariovalorizado.parquet")),
                              tipo_compra.VERSION, d))
 
             # EL FILTRO DE PROVEEDOR VA ACÁ, sobre el cruce ya armado, y no

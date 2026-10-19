@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-672 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+673 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -759,7 +759,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 - **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
 
-**Datos, R2 y DuckDB** (105)
+**Datos, R2 y DuckDB** (106)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -866,6 +866,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#665** — Lo que el banco devuelve de un descuento de convenio: una tabla editable en Costos, guardada…
 - **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
 - **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
+- **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
 
 **SUNAT y SIRE** (60)
 
@@ -1001,7 +1002,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (191)
+**Decisiones de diseño y UX** (192)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1194,6 +1195,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
 - **#671** — «Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada receta base, quién y cuánto…
 - **#672** — Documentos SUNAT: la tarjeta de abajo ABRE en la fidelidad, y suma «Por tipo de compra»…
+- **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -52620,7 +52622,8 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        período entero. Es un DEFAULT: lo elegido después sigue en
        `sunat_graf_modo__eco`.
      - **«Por tipo de compra» es la barra de fidelidad con una fila por
-       tipo** (Alimentos, Otros bienes, Servicios, Financiero de
+       tipo** (Mercadería —Alimentos hasta la #673—, Otros bienes,
+       Servicios, Financiero de
        `tipo_compra.TIPOS`, y «Sin clasificar» al final), no una torta: el
        renglón dice cuánto se compró de ese tipo y su %, la barra cuánto
        de eso está cargado. `_barras_fidelidad` acepta filas que no son
@@ -52636,6 +52639,43 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-19.)
 
+673. **«Mercadería» es lo que lleva KARDEX, no «Alimentos»
+     (`tipo_compra.py`, `VERSION` 1 → 2).** 2026-10-19, a pedido: «que
+     considere alimentos, bebidas, vinos, envases, limpieza: cosas que
+     manejen kardex». Reemplaza al tipo «Alimentos» de la #640, que eran
+     las cuatro familias de comida y bebida y dejaba en «Otros bienes» los
+     envases, la leña y la limpieza, que entran al Almacén y se descargan
+     igual.
+
+     - **La marca es la del maestro, por código**: `TIPO PRODUCTO` de
+       `inventariovalorizado.parquet` (MERCADERIA / SERVICIO,
+       `tipo_compra.tipos_de_producto`). Medido el mismo día: 3.663
+       códigos MERCADERIA y 236 SERVICIO, NINGUNO con las dos marcas en
+       áreas distintas, y las 12.892 líneas de compras de 12 meses tienen
+       su código en el maestro. `compras.parquet` no trae la marca: la
+       cruza `_con_tipo` por `COD_PRODUCTO`.
+     - **Con marca SERVICIO no es automáticamente un servicio**: si la
+       subfamilia es una cosa (`SUBFAMILIAS_BIENES`: menaje, uniformes,
+       botiquín, activos menores, consumo del personal) va a «Otros
+       bienes» — bienes SIN kardex. Una limpieza registrada como servicio
+       sí sale Servicios: manda el kardex.
+     - **Sin marca, la familia** (respaldo): las cuatro de comida y bebida
+       más ENVASES Y EMBALAJES, y en las de gasto la leña y la limpieza
+       (`SUBFAMILIAS_MERCADERIA`, casi enteras con kardex: S/ 135.661
+       contra 153 y 45.735 contra 21). Medido: con o sin maestro la
+       Mercadería del Almacén da casi lo mismo (S/ 1,797 M contra 1,794 M);
+       lo que mueve el maestro son los útiles y el menaje con kardex.
+     - **La caché de la vista lleva el sello del maestro**
+       (`_tablas_tipo`): un producto que cambia de marca no espera a que
+       caduque la tabla. Lo vigila `test_tipo_compra.py`.
+     - **El primer día**, 12 meses sobre SUNAT: Mercadería 50,7 % (S/ 2,21 M,
+       85,9 % cargado y cuadra) donde Alimentos era 44,3 %; Otros bienes
+       cae del 7,0 % al 0,2 %. «Sin clasificar» pasa del 6,4 % al 6,7 %
+       (S/ 17 K): proveedores que dejaron de llegar al 90 % de un tipo; no
+       se midió cuáles.
+
+     (2026-10-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52648,7 +52688,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#672**; la próxima toma el número siguiente.
+> última regla es la **#673**; la próxima toma el número siguiente.
 
 >
 
