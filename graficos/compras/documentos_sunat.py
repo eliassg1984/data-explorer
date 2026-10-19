@@ -81,6 +81,7 @@ import html
 import io
 import json
 import re
+import time
 import unicodedata
 
 import pandas as pd
@@ -1271,7 +1272,8 @@ def _tabla_documentos(df_cruce, df_sire):
     # Los XML que ya están en R2, en UN listado (ver
     # `sunat.claves_xml_en_r2`). La key se arma con la MISMA función que usa
     # el sync que los sube, así que no hay forma de que difieran en el nombre.
-    _xml_en_r2 = sunat.claves_xml_en_r2()
+    _xml_en_r2 = (sunat.claves_xml_en_r2()
+                  | st.session_state.get(_K_XML_LLEGADOS, frozenset()))
 
     filas = []
     # Diccionarios y no `iterrows()`, como en `cruzar_con_parquet` (#589).
@@ -3492,7 +3494,15 @@ def _ficha_sunat(doc):
         nombres.append(f"📋 Detalle ({len(lineas)})")
     if xml_original:
         nombres.append("🧾 XML")
-    if not (pdf_original or xml_original):
+    pendiente = not (pdf_original or xml_original) and _en_espera(doc)
+    if pendiente:
+        # EL PEDIDO EN CURSO VA ARRIBA DE LAS PESTAÑAS, no adentro de
+        # «Original»: cada corrida completa devuelve la ficha a «Datos», y
+        # ahí el aviso —y su vigilante— quedaban escondidos (medido el
+        # 2026-10-19, regla #674).
+        _pedir_original(doc)
+        nombres.append("⏳ Original")
+    elif not (pdf_original or xml_original):
         # La ETIQUETA cambia cuando el último pedido falló: con el rótulo
         # de siempre («⬇ Original», que invita a bajar algo) el usuario se
         # queda en «Datos» esperando un archivo que ya se sabe que no va a
@@ -3528,6 +3538,9 @@ def _ficha_sunat(doc):
             elif nombre.startswith("🧾"):
                 st.code(xml_original.decode("utf-8", errors="replace"),
                         language="xml", height=_ALTO_DETALLE_FICHA)
+            elif pendiente:
+                st.caption("El pedido está en curso (arriba): esta ficha se "
+                           "completa sola cuando llegue el original.")
             else:
                 _pedir_original(doc)
 
@@ -4365,6 +4378,120 @@ def _ficha_modal(doc):
                                   on_dismiss=_cerrar_ficha)(_contenido))()
 
 
+_K_ESPERA_ORIGINAL = "sunat_espera_original"
+"""`{clave_solicitud: time.time() de cuando se empezó a esperar}`: los
+pedidos de original que la ficha está esperando en esta sesión. Una
+entrada vencida (más vieja que `_ESPERA_TOPE_S`) se QUEDA, para que volver
+a abrir la ficha no reinicie la espera sola: la reinicia el botón «Ver si
+ya llegó» o un pedido nuevo. Regla #674."""
+
+_ESPERA_CADA_S = 4
+"""Cada cuánto mira la ficha si el original ya llegó: el mismo tic que
+`app.py::_vigilar_refresco`."""
+
+_ESPERA_TOPE_S = 150
+"""Cuánto espera la ficha sola. El pedido suele atenderse en menos de un
+minuto; más allá, lo probable es que la máquina local esté apagada o que
+SUNAT no conteste, y un fragment que tictaquea sin fin vence la caché de
+mensajes del navegador (regla #474)."""
+
+
+def _inicio_espera(doc, reiniciar=False):
+    """Desde cuándo se espera el original de `doc` (y lo anota si no)."""
+    esperas = st.session_state.setdefault(_K_ESPERA_ORIGINAL, {})
+    clave = sunat.clave_solicitud(doc)
+    if reiniciar:
+        esperas.pop(clave, None)
+    return esperas.setdefault(clave, time.time())
+
+
+def _en_espera(doc):
+    """¿Hay un pedido de original de `doc` en curso? La señal en R2, o una
+    espera de esta sesión todavía dentro del tope y sin marca de fallo: la
+    máquina local borra la señal al tomar el pedido, antes de subir el
+    archivo, y en ese hueco la ficha no puede volver a ofrecer «Traer»."""
+    if sunat.solicitud_pendiente(doc):
+        return True
+    inicio = st.session_state.get(_K_ESPERA_ORIGINAL, {}).get(
+        sunat.clave_solicitud(doc))
+    return (inicio is not None and time.time() - inicio <= _ESPERA_TOPE_S
+            and not sunat.fallo_solicitud(doc))
+
+
+_K_XML_LLEGADOS = "sunat_xml_llegados"
+"""Las keys de R2 de los XML que llegaron en ESTA sesión por un pedido de la
+ficha. La tabla las suma a `sunat.claves_xml_en_r2()` para poner el ✓ sin
+volver a listar R2 entero: ese listado tarda 21,8 s desde la laptop (5.138
+XML, medido el 2026-10-19), y vaciarlo en cada llegada se pagaba en la
+corrida que redibuja la ficha. Regla #674."""
+
+
+def _marcar_llegado(doc, xml):
+    if xml:
+        st.session_state[_K_XML_LLEGADOS] = (
+            st.session_state.get(_K_XML_LLEGADOS, frozenset())
+            | {sunat.claves_original(doc)[1]})
+
+
+def _terminar_espera(doc):
+    st.session_state.get(_K_ESPERA_ORIGINAL, {}).pop(
+        sunat.clave_solicitud(doc), None)
+
+
+@una_vez_por_corrida
+@st.fragment(run_every=_ESPERA_CADA_S)
+def _esperar_original(doc):
+    """El vigilante de un pedido de original, DENTRO de la ficha: cada
+    `_ESPERA_CADA_S` segundos pregunta a R2 si llegó el PDF/XML, si el
+    pedido falló o si se atendió sin archivo. Con cualquiera de las tres,
+    una corrida completa redibuja la ficha —ya con «Comprobante», «Detalle»
+    y «XML»— y el ✓ de la columna «XML» de la tabla (por
+    `_K_XML_LLEGADOS`, sin volver a listar R2).
+
+    Hasta el 2026-10-19 la ficha decía «Volvé a entrar al documento en un
+    rato»: nada volvía a mirar R2 mientras el usuario no tocara algo, y
+    había que cerrar la ficha y abrirla de nuevo. Regla #674.
+
+    Existe SÓLO mientras hay un pedido pendiente y por `_ESPERA_TOPE_S`
+    como mucho, igual que `app.py::_vigilar_refresco`: un `run_every` que
+    tictaquea siempre le vence al navegador la caché de mensajes y se come
+    clics (regla #474). Al vencer, una corrida completa lo desmonta y queda
+    el botón «Ver si ya llegó». `una_vez_por_corrida` porque es un fragment
+    adentro de otro (la modal, regla #456)."""
+    clave = sunat.clave_solicitud(doc)
+    inicio = st.session_state.get(_K_ESPERA_ORIGINAL, {}).get(clave)
+    if inicio is None:
+        return
+    sunat.refrescar_original(doc)
+    pdf, xml = sunat.originales(doc)
+    # Que la señal del pedido desaparezca NO es el final: la máquina local
+    # la borra al TOMAR el pedido, unos segundos antes de subir el archivo
+    # (medido: 60 s después del pedido la señal ya no estaba y el XML llegó
+    # a los ~115). Sólo terminan la espera el original o la marca de fallo.
+    if pdf or xml or sunat.fallo_solicitud(doc):
+        _terminar_espera(doc)
+        _marcar_llegado(doc, xml)
+        st.rerun(scope="app")
+    if time.time() - inicio > _ESPERA_TOPE_S:
+        st.rerun(scope="app")
+    st.caption(f"Esperando el original… {int(time.time() - inicio)} s")
+
+
+def _boton_ver_si_llego(doc):
+    """El respaldo de la espera: mirar AHORA si llegó, sin cerrar la ficha.
+    Una corrida completa y no sólo la de la modal, para que el ✓ de la
+    tabla también se entere. Reinicia la espera: si el pedido sigue
+    pendiente, la ficha vuelve a esperar sola."""
+    if st.button("↻ Ver si ya llegó", use_container_width=True,
+                 key="sunat_ver_si_llego",
+                 help="Pregunta ahora si el PDF y el XML ya están "
+                      "guardados. No hace falta cerrar la ficha."):
+        sunat.refrescar_original(doc)
+        _marcar_llegado(doc, sunat.originales(doc)[1])
+        _inicio_espera(doc, reiniciar=True)
+        st.rerun()
+
+
 def _pedir_original(doc):
     """El flujo de "todavía no está sincronizado el original": avisar en
     qué estado está el pedido y, si no hay ninguno, ofrecer hacerlo.
@@ -4373,16 +4500,31 @@ def _pedir_original(doc):
     dejó de ser un panel propio y pasó a ser pestañas de la ficha: el
     pedido no es una pestaña —no hay nada que ver— sino lo que se muestra
     EN LUGAR de ellas.
+
+    Con un pedido pendiente la ficha ESPERA sola (`_esperar_original`) y se
+    completa cuando llega; pasado `_ESPERA_TOPE_S`, dice por qué puede
+    estar tardando y ofrece «Ver si ya llegó». Regla #674.
     """
-    if sunat.solicitud_pendiente(doc):
+    if _en_espera(doc):
         # La corrida nocturna va de lo más nuevo hacia atrás y tarda
         # semanas en llegar a lo viejo (ver regla #142), así que acá se
         # ofrece pedirlo puntualmente. La webapp NO abre ningún navegador:
         # deja una señal en R2 y la CPU local hace el trabajo — mismo
         # mecanismo que el refresco de parquets (regla #144).
-        st.info("⏳ Pedido. La máquina local lo está trayendo de SUNAT — "
-                "suele tardar menos de un minuto. Volvé a entrar al "
-                "documento en un rato.", icon=None)
+        if time.time() - _inicio_espera(doc) <= _ESPERA_TOPE_S:
+            st.info("⏳ Pedido. La máquina local lo está trayendo de SUNAT "
+                    "— suele tardar menos de un minuto. Esta ficha se "
+                    "completa sola cuando llegue.", icon=None)
+            _esperar_original(doc)
+        else:
+            st.warning(
+                f"⏳ El pedido lleva más de {_ESPERA_TOPE_S // 60} minutos "
+                "sin respuesta. Puede que la máquina local esté apagada o "
+                "que SUNAT no esté contestando; el pedido sigue en la cola "
+                "y se atiende cuando vuelva.", icon=None)
+            # El botón, sólo cuando la ficha dejó de esperar sola: al lado
+            # del contador era una segunda forma de hacer lo mismo.
+            _boton_ver_si_llego(doc)
         return
 
     # Un intento anterior que falló: sin esto el usuario ve el mismo botón
@@ -4419,7 +4561,11 @@ def _pedir_original(doc):
                       "que emitió el proveedor. Tarda menos de un minuto; "
                       "después queda guardado para siempre."):
         if sunat.solicitar_original(doc):
-            st.rerun()
+            _inicio_espera(doc, reiniciar=True)
+            # Sólo la ficha (la modal es un fragment): una corrida completa
+            # dejaba ~25 s la pantalla sin ficha mientras el drill se
+            # recalculaba, y la tabla no tiene nada nuevo que mostrar.
+            st.rerun(scope="fragment")
         else:
             st.error("No se pudo dejar el pedido. ¿Están las credenciales "
                      "de R2 configuradas?")

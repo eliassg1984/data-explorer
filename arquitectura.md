@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-673 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+674 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -868,7 +868,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
 - **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
 
-**SUNAT y SIRE** (60)
+**SUNAT y SIRE** (61)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -930,6 +930,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#652** — «Análisis de diferencias» dice QUIÉN PIDE cada producto y qué factura de SUNAT sin ingresar…
 - **#668** — La vista por pedido del Detalle dice el pedido, su horario y su documento
 - **#672** — Documentos SUNAT: la tarjeta de abajo ABRE en la fidelidad, y suma «Por tipo de compra»…
+- **#674** — El original de SUNAT se espera DENTRO de la ficha: no hay que cerrarla y volver a abrirla…
 
 **Fechas, rangos y cortes** (17)
 
@@ -52676,6 +52677,50 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-19.)
 
+674. **El original de SUNAT se espera DENTRO de la ficha: no hay que
+     cerrarla y volver a abrirla (`documentos_sunat.py::_esperar_original`,
+     `sunat.refrescar_original`).** 2026-10-19, a pedido: «usar la
+     funcionalidad de traer el XML, pero que no sea volver a entrar y salir
+     del reporte». Hasta ese día la ficha decía «Volvé a entrar al
+     documento en un rato»: nada volvía a mirar R2 mientras el usuario no
+     tocara algo.
+
+     - **Un vigilante cada 4 s, sólo mientras hay un pedido y por 150 s
+       como mucho** (`_ESPERA_CADA_S`, `_ESPERA_TOPE_S`): el patrón de
+       `app.py::_vigilar_refresco`, por la misma razón — un `run_every` que
+       tictaquea siempre vence la caché de mensajes del navegador y se come
+       clics (#474). Es un fragment ADENTRO de la modal: lleva
+       `una_vez_por_corrida` (#456). Con el original (o la marca de fallo),
+       una corrida completa redibuja la ficha con «Comprobante», «Detalle» y
+       «XML» y pone el ✓ en la tabla. Pasado el tope, la ficha dice por qué
+       puede tardar (la máquina local apagada, SUNAT sin contestar) y
+       ofrece «↻ Ver si ya llegó», que mira ahora y reinicia la espera.
+     - **Que la señal del pedido desaparezca NO es el final**: la máquina
+       local la borra al TOMAR el pedido, antes de subir el archivo
+       (medido: a los 60 s la señal ya no estaba y el XML llegó a los ~115).
+       La primera versión lo tomó como «terminó», cortó la espera y la
+       ficha volvió a ofrecer «Traer». Ahora terminan la espera sólo el
+       original o el fallo, y `_en_espera` cuenta como pedido en curso una
+       espera de la sesión dentro del tope.
+     - **El aviso va ARRIBA de las pestañas**, y la pestaña se llama
+       «⏳ Original»: cada corrida completa devuelve la ficha a «Datos», y
+       adentro de «Original» el aviso y su vigilante quedaban escondidos.
+     - **Pedir recarga sólo la ficha** (`st.rerun(scope="fragment")`): con
+       una corrida completa la pantalla quedaba ~25 s sin ficha mientras el
+       drill se recalculaba, para nada — la tabla no cambia al pedir.
+     - **El ✓ de la tabla no vuelve a listar R2**: la llegada se anota en
+       `_K_XML_LLEGADOS` y la tabla la suma a `claves_xml_en_r2()`. Ese
+       listado son 5.138 XML y tarda 21,8 s desde la laptop; vaciarlo en
+       cada llegada se pagaba en la corrida que redibuja la ficha.
+     - **Probado de punta a punta con Playwright** (Streamlit 1.64): DOBLE G
+       F001-2730 (primera versión) y ANHELAR F001-37600 (la final) llegaron:
+       la ficha se completó sola, ANHELAR a los ~66 s, con el ✓ en la
+       tabla. LA CESTA F001-3599 e INDUTECH FT01-2147 terminaron en fallo y
+       la ficha pasó sola a «⚠ Original», pero con la primera versión. El
+       tope de 150 s no se vio vencer en el navegador.
+
+     (2026-10-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52688,7 +52733,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#673**; la próxima toma el número siguiente.
+> última regla es la **#674**; la próxima toma el número siguiente.
 
 >
 

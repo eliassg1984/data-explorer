@@ -1427,6 +1427,18 @@ def fallo_solicitud(doc):
     return _leer_fallo(clave_fallo(doc))
 
 
+def refrescar_original(doc):
+    """Olvida lo cacheado sobre si el original de `doc` ya llegó: la
+    existencia en R2 (20 s), la señal del pedido y su marca de fallo (15 s).
+    Lo llama quien ESPERA un pedido —la ficha, cada pocos segundos, y su
+    botón «Ver si ya llegó»— para que la respuesta sea la de ahora y no la
+    de hace 20 s. `.clear()` entero porque son `head_object` baratos: la
+    caché que importa, la de los BYTES, no se toca. Regla #674."""
+    _existe_original.clear()
+    _hay_senal.clear()
+    _leer_fallo.clear()
+
+
 def solicitar_original(doc):
     """Deja en R2 la señal para que la CPU local baje este original.
 
