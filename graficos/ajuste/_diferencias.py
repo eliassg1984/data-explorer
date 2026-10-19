@@ -89,15 +89,16 @@ _CSS = f"""
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 .dif-kpis {{ display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
              gap: 8px; margin: 2px 0 2px; }}
-.dif-kpi {{ border: 1px solid {GRIS_LINEA}; border-radius: 10px; padding: 6px 10px;
-            display: flex; flex-direction: column; gap: 2px; min-width: 0; }}
+/* Nombre y cifra; el comentario, al pasar el cursor (`title`): a pedido,
+   2026-10-18 -- con él en un tercer renglón, la fila medía ~78px. */
+.dif-kpi {{ border: 1px solid {GRIS_LINEA}; border-radius: 10px; padding: 5px 10px;
+            display: flex; flex-direction: column; gap: 1px; min-width: 0; cursor: help; }}
 .dif-kpi.a {{ border-color: {LAVANDA_BORDE}; background: {LAVANDA_SELECCION}; }}
 .dif-kpi .r {{ font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
                color: {GRIS_TEXTO}; font-weight: 600; white-space: nowrap;
                overflow: hidden; text-overflow: ellipsis; }}
 .dif-kpi .v {{ font-size: 18px; font-weight: 700; color: {TEXTO_PRINCIPAL};
                font-variant-numeric: tabular-nums; line-height: 1.2; }}
-.dif-kpi .d {{ font-size: 11.5px; color: {GRIS_TEXTO}; }}
 .dif-neg {{ color: {AJUSTE_NEG_TEXTO} !important; }}
 .dif-pos {{ color: {AJUSTE_POS_TEXTO} !important; }}
 .dif-n {{ font-size: 15px; font-weight: 700; color: {ACENTO_TEXTO}; line-height: 1.25; }}
@@ -137,9 +138,8 @@ _CSS = f"""
 .dif-nota {{ font-size: 11.5px; color: {GRIS_TEXTO}; }}
 /* Lo vendido y sin descontar al contar (#650): una tarjeta más de la fila,
    en ámbar -- hasta el 2026-10-18 era un renglón propio, y ocupaba dos. */
-.dif-kpi.al {{ border-color: {AJUSTE_ALERTA_BORDE}; background: {AJUSTE_ALERTA_FONDO};
-               cursor: help; }}
-.dif-kpi.al .r, .dif-kpi.al .d {{ color: {AJUSTE_ALERTA_TEXTO}; }}
+.dif-kpi.al {{ border-color: {AJUSTE_ALERTA_BORDE}; background: {AJUSTE_ALERTA_FONDO}; }}
+.dif-kpi.al .r {{ color: {AJUSTE_ALERTA_TEXTO}; }}
 .dif-viene {{ font-size: 12.5px; color: {GRIS_TEXTO_MEDIO}; line-height: 1.5; }}
 .dif-uso {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px;
             padding: 4px 0; border-bottom: 1px solid {GRIS_LINEA}; font-size: 12.5px; }}
@@ -633,21 +633,28 @@ def _ficha_junto(x, fg, fichas):
 
 # ── la vista ────────────────────────────────────────────────────────────
 
+def _tarjeta(rotulo, valor, ayuda, cls="", cls_valor=""):
+    """Una tarjeta de la fila de totales: el nombre y la cifra; el
+    comentario, al pasar el cursor."""
+    return (f'<div class="dif-kpi {cls}" title="{html.escape(ayuda, quote=True)}">'
+            f'<span class="r">{_e(rotulo)}</span>'
+            f'<span class="v {cls_valor}">{valor}</span></div>')
+
+
 def _kpis(f, extra="", que="líneas"):
     fal, sob, pf, ps, sin = da.cobertura(f)
     nf, ns = int((f["q"] < 0).sum()), int((f["q"] > 0).sum())
     sin_f = int(((f["n_pistas"] == 0) & (f["q"] < 0)).sum())
     return ('<div class="dif-kpis">'
-            f'<div class="dif-kpi"><span class="r">Faltó</span><span class="v dif-neg">'
-            f'{_soles(-fal)}</span><span class="d">{nf:,} {que}</span></div>'
-            f'<div class="dif-kpi"><span class="r">Sobró</span><span class="v dif-pos">'
-            f'{_soles(sob)}</span><span class="d">{ns:,} {que}</span></div>'
-            f'<div class="dif-kpi a"><span class="r">Con pista fuerte</span><span class="v">'
-            f'{round(pf * 100)} % · {round(ps * 100)} %</span><span class="d">del faltante y '
-            'del sobrante, en soles</span></div>'
-            f'<div class="dif-kpi a"><span class="r">Sin ninguna pista</span><span class="v">'
-            f'{sin:,} {que}</span><span class="d">{sin_f:,} faltantes y {sin - sin_f:,} '
-            'sobrantes: hay que mirarlas a mano</span></div>' + extra + '</div>')
+            + _tarjeta("Faltó", _soles(-fal), f"{nf:,} {que} con faltante.", cls_valor="dif-neg")
+            + _tarjeta("Sobró", _soles(sob), f"{ns:,} {que} con sobrante.", cls_valor="dif-pos")
+            + _tarjeta("Con pista fuerte", f"{round(pf * 100)} % · {round(ps * 100)} %",
+                       "Cuánto del faltante y del sobrante, en soles, tiene una pista fuerte: "
+                       "los números calzan o es un hecho del kardex.", cls="a")
+            + _tarjeta("Sin ninguna pista", f"{sin:,} {que}",
+                       f"{sin_f:,} faltantes y {sin - sin_f:,} sobrantes sin ninguna pista: hay "
+                       "que mirarlas a mano.", cls="a")
+            + extra + '</div>')
 
 
 def _kpi_sin_descontar(lin, lote):
@@ -681,14 +688,7 @@ def _kpi_sin_descontar(lin, lote):
         ayuda += (f" El descargo siguiente fue el {da.fecha_corta(sig)}: lo que tomó volverá "
                   "como sobrante en el próximo conteo.")
     ayuda += " Están en la pista «Sin descontar»."
-    # Las fechas, al pasar el cursor: con conteos en dos días (Venta Interna
-    # se contó el 6) «del 30 set y 2 oct» se leía como un par.
-    det = (f"{_soles(ant, signo=False)} de días anteriores al conteo: el ajuste se abrió "
-           "sin descargarlas" if ant >= 1 and dias else f"{n:,} líneas: volverán como sobrante")
-    return (f'<div class="dif-kpi al" title="{html.escape(ayuda, quote=True)}">'
-            '<span class="r">Sin descontar al contar</span>'
-            f'<span class="v">{_soles(v, signo=False)}</span>'
-            f'<span class="d">{_e(det)}</span></div>')
+    return _tarjeta("Sin descontar al contar", _soles(v, signo=False), ayuda, cls="al")
 
 
 def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,

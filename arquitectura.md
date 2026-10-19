@@ -51319,7 +51319,10 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        descontar es una QUINTA tarjeta de la fila de totales —era un renglón
        propio, de dos líneas—, con el detalle entero al pasar el cursor (la
        grilla toma tantas columnas como tarjetas). Con «Áreas juntas» los
-       totales cuentan productos. La tarjeta mide 724px, contra 861.
+       totales cuentan productos. La tarjeta mide 724px, contra 861. Y la
+       misma tarde, a pedido, el comentario de TODAS las tarjetas de la fila
+       pasa al cursor (`_tarjeta`: nombre y cifra, el resto en `title`): la
+       fila mide 51px (eran ~92) y la tarjeta, 683.
 
      (2026-10-18.)
 

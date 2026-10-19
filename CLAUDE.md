@@ -1299,9 +1299,10 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   anexos de la #650): con el filtro de Área, una fila por producto con las
   áreas sumadas (`diferencias_ajuste.agrupar_por_producto`) — lo que falta
   en una y sobra en otra se compensa —. `st.tabs` con `key` conserva la
-  pestaña al cambiar de línea. Las pistas van en un desplegable y lo sin
-  descontar es una tarjeta más de la fila de totales: a pedido, nada que
-  ocupe dos renglones.
+  pestaña al cambiar de línea. Las pistas van en un desplegable, lo sin
+  descontar es una tarjeta más de la fila de totales y el comentario de
+  cada tarjeta aparece al pasar el cursor: a pedido, nada que ocupe dos
+  renglones.
 - **En el Almacén Central el POS no descuenta ventas, nunca**: lo que sale,
   sale con requerimiento, transferencia o nota. Y **el ajuste se abre
   después de descargar las ventas hasta el día anterior**: lo de días
