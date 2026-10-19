@@ -279,8 +279,9 @@ igual(D["venta_extra"]["Eventos"][0], 500.0, "armar: Eventos aparte")
 ok("descuentos" in f and "descuento_extra" in D,
    "armar: el costo de descuentos viaja como fila (regla #661)")
 _js = (RAIZ / "graficos" / "costos_tabla.js").read_text(encoding="utf-8")
-ok("r.desc" in _js and "resta(r.pos, r.desc)" in _js and "let nv = suma(r.cort, r.desc);" in _js,
-   "la tabla resta el costo de descuentos de los DOS lados: consumo y POS (regla #661)")
+ok("let nv = [...r.cort];" in _js and "r.dif = resta(r.carta, r.pos)" in _js
+   and "resta(r.pos, r.desc)" not in _js,
+   "descuentos separados; se compara con costo histórico completo del Sistema")
 ok("r.falt = resta(r.dif, r.bajas)" in _js and "r.bajas, r.cort" not in _js,
    "las bajas no son un consumo no vendido: explican la diferencia (regla #662)")
 ok(set(cv.tabla_larga(D).columns) == {"PERIODO", "FAMILIA", "CONCEPTO", "SOLES"},

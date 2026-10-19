@@ -5,7 +5,7 @@
    selector :has, por la regla #469. */
 
 .cv { display: grid; gap: 8px; min-width: 0; color: var(--text-primary); font-size: 13px; line-height: 1.3;
-  --cv-concepto: 236px; --cv-periodo: 104px; --cv-total: 108px; }
+  --cv-concepto: 236px; --cv-periodo: 124px; --cv-total: 120px; }
 .cv button, .cv select { font: inherit; }
 .cv button:focus-visible, .cv select:focus-visible, .cv summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -178,3 +178,43 @@ tr.detalle > td { background: var(--accent-light); border-bottom: 1px solid var(
 @media (pointer: coarse) { .enlace-origen { min-width: 32px; min-height: 40px; text-align: center; } }
 
 @media (prefers-reduced-motion: reduce) { .cv * { transition: none !important; } }
+
+/* Resumen de seis filas; cálculo, calidad y análisis comercial desplegables. */
+.tasa { display: block; color: var(--text-secondary); font-size: 10.5px; font-weight: 400; margin-top: 4px; }
+.seleccionado { box-shadow: inset 1px 0 0 var(--border-lavender), inset -1px 0 0 var(--border-lavender); }
+thead th.seleccionado { box-shadow: inset 0 -3px 0 var(--accent); }
+thead th button { border: 0; background: none; padding: 0; color: inherit; font-weight: inherit; cursor: pointer; }
+.cv-panel { min-width: 0; border: 1px solid var(--border); background: var(--bg-card); border-radius: 10px; overflow: hidden; }
+.cv-panel > summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 18px; padding: 13px 15px; font-weight: 600; cursor: pointer; }
+.cv-panel-ayuda { font-weight: 400; font-size: 12px; color: var(--text-secondary); }
+.cv-panel-cuerpo { border-top: 1px solid var(--border); padding: 14px 15px; min-width: 0; }
+.cv-panel-cuerpo p { color: var(--text-secondary); font-size: 12px; line-height: 1.5; margin: 8px 0; max-width: 100ch; }
+.cv-panel-cuerpo p b { color: var(--text-primary); }
+.cv-calidad.con-observaciones > summary { color: var(--warning-text); background: var(--warning-bg); }
+.cv-calidad-scroll, .cv-comercial-scroll { overflow-x: auto; margin: 10px 0; }
+.cv-calidad-tabla, .cv-comercial-tabla { width: 100%; min-width: 760px; table-layout: auto; }
+.cv-calidad-tabla td, .cv-calidad-tabla th { text-align: left; padding: 7px 9px; font-size: 11.5px; white-space: normal; }
+.cv-calidad-tabla td:nth-child(4) { min-width: 190px; }
+.cv-calidad-tabla td:nth-child(5), .cv-calidad-tabla td:nth-child(6), .cv-calidad-tabla td:nth-child(7) { text-align: right; white-space: nowrap; }
+.cv-comercial-tabla th:first-child { text-align: left; min-width: 220px; padding: 8px; }
+.cv-comercial-tabla tbody th { font-size: 12px; font-weight: 500; }
+.cv-accion { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; min-height: 32px; border: 1px solid var(--border-lavender); border-radius: 6px; background: var(--bg-card); color: var(--accent-deep); text-decoration: none; cursor: pointer; font-size: 12px; }
+.cv-accion[aria-pressed="true"] { background: var(--accent-tint); border-color: var(--accent); }
+.cv-documental-metricas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 15px; }
+.cv-documental-metricas > div { display: grid; gap: 5px; }
+.cv-documental-metricas strong { font-size: 20px; font-weight: 600; }
+.cv-documental-metricas span { font-size: 12px; color: var(--text-secondary); }
+.cv-grafico-controles, .cv-seleccion-resumen, .cv-elegir-mes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 15px; }
+.cv-grafico-controles { justify-content: space-between; }
+.cv-comparacion svg { width: 100%; height: auto; display: block; }
+.cv-comparacion text { fill: var(--text-secondary); font-family: inherit; font-size: 12px; }
+.cv-grilla { stroke: var(--border-lavender); stroke-width: 1; }
+.cv-linea { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
+.cv-linea.carta { stroke: var(--accent); }
+.cv-linea.sistema { stroke: var(--text-secondary); stroke-dasharray: 6 4; }
+.cv-punto { cursor: pointer; stroke: var(--bg-card); stroke-width: 2; }
+.cv-punto.carta, .leyenda i.carta { fill: var(--accent); background: var(--accent); }
+.cv-punto.sistema, .leyenda i.sistema { fill: var(--text-secondary); background: var(--text-secondary); }
+.cv-seleccion-resumen { border-top: 1px solid var(--border); padding-top: 13px; margin-top: 13px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.cv.cv-movil .cv-documental-metricas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (pointer: coarse) { .cv-accion, .cv-elegir-mes button, thead th button { min-height: 44px; } }

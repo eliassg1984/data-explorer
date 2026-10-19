@@ -14,7 +14,7 @@
 const BUCK = ['Alimentos', 'Bebidas', 'Vinos', 'Envases'];
 const COLOR = { Alimentos: '--serie-0', Bebidas: '--serie-3', Vinos: '--serie-2', Envases: '--serie-1' };
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'];
-const VENTANA = 12;
+const VENTANA = 6;
 const BAJAS = 'Bajas';
 // Lo que gasta inventario sin ser la venta del reporte y se puede sumar a la
 // venta de Alimentos (las claves de `venta_extra` en costo_ventas.py).
@@ -43,9 +43,12 @@ const mil = (v) => `${(v / 1000).toLocaleString('en-US', { maximumFractionDigits
 // `st.ini[grano]` es el primer período visible: la tabla muestra VENTANA.
 function ventana(st, data) {
   const n = data.periodos.length;
-  const ini = Math.max(0, Math.min(st.ini[st.grano], n - VENTANA));
-  const fin = Math.min(n, ini + VENTANA);
-  return { ini, fin, per: data.periodos.slice(ini, fin) };
+  const cantidad = st.cantidad || VENTANA;
+  const indices = st.grano === 'mes' && st.anio ? data.periodos.map((p, i) => p.k.startsWith(st.anio + '-') ? i : -1).filter(i => i >= 0) : [];
+  const minimo = indices.length ? indices[0] : 0, maximo = indices.length ? indices[indices.length - 1] + 1 : n;
+  const ini = Math.max(minimo, Math.min(st.ini[st.grano], Math.max(minimo, maximo - cantidad)));
+  const fin = Math.min(maximo, ini + cantidad);
+  return { ini, fin, minimo, maximo, per: data.periodos.slice(ini, fin) };
 }
 
 function cortar(arr, w) { return (arr || []).slice(w.ini, w.fin); }
@@ -70,12 +73,11 @@ function porFamilia(st, data, w, b) {
     }
   }
   r.operativo = resta(suma(r.ii, r.c), r.fi);
-  // Consumos no vendidos: el costo de las cortesías, el de la parte
-  // descontada y las salidas que no se quitaron. Es lo que va del consumo
+  // Consumos no vendidos: cortesías y salidas seleccionadas. Es lo que va del consumo
   // operativo al carta. Las BAJAS no: son pérdida, se quedan en el consumo
   // carta y explican la diferencia (regla #662, como el cuadro de costos
   // que el usuario llevaba antes).
-  let nv = suma(r.cort, r.desc);
+  let nv = [...r.cort];
   for (const t of st.agregadas) {
     r[`s_${t}`] = de((data.salidas || {})[t]);
     nv = suma(nv, r[`s_${t}`]);
@@ -83,11 +85,9 @@ function porFamilia(st, data, w, b) {
   r.nv = nv;
   r.carta = resta(r.operativo, nv);
   r.margen = resta(r.v, r.carta);
-  // El POS costea ENTERO el plato con descuento —se vendió—: su costo
-  // ajustado le resta la misma parte descontada, y la diferencia compara
-  // lo mismo con lo mismo (regla #661).
-  r.pos_aj = resta(r.pos, r.desc);
-  r.dif = resta(r.carta, r.pos_aj);
+  // El plato vendido mantiene su costo histórico completo. Los descuentos
+  // son referencia comercial y no modifican ninguno de los dos lados.
+  r.dif = resta(r.carta, r.pos);
   // Separar las bajas registradas deja un saldo pendiente de conciliar;
   // por sí solo, ese saldo no identifica su causa.
   r.falt = resta(r.dif, r.bajas);
@@ -96,43 +96,24 @@ function porFamilia(st, data, w, b) {
 
 function filas(st) {
   const f = [
-    // La venta arriba, como en un estado de resultados: es la base de cada %.
-    { k: 'v', nom: 'Venta neta documentada', nota: 'comprobantes pagados y por cobrar − notas de crédito, sin IGV ni recargo', tipo: 'suma', sentido: 'bien', calc: true },
-    { k: 'ii', nom: 'Inventario inicial', tipo: 'ini', sentido: 'neutro', fuerte: true },
-    { k: 'c', nom: 'Compras', signo: '+', tipo: 'suma', sentido: 'mal' },
-    { k: 'fi', nom: 'Inventario final', signo: '−', tipo: 'fin', sentido: 'neutro' },
-    { k: 'operativo', nom: 'Consumo operativo valorizado', nota: 'inventario inicial + compras − inventario final', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true },
-    { k: 'p_operativo', nom: '% costo operativo', tipo: 'pct', sentido: 'mal', num: 'operativo', den: 'v' },
-    // El grupo (a pedido, 2026-10-09): lo consumido que no se vendió, en su
-    // nombre de control de costos. Cerrado es UNA fila con el total; abierto
-    // crece hacia abajo con sus dos tramos —lo que viene del Almacén y lo
-    // que viene del Sistema Restaurante—, que contablemente son cosas
-    // distintas (merma o desmedro, gasto de personal, promoción).
-    { k: 'nv', nom: 'Consumos no vendidos', nota: 'consumo interno, cortesías y descuentos', signo: '−', tipo: 'suma', sentido: 'mal', grupo: true, fuerte: true },
+    { k: 'v', nom: 'Venta neta documentada', nota: 'pagados y por cobrar − notas de crédito; sin IGV ni recargo', tipo: 'suma', sentido: 'bien', calc: true },
+    { k: 'carta', nom: 'Consumo carta', nota: 'consumo operativo − salidas seleccionadas − cortesías; abrir cálculo', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true, calculo: true, tasa: 'carta' },
   ];
-  if (st.grupoAbierto) {
-    f.push({ tramo: 'Notas de salida del Almacén' });
-    for (const t of st.agregadas) f.push({ k: `s_${t}`, nom: t, tipo: 'suma', sentido: 'mal', quitar: t, hijo: true });
-    f.push({ agregar: true });
-    f.push({ tramo: 'Sistema Restaurante' });
-    f.push({ k: 'cort', nom: 'Costo de cortesías', tipo: 'suma', sentido: 'mal', hijo: true });
-    f.push({ k: 'desc', nom: 'Costo de descuentos', nota: 'costo del plato × proporción descontada, ajustado por devolución de convenios', tipo: 'suma', sentido: 'mal', hijo: true });
+  if (st.calculoAbierto) {
+    f.push({ k: 'ii', nom: 'Inventario inicial', tipo: 'ini', sentido: 'neutro', hijo: true },
+      { k: 'c', nom: 'Compras netas', signo: '+', tipo: 'suma', sentido: 'mal', hijo: true },
+      { k: 'fi', nom: 'Inventario final', signo: '−', tipo: 'fin', sentido: 'neutro', hijo: true },
+      { k: 'operativo', nom: 'Consumo operativo valorizado', signo: '=', tipo: 'suma', sentido: 'mal', hijo: true, tasa: 'operativo' },
+      { k: 'nv', nom: 'Consumos no vendidos', nota: 'salidas seleccionadas y cortesías; descuentos separados', signo: '−', tipo: 'suma', sentido: 'mal', grupo: true });
+    if (st.grupoAbierto) {
+      for (const t of st.agregadas) f.push({ k: `s_${t}`, nom: t, tipo: 'suma', sentido: 'mal', quitar: t, hijo: true });
+      f.push({ agregar: true }, { k: 'cort', nom: 'Costo de cortesías', tipo: 'suma', sentido: 'mal', hijo: true });
+    }
   }
-  f.push({ k: 'carta', nom: 'Consumo carta', nota: 'consumo operativo − consumos no vendidos', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
-  f.push({ k: 'p_carta', nom: '% costo carta real', tipo: 'pct', sentido: 'mal', num: 'carta', den: 'v', calc: true });
-  f.push({ k: 'margen', nom: 'Margen bruto', nota: 'venta − consumo carta', signo: '=', tipo: 'suma', sentido: 'bien', calc: true, fuerte: true });
-  f.push({ sec: 'Conciliación con el costo histórico del Sistema Restaurante' });
-  // Dos costos del POS, como el «Teórico S/ DSCTO» y «C/ DSCTO» del cuadro
-  // de costos del usuario (regla #662): el del Paloteo tal cual, para
-  // cotejarlo, y el que se compara, sin la parte regalada de los descuentos.
-  f.push({ k: 'pos', nom: 'Costo histórico de lo vendido', nota: 'costo registrado de platos, combos y propiedades, antes del ajuste por descuentos', tipo: 'suma', sentido: 'mal' });
-  f.push({ k: 'p_pos_sd', nom: '% costo histórico', tipo: 'pct', sentido: 'mal', num: 'pos', den: 'v' });
-  f.push({ k: 'pos_aj', nom: 'Costo POS ajustado', nota: 'costo histórico de lo vendido − costo de descuentos', tipo: 'suma', sentido: 'mal', fuerte: true });
-  f.push({ k: 'p_pos', nom: '% costo POS ajustado', tipo: 'pct', sentido: 'mal', num: 'pos_aj', den: 'v' });
-  f.push({ k: 'dif', nom: 'Diferencia', nota: 'consumo carta − costo POS ajustado', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
-  f.push({ k: 'bajas', nom: 'Bajas registradas', nota: 'valor de las notas de salida procesadas de tipo baja', tipo: 'suma', sentido: 'mal', hijo: true });
-  f.push({ k: 'falt', nom: 'Diferencia pendiente de conciliación', nota: 'diferencia − bajas registradas; revisar fechas, alcance, clasificación y registros antes de atribuir una pérdida física', tipo: 'suma', sentido: 'mal', hijo: true });
-  f.push({ k: 'p_dif', nom: 'Diferencia en puntos', tipo: 'pp', sentido: 'mal', calc: true });
+  f.push({ k: 'pos', nom: 'Costo del Sistema', nota: 'costo histórico completo de platos, combos y propiedades; notas de crédito restadas', tipo: 'suma', sentido: 'mal', tasa: 'pos' },
+    { k: 'dif', nom: 'Diferencia', nota: 'consumo carta − costo histórico completo del Sistema', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true, tasa: 'dif' },
+    { k: 'bajas', nom: 'Bajas registradas', nota: 'salidas procesadas de tipo baja; permanecen en el consumo carta', tipo: 'suma', sentido: 'mal', hijo: true },
+    { k: 'falt', nom: 'Pendiente de conciliación', nota: 'diferencia − bajas registradas; el saldo no demuestra por sí solo pérdida física', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true, tasa: 'falt' });
   return f;
 }
 
@@ -147,7 +128,7 @@ function valores(st, data, w, fila, fams) {
   }
   if (fila.tipo === 'pp') {
     const c = valores(st, data, w, { tipo: 'pct', num: 'carta', den: 'v' }, fams);
-    const p = valores(st, data, w, { tipo: 'pct', num: 'pos_aj', den: 'v' }, fams);
+    const p = valores(st, data, w, { tipo: 'pct', num: 'pos', den: 'v' }, fams);
     return {
       mes: c.mes.map((x, i) => (x == null || p.mes[i] == null ? null : x - p.mes[i])),
       tot: c.tot == null || p.tot == null ? null : c.tot - p.tot,
@@ -211,21 +192,27 @@ function dibujar(raiz) {
   // UNA fila arriba (a pedido, 2026-10-09): el título y el rango a la
   // izquierda; Período, Familias y Eventos a la derecha. Sin KPIs: la tabla
   // sube y entra entera en la pantalla.
-  const hayMas = data.periodos.length > VENTANA;
+  const hayMas = w.maximo - w.minimo > (st.cantidad || VENTANA);
   const aviso = esMes ? '' : `Por ${st.grano}, el inventario es el del kardex al final de cada período, no lo contado: el ajuste de cada cierre cae entero en el período del cierre, y por eso las ${plural(st.grano)} no suman el mes.`;
-  let html = `<div class="cv-cab"><div class="cv-tit"><h2>Estado de costo de venta ajustado</h2>
+  if (!w.per.some(p => p.k === st.seleccionado)) st.seleccionado = w.per[n - 1].k;
+  let html = `<div class="cv-cab"><div class="cv-tit"><h2>Estado de costo de venta</h2>
     <span class="cv-rango">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)} · ${n} ${plural(st.grano)}${esMes ? ' operativos' : ''}</span>
-    ${hayMas ? `<span class="cv-ventana"><button type="button" data-ventana="-1" aria-label="Períodos anteriores" ${w.ini === 0 ? 'disabled' : ''}>‹</button><button type="button" data-ventana="1" aria-label="Períodos siguientes" ${w.fin >= data.periodos.length ? 'disabled' : ''}>›</button></span>` : ''}
+    ${hayMas ? `<span class="cv-ventana"><button type="button" data-ventana="-1" aria-label="Períodos anteriores" ${w.ini === w.minimo ? 'disabled' : ''}>‹</button><button type="button" data-ventana="1" aria-label="Períodos siguientes" ${w.fin >= w.maximo ? 'disabled' : ''}>›</button></span>` : ''}
     ${aviso ? `<span class="cv-kardex" title="${esc(aviso)}">inventario del kardex ⓘ</span>` : ''}</div>
     <div class="cv-controles">`;
   if (hay.length > 1) {
     html += `<label class="cv-campo"><span class="cv-rot">Período</span><select data-grano-sel aria-label="Período">${hay.map(([g, nom]) =>
       `<option value="${g}"${st.grano === g ? ' selected' : ''}>${nom}</option>`).join('')}</select></label>`;
   }
+  if (esMes) {
+    const anios = [...new Set(data.periodos.map(p => p.k.slice(0, 4)))];
+    html += `<label class="cv-campo"><span class="cv-rot">Año</span><select data-anio aria-label="Año"><option value=""${!st.anio ? ' selected' : ''}>Recientes</option>${anios.map(a => `<option value="${a}"${a === st.anio ? ' selected' : ''}>${a}</option>`).join('')}</select></label>`;
+  }
+  html += `<label class="cv-campo"><span class="cv-rot">Columnas</span><select data-cantidad aria-label="Cantidad de períodos"><option value="6"${st.cantidad === 6 ? ' selected' : ''}>6 períodos</option><option value="12"${st.cantidad === 12 ? ' selected' : ''}>12 períodos</option></select></label>`;
   const famTxt = F.length === BUCK.length ? 'Todas' : F.length === 1 ? F[0] : `${F.length} de ${BUCK.length}`;
   html += `<details class="dd"${st.ddAbierto ? ' open' : ''}><summary><span class="cv-rot">Familias</span><span class="dd-val">${famTxt}</span><span class="dd-fl">▾</span></summary>
       <div class="dd-panel">${BUCK.map((b) => `<label class="dd-op"><input type="checkbox" data-fam-chk="${b}" ${st.fams.has(b) ? 'checked' : ''}><span class="pt" style="background:var(${COLOR[b]})"></span>${b}</label>`).join('')}
-      <span class="dd-nota">Familias de insumos del Almacén. La venta se agrupa por grupos de carta; Envases no tiene venta ni costo POS propio en esta selección.</span></div></details>
+      <span class="dd-nota">Familias de insumos del Almacén. La venta se agrupa por grupos de carta; Envases no tiene venta ni costo del Sistema propio en esta selección.</span></div></details>
     <span class="cv-campo"><span class="cv-rot">Sumar a la venta</span>${EXTRAS.map((g) =>
       `<label class="interruptor"><input type="checkbox" data-extra="${g}" ${st.extra.has(g) ? 'checked' : ''}> ${g}</label>`).join('')}</span>
     </div></div>`;
@@ -235,38 +222,48 @@ function dibujar(raiz) {
   });
   html += `<div class="cv-contexto" role="status" aria-live="polite" aria-atomic="true">
     <span>${esMes ? 'Mes operativo · inventario contado' : `${st.grano === 'semana' ? 'Semana' : 'Quincena'} · inventario del kardex`}</span>
-    <span>Venta y costo POS: día contable del turno</span>
+    <span>Venta y costo del Sistema: día contable del turno</span>
     <span>Familias: ${esc(F.join(', '))}</span>
     <span>${esc(estadoExtra.join(' · '))}</span></div>`;
-  html += notas(st, data, w);
+  html += observaciones(st, data, w, F);
+  html += coberturaSUNAT(st);
 
   // La tabla
   const cols = `<col class="c-lab">${w.per.map(() => '<col class="c-mes">').join('')}<col class="c-tot">`;
-  const ths = w.per.map((p) => `<th scope="col">${esc(p.rot)}<span class="sub">${esc(p.sub || '')}</span></th>`).join('');
+  const ths = w.per.map((p) => `<th scope="col" class="${p.k === st.seleccionado ? 'seleccionado' : ''}"><button type="button" data-seleccionar="${esc(p.k)}" aria-pressed="${p.k === st.seleccionado}">${esc(p.rot)}</button><span class="sub">${esc(p.sub || '')}</span></th>`).join('');
   let cuerpo = '';
   for (const fila of filas(st)) {
     if (fila.sec) { cuerpo += `<tr class="sec"><td colspan="${n + 2}"><div class="fila-fija">${fila.sec}</div></td></tr>`; continue; }
     if (fila.agregar) { cuerpo += filaAgregar(st, data, w, F, n); continue; }
     if (fila.tramo) { cuerpo += `<tr class="tramo"><td colspan="${n + 2}"><div class="fila-fija">${fila.tramo}</div></td></tr>`; continue; }
     const val = valores(st, data, w, fila, F);
-    const abierta = st.abierta === fila.k;
+    const abierta = fila.calculo ? st.calculoAbierto : fila.grupo ? st.grupoAbierto : st.abierta === fila.k;
+    const accion = fila.calculo ? 'data-calculo' : fila.grupo ? 'data-grupo' : `data-fila="${esc(fila.k)}"`;
     const cls = ['fila', fila.calc ? 'calc' : '', fila.fuerte ? 'fuerte' : '', abierta ? 'abierta' : '',
       fila.hijo ? 'hijo' : '', fila.grupo ? 'grupo' : '', fila.grupo && st.grupoAbierto ? 'grupo-abierto' : ''].join(' ');
     const tip = ` title="${esc(fila.nota ? `${fila.nom}: ${fila.nota}` : fila.nom)}"`;
     cuerpo += `<tr class="${cls}"><td class="lab"><div class="fila-lab">`
+      + (fila.calculo ? `<button type="button" class="chev" data-calculo aria-expanded="${!!st.calculoAbierto}" aria-label="Abrir cálculo del consumo carta">${st.calculoAbierto ? '▾' : '▸'}</button>` : '')
       + (fila.grupo ? `<button type="button" class="chev" data-grupo aria-expanded="${!!st.grupoAbierto}" aria-label="${st.grupoAbierto ? 'Cerrar' : 'Abrir'} el detalle de ${esc(fila.nom)}">${st.grupoAbierto ? '▾' : '▸'}</button>` : '')
-      + `<button type="button" class="fila-btn" data-fila="${esc(fila.k)}" aria-expanded="${abierta}"${tip}><span class="signo">${fila.signo || ''}</span>`
+      + `<button type="button" class="fila-btn" ${accion} aria-expanded="${abierta}"${tip}><span class="signo">${fila.signo || ''}</span>`
       + `<span class="nom">${esc(fila.nom)}</span><span class="flecha">▼</span></button>`
       + (fila.quitar ? `<button type="button" class="quitar" data-quitar="${esc(fila.quitar)}" aria-label="Quitar ${esc(fila.quitar)}">×</button>` : '')
-      + `</div></td>${val.mes.map((x, i) => `<td class="${claseCelda(fila, x)}">${fmtCelda(fila, x)}${enlaceOrigen(st, fila, w.per[i])}</td>`).join('')}`
-      + `<td class="tot ${claseCelda(fila, val.tot)}">${fmtCelda(fila, val.tot)}</td></tr>`;
-    if (abierta) cuerpo += detalle(st, data, w, fila, F, val);
+      + `</div></td>${val.mes.map((x, i) => `<td class="${claseCelda(fila, x)} ${w.per[i].k === st.seleccionado ? 'seleccionado' : ''}">${fmtCelda(fila, x)}${enlaceOrigen(st, fila, w.per[i])}${tasaCelda(st, data, w, F, fila, i)}</td>`).join('')}`
+      + `<td class="tot ${claseCelda(fila, val.tot)}">${fmtCelda(fila, val.tot)}${tasaCelda(st, data, w, F, fila, null)}</td></tr>`;
+    if (abierta && !fila.calculo && !fila.grupo) cuerpo += detalle(st, data, w, fila, F, val);
   }
   html += `<div class="desliza" role="region" aria-label="Tabla de costos con desplazamiento horizontal por períodos"><table><colgroup>${cols}</colgroup><thead><tr><th class="lab" scope="col">Concepto<span class="sub">${esMes ? 'mes operativo · cierre' : 'kardex'}</span></th>${ths}<th class="tot" scope="col">${n} ${plural(st.grano)}<span class="sub">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)}</span></th></tr></thead><tbody>${cuerpo}</tbody></table></div>`;
   html += `<div class="estado-desliza"><span>← Períodos anteriores · recientes →</span><span class="periodos-visibles"></span></div>`;
 
+  html += graficoComparacion(st, data, w, F);
+  html += comercial(st, data, w, F);
+  html += notas(st, data, w);
   raiz.innerHTML = html;
   prepararDesplazamiento(raiz, w);
+  if (st.irCalculo) {
+    raiz.querySelector('.cv-calidad')?.scrollIntoView({ block: 'start' });
+    st.irCalculo = false;
+  }
 }
 
 function prepararDesplazamiento(raiz, w) {
@@ -290,6 +287,13 @@ function prepararDesplazamiento(raiz, w) {
     if (i >= 0) posicion = i * 104;
   }
   d.scrollLeft = Math.max(0, Math.min(max, posicion));
+  if (st.enfocarSeleccion) {
+    const i = w.per.findIndex(p => p.k === st.seleccionado);
+    const columna = d.querySelectorAll('thead th')[i + 1];
+    const lab = d.querySelector('th.lab');
+    if (columna && lab && i >= 0) d.scrollLeft = Math.max(0, columna.offsetLeft - lab.offsetWidth);
+    st.enfocarSeleccion = false;
+  }
   st.scroll[clave] = max ? d.scrollLeft / max : 0;
   const actualizar = () => {
     const borde = d.getBoundingClientRect();
@@ -455,23 +459,23 @@ function notas(st, data, w) {
     <dt>Inventario inicial y final</dt><dd>${inventario} El inicial de un período es el final del anterior. El total de la ventana muestra el primer inventario inicial y el último final, sin sumarlos.</dd>
     <dt>Compras y salidas</dt><dd>Compras a valor neto, sin IGV, con las notas de crédito de proveedores restadas, por fecha del documento. Notas de salida procesadas a valor neto, por fecha de registro. Todas las salidas que no son bajas entran como deducción inicialmente; la × permite quitar una.</dd>
     <dt>Consumo operativo valorizado</dt><dd>Inventario inicial + compras − inventario final. Es la variación valorizada disponible para analizar el consumo del período; incluye los efectos de registros, ajustes de inventario y valorización.</dd>
-    <dt>Consumos no vendidos</dt><dd>Notas de salida seleccionadas que no son bajas + costo de cortesías + costo de descuentos. Las bajas permanecen dentro del consumo carta y se presentan aparte para conciliar la diferencia.</dd>
-    <dt>Cortesías y descuentos</dt><dd>Las cortesías se valorizan al costo histórico registrado y se excluyen de la venta documentada. Costo de descuentos = costo del plato × proporción descontada de la línea; se ajusta por la devolución de convenios bancarios configurada. Este costo se resta tanto del consumo como del costo POS.</dd>
-    <dt>Consumo carta</dt><dd>Consumo operativo valorizado − consumos no vendidos seleccionados. Es la base de consumo que se compara con el costo POS ajustado; puede contener diferencias pendientes de explicar.</dd>
+    <dt>Consumos no vendidos</dt><dd>Notas de salida seleccionadas que no son bajas + costo de cortesías. Las bajas permanecen dentro del consumo carta y se presentan aparte para conciliar la diferencia.</dd>
+    <dt>Cortesías y descuentos</dt><dd>Las cortesías se valorizan al costo histórico registrado y se excluyen de la venta documentada. Costo de descuentos = costo del plato × proporción descontada de la línea; se ajusta por la devolución de convenios bancarios configurada. Esta referencia comercial no se resta del consumo carta ni del costo del Sistema.</dd>
+    <dt>Consumo carta</dt><dd>Consumo operativo valorizado − consumos no vendidos seleccionados. Es la base de consumo que se compara con el costo completo del Sistema; puede contener diferencias pendientes de explicar.</dd>
     <dt>Costo histórico de lo vendido</dt><dd>Costo guardado en el pedido, incluidos componentes de combos y propiedades, respetando cantidades y ajustes positivos o negativos. Las notas de crédito revierten la parte correspondiente del costo de la venta. No se recalcula con la receta ni los precios actuales.</dd>
-    <dt>Costo POS ajustado</dt><dd>Costo histórico de lo vendido − costo de descuentos. Es la base comparable con consumo carta después de aplicar la misma deducción por descuentos a ambos lados.</dd>
-    <dt>Diferencia y saldo pendiente</dt><dd>Diferencia = consumo carta − costo POS ajustado. Diferencia pendiente de conciliación = diferencia − bajas registradas. El saldo por sí solo no demuestra una pérdida física: requiere revisar fechas, alcance, clasificación, recetas, valorización y registros.</dd>
-    <dt>Porcentajes y margen</dt><dd>Cada % de costo divide su costo o consumo entre la venta neta documentada de la misma selección. Margen bruto = venta neta documentada − consumo carta. Diferencia en puntos = % consumo carta − % costo POS ajustado.</dd>
+    <dt>Descuentos separados</dt><dd>El costo histórico completo de lo vendido se compara con el consumo carta. Los descuentos y el margen se presentan en el análisis comercial.</dd>
+    <dt>Diferencia y saldo pendiente</dt><dd>Diferencia = consumo carta − costo completo del Sistema. Diferencia pendiente de conciliación = diferencia − bajas registradas. El saldo por sí solo no demuestra una pérdida física: requiere revisar fechas, alcance, clasificación, recetas, valorización y registros.</dd>
+    <dt>Porcentajes y margen</dt><dd>Cada % de costo divide su costo o consumo entre la venta neta documentada de la misma selección. Margen bruto = venta neta documentada − consumo carta. Diferencia en puntos = % consumo carta − % costo completo del Sistema.</dd>
   </dl></details>
   <details class="nota alerta" data-nota="referencias"${abiertos.has('referencias') ? ' open' : ''}><summary>Referencias Inforest y alcance</summary><ul>
     <li><b>Referencia del costo: Paloteo de Producción → Comparativo → «(a) Ventas en el rango» → Precio costo.</b> Sin «Evaluar por Día Contable», el comparativo revisado exige que tanto el pedido como el comprobante estén dentro del rango. Esta vista agrupa venta y costo por día contable del turno: para comparar deben conciliarse ambas fechas, las notas de crédito y los filtros.</li>
     <li><b>Referencia de venta: Registro de Ventas.</b> En modo por fecha de emisión, selecciona comprobantes por emisión y puede incluir cuentas por cobrar; aquí se agrupan por turno. La venta documentada no representa necesariamente cobros del período.</li>
     <li><b>Referencias del Almacén:</b> cierres de inventario o Histórico del Almacén para existencias, compras netas y «Relación de Notas de Salidas» para salidas. El consumo y su conciliación combinan esas fuentes en la webapp; no equivalen por sí solos a un reporte único de Inforest.</li>
-    <li><b>Familias de insumos y grupos de carta son clasificaciones distintas.</b> Inventario, compras y salidas usan familias del Almacén; venta y costo POS usan grupos de carta. Una receta puede consumir insumos de otra familia, por lo que cada fila familiar requiere conciliar su composición.</li>
-    <li><b>Envases:</b> entra en inventario, compras y salidas, pero no tiene venta ni costo POS propio en esta agrupación. Su inclusión puede ampliar la diferencia; quitarlo no corrige por sí solo las diferencias de clasificación de ingredientes.</li>
+    <li><b>Familias de insumos y grupos de carta son clasificaciones distintas.</b> Inventario, compras y salidas usan familias del Almacén; venta y costo del Sistema usan grupos de carta. Una receta puede consumir insumos de otra familia, por lo que cada fila familiar requiere conciliar su composición.</li>
+    <li><b>Envases:</b> entra en inventario, compras y salidas, pero no tiene venta ni costo del Sistema propio en esta agrupación. Su inclusión puede ampliar la diferencia; quitarlo no corrige por sí solo las diferencias de clasificación de ingredientes.</li>
     ${extras}
     <li><b>Costos de producción queda fuera</b> de inventarios, compras y salidas.</li>
-    <li><b>Desde octubre 2025.</b> Los períodos anteriores no se presentan por inconsistencias históricas entre cierres y kardex.</li>
+    <li><b>Mes desde 2024.</b> Requiere inventario inicial y final y datos de venta del mes; las observaciones de valorización se muestran por período y familia. Semana y Quincena conservan su histórico desde octubre 2025, basado en Kardex.</li>
   </ul></details></div>`;
 }
 
@@ -479,7 +483,7 @@ function notas(st, data, w) {
 function enlazar(raiz) {
   raiz.addEventListener('click', (ev) => {
     const st = raiz.__st;
-    const b = ev.target.closest('button');
+    const b = ev.target.closest('button, [data-seleccionar]');
     if (!b || !raiz.contains(b)) return;
     if (b.dataset.fila) {
       st.abierta = st.abierta === b.dataset.fila ? null : b.dataset.fila;
@@ -492,6 +496,20 @@ function enlazar(raiz) {
       st.quitadas = st.quitadas.filter((t) => t !== b.dataset.agregar);
       st.menu = false;
       guardar('costos_salidas_quitadas', st.quitadas);
+    } else if (b.dataset.seleccionar) {
+      st.seleccionado = b.dataset.seleccionar;
+      st.enfocarSeleccion = true;
+    } else if (b.hasAttribute('data-calculo')) {
+      st.calculoAbierto = !st.calculoAbierto;
+    } else if (b.dataset.metrica) {
+      st.metrica = b.dataset.metrica;
+    } else if (b.hasAttribute('data-revisar-mes')) {
+      st.calculoAbierto = true;
+      st.notasAbiertas.add('calidad');
+      st.irCalculo = true;
+    } else if (b.hasAttribute('data-exportar-observaciones')) {
+      exportarObservaciones(st);
+      return;
     } else if (b.hasAttribute('data-grupo')) {
       st.grupoAbierto = !st.grupoAbierto;
       if (!st.grupoAbierto && /^(bajas|cort|s_)/.test(st.abierta || '')) st.abierta = null;
@@ -501,7 +519,7 @@ function enlazar(raiz) {
     } else if (b.dataset.modo) {
       st.modo = b.dataset.modo;
     } else if (b.dataset.ventana) {
-      st.ini[st.grano] += Number(b.dataset.ventana) * VENTANA;
+      st.ini[st.grano] += Number(b.dataset.ventana) * (st.cantidad || VENTANA);
     } else {
       return;
     }
@@ -512,6 +530,12 @@ function enlazar(raiz) {
     if (el.matches('[data-extra]')) {
       if (el.checked) st.extra.add(el.dataset.extra); else st.extra.delete(el.dataset.extra);
       guardar('costos_sumar', [...st.extra]);
+    } else if (el.matches('[data-anio]')) {
+      st.anio = el.value || null;
+      st.ini.mes = el.value ? Math.max(0, st.data.periodos.findIndex(p => p.k.startsWith(el.value + '-'))) : Number.MAX_SAFE_INTEGER;
+      st.seleccionado = null;
+    } else if (el.matches('[data-cantidad]')) {
+      st.cantidad = Number(el.value);
     } else if (el.matches('[data-grano-sel]')) {
       st.grano = el.value;
       st.abierta = null;
@@ -535,6 +559,15 @@ function enlazar(raiz) {
       if (ev.target.open) abiertas.add(clave); else abiertas.delete(clave);
     }
   }, true);
+  raiz.addEventListener('keydown', ev => {
+    const punto = ev.target.closest('circle[data-seleccionar]');
+    if (punto && (ev.key === 'Enter' || ev.key === ' ')) {
+      ev.preventDefault();
+      raiz.__st.seleccionado = punto.dataset.seleccionar;
+      raiz.__st.enfocarSeleccion = true;
+      dibujar(raiz);
+    }
+  });
   document.addEventListener('click', (ev) => {
     const dd = raiz.querySelector('details.dd');
     if (dd && dd.open && !ev.composedPath().includes(dd)) { dd.open = false; raiz.__st.ddAbierto = false; }
@@ -561,6 +594,7 @@ export default function (component) {
       // 2026-10-09 se guardaba lo añadido, en `costos_salidas`, que se ignora.)
       quitadas: leer('costos_salidas_quitadas', []).filter((t) => typeof t === 'string'),
       agregadas: [],
+      calculoAbierto: false, cantidad: VENTANA, seleccionado: null, anio: null, metrica: 'porcentaje',
       abierta: null, modo: 'total', menu: false, grano: leer('costos_grano', 'mes'),
       grupoAbierto: leer('costos_grupo_abierto', false) === true,
       notasAbiertas: new Set(),
@@ -569,6 +603,7 @@ export default function (component) {
     if (data?.desde_resumen) {
       const i = (data.granos?.mes?.periodos || []).findIndex(p => p.k === data.mes_inicial);
       raiz.__st.grano = 'mes';
+      raiz.__st.seleccionado = data.mes_inicial;
       raiz.__st.fams = new Set(BUCK);
       raiz.__st.extra = new Set(['Eventos']);
       raiz.__st.quitadas = [];

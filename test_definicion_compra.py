@@ -261,11 +261,28 @@ ok(_pide_crudo, "«Documentos SUNAT» pide compras SIN restar las notas",
    "cruza documento contra documento: una factura anulada que desaparece "
    "saldría «Solo SUNAT» siendo falso (regla #301)")
 
+def _lee_o_resta_notas(texto):
+    # El sello identifica la caché, no lee ni vuelve a aplicar una nota.
+    for llamada in ast.walk(ast.parse(texto)):
+        if not isinstance(llamada, ast.Call):
+            continue
+        nombre = getattr(llamada.func, "attr", getattr(llamada.func, "id", ""))
+        if nombre == "aplicar_notas":
+            return True
+        if nombre in ("cargar", "cargar_rango", "_cargar_cacheable") and llamada.args:
+            archivo = ast.unparse(llamada.args[0])
+            if "notascreditocompras" in archivo or "ARCHIVO_NOTAS" in archivo:
+                return True
+    return False
+
+
+ok(_lee_o_resta_notas("data.cargar(dc.ARCHIVO_NOTAS)")
+   and _lee_o_resta_notas("dc.aplicar_notas(compras, notas)")
+   and not _lee_o_resta_notas("data.sello_datos('notascreditocompras.parquet')"),
+   "la guarda distingue lectura de notas y versión de caché")
 _lectores = [p.relative_to(RAIZ).as_posix()
              for p in (RAIZ / "graficos").rglob("*.py")
-             if "notascreditocompras" in p.read_text(encoding="utf-8")
-             or "ARCHIVO_NOTAS" in p.read_text(encoding="utf-8")
-             or "aplicar_notas" in p.read_text(encoding="utf-8")]
+             if _lee_o_resta_notas(p.read_text(encoding="utf-8"))]
 ok(not _lectores, "ninguna vista lee el parquet de notas ni las resta por su cuenta",
    f"lo hacen: {_lectores} — se restan UNA vez, en data.cargar; quien las "
    "quiera sin restar las pide a data.notas_credito_compras()")

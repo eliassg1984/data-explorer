@@ -60,7 +60,7 @@ consumen los dos lados — `data.py` y las vistas —, igual que `cortes.py`.
 import numpy as np
 import pandas as pd
 
-VERSION = 7
+VERSION = 8
 """Entra en la clave de la caché de `data.py`. Subirla al cambiar la
 definición: la caché vive en disco y, sin esto, seguiría sirviendo el df
 preparado con la regla anterior hasta que cambie el parquet.
@@ -73,7 +73,8 @@ restan como los adultos (regla #591); la 5, la nota que toma la fecha de
 su propia fila, y la venta por día del turno de caja (regla #593); la 6,
 el costo de la parte DESCONTADA en `por_grupo_dia` (regla #661); la 7,
 el código del descuento en `por_grupo_dia`, para la devolución de los
-convenios bancarios (regla #665)."""
+convenios bancarios (regla #665); la 8, conteos de ítems con venta positiva
+sin costo antes de agrupar, para la calidad del reporte Costos (#676)."""
 
 CLASE = "CLASE VENTA"
 VENTA = "Venta"
@@ -728,7 +729,7 @@ def unidades_por_clase_dia(df):
     return g[list(POR_CLASE_DIA)]
 
 POR_GRUPO_DIA = ("dia", "grupo", "clase", "cod_desc", "neto", "costo",
-                 "costo_descuento")
+                 "costo_descuento", "lineas_sin_costo", "venta_sin_costo")
 """Las columnas de `por_grupo_dia`, con nombre fijo (regla #481)."""
 
 
@@ -745,8 +746,8 @@ def por_grupo_dia(df):
 
     `costo_descuento` es el costo de la parte REGALADA de cada plato con
     descuento: costo × descuento ÷ precio de carta de la línea —un plato al
-    50 % deja la mitad de su costo—. Es como una media cortesía, y el
-    reporte Costos la resta de los dos lados (regla #661). El descuento es
+    50 % deja la mitad de su costo—. Costos la muestra como referencia
+    comercial separada de su conciliación (regla #676). El descuento es
     el del Reporte de Descuentos del POS (`spRep_Descuento`, «Precio
     Venta»): septiembre 2026 cuadra al céntimo, S/ 50.481,50.
 
@@ -788,11 +789,17 @@ def por_grupo_dia(df):
     parte = (_num(DESCUENTO_ITEM) / carta.where(carta.abs() > 1e-9)).fillna(0.0)
     b["costo_descuento"] = (b["costo"] * parte.clip(0.0, 1.0)).where(
         b["clase"] != CORTESIA, 0.0)
+    # Calidad del costo de lo vendido: antes de agrupar se conserva cuántos
+    # ítems con venta/cantidad positivas carecen de costo. No es costo estimado.
+    sin_costo = ((b["clase"] != CORTESIA) & (b["neto"] > .005)
+                 & (_num(CANTIDAD) > 0) & (b["costo"].abs() < 1e-9))
+    b["lineas_sin_costo"] = sin_costo.astype(int)
+    b["venta_sin_costo"] = b["neto"].where(sin_costo, 0.0)
     b = b.dropna(subset=["dia", "grupo"])
     if b.empty:
         return vacio
     g = b.groupby(["dia", "grupo", "clase", "cod_desc"], as_index=False)[
-        ["neto", "costo", "costo_descuento"]].sum()
+        ["neto", "costo", "costo_descuento", "lineas_sin_costo", "venta_sin_costo"]].sum()
     g["grupo"] = g["grupo"].astype(object)
     return g[list(POR_GRUPO_DIA)]
 

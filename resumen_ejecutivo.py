@@ -14,7 +14,7 @@ import pandas as pd
 import costo_ventas as cv
 import definicion_venta as dv
 
-VERSION = 1
+VERSION = 2
 PEDIDO = "LLAVE LOCAL PEDIDO"
 
 
@@ -107,8 +107,8 @@ def ventas_del_rango(df, ini, fin):
 def costo_del_mes(datos, mes):
     """Mismos defaults que Costos: 4 familias, Eventos sí, Venta interna no.
 
-    Las bajas siguen dentro del consumo carta. Cortesías, descuentos netos
-    de devoluciones del banco y las demás salidas se restan. No se utiliza
+    Las bajas siguen dentro del consumo carta. Cortesías y las demás
+    salidas se restan; los descuentos son referencia comercial. No se utiliza
     la venta total de la portada como denominador: Costos tiene su propio
     ámbito de grupos y lo devuelve explícitamente como venta_base.
     """
@@ -138,12 +138,12 @@ def costo_del_mes(datos, mes):
         bajas = de(datos.get("salidas", {}).get(cv.BAJAS, {}), cub)
         otros = sum(de(serie, cub) for tipo, serie in datos.get("salidas", {}).items()
                     if tipo != cv.BAJAS)
-        nv = otros + de(filas["cortesias"], cub) + descuento
-        carta, ajustado = operativo - nv, pos - descuento
+        nv = otros + de(filas["cortesias"], cub)
+        carta = operativo - nv
         familias.append({"familia": cub, "venta_base": venta,
                          "operativo": operativo, "no_vendido": nv,
-                         "carta": carta, "pos": ajustado, "bajas": bajas,
-                         "diferencia": carta - ajustado,
+                         "carta": carta, "pos": pos, "bajas": bajas,
+                         "descuentos": descuento, "diferencia": carta - pos,
                          "porcentaje": operativo / venta if venta > 0 else None})
     total = {k: sum(f[k] for f in familias) for k in (
         "venta_base", "operativo", "no_vendido", "carta", "pos", "bajas", "diferencia")}
@@ -154,4 +154,5 @@ def costo_del_mes(datos, mes):
     total["faltante"] = total["diferencia"] - total["bajas"]
     total["familias"] = familias
     total["cierre"] = periodos[i].get("sub", "")
+    total["observaciones"] = datos.get("calidad", {}).get(str(mes), {})
     return total

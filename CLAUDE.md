@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -1103,53 +1103,50 @@ Familia y Subfamilia salen del histórico SIN el filtro de Documento: elegir
 
 ## El costo de ventas: el reporte «Costos»
 
-Desde el 2026-10-09. Una vista, «Costo de Venta Ajustado» en el rail
-(desde el 2026-10-16; su id sigue siendo «Costo de ventas»), por MES
-OPERATIVO:
+La vista se llama «Costo de ventas» (mismo id). Desde 2026-10-19 compara
+consumo carta con el costo histórico COMPLETO del Sistema:
 
-    Consumo operativo = inventario inicial + compras − inventario final
-    Consumo carta     = consumo operativo − consumos no vendidos
-                        (notas de salida que no son bajas + cortesías
-                         + costo de descuentos)
-    Diferencia        = consumo carta − costo del POS con descuento
-                      = bajas registradas + faltante no registrado
+    Consumo operativo = inventario inicial + compras netas − inventario final
+    Consumo carta     = consumo operativo − salidas que no son bajas − cortesías
+    Diferencia        = consumo carta − costo histórico completo del Sistema
+    Pendiente         = diferencia − bajas registradas
 
-El consumo carta se compara con el costo del POS (Paloteo › Comparativo ›
-«(a) Ventas en el rango»); el operativo es el dato de antes. Los nombres son
-los de la planilla del usuario. El inventario es el ÚLTIMO cierre de cada
-área en su mes operativo, valorizado como se contó; desde octubre 2025
-(antes los cierres no cuadran, #612). La cuenta es `costo_ventas.py`; la
-tabla, un `st.components.v2` (`graficos/costos_tabla.js`) que hace en el
-navegador las restas que dependen de lo elegido. Envases no tiene costo del
-POS y Eventos y Venta interna no son la venta: los dos se ajustan en
-pantalla (Eventos se suma a la venta por defecto; Venta interna, no). Por **quincena o semana** el inventario es el del KARDEX al final
-del período (`costo_ventas.inventario_en_momentos`), no lo contado: las
-semanas no suman el mes. Reemplazó a Ventas › «Venta vs Compra». Regla #622.
+**Los descuentos están separados**, en «Margen y descuentos». Su costo
+proporcional, neto de las devoluciones de convenios configuradas, es una
+referencia comercial: no reduce ni consumo carta ni costo del Sistema.
+Las bajas permanecen en el consumo carta y explican parte de la diferencia.
+El saldo por sí solo no demuestra pérdida física. La portada de Resumen
+ejecutivo aplica la misma cuenta. Esta decisión sustituye la comparación
+ajustada por descuentos de la regla #661; ver regla #676.
 
-**El costo de descuentos es la parte REGALADA** (costo × descuento ÷
-carta: un plato al 50 % deja la mitad de su costo), y **se resta de los
-dos lados**: ese plato SÍ se vendió y el POS lo costea entero, así que la
-comparación es contra el «Costo con descuento» (debajo del «Costo sin
-descuento», el Paloteo tal cual). **Las bajas no se restan**: son pérdida,
-se quedan en el consumo carta y explican la Diferencia junto al faltante
-no registrado (regla #662, como el cuadro de costos que el usuario llevaba
-antes). Sale de `definicion_venta.por_grupo_dia`
-(`costo_descuento`). El descuento cuadra al céntimo con el Reporte de
-Descuentos del POS (`spRep_Descuento`): septiembre 2026, S/ 50.481,50.
-Regla #661.
+**Mes desde enero de 2024**, con inventario inicial y final y movimientos
+de venta del mes. El inventario es lo CONTADO valorizado del último cierre
+por área en el mes operativo, no el ajuste de Kardex. Un parcial anterior
+al final de mes no habilita su consumo mensual. `costos_calidad.py` revisa
+ambas puntas por período y familia: stock con precio cero, negativos,
+datos ausentes, duplicados y cambios de cobertura de áreas. Conserva los
+importes originales y ofrece el detalle y CSV de las observaciones.
 
-**Y de un descuento de convenio, el banco devuelve una parte** (regla
-#665): esa parte no está regalada. El POS no lo sabe; la tabla (código del
-descuento, % de devolución, vigencia) se edita en Costos › «Convenios con
-devolución del banco» y vive en R2, NO en el repo, que es público
-(`convenios_descuento.py` arranca vacío). Entra también en el «% costo»
-de Mix de carta, que se mide sobre el neto más la devolución.
+**Semana y Quincena mantienen octubre de 2025 como inicio**: su inventario
+sí proviene del Kardex y requiere su propia validación. No extenderles el
+histórico por haber validado los cierres mensuales.
 
-**El presupuesto de venta** (por mes y servicio) tampoco está en el POS:
-vive en R2 y se edita en Costos › «Presupuesto de venta»
-(`presupuesto_ventas.py`, regla #669). Ventas › Comparación Año Pasado lo
-dibuja con su % de cumplimiento; el día y la semana son un reparto según la
-venta del año anterior, sólo el mes es exacto.
+La tabla muestra seis períodos y seis filas principales; permite doce
+columnas, elegir año y abrir cálculo, no vendidos y evolución por fila.
+El gráfico compara consumo carta y Sistema, en importe o porcentaje de
+venta; elegir un mes resalta su columna y cambia observaciones y cobertura.
+«SUNAT y Sistema» reutiliza el cruce documental existente sobre el registro
+cargado, antes de filtrar estados y sin XML/API en vivo. La cobertura es
+(Coincide + Diferencia) / documentos SUNAT; excluye Solo sistema. Notas e
+importes positivos pendientes se separan. No modifica compras ni consumo,
+no certifica recepción física y no interpreta falta de registro como cero.
+
+Eventos se suma a Alimentos por defecto; Venta interna no. Familias del
+Almacén y grupos de venta son clasificaciones distintas. Envases no tiene
+venta propia en esta agrupación. Los convenios bancarios se siguen editando
+en Costos y se guardan en R2 (`convenios_descuento.py`, regla #665); Mix de
+carta conserva su tratamiento comercial. El presupuesto de ventas también
+se mantiene en R2 y se edita en Costos (regla #669).
 
 ## El stock también tiene UNA definición: lo ACTIVO
 

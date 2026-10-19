@@ -58,6 +58,8 @@ def enlaces(granos):
                     agregar(fila, "Inventario Valorizado", "productos",
                             "Stock histórico por producto", fecha_stock=fecha.isoformat())
             if grano == "mes":
+                agregar("documental", "Documentos SUNAT", "documentos_sunat",
+                        "Comprobantes SUNAT del mes")
                 for fila in ("dif", "falt"):
                     agregar(fila, "Ajuste de Inventario", "diferencias",
                             "Investigar diferencias del cierre",
@@ -80,7 +82,7 @@ def _contexto(params, reporte):
         return None
     vistas = {"Ventas": "resumen_ejecutivo", "Compras": "compras_por_periodo",
               "Movimientos": "salidas_por_periodo", "Ajuste de Inventario": "diferencias",
-              "Inventario Valorizado": "productos"}
+              "Inventario Valorizado": "productos", "Documentos SUNAT": "documentos_sunat"}
     if params.get("vista") != vistas.get(reporte):
         return None
     try:
@@ -111,11 +113,16 @@ def aplicar_contexto(reporte, df=None):
         return
     if df is None:
         categoria = {"Compras": "sec_semanal", "Movimientos": "sal_periodo"}.get(reporte)
-        if reporte in ("Ventas", "Compras", "Movimientos"):
+        if reporte in ("Ventas", "Compras", "Movimientos", "Documentos SUNAT"):
             carga = reporte == "Ventas"
             clave = clave_rango(reporte, carga, categoria)
             aplicar_atajo(clave, rango, reporte, carga)
             restaurar_eco(clave)
+        st.session_state[marca] = firma
+        return
+
+    if reporte == "Documentos SUNAT":
+        # El cruce documental no admite filtros de familia de insumos.
         st.session_state[marca] = firma
         return
 

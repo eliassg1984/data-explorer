@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-675 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+676 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -760,7 +760,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
 - **#675** — Documentos SUNAT pide EN LOTE los XML que faltan en la tabla…
 
-**Datos, R2 y DuckDB** (106)
+**Datos, R2 y DuckDB** (107)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -868,8 +868,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
 - **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
 - **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
+- **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 
-**SUNAT y SIRE** (62)
+**SUNAT y SIRE** (63)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -933,6 +934,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#672** — Documentos SUNAT: la tarjeta de abajo ABRE en la fidelidad, y suma «Por tipo de compra»…
 - **#674** — El original de SUNAT se espera DENTRO de la ficha: no hay que cerrarla y volver a abrirla…
 - **#675** — Documentos SUNAT pide EN LOTE los XML que faltan en la tabla…
+- **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 
 **Fechas, rangos y cortes** (17)
 
@@ -52766,6 +52768,49 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-19.)
 
+676. **Costos mensual usa lo contado; descuentos y cobertura documental
+     se presentan separados de su conciliación.** Desde 2026-10-19,
+     por pedido del usuario después de validar el histórico de archivos:
+
+     - Mes comienza en 2024 (`DESDE_MES`) si hay dos cierres y venta del
+       mes; un parcial previo al final de mes no lo habilita. No se
+       condiciona a la calidad del AJUSTE del Kardex: son fuentes distintas.
+       Semana/Quincena conservan `DESDE` en octubre 2025.
+     - `costos_calidad.inventarios` revisa AMBAS puntas: precio cero,
+       cantidades/valores negativos, datos ausentes, duplicados y áreas
+       sin cierre. Las alertas y su CSV siguen la familia y mes elegidos.
+       No rellena precios ni corrige las cantidades. El mes siguiente
+       hereda las observaciones de su inventario inicial.
+     - Consumo carta = operativo − salidas seleccionadas que no son bajas
+       − cortesías. Costo Sistema = costo histórico completo. Los
+       descuentos salen de ambos lados, sustituyendo la presentación
+       ajustada de #661: la diferencia queda igual, pero los importes y
+       porcentajes comparan costos completos. Resumen usa la misma cuenta.
+       Las bajas permanecen dentro del consumo y se separan al conciliar.
+     - Seis filas principales, 6/12 períodos, selector de año, cálculo y
+       no vendidos desplegables. El gráfico permite importe/% y selección
+       de mes en puntos o botones; conserva selección, familias y extras.
+       Los porcentajes acumulados usan la venta acumulada y los inventarios
+       del total son la primera y última punta.
+     - `costos_paneles.js` se concatena con el componente principal. El
+       control documental reutiliza `cruzar_con_parquet` sobre el registro
+       cargado y compras BRUTAS más notas documentales, sin API/XML.
+       Denominador SUNAT antes de filtrar estados; incluye coincidencias
+       con diferencia de importe y excluye Solo sistema. Notas pendientes
+       separadas de importes positivos. Sin cobertura no significa cero
+       pendientes. Nunca se incorpora ese control al consumo del reporte.
+     - La observación de venta sin costo se cuenta ANTES de agrupar por
+       día/grupo, después de quitar ítems repetidos por pagos. Suma venta,
+       no un costo faltante estimado. `definicion_venta.VERSION` pasa a 8;
+       `costo_ventas.VERSION` a 6 y Resumen a 2. Los sellos de las notas de
+       compra forman parte de las cachés de Costos y Resumen.
+
+     Pruebas: `test_costos_calidad.py`, `test_costo_ventas.py`,
+     `test_resumen_ejecutivo.py` y reproducción privada sobre archivos reales.
+     Ningún dato del negocio se incorpora al repositorio público.
+
+     (2026-10-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52778,7 +52823,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#675**; la próxima toma el número siguiente.
+> última regla es la **#676**; la próxima toma el número siguiente.
 
 >
 

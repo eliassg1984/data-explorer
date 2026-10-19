@@ -37,6 +37,7 @@ import convenios_descuento
 import presupuesto_ventas
 import costo_ventas
 import costos_enlaces
+import costos_calidad
 import data
 import definicion_venta
 import kardex
@@ -44,13 +45,13 @@ from graficos.base import (
     _render_rail, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
 )
 
-# Una sola vista: «Costo de Venta Ajustado» desde el 2026-10-16 (a pedido,
-# al sumar el costo de descuentos, regla #661). El id sigue siendo «Costo de
+# Una sola vista: «Costo de ventas», con descuentos comerciales separados
+# desde el 2026-10-19 (regla #676). El id sigue siendo «Costo de
 # ventas»: renombrar es cambiar sólo el rótulo. El rail se declara igual —con `rail_sin_tablas`, como
 # todos (regla #507)— porque de él salen el panel del reporte en la columna
 # (`graficos/__init__.py::_RAILS`, regla #568) y el rótulo de la franja.
 _COSTOS_RAIL_CATEGORIAS = rail_sin_tablas((
-    ("Costos", (("Costo de ventas", "Costo de Venta Ajustado", ":material/calculate:"),)),
+    ("Costos", (("Costo de ventas", "Costo de ventas", ":material/calculate:"),)),
 ))
 
 # Vacía y no ausente: `_render_rail` distingue `secciones=()` («destino
@@ -58,13 +59,14 @@ _COSTOS_RAIL_CATEGORIAS = rail_sin_tablas((
 _PILA = pila_sin_tablas(())
 
 _ARCHIVOS = ("compras.parquet", "salidas.parquet", "ventas.parquet",
-             "inventariovalorizado.parquet", kardex.ARCHIVO)
+             "notascreditocompras.parquet", "inventariovalorizado.parquet", kardex.ARCHIVO)
 
 _AQUI = Path(__file__).parent
 _TABLA = st.components.v2.component(
     "costos_tabla",
     css=(_AQUI / "costos_tabla.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "costos_tabla.js").read_text(encoding="utf-8"),
+    js=((_AQUI / "costos_paneles.js").read_text(encoding="utf-8")
+        + "\n" + (_AQUI / "costos_tabla.js").read_text(encoding="utf-8")),
 )
 
 
@@ -115,6 +117,37 @@ def _datos(_ajuste, sellos, version, convenios=None):
     return {"granos": granos}
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cobertura_documental(periodos, sellos, version=1):
+    """Mismo cruce de Documentos SUNAT, sólo del registro cargado; sin XML/API.
+
+    Fallar lanza y no se cachea como cero. Los documentos se comparan con
+    compras brutas más sus notas propias, antes de filtrar estados/familias.
+    """
+    from graficos.compras import documentos_sunat as documentos
+    registro = data.cargar("sunat_compras.parquet")
+    compras = data.cargar("compras.parquet", notas_credito=False)
+    notas = data.notas_credito_compras()
+    if registro is None or compras is None or notas is None:
+        raise RuntimeError("No se pudo leer el control documental")
+    if registro.empty or "fecha_emision" not in registro:
+        return {}
+    fechas = pd.to_datetime(registro["fecha_emision"], errors="coerce")
+    resultado = {}
+    for clave in periodos:
+        mes = pd.Period(clave, freq="M")
+        ini, fin = mes.start_time.date(), mes.end_time.date()
+        reg = registro[fechas.dt.to_period("M") == mes]
+        if reg.empty:
+            resultado[clave] = {"disponible": False}
+            continue
+        agrupado = documentos._parquet_agrupado_por_documento(
+            compras, "FECHA_EMISION_DOC", ini, fin, notas=notas)
+        resultado[clave] = costos_calidad.cobertura_documental(
+            documentos.cruzar_con_parquet(reg, agrupado))
+    return resultado
+
+
 def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard «Costos»: el rail de una vista + la tabla del costo de ventas.
 
@@ -140,10 +173,21 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
                        "Reintentá en unos segundos.")
             return
         if not mes["periodos"]:
-            st.info("Todavía no hay dos cierres de inventario seguidos desde "
-                    "octubre 2025: sin inventario inicial y final no hay "
-                    "consumo que calcular.")
+            st.info("No hay meses desde 2024 con inventario inicial, final "
+                    "y cobertura de ventas para calcular este reporte.")
             return
+        documental = {}
+        if data.secrets_disponibles():
+            try:
+                archivos = ("sunat_compras.parquet", "compras.parquet",
+                            "notascreditocompras.parquet")
+                documental = _cobertura_documental(
+                    tuple(p["k"] for p in mes["periodos"]),
+                    tuple(data.sello_datos(a) for a in archivos))
+            except Exception:
+                # Su falta no transforma documentos pendientes en cero y
+                # tampoco impide leer el estado de costos.
+                documental = {}
         # El asistente responde sobre lo que suma la tabla, no sobre los
         # cierres sueltos que llegan en `df_f`.
         publicar_contexto_ia("Costos", costo_ventas.tabla_larga(mes))
@@ -153,7 +197,7 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
         desde_resumen = (st.query_params.get("desde_resumen") == "1"
                           and any(p["k"] == mes_enlace for p in mes["periodos"]))
         _TABLA(key="costos_tabla", data=dict(
-            datos, enlaces=costos_enlaces.enlaces(datos["granos"]),
+            datos, documental=documental, enlaces=costos_enlaces.enlaces(datos["granos"]),
             mes_inicial=mes_enlace if desde_resumen else None,
             desde_resumen=desde_resumen), width="stretch")
     _editor_convenios(convenios)

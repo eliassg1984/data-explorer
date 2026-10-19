@@ -10,11 +10,11 @@ LA CUENTA, período por período y por familia:
 
     Consumo operativo = inventario inicial + compras − inventario final
     Consumos no vendidos = notas de salida que no son bajas + costo de
-                           cortesías + costo de descuentos
+                           cortesías
                            (las salidas entran todas; en pantalla se puede
                             quitar una)
     Consumo carta     = consumo operativo − consumos no vendidos
-    Diferencia        = consumo carta − costo del POS con descuento
+    Diferencia        = consumo carta − costo histórico completo del Sistema
                       = bajas registradas + diferencia pendiente de conciliación
 
 Las BAJAS no son un consumo no vendido: son pérdida, se quedan en el
@@ -25,11 +25,8 @@ La diferencia después de bajas es un residuo por conciliar entre fechas,
 alcance, clasificación de insumos, recetas y valorización. Su importe por
 sí solo no demuestra un faltante físico.
 
-El costo de descuentos es la parte REGALADA de los platos con descuento
-(costo × descuento ÷ precio de carta, `definicion_venta.por_grupo_dia`): un
-plato al 50 % deja la mitad de su costo, como media cortesía. Ese plato SÍ
-se vendió y el POS lo costea entero, así que se resta también del costo
-según el POS —«ajustado»—: la diferencia no cambia (regla #661).
+El costo proporcional de descuentos se muestra como referencia comercial
+separada: el plato vendido mantiene su costo completo en la conciliación.
 
 El consumo operativo es todo lo que salió del almacén; el consumo carta, lo
 que costó lo vendido, y es el que se compara con el costo que dice el
@@ -40,7 +37,7 @@ navegador (`graficos/costos_tabla.js`): acá se arman las series de cada fila.
 TRES GRANOS, DOS INVENTARIOS:
 
   · Mes: el inventario es el del MES OPERATIVO. El cierre de fin de mes se
-    registra del 1 al 6 del siguiente (`cortes.fecha_operativa`, regla
+    registra del 1 al 7 del siguiente (`cortes.fecha_operativa`, regla
     #613), así que el «cierre de setiembre» lleva fecha de octubre. Por
     área, el ÚLTIMO cierre cuya fecha operativa cae en el mes, valorizado
     como se contó (`VALORIZADO TOTAL` = stock declarado × precio promedio).
@@ -75,9 +72,9 @@ definición. Viajan aparte (`venta_extra`, `costo_extra`) y la pantalla los
 suma a Alimentos con una casilla cada uno: Eventos marcada por defecto, Venta
 interna no.
 
-DESDE OCTUBRE 2025. Antes, los cierres y el kardex no cuadran: setiembre
-2025 tuvo un ajuste de S/ 627 mil al limpiar el inventario (regla #612), y
-el costo de mayo 2025 salía negativo.
+MES DESDE 2024, con dos cierres y cobertura de ventas. Las observaciones
+de valorización se calculan en costos_calidad. Semana y quincena conservan
+su límite de octubre 2025: usan otra fuente de inventario.
 
 Puro pandas, sin streamlit. Lo vigila `test_costo_ventas.py`.
 """
@@ -89,14 +86,17 @@ import pandas as pd
 
 from cortes import MESES_ABR_ES, fecha_operativa
 
-VERSION = 5
+VERSION = 6
 """Subirla cuando cambie QUÉ se calcula. 2: semanas y quincenas. 3: los
 rótulos de los períodos sin «cierre»/«kardex» (lo dice la cabecera). 4: el
 costo de descuentos (regla #661). 5: lo que devuelve el banco de un
-convenio (regla #665)."""
+convenio (regla #665). 6: conciliación con costo completo, histórico mensual
+desde 2024 y observaciones de valorización (regla #676)."""
 
 DESDE = pd.Period("2025-10", freq="M")
-"""El primer mes que se muestra: antes los cierres no sirven (regla #612)."""
+"""Inicio del histórico de SEMANA/QUINCENA, basado en Kardex."""
+DESDE_MES = pd.Period("2024-01", freq="M")
+"""Inicio mensual: inventario contado, independiente del ajuste de Kardex."""
 
 GRANOS = ("mes", "quincena", "semana")
 
@@ -431,7 +431,7 @@ def meses_del_reporte(inv):
     """Los meses con inventario al cierre del mes Y del anterior, desde
     `DESDE`: sin las dos puntas no hay consumo que calcular."""
     hay = set(inv.index)
-    return [m for m in sorted(hay) if m >= DESDE and (m - 1) in hay]
+    return [m for m in sorted(hay) if m >= DESDE_MES and (m - 1) in hay]
 
 
 # ── La tabla ─────────────────────────────────────────────────────────────
@@ -476,6 +476,20 @@ def armar(ajuste, compras, salidas, por_grupo_dia, convenios=None):
     seguidos, `periodos` va vacío."""
     inv, areas = inventario_por_mes(ajuste)
     meses = meses_del_reporte(inv)
+    # La ausencia de ventas históricas no es una venta/cortesía de cero.
+    if por_grupo_dia is None or por_grupo_dia.empty:
+        meses = []
+    else:
+        fechas = pd.to_datetime(por_grupo_dia["dia"], errors="coerce").dropna()
+        cobertura = set(fechas.dt.to_period("M"))
+        meses = [m for m in meses if m in cobertura]
+    # Un parcial del mes en curso no es su inventario final. Se exige al
+    # menos una apertura al final del mes o en los días del siguiente que
+    # fecha_operativa asigna al cierre; el resto se audita por área.
+    if meses:
+        f = pd.to_datetime(ajuste[_col(ajuste, "FECHA APERTURA INVENTARIO")], errors="coerce")
+        ultimos = pd.DataFrame({"mes": fecha_operativa(f).dt.to_period("M"), "fecha": f}).groupby("mes")["fecha"].max()
+        meses = [m for m in meses if ultimos.loc[m] >= m.end_time.normalize()]
     prev = inv.copy()
     prev.index = [m + 1 for m in prev.index]
     out = {"grano": "mes", "inventario": "cierre", "periodos": []}
@@ -490,6 +504,10 @@ def armar(ajuste, compras, salidas, por_grupo_dia, convenios=None):
                                 "sub": sub})
     out.update(_tabla(meses, prev, inv, compras, salidas, por_grupo_dia, clave_mes,
                       convenios))
+    # Import local: la auditoría depende de las mismas familias/fechas.
+    import costos_calidad
+    out["calidad"] = costos_calidad.inventarios(ajuste, meses)
+    out["calidad_venta"] = costos_calidad.ventas(por_grupo_dia, meses)
     return out
 
 

@@ -23,7 +23,7 @@ _RESUMEN_RAIL_CATEGORIAS = rail_sin_tablas((
 ))
 _PILA = pila_sin_tablas(())
 _ARCHIVOS = ("ajusteinventario.parquet", "compras.parquet", "salidas.parquet",
-             "ventas.parquet")
+             "ventas.parquet", "notascreditocompras.parquet")
 _AQUI = Path(__file__).parent
 _COMPONENTE = st.components.v2.component(
     "resumen_ejecutivo",
