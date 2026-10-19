@@ -6225,6 +6225,10 @@ CSS = """    /* ================================================================
         gap: 0 !important;
         min-width: 0 !important;
     }
+    .st-key-vh_contexto_superior [data-testid="stCaptionContainer"],
+    .st-key-vh_contexto_superior [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
     .st-key-vh_contexto_superior [data-testid="stCaptionContainer"] p {
         text-align: right !important;
     }
