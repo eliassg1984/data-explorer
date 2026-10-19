@@ -99,6 +99,7 @@ from tema import (
 from graficos import alturas
 from graficos import ventas_ficha_hora as _fh
 from graficos import ventas_hora_controles as _hc
+from graficos import ventas_hora_detalle as _hd
 from inyecciones._iframe import inyectar_html
 from graficos.base import (
     _card, _resolver, franja_linea_inferior, paso_etiquetas,
@@ -930,6 +931,11 @@ def _prep_tramo(df, c, grano, ini, fin, semanal=False):
     for _id, _col in (("grupo", "fam"), ("sub", "sub"), ("prod", "prod")):
         if c.get(_col) and c[_col] in df.columns:
             out[_id] = df.loc[m, c[_col]].astype(str).values
+    if "ped" not in out and c.get("pedido") and c["pedido"] in df:
+        out["ped"] = df.loc[m, c["pedido"]].astype(str).values
+    _canal = _resolver(df, ["Canal Venta", "Canal_Venta", "Canal"])
+    if _canal:
+        out["canal"] = df.loc[m, _canal].fillna("Sin canal").astype(str).values
     if c.get("area") and c["area"] in df.columns:
         out["area"] = nombre_area(df.loc[m, c["area"]]).values
     if c.get("tipo_desc") and c["tipo_desc"] in df.columns:
@@ -2099,23 +2105,25 @@ _TOP_PLATOS = 20
 _MED_FILAS = ("venta", "cant", "desc")
 _NOCHE_DESDE = 18
 _K_FICHA = "vh_ficha"
+_K_CELDA_FILA = "vh_celda_fila"
+_K_PERFIL_FILA = "vh_perfil_fila"
 # Espacio entre mapa y ficha, sin marcas. El alto de la cabecera lo mide
 # el navegador porque sus filtros pueden envolver (#627).
 _PIE_SOLO_FICHA = 21
 
 
-def _items_filas(tramos, que):
-    """Las filas del mapa: los 20 platos que más vendieron en el período MÁS
-    NUEVO de los elegidos, o todos los grupos por venta. Las mismas filas en
+def _items_filas(tramos, que, medida="venta"):
+    """Las filas del mapa: los 20 platos con mayor medida en el período MÁS
+    NUEVO de los elegidos, o todos los grupos según esa medida. Las mismas filas en
     todos los paneles: si no, «Diferencia» restaría platos distintos."""
     con = [x for x in tramos if x is not None and not x.empty
            and que in x.columns]
     if not con:
         return []
     if que == "prod":
-        return (con[-1].groupby("prod")["venta"].sum()
+        return (con[-1].groupby("prod")[medida].sum()
                 .nlargest(_TOP_PLATOS).index.tolist())
-    return (pd.concat(con).groupby(que)["venta"].sum()
+    return (pd.concat(con).groupby(que)[medida].sum()
             .sort_values(ascending=False).index.tolist())
 
 
@@ -2199,7 +2207,7 @@ def _fig_filas(items, mats, etq_cols, claves, grano, medida, dif, foco,
                 xs.append(offs[s] + c)
                 ys.append(n)
                 cd.append([n, per, etq_cols[c],
-                           _fmt_valor(v, medida, por_dia), d])
+                           _fmt_valor(v, medida, por_dia), d, s, c])
     # `hoverinfo` NO es «skip»: eso apaga también el clic (#388). La
     # etiqueta la da el hovertemplate.
     fig.add_trace(go.Scatter(
@@ -2224,9 +2232,13 @@ def _fig_filas(items, mats, etq_cols, claves, grano, medida, dif, foco,
                                yref="paper", yanchor="bottom",
                                showarrow=False, text=txt,
                                font=dict(size=12, color=TEXTO_PRINCIPAL))
-    if foco in items:
-        i = items.index(foco)
-        fig.add_shape(type="rect", x0=-0.5, x1=total - 0.5, y0=i - 0.5,
+    nombre_foco = foco.get("nombre") if isinstance(foco, dict) else foco
+    if nombre_foco in items:
+        i = items.index(nombre_foco)
+        celda = isinstance(foco, dict) and 0 <= foco.get("sel", -1) < len(mats)
+        centro = offs[foco["sel"]] + foco["c"] if celda else 0
+        fig.add_shape(type="rect", x0=centro - .5 if celda else -.5,
+                      x1=centro + .5 if celda else total - .5, y0=i - 0.5,
                       y1=i + 0.5, layer="above", fillcolor="rgba(0,0,0,0)",
                       line=dict(color=ACENTO, width=2))
     varios = len(claves) > 1
@@ -2258,16 +2270,55 @@ def _punto_fila(evt):
     return cd[0] if cd else None
 
 
-def _clic_filas(base_key):
+def _seleccion_fila(evt, horas, que):
+    """La celda conserva entidad, período y hora, también a medianoche."""
+    punto = _first_point(evt)
+    cd = punto.get("customdata") if isinstance(punto, dict) else None
+    if not cd or len(cd) < 7:
+        return None
+    try:
+        sel, col = int(cd[5]), int(cd[6])
+        if sel < 0 or not 0 <= col < len(horas):
+            return None
+        return {"que": que, "nombre": str(cd[0]), "sel": sel,
+                "c": col, "hora": int(horas[col])}
+    except (TypeError, ValueError):
+        return None
+
+
+def _cerrar_fila():
+    for key in (_K_FICHA, _K_CELDA_FILA, _K_PERFIL_FILA):
+        st.session_state.pop(key, None)
+    st.session_state[_hc.AMPLIADO] = False
+
+
+def _alternar_perfil_fila():
+    st.session_state[_K_PERFIL_FILA] = not st.session_state.get(_K_PERFIL_FILA, False)
+
+
+def _ver_producto_fila(nombre):
+    """Callback previo al rerun: mantiene período, hora y alcance."""
+    celda = dict(st.session_state.get(_K_CELDA_FILA) or {})
+    celda.update(que="prod", nombre=nombre)
+    st.session_state[_K_CELDA_FILA] = celda
+    st.session_state[_K_FICHA] = nombre
+    st.session_state["vh_op_filas"] = "Platos"
+    st.session_state["vh_filas_aplicada"] = "Platos"
+
+
+def _clic_filas(base_key, horas=(), que="prod"):
     """El clic de la corrida anterior, leído ANTES de dibujar y con un
     contador en la key (regla #399): la ficha tiene que abrir en la MISMA
     corrida que el clic, y el mapa se dibuja con la key nueva."""
     n = st.session_state.get(f"_{base_key}_n", 0)
-    nombre = _punto_fila(st.session_state.get(f"{base_key}_{n}"))
+    evt = st.session_state.get(f"{base_key}_{n}")
+    nombre = _punto_fila(evt)
     if nombre is not None:
         st.session_state[f"_{base_key}_n"] = n + 1
-        st.session_state[_K_FICHA] = (
-            None if st.session_state.get(_K_FICHA) == nombre else nombre)
+        st.session_state[_K_FICHA] = nombre
+        st.session_state[_K_CELDA_FILA] = _seleccion_fila(evt, horas, que)
+        st.session_state[_K_PERFIL_FILA] = False
+        st.session_state[_hc.FILTROS_ABIERTOS] = False
     return f"{base_key}_{st.session_state.get(f'_{base_key}_n', 0)}"
 
 
@@ -2276,7 +2327,7 @@ def _a_dias_horas():
     st.session_state["vh_op_filas"] = _FILAS[0]
 
 
-def _ficha_filas(tramos, claves, grano, que, nombre, medida, horas):
+def _ficha_filas(tramos, claves, grano, que, nombre, medida, horas, por_dia=True):
     """La ficha de una fila de «Platos»/«Grupos»: en cada período, cuánto,
     cuánto por día, su puesto, su hora pico, cuánto vende de noche y de
     viernes a domingo; y su curva por hora y por día de semana."""
@@ -2298,7 +2349,7 @@ def _ficha_filas(tramos, claves, grano, que, nombre, medida, horas):
         den = np.array([cuenta.get(w, 0) for w in range(7)], dtype=float)
         puesto = "—"
         if tot:
-            _rk = tr.groupby(que)["venta"].sum().rank(ascending=False,
+            _rk = tr.groupby(que)[medida].sum().rank(ascending=False,
                                                       method="min")
             puesto = f"#{int(_rk.get(nombre))}" if nombre in _rk else "—"
         noche = (float(ph[[h for h in horas if h >= _NOCHE_DESDE or h < 6]]
@@ -2313,17 +2364,18 @@ def _ficha_filas(tramos, claves, grano, que, nombre, medida, horas):
                       "Vie–Dom": f"{finde:.0%}"})
         color = _COLOR_MARCA[s % len(_COLOR_MARCA)]
         curvas.append(go.Scatter(
-            x=[_etiqueta_hora(h) for h in horas], y=ph.values / n_dias,
+            x=[_etiqueta_hora(h) for h in horas], y=ph.values / (n_dias if por_dia else 1),
             mode="lines+markers", name=per, line=dict(color=color, width=2),
             marker=dict(size=5),
-            hovertemplate=f"{per} · %{{x}}<br>%{{y:,.0f}} por día"
-                          "<extra></extra>"))
+            hovertemplate=f"{per} · %{{x}}<br>%{{y:,.0f}}" + (" por día" if por_dia else " total")
+                          + "<extra></extra>"))
         semanas.append(go.Bar(
-            x=list(_DIAS_ES), y=np.divide(pw.values, den,
-                                          out=np.zeros(7), where=den > 0),
+            x=list(_DIAS_ES), y=(np.divide(pw.values, den,
+                                          out=np.zeros(7), where=den > 0)
+                                 if por_dia else pw.values),
             name=per, marker=dict(color=color),
-            hovertemplate=f"{per} · %{{x}}<br>%{{y:,.0f}} por día"
-                          "<extra></extra>"))
+            hovertemplate=f"{per} · %{{x}}<br>%{{y:,.0f}}" + (" por día" if por_dia else " total")
+                          + "<extra></extra>"))
     if not filas:
         st.caption("Sin ventas de esa fila en los períodos elegidos.")
         return
@@ -2332,9 +2384,9 @@ def _ficha_filas(tramos, claves, grano, que, nombre, medida, horas):
                                           rol=alturas.MINI, minimo=70))
     # columnas-internas: la curva por hora y la de día de semana
     c1, c2 = st.columns([1.6, 1], gap="small")
-    for col, trazas, titulo in ((c1, curvas, "Por hora · promedio por día"),
+    for col, trazas, titulo in ((c1, curvas, "Por hora · " + ("promedio por día" if por_dia else "total")),
                                 (c2, semanas, "Por día de semana · "
-                                              "promedio")):
+                                              + ("promedio" if por_dia else "total"))):
         with col:
             f = go.Figure(trazas)
             _compras_layout_min(f, titulo)
@@ -2640,6 +2692,7 @@ def _cerrar_foco():
     """El botón «Cerrar» de la ficha de la hora. Corre antes del rerun, así
     que la ficha ya no se dibuja en esa misma pasada."""
     st.session_state.pop(_K_FOCO, None)
+    st.session_state[_hc.AMPLIADO] = False
 
 
 def _abrir_dia_de_semana(iso):
@@ -2833,7 +2886,8 @@ def _ficha_de_la_hora(foco, claves, grano, ancla, filtrar_cb, raros, horas,
                   float(r[_vc].sum()))
                  if len(r) else (0.0, 0.0, 0.0))
     _fh.dibujar(dia, foco["h"], fl, horas, modo=modo, celda=celda,
-                al_cerrar=_cerrar_foco)
+                al_cerrar=_cerrar_foco, al_ampliar=_hc.alternar_ampliado,
+                ampliado=bool(st.session_state.get(_hc.AMPLIADO)))
 
 
 def _tabla_medidas(marcas, tramos, claves, grano, orden, medidas, ver_var):
@@ -3077,8 +3131,14 @@ def _dibujar_filas(tramos, claves, grano, medida, filas, cols_filas, lectura,
             st.button("Ver en filas Horas", key="vh_btn_a_dias",
                       on_click=_a_dias_horas, use_container_width=True)
         medida = "venta"
-    items = _items_filas(tramos, que)
+    key = _clic_filas(f"vh_filas_g_{que}_{grano}", horas, que)
+    items = _items_filas(tramos, que, medida)
+    elegido = st.session_state.get(_K_FICHA)
+    if elegido and elegido not in items and any(
+            t is not None and que in t and t[que].eq(elegido).any() for t in tramos):
+        items.append(elegido)
     if not items:
+        _cerrar_fila()
         _sin_col = que == "area" and not any(
             x is not None and "area" in x.columns for x in tramos)
         st.info("El parquet de ventas no trae el área de producción "
@@ -3098,9 +3158,13 @@ def _dibujar_filas(tramos, claves, grano, medida, filas, cols_filas, lectura,
     elif dif and not por_dia:
         st.caption("En «Total», un período en curso sale rojo aunque nada haya "
                    "cambiado: «Por día» lo compara parejo.")
-    key = _clic_filas(f"vh_filas_g_{que}_{grano}")
+    if que == "prod":
+        st.caption(f"Hasta {_TOP_PLATOS} platos por {_MED_LABEL[medida].lower()} "
+                   "del período más reciente; el seleccionado se conserva.")
+    foco = (st.session_state.get(_K_CELDA_FILA)
+            if not st.session_state.get(_K_PERFIL_FILA) else elegido)
     fig = _fig_filas(items, mats, etq, claves, grano, medida, dif,
-                     st.session_state.get(_K_FICHA), por_dia)
+                     foco or elegido, por_dia)
     st.plotly_chart(fig, key=key, on_select="rerun", selection_mode="points",
                     config={"displaylogo": False, "displayModeBar": False})
     return int(fig.layout.height)
@@ -3195,6 +3259,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         st.session_state[_K_MEDIDA_VALOR] = _MED_CORTO["ticket"]
     comparar = modo == MODOS_VISTA[1]
     if modo == MODOS_VISTA[2]:
+        st.session_state[_hc.AMPLIADO] = False
         preservar_widgets(_KEYS_WIDGET_MAPA)
         with _card("vh_a_medida"):
             _franja.cuerpo(d, filtrar_cb, interruptor=_interruptor_modo)
@@ -3303,6 +3368,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.session_state[_K_MARCAS] = []
             st.session_state[_K_SEL] = None
             st.session_state.pop(_K_FOCO, None)
+            _cerrar_fila()
 
         # Lo de la fila de abajo que la de arriba necesita (ver arriba).
         en_filas = st.session_state.get("vh_op_filas") != _FILAS[0]
@@ -3438,6 +3504,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.session_state[_K_MARCAS] = []
             st.session_state[_K_SEL] = None
             st.session_state.pop(_K_FOCO, None)
+            _cerrar_fila()
         # Lo mismo al pasar de «Días» a «Por día de semana»: la columna 5 de
         # uno es el día 6 y la del otro, los sábados.
         if st.session_state.get("vh_dias_aplicado") != semanal:
@@ -3450,6 +3517,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         _pedida = st.session_state.pop("_vh_ficha_pedida", None)
         if st.session_state.get("vh_filas_aplicada") != filas or _pedida:
             st.session_state["vh_filas_aplicada"] = filas
+            _cerrar_fila()
             st.session_state[_K_FICHA] = _pedida
             st.session_state.pop(_K_FOCO, None)
 
@@ -3529,8 +3597,11 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         desliza = False
         if en_filas:
             marcas, foco = [], None
-            _alto = _dibujar_filas(tramos, claves, grano, medida, filas,
-                                   cols_filas, lectura, escala, horas)
+            with st.container(key="vh_desliza"):
+                st.markdown('<span class="vh-mapa-opciones"></span>',
+                            unsafe_allow_html=True)
+                _alto = _dibujar_filas(tramos, claves, grano, medida, filas,
+                                       cols_filas, lectura, escala, horas)
         else:
             # ── La selección se lee ANTES de dibujar, no después ─────────────
             # Un arrastre costaba DOS pasadas del script: la que dispara
@@ -3576,6 +3647,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     st.session_state[_K_SEL] = _huella
                     st.session_state[_K_FOCO] = {"sel": _clic[0],
                                                  "c": _clic[1], "h": _clic[2]}
+                    st.session_state[_hc.FILTROS_ABIERTOS] = False
                     if semanal:
                         st.session_state[_K_FOCO]["sem"] = True
             else:
@@ -3678,23 +3750,27 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # esto era `st.container(height=alturas.reparto(...))`, que restaba contra
     # una pantalla supuesta: correcto en el laptop objetivo, y 350px de más en
     # un monitor grande. Ver `alturas.py` § LA RESTA NO SE HACE ACÁ.
-    publicar_var_px(
-        "vh-alto-arriba",
-        _alto
-        + (_CROMO_TARJETA if marcas else _PIE_SOLO_FICHA)
-        + (_BARRA_DESLIZA if desliza else 0))
+    _ficha = en_filas and st.session_state.get(_K_FICHA)
+    _ampliado = bool(st.session_state.get(_hc.AMPLIADO)
+                     and (marcas or _ficha or foco))
+    _hc.actualizar_estado(contexto["estado"], _ampliado)
     # El piso del panel también se publica en vez de vivir suelto en el CSS:
     # con marcas evita que en una pantalla apretada quede una tira ilegible;
     # SIN marcas tiene que ser 0, o el panel vacío se come 150px de tarjeta.
-    _ficha = en_filas and st.session_state.get(_K_FICHA)
-    publicar_var_px("vh-panel-min",
-                    _PANEL_MIN if (marcas or _ficha or foco) else 0)
     # Key ESTABLE, sin `_on`/`_off`. Alternarla dejaba el contenedor viejo
     # huérfano en el DOM (regla #70) y no hace falta: con el panel vacío el
     # `max-height` no molesta a nadie.
     _panel = st.container(key="vh_panel_drill", border=False)
 
     with _panel:
+        # Las variables CSS no ocupan filas entre el mapa y el detalle.
+        with st.container(key="vh_panel_medidas"):
+            publicar_var_px(
+                "vh-alto-arriba", 0 if _ampliado else _alto
+                + (_CROMO_TARJETA if marcas else _PIE_SOLO_FICHA)
+                + (_BARRA_DESLIZA if desliza else 0))
+            publicar_var_px("vh-panel-min",
+                            _PANEL_MIN if (marcas or _ficha or foco) else 0)
         # ── La ficha de la hora: lo que abre un CLIC (regla #536) ───────
         # Primera del panel, pegada al mapa: es la respuesta a «¿qué fue
         # esto?» sobre la celda que se acaba de tocar. Se abre SIEMPRE, vacía
@@ -3708,6 +3784,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                      "cobro": col_fecha, "venta": col_venta, "pax": col_pax,
                      "pedido": col_pedido, "prod": col_prod,
                      "cant": col_cant, "grupo": col_fam}, tramos=tramos)
+            else:
+                st.markdown('<span class="vh-panel-vacio"></span>', unsafe_allow_html=True)
 
         # Las dos tarjetas se abren SIEMPRE, aunque no haya marcas, y por
         # dentro deciden si tienen algo que decir. NO es cosmético: un
@@ -3737,6 +3815,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 # una lista de totales y la pregunta era la comparación.
                 _tabla_medidas(marcas, tramos, claves, grano, horas,
                                medidas, True)
+            else:
+                st.markdown('<span class="vh-panel-vacio"></span>', unsafe_allow_html=True)
 
         # ── Drill: árbol Grupo › Sub Grupo › Plato › Descuento ──────────
         with _card("ventas_horario_arbol",
@@ -3765,14 +3845,46 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                                  if _MED_LABEL[m] in (_sela or [])} or {"venta"}
                 _tabla_arbol(marcas, tramos, claves, grano, horas,
                              medidas_arbol, expandir=_exp, colapsar=_col)
+            else:
+                st.markdown('<span class="vh-panel-vacio"></span>', unsafe_allow_html=True)
 
         # ── La ficha de una fila de «Platos»/«Grupos» (regla #530) ──────
         # Se abre SIEMPRE, vacía cuando no hay ficha, por la regla #70: un
         # contenedor con key que deja de dibujarse retiene a sus hijos.
-        with _card("ventas_horario_ficha", "", titulo_arriba=True):
+        with _card("ventas_horario_ficha", "", titulo_arriba=True), st.container(key="vh_fila_detalle"):
             if _ficha:
-                _ficha_filas(tramos, claves, grano,
-                             _QUE_FILAS[filas],
-                             st.session_state[_K_FICHA],
-                             medida if medida in _MED_FILAS else "venta",
-                             horas)
+                celda_fila = st.session_state.get(_K_CELDA_FILA)
+                if celda_fila and 0 <= celda_fila.get("sel", -1) < len(tramos):
+                    s = celda_fila["sel"]
+                    ini_f, fin_f = _rango_de_clave(claves[s], grano)
+                    periodo = (f"{_etiqueta_clave(claves[s], grano)} · "
+                               f"{ini_f:%d/%m/%Y}–{min(fin_f, ancla):%d/%m/%Y}")
+                    referencia = ({"tramo": tramos[0],
+                                   "periodo": _etiqueta_clave(claves[0], grano)}
+                                  if lectura == _LECTURAS[1] and s > 0 else None)
+                    _hd.dibujar(
+                        tramos[s], que=_QUE_FILAS[filas],
+                        nombre=st.session_state[_K_FICHA],
+                        hora=celda_fila["hora"], periodo=periodo,
+                        base_temporal=hora,
+                        medida=medida if medida in _MED_FILAS else "venta",
+                        horas=horas, por_dia=escala == _ESCALAS[1],
+                        perfil=bool(st.session_state.get(_K_PERFIL_FILA)),
+                        al_perfil=_alternar_perfil_fila, al_cerrar=_cerrar_fila,
+                        al_ampliar=_hc.alternar_ampliado, ampliado=_ampliado,
+                        al_producto=_ver_producto_fila, referencia=referencia)
+                else:
+                    # Entrada desde Análisis de platos: perfil general, sin
+                    # inventar una celda que el usuario todavía no eligió.
+                    with st.container(horizontal=True, key="vh_fila_cabecera"):
+                        st.button("Volver al mapa" if _ampliado else "Ampliar",
+                                  key="vh_detalle_ampliar",
+                                  on_click=_hc.alternar_ampliado)
+                        st.button("Cerrar", key="vh_fila_cerrar", on_click=_cerrar_fila)
+                    _ficha_filas(tramos, claves, grano, _QUE_FILAS[filas],
+                                 st.session_state[_K_FICHA],
+                                 medida if medida in _MED_FILAS else "venta", horas,
+                                 por_dia=escala == _ESCALAS[1])
+            else:
+                st.markdown('<span class="vh-panel-vacio"></span>', unsafe_allow_html=True)
+    _hc.medir_panel()

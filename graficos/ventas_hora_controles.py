@@ -19,6 +19,29 @@ CATEGORIA = "vt_hora"
 BASES = ("Hora del pedido", "Hora del comprobante")
 TODOS = "Toda la carta"
 KEYS = ("vh_canal", "vh_ambito", "vh_op_hora", "vh_raros")
+FILTROS_ABIERTOS = "_vh_filtros_abiertos"
+AMPLIADO = "_vh_detalle_ampliado"
+
+
+def alternar_filtros():
+    st.session_state[FILTROS_ABIERTOS] = not st.session_state.get(FILTROS_ABIERTOS, False)
+
+
+def alternar_ampliado():
+    st.session_state[AMPLIADO] = not st.session_state.get(AMPLIADO, False)
+
+
+def actualizar_estado(holder, ampliado=None):
+    """Clases locales: los widgets siguen montados al plegar o ampliar."""
+    if ampliado is not None:
+        st.session_state[AMPLIADO] = bool(ampliado)
+    clases = ["vh-estado"]
+    if not st.session_state.get(FILTROS_ABIERTOS, False):
+        clases.append("vh-filtros-cerrados")
+    if st.session_state.get(AMPLIADO, False):
+        clases.append("vh-detalle-ampliado")
+    holder.markdown(f'<span class="{" ".join(clases)}"></span>',
+                     unsafe_allow_html=True)
 
 
 def filtrar(df, *, canales=(), ambito=TODOS, incluir=True):
@@ -63,6 +86,44 @@ def medir_cabecera():
     </script>""")
 
 
+def medir_panel():
+    """Reserva el espacio desde el borde real del detalle hasta la ventana."""
+    inyectar_html("""<script>
+    (() => {
+      const doc = window.parent.document;
+      let pending = false;
+      const update = () => {
+        pending = false;
+        const panel = doc.querySelector('.st-key-vh_panel_drill');
+        if (!panel) return;
+        const value = Math.max(0, window.parent.innerHeight -
+          Math.max(0, panel.getBoundingClientRect().top) - 16) + 'px';
+        if (panel.style.getPropertyValue('--vh-panel-disponible') !== value)
+          panel.style.setProperty('--vh-panel-disponible', value);
+      };
+      const schedule = () => {
+        // El iframe es invisible: su propio RAF puede quedar suspendido.
+        if (!pending) { pending = true; window.parent.requestAnimationFrame(update); }
+      };
+      const obs = new ResizeObserver(schedule);
+      const section = doc.querySelector('.st-key-vt_sec_hora');
+      obs.observe(section || doc.body);
+      const changes = new MutationObserver(schedule);
+      changes.observe(section || doc.body, {childList:true, subtree:true,
+                                            attributes:true, attributeFilter:['class']});
+      window.parent.addEventListener('resize', schedule);
+      doc.addEventListener('scroll', schedule, true);
+      update();
+      window.addEventListener('pagehide', () => {
+        obs.disconnect();
+        changes.disconnect();
+        window.parent.removeEventListener('resize', schedule);
+        doc.removeEventListener('scroll', schedule, true);
+      }, {once:true});
+    })();
+    </script>""")
+
+
 def cabecera(d, col_fecha, col_pedido, ancla, filtrar_cb, interruptor):
     """Dibuja título, modo y filtros, y devuelve su contexto para el cuerpo."""
     with st.container(horizontal=True, vertical_alignment="center",
@@ -79,6 +140,8 @@ def cabecera(d, col_fecha, col_pedido, ancla, filtrar_cb, interruptor):
         ancla.replace(day=1), ancla)
     rng = (rng[0], min(rng[1], ancla))
     ss = st.session_state
+    estado = st.empty()
+    actualizar_estado(estado)
     # Conserva la base y las marcas de las sesiones abiertas antes del cambio
     # de nombre: esa hora siempre fue la del comprobante, no la del pago.
     for key in ("vh_op_hora", "vh_hora_aplicada"):
@@ -115,37 +178,50 @@ def cabecera(d, col_fecha, col_pedido, ancla, filtrar_cb, interruptor):
     if elegido not in ambitos:
         ambitos.append(elegido)
 
-    with st.container(horizontal=True, vertical_alignment="bottom",
-                      gap="medium", key="vh_filtros"):
-        fecha = st.container(key="vh_filtro_fecha", width=220)
-        with fecha:
-            st.caption("Fechas")
-            if ctx:
-                selector_fecha_tarjeta("vh_fecha", "vh_fecha_cambio",
-                                       categoria=CATEGORIA, ctx=ctx)
-            else:
-                st.caption(f"{rng[0]:%d/%m/%Y} – {rng[1]:%d/%m/%Y}")
-        with st.container(key="vh_filtro_canal", width=195):
-            seleccion_multiple("vh_canal", canales, conservar=True)
-            canal_sel = st.multiselect("Canal", canales, key="vh_canal",
-                                       placeholder="Todos los canales")
-        with st.container(key="vh_filtro_ambito", width=230):
-            ambito = st.selectbox("Ámbito", ambitos, key="vh_ambito")
-        with st.container(key="vh_filtro_base", width=185):
-            hora = st.selectbox("Base temporal", BASES, key="vh_op_hora",
-                                disabled=not col_pedido,
-                                help="Pedido: apertura del pedido, no la hora "
-                                     "de cada plato. Comprobante: fecha y "
-                                     "hora de registro del documento.")
     with st.container(horizontal=True, vertical_alignment="center",
-                      gap="medium", key="vh_contexto"):
-        incluir = st.toggle("Incluir Venta Interna y Eventos",
-                            value=bool(ss.get("_vh_raros_valor", True)),
-                            key="vh_raros")
-        ss["_vh_raros_valor"] = incluir
-        st.caption("Venta atribuida a la apertura del pedido" if hora == BASES[0]
-                   else "Venta atribuida al registro del comprobante")
+                      key="vh_resumen_contexto"):
+        with st.container(width="stretch"):
+            resumen_canal = ", ".join(ss.get("vh_canal") or []) or "Todos los canales"
+            especiales = ("Incluye Venta Interna y Eventos"
+                          if ss.get("vh_raros", ss.get("_vh_raros_valor", True))
+                          else "Excluye Venta Interna y Eventos")
+            st.caption(f"{rng[0]:%d/%m/%Y} – {rng[1]:%d/%m/%Y} · "
+                       f"{resumen_canal} · {elegido} · {ss['vh_op_hora']} · {especiales}")
+        st.button("Filtros", key="vh_ver_filtros", icon=":material/tune:",
+                  on_click=alternar_filtros)
+    with st.container(key="vh_datos"):
+        with st.container(horizontal=True, vertical_alignment="bottom",
+                          gap="medium", key="vh_filtros"):
+            fecha = st.container(key="vh_filtro_fecha", width=220)
+            with fecha:
+                st.caption("Fechas")
+                if ctx:
+                    selector_fecha_tarjeta("vh_fecha", "vh_fecha_cambio",
+                                           categoria=CATEGORIA, ctx=ctx)
+                else:
+                    st.caption(f"{rng[0]:%d/%m/%Y} – {rng[1]:%d/%m/%Y}")
+            with st.container(key="vh_filtro_canal", width=195):
+                seleccion_multiple("vh_canal", canales, conservar=True)
+                canal_sel = st.multiselect("Canal", canales, key="vh_canal",
+                                           placeholder="Todos los canales")
+            with st.container(key="vh_filtro_ambito", width=230):
+                ambito = st.selectbox("Ámbito", ambitos, key="vh_ambito")
+            with st.container(key="vh_filtro_base", width=185):
+                hora = st.selectbox("Base temporal", BASES, key="vh_op_hora",
+                                    disabled=not col_pedido,
+                                    help="Pedido: apertura del pedido, no la hora "
+                                         "de cada plato. Comprobante: fecha y "
+                                         "hora de registro del documento.")
+        with st.container(horizontal=True, vertical_alignment="center",
+                          gap="medium", key="vh_contexto"):
+            incluir = st.toggle("Incluir Venta Interna y Eventos",
+                                value=bool(ss.get("_vh_raros_valor", True)),
+                                key="vh_raros")
+            ss["_vh_raros_valor"] = incluir
+            st.caption("Venta atribuida a la apertura del pedido" if hora == BASES[0]
+                       else "Venta atribuida al registro del comprobante")
     filtros = dict(canales=tuple(canal_sel), ambito=ambito, incluir=incluir)
     return {"rango": rng, "hora": hora, "incluir": incluir,
             "filtrar": partial(_aplicar, original=filtrar_cb, **filtros),
-            "fecha_container": fecha, "canales": canal_sel, "ambito": ambito}
+            "fecha_container": fecha, "canales": canal_sel, "ambito": ambito,
+            "estado": estado}

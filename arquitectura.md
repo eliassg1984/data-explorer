@@ -49360,6 +49360,28 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      conservar las cifras y sus encabezados legibles. Lo que sigue
      describe el diseño anterior y su origen.
 
+     El detalle contextual de Platos, Grupos y Áreas vive en
+     `graficos/ventas_hora_detalle.py`: el clic conserva entidad, período
+     y hora (incluidas las 0 h), en vez de sólo el nombre. Otra hora
+     actualiza la ficha; «Ver perfil completo» amplía a todas las horas
+     del mismo período y «Volver a la celda» conserva la selección.
+     Los KPIs y las curvas respetan Total/Por día y el divisor del mapa,
+     incluidos los días sin venta del elemento. Orden y puesto siguen
+     la medida elegida. Desde un grupo se entra a su plato conservando
+     período, hora y alcance. Los pedidos muestran sólo los ítems de esa
+     selección y sus importes por pedido no se promedian. La ficha de
+     Horas conserva la comparación histórica y los ocho factores por
+     mesa. «Ampliar» oculta el mapa con CSS sin desmontar sus widgets;
+     cerrar o volver lo restaura. Los filtros comunes se pliegan con un
+     resumen visible y la presentación permanece a la vista. El alto
+     del detalle se mide desde su borde real hasta la ventana. Lo vigila
+     `test_ventas_hora_detalle.py`.
+     Los contenedores vacíos siguen montados y se ocultan con un marcador
+     local, para que no consuman altura entre mapa y ficha. La medición usa
+     el `requestAnimationFrame` del padre: el del iframe invisible puede
+     quedar suspendido. Las fichas anulan el margen negativo de markdown
+     para que los avisos no tapen cifras ni se recorte el último renglón.
+
      El
      interruptor del renglón del título alterna el mapa de calor simple,
      el de comparar períodos y `graficos/ventas_franja.py` (2026-10-10). Nació de un pedido real —«cuánto se vendió por Rappi

@@ -4884,9 +4884,9 @@ CSS = """    /* ================================================================
     /* =================================================================== */
     @media screen and (min-width: 769px) {
         div[class*="st-key-vh_panel_drill"] {
-            max-height: calc(var(--alto-util)
+            max-height: var(--vh-panel-disponible, calc(var(--alto-util)
                              - var(--vh-cab-alto, 220px)
-                             - var(--vh-alto-arriba, 400px)) !important;
+                             - var(--vh-alto-arriba, 400px))) !important;
             min-height: var(--vh-panel-min, 0px) !important;
             overflow-y: auto !important;
         }
@@ -5080,7 +5080,7 @@ CSS = """    /* ================================================================
        extremo, como texto y no como caja: con borde medía 40 px y fijaba
        el alto de la fila. */
     .st-key-vhh_barra {
-        flex-wrap: nowrap !important;
+        flex-wrap: wrap !important;
         min-height: 0 !important;
     }
     .st-key-vhh_barra > .st-key-vh_foco_cerrar {
@@ -6375,6 +6375,102 @@ CSS = """    /* ================================================================
     .st-key-vh_desliza:has(.vh-totales-margen):not(:has(.st-key-vh_eje_horas))
         [data-testid="stPlotlyChart"] {
         min-width: 980px !important;
+    }
+    /* Detalle contextual. Plegar conserva los widgets y sus selecciones. */
+    .st-key-vh_panel_drill > div:has(.vh-panel-vacio),
+    .st-key-vh_panel_drill > div:has(.st-key-vh_panel_medidas) {
+        display: none !important;
+    }
+    /* El margen negativo de markdown recortaba el pie de la comparación
+       y montaba el aviso de Venta Interna encima de los KPIs. */
+    .st-key-chartcard_ventas_horario_hora [data-testid="stMarkdownContainer"],
+    .st-key-vh_fila_detalle [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .stElementContainer:has(.vh-estado) { display: none !important; }
+    .st-key-vh_controles:has(.vh-filtros-cerrados) .st-key-vh_datos {
+        display: none !important;
+    }
+    .st-key-vh_resumen_contexto {
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+    }
+    .st-key-vh_resumen_contexto [data-testid="stCaptionContainer"] p {
+        margin: 0 !important;
+        font-size: 12px !important;
+        line-height: 1.3 !important;
+    }
+    .st-key-vh_ver_filtros button,
+    .st-key-vh_detalle_ampliar button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 8px !important;
+        color: var(--text-secondary) !important;
+        border: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        border-radius: 6px !important;
+    }
+    .st-key-vh_ver_filtros button p,
+    .st-key-vh_detalle_ampliar button p { font-size: 12px !important; }
+    .st-key-vh_fila_cabecera {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        align-items: center !important;
+    }
+    .st-key-vh_fila_cabecera > div:first-child { flex: 1 1 180px !important; }
+    .st-key-vh_fila_cabecera > div:not(:first-child) { flex: 0 0 auto !important; }
+    .st-key-vh_fila_cabecera button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 8px !important;
+        border-radius: 6px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vh_fila_cabecera button p { font-size: 12px !important; }
+    .vh-fila-titulo {
+        margin: 0 !important;
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+    }
+    .vh-fila-kpis {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px 20px !important;
+        font-size: 12px !important;
+        color: var(--text-secondary) !important;
+        padding: 4px 0 !important;
+    }
+    .vh-fila-kpis b {
+        color: var(--text-primary) !important;
+        font-size: 15px !important;
+        margin-left: 6px !important;
+    }
+    .st-key-vh_fila_tab [data-testid="stButtonGroup"] button {
+        min-height: 28px !important;
+        height: auto !important;
+        padding: 3px 1px !important;
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        border-radius: 0 !important;
+        color: var(--text-secondary) !important;
+        font-size: 13px !important;
+    }
+    .st-key-vh_fila_tab [data-testid="stButtonGroup"] button[data-selected="true"] {
+        color: var(--accent) !important;
+        border-bottom-color: var(--accent) !important;
+    }
+    :is(.st-key-vt_sec_hora, .st-key-ajuste_graf_card_izq_ventas_hora):has(.vh-detalle-ampliado)
+        :is(.st-key-vh_resumen_contexto, .st-key-vh_datos,
+            .st-key-vh_presentacion, .st-key-vh_comparar, .st-key-vh_desliza) {
+        display: none !important;
+    }
+    :is(.st-key-vt_sec_hora, .st-key-ajuste_graf_card_izq_ventas_hora):has(.vh-detalle-ampliado)
+        div[class*="st-key-chartcard_ventas_horario_"]:has(.st-key-vh_controles)
+        .stElementContainer:has(.stPlotlyChart) {
+        display: none !important;
     }
     /* La densidad depende del alto disponible, no de una resolución fija.
        Se mantiene el tamaño de letra; sólo se reduce el cromo en laptops. */

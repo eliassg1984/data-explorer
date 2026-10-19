@@ -730,7 +730,8 @@ def _fig_abiertas(t, serie, normal_, ref, h0, h1, horas_eje):
 
 # ── La ficha ────────────────────────────────────────────────────────────────
 
-def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
+def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
+             al_ampliar=None, ampliado=False):
     """La ficha de la celda (`dia`, `hora`).
 
     `fl` son las filas de `filas()` sobre la ventana del panel; `horas`, las
@@ -807,6 +808,11 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
                     st.markdown(f'<p class="vhh-h3 vhh-h3-barra">Por mesa '
                                 f'{_info("mesa")}</p>',
                                 unsafe_allow_html=True)
+            if al_ampliar is not None:
+                st.button("Volver al mapa" if ampliado else "Ampliar",
+                          key="vh_detalle_ampliar", on_click=al_ampliar,
+                          icon=":material/close_fullscreen:" if ampliado else
+                               ":material/open_in_full:")
             st.button("Cerrar", key="vh_foco_cerrar",
                       icon=":material/close:", on_click=al_cerrar)
     # EL RESULTADO, NO EL RÓTULO (2026-10-04, a pedido). Junto al título,
