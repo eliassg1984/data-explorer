@@ -51326,6 +51326,28 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-18.)
 
+     **Addendum (2026-10-18, cuarta ronda): «Sobró sin que entrara nada»
+     (`VERSION` 9).** El usuario, sobre el Gin Le Tribute del parcial del 16
+     oct: la tabla decía +5 L, la pista «Revierte el conteo anterior» y la
+     ficha «faltó 0 L; ahora sobra 0 L». Eran tres cosas:
+
+     - **El sobrante estaba en el Almacén Central y no tenía pista**: el
+       sistema en 0, ni un movimiento desde agosto, 5 L contados (S/ 1.150),
+       la última compra en 2024. Para un sobrante con el sistema en
+       NEGATIVO estaba «Sistema en negativo»; con el sistema en CERO y sin
+       entradas no había nada. Ahora es «Sobró sin que entrara nada»
+       (`sinent`), fuerte —es un hecho del kardex—: entró sin registrarse o
+       se contó otro producto con este código. En ese parcial, 15 líneas y
+       S/ 2.156 del sobrante.
+     - **La pista era de Barra, que pesa S/ 0,56**, y con «Áreas juntas»
+       pasaba a ser la principal del producto. Las pistas de una línea que
+       pesa menos del 10 % de la más grande ya no hablan por el producto
+       (`agrupar_por_producto`; sin precio, se pesa por la cantidad).
+     - **«0 L» era 0,0024 L** redondeado a dos decimales: `es` escribe ahora
+       lo que daría «0» sin serlo con dos cifras (0.0024).
+
+     (2026-10-18.)
+
 651. **«Análisis de diferencias» mira los COMBOS, no descarta las líneas
      sin precio y reconoce lo vendido con el código de otro producto.**
      2026-10-13, sobre la #650. En `diferencias_ajuste.py`

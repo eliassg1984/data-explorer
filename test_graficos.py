@@ -9162,7 +9162,8 @@ def _pruebas_diferencias_sin_descontar():
     PROD = {50: ("(P) Lomo fino al trapo x und (produccion)", "UND", 86.0),
             51: ("Chocolate 72% Cacao", "KILOS", 289.0),
             52: ("(Rb) Pollito bb confitado x und (parrilla)", "UND", 14.7),
-            53: ("Aji Amarillo", "KILOS", 12.0), 54: ("Queso Provolone", "KILOS", 66.5)}
+            53: ("Aji Amarillo", "KILOS", 12.0), 54: ("Queso Provolone", "KILOS", 66.5),
+            55: ("Gin Le Tribute x Lt", "LITROS", 230.0)}
 
     def fila(t, a, c, s, k):
         n, u, p = PROD[c]
@@ -9176,6 +9177,7 @@ def _pruebas_diferencias_sin_descontar():
         fila("2026-09-02 09:00", 10, 52, 5, 5), fila("2026-09-16 17:30", 1, 50, 10, 10),
         fila("2026-09-16 17:30", 1, 53, 1, 1), fila("2026-09-17 12:00", 1, 51, 2, 2),
         fila("2026-09-16 17:30", 0, 54, 20, 20), fila(t1, 0, 54, 20, 4),
+        fila("2026-09-16 17:30", 0, 55, 0, 0), fila(t1, 0, 55, 0, 5),
         fila(t1, 1, 50, 10, 7), fila(t1, 1, 51, 1.5, 2), fila(t1, 10, 52, 4, 5),
         fila(t1, 1, 53, 1, 0.95)])
 
@@ -9277,6 +9279,13 @@ def _pruebas_diferencias_sin_descontar():
     check("en el Almacén Central, «Salió sin requerimiento» y no «otra área»",
           ([p["ti"] for p in nada], "no se descuentan ventas" in nada[0]["tx"]),
           (["Salió sin requerimiento"], True))
+
+    # 4c — sobró con el sistema en cero y sin que entrara nada (el Gin Le
+    # Tribute del parcial del 16 oct 2026): un hecho del kardex.
+    p_ = [p for p in F[de[(0, "55")]["id"]]["pistas"] if p["t"] == "sinent"]
+    check("sobró sin que entrara nada: fuerte, y dice lo contado",
+          ([(p["ti"], p["f"]) for p in p_], "se contaron 5 L" in p_[0]["tx"]),
+          ([("Sobró sin que entrara nada", 1)], True))
 
     # 5 — EL CALENDARIO de descargos (`descargosventas.parquet`, TLOG_DESCARGO):
     # lo mismo, exacto y con la hora, y manda sobre la regla de 2026.
@@ -9390,6 +9399,18 @@ def _pruebas_diferencias_juntas():
         {4: {"pistas": [misma]}, 5: {"pistas": [dict(misma)]}})
     check("la misma pista en dos áreas, una vez",
           [p["tx"] for p in FG2[0]["pistas"]], ["En Cocina y Almacen Central: Sobra el aderezo."])
+    # El Gin Le Tribute del parcial del 16 oct 2026: 5 L en el Almacén, sin
+    # pista, y 0,0024 L en Barra que «revierten» el conteo anterior. La
+    # Barra pesa S/ 0,56 de S/ 1.151: su pista no habla por el producto.
+    rev = {"t": "rev", "f": 1, "ti": "Revierte el conteo anterior", "tx": "…"}
+    G3, FG3 = da.agrupar_por_producto(
+        pd.DataFrame([linea(6, "13", 0, "Almacen Central", 5.0, 1150.14, ""),
+                      linea(7, "13", 11, "Barra", 0.002424, 0.5576, rev["ti"])]),
+        {6: {"pistas": []}, 7: {"pistas": [rev]}})
+    check("la pista de una línea que pesa poco no habla por el producto",
+          (FG3[0]["pistas"], G3.loc[0, "n_pistas"], G3.loc[0, "pista"]), ([], 0, ""))
+    check("y una cantidad chica se escribe con sus cifras, no «0»",
+          (da.es(0.002424), da.es(-0.0024), da.es(0.004)), ("0.0024", "−0.0024", "0.004"))
     return fallos
 
 

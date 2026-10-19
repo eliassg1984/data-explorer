@@ -1322,7 +1322,9 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   paloteo, pedido por pedido y abierto por las recetas base, sí (77 %): de
   ahí salen las ventas sin descontar y los combos.
 - **El 74 % del sobrante de un cierre es el sistema en negativo**: se
-  descargó antes de que entrara nada. No es mercadería que apareció.
+  descargó antes de que entrara nada. No es mercadería que apareció. Con el
+  sistema en CERO y sin entradas, en cambio, sí apareció: «Sobró sin que
+  entrara nada» (entró sin registrarse, o se contó otro producto).
 - **«Ninguna receta lo usa» lo decide el PERFIL DE SALIDA de 180 días**
   (ventas, producción, notas por tipo; anexo de la #650): hay productos que
   el kardex descuenta por ventas sin estar en ninguna receta (los bowls), y

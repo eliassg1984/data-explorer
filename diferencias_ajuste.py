@@ -64,6 +64,8 @@ LAS PISTAS, en el orden en que se muestran (fuertes primero):
   area     el mismo producto, al revés, en otra área (traslado sin registrar)
   neg      el sistema terminó en negativo: el sobrante corrige un descargo
            que se hizo sin ingreso, no es mercadería que apareció
+  sinent   sobró con el sistema en CERO y sin que entrara nada: entró algo
+           sin registrarse o se contó otro producto con este código
   rev      revierte el conteo anterior de la misma línea
   uso      en los 6 meses anteriores el producto salió sobre todo por NOTAS
            de un tipo (comida de personal, prueba, uso en el área…), y entre
@@ -106,13 +108,13 @@ import pandas as pd
 
 from sin_plato import palabra_clave
 
-VERSION = 8
+VERSION = 9
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula. La 6: el paloteo, las ventas sin descontar al contar
 y los combos por lo marcado (#650). La 7: el calendario de descargos
 (`descargosventas.parquet`) y las áreas juntas (`agrupar_por_producto`). La
 8: el Almacén Central no descuenta ventas, y lo sin descontar de días
-anteriores al conteo va aparte."""
+anteriores al conteo va aparte. La 9: «Sobró sin que entrara nada»."""
 
 EPS = 0.005
 """Soles: una línea con menos de esto no tiene diferencia."""
@@ -137,14 +139,14 @@ receta con este `SUBALM INS`—: lo que sale, sale con un requerimiento, una
 transferencia o una nota."""
 
 TIPOS = ("receta", "desc", "lote", "prod", "combo", "sunat", "req", "area", "rubro", "uso",
-         "neg", "rev", "nada", "nadie")
+         "neg", "sinent", "rev", "nada", "nadie")
 """Los tipos de pista, en el orden en que se muestran a igual fuerza. «rubro»
 va antes que «neg» y «nada» desde la #651: cuando es fuerte («vendido con el
 código del otro») explica por qué hay un negativo o por qué no salió nada.
 «lote» va arriba (#650): es un hecho del POS, no una sospecha."""
 
 NOMBRE_TIPO = {"receta": "Receta", "desc": "Área de descargo", "uso": "Salida habitual",
-               "lote": "Sin descontar",
+               "lote": "Sin descontar", "sinent": "Sin entrada",
                "prod": "Producción",
                "combo": "Combo",
                "sunat": "Factura sin ingresar", "req": "Sin procesar",
@@ -223,8 +225,14 @@ def dias_txt(dias):
 
 def es(x, dec=2):
     """Un número como lo escribe el resto de Ajuste (`toLocaleString('es-PE')`
-    en sus tablas): 1,135.8, sin ceros de más y con el menos tipográfico."""
-    t = f"{abs(float(x)):,.{dec}f}"
+    en sus tablas): 1,135.8, sin ceros de más y con el menos tipográfico.
+    Lo que con `dec` decimales sería «0» sin serlo lleva dos cifras: 0.0024,
+    no «0» —«faltó 0 L; ahora sobra 0 L» con 0,0024 L de cada lado
+    (2026-10-18)—."""
+    a = abs(float(x))
+    if dec and 0 < a < 0.5 * 10 ** -dec:
+        dec = int(np.ceil(-np.log10(a))) + 1
+    t = f"{a:,.{dec}f}"
     if dec and "." in t:
         t = t.rstrip("0").rstrip(".")
     return ("−" if float(x) < 0 and t != "0" else "") + t
@@ -1878,6 +1886,21 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                       f"salieron {es(x['sal'])}. El sobrante corrige ese negativo: algo entró "
                       "sin registrarse.")
             P.append({"t": "neg", "f": 1, "ti": "Sistema en negativo", "tx": tx})
+        # sinent — sobró con el sistema en CERO y sin que entrara nada: entró
+        # algo sin registrarse o se contó otro producto con este código. Es
+        # un hecho del kardex, como el negativo (el Gin Le Tribute del parcial
+        # del 16 oct 2026: 5 L en el Almacén Central, sin una compra desde
+        # 2024, y sin pista hasta el 2026-10-18).
+        if q > 0 and abs(x["s"]) <= 1e-9 and sin_ing:
+            uc = f["viene"]["compra"]
+            compra = (f"La última compra fue el {fecha_corta(uc)} {uc.year}."
+                      if uc is not None and pd.notna(uc)
+                      else f"No se compró en los últimos {DIAS_ATRAS} días.")
+            P.append({"t": "sinent", "f": 1, "ti": "Sobró sin que entrara nada",
+                      "tx": f"El sistema tenía 0 {u} y {desde_} no entró nada —ni compra, ni "
+                            f"requerimiento, ni traslado—, pero se contaron {es(x['k'])} {u}. "
+                            f"{compra} O entró sin registrarse, o se contó otro producto con "
+                            "este código."})
         # rev — revierte el conteo anterior
         q0 = x["q0"]
         if pd.notna(q0) and abs(q0) > 1e-9 and np.sign(q0) == -np.sign(x["q"]):
@@ -2016,7 +2039,8 @@ def agrupar_por_producto(lineas, fichas):
     `comp` (True si la suma da cero: se compensó entera). `FG` {id: ficha}
     con las pistas de las líneas del lado de la suma, cada una con su área
     adelante, sin «Otra área» si la otra línea también está en el grupo (ya
-    se compensó), y `partes`, las líneas de cada área. Pura."""
+    se compensó), y sin las de una línea que pesa menos del 10 % de la más
+    grande; y `partes`, las líneas de cada área. Pura."""
     cols = ["id", "cod", "acod", "producto", "area", "familia", "subfamilia", "u", "s", "k",
             "q", "v", "precio", "pista", "pista_t", "pista_f", "n_pistas", "fuerte", "tipos",
             "n_areas", "areas", "comp", "base"]
@@ -2033,11 +2057,18 @@ def agrupar_por_producto(lineas, fichas):
         sg = np.sign(q) if abs(q) > 1e-6 else np.sign(v)
         ids = {int(r["id"]) for r in partes}
         varias = len(partes) > 1
+        # Una línea que pesa menos del 10 % de la más grande no habla por el
+        # producto: la Barra del Gin Le Tribute (S/ 0,56 de S/ 1.151) ponía
+        # su «Revierte» como pista principal y el Almacén, con todo el
+        # sobrante, no aparecía. Sin precio, se pesa por la cantidad.
+        con_precio = any(abs(r["v"]) > EPS for r in partes)
+        peso = (lambda r: abs(r["v"])) if con_precio else (lambda r: abs(r["q"]))
+        tope = 0.1 * max(peso(r) for r in partes)
         # La misma pista en dos áreas (el mismo derivado que sobra, la misma
         # receta) va UNA vez, con las dos áreas adelante.
         juntas = {}
         for r in partes:
-            if np.sign(r["q"]) != sg and abs(r["q"]) > 1e-6:
+            if (np.sign(r["q"]) != sg and abs(r["q"]) > 1e-6) or peso(r) < tope:
                 continue
             for p in fichas[int(r["id"])]["pistas"]:
                 if p["t"] == "area" and p.get("r") in ids:
