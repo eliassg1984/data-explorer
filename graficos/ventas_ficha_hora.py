@@ -782,39 +782,6 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
         st.session_state[_K_VISTA] = VISTAS[0]
     vista = st.session_state[_K_VISTA]
 
-    # DOS COLUMNAS DESDE ARRIBA (2026-09-29, a pedido: «subir los
-    # cuadrantes», regla #564). Antes el título, la botonera y el cerrar
-    # eran una fila propia y «Por mesa» empezaba recién debajo del bloque
-    # del título (título, subtítulo, KPIs: ~75 px), con la columna derecha
-    # vacía todo ese alto. Ahora la derecha lleva la botonera y, pegado
-    # debajo, lo de la vista; la izquierda, el título y lo normal.
-    # columnas-internas: la ficha en dos columnas, como el mockup
-    # Con un hueco entre las dos (2026-09-29, a pedido: «más aire entre los
-    # dos gráficos», regla #567): la tira de puntos y la grilla se leían
-    # como una sola cosa. La grilla, más angosta, cabe en 6.
-    c_a, _hueco, c_b = st.columns([5, 1, 6], gap="large")
-    with c_b:
-        with st.container(horizontal=True, vertical_alignment="center",
-                          key="vhh_barra"):
-            # Pestañas de línea, no cápsulas: la key cae en las reglas de
-            # `vh_op_` de estilos/_80_cards.py (texto con subrayado).
-            vista = st.pills("Ver", list(VISTAS), key=_K_VISTA,
-                             label_visibility="collapsed") or VISTAS[0]
-            # «POR MESA» sube a la fila de las pestañas (2026-09-29, a
-            # pedido, regla #565): es el título de lo que va justo debajo,
-            # y en su propio renglón le costaba 30 px a los cuadros.
-            if vista == VISTAS[0]:
-                with st.container(key="vhh_rot_mesa", width="content"):
-                    st.markdown(f'<p class="vhh-h3 vhh-h3-barra">Por mesa '
-                                f'{_info("mesa")}</p>',
-                                unsafe_allow_html=True)
-            if al_ampliar is not None:
-                st.button("Volver al mapa" if ampliado else "Ampliar",
-                          key="vh_detalle_ampliar", on_click=al_ampliar,
-                          icon=":material/close_fullscreen:" if ampliado else
-                               ":material/open_in_full:")
-            st.button("Cerrar", key="vh_foco_cerrar",
-                      icon=":material/close:", on_click=al_cerrar)
     # EL RESULTADO, NO EL RÓTULO (2026-10-04, a pedido). Junto al título,
     # cuánto se aleja esta hora de lo normal, en todas las vistas: es de la
     # hora, no de un bloque. Y en la fila de Venta · Pax · Ticket, donde
@@ -833,14 +800,38 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
                     f'{_info("normal")}</span>')
     else:
         ver_html = ""
+    # Las acciones pertenecen a toda la ficha y conservan una fila propia
+    # junto al título; no compiten con las pestañas de la mitad derecha.
+    with st.container(horizontal=True, vertical_alignment="center",
+                      key="vhh_cabecera"):
+        with st.container(width="stretch"):
+            st.markdown(
+                f'<p class="vhh-tit">{_DIAS[dow].capitalize()} {dia.day} '
+                f'{cortes.MESES_ABR_ES[dia.month - 1]} · '
+                f'{cortes.etiqueta_hora(hora)}'
+                # El subtítulo en el MISMO renglón del título (#565).
+                f'<span class="vhh-sub" title="{sub_tit}">{sub}</span>'
+                f'{ver_html}</p>', unsafe_allow_html=True)
+        with st.container(horizontal=True, width="content", key="vhh_acciones"):
+            if al_ampliar is not None:
+                st.button("Volver al mapa" if ampliado else "Ampliar",
+                          key="vh_detalle_ampliar", on_click=al_ampliar,
+                          icon=":material/close_fullscreen:" if ampliado else
+                               ":material/open_in_full:")
+            st.button("Cerrar", key="vh_foco_cerrar",
+                      icon=":material/close:", on_click=al_cerrar)
+    # columnas-internas: comparación y los ocho factores por mesa (#567).
+    c_a, _hueco, c_b = st.columns([5, 1, 6], gap="large")
+    with c_b:
+        with st.container(horizontal=True, vertical_alignment="center", key="vhh_barra"):
+            vista = st.pills("Ver", list(VISTAS), key=_K_VISTA,
+                             label_visibility="collapsed") or VISTAS[0]
+            if vista == VISTAS[0]:
+                with st.container(key="vhh_rot_mesa", width="content"):
+                    st.markdown(f'<p class="vhh-h3 vhh-h3-barra">Por mesa '
+                                f'{_info("mesa")}</p>', unsafe_allow_html=True)
     with c_a:
         st.markdown(
-            f'<p class="vhh-tit">{_DIAS[dow].capitalize()} {dia.day} '
-            f'{cortes.MESES_ABR_ES[dia.month - 1]} · '
-            f'{cortes.etiqueta_hora(hora)}'
-            # El subtítulo en el MISMO renglón del título (#565).
-            f'<span class="vhh-sub" title="{sub_tit}">{sub}</span>'
-            f'{ver_html}</p>'
             f'<p class="vhh-kpis"><span>Venta<b>{_soles(v_hora)}</b></span>'
             f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Gasto/persona<b>'
             f'{_soles2(v_ticket / pax_hora) if pax_hora else "—"}</b></span>'

@@ -3165,6 +3165,12 @@ def _dibujar_filas(tramos, claves, grano, medida, filas, cols_filas, lectura,
             if not st.session_state.get(_K_PERFIL_FILA) else elegido)
     fig = _fig_filas(items, mats, etq, claves, grano, medida, dif,
                      foco or elegido, por_dia)
+    fig.update_layout(meta=dict(
+        vh_alto_normal=fig.layout.height,
+        vh_alto_minimo=alturas.por_filas(
+            len(items), px_fila=_PX_HORA_DRILL, rol=alturas.PROTAGONISTA,
+            extra=(_AIRE_MAPA if len(claves) > 1 else _AIRE_MAPA_SOLO), minimo=_ALTO_MIN),
+        vh_detalle=bool(elegido), vh_reserva=alturas.MINI))
     st.plotly_chart(fig, key=key, on_select="rerun", selection_mode="points",
                     config={"displaylogo": False, "displayModeBar": False})
     return int(fig.layout.height)
@@ -3673,10 +3679,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             # debajo y empujar el gráfico fuera de la vista (1.312px de scroll
             # medidos antes de esto). El objetivo del usuario, textual: "que no
             # pierda enfoque en el gráfico principal y que haga el mínimo scroll".
-            # Con SÓLO la ficha de la hora abierta el mapa ya no se achata
-            # (2026-09-27, a pedido, regla #551): se abre con cada clic, y
-            # con filas de 16 px la celda de al lado costaba acertarla. La
-            # ficha se desliza por dentro de su panel, que se lleva la resta.
+            # El navegador sólo reduce el mapa si falta sitio para la ficha;
+            # en pantallas altas conserva el alto de reposo (#627).
             _alto = _alto_mapa(len(horas), con_drill=bool(marcas),
                                varios=len(claves) > 1, totales=totales)
             _total = _total_columnas(claves, grano, ancla, semanal)
@@ -3686,6 +3690,10 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                             semanal=semanal, desliza=desliza,
                             promedio=promedio, forma=forma, numeros=numeros,
                             totales=totales)
+            fig.update_layout(meta=dict(fig.layout.meta or {},
+                vh_alto_normal=_alto, vh_alto_minimo=_alto_mapa(
+                    len(horas), con_drill=True, varios=len(claves) > 1, totales=totales),
+                vh_detalle=bool(foco or marcas), vh_reserva=alturas.MINI))
             _cfg_fig = {"displaylogo": False, "displayModeBar": False}
             # EL MAPA DESLIZABLE (regla #551). El contenedor se dibuja SIEMPRE
             # —un contenedor con key que deja de dibujarse retiene a sus hijos,

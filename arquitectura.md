@@ -49381,6 +49381,17 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      el `requestAnimationFrame` del padre: el del iframe invisible puede
      quedar suspendido. Las fichas anulan el margen negativo de markdown
      para que los avisos no tapen cifras ni se recorte el último renglón.
+     Al abrir el detalle, el navegador reserva el rol MINI y reduce el
+     mapa sólo si falta altura, mediante `Plotly.relayout`. Python publica
+     en `layout.meta` el alto normal y el mínimo por número de filas;
+     también se reajusta el eje fijo de un mapa deslizable. Ampliar la
+     ventana o cerrar la ficha devuelve el alto normal. Las acciones de
+     Horas comparten cabecera con el título y ya no desplazan las pestañas
+     ni mandan Cerrar a otro renglón en laptop.
+     El alto debe ajustarse también en los marcos de Streamlit que envuelven
+     el SVG; cambiar sólo Plotly conserva un hueco con el alto anterior.
+     `border=True` añade un bloque vertical sin key: su gap se ajusta por
+     la cadena de hijos directos, junto al del contenedor con key.
 
      El
      interruptor del renglón del título alterna el mapa de calor simple,

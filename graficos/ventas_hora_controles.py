@@ -96,8 +96,39 @@ def medir_panel():
         pending = false;
         const panel = doc.querySelector('.st-key-vh_panel_drill');
         if (!panel) return;
-        const value = Math.max(0, window.parent.innerHeight -
-          Math.max(0, panel.getBoundingClientRect().top) - 16) + 'px';
+        const graphs = [...doc.querySelectorAll('.st-key-vh_desliza .js-plotly-plot')];
+        const graph = graphs.find(g => g.layout?.meta?.vh_alto_normal);
+        const meta = graph?.layout.meta;
+        const top = panel.getBoundingClientRect().top;
+        const end = window.parent.innerHeight - 20;
+        if (meta && window.parent.Plotly && window.parent.innerWidth > 768 &&
+            !doc.querySelector('.vh-detalle-ampliado')) {
+          const current = graph.getBoundingClientRect().height;
+          const desired = meta.vh_detalle ? Math.max(meta.vh_alto_minimo,
+            Math.min(meta.vh_alto_normal, end - top + current - meta.vh_reserva))
+            : meta.vh_alto_normal;
+          const height = Math.round(desired);
+          graphs.forEach(g => {
+            // Streamlit reserva el alto original en el marco del SVG.
+            const frame = g.closest('.stPlotlyChart');
+            const host = g.closest('.stElementContainer');
+            for (let box = frame; host && box && box !== host.parentElement; box = box.parentElement) {
+              if (box.style.height !== height + 'px' ||
+                  box.style.getPropertyPriority('height') !== 'important') {
+                box.style.setProperty('height', height + 'px', 'important');
+                box.style.setProperty('max-height', height + 'px', 'important');
+                box.style.setProperty('min-height', '0px', 'important');
+              }
+            }
+            if (Math.abs(g.getBoundingClientRect().height - height) > 1 && !g._vhSizing) {
+              g._vhSizing = true;
+              Promise.resolve(window.parent.Plotly.relayout(g, {height})).finally(() => {
+                g._vhSizing = false; schedule();
+              });
+            }
+          });
+        }
+        const value = Math.max(0, end - Math.max(0, top)) + 'px';
         if (panel.style.getPropertyValue('--vh-panel-disponible') !== value)
           panel.style.setProperty('--vh-panel-disponible', value);
       };

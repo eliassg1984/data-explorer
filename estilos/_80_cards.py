@@ -5083,6 +5083,29 @@ CSS = """    /* ================================================================
         flex-wrap: wrap !important;
         min-height: 0 !important;
     }
+    .st-key-vhh_cabecera {
+        align-items: center !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+    .st-key-vhh_cabecera > div:first-child { flex: 1 1 240px !important; }
+    .st-key-vhh_cabecera > div:last-child { flex: 0 0 auto !important; }
+    .st-key-vhh_acciones {
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        margin-left: auto !important;
+    }
+    .st-key-vhh_acciones > div { flex: 0 0 auto !important; }
+    .st-key-vh_panel_drill {
+        scrollbar-gutter: stable;
+        scrollbar-width: thin;
+        scrollbar-color: var(--scroll-thumb) transparent;
+        overscroll-behavior-y: contain;
+    }
+    .st-key-vt_sec_hora .st-key-ajuste_graf_card_izq_ventas_hora,
+    .st-key-ajuste_graf_card_izq_ventas_hora > div > [data-testid="stVerticalBlock"] {
+        gap: 4px !important;
+    }
     .st-key-vhh_barra > .st-key-vh_foco_cerrar {
         margin-left: auto !important;
     }
@@ -6475,6 +6498,13 @@ CSS = """    /* ================================================================
     /* La densidad depende del alto disponible, no de una resolución fija.
        Se mantiene el tamaño de letra; sólo se reduce el cromo en laptops. */
     @media (min-width: 769px) and (max-height: 800px) {
+        .st-key-chartcard_ventas_horario_hora .vhh-factor {
+            padding: 4px 7px !important;
+            line-height: 1.2 !important;
+        }
+        .st-key-chartcard_ventas_horario_hora .vhh-grilla {
+            row-gap: 6px !important;
+        }
         .st-key-vh_controles {
             --vh-control-alto: 28px;
             --vh-tab-alto: 28px;
