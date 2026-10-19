@@ -97,7 +97,12 @@ _K_SALON_VALOR = "_vh_mesas_salon_valor"
 # alterna los tres en el MISMO lugar. Su valor sobrevive a cerrar la ficha:
 # quien mira pedidos suele seguir mirando pedidos en la hora siguiente.
 _K_VISTA = "vh_op_ficha"
+_K_VISTA_SELECTOR = "vhh_vista"
 VISTAS = ("Resumen y contexto", "Mesas del salón", "Pedidos")
+
+
+def _cambiar_vista():
+    st.session_state[_K_VISTA] = st.session_state[_K_VISTA_SELECTOR]
 
 _INFO = {
     "normal": "Las 8 semanas anteriores, mismo día de la semana y misma "
@@ -758,9 +763,7 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
     ampm = "am" if int(hora) % 24 < 12 else "pm"
     verbo = (("abierto" if n == 1 else "abiertos") if modo == "pedido"
              else "con cobro")
-    # Corto desde el 2026-10-04: el renglón del título suma el resultado
-    # contra lo normal y no entraba. «Entre las 10:00 y las 10:59 pm»
-    # repetía la hora del título; queda en el tooltip.
+    # La hora ya figura en el título; el intervalo completo queda en tooltip.
     sub = (f"{n} {'pedido' if n == 1 else 'pedidos'} {verbo}" if n else
            "Ningún pedido a esta hora")
     sub_tit = f"entre {la} {h12}:00 y {la} {h12}:59 {ampm}"
@@ -782,11 +785,8 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
         st.session_state[_K_VISTA] = VISTAS[0]
     vista = st.session_state[_K_VISTA]
 
-    # EL RESULTADO, NO EL RÓTULO (2026-10-04, a pedido). Junto al título,
-    # cuánto se aleja esta hora de lo normal, en todas las vistas: es de la
-    # hora, no de un bloque. Y en la fila de Venta · Pax · Ticket, donde
-    # estaba el rótulo «CONTRA LO NORMAL», la frase que dice en qué puesto
-    # cae; con eso la tira de abajo sube un renglón.
+    # La comparación es de la venta de la hora. Va junto a esa cifra en
+    # todas las vistas y deja libre la cabecera para el selector y acciones.
     vb = [p["v"] for p in previas]
     ver = veredicto_normal(v_hora, vb)
     if ver:
@@ -795,12 +795,12 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
                     f" (de {_soles(min(vb))} a {_soles(max(vb))}): las "
                     f"{len(vb)} semanas anteriores, mismo día y misma hora",
                     quote=True)
-        ver_html = (f'<span class="vhh-tit-normal"><span class="vhh-chip '
+        ver_html = (f'<span class="vhh-normal"><span class="vhh-chip '
                     f'{ver[1]}" title="{_tit}">{ver[0]}</span>'
                     f'{_info("normal")}</span>')
     else:
         ver_html = ""
-    # Título, pestañas y acciones comparten la cabecera completa. Las
+    # Título, selector y acciones comparten la cabecera completa. Las
     # acciones no reservan una fila por encima del gráfico de mesas.
     with st.container(horizontal=True, vertical_alignment="center",
                       key="vhh_cabecera"):
@@ -811,11 +811,18 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
                 f'{cortes.etiqueta_hora(hora)}'
                 # El subtítulo en el MISMO renglón del título (#565).
                 f'<span class="vhh-sub" title="{sub_tit}">{sub}</span>'
-                f'{ver_html}</p>', unsafe_allow_html=True)
+                '</p>', unsafe_allow_html=True)
         with st.container(horizontal=True, vertical_alignment="center",
                           width="content", key="vhh_barra"):
-            vista = st.pills("Ver", list(VISTAS), key=_K_VISTA,
-                             label_visibility="collapsed") or VISTAS[0]
+            # Estado canónico separado del widget: migra sesiones con pills
+            # y conserva la vista al cerrar/reabrir la ficha.
+            st.session_state[_K_VISTA_SELECTOR] = vista
+            with st.container(key="vhh_selector", width=210):
+                vista = st.selectbox("Detalle de la hora", VISTAS,
+                                     key=_K_VISTA_SELECTOR,
+                                     on_change=_cambiar_vista,
+                                     label_visibility="collapsed")
+            st.session_state[_K_VISTA] = vista
             with st.container(key="vhh_rot_mesa", width="content"):
                 if vista == VISTAS[0]:
                     st.markdown(f'<p class="vhh-h3 vhh-h3-barra">Por mesa '
@@ -833,7 +840,8 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
 
     def resumen():
         st.markdown(
-            f'<p class="vhh-kpis"><span>Venta<b>{_soles(v_hora)}</b></span>'
+            f'<p class="vhh-kpis"><span class="vhh-kpi-venta">'
+            f'<span>Venta<b>{_soles(v_hora)}</b></span>{ver_html}</span>'
             f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Gasto/persona<b>'
             f'{_soles2(v_ticket / pax_hora) if pax_hora else "—"}</b></span>'
             # La frase en esta fila, sólo en la vista de lo normal: es el
@@ -893,7 +901,7 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
                 f'{int(salon)}</b> mesas ({100 * conc / salon:,.0f}%) · venta '
                 f'por mesa del salón: <b>{_soles(v_hora / salon)}</b>.</p>',
                 unsafe_allow_html=True)
-    with c_d:
+    with c_d, st.container(key="vhh_mesas_grafico", gap="small"):
         t, serie = linea(ini, fin, t0, t1)
         nor = tipica(ini, fin, t0, t1) if len(ini) else None
         visto = int(abiertas(ini, fin, ini).max()) if len(ini) else 0
@@ -903,11 +911,12 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
                    f"lo más visto desde el {desde.day} "
                    f"{cortes.MESES_ABR_ES[desde.month - 1]} ({ref})")
         st.markdown(
+            '<div class="vhh-mesas-leyenda">'
             f'<p class="vhh-h3">Mesas abiertas a la vez {_info("conc")}</p>'
             '<p class="vhh-ley"><span><i class="ln"></i>este día</span>'
             f'<span><i class="ln nor"></i>un {_DIAS[dow]} normal (mediana de '
             f'8 semanas)</span><span><i class="ln ref"></i>{etq_ref}</span>'
-            '</p>', unsafe_allow_html=True)
+            '</p></div>', unsafe_allow_html=True)
         if len(ini) and fl["abre"].notna().any():
             eje = []
             h = t0.ceil("h")

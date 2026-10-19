@@ -49400,8 +49400,14 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      altura como si fuera ancho. Ampliar oculta también ese bloque.
      En escritorio, Filas/Columnas/Medida/Cálculo conservan labels nativos
      y los colocan junto al valor en una sola línea; en móvil vuelven al
-     formato vertical. En Horas, título, pestañas y acciones comparten
-     toda la cabecera. Mesas del salón coloca el resumen y la capacidad
+     formato vertical. En Horas, título, selector de detalle y acciones
+     comparten la cabecera. El selector conserva `vh_op_ficha` como estado
+     canónico y usa una key de widget distinta al antiguo pills; al cambiar
+     copia su valor al estado, que persiste al cerrar y reabrir. La comparación
+     «vs lo normal» acompaña a Venta y no al título. El rótulo y la leyenda
+     del gráfico de mesas comparten fila cuando caben; se envuelven en
+     pantallas estrechas y conservan el texto completo.
+     Mesas del salón coloca el resumen y la capacidad
      a la izquierda del gráfico, y Pedidos conserva su resumen junto a
      los meseros; no hay una fila vacía de acciones encima del contenido.
 

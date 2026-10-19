@@ -5045,16 +5045,18 @@ CSS = """    /* ================================================================
         padding-left: 14px !important;
         border-left: 1px solid var(--border) !important;
     }
-    /* EL RESULTADO, NO EL RÓTULO (2026-10-04, a pedido): junto al título,
-       cuánto se aleja la hora de lo normal («▲ 86% vs lo normal»), y en
-       la fila de los KPIs, donde estaba «CONTRA LO NORMAL», la frase que
-       dice en qué puesto cae. */
-    .st-key-chartcard_ventas_horario_hora .vhh-tit .vhh-tit-normal {
+    /* La comparación acompaña a Venta y no ensancha el título. */
+    .st-key-chartcard_ventas_horario_hora .vhh-kpi-venta {
+        display: inline-flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 4px 8px !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-normal {
         display: inline-flex !important;
         align-items: center !important;
         gap: 5px !important;
-        margin-left: 10px !important;
-        vertical-align: 2px !important;
+        white-space: nowrap !important;
         font-weight: 400 !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-kpis .vhh-kpi-frase {
@@ -5075,10 +5077,7 @@ CSS = """    /* ================================================================
     .st-key-chartcard_ventas_horario_hora .st-key-vh_mesas_salon {
         margin-top: 14px !important;
     }
-    /* La barra de la ficha (regla #564): las pestañas de línea a la
-       izquierda —su estilo viene de las reglas de `vh_op_`— y «Cerrar» al
-       extremo, como texto y no como caja: con borde medía 40 px y fijaba
-       el alto de la fila. */
+    /* Selector de detalle y acciones en una cabecera compacta. */
     .st-key-vhh_barra {
         flex-wrap: wrap !important;
         min-height: 0 !important;
@@ -5096,6 +5095,43 @@ CSS = """    /* ================================================================
     }
     .st-key-vhh_cabecera > div:first-child { flex: 1 1 240px !important; }
     .st-key-vhh_cabecera > div:last-child { flex: 0 0 auto !important; }
+    .st-key-vhh_barra > .st-key-vhh_selector,
+    .st-key-vhh_barra > div:has(.st-key-vhh_selector) {
+        flex: 0 0 210px !important;
+        width: 210px !important;
+        min-width: 0 !important;
+    }
+    .st-key-vhh_vista [data-testid="stSelectbox"] [role="group"],
+    .st-key-vhh_vista [data-baseweb="select"] > div,
+    .st-key-vhh_vista .react-aria-Select > button {
+        height: 28px !important;
+        min-height: 28px !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+        background: var(--bg-card) !important;
+    }
+    .st-key-vhh_vista [data-testid="stSelectbox"] input {
+        height: 24px !important;
+        min-height: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        font-size: 13px !important;
+    }
+    .st-key-vhh_mesas_grafico { gap: 4px !important; }
+    .vhh-mesas-leyenda {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 16px;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-mesas-leyenda .vhh-h3 {
+        flex: 0 0 auto;
+        margin: 0 !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-mesas-leyenda .vhh-ley {
+        flex: 1 1 440px;
+        margin: 0 !important;
+    }
     .st-key-vhh_acciones {
         flex-wrap: nowrap !important;
         gap: 6px !important;
@@ -6581,9 +6617,6 @@ CSS = """    /* ================================================================
         }
         .st-key-vhh_barra { flex-direction: row !important; flex-wrap: wrap !important; }
         .st-key-vhh_barra > div { min-width: 0 !important; max-width: 100% !important; }
-        .st-key-vh_op_ficha [data-testid="stButtonGroup"] > div {
-            flex-wrap: wrap !important;
-        }
         .st-key-vhh_acciones { flex-direction: row !important; }
         .vh-campo-fijo { align-items: flex-start; flex-direction: column; gap: 3px; }
         .st-key-vh_controles { --vh-control-alto: 40px; --vh-tab-alto: 36px; }
