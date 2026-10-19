@@ -6506,6 +6506,18 @@ CSS = """    /* ================================================================
     .st-key-vh_controles:has(.vh-filtros-cerrados) .st-key-vh_datos {
         display: none !important;
     }
+    /* Se pliega la fila completa y su wrapper, sin desmontar widgets. */
+    .st-key-vh_controles:has(.vh-configuracion-cerrada) .st-key-vh_presentacion,
+    .st-key-vh_controles:has(.vh-configuracion-cerrada) > div:has(.st-key-vh_presentacion) {
+        display: none !important;
+    }
+    .st-key-vh_acciones_contexto {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }
+    .st-key-vh_acciones_contexto > div { flex: 0 0 auto !important; width: auto !important; }
     .st-key-vh_resumen_contexto {
         gap: 8px !important;
         flex-wrap: wrap !important;
@@ -6517,6 +6529,7 @@ CSS = """    /* ================================================================
         line-height: 1.3 !important;
     }
     .st-key-vh_ver_filtros button,
+    .st-key-vh_ver_configuracion button,
     .st-key-vh_detalle_ampliar button {
         min-height: 28px !important;
         height: 28px !important;
@@ -6527,7 +6540,13 @@ CSS = """    /* ================================================================
         border-radius: 6px !important;
     }
     .st-key-vh_ver_filtros button p,
+    .st-key-vh_ver_configuracion button p,
     .st-key-vh_detalle_ampliar button p { font-size: 12px !important; }
+    .st-key-vh_controles:has(.vh-configuracion-abierta) .st-key-vh_ver_configuracion button {
+        background: var(--accent-tint) !important;
+        border-color: var(--border-lavender) !important;
+        color: var(--accent-deep) !important;
+    }
     .st-key-vh_fila_cabecera {
         flex-wrap: wrap !important;
         gap: 6px !important;
@@ -6636,10 +6655,10 @@ CSS = """    /* ================================================================
         }
         .st-key-vh_controles .st-key-vh_resumen_contexto {
             flex-direction: row !important;
-            flex-wrap: nowrap !important;
+            flex-wrap: wrap !important;
         }
         .st-key-vh_controles .st-key-vh_resumen_contexto > div:first-child {
-            flex: 1 1 0 !important;
+            flex: 1 1 100% !important;
             min-width: 0 !important;
             width: auto !important;
         }

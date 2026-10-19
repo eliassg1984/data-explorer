@@ -21,11 +21,16 @@ BASES = ("Hora del pedido", "Hora del comprobante")
 TODOS = "Toda la carta"
 KEYS = ("vh_canal", "vh_ambito", "vh_op_hora", "vh_raros")
 FILTROS_ABIERTOS = "_vh_filtros_abiertos"
+CONFIGURACION_ABIERTA = "_vh_configuracion_abierta"
 AMPLIADO = "_vh_detalle_ampliado"
 
 
 def alternar_filtros():
     st.session_state[FILTROS_ABIERTOS] = not st.session_state.get(FILTROS_ABIERTOS, False)
+
+
+def alternar_configuracion():
+    st.session_state[CONFIGURACION_ABIERTA] = not st.session_state.get(CONFIGURACION_ABIERTA, False)
 
 
 def alternar_ampliado():
@@ -39,6 +44,8 @@ def actualizar_estado(holder, ampliado=None):
     clases = ["vh-estado"]
     if not st.session_state.get(FILTROS_ABIERTOS, False):
         clases.append("vh-filtros-cerrados")
+    clases.append("vh-configuracion-abierta" if st.session_state.get(CONFIGURACION_ABIERTA, False)
+                  else "vh-configuracion-cerrada")
     if st.session_state.get(AMPLIADO, False):
         clases.append("vh-detalle-ampliado")
     holder.markdown(f'<span class="{" ".join(clases)}"></span>',
@@ -105,8 +112,16 @@ def medir_panel():
         if (meta && window.parent.Plotly && window.parent.innerWidth > 768 &&
             !doc.querySelector('.vh-detalle-ampliado')) {
           const current = graph.getBoundingClientRect().height;
+          const controls = doc.querySelector('.st-key-vh_controles');
+          const folded = controls?.querySelector('.vh-configuracion-cerrada');
+          const style = folded ? window.parent.getComputedStyle(controls) : null;
+          const px = name => style ? parseFloat(style.getPropertyValue(name)) || 0 : 0;
+          // El espacio recuperado se entrega al detalle, no al alto del mapa.
+          const recovered = px('--vh-control-alto') +
+            2 * px('--vh-presentacion-relleno') + px('--vh-control-gap');
+          const reserve = meta.vh_reserva + recovered;
           const desired = meta.vh_detalle ? Math.max(meta.vh_alto_minimo,
-            Math.min(meta.vh_alto_normal, end - top + current - meta.vh_reserva))
+            Math.min(meta.vh_alto_normal, end - top + current - reserve))
             : meta.vh_alto_normal;
           const height = Math.round(desired);
           graphs.forEach(g => {
@@ -223,8 +238,14 @@ def cabecera(d, col_fecha, col_pedido, ancla, filtrar_cb, interruptor):
                           else "Excluye Venta Interna y Eventos")
             st.caption(f"{resumen_fecha} · "
                        f"{resumen_canal} · {elegido} · {ss['vh_op_hora']} · {especiales}")
-        st.button("Filtros", key="vh_ver_filtros", icon=":material/tune:",
-                  on_click=alternar_filtros)
+        with st.container(horizontal=True, width="content", gap="small",
+                          key="vh_acciones_contexto"):
+            st.button("Filtros", key="vh_ver_filtros", icon=":material/tune:",
+                      on_click=alternar_filtros)
+            if ss.get("vh_modo") != "Franjas":
+                st.button("Configurar", key="vh_ver_configuracion", icon=":material/settings:",
+                          help="Filas, columnas, medida, cálculo y apariencia del mapa",
+                          on_click=alternar_configuracion)
     with st.container(key="vh_datos"):
         with st.container(horizontal=True, vertical_alignment="bottom",
                           gap="medium", key="vh_filtros"):

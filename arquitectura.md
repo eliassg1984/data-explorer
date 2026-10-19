@@ -49392,10 +49392,18 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      el SVG; cambiar sólo Plotly conserva un hueco con el alto anterior.
      `border=True` añade un bloque vertical sin key: su gap se ajusta por
      la cadena de hijos directos, junto al del contenedor con key.
-     El resumen de contexto y Filtros comparten la primera fila con título
+     El resumen de contexto, Filtros y Configurar comparten la primera fila con título
      y modos; la fecha usa la etiqueta breve de `cortes.etiqueta_corte`
-     y conserva ambos años cuando cruza de año. La presentación queda en
-     la segunda fila, con sus etiquetas permanentes. El bloque de contexto
+     y conserva ambos años cuando cruza de año. Configurar abre y pliega
+     Filas/Columnas/Medida/Cálculo y Apariencia, cerrado por defecto.
+     La fila y sus widgets siguen montados para conservar valores; se ocultan
+     con su wrapper para no reservar un hueco. Comparar conserva sus controles
+     de períodos y Franjas no muestra Configurar porque no tiene ese mapa.
+     Con detalle abierto, `medir_panel` suma a la reserva el alto recuperado
+     según las variables CSS del control, el relleno y el gap; así ese espacio
+     va al detalle y no vuelve a engrosar el mapa. Sin detalle el mapa mantiene
+     su alto normal, y en monitor grande se conserva ese mismo máximo.
+     Las etiquetas de presentación son permanentes cuando se despliega. El bloque de contexto
      puede envolver; en móvil su base flex vuelve a auto para no reservar
      altura como si fuera ancho. Ampliar oculta también ese bloque.
      En escritorio, Filas/Columnas/Medida/Cálculo conservan labels nativos
