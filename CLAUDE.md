@@ -1282,10 +1282,18 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   cambiar: si las ventas descontaron desde un área más de lo que las
   recetas de hoy descargan desde ahí, y un plato se editó y hoy apunta a
   otra, la pista «Se descontó desde otra área» lo dice (#654).
-- **Mira los combos** (`combosdetalle.parquet`, #651) y los compara por
-  TOTALES del período, no por día: el POS descuenta las ventas en lotes, a
-  la mañana siguiente y juntando días. Lo elegido en un combo a elegir
-  (CPEDIDO) no llega a ningún parquet: esa pista es «posible».
+- **Mira los combos por lo MARCADO en cada pedido** (#651 y un anexo de la #650): el POS
+  descuenta sólo lo marcado, y lo marcado (CPEDIDO) SÍ está en R2, en el
+  paloteo (`paloteoinsumosnivel1.parquet`, `TIPO PRODUCTO` = «C»). Hasta
+  el 2026-10-18 se deducía comparando totales del kardex, y una coincidencia
+  acusó al Reto Malbec, que el combo sí había descontado.
+- **Lo vendido y sin descontar al contar** (anexo de la #650): el descargo de ventas
+  se corre a mano por la mañana, así que lo vendido desde el último hasta
+  la hora del conteo sigue en el sistema y falta sin ser pérdida. Y desde
+  2026 cada corrida va del 1 del mes a la mañana del día: el ÚLTIMO día del
+  mes no lo toma ninguna (el 31 ago y el 30 set 2026, el día antes de cada
+  cierre). Lo dicen una pista y un aviso arriba de la lista; lo que cubrió
+  cada descargo no lo dice el kardex de R2 (`TLOG_DESCARGO` del POS sí).
 - **Dice quién PIDE cada producto** (los requerimientos de 90 días, por
   área) **y qué factura de SUNAT sin ingresar explica un sobrante** (el
   cruce «Solo SUNAT» de Documentos SUNAT y las líneas de su XML, #652).
@@ -1297,7 +1305,9 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   faltante («Vendido con el código del otro», #651). El lado lo dice la
   CANTIDAD.
 - **Recetas × vendido no cuadra con el descargo del kardex** (31 % de
-  las líneas a ±10 %): en la ficha va con «≈», sin compararlo.
+  las líneas a ±10 %): en la ficha va con «≈», sin compararlo. El
+  paloteo, pedido por pedido y abierto por las recetas base, sí (77 %): de
+  ahí salen las ventas sin descontar y los combos.
 - **El 74 % del sobrante de un cierre es el sistema en negativo**: se
   descargó antes de que entrara nada. No es mercadería que apareció.
 - **«Ninguna receta lo usa» lo decide el PERFIL DE SALIDA de 180 días**

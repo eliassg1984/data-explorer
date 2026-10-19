@@ -8667,12 +8667,15 @@ def _pruebas_diferencias_combos():
          queda en −6 y la Chardonnay, sin precio, sobra por S/ 0). La línea
          de S/ 0 entra a la lista —como sobrante, por la CANTIDAD— y las dos
          se señalan una a la otra, como pista fuerte.
-      2. LA COPA A ELEGIR DEL COMBO: el Menu Sapiens se vende 16 veces y ese
-         día no se descuenta el Reto Malbec, una de sus dos copas: pista
-         posible, «hasta» 16 × 0,2.
-      3. EL PLATO FIJO DEL COMBO: el pan va siempre, y si el combo se vende
-         sin descontarlo, la pista es fuerte y reemplaza a «Nada lo
-         descargó» (sus platos sólo se vendieron dentro del combo).
+      2. LA COPA A ELEGIR DEL COMBO (anexo de la #650): el Menu Sapiens se vende 16
+         veces y en sus pedidos se marcan 7 Reto Malbec —que el kardex SÍ
+         descuenta, 1,4 und— y ninguna de la otra copa: faltan 9 sin marcar.
+         Pista posible, «hasta» 9 × 0,2. Hasta la #651 se deducía de los
+         totales del kardex, y acusaba al Reto Malbec.
+      3. EL PLATO FIJO DEL COMBO: el pan va siempre, y si en los pedidos no
+         se marca, la pista es fuerte y reemplaza a «Nada lo descargó» (sus
+         platos sólo se vendieron dentro del combo).
+      4. SIN EL PALOTEO no se sabe qué se marcó: no hay pista de combo.
     """
     import pandas as pd
 
@@ -8704,16 +8707,26 @@ def _pruebas_diferencias_combos():
     t0, t1 = "2026-09-16 17:30", "2026-10-01 17:35"
     ajuste = pd.DataFrame(
         [fila(t0, *x) for x in ((2, 80, 0, 0), (2, 81, 0, 0), (2, 90, 10, 10), (1, 91, 20, 20))]
-        + [fila(t1, *x) for x in ((2, 80, 6, 0), (2, 81, -6, 0), (2, 90, 9, 5.8),
+        + [fila(t1, *x) for x in ((2, 80, 6, 0), (2, 81, -6, 0), (2, 90, 7.6, 5.8),
                                   (1, 91, 20, 4))])
 
     def kx(t, a, c, tipo, ent, sal, stock):
         return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
                 "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": tipo, "CANT INGRESO": ent,
                 "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
+    # El 25 set a las 10 el descargo descuenta las 7 copas marcadas en el combo.
     kardex = pd.DataFrame([kx("2026-09-18 10:00", 2, 80, "99", 6, 0, 6),
                            kx("2026-09-21 13:00", 2, 81, "95", 0, 6, -6),
-                           kx("2026-09-19 13:00", 2, 90, "95", 0, 1, 9)])
+                           kx("2026-09-19 13:00", 2, 90, "95", 0, 1, 9),
+                           kx("2026-09-25 10:00", 2, 90, "95", 0, 1.4, 7.6)])
+    # Lo marcado en el pedido de los 16 menús: 7 Reto Malbec; el pan, nada.
+    paloteo = pd.DataFrame([
+        {"FECHA PEDIDO": pd.Timestamp("2026-09-24 19:00"),
+         "FECHA ITEM": pd.Timestamp("2026-09-24 19:05"), "COD PEDIDO": "2600011286",
+         "TIPO PRODUCTO": "C", "COD PRODUCTO": "0000905", "PRODUCTO": "(Cp) Reto Malbec",
+         "CANT VENDIDA": 7.0, "COD INSUMO": "0000090", "CONSUMO TOTAL": 1.4}])
+    pedidos = pd.DataFrame([{"CODIGO PEDIDO": "2600011286",
+                             "DIA CONTABLE": pd.Timestamp("2026-09-24")}])
     rv = pd.DataFrame([
         {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
          "COD PLATO": f"{cp:07d}", "NOMB PLATO": pl, "COD INS": f"{ci:07d}", "CANTIDAD": q,
@@ -8743,7 +8756,7 @@ def _pruebas_diferencias_combos():
     ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
     cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
     r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta,
-                    combos=combos)
+                    combos=combos, paloteo=paloteo, pedidos=pedidos)
     L, F = r["lineas"], r["fichas"]
     de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
 
@@ -8760,22 +8773,35 @@ def _pruebas_diferencias_combos():
     check("lo que sobra apunta al que falta",
           [(p["ti"], p["f"], p.get("r")) for p in pistas(2, "81")][:1],
           [("Vendido con el código del otro", 1, de[(2, "80")]["id"])])
-    # 2 — la copa a elegir del combo
+    # 2 — la copa a elegir del combo: lo marcado, no los totales del kardex
     combo = [p for p in pistas(2, "90") if p["t"] == "combo"]
-    check("la copa a elegir del combo que no se descontó",
-          [(p["ti"], p["f"]) for p in combo], [("Combo que no lo descontó", 0)])
-    check("dice hasta cuánto, si todos la eligieron", "hasta 3.2 und" in combo[0]["tx"], True)
+    check("la copa a elegir: combos sin la opción marcada",
+          [(p["ti"], p["f"]) for p in combo], [("Combo sin la opción marcada", 0)])
+    check("dice lo que se marcó y lo que falta marcar",
+          "se marcaron 7 (Cp) Reto Malbec y 0 (Cp) Otro vino: faltan 9" in combo[0]["tx"], True)
+    check("y hasta cuánto, si esos 9 fueron esta copa", "hasta 1.8 und" in combo[0]["tx"], True)
     usos = [u for u in F[de[(2, "90")]["id"]]["usos"] if u["via"] == "combo"]
     check("y el combo está en «Dónde se usa»",
           [(u["n"], u["g"], u["fijo"], u["nv"], round(u["hasta"], 6)) for u in usos],
           [("Menu Sapiens Sept2026", "G", False, 16.0, 3.2)])
     # 3 — el plato fijo del combo
-    check("el pan fijo del combo: pista fuerte y la principal",
-          [(p["t"], p["f"]) for p in pistas(1, "91")][:1], [("combo", 1)])
+    check("el pan fijo del combo sin marcar: pista fuerte y la principal",
+          [(p["t"], p["ti"], p["f"]) for p in pistas(1, "91")][:1],
+          [("combo", "Fijo del combo sin marcar", 1)])
+    check("dice cuánto se marcó", "se marcó 0, no 16" in pistas(1, "91")[0]["tx"], True)
     check("reemplaza a «Nada lo descargó»",
           [p["t"] for p in pistas(1, "91") if p["t"] == "nada"], [])
     check("y dice que no salió nada con un documento",
           pistas(1, "91")[0]["tx"].startswith("Desde el conteo del 16 set no salió nada"), True)
+    # 4 — sin el paloteo, no hay pista de combo
+    r0 = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta,
+                     combos=combos)
+    F0 = r0["fichas"]
+    de0 = {(a, c): x["id"] for a, c, x in zip(r0["lineas"]["acod"], r0["lineas"]["cod"],
+                                              r0["lineas"].to_dict("records"))}
+    check("sin el paloteo no hay pista de combo",
+          [p["t"] for k_ in ((2, "90"), (1, "91")) for p in F0[de0[k_]]["pistas"]
+           if p["t"] == "combo"], [])
     return fallos
 
 
@@ -9096,6 +9122,148 @@ def _pruebas_diferencias_perfil():
     check("con el consejo de las bebidas y lo que antes sí se vendía",
           ("vendido con otro código" in vino[0]["tx"], "sí se vendió (23 und)" in vino[0]["tx"]),
           (True, True))
+    return fallos
+
+
+def _pruebas_diferencias_sin_descontar():
+    """Ajuste › «Análisis de diferencias», lo VENDIDO Y SIN DESCONTAR AL
+    CONTAR (anexo de la regla #650), con el cierre de setiembre 2026: el descargo de
+    ventas se corre a mano por la mañana, el último antes del conteo del 1 oct
+    fue el 30 set a las 9 y el siguiente, el 7 oct, desde el 1 oct.
+
+      1. EL FALTANTE: lo vendido el 30 set y el 1 oct antes del conteo
+         seguía en el sistema. Lo del 30 set no lo toma el descargo
+         siguiente y no vuelve; lo del 1 oct sí, y volverá como sobrante. Lo
+         del 1 oct después del conteo no cuenta.
+      2. EL ESPEJO EN UN SOBRANTE: al parcial del 17 set la chirimoya del 16
+         seguía sin descontar (500 g = 0,5 kg, con el factor del maestro); el
+         conteo la restó y el descargo del 18 set, otra vez.
+      3. EL ÚLTIMO DÍA DEL MES NO VUELVE: lo vendido el 31 ago, pendiente al
+         cierre del 2 set, el descargo del 7 set no lo tomó (empezó el 1).
+      4. UNA RECETA BASE POR INSUMO: el paloteo nombra la DD; lo que el
+         kardex mueve son sus insumos.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #650 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #650 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {1: "COCINA", 10: "COCINA PERSONAL"}
+    PROD = {50: ("(P) Lomo fino al trapo x und (produccion)", "UND", 86.0),
+            51: ("Chocolate 72% Cacao", "KILOS", 289.0),
+            52: ("(Rb) Pollito bb confitado x und (parrilla)", "UND", 14.7),
+            53: ("Aji Amarillo", "KILOS", 12.0)}
+
+    def fila(t, a, c, s, k):
+        n, u, p = PROD[c]
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "ALIMENTOS", "SUBFAMILIA": "VARIOS",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": u,
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": p, "AJUSTE VALORIZADO": (k - s) * p}
+    t1 = "2026-10-01 17:35"
+    ajuste = pd.DataFrame([
+        fila("2026-09-02 09:00", 10, 52, 5, 5), fila("2026-09-16 17:30", 1, 50, 10, 10),
+        fila("2026-09-16 17:30", 1, 53, 1, 1), fila("2026-09-17 12:00", 1, 51, 2, 2),
+        fila(t1, 1, 50, 10, 7), fila(t1, 1, 51, 1.5, 2), fila(t1, 10, 52, 4, 5),
+        fila(t1, 1, 53, 1, 0.95)])
+
+    def kx(t, a, c, sal, stock):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": "95", "CANT INGRESO": 0.0,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
+    # Los descargos de cada mañana (el 99 es un producto cualquiera).
+    kardex = pd.DataFrame([kx("2026-08-31 09:00", 1, 99, 1, 0), kx("2026-09-07 17:00", 10, 52, 1, 4),
+                           kx("2026-09-16 10:00", 1, 99, 1, 0), kx("2026-09-18 16:00", 1, 51, 0.5, 1.5),
+                           kx("2026-09-30 09:00", 1, 99, 1, 0), kx("2026-10-07 09:00", 1, 50, 1, 9)])
+
+    def pal(fi, ped, cp, plato, n, ci, consumo):
+        return {"FECHA PEDIDO": pd.Timestamp(fi), "FECHA ITEM": pd.Timestamp(fi),
+                "COD PEDIDO": ped, "TIPO PRODUCTO": "P", "COD PRODUCTO": f"{cp:07d}",
+                "PRODUCTO": plato, "CANT VENDIDA": n, "COD INSUMO": f"{ci:07d}",
+                "CONSUMO TOTAL": consumo}
+    paloteo = pd.DataFrame([
+        pal("2026-09-30 14:00", "A1", 701, "Lomo al Trapo 1kg", 2, 50, 2),
+        pal("2026-10-01 13:00", "A2", 701, "Lomo al Trapo 1kg", 1, 50, 1),
+        pal("2026-10-01 20:00", "A3", 701, "Lomo al Trapo 1kg", 1, 50, 1),
+        pal("2026-09-16 20:00", "B1", 702, "Chirimoya a la Brasa", 5, 51, 500),
+        pal("2026-08-31 20:00", "C1", 712, "Sarten de Arroz con Pollo", 1, 52, 1),
+        pal("2026-09-30 15:00", "D1", 703, "Ojo de Bife Gravy", 1, 800, 1)])
+    pedidos = pd.DataFrame([{"CODIGO PEDIDO": p_, "DIA CONTABLE": pd.Timestamp(d_)}
+                            for p_, d_ in (("A1", "2026-09-30"), ("A2", "2026-10-01"),
+                                           ("A3", "2026-10-01"), ("B1", "2026-09-16"),
+                                           ("C1", "2026-08-31"), ("D1", "2026-09-30"))])
+    maestro = pd.DataFrame([{"CODIGO PRODUCTO": f"{c:07d}", "FACTOR": f}
+                            for c, f in ((50, 1.0), (51, 1000.0), (52, 1.0), (800, 1.0))])
+    rv = pd.DataFrame([
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+         "COD PLATO": f"{cp:07d}", "NOMB PLATO": pl, "COD INS": f"{ci:07d}", "CANTIDAD": q,
+         "FACTOR": f, "SUBALM INS": ar, "T DESCARG": td,
+         "FECH MODIF": pd.Timestamp("2026-05-01")}
+        for cp, pl, ci, q, f, ar, td in (
+            (701, "Lomo al Trapo 1kg", 50, 1.0, 1.0, "COCINA", "PRODUCTO"),
+            (702, "Chirimoya a la Brasa", 51, 100.0, 1000.0, "COCINA", "PRODUCTO"),
+            (712, "Sarten de Arroz con Pollo", 52, 1.0, 1.0, "COCINA PERSONAL", "PRODUCTO"),
+            (703, "Ojo de Bife Gravy", 800, 1.0, 1.0, "COCINA", "INSUMO"))])
+    rb = pd.DataFrame([{"RB ACT": "RB.ACTIV", "COD PROD RB": "0000800",
+                        "RB NOMBRE": "(Rs) Gravy de culantro DD", "COD INS RB": "0000053",
+                        "INSUMO": "Aji Amarillo", "CANT": 50.0, "FACTOR INS": 1000.0,
+                        "AREA DESC RB": "COCINA", "T DESCARG": "PRODUCTO", "DESCARGA": "DESC",
+                        "FECH REG": pd.Timestamp("2026-05-01")}])
+    vacia = lambda *cols: pd.DataFrame(columns=list(cols))
+    carta = vacia("TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA")
+    porc = vacia("COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT", "PROD INICIAL",
+                 "COD PORC", "FEC REGIST", "CANT A PORCIONAR")
+    ordenes = vacia("NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO", "CANTIDAD")
+    venta = vacia("producto", "dia", "unidades", "costo", "unidades_costeadas")
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta,
+                    paloteo=paloteo, pedidos=pedidos, maestro=maestro)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+
+    def lote(a, c):
+        return [p for p in F[de[(a, c)]["id"]]["pistas"] if p["t"] == "lote"]
+
+    # 1 — el faltante
+    p_ = lote(1, "50")
+    check("lo vendido y sin descontar al contar, fuerte: es todo lo que falta",
+          [(p["ti"], p["f"]) for p in p_], [("Vendido y sin descontar al contar", 1)])
+    check("lo del 30 set no vuelve y lo del 1 oct sí",
+          "≈ 2 und no los tomó y no volverán; ≈ 1 sí" in p_[0]["tx"], True)
+    check("la lista lo trae por línea, por nombre de columna",
+          (de[(1, "50")]["pend"], de[(1, "50")]["pend_v"], de[(1, "50")]["pend_nunca_v"]),
+          (3.0, 258.0, 172.0))
+    check("y el resumen, los dos descargos y desde dónde tomó el segundo",
+          tuple(r["resumen"]["lote"][k_] for k_ in ("ultimo", "siguiente", "desde")),
+          (pd.Timestamp("2026-09-30 09:00"), pd.Timestamp("2026-10-07 09:00"),
+           pd.Timestamp("2026-10-01 07:00")))
+    # 2 — el espejo en un sobrante
+    p_ = lote(1, "51")
+    check("lo pendiente al conteo anterior que el POS descontó después",
+          [(p["ti"], p["f"]) for p in p_], [("Descontado después del conteo anterior", 1)])
+    check("con el factor del maestro y el descargo que lo volvió a restar",
+          ("≈ 0.5 kg" in p_[0]["tx"], "el descargo del 18 set lo volvió a restar" in p_[0]["tx"]),
+          (True, True))
+    # 3 — el último día del mes no vuelve
+    check("lo del 31 ago no lo tomó el descargo del 7 set: no explica el sobrante",
+          lote(10, "52"), [])
+    # 4 — una receta base por insumo
+    p_ = lote(1, "53")
+    check("la DD se abre en sus insumos: el ají sin descontar",
+          (de[(1, "53")]["pend"], "esa venta no la tomó, y no volverá" in p_[0]["tx"]),
+          (0.05, True))
     return fallos
 
 
@@ -12827,6 +12995,7 @@ def main():
     fallos += _pruebas_diferencias_req_sunat()
     fallos += _pruebas_diferencias_area_descargo()
     fallos += _pruebas_diferencias_perfil()
+    fallos += _pruebas_diferencias_sin_descontar()
     fallos += _pruebas_merma()
     fallos += _pruebas_cortes_y_peso()
     fallos += _pruebas_rastro_proveedor()

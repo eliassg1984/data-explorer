@@ -2207,7 +2207,9 @@ _ARCHIVOS_DIFERENCIAS = ("ajusteinventario.parquet", "recetaventa.parquet",
                          "porcionamientos.parquet", "ordenesproduccion.parquet",
                          "salidas.parquet", "ventas.parquet", "combosdetalle.parquet",
                          "requerimientos.parquet", "sunat_compras.parquet",
-                         "compras.parquet", "notascreditocompras.parquet")
+                         "compras.parquet", "notascreditocompras.parquet",
+                         "paloteoinsumosnivel1.parquet", "pedidos.parquet",
+                         "inventariovalorizado.parquet")
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False, max_entries=12)
@@ -2216,11 +2218,13 @@ def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
     (`diferencias_ajuste.calcular`, regla #650). Si falla, LANZA: no se
     cachea.
 
-    `archivo` es el kardex; `sellos`, los de los otros trece parquets
+    `archivo` es el kardex; `sellos`, los de los otros dieciséis parquets
     (`_ARCHIVOS_DIFERENCIAS`), y `version`, la de la cuenta. Ninguno se usa
     en el cuerpo: son la clave (ver el bloque del sello). Del kardex se bajan
-    las filas desde `DIAS_ATRAS` días antes de la sesión hasta su último
-    día: unas 60 mil por cierre. Medido sobre el cierre de setiembre 2026:
+    las filas desde `DIAS_ATRAS` días antes de la sesión hasta `DIAS_TARDE`
+    días después de su último día (de ahí sale cuándo fue el siguiente
+    descargo de ventas, #650): unas 60 mil por cierre. Del paloteo, los
+    mismos días hasta la sesión. Medido sobre el cierre de setiembre 2026:
     6 s de cuenta, una vez por versión de los datos."""
     if not secrets_disponibles():
         return None
@@ -2234,7 +2238,31 @@ def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
     con = get_conn()
     bucket = st.secrets["R2_BUCKET"]
     rel = f"read_parquet('s3://{bucket}/{archivo}')"
-    kx = con.execute(kardex.sql_filas(rel, desde, max(s["dias"]))).df()
+    kx = con.execute(kardex.sql_filas(
+        rel, desde, max(s["dias"]) + timedelta(days=diferencias_ajuste.DIAS_TARDE))).df()
+    # Lo que descuenta cada pedido, el día contable de cada pedido y el factor
+    # de cada producto (#650). Sin ellos, la cuenta sigue sin las pistas de
+    # ventas sin descontar ni de combo.
+    d0, d1 = desde - timedelta(days=2), max(s["dias"]) + timedelta(days=1)
+    try:
+        pal = con.execute(f"""
+            SELECT "FECHA PEDIDO", "FECHA ITEM", "COD PEDIDO", "TIPO PRODUCTO",
+                   "COD PRODUCTO", "PRODUCTO", "CANT VENDIDA", "COD INSUMO", "CONSUMO TOTAL"
+            FROM read_parquet('s3://{bucket}/paloteoinsumosnivel1.parquet')
+            WHERE "FECHA PEDIDO" >= TIMESTAMP '{desde:%Y-%m-%d} 00:00:00'
+              AND "FECHA PEDIDO" < TIMESTAMP '{d1:%Y-%m-%d} 00:00:00'
+        """).df()
+        ped = con.execute(f"""
+            SELECT "CODIGO PEDIDO", "DIA CONTABLE"
+            FROM read_parquet('s3://{bucket}/pedidos.parquet')
+            WHERE "FECHA APERTURA" >= TIMESTAMP '{d0:%Y-%m-%d} 00:00:00'
+        """).df()
+        mae = con.execute(f"""
+            SELECT DISTINCT "CODIGO PRODUCTO", "FACTOR"
+            FROM read_parquet('s3://{bucket}/inventariovalorizado.parquet')
+        """).df()
+    except Exception:
+        pal = ped = mae = None
     vend = _venta_por_producto_dia_cacheable(
         "ventas.parquet", sello_datos("ventas.parquet"),
         definicion=_version_preparar("ventas.parquet"))
@@ -2255,7 +2283,8 @@ def _diferencias_cacheable(archivo, sello, clave, sellos=(), version=None):
         aj, s, ses, kx, cargar("recetaventa.parquet"),
         cargar("recetabase.parquet"), cargar("cartacosteada.parquet"),
         cargar("porcionamientos.parquet"), cargar("ordenesproduccion.parquet"),
-        cargar("salidas.parquet"), vend, combos=combos, requerimientos=reqs, sunat=su)
+        cargar("salidas.parquet"), vend, combos=combos, requerimientos=reqs, sunat=su,
+        paloteo=pal, pedidos=ped, maestro=mae)
 
 
 # Los emisores que no venden mercadería: sus comprobantes no se leen (#652).

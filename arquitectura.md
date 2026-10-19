@@ -51003,58 +51003,6 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      con el módulo viejo en memoria la página sigue dibujando las barras de
      colores hasta el reinicio.
 
-     **Addendum (mismo día, otra ronda): el PERFIL DE SALIDA y textos según
-     qué es el producto.** En `diferencias_ajuste.py` (`perfil`,
-     `salida_habitual`, `sin_receta`, `familia_de`, la pista «uso»,
-     `VERSION` 5), `graficos/ajuste/_diferencias.py` («Cómo sale») y
-     `test_graficos.py::_pruebas_diferencias_perfil`. Va como anexo y no
-     como regla nueva porque, mientras se escribía, otra sesión tenía la #655
-     sin commitear y ya citada en su código.
-
-     Dos quejas del usuario, las dos ciertas:
-     - «"Sus platos no se vendieron" es genérico: algunos ítems son vinos o
-       bebidas». Medido: 64 de las 69 líneas con esa pista eran bebidas (58
-       de «Bebidas con alcohol»), y el consejo —«falta en una receta»— no
-       les cabe. Ahora es «No se vendió nada que lo lleve», con un consejo
-       por familia (`familia_de`: a una bebida, «vendido con otro código, una
-       cortesía o un evento sin marcar, una rotura sin nota»; a un envase,
-       «pedidos cuya receta no lo lleva») y, si antes se vendía, cuánto.
-     - «"Ninguna receta lo usa" no es exacto: un producto puede salir por
-       porcionamiento o por una salida como comida de personal o prueba».
-       Y peor: los bowls ensaladera y el secador de tela no están en ninguna
-       receta, activa ni inactiva, ni en un descargo directo, y el KARDEX
-       los descuenta por ventas (1.190 bowls en 180 días): lo agrega algo
-       que no llega a los parquets, quizá el envase que el POS suma por
-       canal.
-
-     **El perfil de salida.** Cómo salió cada producto en los `DIAS_ATRAS`
-     días antes de la sesión, en el restaurante entero: por ventas (95), por
-     producción o porcionamiento (94/96/90), o por notas, partidas por el
-     `TIPO DESCARGO` de `salidas.parquet` (lo que el 98 tiene y salidas no
-     parte queda «Nota de salida»; 91 y 92, «Control interno» y «Merma
-     fija»). La ficha lo muestra («Cómo sale») y decide qué pista va:
-     - **Ningún documento en 180 días** → «Ninguna receta lo usa» (el hueso
-       de pollo).
-     - **Sólo notas** → «Sale sólo por notas» (las bolsas al vacío: «Uso en
-       el Area», 1.750 und).
-     - **El kardex lo descuenta por ventas o producción sin receta
-       visible** → «Se descuenta sin receta visible», POSIBLE (los bowls, el
-       secador).
-     - **Sale sobre todo por notas de UN tipo** (≥ 60 % notas y ese tipo ≥
-       50 % del total) → la pista «uso», «Suele salir por "Comida
-       Personal"»: lo de siempre (lo de 180 días, por día, por los días entre
-       los dos conteos) contra lo registrado; si se registró menos de la
-       mitad, la diferencia se compara con lo que falta, y es fuerte si calza
-       (0,5–2×). Setiembre 2026: 43 líneas, por «Uso en el Area», «Evento»,
-       «Prueba», «Comida Personal», «Bajas».
-
-     Cuánto mueve: las pistas fuertes pasan de cubrir el 57,1 % al 55,2 %
-     del faltante en soles, porque «Se descuenta sin receta visible» es
-     posible donde antes «Ninguna receta lo usa» era fuerte. Es lo honesto:
-     el kardex dice que algo lo descuenta.
-
-     (2026-10-13.)
-
 650. **Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de
      diferencias», con el posible origen de cada faltante y sobrante y la
      ficha de la línea.** 2026-10-13, sobre las #612, #632, #645 y #648. En
@@ -51173,6 +51121,135 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      reinicio la vista no aparece.
 
      (2026-10-13.)
+
+     **Addendum (mismo día, otra ronda): el PERFIL DE SALIDA y textos según
+     qué es el producto.** En `diferencias_ajuste.py` (`perfil`,
+     `salida_habitual`, `sin_receta`, `familia_de`, la pista «uso»,
+     `VERSION` 5), `graficos/ajuste/_diferencias.py` («Cómo sale») y
+     `test_graficos.py::_pruebas_diferencias_perfil`. Va como anexo y no
+     como regla nueva porque, mientras se escribía, otra sesión tenía la #655
+     sin commitear y ya citada en su código.
+
+     Dos quejas del usuario, las dos ciertas:
+     - «"Sus platos no se vendieron" es genérico: algunos ítems son vinos o
+       bebidas». Medido: 64 de las 69 líneas con esa pista eran bebidas (58
+       de «Bebidas con alcohol»), y el consejo —«falta en una receta»— no
+       les cabe. Ahora es «No se vendió nada que lo lleve», con un consejo
+       por familia (`familia_de`: a una bebida, «vendido con otro código, una
+       cortesía o un evento sin marcar, una rotura sin nota»; a un envase,
+       «pedidos cuya receta no lo lleva») y, si antes se vendía, cuánto.
+     - «"Ninguna receta lo usa" no es exacto: un producto puede salir por
+       porcionamiento o por una salida como comida de personal o prueba».
+       Y peor: los bowls ensaladera y el secador de tela no están en ninguna
+       receta, activa ni inactiva, ni en un descargo directo, y el KARDEX
+       los descuenta por ventas (1.190 bowls en 180 días): lo agrega algo
+       que no llega a los parquets, quizá el envase que el POS suma por
+       canal.
+
+     **El perfil de salida.** Cómo salió cada producto en los `DIAS_ATRAS`
+     días antes de la sesión, en el restaurante entero: por ventas (95), por
+     producción o porcionamiento (94/96/90), o por notas, partidas por el
+     `TIPO DESCARGO` de `salidas.parquet` (lo que el 98 tiene y salidas no
+     parte queda «Nota de salida»; 91 y 92, «Control interno» y «Merma
+     fija»). La ficha lo muestra («Cómo sale») y decide qué pista va:
+     - **Ningún documento en 180 días** → «Ninguna receta lo usa» (el hueso
+       de pollo).
+     - **Sólo notas** → «Sale sólo por notas» (las bolsas al vacío: «Uso en
+       el Area», 1.750 und).
+     - **El kardex lo descuenta por ventas o producción sin receta
+       visible** → «Se descuenta sin receta visible», POSIBLE (los bowls, el
+       secador).
+     - **Sale sobre todo por notas de UN tipo** (≥ 60 % notas y ese tipo ≥
+       50 % del total) → la pista «uso», «Suele salir por "Comida
+       Personal"»: lo de siempre (lo de 180 días, por día, por los días entre
+       los dos conteos) contra lo registrado; si se registró menos de la
+       mitad, la diferencia se compara con lo que falta, y es fuerte si calza
+       (0,5–2×). Setiembre 2026: 43 líneas, por «Uso en el Area», «Evento»,
+       «Prueba», «Comida Personal», «Bajas».
+
+     Cuánto mueve: las pistas fuertes pasan de cubrir el 57,1 % al 55,2 %
+     del faltante en soles, porque «Se descuenta sin receta visible» es
+     posible donde antes «Ninguna receta lo usa» era fuerte. Es lo honesto:
+     el kardex dice que algo lo descuenta.
+
+     (2026-10-13.)
+
+     **Addendum (2026-10-18): lo vendido y sin descontar al contar, y los
+     combos por lo MARCADO —el «Análisis de diferencias» lee el paloteo
+     (`diferencias_ajuste.py`, `VERSION` 6)—.** Va como anexo y no como
+     regla nueva porque, mientras se escribía, otra sesión tenía el número
+     siguiente sin commitear y ya citado en su código. Nació de una
+     pregunta del usuario sobre la pista «Combo que no lo descontó» del
+     Reto Malbec (#651): «¿significa que sí figura en el detalle del
+     combo, pero que el sistema no lo descontó?».
+     No: en producción, CPEDIDO trae 7 (Cp) Reto Malbec en el pedido de los
+     16 Menu Sapiens Sept2026 del 24 set, y `ALMACEN.DBO.MSUBKARDEX` los
+     descuenta el 25 set a las 10:35 (1,4 und, con ese pedido en
+     `tDocumento` y el 24 set en `fDiaContable`). La pista era falsa por una
+     coincidencia: comparaba el descargo del kardex del período (22 und) con
+     lo vendido SUELTO por día (22 und), y lo suelto contaba 1,4 und que el
+     kardex todavía no había descontado al contar —2 copas del 30 set y una
+     botella del 1 oct—. 20,6 sueltos + 1,4 del combo = 22.
+
+     - **El descargo de ventas se corre A MANO** (`TPARAMETRO.lDescargoAutomatico`
+       vacío), casi cada mañana, y a veces junta días. `kardex.parquet` agrupa
+       por hora y no dice qué días cubrió cada descargo; `TLOG_DESCARGO` del
+       POS sí (rango `fFecInicio`–`fFecFin` de cada corrida), y muestra por
+       qué se pierden días: desde 2026 cada corrida va **del 1 del mes a las
+       7:00 hasta la mañana del día**, así que lo vendido el último día del
+       mes después de esa corrida no lo toma ninguna. El 31 ago y el 30 set
+       2026, el día antes de cada cierre, nunca se descontaron.
+     - **Lo que descuenta cada pedido sale del PALOTEO**
+       (`paloteoinsumosnivel1.parquet`, que ya estaba en R2 y ya lo leían
+       Consumo según recetas y Revisar recetas): cada pedido con la hora de
+       cada plato, lo servido DENTRO de un combo («C», CPEDIDO), los
+       modificadores («X») y los platos directos. `descargos_de_pedidos` lo
+       lleva a lo que mueve el kardex: la unidad con el `FACTOR` del maestro
+       (`inventariovalorizado.parquet`), el área de la línea de receta
+       (`SUBALM INS`; si no la dice, la desde la que el kardex más lo
+       descontó) y las líneas por insumo abiertas en su receta base (#648,
+       sólo las que tienen `DESCARGA` = DESC). Contra el descargo de la
+       ventana calza en el 77 % de las líneas (setiembre 2026), y recetas ×
+       vendido en el 31 %: lo que no calza son recetas editadas en el mes,
+       porque el paloteo usa la de HOY. El día contable de cada pedido sale
+       de `pedidos.parquet`.
+     - **«Vendido y sin descontar al contar»** (la pista `lote`): lo vendido
+       desde el día del último descargo —incluido, si el descargo se corrió
+       de noche, desde las 20 h— hasta la hora del conteo (por `FECHA
+       ITEM`). Falta sin ser pérdida, y la pista dice qué hará el descargo
+       siguiente: lo vendido antes del 1 de su mes a las 7:00 no lo toma y
+       no vuelve (`inicio_del_descargo`; antes de 2026 se corría día por día
+       y no se afirma nada); lo demás volverá como sobrante en el próximo
+       conteo. **Su espejo en un sobrante**: lo que estaba sin descontar al
+       conteo ANTERIOR y el descargo siguiente tomó dentro del período —ese
+       conteo ya lo había restado—. Las dos son fuertes si calzan (0,5–1,5
+       veces la diferencia). El kardex se lee `DIAS_TARDE` días después de
+       la sesión para saber cuándo fue el descargo siguiente.
+     - **El aviso de la sesión**, debajo de los KPIs: cuánto había sin
+       descontar al contar y cuánto no se descontará nunca. Setiembre 2026:
+       S/ 3.548 a costo en 237 líneas, S/ 2.593 de ellos del 30 set.
+     - **La pista de combo cuenta lo MARCADO** (`combo_sin_marcar`): un fijo
+       que se marcó menos de lo que lleva («se marcó 0, no 16», fuerte si
+       calza) o combos sin ninguna opción del grupo marcada («se marcaron 7
+       (Cp) Reto Malbec y 0 (Cp) Cinco Sentidos Chardonnay: faltan 9»,
+       siempre posible: un menú puede servirse sin vino). Cuántas opciones se
+       marcan por combo no lo dice la ficha: sale de lo marcado en los 180
+       días anteriores (una parrilla lleva dos guarniciones), y es una al
+       menos. Sólo cuando todas las opciones del grupo tienen receta (sin
+       ella no están en el paloteo) y ningún OTRO combo que las lleva se
+       vendió en esos días. Sin el paloteo no hay pista de combo: la
+       deducción por totales se fue.
+     - Las pistas fuertes pasan de cubrir el 55,2 % al 56,4 % del faltante y
+       del 78,8 % al 79,7 % del sobrante; la cuenta, de 11 a 12 s por sesión
+       (una vez por versión de los datos: va a la caché de disco).
+     - **Lo que se descartó**: deducir qué días cubrió cada descargo
+       comparándolo con lo vendido día por día. Contra MSUBKARDEX erraba 29
+       de 175 días (descargos de medianoche, días descontados fuera de
+       orden) y daba diez días «saltados» donde había dos. Si hace falta
+       exacto para cualquier período, el camino es una fila del Sheet con
+       `TLOG_DESCARGO`.
+
+     (2026-10-18.)
 
 651. **«Análisis de diferencias» mira los COMBOS, no descarta las líneas
      sin precio y reconoce lo vendido con el código de otro producto.**

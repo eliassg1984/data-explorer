@@ -70,7 +70,7 @@ _ICONO = {"receta": ":material/error:", "prod": ":material/precision_manufacturi
           "rev": ":material/undo:", "nada": ":material/block:",
           "combo": ":material/restaurant_menu:", "sunat": ":material/receipt_long:",
           "req": ":material/pending_actions:", "desc": ":material/alt_route:",
-          "uso": ":material/history:",
+          "uso": ":material/history:", "lote": ":material/schedule:",
           "nadie": ":material/no_meals:", "rubro": ":material/compare_arrows:"}
 
 _SIN_DATOS = ("No se pudo armar el análisis de esta sesión: hace falta el "
@@ -128,6 +128,11 @@ _CSS = f"""
 .dif-mot .m {{ color: {GRIS_TEXTO_SUAVE}; font-size: 11px; text-align: right; white-space: nowrap; }}
 .dif-t {{ font-size: 12px; font-weight: 700; color: {TEXTO_PRINCIPAL}; margin-bottom: 2px; }}
 .dif-nota {{ font-size: 11.5px; color: {GRIS_TEXTO}; }}
+/* El aviso de las ventas sin descontar al contar (#650), debajo de los KPIs. */
+.dif-aviso {{ font-size: 12.5px; color: {AJUSTE_ALERTA_TEXTO}; background: {AJUSTE_ALERTA_FONDO};
+              border: 1px solid {AJUSTE_ALERTA_BORDE}; border-radius: 8px; padding: 6px 10px;
+              margin: 2px 0 2px; line-height: 1.45; }}
+.dif-aviso b {{ font-weight: 700; }}
 .dif-viene {{ font-size: 12.5px; color: {GRIS_TEXTO_MEDIO}; line-height: 1.5; }}
 .dif-uso {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px;
             padding: 4px 0; border-bottom: 1px solid {GRIS_LINEA}; font-size: 12.5px; }}
@@ -542,6 +547,31 @@ def _kpis(f):
             'sobrantes: hay que mirarlas a mano</span></div></div>')
 
 
+def _aviso_sin_descontar(lin, lote):
+    """El aviso de la sesión (#650): lo vendido que el POS todavía no había
+    descontado al contar —figura como faltante sin ser pérdida—, y cuánto de
+    eso no lo tomó el descargo siguiente. Vacío si es poco."""
+    if not lote or lote.get("ultimo") is None or "pend_v" not in lin.columns:
+        return ""
+    v = float(lin["pend_v"].sum())
+    if v < 20:
+        return ""
+    n = int((lin["pend"] > 1e-9).sum())
+    nunca = float(lin["pend_nunca_v"].sum()) if "pend_nunca_v" in lin.columns else 0.0
+    sig, desde = lote.get("siguiente"), lote.get("desde")
+    tx = (f"Al contar, el POS no había descontado lo vendido desde su último descargo, el "
+          f"{_e(da.cuando(lote['ultimo'], minutos=False))}: <b>≈ {_soles(v, signo=False)}</b> a "
+          f"costo en {n:,} líneas, que figuran como faltante sin ser pérdida.")
+    if sig is not None and desde is not None and nunca >= 1:
+        tx += (f" El descargo siguiente, el {_e(da.fecha_corta(sig))}, empezó el "
+               f"{_e(da.fecha_corta(desde))}: <b>{_soles(nunca, signo=False)}</b> no se "
+               "descontarán nunca; el resto volverá como sobrante en el próximo conteo.")
+    elif sig is not None:
+        tx += (f" El descargo siguiente fue el {_e(da.fecha_corta(sig))}: lo que tomó "
+               "volverá como sobrante en el próximo conteo.")
+    return f'<div class="dif-aviso">{tx} Están en la pista «Sin descontar».</div>'
+
+
 def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
                       col_producto):
     """La vista «Análisis de diferencias» (regla #650)."""
@@ -595,7 +625,8 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         lin = r["lineas"]
         if fam_sel:
             lin = lin[lin["familia"].isin([f.upper() for f in fam_sel])]
-        st.markdown(_kpis(lin), unsafe_allow_html=True)
+        st.markdown(_kpis(lin) + _aviso_sin_descontar(lin, r["resumen"].get("lote")),
+                    unsafe_allow_html=True)
 
         # El lado, la pista y el buscador. Lo elegido se corrige ANTES de
         # dibujar cada widget: una opción que deja de estar lo revienta.
