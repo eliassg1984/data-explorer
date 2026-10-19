@@ -49392,6 +49392,12 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      el SVG; cambiar sólo Plotly conserva un hueco con el alto anterior.
      `border=True` añade un bloque vertical sin key: su gap se ajusta por
      la cadena de hijos directos, junto al del contenedor con key.
+     El resumen de contexto y Filtros comparten la primera fila con título
+     y modos; la fecha usa la etiqueta breve de `cortes.etiqueta_corte`
+     y conserva ambos años cuando cruza de año. La presentación queda en
+     la segunda fila, con sus etiquetas permanentes. El bloque de contexto
+     puede envolver; en móvil su base flex vuelve a auto para no reservar
+     altura como si fuera ancho. Ampliar oculta también ese bloque.
 
      El
      interruptor del renglón del título alterna el mapa de calor simple,

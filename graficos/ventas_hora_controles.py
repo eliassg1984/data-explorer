@@ -11,6 +11,7 @@ import pandas as pd
 import streamlit as st
 
 from data import REPORTES, cargar_rango
+from cortes import etiqueta_corte
 from graficos.base import (_resolver, ctx_rango_propio, rango_tarjeta,
                            seleccion_multiple, selector_fecha_tarjeta)
 from inyecciones._iframe import inyectar_html
@@ -164,6 +165,7 @@ def cabecera(d, col_fecha, col_pedido, ancla, filtrar_cb, interruptor):
                         unsafe_allow_html=True)
         with st.container(key="vh_navegacion", width="content"):
             interruptor()
+        contexto_superior = st.container(key="vh_contexto_superior", width="stretch")
 
     ctx = ctx_rango_propio()
     st.session_state.pop("vh_fecha_cambio", None)
@@ -209,14 +211,17 @@ def cabecera(d, col_fecha, col_pedido, ancla, filtrar_cb, interruptor):
     if elegido not in ambitos:
         ambitos.append(elegido)
 
-    with st.container(horizontal=True, vertical_alignment="center",
-                      key="vh_resumen_contexto"):
+    with contexto_superior, st.container(horizontal=True, vertical_alignment="center",
+                                        key="vh_resumen_contexto"):
         with st.container(width="stretch"):
             resumen_canal = ", ".join(ss.get("vh_canal") or []) or "Todos los canales"
+            resumen_fecha = (f"{etiqueta_corte(*rng)} {rng[1].year}"
+                             if rng[0].year == rng[1].year else
+                             f"{rng[0]:%d/%m/%Y} – {rng[1]:%d/%m/%Y}")
             especiales = ("Incluye Venta Interna y Eventos"
                           if ss.get("vh_raros", ss.get("_vh_raros_valor", True))
                           else "Excluye Venta Interna y Eventos")
-            st.caption(f"{rng[0]:%d/%m/%Y} – {rng[1]:%d/%m/%Y} · "
+            st.caption(f"{resumen_fecha} · "
                        f"{resumen_canal} · {elegido} · {ss['vh_op_hora']} · {especiales}")
         st.button("Filtros", key="vh_ver_filtros", icon=":material/tune:",
                   on_click=alternar_filtros)

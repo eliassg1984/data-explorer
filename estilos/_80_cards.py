@@ -6213,6 +6213,21 @@ CSS = """    /* ================================================================
         flex: 0 0 auto !important;
         width: auto !important;
     }
+    /* El contexto ocupa el espacio libre junto al título y las pestañas.
+       Las dos formas cubren el contenedor y el wrapper de Streamlit. */
+    .st-key-vh_cabecera > .st-key-vh_contexto_superior,
+    .st-key-vh_cabecera > div:has(.st-key-vh_contexto_superior) {
+        flex: 1 1 420px !important;
+        min-width: 0 !important;
+        margin-left: auto !important;
+    }
+    .st-key-vh_contexto_superior {
+        gap: 0 !important;
+        min-width: 0 !important;
+    }
+    .st-key-vh_contexto_superior [data-testid="stCaptionContainer"] p {
+        text-align: right !important;
+    }
     .st-key-vh_cabecera .vh-titulo,
     .st-key-vh_cabecera .vh-titulo > span { margin: 0 !important; }
     .st-key-vh_navegacion { padding: 0 !important; border: none !important; }
@@ -6486,7 +6501,7 @@ CSS = """    /* ================================================================
         border-bottom-color: var(--accent) !important;
     }
     :is(.st-key-vt_sec_hora, .st-key-ajuste_graf_card_izq_ventas_hora):has(.vh-detalle-ampliado)
-        :is(.st-key-vh_resumen_contexto, .st-key-vh_datos,
+        :is(.st-key-vh_contexto_superior, .st-key-vh_resumen_contexto, .st-key-vh_datos,
             .st-key-vh_presentacion, .st-key-vh_comparar, .st-key-vh_desliza) {
         display: none !important;
     }
@@ -6518,6 +6533,28 @@ CSS = """    /* ================================================================
             flex-direction: column !important;
             align-items: flex-start !important;
             gap: 4px !important;
+        }
+        .st-key-vh_controles .st-key-vh_cabecera > .st-key-vh_contexto_superior,
+        .st-key-vh_controles .st-key-vh_cabecera > div:has(.st-key-vh_contexto_superior) {
+            flex: 0 0 auto !important;
+            width: 100% !important;
+            margin-left: 0 !important;
+        }
+        .st-key-vh_contexto_superior [data-testid="stCaptionContainer"] p {
+            text-align: left !important;
+        }
+        .st-key-vh_controles .st-key-vh_resumen_contexto {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+        }
+        .st-key-vh_controles .st-key-vh_resumen_contexto > div:first-child {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+            width: auto !important;
+        }
+        .st-key-vh_controles .st-key-vh_resumen_contexto > div:last-child {
+            flex: 0 0 auto !important;
+            width: auto !important;
         }
         /* La regla móvil general convierte filas en columnas. Una base
            flex en px pasaría a ser un ALTO: aquí los campos tienen su alto
