@@ -9158,11 +9158,11 @@ def _pruebas_diferencias_sin_descontar():
             fallos += 1
             print(f"FALLA diferencias #650 · {nombre}: got={got!r} exp={exp!r}")
 
-    AREA = {1: "COCINA", 10: "COCINA PERSONAL"}
+    AREA = {0: "ALMACEN CENTRAL", 1: "COCINA", 10: "COCINA PERSONAL"}
     PROD = {50: ("(P) Lomo fino al trapo x und (produccion)", "UND", 86.0),
             51: ("Chocolate 72% Cacao", "KILOS", 289.0),
             52: ("(Rb) Pollito bb confitado x und (parrilla)", "UND", 14.7),
-            53: ("Aji Amarillo", "KILOS", 12.0)}
+            53: ("Aji Amarillo", "KILOS", 12.0), 54: ("Queso Provolone", "KILOS", 66.5)}
 
     def fila(t, a, c, s, k):
         n, u, p = PROD[c]
@@ -9175,6 +9175,7 @@ def _pruebas_diferencias_sin_descontar():
     ajuste = pd.DataFrame([
         fila("2026-09-02 09:00", 10, 52, 5, 5), fila("2026-09-16 17:30", 1, 50, 10, 10),
         fila("2026-09-16 17:30", 1, 53, 1, 1), fila("2026-09-17 12:00", 1, 51, 2, 2),
+        fila("2026-09-16 17:30", 0, 54, 20, 20), fila(t1, 0, 54, 20, 4),
         fila(t1, 1, 50, 10, 7), fila(t1, 1, 51, 1.5, 2), fila(t1, 10, 52, 4, 5),
         fila(t1, 1, 53, 1, 0.95)])
 
@@ -9214,7 +9215,8 @@ def _pruebas_diferencias_sin_descontar():
             (701, "Lomo al Trapo 1kg", 50, 1.0, 1.0, "COCINA", "PRODUCTO"),
             (702, "Chirimoya a la Brasa", 51, 100.0, 1000.0, "COCINA", "PRODUCTO"),
             (712, "Sarten de Arroz con Pollo", 52, 1.0, 1.0, "COCINA PERSONAL", "PRODUCTO"),
-            (703, "Ojo de Bife Gravy", 800, 1.0, 1.0, "COCINA", "INSUMO"))])
+            (703, "Ojo de Bife Gravy", 800, 1.0, 1.0, "COCINA", "INSUMO"),
+            (704, "Provoleta", 54, 0.1, 1.0, "COCINA", "PRODUCTO"))])
     rb = pd.DataFrame([{"RB ACT": "RB.ACTIV", "COD PROD RB": "0000800",
                         "RB NOMBRE": "(Rs) Gravy de culantro DD", "COD INS RB": "0000053",
                         "INSUMO": "Aji Amarillo", "CANT": 50.0, "FACTOR INS": 1000.0,
@@ -9240,6 +9242,10 @@ def _pruebas_diferencias_sin_descontar():
     p_ = lote(1, "50")
     check("lo vendido y sin descontar al contar, fuerte: es todo lo que falta",
           [(p["ti"], p["f"]) for p in p_], [("Vendido y sin descontar al contar", 1)])
+    check("y lo del 30 set debía descargarse antes de abrir el ajuste",
+          ("Lo del 30 set debía descargarse antes de abrir el ajuste" in p_[0]["tx"],
+           de[(1, "50")]["pend_ant_v"], r["resumen"]["lote"]["dias_antes"]),
+          (True, 172.0, [pd.Timestamp("2026-09-30")]))
     check("lo del 30 set no vuelve y lo del 1 oct sí",
           "≈ 2 und no los tomó y no volverán; ≈ 1 sí" in p_[0]["tx"], True)
     check("la lista lo trae por línea, por nombre de columna",
@@ -9264,6 +9270,13 @@ def _pruebas_diferencias_sin_descontar():
     check("la DD se abre en sus insumos: el ají sin descontar",
           (de[(1, "53")]["pend"], "esa venta no la tomó y no volverá" in p_[0]["tx"]),
           (0.05, True))
+
+    # 4b — el Almacén Central no descuenta ventas: una receta de Cocina no
+    # «falla» desde aquí.
+    nada = [p for p in F[de[(0, "54")]["id"]]["pistas"] if p["t"] == "nada"]
+    check("en el Almacén Central, «Salió sin requerimiento» y no «otra área»",
+          ([p["ti"] for p in nada], "no se descuentan ventas" in nada[0]["tx"]),
+          (["Salió sin requerimiento"], True))
 
     # 5 — EL CALENDARIO de descargos (`descargosventas.parquet`, TLOG_DESCARGO):
     # lo mismo, exacto y con la hora, y manda sobre la regla de 2026.

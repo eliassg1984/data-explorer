@@ -51297,6 +51297,32 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-18.)
 
+     **Addendum (2026-10-18, tercera ronda): el Almacén Central y la regla
+     del descargo; la vista en menos renglones (`VERSION` 8).** Lo dijo el
+     usuario al revisarla en Cloud.
+
+     - **El POS no descuenta ventas desde el Almacén Central**, nunca
+       (`ACOD_ALMACEN_CENTRAL`; el kardex lo confirma: ningún 95 en el área
+       000, ninguna receta con ese `SUBALM INS`). Ahí lo que sale, sale con un
+       requerimiento, una transferencia o una nota. «Nada lo descargó» decía
+       del Queso Provolone «Provoleta lo descarga desde Cocina… o la receta
+       apunta al área equivocada»: para el Almacén es «Salió sin
+       requerimiento», posible.
+     - **El ajuste se abre después de descargar las ventas hasta el día
+       anterior** (la regla operativa del restaurante). Lo vendido en días
+       ANTERIORES al del conteo y sin descontar no debía estar: la pista lo
+       dice («Lo del 30 set debía descargarse antes de abrir el ajuste») y
+       va aparte en `pend_ant_v`. Lo del mismo día es de esperar.
+     - **Menos renglones**: la vista abre en «Áreas juntas» (primera opción
+       del control); las pistas son un desplegable en la fila del lado, el
+       modo y el buscador —eran pastillas en dos renglones—; y lo sin
+       descontar es una QUINTA tarjeta de la fila de totales —era un renglón
+       propio, de dos líneas—, con el detalle entero al pasar el cursor (la
+       grilla toma tantas columnas como tarjetas). Con «Áreas juntas» los
+       totales cuentan productos. La tarjeta mide 724px, contra 861.
+
+     (2026-10-18.)
+
 651. **«Análisis de diferencias» mira los COMBOS, no descarta las líneas
      sin precio y reconoce lo vendido con el código de otro producto.**
      2026-10-13, sobre la #650. En `diferencias_ajuste.py`

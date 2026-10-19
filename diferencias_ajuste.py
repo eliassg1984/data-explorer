@@ -46,7 +46,9 @@ LAS PISTAS, en el orden en que se muestran (fuertes primero):
            descontar al conteo ANTERIOR y el POS descontó después. Qué venta
            tomó cada descargo lo dice su calendario (`descargosventas.parquet`,
            TLOG_DESCARGO: el 31 ago y el 30 set 2026 no los tomó ninguno);
-           sin él, se deduce de las horas del kardex
+           sin él, se deduce de las horas del kardex. Lo de días ANTERIORES
+           al conteo va aparte: el ajuste se abre después de descargar las
+           ventas hasta el día anterior (la regla del restaurante)
   prod     falta un insumo y sobra lo que se hace con él (o al revés), por
            receta base o porcionamiento
   combo    va en un combo que se vendió y en sus pedidos no se marcó (#650):
@@ -68,7 +70,9 @@ LAS PISTAS, en el orden en que se muestran (fuertes primero):
            los dos conteos se registró mucho menos que lo de siempre: lo que
            falta se parece a esas notas sin registrar (#650)
   nada     no salió nada del área con un documento; y POR QUÉ, siguiendo cada
-           receta que debía descontarlo (`por_que_nada`)
+           receta que debía descontarlo (`por_que_nada`). En el Almacén
+           Central el POS no descuenta ventas, nunca: ahí es «Salió sin
+           requerimiento»
   nadie    ningún plato, receta base ni porcionamiento lo usa
   rubro    mismo rubro (`sin_plato.palabra_clave`), al revés, con cantidades
            que calzan. Fuerte si lo que falta no tuvo salidas y lo que sobra se
@@ -102,11 +106,13 @@ import pandas as pd
 
 from sin_plato import palabra_clave
 
-VERSION = 7
+VERSION = 8
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula. La 6: el paloteo, las ventas sin descontar al contar
 y los combos por lo marcado (#650). La 7: el calendario de descargos
-(`descargosventas.parquet`) y las áreas juntas (`agrupar_por_producto`)."""
+(`descargosventas.parquet`) y las áreas juntas (`agrupar_por_producto`). La
+8: el Almacén Central no descuenta ventas, y lo sin descontar de días
+anteriores al conteo va aparte."""
 
 EPS = 0.005
 """Soles: una línea con menos de esto no tiene diferencia."""
@@ -123,6 +129,12 @@ USOS_FICHA = 10
 """Cuántos usos (platos, recetas, porcionamientos) lleva la ficha."""
 
 FAMILIA_OPERACION = "COSTOS PRODUCCION"
+
+ACOD_ALMACEN_CENTRAL = 0
+"""El código del Almacén Central (`CODIGO AREA` 000). El POS NO descuenta
+ventas desde aquí —ningún descargo de ventas (95) en el kardex, ninguna
+receta con este `SUBALM INS`—: lo que sale, sale con un requerimiento, una
+transferencia o una nota."""
 
 TIPOS = ("receta", "desc", "lote", "prod", "combo", "sunat", "req", "area", "rubro", "uso",
          "neg", "rev", "nada", "nadie")
@@ -194,6 +206,19 @@ def cuando(t, minutos=True):
         return ""
     t = pd.Timestamp(t)
     return f"{fecha_corta(t)} a las {t.hour}" + (f":{t.minute:02d}" if minutos else "")
+
+
+def dias_txt(dias):
+    """Unos días como se dicen: «30 set», «29 y 30 set», «31 ago y 1 set»,
+    «del 27 al 30 set». Vacío sin días."""
+    dias = sorted({pd.Timestamp(d).normalize() for d in dias})
+    if not dias:
+        return ""
+    if len(dias) == 1:
+        return fecha_corta(dias[0])
+    a, b = dias[0], dias[-1]
+    ini = str(a.day) if a.month == b.month else fecha_corta(a)
+    return f"{ini} y {fecha_corta(b)}" if len(dias) == 2 else f"del {ini} al {fecha_corta(b)}"
 
 
 def es(x, dec=2):
@@ -910,15 +935,20 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         todavía no había descontado a la hora `t`: `{"q", "pl"` [(plato,
         cantidad)], `"b"` el último descargo, `"sig"` el siguiente, `"corte"`
         desde dónde tomó éste, `"nunca"` lo que no tomó ninguno, `"luego"`
-        cuándo se descontó el resto `}`. Lo vendido ANTES del conteo
+        cuándo se descontó el resto, `"antes"` lo vendido en días ANTERIORES
+        al del conteo y `"dias"` cuáles `}`. Lo vendido ANTES del conteo
         anterior y no descontado, ese conteo ya lo restó: no cuenta.
+
+        «Antes» es lo que no debía estar: el ajuste se abre después de
+        descargar las ventas hasta el día anterior (la regla operativa del
+        restaurante). Lo del mismo día del conteo sí es de esperar.
 
         Con el calendario es exacto. Sin él: un descargo de la mañana cubre
         hasta el día anterior; uno de noche (desde las 20 h; en abril–julio
         2026 los hubo a las 23), también su día; y «nunca» es lo de antes de
         `inicio_del_descargo` del siguiente."""
         out = {"q": 0.0, "pl": [], "b": None, "sig": None, "corte": None, "nunca": 0.0,
-               "luego": None, "exacto": exacto}
+               "luego": None, "exacto": exacto, "antes": 0.0, "dias": []}
         if t is None or pd.isna(t):
             return out
         b = ultimo_descargo(t)
@@ -949,7 +979,10 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         if not m.any():
             out.update(nunca=0.0, luego=None)
             return out
-        out.update(q=float(q_[m].sum()), pl=_por_plato(pl_[m], q_[m]))
+        ant = m & (dc_ < np.datetime64(pd.Timestamp(t).normalize()))
+        out.update(q=float(q_[m].sum()), pl=_por_plato(pl_[m], q_[m]),
+                   antes=float(q_[ant].sum()),
+                   dias=sorted(pd.Timestamp(d_) for d_ in np.unique(dc_[ant])))
         return out
 
     def descontado_despues(c, area, t0, t1):
@@ -1401,6 +1434,9 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                        "sobraría.")
             else:
                 tx += f"Explica ≈ {es(p_)} de los {es(-q)} {un} que faltan."
+            if d["antes"] > 1e-9:
+                tx += (f" Lo del {dias_txt(d['dias'])} debía descargarse antes de abrir el "
+                       "ajuste.")
             sig, nunca, corte, luego = d["sig"], d["nunca"], d["corte"], d["luego"]
             ninguno = ", ni ninguno después," if d["exacto"] else ""
             if nunca > 1e-9 and nunca >= p_ - 1e-9:
@@ -1603,6 +1639,16 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         se vendieron DENTRO de un combo: eso lo dice la pista del combo."""
         c, area, t0, t1, w = x["cod"], x["area"], x["t0x"], x["t1"], x["w"]
         aqui = _titulo(x["area"])
+        # En el Almacén Central el POS no descuenta ventas, nunca (lo dijo el
+        # usuario el 2026-10-18 y lo confirma el kardex: ningún 95 ahí):
+        # ninguna receta «falla» desde aquí, y decir que la receta apunta a
+        # otra área era falso.
+        if int(x["acod"]) == ACOD_ALMACEN_CENTRAL:
+            return {"t": "nada", "f": 0, "ti": "Salió sin requerimiento",
+                    "tx": "En el Almacén Central no se descuentan ventas: sólo sale con un "
+                          "requerimiento, una transferencia o una nota de salida. Lo que falta "
+                          "se entregó sin documento —o con un requerimiento sin procesar—, o es "
+                          "un error de conteo."}
         sin_orden, quieta, otra, quietos, vendidos, en_combo = [], [], [], [], [], []
         for r in rb_por_ci.get(c, ()):
             if r.t != "PRODUCTO" or r.prod not in con_stock:
@@ -1943,13 +1989,18 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     # Lo vendido y sin descontar al contar, por línea, para el aviso (#650).
     pend = {int(x["id"]): float(x["pend"]["q"]) for x in lin}
     nunca = {int(x["id"]): float(x["pend"]["nunca"]) for x in lin}
+    antes = {int(x["id"]): float(x["pend"]["antes"]) for x in lin}
     out["pend"] = out["id"].map(pend).fillna(0.0)
     out["pend_v"] = out["pend"] * out["precio"]
     out["pend_nunca_v"] = out["id"].map(nunca).fillna(0.0) * out["precio"]
+    # Lo de días ANTERIORES al conteo: el ajuste se abrió sin descargarlo.
+    out["pend_ant_v"] = out["id"].map(antes).fillna(0.0) * out["precio"]
     t1m = L["t1"].mode().iloc[0]
     sig_m, corte_m = siguiente_descargo(t1m)
     lote = {"t1": t1m, "ultimo": ultimo_descargo(t1m), "siguiente": sig_m,
-            "desde": corte_m, "con_paloteo": D is not None, "exacto": exacto}
+            "desde": corte_m, "con_paloteo": D is not None, "exacto": exacto,
+            "dias_antes": sorted({d_ for x in lin if x["pend"]["antes"] > 1e-9
+                                  for d_ in x["pend"]["dias"]})}
     return {"lineas": out.reset_index(drop=True), "fichas": fichas,
             "resumen": {"hist": hist_lab, "desde": desde, "lote": lote}}
 

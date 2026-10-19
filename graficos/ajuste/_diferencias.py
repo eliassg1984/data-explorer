@@ -70,21 +70,15 @@ _K_TABLA = "_ajdif_key"
 _K_FILAS = "_ajdif_filas"
 
 LADOS = ("fal", "sob")
-VER = ("area", "junto")
-"""Una fila por línea (producto × área) o por producto, con las áreas
-elegidas juntas (`da.agrupar_por_producto`)."""
+VER = ("junto", "area")
+"""Una fila por producto, con las áreas elegidas juntas
+(`da.agrupar_por_producto`) -- con la que abre la vista, a pedido --, o una
+por línea (producto × área)."""
 TABS = ("Posible origen", "La cuenta", "De dónde viene", "Dónde se usa")
 TABS_JUNTO = ("Posible origen", "Por área", "De dónde viene", "Dónde se usa")
 FILTROS = ("todas", "fuerte", "sin") + da.TIPOS
 _NOMBRE_FILTRO = {"todas": "Todas", "fuerte": "Con pista fuerte",
                   "sin": "Sin pista", **da.NOMBRE_TIPO}
-_ICONO = {"receta": ":material/error:", "prod": ":material/precision_manufacturing:",
-          "area": ":material/swap_horiz:", "neg": ":material/remove:",
-          "rev": ":material/undo:", "nada": ":material/block:",
-          "combo": ":material/restaurant_menu:", "sunat": ":material/receipt_long:",
-          "req": ":material/pending_actions:", "desc": ":material/alt_route:",
-          "uso": ":material/history:", "lote": ":material/schedule:",
-          "nadie": ":material/no_meals:", "rubro": ":material/compare_arrows:"}
 
 _SIN_DATOS = ("No se pudo armar el análisis de esta sesión: hace falta el "
               "kardex y las recetas en R2, y que la sesión tenga diferencias.")
@@ -93,7 +87,7 @@ _CSS = f"""
 <style>
 .dif-sub {{ font-size: 12px; color: {GRIS_TEXTO}; margin: -2px 0 0 2px;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-.dif-kpis {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+.dif-kpis {{ display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
              gap: 8px; margin: 2px 0 2px; }}
 .dif-kpi {{ border: 1px solid {GRIS_LINEA}; border-radius: 10px; padding: 6px 10px;
             display: flex; flex-direction: column; gap: 2px; min-width: 0; }}
@@ -141,11 +135,11 @@ _CSS = f"""
 .dif-mot .m {{ color: {GRIS_TEXTO_SUAVE}; font-size: 11px; text-align: right; white-space: nowrap; }}
 .dif-t {{ font-size: 12px; font-weight: 700; color: {TEXTO_PRINCIPAL}; margin-bottom: 2px; }}
 .dif-nota {{ font-size: 11.5px; color: {GRIS_TEXTO}; }}
-/* El aviso de las ventas sin descontar al contar (#650), debajo de los KPIs. */
-.dif-aviso {{ font-size: 12.5px; color: {AJUSTE_ALERTA_TEXTO}; background: {AJUSTE_ALERTA_FONDO};
-              border: 1px solid {AJUSTE_ALERTA_BORDE}; border-radius: 8px; padding: 6px 10px;
-              margin: 2px 0 2px; line-height: 1.45; }}
-.dif-aviso b {{ font-weight: 700; }}
+/* Lo vendido y sin descontar al contar (#650): una tarjeta más de la fila,
+   en ámbar -- hasta el 2026-10-18 era un renglón propio, y ocupaba dos. */
+.dif-kpi.al {{ border-color: {AJUSTE_ALERTA_BORDE}; background: {AJUSTE_ALERTA_FONDO};
+               cursor: help; }}
+.dif-kpi.al .r, .dif-kpi.al .d {{ color: {AJUSTE_ALERTA_TEXTO}; }}
 .dif-viene {{ font-size: 12.5px; color: {GRIS_TEXTO_MEDIO}; line-height: 1.5; }}
 .dif-uso {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px;
             padding: 4px 0; border-bottom: 1px solid {GRIS_LINEA}; font-size: 12.5px; }}
@@ -639,27 +633,29 @@ def _ficha_junto(x, fg, fichas):
 
 # ── la vista ────────────────────────────────────────────────────────────
 
-def _kpis(f):
+def _kpis(f, extra="", que="líneas"):
     fal, sob, pf, ps, sin = da.cobertura(f)
     nf, ns = int((f["q"] < 0).sum()), int((f["q"] > 0).sum())
     sin_f = int(((f["n_pistas"] == 0) & (f["q"] < 0)).sum())
     return ('<div class="dif-kpis">'
             f'<div class="dif-kpi"><span class="r">Faltó</span><span class="v dif-neg">'
-            f'{_soles(-fal)}</span><span class="d">{nf:,} líneas</span></div>'
+            f'{_soles(-fal)}</span><span class="d">{nf:,} {que}</span></div>'
             f'<div class="dif-kpi"><span class="r">Sobró</span><span class="v dif-pos">'
-            f'{_soles(sob)}</span><span class="d">{ns:,} líneas</span></div>'
+            f'{_soles(sob)}</span><span class="d">{ns:,} {que}</span></div>'
             f'<div class="dif-kpi a"><span class="r">Con pista fuerte</span><span class="v">'
             f'{round(pf * 100)} % · {round(ps * 100)} %</span><span class="d">del faltante y '
             'del sobrante, en soles</span></div>'
             f'<div class="dif-kpi a"><span class="r">Sin ninguna pista</span><span class="v">'
-            f'{sin:,} líneas</span><span class="d">{sin_f:,} faltantes y {sin - sin_f:,} '
-            'sobrantes: hay que mirarlas a mano</span></div></div>')
+            f'{sin:,} {que}</span><span class="d">{sin_f:,} faltantes y {sin - sin_f:,} '
+            'sobrantes: hay que mirarlas a mano</span></div>' + extra + '</div>')
 
 
-def _aviso_sin_descontar(lin, lote):
-    """El aviso de la sesión (#650): lo vendido que el POS todavía no había
-    descontado al contar —figura como faltante sin ser pérdida—, y cuánto de
-    eso no lo tomó el descargo siguiente. Vacío si es poco."""
+def _kpi_sin_descontar(lin, lote):
+    """La tarjeta de lo vendido que el POS todavía no había descontado al
+    contar (#650): figura como faltante sin ser pérdida. Dice cuánto era de
+    días ANTERIORES al conteo —el ajuste se abre después de descargar hasta
+    el día anterior: eso no debía estar—; el detalle entero, al pasar el
+    cursor. Vacío si es poco."""
     if not lote or lote.get("ultimo") is None or "pend_v" not in lin.columns:
         return ""
     v = float(lin["pend_v"].sum())
@@ -667,19 +663,32 @@ def _aviso_sin_descontar(lin, lote):
         return ""
     n = int((lin["pend"] > 1e-9).sum())
     nunca = float(lin["pend_nunca_v"].sum()) if "pend_nunca_v" in lin.columns else 0.0
+    ant = float(lin["pend_ant_v"].sum()) if "pend_ant_v" in lin.columns else 0.0
+    dias = da.dias_txt(lote.get("dias_antes") or [])
     sig, desde = lote.get("siguiente"), lote.get("desde")
     exacto = bool(lote.get("exacto"))
-    tx = (f"Al contar, el POS no había descontado lo vendido desde su último descargo, el "
-          f"{_e(da.cuando(lote['ultimo'], minutos=exacto))}: <b>≈ {_soles(v, signo=False)}</b> a "
-          f"costo en {n:,} líneas, que figuran como faltante sin ser pérdida.")
+    ayuda = (f"Al contar, el POS no había descontado lo vendido desde su último descargo, el "
+             f"{da.cuando(lote['ultimo'], minutos=exacto)}: ≈ {_soles(v, signo=False)} a costo en "
+             f"{n:,} líneas, que figuran como faltante sin ser pérdida.")
+    if ant >= 1 and dias:
+        ayuda += (f" {_soles(ant, signo=False)} son del {dias}: el ajuste se abre después de "
+                  "descargar las ventas hasta el día anterior, y no se descargaron.")
     if sig is not None and desde is not None and nunca >= 1:
-        tx += (f" El descargo siguiente, el {_e(da.fecha_corta(sig))}, tomó lo vendido desde el "
-               f"{_e(da.cuando(desde, minutos=exacto))}: <b>{_soles(nunca, signo=False)}</b> no "
-               "se descontarán nunca; el resto volverá como sobrante en el próximo conteo.")
+        ayuda += (f" El descargo siguiente, el {da.fecha_corta(sig)}, tomó lo vendido desde el "
+                  f"{da.cuando(desde, minutos=exacto)}: {_soles(nunca, signo=False)} no se "
+                  "descontarán nunca; el resto volverá como sobrante en el próximo conteo.")
     elif sig is not None:
-        tx += (f" El descargo siguiente fue el {_e(da.fecha_corta(sig))}: lo que tomó "
-               "volverá como sobrante en el próximo conteo.")
-    return f'<div class="dif-aviso">{tx} Están en la pista «Sin descontar».</div>'
+        ayuda += (f" El descargo siguiente fue el {da.fecha_corta(sig)}: lo que tomó volverá "
+                  "como sobrante en el próximo conteo.")
+    ayuda += " Están en la pista «Sin descontar»."
+    # Las fechas, al pasar el cursor: con conteos en dos días (Venta Interna
+    # se contó el 6) «del 30 set y 2 oct» se leía como un par.
+    det = (f"{_soles(ant, signo=False)} de días anteriores al conteo: el ajuste se abrió "
+           "sin descargarlas" if ant >= 1 and dias else f"{n:,} líneas: volverán como sobrante")
+    return (f'<div class="dif-kpi al" title="{html.escape(ayuda, quote=True)}">'
+            '<span class="r">Sin descontar al contar</span>'
+            f'<span class="v">{_soles(v, signo=False)}</span>'
+            f'<span class="d">{_e(det)}</span></div>')
 
 
 def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
@@ -743,14 +752,15 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         # producto: lo que falta en una y sobra en otra se compensa). Se lee
         # antes de dibujar el control: los totales de arriba dependen de él.
         if ss.get(K_VER) not in VER:
-            ss[K_VER] = VER[0]
+            ss[K_VER] = "junto"
         junto = ss[K_VER] == "junto"
         G = FG = None
         lista = lin
         if junto:
             G, FG = da.agrupar_por_producto(lin, r["fichas"])
             lista = G[~G["comp"]]
-        st.markdown(_kpis(lista) + _aviso_sin_descontar(lin, r["resumen"].get("lote")),
+        st.markdown(_kpis(lista, _kpi_sin_descontar(lin, r["resumen"].get("lote")),
+                          que="productos" if junto else "líneas"),
                     unsafe_allow_html=True)
 
         # El lado, la pista y el buscador. Lo elegido se corrige ANTES de
@@ -774,9 +784,10 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         opciones = [o for o in FILTROS if cuenta[o] or o == "todas"]
         if ss.get(K_PISTA) not in opciones:
             ss[K_PISTA] = "todas"
-        # columnas-internas: el lado, por área o juntas y el buscador; las
-        # pistas, en el renglón de abajo a lo ancho.
-        c_l, c_v, c_b = st.columns([2.0, 1.3, 1.0], vertical_alignment="center")
+        # columnas-internas: el lado, juntas o por área, la pista y el
+        # buscador, en UN renglón (las pistas fueron pastillas en dos
+        # renglones hasta el 2026-10-18: «no deseo que me ocupen dos filas»).
+        c_l, c_v, c_p, c_b = st.columns([1.55, 1.25, 1.45, 1.05], vertical_alignment="center")
         with c_l:
             n_fal, n_sob = int((lista["q"] < 0).sum()), int((lista["q"] > 0).sum())
             st.segmented_control(
@@ -788,13 +799,13 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
                 format_func=lambda o: "Por área" if o == "area" else "Áreas juntas",
                 help="«Áreas juntas» suma cada producto en las áreas elegidas: lo que falta "
                      "en una y sobra en otra se compensa.")
+        with c_p:
+            st.selectbox("Posible origen", opciones, key=K_PISTA, label_visibility="collapsed",
+                         format_func=lambda o: ("Todas las pistas" if o == "todas"
+                                                else _NOMBRE_FILTRO[o]) + f" · {cuenta[o]}")
         with c_b:
             st.text_input("Buscar", key=K_BUSCAR, placeholder="Buscar producto o área",
                           label_visibility="collapsed")
-        with st.container(key="ajdif_pistas"):
-            st.pills("Posible origen", opciones, key=K_PISTA, label_visibility="collapsed",
-                     format_func=lambda o: (f"{_ICONO[o]} " if o in _ICONO else "")
-                     + f"{_NOMBRE_FILTRO[o]} · {cuenta[o]}")
         filtro = ss.get(K_PISTA) or "todas"
         f = base
         if filtro == "fuerte":

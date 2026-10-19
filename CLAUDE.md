@@ -1295,11 +1295,17 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   cierre). Lo dicen una pista y un aviso arriba de la lista. Qué venta
   tomó cada descargo lo dice su calendario (`descargosventas.parquet`, de
   `TLOG_DESCARGO`): el POS filtra por la hora del PEDIDO.
-- **La ficha va en pestañas y hay «Áreas juntas»** (2026-10-18, anexo de
-  la #650): con el filtro de Área, una fila por producto con las áreas
-  sumadas (`diferencias_ajuste.agrupar_por_producto`) — lo que falta en
-  una y sobra en otra se compensa —. `st.tabs` con `key` conserva la
-  pestaña al cambiar de línea.
+- **La ficha va en pestañas y la vista abre en «Áreas juntas»** (2026-10-18,
+  anexos de la #650): con el filtro de Área, una fila por producto con las
+  áreas sumadas (`diferencias_ajuste.agrupar_por_producto`) — lo que falta
+  en una y sobra en otra se compensa —. `st.tabs` con `key` conserva la
+  pestaña al cambiar de línea. Las pistas van en un desplegable y lo sin
+  descontar es una tarjeta más de la fila de totales: a pedido, nada que
+  ocupe dos renglones.
+- **En el Almacén Central el POS no descuenta ventas, nunca**: lo que sale,
+  sale con requerimiento, transferencia o nota. Y **el ajuste se abre
+  después de descargar las ventas hasta el día anterior**: lo de días
+  anteriores sin descontar es un error de proceso, y va aparte.
 - **Dice quién PIDE cada producto** (los requerimientos de 90 días, por
   área) **y qué factura de SUNAT sin ingresar explica un sobrante** (el
   cruce «Solo SUNAT» de Documentos SUNAT y las líneas de su XML, #652).
