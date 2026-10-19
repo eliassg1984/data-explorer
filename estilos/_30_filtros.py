@@ -144,9 +144,12 @@ CSS = """    /* ================================================================
        DOS keys a la vez sólo matchea la columna de afuera, que es la única
        que tiene los dos botones adentro. */
     .st-key-sunat_card_izq [data-testid="stColumn"]:has(.st-key-sunat_actualizar):has(.st-key-sunat_dl_xlsx) {
-        flex: 0 0 78px !important;
-        min-width: 78px !important;
+        flex: 0 0 125px !important;
+        min-width: 125px !important;
     }
+    /* 125 y no 78 desde el 2026-10-19: un TERCER ícono, el pedido en lote
+       de los XML que faltan (`sunat_lote_btn`, regla #675). Tres glifos de 31
+       y dos gaps de 16. */
     /* El GAP de la tarjeta: 6px y no el 1rem de Streamlit. Sus hijos son
        tres —el renglón de filtros, la tira de KPIs y la tabla— y los tres
        hablan de lo mismo, así que un rem entre cada par son 32px de aire
@@ -159,6 +162,7 @@ CSS = """    /* ================================================================
     /* Los dos iconos de accion (refrescar / exportar) a la altura del texto
        y sin el marco de boton de Streamlit. */
     .st-key-sunat_actualizar button,
+    .st-key-sunat_lote_btn button,
     .st-key-sunat_dl_xlsx button {
         min-height: 0 !important;
         height: 30px !important;
@@ -167,7 +171,22 @@ CSS = """    /* ================================================================
         background: transparent !important;
         color: var(--text-secondary) !important;
     }
+    /* La confirmación del pedido en lote: UN renglón arriba de la tabla
+       (regla #675). Sin el margen de -16px del markdown (regla #162) el
+       texto no queda alineado con los botones, y los botones van del alto
+       de los íconos de la botonera. */
+    .st-key-sunat_lote_panel [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .st-key-sunat_lote_pedir button,
+    .st-key-sunat_lote_cancelar button {
+        min-height: 0 !important;
+        height: 28px !important;
+        padding: 0 12px !important;
+        font-size: 12px !important;
+    }
     .st-key-sunat_actualizar button:hover,
+    .st-key-sunat_lote_btn button:hover,
     .st-key-sunat_dl_xlsx button:hover {
         background: var(--accent-tint) !important;
         color: var(--accent-deep) !important;

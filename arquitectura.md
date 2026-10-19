@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-674 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+675 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -593,7 +593,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 
-**Streamlit** (163)
+**Streamlit** (164)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -758,6 +758,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 - **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
+- **#675** — Documentos SUNAT pide EN LOTE los XML que faltan en la tabla…
 
 **Datos, R2 y DuckDB** (106)
 
@@ -868,7 +869,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
 - **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
 
-**SUNAT y SIRE** (61)
+**SUNAT y SIRE** (62)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -931,6 +932,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#668** — La vista por pedido del Detalle dice el pedido, su horario y su documento
 - **#672** — Documentos SUNAT: la tarjeta de abajo ABRE en la fidelidad, y suma «Por tipo de compra»…
 - **#674** — El original de SUNAT se espera DENTRO de la ficha: no hay que cerrarla y volver a abrirla…
+- **#675** — Documentos SUNAT pide EN LOTE los XML que faltan en la tabla…
 
 **Fechas, rangos y cortes** (17)
 
@@ -52721,6 +52723,49 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-19.)
 
+675. **Documentos SUNAT pide EN LOTE los XML que faltan en la tabla
+     (`documentos_sunat.py::_candidatos_lote`, `_vigilar_lote_xml`,
+     `sunat.solicitudes_en_r2`).** 2026-10-19, a pedido, después de la
+     #674: un ícono en la botonera (☁, entre ⟳ y ⬇) abre arriba de la tabla
+     un renglón —«42 documento(s) sin XML… Pedir 25 XML · Cancelar»— y el
+     botón deja un pedido por documento, el mismo de la ficha.
+
+     - **Mira las filas que muestra la tabla**: con el filtro de proveedor
+       o de estado, pide sólo ésas. Del más reciente al más viejo, 25 como
+       mucho por clic (`_LOTE_MAX`): la máquina local los atiende de a uno,
+       ~1 min cada uno.
+     - **Los candidatos salen de DOS listados, no de una consulta por
+       fila**: los XML (`claves_xml_en_r2`, que ya usa la columna «XML») y
+       los pedidos y fallos (`solicitudes_en_r2`, 22 claves y 0,3 s). Quedan
+       fuera los bancos y financieras, los emisores que el portal nunca
+       sirvió (el criterio de `emisor_sin_originales`, contado sobre el
+       listado: ≥ 15 documentos en el registro y ningún XML en R2), lo ya
+       pedido y lo que ya falló (se reintenta desde su ficha). Lo que se
+       descarta, y por qué, va en el tooltip. Medido sobre 12 meses: 44
+       pedibles, 403 de bancos, 4 que ya fallaron.
+     - **UN vigilante para todo el lote**, cada 10 s (`_LOTE_CADA_S`):
+       lista las señales una vez y pregunta por el XML sólo de lo que la
+       máquina local ya tomó. Un documento termina con su XML o con su marca
+       de fallo, no cuando desaparece su señal (#674). Existe sólo mientras
+       hay un lote (#474) y se retira con 4 min sin avance (la máquina local
+       apagada; los pedidos siguen en la cola) o a los 15 min: 90 tics,
+       debajo del `maxCachedMessageAge` = 100 de `.streamlit/config.toml`.
+       Por eso el tic es de 10 s y no de 4. Al terminar, una corrida completa pone los ✓ con
+       `_K_XML_LLEGADOS` (#674) y deja «✓ XML de SUNAT: 2 de 2 listos»
+       arriba de la tabla, una vez.
+     - **No es un `st.popover`**: el suyo dibuja el ícono más una flecha,
+       no entra en los 31 px de la botonera y se montaba sobre el
+       desplegable de estado (medido). Es un `st.button` que abre el
+       renglón, y la botonera pasó de 78 a 125 px (`estilos/_30_filtros.py`).
+       Y es UN renglón (28 px) y no un recuadro: la tarjeta tiene techo
+       (`--alto-util`), y el recuadro de la primera versión (165 px) le
+       habría puesto barra por dentro.
+     - **Probado con un lote real chico**: los 2 XML que le faltaban a
+       CORPORACION GARCIA CARBON llegaron en 131 s (el avance pasó de 0 a 1
+       y a 2 de 2), y R2 los tiene.
+
+     (2026-10-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52733,7 +52778,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#674**; la próxima toma el número siguiente.
+> última regla es la **#675**; la próxima toma el número siguiente.
 
 >
 

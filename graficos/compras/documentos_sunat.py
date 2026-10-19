@@ -4492,6 +4492,255 @@ def _boton_ver_si_llego(doc):
         st.rerun()
 
 
+# ── El pedido en LOTE de los XML que faltan (regla #675) ────────────────────
+_K_LOTE = "sunat_lote_xml"
+"""El lote en curso: `{"pedidos": {clave_solicitud: {"xml", "doc"}},
+"listos", "fallidos" (sets de claves), "inicio", "avance" (time.time() del
+último cambio)}`. Sólo existe mientras el lote está en curso."""
+
+_K_LOTE_RESUMEN = "sunat_lote_resumen"
+"""Lo que dejó el último lote, para decirlo UNA vez arriba de la tabla."""
+
+_LOTE_MAX = 25
+"""Cuántos pide un clic como mucho, los más recientes primero. La máquina
+local los atiende de a uno (~25-60 s cada uno, medido en la #674): 25 son
+diez a veinte minutos, y una cola más larga que eso no se mira terminar."""
+
+_LOTE_CADA_S = 10
+"""Cada cuánto mira el vigilante del lote. Más lento que el de la ficha (4 s)
+porque un documento tarda más que eso en llegar, y porque cada tic envejece
+la caché de mensajes del navegador (#474; `maxCachedMessageAge` = 100)."""
+
+_LOTE_SIN_AVANCE_S = 240
+"""Sin un documento resuelto en este tiempo, el vigilante se retira: lo
+probable es que la máquina local esté apagada. Los pedidos siguen en la cola
+de R2 y se atienden cuando vuelva."""
+
+_LOTE_TOPE_S = 15 * 60
+"""Tope absoluto: 90 tics de `_LOTE_CADA_S`, por debajo del
+`maxCachedMessageAge` = 100 de `.streamlit/config.toml` (#474)."""
+
+
+def _candidatos_lote(df_cruce, vis):
+    """`(pedibles, descartes)`: los documentos de la tabla (`df_cruce` ya
+    filtrado) sin XML en R2 que tiene sentido pedir, del más reciente al más
+    viejo, como dicts del SIRE; y `{motivo: cuántos}` de los que no.
+
+    Sin una consulta a R2 por fila: dos LISTADOS (los XML, que ya usa la
+    columna «XML», y `sunat.solicitudes_en_r2`) y el registro en memoria.
+    Fuera quedan las entidades financieras (los bancos no publican sus
+    originales), los emisores que el portal nunca sirvió —el mismo criterio
+    que `sunat.emisor_sin_originales`, contado sobre el listado—, lo que ya
+    está pedido y lo que ya falló (se reintenta desde su ficha)."""
+    if (df_cruce is None or df_cruce.empty or vis is None or vis.empty
+            or "car" not in df_cruce.columns or "car" not in vis.columns):
+        return [], {}
+    cars = set(df_cruce["car"].astype(str))
+    docs = [r for r in vis.to_dict("records") if str(r.get("car") or "") in cars]
+    xml_en_r2 = (sunat.claves_xml_en_r2()
+                 | st.session_state.get(_K_XML_LLEGADOS, frozenset()))
+    rucs_con_xml = {k.split("/")[1] for k in xml_en_r2 if k.count("/") >= 2}
+    solicitudes = sunat.solicitudes_en_r2()
+    reg = sunat._registro_de_parquet()
+    por_ruc = ({} if reg is None or "ruc_proveedor" not in getattr(reg, "columns", ())
+               else reg["ruc_proveedor"].astype(str).str.strip()
+               .value_counts().to_dict())
+
+    pedibles, descartes = [], {}
+
+    def _fuera(motivo):
+        descartes[motivo] = descartes.get(motivo, 0) + 1
+
+    for r in docs:
+        if sunat.claves_original(r)[1] in xml_en_r2:
+            continue
+        ruc = str(r.get("ruc_proveedor") or "").strip()
+        cdp = str(r.get("tipo_cdp") or "").strip().zfill(2)
+        if (cdp in tipo_compra.TIPOS_CDP_FINANCIEROS
+                or tipo_compra.es_entidad_financiera(r.get("proveedor"))):
+            _fuera("de bancos y financieras")
+        elif (ruc not in rucs_con_xml
+              and por_ruc.get(ruc, 0) >= sunat.MINIMO_INTENTOS_EMISOR):
+            _fuera("de proveedores que SUNAT nunca entrega")
+        elif sunat.clave_fallo(r) in solicitudes:
+            _fuera("que ya fallaron (se reintentan desde su ficha)")
+        elif sunat.clave_solicitud(r) in solicitudes:
+            _fuera("ya pedidos")
+        else:
+            pedibles.append(r)
+    pedibles.sort(key=lambda r: str(r.get("fecha_emision") or ""), reverse=True)
+    return pedibles, descartes
+
+
+_K_LOTE_ABIERTO = "sunat_lote_abierto"
+"""¿Está abierta la confirmación del lote? La abre y la cierra el ícono."""
+
+
+def _alternar_lote():
+    st.session_state[_K_LOTE_ABIERTO] = not st.session_state.get(
+        _K_LOTE_ABIERTO, False)
+
+
+def _boton_lote_xml():
+    """El ícono de la botonera, gemelo de ⟳ y ⬇. Abre (o cierra) la
+    confirmación arriba de la tabla (`_panel_lote_xml`). NO es un
+    `st.popover`: el suyo dibuja el ícono más una flecha, no entra en los
+    31 px de la botonera y se montaba sobre el desplegable de estado
+    (medido el 2026-10-19). Regla #675."""
+    st.button("", icon=":material/cloud_download:", key="sunat_lote_btn",
+              use_container_width=True, on_click=_alternar_lote,
+              help="Traer de SUNAT los XML que faltan en la tabla")
+
+
+def _panel_lote_xml(df_cruce, vis):
+    """La confirmación del lote: cuántos XML de la tabla se pueden pedir
+    —y cuántos no, y por qué— y el botón que los pide. Mira las filas que
+    muestra la tabla: con el filtro de proveedor o de estado, pide sólo
+    ésas. Regla #675."""
+    pedibles, descartes = _candidatos_lote(df_cruce, vis)
+    n = min(len(pedibles), _LOTE_MAX)
+    if not pedibles:
+        texto = ("Ningún documento de la tabla, tal como está filtrada, "
+                 "tiene un XML que se pueda pedir.")
+    else:
+        texto = (f"<b>{len(pedibles)} documento(s) sin XML.</b> "
+                 + (f"Se piden los {n} más recientes; " if len(pedibles) > n
+                    else "")
+                 + "la máquina local los trae de a uno, ~1 min cada uno.")
+    ayuda = ("No se piden: " + " · ".join(
+        f"{v} {k}" for k, v in descartes.items()) + "."
+        if descartes else "")
+    # UN renglón, no un recuadro: la tarjeta de la tabla tiene techo
+    # (`--alto-util`) y un recuadro de 165 px le habría puesto barra por
+    # dentro. Lo descartado va en el tooltip del texto.
+    with st.container(horizontal=True, vertical_alignment="center",
+                      gap="small", key="sunat_lote_panel"):
+        st.markdown(
+            f'<div style="font-size:12px;color:{GRIS_TEXTO};" '
+            f'title="{html.escape(ayuda)}">{texto}'
+            + (f' <span style="text-decoration:underline dotted;">'
+               f'{sum(descartes.values())} no se piden</span>'
+               if descartes else "") + '</div>', unsafe_allow_html=True)
+        if pedibles and st.button(f"Pedir {n} XML", key="sunat_lote_pedir",
+                                  type="primary"):
+            st.session_state[_K_LOTE_ABIERTO] = False
+            _pedir_lote(pedibles[:n])
+        st.button("Cancelar", key="sunat_lote_cancelar",
+                  on_click=_alternar_lote)
+
+
+def _pedir_lote(docs):
+    """Deja una señal por documento —`sunat.solicitar_original`, la misma
+    de la ficha— y arranca el vigilante del lote."""
+    pedidos = {}
+    with st.spinner(f"Pidiendo {len(docs)} XML…"):
+        for r in docs:
+            if sunat.solicitar_original(r):
+                pedidos[sunat.clave_solicitud(r)] = {
+                    "xml": sunat.claves_original(r)[1],
+                    "doc": str(r.get("documento") or "")}
+    sunat.solicitudes_en_r2.clear()
+    st.session_state.pop(_K_LOTE_RESUMEN, None)
+    if pedidos:
+        ahora = time.time()
+        st.session_state[_K_LOTE] = {"pedidos": pedidos, "listos": set(),
+                                     "fallidos": set(), "inicio": ahora,
+                                     "avance": ahora}
+    else:
+        st.session_state[_K_LOTE_RESUMEN] = (
+            "No se pudo dejar ningún pedido. ¿Están las credenciales de R2 "
+            "configuradas?")
+    st.rerun()
+
+
+def _texto_lote(lote):
+    n = len(lote["pedidos"])
+    listos, fallidos = len(lote["listos"]), len(lote["fallidos"])
+    partes = [f"{listos} de {n} listos"]
+    if fallidos:
+        partes.append(f"{fallidos} sin original en SUNAT")
+    resto = n - listos - fallidos
+    if resto:
+        partes.append(f"{resto} en camino")
+    return " · ".join(partes)
+
+
+def _terminar_lote(motivo=""):
+    lote = st.session_state.pop(_K_LOTE, None)
+    if lote:
+        st.session_state[_K_LOTE_RESUMEN] = (
+            f"XML de SUNAT: {_texto_lote(lote)}." + (f" {motivo}" if motivo
+                                                     else ""))
+    st.rerun(scope="app")
+
+
+@una_vez_por_corrida
+@st.fragment(run_every=_LOTE_CADA_S)
+def _vigilar_lote_xml():
+    """El vigilante del lote: UNO para todos los pedidos, no uno por
+    documento. Cada tic lista las señales una vez (`solicitudes_en_r2`) y
+    pregunta por el XML SÓLO de los documentos que la máquina local ya tomó
+    —su señal ya no está—: con la cola de 25, son uno o dos `head_object`
+    por tic. Un documento termina con su XML (listo) o con su marca de fallo
+    (sin original); que la señal desaparezca no es el final (#674).
+
+    Existe sólo mientras hay un lote en curso (#474). Al terminar —todos
+    resueltos, `_LOTE_SIN_AVANCE_S` sin avance o `_LOTE_TOPE_S`— una
+    corrida completa pone los ✓ en la tabla (por `_K_XML_LLEGADOS`, sin
+    volver a listar los XML de R2) y el resumen queda arriba de la tabla.
+    `una_vez_por_corrida`: es un fragment adentro de otro (#456)."""
+    lote = st.session_state.get(_K_LOTE)
+    if not lote:
+        return
+    sunat.solicitudes_en_r2.clear()
+    sunat._existe_original.clear()
+    solicitudes = sunat.solicitudes_en_r2()
+    ahora = time.time()
+    antes = len(lote["listos"]) + len(lote["fallidos"])
+    for clave, info in lote["pedidos"].items():
+        if clave in lote["listos"] or clave in lote["fallidos"]:
+            continue
+        if clave.replace(".json", ".fallo.json") in solicitudes:
+            lote["fallidos"].add(clave)
+        elif clave not in solicitudes and sunat._existe_original(info["xml"]):
+            lote["listos"].add(clave)
+            st.session_state[_K_XML_LLEGADOS] = (
+                st.session_state.get(_K_XML_LLEGADOS, frozenset())
+                | {info["xml"]})
+    resueltos = len(lote["listos"]) + len(lote["fallidos"])
+    if resueltos != antes:
+        lote["avance"] = ahora
+    if resueltos >= len(lote["pedidos"]):
+        _terminar_lote()
+    if ahora - lote["avance"] > _LOTE_SIN_AVANCE_S:
+        _terminar_lote(
+            f"La máquina local no avanza hace {_LOTE_SIN_AVANCE_S // 60} "
+            "minutos: puede estar apagada. Los que faltan siguen pedidos y "
+            "se traen cuando vuelva.")
+    if ahora - lote["inicio"] > _LOTE_TOPE_S:
+        _terminar_lote("Los que faltan siguen pedidos y se traen solos.")
+    st.markdown(
+        f'<div style="font-size:12px;color:{GRIS_TEXTO};text-align:right;">'
+        f'⏳ Trayendo XML de SUNAT: {_texto_lote(lote)}. Los ✓ de la tabla '
+        'se ponen al terminar; la ficha de cada uno ya lo muestra.</div>',
+        unsafe_allow_html=True)
+
+
+def _avance_lote_xml(df_cruce, vis):
+    """Arriba de la tabla: el vigilante mientras hay un lote; si no, la
+    confirmación si está abierta, y lo que dejó el último lote (una vez)."""
+    if st.session_state.get(_K_LOTE):
+        _vigilar_lote_xml()
+        return
+    if st.session_state.get(_K_LOTE_ABIERTO):
+        _panel_lote_xml(df_cruce, vis)
+    resumen = st.session_state.pop(_K_LOTE_RESUMEN, None)
+    if resumen:
+        st.markdown(
+            f'<div style="font-size:12px;color:{GRIS_TEXTO};text-align:right;">'
+            f'✓ {html.escape(resumen)}</div>', unsafe_allow_html=True)
+
+
 def _pedir_original(doc):
     """El flujo de "todavía no está sincronizado el original": avisar en
     qué estado está el pedido y, si no hay ninguno, ofrecer hacerlo.
@@ -4869,7 +5118,8 @@ def renderizar_documentos_sunat(d, col_fecha):
             # se calcula abajo. Ver `_filtro_estado`.
             _slot_est = st.empty()
         with c_act:
-            _c_ref, _c_xls = st.columns(2)  # columnas-internas: 2 iconos de accion
+            # columnas-internas: 3 iconos de accion
+            _c_ref, _c_lote, _c_xls = st.columns(3)
         with _c_ref:
             _ayuda = "Volver a consultar a SUNAT"
             if not sunat.secrets_disponibles():
@@ -4891,6 +5141,10 @@ def renderizar_documentos_sunat(d, col_fecha):
                 sunat._bytes_original.clear()
                 sunat.claves_xml_en_r2.clear()
                 st.rerun()
+        with _c_lote:
+            # Como el Excel: el hueco se reserva acá y lo rellena `_cuerpo`,
+            # que es quien sabe qué filas muestra la tabla. Regla #675.
+            _slot_lote = st.empty()
         with _c_xls:
             # El botón de exportar vive ARRIBA (a pedido) pero los datos
             # que exporta se calculan MÁS ABAJO. `st.empty()` reserva el
@@ -5015,6 +5269,12 @@ def renderizar_documentos_sunat(d, col_fecha):
                     f'todavía no los trajo y SUNAT no respondió la consulta '
                     f'en vivo. Probá de nuevo con ⟳.</div>',
                     unsafe_allow_html=True)
+            # El pedido en lote de los XML que faltan (regla #675): su
+            # avance arriba de la tabla mientras dura, y el botón en la
+            # botonera, sobre las filas que la tabla muestra.
+            with _slot_lote.container(key="sunat_lote"):
+                _boton_lote_xml()
+            _avance_lote_xml(df_cruce, vis)
             doc = _tabla_documentos(df_cruce, vis)
 
             # Se rellena el hueco reservado ARRIBA. Se exporta el CRUCE,

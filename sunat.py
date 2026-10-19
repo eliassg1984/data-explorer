@@ -1427,6 +1427,29 @@ def fallo_solicitud(doc):
     return _leer_fallo(clave_fallo(doc))
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def solicitudes_en_r2():
+    """Las keys de TODO lo que hay bajo `PREFIJO_SOLICITUDES`: las señales
+    pendientes (`….json`) y las marcas de fallo (`….fallo.json`), como
+    `frozenset`. UN listado en vez de un `head_object` por documento: es lo
+    que usa el pedido en lote de «Documentos SUNAT» para saber qué ya está
+    pedido, qué falló y qué tomó la máquina local (regla #675). Vacío sin
+    secrets o si R2 no contesta. TTL de 60 s: lo lee el popover del lote en
+    cada corrida del drill (0,3 s el listado); quien necesita el dato fresco
+    —los vigilantes, el pedido— lo vacía antes."""
+    import data
+
+    if not data.secrets_disponibles():
+        return frozenset()
+    try:
+        paginas = data.get_s3_cliente().get_paginator("list_objects_v2").paginate(
+            Bucket=st.secrets["R2_BUCKET"], Prefix=f"{PREFIJO_SOLICITUDES}/")
+        return frozenset(o["Key"] for p in paginas
+                         for o in p.get("Contents", []))
+    except Exception:
+        return frozenset()
+
+
 def refrescar_original(doc):
     """Olvida lo cacheado sobre si el original de `doc` ya llegó: la
     existencia en R2 (20 s), la señal del pedido y su marca de fallo (15 s).
