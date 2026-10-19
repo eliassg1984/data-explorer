@@ -108,13 +108,14 @@ import pandas as pd
 
 from sin_plato import palabra_clave
 
-VERSION = 9
+VERSION = 10
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula. La 6: el paloteo, las ventas sin descontar al contar
 y los combos por lo marcado (#650). La 7: el calendario de descargos
 (`descargosventas.parquet`) y las áreas juntas (`agrupar_por_producto`). La
 8: el Almacén Central no descuenta ventas, y lo sin descontar de días
-anteriores al conteo va aparte. La 9: «Sobró sin que entrara nada»."""
+anteriores al conteo va aparte. La 9: «Sobró sin que entrara nada». La 10:
+las notas, por la hora del conteo; en el Almacén Central, hacia dónde salió."""
 
 EPS = 0.005
 """Soles: una línea con menos de esto no tiene diferencia."""
@@ -789,7 +790,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             p_[g_] += float(qv)
         else:
             p_["notas"][g_] = p_["notas"].get(g_, 0.0) + float(qv)
-    notas_de = {}
+    notas_de, nota_area = {}, {}
     if S is not None:
         for (c_, tp), qv in (S[(S["f"] >= desde) & (S["f"] < ini)]
                              .groupby(["cod", "tipo"])["q"].sum().items()):
@@ -798,6 +799,12 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                 p_["notas"][tp or "Nota de salida"] = p_["notas"].get(tp or "Nota de salida", 0.0) + float(qv)
         notas_de = {c_: (g["f"].to_numpy(), g["tipo"].to_numpy(), g["q"].to_numpy())
                     for c_, g in S.groupby("cod")}
+        # En qué área se registra cada tipo de nota de cada producto: la del
+        # Almacén Central dice hacia dónde salió lo que falta (#650).
+        _na = (S[(S["f"] >= desde) & (S["f"] < ini)].groupby(["cod", "tipo", "area"])["q"]
+               .sum().reset_index().sort_values("q", kind="stable")
+               .drop_duplicates(["cod", "tipo"], keep="last"))
+        nota_area = {(c_, tp): a_ for c_, tp, a_ in zip(_na["cod"], _na["tipo"], _na["area"])}
     for p_ in perfil.values():
         # Lo del kardex (98) que salidas.parquet no partió por tipo.
         resto = p_["n98"] - sum(v_ for k_, v_ in p_["notas"].items()
@@ -1577,7 +1584,11 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         h = notas_de.get(x["cod"])
         if h is not None:
             f_, t_, q_ = h
-            m = ((f_ > np.datetime64(x["t0w"].normalize())) & (f_ <= np.datetime64(x["t1"]))
+            # Por la HORA del conteo anterior, no por su día: la pierna de
+            # cerdo, parcial del 16 oct 2026 — una nota de «Comida Personal»
+            # procesada el 1 oct a las 15:30, antes del conteo de las 17:44,
+            # contaba como de este período y apagaba la pista.
+            m = ((f_ > np.datetime64(x["t0w"])) & (f_ <= np.datetime64(x["t1"]))
                  & (t_ == tp))
             reg = float(q_[m].sum())
         if reg >= 0.5 * esperado or esperado <= 1e-9:
@@ -1594,7 +1605,37 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         tx += (f"Lo que falta ({es(falta)} {un}) calza con lo que no se registró: es, "
                f"probablemente, «{tp.lower()}» sin nota." if calza else
                f"Parte de lo que falta ({es(falta)} {un}) puede ser «{tp.lower()}» sin nota.")
+        # En el Almacén Central no se registran esas notas: dice hacia dónde
+        # salió, y si lo que se hace con el producto sobra (si no sobra, no
+        # se porcionó ni se produjo sin registrar).
+        na = nota_area.get((x["cod"], tp))
+        if int(x["acod"]) == ACOD_ALMACEN_CENTRAL and na and na != x["area"]:
+            tx += (f" Esas notas se registran en {_titulo(na)}: desde el Almacén Central, salió "
+                   "hacia allá sin requerimiento.")
+        tx += no_sobra_lo_hecho(x)
         return {"t": "uso", "f": int(calza), "ti": f"Suele salir por «{tp}»", "tx": tx}
+
+    def no_sobra_lo_hecho(x):
+        """«Lo que se hace con él (…) no sobra…», si se porciona o se
+        produce y ninguno de sus derivados sobra en esta sesión."""
+        der = deriv.get(x["cod"], ())
+        if not der:
+            return ""
+        if any(y["q"] > 0 for b_, _v in der for y in por_cod.get(b_, ())):
+            return ""
+        nombres = []
+        # Primero lo que sale de PORCIONARLO: es lo que se hace con él antes
+        # que nada (la pierna → chorizo y chistorra; el salame viene después).
+        for b_, via in sorted(der, key=lambda d_: d_[1] != "porc"):
+            n_ = (rb_nombre.get(b_) if via == "receta"
+                  else next((fn for fc, fn in po_por_ini.get(x["cod"], ()) if fc == b_), None))
+            if n_ and n_ not in nombres:
+                nombres.append(n_)
+        if not nombres:
+            return ""
+        lista = ", ".join(nombres[:2]) + (" y otros" if len(nombres) > 2 else "")
+        return (f" Lo que se hace con él ({lista}) no sobra en este conteo: no se porcionó ni "
+                "se produjo sin registrar.")
 
     def sin_receta(x, pf, pide):
         """La pista de un producto que no está en ninguna receta, porcionamiento
@@ -1639,6 +1680,11 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             otros = ", ".join(f"{_titulo(r_[0])} {es(r_[1])} {u}" for r_ in pide[:3])
             frase = (f" Lo piden por requerimiento: {otros} en 90 días (el último, "
                      f"{fecha_corta(max(r_[3] for r_ in pide))}). Si se gasta, es ahí.")
+            ahora = [r_ for r_ in pide if r_[4] > 1e-9]
+            if len(ahora) < len(pide):
+                frase += (" Entre los dos conteos lo pidió sólo "
+                          + ", ".join(f"{_titulo(r_[0])} ({es(r_[4])} {u})" for r_ in ahora)
+                          + "." if ahora else " Entre los dos conteos no lo pidió nadie.")
         return frase
 
     def por_que_nada(x):
@@ -1945,6 +1991,13 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                 elif p_ is not None:
                     p_["tx"] = antes_ + p_["tx"] + lo_pide(x, f["pide"])
                     P.append(p_)
+            elif int(x["acod"]) == ACOD_ALMACEN_CENTRAL:
+                # Salió algo con documento, pero menos de lo que falta.
+                P.append({"t": "nada", "f": 0, "ti": "Salió sin requerimiento",
+                          "tx": f"En el Almacén Central no se descuentan ventas: entre los dos "
+                                f"conteos salieron {es(x['sal'])} {u} con documento, y faltan "
+                                f"{es(-q)} más. Se entregaron sin requerimiento, o es un error "
+                                "de conteo." + lo_pide(x, f["pide"])})
         if pc is not None:
             P.append(pc)
         # rubro — mismo rubro, al revés, si las cantidades calzan. Un lado

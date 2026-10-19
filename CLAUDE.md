@@ -1304,7 +1304,9 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   cada tarjeta aparece al pasar el cursor: a pedido, nada que ocupe dos
   renglones.
 - **En el Almacén Central el POS no descuenta ventas, nunca**: lo que sale,
-  sale con requerimiento, transferencia o nota. Y **el ajuste se abre
+  sale con requerimiento, transferencia o nota. Lo que falta ahí salió hacia
+  un área sin documento: la pista dice quién lo pide y, si sale por notas
+  (comida de personal), en qué área se registran. Y **el ajuste se abre
   después de descargar las ventas hasta el día anterior**: lo de días
   anteriores sin descontar es un error de proceso, y va aparte.
 - **Dice quién PIDE cada producto** (los requerimientos de 90 días, por

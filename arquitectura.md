@@ -51348,6 +51348,31 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-18.)
 
+     **Addendum (2026-10-19): hacia dónde salió lo que falta en el Almacén
+     Central (`VERSION` 10).** El usuario, sobre la pierna de cerdo del
+     parcial del 16 oct (27,15 kg sin pista): el mes anterior se mandó a
+     Cocina Personal, para la comida del personal; si lo que se porciona de
+     ella no sobra, ¿se puede considerar que se usó ahí?
+
+     - **La pista «Suele salir por "Comida Personal"» no salía por un error
+       de ventana**: contaba las notas desde el DÍA del conteo anterior, no
+       desde su hora, y una de 16,3 kg procesada el 1 oct a las 15:30 —antes
+       del conteo de las 17:44— parecía de este período. Ahora va por la
+       hora (`salida_habitual`): 0 kg registrados contra ~15 de lo habitual,
+       y los 27,15 que faltan calzan. Fuerte.
+     - **En el Almacén Central esa pista dice hacia dónde salió**: dónde se
+       registran esas notas (`nota_area`: «se registran en Cocina Personal:
+       desde el Almacén, salió hacia allá sin requerimiento»), y si lo que se
+       hace con el producto sobra en la sesión (`no_sobra_lo_hecho`, primero
+       lo porcionado): si no sobra, no se porcionó ni se produjo sin
+       registrar.
+     - **«Salió sin requerimiento» también cuando algo salió con documento**
+       pero falta más, con quién lo pide en 90 días y quién lo pidió entre
+       los dos conteos (`lo_pide`). En ese parcial, ningún faltante del
+       Almacén Central queda sin pista (eran 116).
+
+     (2026-10-19.)
+
 651. **«Análisis de diferencias» mira los COMBOS, no descarta las líneas
      sin precio y reconoce lo vendido con el código de otro producto.**
      2026-10-13, sobre la #650. En `diferencias_ajuste.py`

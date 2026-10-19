@@ -9334,6 +9334,95 @@ def _pruebas_diferencias_sin_descontar():
     return fallos
 
 
+def _pruebas_diferencias_almacen():
+    """Ajuste › «Análisis de diferencias», un faltante en el ALMACÉN CENTRAL
+    (anexo de la regla #650), con la pierna de cerdo del parcial del 16 oct
+    2026: el sistema decía 27,15 kg y se contó 0. El Almacén no descuenta
+    ventas; la pierna va a Producción (se porciona) y a Cocina Personal (se
+    usa en la comida del personal, con notas). Entre los dos conteos sólo
+    Producción la pidió, y no se registró ninguna nota de comida de personal
+    —la del 1 oct a las 15:30 es de ANTES del conteo de las 17:44—; lo que se
+    porciona de ella no sobra. Lo más probable: comida de personal sin
+    requerimiento ni nota.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #650 · almacén · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #650 · almacén · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {0: "ALMACEN CENTRAL", 6: "PRODUCCION", 10: "COCINA PERSONAL"}
+
+    def fila(t, a, s, k):
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "ALIMENTOS", "SUBFAMILIA": "CARNES",
+                "CODIGO PRODUCTO": "0000000620", "PRODUCTO": "Pierna de cerdo deshuesada x Kg",
+                "UNIDAD MEDIDA": "KILOS", "STOCK AL CIERRE": s, "STOCK DECLARADO": k,
+                "AJUSTE": k - s, "PRECIO PROMEDIO": 25.0, "AJUSTE VALORIZADO": (k - s) * 25.0}
+    ajuste = pd.DataFrame([fila("2026-10-01 17:44", 0, 8.55, 8.55),
+                           fila("2026-10-16 18:29", 0, 27.15, 0.0)])
+
+    def kx(t, a, tipo, ent, sal, stock):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": "0000620", "COD TIPO": tipo, "CANT INGRESO": ent,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
+    kardex = pd.DataFrame([
+        # lo de antes: Producción la porciona, Cocina Personal la usa con notas
+        kx("2026-09-16 11:00", 6, "96", 0, 71.8, 0), kx("2026-09-29 11:00", 10, "98", 0, 166.475, 0),
+        kx("2026-10-01 15:00", 10, "98", 0, 16.295, 0),
+        # entre los dos conteos, en el Almacén
+        kx("2026-10-06 14:00", 0, "01", 9.5, 0, 18.05), kx("2026-10-06 14:00", 0, "99", 0, 9.5, 8.55),
+        kx("2026-10-14 16:00", 0, "01", 18.6, 0, 27.15)])
+    salidas = pd.DataFrame([
+        {"NOMBRE ESTADO SALIDA": "PROCESADO", "AREA": "COCINA PERSONAL", "COD PRODUCTO": "0000620",
+         "FECHA PROCESADO": pd.Timestamp(f), "CANT SALIDA": q, "TIPO DESCARGO": "Comida Personal"}
+        for f, q in (("2026-09-29 11:30", 166.475), ("2026-10-01 15:30", 16.295))])
+    reqs = pd.DataFrame([
+        {"CODIGO PRODUCTO": "0000620", "SUB ALMACEN": a, "FECHA REGISTRO": pd.Timestamp(f),
+         "COD REQUERIMIENTO": n, "NOMBRE ESTADO REQUERIMIENTO": "PROCESADO", "CANTIDAD": q}
+        for a, f, n, q in (("COCINA PERSONAL", "2026-09-15 11:30", "RQ-1", 31.1),
+                           ("PRODUCCION", "2026-10-06 14:03", "RQ-2", 9.5))])
+    porc = pd.DataFrame([{"COD PROD INIC": "0000620", "COD PROD FINAL": "0000621",
+                          "PROD FINAL RESULT": "(P) Pierna de cerdo desh Chorizo Criollo DD (produccion)",
+                          "PROD INICIAL": "Pierna de cerdo deshuesada x Kg", "COD PORC": "P1",
+                          "FEC REGIST": pd.Timestamp("2026-09-16 11:00"), "CANT A PORCIONAR": 71.8}])
+    vacia = lambda *cols: pd.DataFrame(columns=list(cols))
+    rv = vacia("ITEM VENTA ACTIVO", "RV ACTIV", "DESCARG", "COD PLATO", "NOMB PLATO", "COD INS",
+               "CANTIDAD", "FACTOR", "SUBALM INS", "T DESCARG", "FECH MODIF")
+    rb = vacia("RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO", "CANT",
+               "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG")
+    carta = vacia("TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA")
+    ordenes = vacia("NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO", "CANTIDAD")
+    venta = vacia("producto", "dia", "unidades", "costo", "unidades_costeadas")
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    parcial = [s for s in ses if min(s["dias"]) == pd.Timestamp("2026-10-16").date()][0]
+    r = da.calcular(ajuste, parcial, ses, kardex, rv, rb, carta, porc, ordenes, salidas, venta,
+                    requerimientos=reqs)
+    P = r["fichas"][int(r["lineas"]["id"].iloc[0])]["pistas"]
+    uso = [p for p in P if p["t"] == "uso"]
+    check("suele salir por «Comida Personal», fuerte: la nota de antes del conteo no cuenta",
+          [(p["ti"], p["f"]) for p in uso], [("Suele salir por «Comida Personal»", 1)])
+    check("dice hacia dónde salió y que lo porcionado no sobra",
+          ("Esas notas se registran en Cocina Personal" in uso[0]["tx"],
+           "(P) Pierna de cerdo desh Chorizo Criollo DD (produccion)) no sobra" in uso[0]["tx"]),
+          (True, True))
+    nada = [p for p in P if p["t"] == "nada"]
+    check("y salió sin requerimiento, aunque algo salió con documento",
+          ([p["ti"] for p in nada],
+           "Entre los dos conteos lo pidió sólo Produccion (9.5 kg)" in nada[0]["tx"]),
+          (["Salió sin requerimiento"], True))
+    return fallos
+
+
 def _pruebas_diferencias_juntas():
     """Ajuste › «Análisis de diferencias», las ÁREAS JUNTAS (anexo de la regla
     #650, 2026-10-18): una fila por producto con las áreas elegidas sumadas.
@@ -13144,6 +13233,7 @@ def main():
     fallos += _pruebas_diferencias_perfil()
     fallos += _pruebas_diferencias_sin_descontar()
     fallos += _pruebas_diferencias_juntas()
+    fallos += _pruebas_diferencias_almacen()
     fallos += _pruebas_merma()
     fallos += _pruebas_cortes_y_peso()
     fallos += _pruebas_rastro_proveedor()
