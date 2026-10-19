@@ -108,14 +108,15 @@ import pandas as pd
 
 from sin_plato import palabra_clave
 
-VERSION = 10
+VERSION = 11
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula. La 6: el paloteo, las ventas sin descontar al contar
 y los combos por lo marcado (#650). La 7: el calendario de descargos
 (`descargosventas.parquet`) y las áreas juntas (`agrupar_por_producto`). La
 8: el Almacén Central no descuenta ventas, y lo sin descontar de días
 anteriores al conteo va aparte. La 9: «Sobró sin que entrara nada». La 10:
-las notas, por la hora del conteo; en el Almacén Central, hacia dónde salió."""
+las notas, por la hora del conteo; en el Almacén Central, hacia dónde salió.
+La 11: «Se vende desde otra área» y los porcionamientos raros."""
 
 EPS = 0.005
 """Soles: una línea con menos de esto no tiene diferencia."""
@@ -130,6 +131,17 @@ conteo es un registro tardío posible."""
 
 USOS_FICHA = 10
 """Cuántos usos (platos, recetas, porcionamientos) lleva la ficha."""
+
+PORC_MIN_HAB = 3
+"""Porcionamientos del mismo corte del mismo producto, en los DIAS_ATRAS días
+anteriores, para decir qué es lo habitual. Con menos, no se marca."""
+
+PORC_REND = (0.7, 1.43)
+"""Unidades del corte por unidad porcionada, contra lo habitual: fuera de
+este margen el porcionamiento es raro (#650)."""
+
+PORC_PRECIO = (0.77, 1.3)
+"""El precio con el que entró el corte, contra lo habitual."""
 
 FAMILIA_OPERACION = "COSTOS PRODUCCION"
 
@@ -819,6 +831,24 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     K95 = K[(K["t"] == "95") & (K["sal"] > 0)]
     k95_de = {c: (g["hora"].to_numpy(), g["sal"].to_numpy())
               for c, g in K95.groupby("cod")}
+    # Por ÁREA, de los productos que faltan (#650): lo que las ventas
+    # descontaron en cada una, lo que entró a cada una y su stock. Dicen si lo
+    # vendido se descuenta desde un área que nunca recibe el producto.
+    Kf = (K[K["cod"].isin(set(L.loc[L["q"] < 0, "cod"]))]
+          .sort_values("hora", kind="stable").reset_index(drop=True))
+    _h, _s, _v = Kf["hora"].to_numpy(), Kf["sal"].to_numpy(), Kf["stock"].to_numpy()
+    _m95 = ((Kf["t"] == "95") & (Kf["sal"] > 0)).to_numpy()
+    _mi = ((Kf["ent"] > 0) & (Kf["t"] != "93")).to_numpy()
+    k95_area, ing_area, stock_area = {}, {}, {}
+    areas95 = defaultdict(list)
+    for k_, ix in Kf.groupby(["cod", "acod"]).indices.items():
+        stock_area[k_] = (_h[ix], _v[ix])
+        i95, ii = ix[_m95[ix]], ix[_mi[ix]]
+        if len(i95):
+            k95_area[k_] = (_h[i95], _s[i95])
+            areas95[k_[0]].append(int(k_[1]))
+        if len(ii):
+            ing_area[k_] = _h[ii]
     # Los DESCARGOS DE VENTAS (#650): el POS no descuenta al vender, alguien
     # corre el descargo por la mañana y descuenta los días contables
     # anteriores. Lo vendido entre el último y la hora del conteo seguía en
@@ -1064,13 +1094,59 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                        "fin_n": po["PROD FINAL RESULT"].fillna("").astype(str).str.strip(),
                        "ini_n": po["PROD INICIAL"].fillna("").astype(str).str.strip(),
                        "porc": po["COD PORC"].astype(str), "f": _fecha(po["FEC REGIST"]),
-                       "qe": _num(po["CANT A PORCIONAR"])})
+                       "qe": _num(po["CANT A PORCIONAR"]),
+                       # Lo que salió de cada corte y a qué precio: dicen si un
+                       # porcionamiento fue raro (#650).
+                       "qr": (_num(po["CANT RESULT"]) if "CANT RESULT" in po.columns
+                              else np.nan),
+                       "pr": (_num(po["PREC PROM PROD FIN"])
+                              if "PREC PROM PROD FIN" in po.columns else np.nan),
+                       "ui": (po["UNID PROD INIC"].map(unidad)
+                              if "UNID PROD INIC" in po.columns else "")})
     PO = PO[PO["f"].notna()]
     ult_porc_fin = PO.groupby("fin")["f"].max()
     ult_porc_ini = PO.groupby("ini")["f"].max()
     porc_origen = (PO.groupby(["fin", "ini_n"]).size().reset_index(name="n")
                    .sort_values("n", kind="stable").drop_duplicates("fin", keep="last")
                    .set_index("fin")["ini_n"])
+    # Los porcionamientos RAROS de cada corte (#650): menos (o más) unidades
+    # por lo porcionado que lo habitual del mismo corte del mismo producto,
+    # o un precio fuera de lo habitual. El Bife Ancho Argentino del 13 oct
+    # 2026: de 6,9 kg salieron 11 bifes (1,6 por kg; lo habitual, 2,8) y
+    # entraron a S/ 60,46 (lo habitual, S/ 38,93). Cambia el COSTO del corte,
+    # no cuántos hay.
+    POr = (PO[(PO["qe"] > 0) & (PO["qr"] > 0)].assign(rend=lambda d_: d_["qr"] / d_["qe"])
+           .sort_values("f", kind="stable").reset_index(drop=True))
+    po_fin_ix = POr.groupby("fin").indices
+
+    def porc_raros(c, t0, t1):
+        ix = po_fin_ix.get(c)
+        if ix is None:
+            return []
+        g = POr.iloc[ix]
+        f_, ini_ = g["f"].to_numpy(), g["ini"].to_numpy()
+        rend_, pr_ = g["rend"].to_numpy(), g["pr"].to_numpy()
+        out = []
+        for j in np.flatnonzero((f_ > np.datetime64(t0)) & (f_ <= np.datetime64(t1))):
+            m = ((ini_ == ini_[j]) & (f_ < f_[j])
+                 & (f_ >= f_[j] - np.timedelta64(DIAS_ATRAS, "D")))
+            if m.sum() < PORC_MIN_HAB:
+                continue
+            hab = float(np.median(rend_[m]))
+            pp = pr_[m][~np.isnan(pr_[m])]
+            hab_p = float(np.median(pp)) if len(pp) >= PORC_MIN_HAB else None
+            raro_r = not PORC_REND[0] * hab <= rend_[j] <= PORC_REND[1] * hab
+            raro_p = (hab_p is not None and hab_p > 0 and not np.isnan(pr_[j])
+                      and not PORC_PRECIO[0] * hab_p <= pr_[j] <= PORC_PRECIO[1] * hab_p)
+            if raro_r or raro_p:
+                r = g.iloc[j]
+                out.append({"porc": r["porc"], "f": pd.Timestamp(r["f"]), "ini_n": r["ini_n"],
+                            "qe": float(r["qe"]), "ui": r["ui"] or "", "qr": float(r["qr"]),
+                            "rend": float(r["rend"]), "hab": hab,
+                            "pr": None if np.isnan(pr_[j]) else float(pr_[j]),
+                            "hab_p": hab_p, "raro_r": bool(raro_r), "raro_p": bool(raro_p)})
+        return out
+
     VD = venta_dia.assign(cp=_cod(venta_dia["producto"]), dia=_fecha(venta_dia["dia"]))
     VD["cu"] = _num(VD["costo"]) / _num(VD["unidades_costeadas"]).where(
         _num(VD["unidades_costeadas"]) > 0)
@@ -1254,7 +1330,8 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                      for j, lab in enumerate(hist_lab)],
             "usos": usos[:USOS_FICHA], "usos_n": len(usos), "rec": rec,
             "viene": {"compra": ultima_compra(c, x["t1"]), "porc": porc_origen.get(c),
-                      "uporc": ult_porc_fin.get(c)},
+                      "uporc": ult_porc_fin.get(c),
+                      "raros": porc_raros(c, x["t0w"], x["t1"])},
         }
         fichas[i]["pide"], fichas[i]["pend"] = quien_pide(x)
         pf = perfil.get(c)
@@ -1336,6 +1413,66 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             tx += (f" Esta área no recibió el producto (ni compra, ni requerimiento, ni "
                    f"producción): por eso el sistema quedó en {es(x['s'])}.")
         return {"t": "desc", "f": 1, "ti": "Se descontó desde otra área", "tx": tx}
+
+    def vendido_en_otra_area(x, usos):
+        """La pista «Se vende desde otra área» (#650): lo que falta aquí se
+        vendió, pero las ventas lo descontaron desde un área que NO recibe el
+        producto —ni compra, ni requerimiento, ni producción, en DIAS_ATRAS
+        días— y quedó en negativo. El producto se guarda y se sirve desde
+        aquí, y aquí el sistema se queda con lo ya servido. El Bife Ancho
+        Argentino del parcial del 16 oct 2026: el «Ojo de Bife Argentino
+        300gr Corte» se descuenta desde Calientes (−190 und, nunca recibió
+        uno); faltaban 16 en Cocina y no tenía pista."""
+        c, a = x["cod"], int(x["acod"])
+        if x["ing"] <= 1e-9:
+            return None
+        t0, t1 = np.datetime64(x["t0w"]), np.datetime64(x["t1"])
+        otras = []
+        for b in areas95.get(c, ()):
+            if b == a:
+                continue
+            h, s = k95_area[(c, b)]
+            kb = float(s[(h > t0) & (h <= t1)].sum())
+            if kb <= 1e-9:
+                continue
+            hi = ing_area.get((c, b))
+            if hi is not None and ((hi >= np.datetime64(desde)) & (hi <= t1)).any():
+                continue
+            sh, sv = stock_area[(c, b)]
+            j = int(np.searchsorted(sh, t1, side="right"))
+            stk = float(sv[j - 1]) if j else 0.0
+            if stk > 1e-9:
+                continue
+            otras.append((kb, b, stk))
+        falta, un = -float(x["q"]), x["u"] or "und"
+        tot = sum(o_[0] for o_ in otras)
+        # Unos gramos descontados en otra área no explican un faltante.
+        if not otras or tot < 0.25 * falta:
+            return None
+        otras.sort(key=lambda o_: -o_[0])
+        kb, b, stk = otras[0]
+        nb = area_de.get(b, f"área {b}")
+        pl = [u_ for u_ in usos if u_["via"] in ("plato", "plato_ins")
+              and u_["t"] == "PRODUCTO" and u_["nv"] > 0 and u_["a"] in ("", nb)]
+        pl = list(dict.fromkeys(u_["n"] for u_ in sorted(pl, key=lambda u_: -u_["nv"])))[:2]
+        tx = (f"Lo vendido se descuenta desde {_titulo(nb)}: {es(kb)} {un} entre los dos "
+              f"conteos" + (f" ({', '.join(pl)})" if pl else "") + ", y "
+              f"{_titulo(nb)} no recibe este producto —ni compra, ni requerimiento, ni "
+              "producción—" + (f": allá el sistema quedó en {es(stk)} {un}" if stk < -1e-9
+                               else "") + ". El producto está aquí y lo vendido no se "
+              "descuenta aquí: el sistema se quedó con lo que ya salió.")
+        if len(otras) > 1:
+            tx += " También desde " + ", ".join(
+                f"{_titulo(area_de.get(o_[1], f'área {o_[1]}'))} ({es(o_[0])} {un})"
+                for o_ in otras[1:3]) + "."
+        if tot > 1.25 * falta:
+            tx += f" Si todo saliera de aquí faltarían {es(tot)}; faltan {es(falta)}."
+        elif tot < 0.8 * falta:
+            tx += f" Explica hasta {es(tot)} de los {es(falta)} que faltan."
+        # Fuerte si calza: lo descontado allá cubre lo que falta, sin ser
+        # tanto que lo que falta pueda ser cualquier otra cosa.
+        return {"t": "desc", "f": int(0.8 * falta <= tot <= 4 * falta),
+                "ti": "Se vende desde otra área", "tx": tx}
 
     def combo_sin_marcar(x, usos):
         """La pista de combo (#650): un combo que lleva un plato de este
@@ -1863,6 +2000,10 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             pd_ = area_de_descargo(x, usos_todos[i], f["sal"], sin_ing)
             if pd_ is not None:
                 P.append(pd_)
+        if q < 0:
+            po_ = vendido_en_otra_area(x, usos_todos[i])
+            if po_ is not None:
+                P.append(po_)
         # prod — falta el insumo y sobra lo que se hace con él (o al revés)
         if q < 0:
             cand = []

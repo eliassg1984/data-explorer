@@ -9423,6 +9423,118 @@ def _pruebas_diferencias_almacen():
     return fallos
 
 
+def _pruebas_diferencias_otra_area():
+    """Ajuste › «Análisis de diferencias», lo vendido que se descuenta desde
+    un área que NUNCA recibe el producto (anexo de la regla #650), con el
+    Bife Ancho Argentino Ojo del parcial del 16 oct 2026: faltaban 16 en
+    Cocina y no tenía pista. El «Ojo de Bife Argentino 300gr Corte» (el POS
+    lo descuenta DIRECTO) se descontó 45 veces desde Calientes, que nunca
+    recibió un bife y quedó en negativo; en Cocina sólo se descontaba el
+    Ojo de Bife Gravy. Y el porcionamiento del 13 oct, raro: de 6,9 kg
+    salieron 11 bifes (lo habitual, ~2,9 por kg) a S/ 60,46.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #650 · otra área · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #650 · otra área · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {0: "ALMACEN CENTRAL", 1: "COCINA", 2: "CALIENTES", 6: "PRODUCCION"}
+    BIFE = "(P) Bife Ancho Argentino Ojo 300gr x und (produccion)"
+
+    def fila(t, a, s, k):
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "ALIMENTOS", "SUBFAMILIA": "CARNES",
+                "CODIGO PRODUCTO": "0004088", "PRODUCTO": BIFE, "UNIDAD MEDIDA": "UND",
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": 40.548, "AJUSTE VALORIZADO": (k - s) * 40.548}
+    # El nombre de cada área sale de los conteos: Calientes se contó alguna vez.
+    ajuste = pd.DataFrame([fila("2026-10-01 17:35", 1, 37.0, 3.0),
+                           fila("2026-10-16 18:29", 1, 19.0, 3.0),
+                           dict(fila("2026-02-02 10:00", 2, 0.0, 0.0), **{"CODIGO PRODUCTO": "0000001"})])
+
+    def kx(t, a, tipo, ent, sal, stock):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": "0004088", "COD TIPO": tipo, "CANT INGRESO": ent,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
+    cocina = [kx("2026-10-06 19:00", 1, "99", 9, 0, 12), kx("2026-10-07 09:00", 1, "95", 0, 6, 6),
+              kx("2026-10-07 10:00", 1, "98", 0, 3, 3), kx("2026-10-09 10:00", 1, "99", 9, 0, 12),
+              kx("2026-10-09 11:00", 1, "95", 0, 4, 8), kx("2026-10-12 09:00", 1, "95", 0, 3, 5),
+              kx("2026-10-13 19:00", 1, "99", 11, 0, 16), kx("2026-10-14 09:00", 1, "98", 0, 1, 15),
+              kx("2026-10-14 16:00", 1, "96", 0, 10, 5), kx("2026-10-14 20:00", 1, "99", 3, 0, 8),
+              kx("2026-10-15 09:00", 1, "97", 0, 1, 7), kx("2026-10-15 19:00", 1, "99", 12, 0, 19)]
+    calientes = [kx("2026-09-25 10:00", 2, "95", 0, 4, -134),
+                 kx("2026-10-07 10:00", 2, "95", 0, 17, -151),
+                 kx("2026-10-09 10:00", 2, "95", 0, 13, -164),
+                 kx("2026-10-14 09:00", 2, "95", 0, 15, -179)]
+    kardex = pd.DataFrame(cocina + calientes)
+    rv = pd.DataFrame([{"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+                        "COD PLATO": "0001565", "NOMB PLATO": "Ojo de Bife Gravy",
+                        "COD INS": "0004088", "CANTIDAD": 1.0, "FACTOR": 1.0,
+                        "SUBALM INS": "COCINA", "T DESCARG": "PRODUCTO",
+                        "FECH MODIF": pd.Timestamp("2026-06-01")}])
+    carta = pd.DataFrame([{"TIPO DESC": "DIRECTO", "COD PLATO": "0001640",
+                           "ITEM VENT": "Ojo de Bife Argentino 300gr Corte",
+                           "COD ITEM O RECETA": "0004088"}])
+    venta = pd.DataFrame([{"producto": cp, "dia": pd.Timestamp(d), "unidades": n,
+                           "costo": n * 40.0, "unidades_costeadas": n}
+                          for cp, d, n in (("0001640", "2026-10-06", 17), ("0001640", "2026-10-08", 13),
+                                           ("0001640", "2026-10-13", 15), ("0001565", "2026-10-06", 13))])
+
+    def po(n, f, qe, qr, pr):
+        return {"COD PORC": n, "COD PROD INIC": "0003350", "PROD INICIAL": "Bife Ancho Argentino x Kg",
+                "UNID PROD INIC": "KILOS", "FEC REGIST": pd.Timestamp(f), "CANT A PORCIONAR": qe,
+                "COD PROD FINAL": "0004088", "PROD FINAL RESULT": BIFE, "CANT RESULT": qr,
+                "PREC PROM PROD FIN": pr}
+    porc = pd.DataFrame([po("2609000046", "2026-09-09 09:14", 3.393, 10, 34.41),
+                         po("2609000053", "2026-09-09 09:50", 4.261, 13, 33.54),
+                         po("2609000062", "2026-09-09 11:05", 3.420, 10, 34.40),
+                         po("2609000159", "2026-09-14 12:10", 3.800, 11, 33.69),
+                         po("2610000099", "2026-10-13 15:05", 6.900, 11, 60.46),
+                         po("2610000115", "2026-10-14 16:24", 4.100, 12, 36.68)])
+    vacia = lambda *cols: pd.DataFrame(columns=list(cols))
+    rb = vacia("RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO", "CANT",
+               "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG")
+    ordenes = vacia("NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO", "CANTIDAD")
+    salidas = vacia("NOMBRE ESTADO SALIDA", "AREA", "COD PRODUCTO", "FECHA PROCESADO",
+                    "CANT SALIDA", "TIPO DESCARGO")
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    parcial = [s for s in ses if min(s["dias"]) == pd.Timestamp("2026-10-16").date()][0]
+
+    def correr(kardex_):
+        r = da.calcular(ajuste, parcial, ses, kardex_, rv, rb, carta, porc, ordenes, salidas,
+                        venta)
+        return r["fichas"][int(r["lineas"]["id"].iloc[0])]
+
+    f = correr(kardex)
+    otra = [p for p in f["pistas"] if p["ti"] == "Se vende desde otra área"]
+    check("fuerte, la primera", ([p["f"] for p in otra], f["pistas"][0]["ti"]),
+          ([1], "Se vende desde otra área"))
+    tx = otra[0]["tx"] if otra else ""
+    check("dice desde dónde, cuánto, el plato y el negativo",
+          ("desde Calientes: 45 und" in tx, "(Ojo de Bife Argentino 300gr Corte)" in tx,
+           "quedó en −179 und" in tx, "faltarían 45; faltan 16" in tx),
+          (True, True, True, True))
+    # Si Calientes recibe el bife, lo que se descuenta allá puede estar allá.
+    f2 = correr(pd.concat([kardex, pd.DataFrame([kx("2026-10-08 12:00", 2, "99", 20, 0, -131)])]))
+    check("si esa área lo recibe, no hay pista",
+          [p["ti"] for p in f2["pistas"] if p["ti"] == "Se vende desde otra área"], [])
+    raros = f["viene"]["raros"]
+    check("el porcionamiento raro del 13 oct, por rendimiento y por precio",
+          [(r["porc"], r["raro_r"], r["raro_p"], round(r["rend"], 2)) for r in raros],
+          [("2610000099", True, True, 1.59)])
+    return fallos
+
+
 def _pruebas_diferencias_juntas():
     """Ajuste › «Análisis de diferencias», las ÁREAS JUNTAS (anexo de la regla
     #650, 2026-10-18): una fila por producto con las áreas elegidas sumadas.
@@ -13234,6 +13346,7 @@ def main():
     fallos += _pruebas_diferencias_sin_descontar()
     fallos += _pruebas_diferencias_juntas()
     fallos += _pruebas_diferencias_almacen()
+    fallos += _pruebas_diferencias_otra_area()
     fallos += _pruebas_merma()
     fallos += _pruebas_cortes_y_peso()
     fallos += _pruebas_rastro_proveedor()

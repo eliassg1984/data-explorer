@@ -1281,7 +1281,11 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
 - **El área de descargo de un plato es `SUBALM INS`**, no `AREA PROD`. Y puede
   cambiar: si las ventas descontaron desde un área más de lo que las
   recetas de hoy descargan desde ahí, y un plato se editó y hoy apunta a
-  otra, la pista «Se descontó desde otra área» lo dice (#654).
+  otra, la pista «Se descontó desde otra área» lo dice (#654). Un plato que
+  el POS descuenta DIRECTO no dice su área, y puede descontarse desde una
+  que nunca recibe el producto: el Ojo de Bife Corte, desde Calientes
+  (−190 und) mientras el bife está en Cocina. Lo dice «Se vende desde otra
+  área», en el faltante (anexo de la #650).
 - **Mira los combos por lo MARCADO en cada pedido** (#651 y un anexo de la #650): el POS
   descuenta sólo lo marcado, y lo marcado (CPEDIDO) SÍ está en R2, en el
   paloteo (`paloteoinsumosnivel1.parquet`, `TIPO PRODUCTO` = «C»). Hasta

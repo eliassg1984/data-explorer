@@ -51393,6 +51393,40 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-19.)
 
+     **Addendum (2026-10-19): «Se vende desde otra área» y los porcionamientos
+     raros (`VERSION` 11).** El usuario, sobre el Bife Ancho Argentino Ojo del
+     parcial del 16 oct (16 und de faltante en Cocina, sin pista): «sólo sale
+     en venta y en bajas», con el kardex de Cocina y un porcionamiento de
+     Producción «casi errado».
+
+     - **Lo vendido se descontaba desde un área que nunca recibe el bife.** El
+       «Ojo de Bife Argentino 300gr Corte» —el POS lo descuenta DIRECTO, sin
+       área en la receta— se descuenta desde Calientes (área inactiva, #598):
+       45 und en el período, 190 desde agosto, y Calientes nunca recibió uno
+       (−190 und). En Cocina sólo se descontaba el Ojo de Bife Gravy, que se
+       desactivó el 10 oct. El bife se guarda en Cocina y ahí el sistema se
+       queda con lo servido. En el cierre de setiembre explica los 34 und.
+       Pista nueva, `vendido_en_otra_area`: un faltante en un área que recibe
+       el producto, y descargos de ventas entre los dos conteos desde otra
+       área que en DIAS_ATRAS días no lo recibió (ni compra, ni requerimiento,
+       ni producción) y quedó en cero o negativo. Sólo si lo de allá es al
+       menos un cuarto de lo que falta (unos gramos de sal en Barra no explican
+       10 kg); fuerte si está entre 0,8 y 4 veces lo que falta. Es del tipo
+       «desc», como «Se descontó desde otra área» (#654), que mira el otro
+       lado: el área desde la que se descuenta. El nombre del área sale de los
+       conteos (`area_de`): un área que nunca se contó se llama «Área N».
+     - **Los porcionamientos raros van a «De dónde viene», no a las pistas.**
+       `porc_raros`: unidades del corte por unidad porcionada fuera de
+       0,7–1,43 veces lo habitual (la mediana de los DIAS_ATRAS días
+       anteriores, mismo corte y mismo producto de origen, con 3 o más), o el
+       precio fuera de 0,77–1,3 veces. El del 13 oct: 6,9 kg → 11 bifes (1,6
+       por kg; lo habitual, 2,7) y 3,23 kg de retazos, a S/ 60,46 (lo
+       habitual, S/ 37,48); el del 1 oct, 14,2 kg → 9 bifes a S/ 184,77. No
+       son pista porque cambian el COSTO del corte (y el de sus platos), no
+       cuántos hay: si se cortaron más de los registrados, sobrarían.
+
+     (2026-10-19.)
+
 651. **«Análisis de diferencias» mira los COMBOS, no descarta las líneas
      sin precio y reconoce lo vendido con el código de otro producto.**
      2026-10-13, sobre la #650. En `diferencias_ajuste.py`

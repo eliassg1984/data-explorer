@@ -412,7 +412,34 @@ def _viene_html(x, fi):
         out.append(f'Última compra: <b>{da.fecha_corta(v["compra"])}</b>.'
                    if v["compra"] is not None and pd.notna(v["compra"])
                    else f"Sin compras en los últimos {da.DIAS_ATRAS} días.")
-    return '<div class="dif-viene">' + "".join(f"<div>{t}</div>" for t in out) + "</div>"
+    html = '<div class="dif-viene">' + "".join(f"<div>{t}</div>" for t in out) + "</div>"
+    return html + _porc_raros_html(x, v.get("raros") or [])
+
+
+def _porc_raros_html(x, raros):
+    """Los porcionamientos raros de este corte entre los dos conteos (#650):
+    menos (o más) unidades por lo porcionado que lo habitual, o un precio
+    fuera de lo habitual. Van aquí y no como pista: cambian el COSTO del
+    corte, no cuántos hay."""
+    if not raros:
+        return ""
+    u = _e(x["u"] or "und")
+    filas = []
+    for r in raros:
+        ui = _e(r["ui"] or "und")
+        rend = (f'{da.es(r["rend"], 1)} {u} por {ui}, lo habitual {da.es(r["hab"], 1)}')
+        txt = (f'<b>{da.fecha_corta(r["f"])} · N° {_e(r["porc"])}</b>: de '
+               f'{da.es(r["qe"])} {ui} de {_e(r["ini_n"])} salieron {da.es(r["qr"])} {u} '
+               + (f'(<b>{rend}</b>)' if r["raro_r"] else f'({rend})'))
+        if r["pr"] is not None and r["hab_p"]:
+            pr = f'S/ {r["pr"]:,.2f} la unidad (lo habitual, S/ {r["hab_p"]:,.2f})'
+            txt += f'. Entró a <b>{pr}</b>' if r["raro_p"] else f'. Entró a {pr}'
+        filas.append(f"<div>{txt}.</div>")
+    return ('<div class="dif-h">Porcionamientos raros entre los dos conteos</div>'
+            '<div class="dif-viene">' + "".join(filas) + "</div>"
+            '<div class="dif-nota">Cambian el costo de este producto —y el de los platos que '
+            'lo llevan—, no cuántos hay: si se cortaron más de los registrados, sobrarían.'
+            '</div>')
 
 
 def _perfil_html(x, fi):
