@@ -492,6 +492,43 @@ def _pruebas_costo_carta_ficha():
           (round(ed[1]["delta"], 6), ed[1]["usr"]), (-0.2, "LUIS"))
     check("sin log, ninguna", (sr.ediciones_base(None, dlog, rb),
                                sr.ediciones_base(mlog, dlog.iloc[0:0], rb)), ([], []))
+    # «Cambios Recetas Base» (regla #671) lee lo mismo, más el costo de
+    # antes y de después y cuántos guardados se juntaron.
+    check("cada edición trae su receta, su costo antes y después y sus guardados",
+          (ed[0]["rb"], round(ed[0]["antes"], 6), round(ed[0]["despues"], 6),
+           ed[0]["guardados"], ed[1]["guardados"]), ("R1", 2.0, 2.5, 2, 1))
+    import datetime
+    import graficos.recetas_cambios as rc
+    check("cambios · el tipo de cada línea",
+          [rc.tipo_de_cambio(0.0, 5.0), rc.tipo_de_cambio(5.0, 0.0), rc.tipo_de_cambio(5.0, 6.0)],
+          ["Agregado", "Quitado", "Cantidad"])
+    grande = {"delta": 89.58, "antes": 10.5}      # el tomate que pasó a arúgula
+    chico = {"delta": 0.5, "antes": 2.0}          # +25 % pero medio sol
+    nueva = {"delta": 12.87, "antes": 0.0}        # una receta que estaba vacía
+    check("cambios · grande es ±50 % Y ±S/ 5 (y una receta vacía que suma, también)",
+          [rc.es_grande(grande), rc.es_grande(chico), rc.es_grande(nueva)], [True, False, True])
+    d1, d2 = t1.date(), t2.date()
+    check("cambios · el rango y el orden: de la más nueva a la más vieja",
+          [e["usr"] for e in rc.filtrar(ed, d1, d2)], ["LUIS", "ANA"])
+    check("cambios · por usuario y por insumo",
+          ([e["usr"] for e in rc.filtrar(ed, d1, d2, usuarios=["ANA"])],
+           len(rc.filtrar(ed, d1, d2, insumos=["Aceite"]))), (["ANA"], 1))
+    check("cambios · por tipo: sólo las ediciones con alguna línea de ese tipo",
+          len(rc.filtrar(ed, d1, d2, tipo="Quitado")), 0)
+    # «NOMB PLATO» en mayúsculas, como viene de R2.
+    rv = pd.DataFrame({"COD INS": ["P1", "P1", "X"], "NOMB PLATO": ["Lomo", "Lomo", "Otro"]})
+    rb2 = pd.DataFrame({"COD RB": ["R9", "R1"], "COD PROD RB": ["Q", "P2"],
+                        "COD INS RB": ["P1", "Z"], "RB NOMBRE": ["(Rs) Base madre", "(Rs) Salsa"]})
+    check("cambios · dónde se usa hoy: platos y recetas base, sin repetir",
+          rc.usos("P1", rv, rb2), (["Lomo"], ["(Rs) Base madre"]))
+    check("cambios · el código de HOY de la receta, no el del log",
+          (rc.codigo_actual(ed[0], rb2), rc.codigo_actual({"rb": "R7", "cod_prod": "P1"}, rb2)),
+          ("P2", "P1"))
+    ctx = rc.ctx_fecha(ed, hoy=datetime.date(2026, 10, 19))
+    check("cambios · la fecha va de la primera edición a hoy y abre en 30 días",
+          (ctx["fecha_min"], ctx["fecha_max"], ctx["rango_default"]),
+          (d1, datetime.date(2026, 10, 19),
+           (datetime.date(2026, 9, 20), datetime.date(2026, 10, 19))))
 
     nodos = [{"cod": "P1", "ins": "(Rs) Salsa", "cant": 200.0, "factor": 1000.0,
               "costo": 0.46, "hijos": [
@@ -10751,10 +10788,12 @@ def _pruebas_costo_recetas_base():
     # ── El rail: el orden y los nombres que se pidieron (2026-09-30) ──────
     visibles = [v for _cat, vistas in rec._RAIL_CATEGORIAS for v in vistas
                 if not v[1].startswith("Tabla")]
-    # «Alza Insumo» se sumó el 2026-10-15, al lado de la carta (regla #656).
+    # «Alza Insumo» se sumó el 2026-10-15, al lado de la carta (regla #656);
+    # «Cambios Recetas Base», el 2026-10-19, al lado de su costo (#671).
     check("el rail, en el orden pedido",
           [v[1] for v in visibles],
-          ["Costo Carta", "Alza Insumo", "Costo Recetas Base", "Revisar", "Nuevo Costeo"])
+          ["Costo Carta", "Alza Insumo", "Costo Recetas Base", "Cambios Recetas Base",
+           "Revisar", "Nuevo Costeo"])
     check("la pila, en el mismo orden",
           [s for _k, s in rec._PILA if not s.startswith("Tabla")],
           [v[0] for v in visibles])

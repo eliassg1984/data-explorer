@@ -2177,6 +2177,148 @@ CSS = """    /* ================================================================
     @media (max-width: 900px) {
         .rec-alza-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
+
+    /* «Cambios Recetas Base» (`rec_card_cambios`, regla #671): la tarjeta y
+       el renglón del título de las demás de Recetas; sus cifras son las de
+       Alza Insumo, en cuatro. Lista | ficha con `COLUMNAS_DRILL_FICHA`. */
+    .st-key-rec_card_cambios {
+        background: var(--bg-card) !important;
+        border: none !important;
+        border-radius: 20px !important;
+        padding: 16px 18px;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+    }
+    .st-key-rec_card_cambios > div { border: none !important; }
+    .st-key-rec_cambios_cab {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 6px;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        overflow: visible !important;
+    }
+    .st-key-rec_cambios_cab .chart-card-hdr {
+        border-bottom: none;
+        margin: 0 6px 0 0;
+        padding: 0;
+    }
+    .st-key-rec_cambios_cab_fecha, .st-key-rec_cambios_cab_receta,
+    .st-key-rec_cambios_cab_insumo, .st-key-rec_cambios_cab_usuario,
+    .st-key-rec_cambios_cab_tipo {
+        position: relative;
+        padding-left: 11px !important;
+        overflow: visible !important;
+    }
+    .st-key-rec_cambios_cab_fecha::after, .st-key-rec_cambios_cab_receta::after,
+    .st-key-rec_cambios_cab_insumo::after, .st-key-rec_cambios_cab_usuario::after,
+    .st-key-rec_cambios_cab_tipo::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 1px;
+        height: 18px;
+        background: var(--border);
+    }
+    .st-key-rec_cambios_cab_fecha::before, .st-key-rec_cambios_cab_receta::before,
+    .st-key-rec_cambios_cab_insumo::before, .st-key-rec_cambios_cab_usuario::before,
+    .st-key-rec_cambios_cab_tipo::before {
+        position: absolute;
+        top: calc(100% + 2px);
+        left: 11px;
+        z-index: 20;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: var(--bg-card);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        color: var(--text-secondary);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .12s ease;
+    }
+    .st-key-rec_cambios_cab_fecha:hover::before, .st-key-rec_cambios_cab_receta:hover::before,
+    .st-key-rec_cambios_cab_insumo:hover::before, .st-key-rec_cambios_cab_usuario:hover::before,
+    .st-key-rec_cambios_cab_tipo:hover::before {
+        opacity: 1;
+    }
+    .st-key-rec_cambios_cab_fecha::before { content: "Fecha de la edición"; }
+    .st-key-rec_cambios_cab_receta::before { content: "Receta base"; }
+    .st-key-rec_cambios_cab_insumo::before { content: "Insumo"; }
+    .st-key-rec_cambios_cab_usuario::before { content: "Usuario"; }
+    .st-key-rec_cambios_cab_tipo::before { content: "Qué cambió"; }
+    .rec-cambios-kpis {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin: 4px 0 2px;
+    }
+    .rec-cambios-meta { margin: 0; font-size: 12px; color: var(--text-muted); }
+    .rec-cambios-aviso {
+        margin-top: 8px;
+        padding: 7px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        background: var(--warning-bg);
+        border: 1px solid var(--warning-border);
+        color: var(--warning-text);
+    }
+    .rec-cambios-costos {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 8px 24px;
+        margin: 8px 0 2px;
+    }
+    .rec-cambios-costos small {
+        display: block;
+        font-size: 10.5px;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+    .rec-cambios-costos b { font-size: 17px; font-variant-numeric: tabular-nums; }
+    .rec-cambios-chip {
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .rec-cambios-chip.sube { background: var(--danger-bg); color: var(--danger-text); }
+    .rec-cambios-chip.baja { background: var(--success-bg); color: var(--success-text); }
+    .rec-cambios-sub {
+        margin: 10px 0 4px;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+    .rec-cambios-usos { display: flex; flex-wrap: wrap; gap: 5px; }
+    .rec-cambios-usos span {
+        padding: 2px 9px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 11.5px;
+    }
+    .rec-cambios-usos span.base { border-style: dashed; }
+    .rec-cambios-hist { max-height: 180px; overflow-y: auto; }
+    .rec-cambios-hist > div {
+        display: grid;
+        grid-template-columns: 74px 90px minmax(0, 1fr) 96px;
+        gap: 8px;
+        padding: 3px 0;
+        border-bottom: 1px dashed var(--line-soft);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+    }
+    .rec-cambios-hist > div.on { color: var(--accent-deep); font-weight: 600; }
+    .rec-cambios-hist > div span:last-child { text-align: right; }
+    .rec-cambios-hist .sube { color: var(--danger-text); }
+    .rec-cambios-hist .baja { color: var(--success-text); }
+    .st-key-rec_cambios_ficha .stMarkdown:last-child { margin-bottom: 0; }
     .st-key-rec_rb_det_cab_ver::before { content: "Ver"; }
     .st-key-rec_rb_cab_ventana::before { content: "Uso y producción en"; }
     .st-key-rec_rb_cab_area::before { content: "Área de la receta"; }

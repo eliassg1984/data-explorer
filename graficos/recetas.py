@@ -13,6 +13,8 @@ dos destinos que un chip alternaba (Receta base / Receta venta). A pedido:
     Costo Recetas Base                    lo que usan las ventas de cada
       (recetabase.parquet +               receta base, lo producido y su
        ordenesproduccion.parquet)         costo por unidad en el tiempo
+    Cambios Recetas Base                  qué insumo o cantidad cambió en
+      (recetabaselog + det)               cada receta base, y quién (#671)
     Revisar                               los cortes que se porcionan y
                                           ninguna receta usa, y los que las
                                           recetas piden y casi no se porcionan
@@ -106,6 +108,7 @@ from graficos.base import (
 from graficos.carta_costeada import ARCHIVO as ARCHIVO_CARTA, render_carta_costeada
 from graficos.recetas_alza import render_alza
 from graficos.recetas_base_costo import ARCHIVO_ORDENES, render_costo_recetas_base
+from graficos.recetas_cambios import render_cambios_recetas_base
 from graficos.recetas_revisar import render_revisar_recetas
 from formulario_receta import render_formulario_receta
 
@@ -144,7 +147,12 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # órdenes, y el costo por unidad en el tiempo; ver
     # `graficos/recetas_base_costo.py`. La Tabla cruda de recetabase sigue
     # en esta categoría, oculta con las demás (regla #507).
+    # «Cambios en recetas base» (2026-10-19, regla #671): qué insumo o qué
+    # cantidad cambió en cada receta base, quién y cuánto movió el costo, del
+    # log del Almacén. Al lado de su costo: una dice cuánto cuestan, la otra
+    # qué les cambiaron. Ver `graficos/recetas_cambios.py`.
     ("Recetas base", (("Costo de recetas base",         "Costo Recetas Base", ":material/timeline:"),
+                      ("Cambios en recetas base",       "Cambios Recetas Base", ":material/history:"),
                       ("Tabla · recetas base",          "Tabla · base",    ":material/table_view:"))),
     # «Revisar recetas» (2026-09-28, regla #559): los cortes que la cocina
     # porciona y ninguna receta usa, y los que las recetas piden y casi no
@@ -173,6 +181,7 @@ _PILA = pila_sin_tablas((
     ("rec_sec_carta",        "Carta costeada"),
     ("rec_sec_alza",         "Alza de insumo"),
     ("rec_sec_costo_rb",     "Costo de recetas base"),
+    ("rec_sec_cambios_rb",   "Cambios en recetas base"),
     ("rec_sec_revisar",      "Revisar recetas"),
     ("rec_sec_nueva",        "Nueva receta"),
     ("rec_sec_tabla_rv",     "Tabla · platos"),
@@ -286,6 +295,12 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         # Lo usado por las ventas lo pide la vista misma. Regla #576.
         render_costo_recetas_base(df_rb, partial(_cargar_reporte, ARCHIVO_ORDENES))
 
+    def _dib_cambios_rb():
+        # El log lo lee la vista (en caché, el mismo que usan los ▼ de Costo
+        # Carta); las dos recetas, sólo para nombrar insumos y decir dónde se
+        # usa cada receta base. Regla #671.
+        render_cambios_recetas_base(df_f, df_rb)
+
     def _dib_tabla_rb():
         with st.container(border=True, key="rec_card_tabla_rb"):
             if df_rb is None:
@@ -297,6 +312,7 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         "rec_sec_carta":        _dib_carta,
         "rec_sec_alza":         _dib_alza,
         "rec_sec_costo_rb":     _dib_costo_rb,
+        "rec_sec_cambios_rb":   _dib_cambios_rb,
         "rec_sec_revisar":      _dib_revisar,
         "rec_sec_nueva":        _dib_nueva,
         "rec_sec_tabla_rv":     _dib_tabla_rv,

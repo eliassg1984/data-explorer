@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-670 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+671 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -277,7 +277,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
 
-**Layout y alturas** (94)
+**Layout y alturas** (95)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -373,6 +373,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
 - **#655** — «Costo por kg útil» muestra de dónde sale cada número: la ventana dice sus días y empieza a…
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
+- **#671** — «Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada receta base, quién y cuánto…
 
 **Plotly y figuras** (117)
 
@@ -999,7 +1000,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (189)
+**Decisiones de diseño y UX** (190)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1190,6 +1191,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 - **#668** — La vista por pedido del Detalle dice el pedido, su horario y su documento
 - **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
+- **#671** — «Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada receta base, quién y cuánto…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -52558,6 +52560,52 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-17.)
 
+671. **«Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada
+     receta base, quién y cuánto movió el costo
+     (`graficos/recetas_cambios.py`).** 2026-10-19, a pedido: «¿puedes
+     identificar qué cantidad o ítem cambió en un mes?». Aprobado sobre un
+     mockup clickeable con los datos reales de octubre. Una vista nueva de
+     Recetas, al lado de «Costo Recetas Base» (no un reporte: una dice
+     cuánto cuestan, la otra qué les cambiaron).
+
+     - **La cuenta no es nueva**: es `simulador_receta.ediciones_base`, la
+       que dibuja los ▼ de la ficha de Costo Carta (#657), con campos de
+       más (`rb`, `antes`, `despues`, `guardados`; `VERSION` 2 → 3). Cada
+       fila del log del Almacén es la receta como estaba ANTES de un
+       guardado; la de después, el guardado siguiente o la receta de hoy.
+       **Verificado contra el SQL** el mismo día: en 1.349 de 1.352
+       guardados la cabecera siguiente dice que su guardado anterior fue
+       ése (`fRegistro` = `fMovimiento` del anterior, ±1 min), o sea que la
+       cadena no se salta ninguno; las 3 excepciones son de enero de 2026 o
+       antes, dos a la medianoche. Y el costo de cada foto es Σ cantidad ×
+       precio de sus líneas en 1.350. Una edición junta los guardados a
+       menos de dos horas, y antes/después van con los precios de ANTES.
+     - **El código de producto de una receta base CAMBIA**: la «Marca
+       Chorizo Criollo» pasó de 0002395 a 0003964, y con el del log ningún
+       plato la llevaba. «Dónde se usa hoy» busca con el código de HOY
+       (`codigo_actual`, de `recetabase.COD PROD RB` por `COD RB`).
+     - **`recetaventa` trae «NOMB PLATO» en mayúsculas en R2** («Nomb
+       Plato» en los datos de prueba): las columnas se buscan sin mirar
+       mayúsculas (`_col`).
+     - **«Cambio grande de costo»** (● en la lista y un aviso en la ficha):
+       ±50 % y al menos S/ 5. Es para mirar, no un error: marca el «Tomate
+       criollo limpio» del 07/10/2026 —se quitaron 1.500 g de tomate y
+       entraron 1.200 g de arúgula, de S/ 10,50 a 100,08— y también la
+       Milanesa de lomo, que cambió el corte a propósito.
+     - **Lista | ficha** con `COLUMNAS_DRILL_FICHA`, la selección de Costo
+       Carta (#556: firma de filas en la key, `single-row-required`), y la
+       fecha de la tarjeta con ctx propio (`ctx_fecha`: de la primera
+       edición a HOY —un día sin ediciones también es un dato—, abre en los
+       últimos 30 días). Los filtros de Receta, Insumo y Usuario son
+       `st.multiselect` con opciones del RANGO (`seleccion_multiple`,
+       `conservar=True`, #625).
+     - **Sólo recetas base**: las de PLATO no tienen log en el POS. Lo más
+       parecido es comparar contra `ALMACENPRUEBA1`, una copia de la base
+       de ~2026-09-06 (82 platos cambiados desde entonces), que es una sola
+       foto y no dice cuándo ni quién.
+
+     (2026-10-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52570,7 +52618,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#670**; la próxima toma el número siguiente.
+> última regla es la **#671**; la próxima toma el número siguiente.
 
 >
 

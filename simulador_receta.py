@@ -45,7 +45,7 @@ import math
 import numpy as np
 import pandas as pd
 
-VERSION = 2
+VERSION = 3
 
 UNIDADES = {
     "GRAMOS": "g", "GRAMO": "g", "MILILITROS": "ml", "MILILITRO": "ml",
@@ -561,7 +561,12 @@ def ediciones_base(mlog, dlog, df_rb):
             cambios.sort(key=lambda z: -abs(z[4]))
             out.append({"cod_prod": gr[0]["prod"], "nombre": gr[-1]["nombre"],
                         "t": gr[0]["t"], "usr": gr[-1]["usr"],
-                        "delta": cd - ca, "cambios": cambios})
+                        "delta": cd - ca, "cambios": cambios,
+                        # Para «Cambios Recetas Base» (regla #671): el costo
+                        # de la receta antes y después, los dos con los
+                        # precios de ANTES, y cuántos guardados se juntaron.
+                        "rb": rb, "antes": ca, "despues": cd,
+                        "guardados": len(gr)})
     return sorted(out, key=lambda e: e["t"])
 
 
