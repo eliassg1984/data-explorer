@@ -5082,6 +5082,12 @@ CSS = """    /* ================================================================
     .st-key-vhh_barra {
         flex-wrap: wrap !important;
         min-height: 0 !important;
+        gap: 8px !important;
+    }
+    .st-key-vhh_barra > div { flex: 0 0 auto !important; width: auto !important; }
+    .st-key-vhh_barra > div:has(.vhh-rot-vacio) { display: none !important; }
+    @media (min-width: 769px) {
+        .st-key-vhh_barra { flex-wrap: nowrap !important; }
     }
     .st-key-vhh_cabecera {
         align-items: center !important;
@@ -6386,6 +6392,37 @@ CSS = """    /* ================================================================
         padding-left: 2px !important;
     }
     .st-key-vh_apariencia { margin-left: auto !important; }
+    /* Etiqueta y valor en una sola línea, sin cambiar labels ni keys. */
+    @media (min-width: 769px) {
+        .st-key-vh_presentacion [data-testid="stSelectbox"] {
+            display: grid !important;
+            grid-template-columns: auto minmax(0, 1fr) !important;
+            align-items: center !important;
+            column-gap: 8px !important;
+        }
+        .st-key-vh_presentacion [data-testid="stWidgetLabel"] {
+            margin: 0 !important;
+            white-space: nowrap !important;
+        }
+        .st-key-vh_presentacion [data-testid="stWidgetLabel"] p {
+            margin: 0 !important;
+        }
+    }
+    .st-key-vh_cab_cols [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .vh-campo-fijo {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        min-height: var(--vh-control-alto, 32px);
+        font-size: 13px;
+        color: var(--text-primary);
+    }
+    .vh-campo-fijo > span:first-child {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
     .st-key-vh_apariencia .stPopover button {
         height: var(--vh-control-alto) !important;
         min-height: var(--vh-control-alto) !important;
@@ -6532,6 +6569,23 @@ CSS = """    /* ================================================================
         }
     }
     @media (max-width: 768px) {
+        .st-key-vhh_cabecera > div:first-child {
+            flex: 0 0 auto !important;
+            width: 100% !important;
+            min-width: 0 !important;
+        }
+        .st-key-vhh_cabecera > .st-key-vhh_barra,
+        .st-key-vhh_cabecera > div:has(.st-key-vhh_barra) {
+            flex: 0 0 auto !important;
+            width: 100% !important;
+        }
+        .st-key-vhh_barra { flex-direction: row !important; flex-wrap: wrap !important; }
+        .st-key-vhh_barra > div { min-width: 0 !important; max-width: 100% !important; }
+        .st-key-vh_op_ficha [data-testid="stButtonGroup"] > div {
+            flex-wrap: wrap !important;
+        }
+        .st-key-vhh_acciones { flex-direction: row !important; }
+        .vh-campo-fijo { align-items: flex-start; flex-direction: column; gap: 3px; }
         .st-key-vh_controles { --vh-control-alto: 40px; --vh-tab-alto: 36px; }
         .st-key-vh_controles .st-key-vh_cabecera {
             flex-direction: column !important;

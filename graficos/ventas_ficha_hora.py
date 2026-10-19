@@ -800,8 +800,8 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
                     f'{_info("normal")}</span>')
     else:
         ver_html = ""
-    # Las acciones pertenecen a toda la ficha y conservan una fila propia
-    # junto al título; no compiten con las pestañas de la mitad derecha.
+    # Título, pestañas y acciones comparten la cabecera completa. Las
+    # acciones no reservan una fila por encima del gráfico de mesas.
     with st.container(horizontal=True, vertical_alignment="center",
                       key="vhh_cabecera"):
         with st.container(width="stretch"):
@@ -812,25 +812,26 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
                 # El subtítulo en el MISMO renglón del título (#565).
                 f'<span class="vhh-sub" title="{sub_tit}">{sub}</span>'
                 f'{ver_html}</p>', unsafe_allow_html=True)
-        with st.container(horizontal=True, width="content", key="vhh_acciones"):
-            if al_ampliar is not None:
-                st.button("Volver al mapa" if ampliado else "Ampliar",
-                          key="vh_detalle_ampliar", on_click=al_ampliar,
-                          icon=":material/close_fullscreen:" if ampliado else
-                               ":material/open_in_full:")
-            st.button("Cerrar", key="vh_foco_cerrar",
-                      icon=":material/close:", on_click=al_cerrar)
-    # columnas-internas: comparación y los ocho factores por mesa (#567).
-    c_a, _hueco, c_b = st.columns([5, 1, 6], gap="large")
-    with c_b:
-        with st.container(horizontal=True, vertical_alignment="center", key="vhh_barra"):
+        with st.container(horizontal=True, vertical_alignment="center",
+                          width="content", key="vhh_barra"):
             vista = st.pills("Ver", list(VISTAS), key=_K_VISTA,
                              label_visibility="collapsed") or VISTAS[0]
-            if vista == VISTAS[0]:
-                with st.container(key="vhh_rot_mesa", width="content"):
+            with st.container(key="vhh_rot_mesa", width="content"):
+                if vista == VISTAS[0]:
                     st.markdown(f'<p class="vhh-h3 vhh-h3-barra">Por mesa '
                                 f'{_info("mesa")}</p>', unsafe_allow_html=True)
-    with c_a:
+                else:
+                    st.markdown('<span class="vhh-rot-vacio"></span>', unsafe_allow_html=True)
+            with st.container(horizontal=True, width="content", key="vhh_acciones"):
+                if al_ampliar is not None:
+                    st.button("Volver al mapa" if ampliado else "Ampliar",
+                              key="vh_detalle_ampliar", on_click=al_ampliar,
+                              icon=":material/close_fullscreen:" if ampliado else
+                                   ":material/open_in_full:")
+                st.button("Cerrar", key="vh_foco_cerrar",
+                          icon=":material/close:", on_click=al_cerrar)
+
+    def resumen():
         st.markdown(
             f'<p class="vhh-kpis"><span>Venta<b>{_soles(v_hora)}</b></span>'
             f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Gasto/persona<b>'
@@ -850,7 +851,10 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
                 'Eventos» los saca del mapa.</div>', unsafe_allow_html=True)
 
     if vista == VISTAS[0]:
+        # columnas-internas: comparación y ocho factores por mesa (#567).
+        c_a, _hueco, c_b = st.columns([5, 1, 6], gap="large")
         with c_a:
+            resumen()
             st.markdown(_html_normal(v_hora, previas, dow, hora,
                                      con_rotulo=False),
                         unsafe_allow_html=True)
@@ -864,6 +868,7 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
         # columnas-internas: quién atendió y los pedidos de la hora
         c_c, c_d = st.columns([5, 7], gap="large")
         with c_c:
+            resumen()
             st.markdown(_html_meseros(pc, met), unsafe_allow_html=True)
         with c_d:
             st.markdown(_html_pedidos(pc, items), unsafe_allow_html=True)
@@ -874,6 +879,7 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar,
     # columnas-internas: el número del salón y la línea de mesas abiertas
     c_c, c_d = st.columns([3, 9], gap="large")
     with c_c:
+        resumen()
         salon = st.number_input(
             "Mesas del salón (opcional)", min_value=0, max_value=300, step=1,
             value=int(salon), key=_K_SALON,

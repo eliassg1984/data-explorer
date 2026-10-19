@@ -3406,8 +3406,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             if en_filas:
                 # Las matrices sin horas pertenecen al Mix de Ventas.
                 # Esta vista conserva siempre una dimensión horaria.
-                st.caption("Columnas")
-                st.markdown("Hora")
+                st.markdown('<span class="vh-campo-fijo"><span>Columnas</span>'
+                            '<span>Hora</span></span>', unsafe_allow_html=True)
                 cols_filas = _COLS_FILAS[0]
                 cols_dias = _COLS_DIAS[0]
             else:

@@ -49398,6 +49398,12 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      la segunda fila, con sus etiquetas permanentes. El bloque de contexto
      puede envolver; en móvil su base flex vuelve a auto para no reservar
      altura como si fuera ancho. Ampliar oculta también ese bloque.
+     En escritorio, Filas/Columnas/Medida/Cálculo conservan labels nativos
+     y los colocan junto al valor en una sola línea; en móvil vuelven al
+     formato vertical. En Horas, título, pestañas y acciones comparten
+     toda la cabecera. Mesas del salón coloca el resumen y la capacidad
+     a la izquierda del gráfico, y Pedidos conserva su resumen junto a
+     los meseros; no hay una fila vacía de acciones encima del contenido.
 
      El
      interruptor del renglón del título alterna el mapa de calor simple,
