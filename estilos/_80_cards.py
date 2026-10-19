@@ -1697,7 +1697,8 @@ CSS = """    /* ================================================================
     /* pedido: «son muy gruesos y empujan el gráfico hacia abajo»): 24px */
     /* de alto contra los ~34 de una pastilla de Streamlit. La leyenda   */
     /* empuja los botones a la derecha. Regla #586.                      */
-    .st-key-sunat_res_cab {
+    .st-key-sunat_res_cab,
+    .st-key-sunat_tipo_cab {
         min-height: 0 !important;
     }
     /* Entre el renglón de los controles y lo de abajo, la mitad del gap */
@@ -1707,12 +1708,14 @@ CSS = """    /* ================================================================
     .st-key-sunat_abajo_cuerpo {
         gap: 8px !important;
     }
-    .st-key-sunat_res_cab [data-testid="stElementContainer"]:first-child {
+    .st-key-sunat_res_cab [data-testid="stElementContainer"]:first-child,
+    .st-key-sunat_tipo_cab [data-testid="stElementContainer"]:first-child {
         margin-right: auto;
     }
     .st-key-sunat_res_medida button,
     .st-key-sunat_res_anios button,
-    .st-key-sunat_res_vista button {
+    .st-key-sunat_res_vista button,
+    .st-key-sunat_tipo_medida button {
         min-height: 24px !important;
         height: 24px !important;
         padding: 0 10px !important;
@@ -1721,7 +1724,8 @@ CSS = """    /* ================================================================
     }
     .st-key-sunat_res_medida p,
     .st-key-sunat_res_anios p,
-    .st-key-sunat_res_vista p {
+    .st-key-sunat_res_vista p,
+    .st-key-sunat_tipo_medida p {
         font-size: 11.5px !important;
     }
 

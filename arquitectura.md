@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-671 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+672 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -867,7 +867,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
 - **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
 
-**SUNAT y SIRE** (59)
+**SUNAT y SIRE** (60)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -928,6 +928,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#640** — «Tipo» en Documentos SUNAT: QUÉ se compró —Alimentos, Otros bienes, Servicios o Financiero—.…
 - **#652** — «Análisis de diferencias» dice QUIÉN PIDE cada producto y qué factura de SUNAT sin ingresar…
 - **#668** — La vista por pedido del Detalle dice el pedido, su horario y su documento
+- **#672** — Documentos SUNAT: la tarjeta de abajo ABRE en la fidelidad, y suma «Por tipo de compra»…
 
 **Fechas, rangos y cortes** (17)
 
@@ -1000,7 +1001,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (190)
+**Decisiones de diseño y UX** (191)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1192,6 +1193,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#668** — La vista por pedido del Detalle dice el pedido, su horario y su documento
 - **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
 - **#671** — «Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada receta base, quién y cuánto…
+- **#672** — Documentos SUNAT: la tarjeta de abajo ABRE en la fidelidad, y suma «Por tipo de compra»…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -52606,6 +52608,34 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-19.)
 
+672. **Documentos SUNAT: la tarjeta de abajo ABRE en la fidelidad, y suma
+     «Por tipo de compra» (`documentos_sunat.py::_MODO_ABAJO_INICIAL`,
+     `_panel_por_tipo`).** 2026-10-19, a pedido: «que este cruce sea el
+     gráfico que primero se muestre en la parte de abajo» y «una que
+     muestre agrupada por tipo».
+
+     - **Abría en «Este proveedor»**, que depende de la fila elegida: al
+       entrar al reporte mostraba la serie del primer proveedor de la
+       tabla, que nadie había pedido. El «Resumen del cruce» (#630) es del
+       período entero. Es un DEFAULT: lo elegido después sigue en
+       `sunat_graf_modo__eco`.
+     - **«Por tipo de compra» es la barra de fidelidad con una fila por
+       tipo** (Alimentos, Otros bienes, Servicios, Financiero de
+       `tipo_compra.TIPOS`, y «Sin clasificar» al final), no una torta: el
+       renglón dice cuánto se compró de ese tipo y su %, la barra cuánto
+       de eso está cargado. `_barras_fidelidad` acepta filas que no son
+       períodos (`cab`, y por fila `sub` y `actual=False`). Mismo censo que
+       el resumen (rango, «Mes en SUNAT», proveedor; el estado no), así que
+       las filas suman lo que dice el resumen. Abre en SOLES.
+     - **Lo que dejó ver el primer día** (12 meses a 19 oct 2026, sobre
+       S/ 4,35 M en SUNAT): Financiero es el 25 % de lo facturado y está
+       100 % sin cargar (los bancos), Servicios el 17 % con sólo el 14 %
+       cargado, y «Sin clasificar» el 6 %, también todo sin cargar. La
+       fidelidad «en soles» del resumen la arrastran esos tres, no la
+       mercadería: Alimentos y Otros bienes cuadran al 85-87 %.
+
+     (2026-10-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52618,7 +52648,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#671**; la próxima toma el número siguiente.
+> última regla es la **#672**; la próxima toma el número siguiente.
 
 >
 

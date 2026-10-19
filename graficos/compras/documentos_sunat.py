@@ -3668,11 +3668,21 @@ def _necesita_conversor(doc, fila_cruce):
 
 _MODO_CONVERSOR = "Conversor SUNAT-Sistema"
 _MODO_RESUMEN = "Resumen del cruce"
-_MODOS_ABAJO = _MODOS_GRAFICO + (_MODO_RESUMEN, _MODO_CONVERSOR)
+_MODO_POR_TIPO = "Por tipo de compra"
+_MODOS_ABAJO = _MODOS_GRAFICO + (_MODO_RESUMEN, _MODO_POR_TIPO,
+                                 _MODO_CONVERSOR)
 """Las opciones del selector de la tarjeta de abajo: los tres modos del
 gráfico y el conversor. UN selector y no dos (gráfico/conversor y, adentro,
 el modo del gráfico) porque son cuatro vistas excluyentes de la misma
 tarjeta, y dos filas de botones le costarían alto a la pantalla única."""
+
+_MODO_ABAJO_INICIAL = _MODO_RESUMEN
+"""Con qué vista ABRE la tarjeta de abajo: la fidelidad respecto de SUNAT
+(2026-10-19, a pedido: «que este cruce sea el gráfico que primero se
+muestre»). Hasta ese día abría en «Este proveedor», que depende de la fila
+elegida y al entrar al reporte mostraba al primer proveedor de la lista.
+Es un default: lo que el usuario elige después se recuerda en
+`_K_MODO_ABAJO`. Regla #672."""
 
 
 _COMPARACIONES = {"Año pasado": 1, "Hace 2 años": 2}
@@ -3872,6 +3882,79 @@ def _panel_resumen(d, resumen):
             + "<br>".join(avisos) + "</div>", unsafe_allow_html=True)
 
 
+_SIN_TIPO = "Sin clasificar"
+
+
+def _panel_por_tipo(resumen):
+    """«Por tipo de compra»: lo del período agrupado por QUÉ se compró
+    —Alimentos, Otros bienes, Servicios, Financiero (`tipo_compra.py`,
+    regla #640)— y, en cada tipo, la misma barra de fidelidad que el
+    «Resumen del cruce». 2026-10-19, a pedido. Regla #672.
+
+    Una fila por tipo y no una torta: lo que se compró de cada uno se lee
+    en el renglón (soles y su % del total), y la barra dice cuánto de eso
+    ya está cargado. Juntas responden lo que una torta no: cuánto baja la
+    fidelidad entera un tipo que nadie carga (los bancos facturan, y su
+    comisión no entra al Almacén).
+
+    Mismo censo que el resumen (rango, «Mes en SUNAT» y proveedor; el
+    filtro de estado no), así que las filas suman lo que dice el resumen.
+    Abre en SOLES: «qué se compró» se pregunta en plata; un documento de
+    S/ 15 del banco pesa lo que uno de S/ 4.000 de carne.
+    """
+    censo = (resumen or {}).get("censo")
+    if censo is None or getattr(censo, "empty", True):
+        st.caption("Sin comprobantes en el rango para resumir.")
+        return
+    tipo = (censo["tipo"].fillna("").astype(str).str.strip()
+            if "tipo" in censo.columns
+            else pd.Series("", index=censo.index))
+    tipo = tipo.where(~tipo.isin(("", "—")), _SIN_TIPO)
+
+    with st.container(horizontal=True, vertical_alignment="center",
+                      gap="small", key="sunat_tipo_cab"):
+        _slot_kpi = st.empty()
+        medida = st.pills(
+            "Medir en", ["soles", "doc"], selection_mode="single",
+            default="soles", key="sunat_tipo_medida",
+            format_func=lambda m: "Documentos" if m == "doc" else "Soles",
+            label_visibility="collapsed") or "soles"
+
+    base_total = _fidelidad_cruce(censo)[medida]["sunat"]
+    orden = [t for t in tipo_compra.TIPOS if (tipo == t).any()]
+    orden += sorted(set(tipo) - set(orden) - {_SIN_TIPO})
+    if (tipo == _SIN_TIPO).any():
+        orden.append(_SIN_TIPO)
+    filas, partes = [], []
+    for t in orden:
+        f = _fidelidad_cruce(censo[tipo == t])
+        v = f[medida]["sunat"]
+        pct = _pct_de(v, base_total)
+        sub = (f'{_valor_fid(v, medida, corto=True)} en SUNAT'
+               + (f' · {pct}' if pct else ""))
+        filas.append({"edad": 0, "actual": False, "rango": t, "sub": sub,
+                      "f": f})
+        if pct:
+            partes.append(f"{t} {pct}")
+
+    rango = _rotulo_rango(resumen["f_ini"], resumen["f_fin"])
+    nota = ("Tipo = qué se compró, según el Almacén y el registro de SUNAT "
+            "(columna «Tipo» de la tabla). Cada barra reparte lo que SUNAT "
+            "reporta de ese tipo entre cargado y cuadra, cargado con "
+            "diferencia y falta cargar. Lo cargado sin comprobante en SUNAT "
+            "va aparte y no suma al 100 %.")
+    que = " documentos" if medida == "doc" else ""
+    _slot_kpi.markdown(
+        f'<div class="sunat-fid-kpi" title="{html.escape(nota)}">'
+        '<div class="sunat-fid-kpi-rot">Qué se compró · según SUNAT</div>'
+        '<div class="sunat-fid-kpi-fila"><span class="sunat-fid-kpi-val">'
+        f'{_valor_fid(base_total, medida)}{que}</span></div>'
+        f'<div class="sunat-fid-kpi-sub">{html.escape(" · ".join(partes))}'
+        f' · {rango}</div></div>', unsafe_allow_html=True)
+    st.markdown(_barras_fidelidad(filas, medida, cab="Tipo"),
+                unsafe_allow_html=True)
+
+
 def _kpi_fidelidad_html(periodos, medida, nota):
     """La fidelidad del período actual, grande, con la diferencia en puntos
     contra el período anterior más cercano que se esté comparando."""
@@ -3913,9 +3996,14 @@ def _kpi_fidelidad_html(periodos, medida, nota):
         f'<div class="sunat-fid-kpi-sub">{sub}</div></div>')
 
 
-def _barras_fidelidad(periodos, medida):
+def _barras_fidelidad(periodos, medida, cab="Período"):
     """Una barra apilada al 100 % por período: en qué se reparte lo que
     reporta SUNAT. Al costado, «Fuera de SUNAT», punteado.
+
+    Las filas no tienen por qué ser períodos: «Por tipo de compra» le pasa
+    una por tipo (`_panel_por_tipo`), con `cab` = «Tipo» y, en cada fila,
+    su propio `sub` y `actual=False` — así ninguna sale resaltada ni carga
+    la nota de lo reciente, que es del período actual.
 
     HTML y no Plotly: son tres barras horizontales con su texto adentro, y
     el tooltip de cada tramo es el del navegador (`title`). Los colores
@@ -3929,7 +4017,7 @@ def _barras_fidelidad(periodos, medida):
         f'</i>{nombre}</span>' for clave, _e, nombre, ayuda in _TRAMOS_FIDELIDAD)
     filas = [
         '<div class="sunat-fid-fila sunat-fid-cab">'
-        '<div class="sunat-fid-per">Período</div>'
+        f'<div class="sunat-fid-per">{html.escape(cab)}</div>'
         f'<div class="sunat-fid-medio"><span>Qué pasó con {que}</span>'
         f'<span class="sunat-fid-leyenda">{leyenda}</span></div>'
         f'<div class="sunat-fid-fuera-col" title="{html.escape(_AYUDA_FUERA)}">'
@@ -3938,9 +4026,9 @@ def _barras_fidelidad(periodos, medida):
     for p in periodos:
         f = p["f"][medida]
         base = f["sunat"]
-        actual = p["edad"] == 0
-        sub = (f'{_valor_fid(base, medida, corto=True)} en SUNAT'
-               + (" · actual" if actual else ""))
+        actual = p.get("actual", p["edad"] == 0)
+        sub = p.get("sub") or (f'{_valor_fid(base, medida, corto=True)} en '
+                               f'SUNAT' + (" · actual" if actual else ""))
         tramos = []
         for clave, _e, nombre, ayuda in _TRAMOS_FIDELIDAD:
             v = f[clave]
@@ -4122,9 +4210,9 @@ def _panel_abajo(vis, doc, fila_cruce, d, resumen=None):
     tabla: el botón «📄 Ver <doc>» que vivía al costado del selector
     se quitó a pedido (2026-10-02).
     """
-    modo = st.session_state.get(_K_MODO_ABAJO, _MODOS_GRAFICO[0])
+    modo = st.session_state.get(_K_MODO_ABAJO, _MODO_ABAJO_INICIAL)
     if modo not in _MODOS_ABAJO:
-        modo = _MODOS_GRAFICO[0]
+        modo = _MODO_ABAJO_INICIAL
 
     # EL SELECTOR ES UNA COLUMNA DE ÍCONOS AL COSTADO, no un renglón arriba
     # (2026-10-02, a pedido: «que los toggles no me ocupen una fila»). Un
@@ -4153,6 +4241,7 @@ _ICONOS_ABAJO = {
     "Por fecha": ":material/calendar_month:",
     "Por proveedor": ":material/leaderboard:",
     _MODO_RESUMEN: ":material/bar_chart:",
+    _MODO_POR_TIPO: ":material/category:",
     _MODO_CONVERSOR: ":material/swap_horiz:",
 }
 """Un ícono por vista de `_MODOS_ABAJO`, en el mismo orden."""
@@ -4160,7 +4249,7 @@ _ICONOS_ABAJO = {
 _SLUG_ABAJO = {
     "Este proveedor": "este_prov", "Por fecha": "fecha",
     "Por proveedor": "por_prov", _MODO_RESUMEN: "resumen",
-    _MODO_CONVERSOR: "conversor",
+    _MODO_POR_TIPO: "por_tipo", _MODO_CONVERSOR: "conversor",
 }
 
 
@@ -4172,6 +4261,8 @@ def _contenido_abajo(modo, vis, doc, fila_cruce, d, resumen):
     """Lo que dibuja la tarjeta de abajo para la vista `modo`."""
     if modo == _MODO_RESUMEN:
         _panel_resumen(d, resumen)
+    elif modo == _MODO_POR_TIPO:
+        _panel_por_tipo(resumen)
     elif modo != _MODO_CONVERSOR:
         _panel_grafico(vis, doc, modo)
     elif doc is not None and not _necesita_conversor(doc, fila_cruce):
