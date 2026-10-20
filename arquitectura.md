@@ -51438,6 +51438,57 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-19.)
 
+     **Addendum (2026-10-19): el nombre del POS, lo que DEJÓ de descargarse y
+     los porcionamientos por área (`VERSION` 12).** El usuario, sobre cuatro
+     líneas del cierre de setiembre 2026:
+
+     - **«Descargo de Ventas», no «descontar».** Es el nombre del proceso en
+       el POS y en el kardex. «Vendido y sin descontar al contar» pasa a
+       «Vendido y sin descargar al contar», y su tarjeta y sus textos dicen
+       «el Descargo de Ventas». Verificado en el POS con el Lomo fino al
+       trapo: los tres pedidos del 30 set que llevan el Lomo al Trapo 1kg
+       (2600011579, 11595, 11599) tienen `INFOREST.DBO.DPEDIDO.lTransferido`
+       vacío en todos sus ítems, y los del 28 set, en 1: el 30 set no lo tomó
+       ningún Descargo de Ventas, que es lo que la pista ya deducía del
+       calendario (`descargosventas.parquet`). `lTransferido` es la marca
+       por pedido; hoy no llega a ningún parquet.
+     - **«Dejó de descargarse por ventas»** (`dejo_de_descargarse`). El Aceite
+       Frituras de Cocina salía «No se vendió nada que lo lleve» (sólo lo
+       lleva Huevo Frito), y lo importante era otra cosa: el Descargo de
+       Ventas lo bajaba desde Cocina 160–170 L al mes de noviembre 2025 a
+       marzo 2026, 30 L en abril y casi nada desde mayo, mientras Cocina lo
+       sigue pidiendo (80 L entre los dos conteos). Se quitó de las recetas
+       que lo llevaban. La pista sale si el mes en que más bajó vale S/ 20 o
+       más, el último mes con al menos un cuarto de eso es dos o más meses
+       anterior al conteo anterior, y al área le siguió ENTRANDO: un vino que
+       no se vende desde junio y nadie pide sigue siendo «no se vendió».
+     - **Un porcionamiento registrado después del conteo no es «el de lo que
+       falta».** «Porcionamiento registrado tarde» desaparece: nada dice que
+       el porcionamiento del 13 oct del Tomahawk de cerdo sea de lo que se
+       porcionó antes de contar. Y los porcionamientos se miran por ÁREA
+       (`sin_porcionar`, con el 96 del kardex): el Tomahawk se porcionó
+       cuatro veces entre los dos conteos, pero desde Producción; en Cocina no
+       se movió. Ahora dice «Se porcionó desde otra área» o «No se porcionó»,
+       posible, y si sus cortes no sobran lo dice: si se hubiera porcionado
+       sin registrar, sobrarían. Si sobra un corte, eso es lo que explica el
+       faltante, con el nombre que le puso el usuario: «No se porcionó en el
+       sistema» (la pista `prod` por porcionamiento, en los dos lados).
+     - **Las relaciones de porcionamiento, sólo hasta la sesión.** La
+       Milanesa de Tomahawk se porcionó al revés el 15 oct (a «Tomahawk de
+       cerdo x und», el código que pide la receta de la Milanesa de
+       Cotoletta); con eso parecía un producto que «sale al porcionarse» y
+       se le ofrecía ese porcionamiento como registrado tarde.
+     - **«Mismo rubro» era la palabra de la cuenta**, y el usuario preguntó
+       qué quería decir: es la primera palabra del nombre que dice qué es
+       (`sin_plato.palabra_clave`). Ahora la pista se llama «Sobra (Falta)
+       uno de nombre parecido» y nombra la palabra: la Masa Tarta de queso
+       (−7,31 kg) y la Masa creme brulee (+7,25 kg), «masa».
+     - **La orden de producción posterior al conteo, igual**: «Su orden se
+       registró tarde» pasa a «Su receta base no se produjo», con la fecha
+       de la orden siguiente como un hecho.
+
+     (2026-10-19.)
+
 651. **«Análisis de diferencias» mira los COMBOS, no descarta las líneas
      sin precio y reconoce lo vendido con el código de otro producto.**
      2026-10-13, sobre la #650. En `diferencias_ajuste.py`

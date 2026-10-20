@@ -1291,7 +1291,7 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   paloteo (`paloteoinsumosnivel1.parquet`, `TIPO PRODUCTO` = «C»). Hasta
   el 2026-10-18 se deducía comparando totales del kardex, y una coincidencia
   acusó al Reto Malbec, que el combo sí había descontado.
-- **Lo vendido y sin descontar al contar** (anexo de la #650): el descargo de ventas
+- **Lo vendido y sin descargar al contar** (anexo de la #650): el Descargo de Ventas
   se corre a mano por la mañana, así que lo vendido desde el último hasta
   la hora del conteo sigue en el sistema y falta sin ser pérdida. Y desde
   2026 cada corrida va del 1 del mes a la mañana del día: el ÚLTIMO día del
@@ -1337,6 +1337,14 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   otros que salen siempre por notas (comida de personal, uso en el área).
   Y lo que no se vendió se aconseja según qué es: un vino no «falta en una
   receta».
+- **Un registro posterior al conteo no es «el que faltaba»**: ni un
+  porcionamiento ni una orden después del conteo se dan por lo hecho antes,
+  y los porcionamientos se miran por ÁREA (el 96 del kardex): el Tomahawk
+  se porcionó desde Producción, y en Cocina no se movió. Si sobra el
+  corte, «No se porcionó en el sistema». Y lo que el Descargo de Ventas
+  bajaba y dejó de bajar mientras el área lo sigue pidiendo es una receta
+  que ya no lo lleva: «Dejó de descargarse por ventas» (el Aceite Frituras
+  de Cocina). Anexo de la #650, 2026-10-19.
 - **Tocar la cuenta es subir `diferencias_ajuste.VERSION`.**
 
 ## El consumo según recetas baja hasta lo que se COMPRA

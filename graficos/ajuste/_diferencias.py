@@ -701,21 +701,21 @@ def _kpi_sin_descontar(lin, lote):
     dias = da.dias_txt(lote.get("dias_antes") or [])
     sig, desde = lote.get("siguiente"), lote.get("desde")
     exacto = bool(lote.get("exacto"))
-    ayuda = (f"Al contar, el POS no había descontado lo vendido desde su último descargo, el "
+    ayuda = (f"Al contar, el Descargo de Ventas no había bajado lo vendido desde el último, el "
              f"{da.cuando(lote['ultimo'], minutos=exacto)}: ≈ {_soles(v, signo=False)} a costo en "
              f"{n:,} líneas, que figuran como faltante sin ser pérdida.")
     if ant >= 1 and dias:
         ayuda += (f" {_soles(ant, signo=False)} son del {dias}: el ajuste se abre después de "
                   "descargar las ventas hasta el día anterior, y no se descargaron.")
     if sig is not None and desde is not None and nunca >= 1:
-        ayuda += (f" El descargo siguiente, el {da.fecha_corta(sig)}, tomó lo vendido desde el "
-                  f"{da.cuando(desde, minutos=exacto)}: {_soles(nunca, signo=False)} no se "
-                  "descontarán nunca; el resto volverá como sobrante en el próximo conteo.")
+        ayuda += (f" El Descargo de Ventas siguiente, el {da.fecha_corta(sig)}, tomó lo vendido "
+                  f"desde el {da.cuando(desde, minutos=exacto)}: {_soles(nunca, signo=False)} no "
+                  "se descargarán nunca; el resto volverá como sobrante en el próximo conteo.")
     elif sig is not None:
-        ayuda += (f" El descargo siguiente fue el {da.fecha_corta(sig)}: lo que tomó volverá "
+        ayuda += (f" El Descargo de Ventas siguiente fue el {da.fecha_corta(sig)}: lo que tomó volverá "
                   "como sobrante en el próximo conteo.")
-    ayuda += " Están en la pista «Sin descontar»."
-    return _tarjeta("Sin descontar al contar", _soles(v, signo=False), ayuda, cls="al")
+    ayuda += " Están en la pista «Sin descargar»."
+    return _tarjeta("Sin descargar al contar", _soles(v, signo=False), ayuda, cls="al")
 
 
 def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,

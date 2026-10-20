@@ -9035,7 +9035,7 @@ def _pruebas_diferencias_area_descargo():
     de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
     p60 = [p for p in F[de[(10, "60")]["id"]]["pistas"] if p["t"] == "desc"]
     check("se descontó desde un área a la que ya no apunta su receta",
-          [(p["ti"], p["f"]) for p in p60], [("Se descontó desde otra área", 1)])
+          [(p["ti"], p["f"]) for p in p60], [("Se descargó desde otra área", 1)])
     check("nombra el plato editado y el área de hoy",
           "Pollito Bebe Tostado se editó el 7 oct y hoy lo descarga desde Cocina" in p60[0]["tx"],
           True)
@@ -9061,6 +9061,12 @@ def _pruebas_diferencias_perfil():
       3. NADA EN 180 DÍAS: «Ninguna receta lo usa», como antes.
       4. UNA BEBIDA que no se vendió no «falta en una receta»: el consejo es
          el de las bebidas, y dice que antes sí se vendía.
+      5. LO QUE DEJÓ DE DESCARGARSE (2026-10-19): el Aceite Frituras de
+         Cocina, que el Descargo de Ventas bajaba hasta abril y Cocina sigue
+         pidiendo: no es «no se vendió», es una receta que ya no lo lleva.
+      6. LO QUE SALE AL PORCIONARSE se mira por ÁREA, y un porcionamiento
+         registrado después del conteo no se da por el de lo que falta (el
+         Tomahawk de cerdo, porcionado desde Producción).
     """
     import pandas as pd
 
@@ -9082,7 +9088,9 @@ def _pruebas_diferencias_perfil():
             71: ("Zanahoria", "KILOS", 2.0, "ALIMENTOS"),
             72: ("Bowl Ensaladera Bio 1300 Ml", "UND", 1.0, "ENVASES Y EMBALAJES"),
             73: ("Hueso De Pollo", "KILOS", 4.0, "ALIMENTOS"),
-            74: ("Varietal Malbec Roble 750ml", "UND", 55.0, "VINOS Y ESPUMANTES")}
+            74: ("Varietal Malbec Roble 750ml", "UND", 55.0, "VINOS Y ESPUMANTES"),
+            75: ("Aceite Frituras", "LITROS", 7.0, "ALIMENTOS"),
+            76: ("Tomahawk de cerdo x Kg", "KILOS", 40.0, "ALIMENTOS")}
 
     def fila(t, a, c, s, k):
         n, u, p, fam = PROD[c]
@@ -9092,7 +9100,8 @@ def _pruebas_diferencias_perfil():
                 "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
                 "PRECIO PROMEDIO": p, "AJUSTE VALORIZADO": (k - s) * p}
     t0, t1 = "2026-09-16 17:30", "2026-10-01 17:35"
-    lineas = ((1, 70, 500, 200), (6, 71, 30, 16), (1, 72, 50, 30), (6, 73, 40, 0), (2, 74, 6, 0))
+    lineas = ((1, 70, 500, 200), (6, 71, 30, 16), (1, 72, 50, 30), (6, 73, 40, 0), (2, 74, 6, 0),
+              (1, 75, 80, 0), (1, 76, 6, 0))
     ajuste = pd.DataFrame([fila(t0, a, c, s, s) for a, c, s, _ in lineas]
                           + [fila(t1, *x) for x in lineas])
 
@@ -9104,7 +9113,10 @@ def _pruebas_diferencias_perfil():
     kardex = pd.DataFrame([kx("2026-06-15 10:00", 1, 70, "98", 1750.0),
                            kx("2026-06-15 10:00", 6, 71, "98", 180.0),
                            kx("2026-06-15 10:00", 1, 72, "95", 1190.0),
-                           kx("2026-06-15 10:00", 2, 74, "95", 23.0)])
+                           kx("2026-06-15 10:00", 2, 74, "95", 23.0),
+                           kx("2026-04-10 23:00", 1, 75, "95", 200.0),
+                           dict(kx("2026-09-25 13:00", 1, 75, "99", 0.0), **{"CANT INGRESO": 80.0}),
+                           kx("2026-09-28 17:25", 6, 76, "96", 10.0)])
     salidas = pd.DataFrame([
         {"NOMBRE ESTADO SALIDA": "PROCESADO", "AREA": a, "COD PRODUCTO": f"{c:07d}",
          "FECHA PROCESADO": pd.Timestamp("2026-06-15 10:00"), "CANT SALIDA": q,
@@ -9119,13 +9131,24 @@ def _pruebas_diferencias_perfil():
         {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
          "COD PLATO": "0000802", "NOMB PLATO": "Ensalada de la casa",
          "COD INS": "0000071", "CANTIDAD": 0.1, "FACTOR": 1.0, "SUBALM INS": "PRODUCCION",
+         "T DESCARG": "PRODUCTO", "FECH MODIF": pd.Timestamp("2026-05-01")},
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+         "COD PLATO": "0000803", "NOMB PLATO": "Huevo Frito",
+         "COD INS": "0000075", "CANTIDAD": 0.03, "FACTOR": 1.0, "SUBALM INS": "COCINA",
          "T DESCARG": "PRODUCTO", "FECH MODIF": pd.Timestamp("2026-05-01")}])
     vacia = lambda *cols: pd.DataFrame(columns=list(cols))
     rb = vacia("RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO", "CANT",
                "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG")
     carta = vacia("TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA")
-    porc = vacia("COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT", "PROD INICIAL",
-                 "COD PORC", "FEC REGIST", "CANT A PORCIONAR")
+    # El Tomahawk se porcionó el 28 set DESDE PRODUCCIÓN, y otra vez el 13
+    # oct, después del conteo.
+    porc = pd.DataFrame([
+        {"COD PROD INIC": "0000076", "COD PROD FINAL": "0000077",
+         "PROD FINAL RESULT": "(P) Milanesa de Tomahawk x und",
+         "PROD INICIAL": "Tomahawk de cerdo x Kg", "COD PORC": n, "FEC REGIST": pd.Timestamp(f),
+         "CANT A PORCIONAR": q}
+        for n, f, q in (("2609000267", "2026-09-28 17:25", 10.0),
+                        ("2610000101", "2026-10-13 15:15", 19.6))])
     ordenes = vacia("NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO", "CANTIDAD")
     venta = vacia("producto", "dia", "unidades", "costo", "unidades_costeadas")
     ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
@@ -9159,6 +9182,21 @@ def _pruebas_diferencias_perfil():
     check("con el consejo de las bebidas y lo que antes sí se vendía",
           ("vendido con otro código" in vino[0]["tx"], "sí se vendió (23 und)" in vino[0]["tx"]),
           (True, True))
+    # 5 — dejó de descargarse
+    ace = [p for p in F[de[(1, "75")]["id"]]["pistas"] if p["t"] == "nada"]
+    check("el aceite: «Dejó de descargarse por ventas», fuerte",
+          [(p["ti"], p["f"]) for p in ace], [("Dejó de descargarse por ventas", 1)])
+    check("con hasta cuándo, con el nombre del POS y en singular",
+          ("Hasta el 10 abr, el Descargo de Ventas lo bajaba desde Cocina (200 L en abr 2026)"
+           in ace[0]["tx"], "Huevo Frito, que no se vendió." in ace[0]["tx"]), (True, True))
+    # 6 — porcionado desde otra área, sin «registrado tarde»
+    tom = [p for p in F[de[(1, "76")]["id"]]["pistas"] if p["t"] == "nada"]
+    check("el Tomahawk: «Se porcionó desde otra área», posible",
+          [(p["ti"], p["f"]) for p in tom], [("Se porcionó desde otra área", 0)])
+    check("dice desde dónde, el corte que no sobra, y no ofrece el del 13 oct",
+          ("pero desde Produccion (10 kg): desde Cocina, ninguno" in tom[0]["tx"],
+           "(P) Milanesa de Tomahawk x und" in tom[0]["tx"], "13 oct" in tom[0]["tx"],
+           "tarde" in tom[0]["tx"]), (True, True, False, False))
     return fallos
 
 
@@ -9280,7 +9318,7 @@ def _pruebas_diferencias_sin_descontar():
     # 1 — el faltante
     p_ = lote(1, "50")
     check("lo vendido y sin descontar al contar, fuerte: es todo lo que falta",
-          [(p["ti"], p["f"]) for p in p_], [("Vendido y sin descontar al contar", 1)])
+          [(p["ti"], p["f"]) for p in p_], [("Vendido y sin descargar al contar", 1)])
     check("y lo del 30 set debía descargarse antes de abrir el ajuste",
           ("Lo del 30 set debía descargarse antes de abrir el ajuste" in p_[0]["tx"],
            de[(1, "50")]["pend_ant_v"], r["resumen"]["lote"]["dias_antes"]),
@@ -9297,9 +9335,9 @@ def _pruebas_diferencias_sin_descontar():
     # 2 — el espejo en un sobrante
     p_ = lote(1, "51")
     check("lo pendiente al conteo anterior que el POS descontó después",
-          [(p["ti"], p["f"]) for p in p_], [("Descontado después del conteo anterior", 1)])
+          [(p["ti"], p["f"]) for p in p_], [("Descargado después del conteo anterior", 1)])
     check("con el factor del maestro y el descargo que lo volvió a restar",
-          ("≈ 0.5 kg" in p_[0]["tx"], "el descargo del 18 set lo volvió a restar" in p_[0]["tx"]),
+          ("≈ 0.5 kg" in p_[0]["tx"], "el Descargo de Ventas del 18 set lo volvió a restar" in p_[0]["tx"]),
           (True, True))
     # 3 — el último día del mes no vuelve
     check("lo del 31 ago no lo tomó el descargo del 7 set: no explica el sobrante",
@@ -9347,7 +9385,7 @@ def _pruebas_diferencias_sin_descontar():
           (dc_[(1, "50")]["pend"], dc_[(1, "50")]["pend_nunca_v"], dc_[(1, "53")]["pend"],
            lote_c(10, "52")), (3.0, 172.0, 0.05, []))
     check("con la hora del descargo, y ninguno después lo tomó",
-          ("desde su último descargo, el 30 set a las 9:08" in lote_c(1, "50")[0]["tx"],
+          ("desde el último, el 30 set a las 9:08" in lote_c(1, "50")[0]["tx"],
            "no los tomó, ni ninguno después, y no volverán" in lote_c(1, "50")[0]["tx"]),
           (True, True))
     check("el resumen dice los descargos de verdad",
@@ -9356,7 +9394,7 @@ def _pruebas_diferencias_sin_descontar():
            pd.Timestamp("2026-10-01 07:00"), True))
     check("el espejo, fuerte con el calendario",
           [(p["ti"], p["f"]) for p in lote_c(1, "51")],
-          [("Descontado después del conteo anterior", 1)])
+          [("Descargado después del conteo anterior", 1)])
     # Si el descargo del 7 oct hubiera tomado desde el 30 set, el calendario
     # manda: todo vuelve como sobrante.
     cal[-1] = corrida("2026-10-07 10:04", "2026-09-30 07:00", "2026-10-07 07:59")
@@ -9367,7 +9405,7 @@ def _pruebas_diferencias_sin_descontar():
                                        rx["lineas"].to_dict("records"))}
     p_ = lote_c(1, "50", rx["fichas"], dx)
     check("el calendario manda sobre la regla: lo del 30 set se descontó el 7 oct",
-          (dx[(1, "50")]["pend_nunca_v"], "Lo descontó el 7 oct" in p_[0]["tx"]), (0.0, True))
+          (dx[(1, "50")]["pend_nunca_v"], "El Descargo de Ventas del 7 oct lo tomó" in p_[0]["tx"]), (0.0, True))
     return fallos
 
 
