@@ -58,9 +58,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-679 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+680 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (214)
+**CSS y estilos** (215)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -276,6 +276,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
 - **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
+- **#680** — «Análisis de diferencias» lista con fichas cortas que traen su número, y la ficha de la línea…
 
 **Layout y alturas** (96)
 
@@ -1011,7 +1012,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (194)
+**Decisiones de diseño y UX** (195)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1207,6 +1208,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
 - **#677** — De los tres modos de «Distribución de diferencias» sólo el Pareto se podía analizar: la vista…
 - **#679** — «Costo de ventas» tiene DOS formas de la parte de arriba —Tablero y Cascada— y, debajo de las…
+- **#680** — «Análisis de diferencias» lista con fichas cortas que traen su número, y la ficha de la línea…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53061,6 +53063,43 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-20.)
 
+680. **«Análisis de diferencias» lista con fichas cortas que traen su
+     número, y la ficha de la línea aparece sólo al elegirla.** Desde
+     2026-10-20, a pedido («aún se me hace mucha letra»), sobre un mockup
+     de tres opciones: la A (ficha al elegir) con el dato en la celda de la C.
+
+     - **La lista es una pieza propia** (`graficos/ajuste/lista_diferencias.js`
+       + `.css`, un `st.components.v2` sin iframe, como los paneles de fecha y
+       de sesión). Era un `st.dataframe` (#650), y una celda de
+       `st.dataframe` no tiene nada que se pueda clickear. Cada pista es una
+       ficha corta con su título y su número; un clic abre un pop con ese
+       número y el texto de la pista partido en pasos (la «traza»), y
+       «Abrir la ficha de la línea». A Python llega sólo el trigger «fila».
+     - **El número lo pone la cuenta**: cada pista de `diferencias_ajuste`
+       trae `dato` («Calientes −32 und», «−145 und», «≈ 5 und», «0 → 5
+       und»…). `VERSION` pasa a 13. Una pista sin `dato` muestra sólo su
+       título.
+     - **La ficha abre sólo con una línea elegida**: sin foco la lista usa
+       todo el ancho; un clic en una fila la abre al costado y ✕ la cierra.
+       Un foco que dejó de estar en la lista (otro filtro, otra sesión) no
+       abre nada. La pista principal ya no elige la línea de entrada.
+     - **Los cinco totales de arriba son una tira de un renglón** (nombre y
+       cifra juntos; el comentario, al pasar el cursor).
+     - **El pop sobrevive a las corridas que no tocan la lista**: la precarga
+       de las secciones vecinas re-llama al componente y lo cerraba al
+       segundo. El componente recuerda la ficha abierta y la vuelve a abrir si
+       sigue en la lista; lo olvida sólo si el usuario lo cierra.
+     - **Anchos fijos por columna** (`table-layout: fixed`): con el reparto
+       automático, las fichas —que no se parten— pedían su ancho entero y,
+       con la ficha abierta, «S/» y «Posible origen» se salían por la derecha
+       (medido a 1323). Así la ficha corta se achica con «…» y el nombre
+       entero queda en el pop y en el `title`.
+
+     Lo vigila `test_graficos.py::_pruebas_diferencias_ajuste` (el `dato` del
+     negativo y del traslado, y `filas_lista`).
+
+     (2026-10-20.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53073,7 +53112,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#679**; la próxima toma el número siguiente.
+> última regla es la **#680**; la próxima toma el número siguiente.
 
 >
 

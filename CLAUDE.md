@@ -1323,6 +1323,11 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   descontar es una tarjeta más de la fila de totales y el comentario de
   cada tarjeta aparece al pasar el cursor: a pedido, nada que ocupe dos
   renglones.
+- **La lista es una pieza propia y la ficha abre sólo al elegir una línea**
+  (2026-10-20, regla #680): `graficos/ajuste/lista_diferencias.js`. Cada
+  pista es una ficha corta con su número (`dato`, de la cuenta) y un clic
+  abre un pop con ese número y el texto partido en pasos. Los totales, una
+  tira de un renglón.
 - **En el Almacén Central el POS no descuenta ventas, nunca**: lo que sale,
   sale con requerimiento, transferencia o nota. Lo que falta ahí salió hacia
   un área sin documento: la pista dice quién lo pide y, si sale por notas

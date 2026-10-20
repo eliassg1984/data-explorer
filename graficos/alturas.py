@@ -431,9 +431,9 @@ una raya con lo que entró."""
 
 DIFERENCIAS_TABLA = 27 * 16 + 38
 """Tope de la lista de Ajuste › «Análisis de diferencias» (regla #650).
-Desde el 2026-10-20 sus filas parten el texto (66px, `ALTO_FILA` de
-`graficos/ajuste/_diferencias.py`): el mismo tope deja ver seis y el resto
-se desliza dentro de la tabla. Antes:
+Desde el 2026-10-20 la lista es una pieza propia (`lista_diferencias.js`,
+regla #680) y este es el `max-height` de su marco: lo demás se desliza
+dentro, con la cabecera fija. Antes:
 dieciséis filas de 27 y la cabecera. Hasta el 2026-10-18 eran veintiocho, lo
 que medía la ficha de al lado con todo una debajo de otra (~980px); desde
 ese día la ficha va en PESTAÑAS («se verá en laptop») y mide ~500, y la

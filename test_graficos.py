@@ -8745,6 +8745,24 @@ def _pruebas_diferencias_ajuste():
     check("la vista está en el rail de Ajuste",
           [v[0] for _, vs in aj._AJUSTE_RAIL_CATEGORIAS for v in vs if v[0] == "Diferencias"],
           ["Diferencias"])
+    # 5 — la lista con fichas cortas (regla #680): cada pista trae su número
+    # y la fila lleva TODAS sus pistas, la principal primero.
+    check("el negativo trae su número: lo que quedó en el sistema",
+          [p["dato"] for p in F[de[(1, "10")]["id"]]["pistas"] if p["t"] == "neg"],
+          [f"{da.es(de[(1, '10')]['s'])} und"])
+    check("el traslado trae lo del otro lado",
+          [p["dato"] for p in F[de[(0, "10")]["id"]]["pistas"] if p["t"] == "area"],
+          ["+39 und"])
+    from graficos.ajuste._diferencias import filas_lista
+    fl = filas_lista(L, F, junto=False)
+    check("una entrada por fila, en el mismo orden", [x["p"] for x in fl],
+          L["producto"].tolist())
+    f10 = next(x for x in fl if x["k"] == "1|10")
+    check("la fila lleva todas sus pistas, con título, fuerza, número y texto",
+          ([p["ti"] for p in f10["pistas"]] == [p["ti"] for p in F[de[(1, "10")]["id"]]["pistas"]],
+           sorted(f10["pistas"][0])), (True, ["dato", "f", "ti", "tx"]))
+    check("faltante y sobrante se distinguen por la cantidad",
+          sorted({x["lado"] for x in fl}), ["neg", "pos"])
     return fallos
 
 

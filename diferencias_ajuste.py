@@ -113,7 +113,7 @@ import pandas as pd
 
 from sin_plato import palabra_clave
 
-VERSION = 12
+VERSION = 13
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula. La 6: el paloteo, las ventas sin descontar al contar
 y los combos por lo marcado (#650). La 7: el calendario de descargos
@@ -123,7 +123,8 @@ anteriores al conteo va aparte. La 9: «Sobró sin que entrara nada». La 10:
 las notas, por la hora del conteo; en el Almacén Central, hacia dónde salió.
 La 11: «Se vende desde otra área» y los porcionamientos raros. La 12: lo que
 DEJÓ de descargarse por ventas, los porcionamientos por área y sin «registrado
-tarde», y «Descargo de Ventas» con el nombre del POS."""
+tarde», y «Descargo de Ventas» con el nombre del POS. La 13: cada pista
+trae su `dato`, el número corto que la lista muestra en su ficha (regla #680)."""
 
 EPS = 0.005
 """Soles: una línea con menos de esto no tiene diferencia."""
@@ -1437,7 +1438,8 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         if sin_ing:
             tx += (f" Esta área no recibió el producto (ni compra, ni requerimiento, ni "
                    f"producción): por eso el sistema quedó en {es(x['s'])}.")
-        return {"t": "desc", "f": 1, "ti": "Se descargó desde otra área", "tx": tx}
+        return {"t": "desc", "f": 1, "ti": "Se descargó desde otra área", "tx": tx,
+                "dato": f"{_titulo(e['a'])}"}
 
     def vendido_en_otra_area(x, usos):
         """La pista «Se vende desde otra área» (#650): lo que falta aquí se
@@ -1497,7 +1499,8 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         # Fuerte si calza: lo descontado allá cubre lo que falta, sin ser
         # tanto que lo que falta pueda ser cualquier otra cosa.
         return {"t": "desc", "f": int(0.8 * falta <= tot <= 4 * falta),
-                "ti": "Se vende desde otra área", "tx": tx}
+                "ti": "Se vende desde otra área", "tx": tx,
+                "dato": f"{_titulo(nb)} −{es(kb)} {un}"}
 
     def combo_sin_marcar(x, usos):
         """La pista de combo (#650): un combo que lleva un plato de este
@@ -1636,7 +1639,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                 tx += (" Si un Descargo de Ventas lo toma después, el próximo conteo lo devolverá como "
                        "sobrante.")
             return {"t": "lote", "f": int(0.5 <= r <= 1.5), "tx": tx,
-                    "ti": "Vendido y sin descargar al contar"}
+                    "ti": "Vendido y sin descargar al contar", "dato": f"≈ {es(p_)} {un}"}
         if q > 0 and x["pend0"]["q"] > 1e-9:
             d = x["pend0"]
             p_ = d["q"]
@@ -1660,7 +1663,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             # descargo: posible.
             fu = 0.5 <= r <= 1.5 and (d["exacto"] or inicio_del_descargo(d["sig"]) is not None)
             return {"t": "lote", "f": int(fu), "tx": tx,
-                    "ti": "Descargado después del conteo anterior"}
+                    "ti": "Descargado después del conteo anterior", "dato": f"≈ {es(p_)} {un}"}
         return None
 
     def factura_sin_ingresar(x):
@@ -1692,7 +1695,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         (calza, _sc, _), j = mejor
         r = SimpleNamespace(**su_filas[j])
         n_doc = int((SU["doc"] == r.doc).sum())
-        return {"t": "sunat", "f": int(calza), "ti": "Factura sin ingresar",
+        return {"t": "sunat", "f": int(calza), "ti": "Factura sin ingresar", "dato": r.doc,
                 "tx": f"La factura {r.doc} de {r.prov} ({fecha_corta(r.fecha)}) trae «{r.desc}» × "
                       f"{es(r.q)} {r.u} y no está ingresada en el Almacén: figura en SUNAT y no en el "
                       f"sistema{f' (con otras {n_doc - 1} líneas)' if n_doc > 1 else ''}. Si la "
@@ -1717,7 +1720,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         else:
             return None
         return {"t": "req", "f": int(0.6 <= qq / max(abs(q), 1e-9) <= 1.6),
-                "ti": "Requerimiento sin procesar", "tx": tx}
+                "ti": "Requerimiento sin procesar", "tx": tx, "dato": f"N° {n}"}
 
     def familia_de(x):
         """bebida, envase o alimento: qué consejo se le da a lo que no salió."""
@@ -1775,7 +1778,8 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             tx += (f" Esas notas se registran en {_titulo(na)}: desde el Almacén Central, salió "
                    "hacia allá sin requerimiento.")
         tx += no_sobra_lo_hecho(x)
-        return {"t": "uso", "f": int(calza), "ti": f"Suele salir por «{tp}»", "tx": tx}
+        return {"t": "uso", "f": int(calza), "ti": f"Suele salir por «{tp}»", "tx": tx,
+                "dato": f"{es(reg)} de ≈ {es(esperado)} {un}"}
 
     def no_sobra_lo_hecho(x):
         """«Lo que se hace con él (…) no sobra…», si se porciona o se
@@ -1810,6 +1814,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         vend = pf["ventas"] + pf["prod"] if pf else 0.0
         if vend > 1e-9:
             return {"t": "nadie", "f": 0, "ti": "Se descuenta sin receta visible",
+                    "dato": f"{es(vend)} {un} en {DIAS_ATRAS} d",
                     "tx": f"No está en ninguna receta, porcionamiento ni descargo directo, pero en "
                           f"los {DIAS_ATRAS} días anteriores el kardex lo descontó por ventas o "
                           f"producción ({es(vend)} {un}): lo agrega algo que la app no ve (el "
@@ -1818,6 +1823,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         if pf and pf["n_notas"] > 1e-9:
             tipos = ", ".join(f"«{k_}» {es(v_)} {un}" for k_, v_ in pf["notas_l"][:2])
             return {"t": "nadie", "f": 1, "ti": "Sale sólo por notas",
+                    "dato": pf["notas_l"][0][0] if pf["notas_l"] else "",
                     "tx": f"No está en ninguna receta ni porcionamiento: en los {DIAS_ATRAS} días "
                           f"anteriores salió sólo por notas de salida ({tipos}). Lo que falta es "
                           "uso que no se registró con una nota." + lo_pide(x, pide)}
@@ -1992,7 +1998,8 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                 # Un hecho, no una conclusión: nada dice que esa orden sea de
                 # lo producido antes del conteo.
                 tx += f" La orden siguiente es del {fecha_corta(tarde)}, después del conteo."
-            return {"t": "nada", "f": 1, "tx": tx, "ti": "Su receta base no se produjo"}
+            return {"t": "nada", "f": 1, "tx": tx, "ti": "Su receta base no se produjo",
+                    "dato": "0 órdenes"}
         if vendidos:
             nv, cp, plato, qq, por, fm = max(vendidos, key=lambda t_: t_[0])
             tx = (f"{plato}{f' (dentro de {por}, por insumo)' if por else ''} se vendió "
@@ -2015,10 +2022,12 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             else:
                 tx += (" No se editó desde el conteo anterior: revisar si cambió el check "
                        "«descarga por insumo» o el área de descargo.")
-            return {"t": "nada", "f": fu, "ti": "Se vendió y no se descargó", "tx": tx}
+            return {"t": "nada", "f": fu, "ti": "Se vendió y no se descargó", "tx": tx,
+                    "dato": f"{es(nv, 0)} vendidos"}
         if otra:
             areas = sorted({_titulo(a_) for _, a_ in otra})
             return {"t": "nada", "f": 1, "ti": "Se descarga desde otra área",
+                    "dato": areas[0] if areas else "",
                     "tx": f"{otra[0][0]} lo descarga desde {', '.join(areas[:2])}, no desde "
                           f"{aqui}. Lo que falta aquí puede haberse usado allá sin traslado, "
                           "o la receta apunta al área equivocada."}
@@ -2045,6 +2054,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             if dj is not None:
                 un = x["u"] or "und"
                 return {"t": "nada", "f": 1, "ti": "Dejó de descargarse por ventas",
+                        "dato": f"{es(dj['despues'])} {un} desde {fecha_corta(dj['ult'])}",
                         "tx": f"Hasta el {fecha_corta(dj['ult'])}, el Descargo de Ventas lo "
                               f"bajaba desde {aqui} ({es(dj['ref'])} {un} en {dj['mes']}); "
                               f"desde entonces, {es(dj['despues'])} {un}. Hoy lo llevan "
@@ -2056,6 +2066,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                      f"{x['u'] or 'und'}): en este período, no."
                      if pf and pf["ventas"] > 1e-9 else "")
             return {"t": "nada", "f": 1, "ti": "No se vendió nada que lo lleve",
+                    "dato": "0 vendidos",
                     "tx": f"Lo llevan {', '.join(nom[:3])}{' y otros' if len(nom) > 3 else ''}, "
                           f"y no se {'vendió' if len(nom) == 1 else 'vendieron'} entre los dos "
                           f"conteos{ni}.{antes} {consejo}"}
@@ -2141,7 +2152,8 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                                 f"{_titulo(top['area'])}), que {como}. "
                                 + (f"Ese producto se descargó sin que entrara nada: falta registrar "
                                    f"{que}." if fu else f"Puede ser {que} sin registrar."),
-                          "r": int(top["id"]), "m": len(cand) - 1})
+                          "r": int(top["id"]), "m": len(cand) - 1,
+                          "dato": _q(top["q"], top["u"] or "und")})
         if q > 0 and c in insum:
             fal = []
             for a_, via in insum[c]:
@@ -2163,7 +2175,8 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                                  else f"Falta de donde sale: {nom}. ")
                                 + (f"No entró nada desde el conteo anterior: falta registrar {que}."
                                    if fu else f"Puede ser {que} sin registrar."),
-                          "r": int(min(fal[0][2], key=lambda y: y["v"])["id"]), "m": len(fal) - 1})
+                          "r": int(min(fal[0][2], key=lambda y: y["v"])["id"]), "m": len(fal) - 1,
+                          "dato": _q(sum(y["q"] for y in fal[0][2]), fal[0][2][0]["u"] or "und")})
         # area — el mismo producto, al revés, en otra área
         otras = [y for y in por_cod[c] if y["id"] != i and np.sign(y["q"]) == -sg]
         if otras:
@@ -2178,7 +2191,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                             + ("Las cantidades calzan: parece un traslado o requerimiento sin "
                                "registrar." if fu else "Puede ser un traslado o requerimiento "
                                "sin registrar, por una parte."),
-                      "r": int(o["id"])})
+                      "r": int(o["id"]), "dato": _q(o["q"], u)})
         # neg — el sistema terminó en negativo
         if q > 0 and x["s"] < 0:
             salio = sorted(f["sal"], key=lambda m: -m[1])[:2]
@@ -2192,7 +2205,8 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                 tx = (f"El sistema terminó en {es(x['s'])} {u}: entraron {es(x['ing'])} y "
                       f"salieron {es(x['sal'])}. El sobrante corrige ese negativo: algo entró "
                       "sin registrarse.")
-            P.append({"t": "neg", "f": 1, "ti": "Sistema en negativo", "tx": tx})
+            P.append({"t": "neg", "f": 1, "ti": "Sistema en negativo", "tx": tx,
+                      "dato": f"{es(x['s'])} {u}"})
         # sinent — sobró con el sistema en CERO y sin que entrara nada: entró
         # algo sin registrarse o se contó otro producto con este código. Es
         # un hecho del kardex, como el negativo (el Gin Le Tribute del parcial
@@ -2204,6 +2218,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                       if uc is not None and pd.notna(uc)
                       else f"No se compró en los últimos {DIAS_ATRAS} días.")
             P.append({"t": "sinent", "f": 1, "ti": "Sobró sin que entrara nada",
+                      "dato": f"0 → {es(x['k'])} {u}",
                       "tx": f"El sistema tenía 0 {u} y {desde_} no entró nada —ni compra, ni "
                             f"requerimiento, ni traslado—, pero se contaron {es(x['k'])} {u}. "
                             f"{compra} O entró sin registrarse, o se contó otro producto con "
@@ -2214,7 +2229,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             ratio = abs(x["q"]) / abs(q0)
             if 0.6 <= ratio <= 1.6:
                 P.append({"t": "rev", "f": int(0.8 <= ratio <= 1.25),
-                          "ti": "Revierte el conteo anterior",
+                          "ti": "Revierte el conteo anterior", "dato": f"antes {_q(q0, u)}",
                           "tx": f"En el conteo del {t0s} {'sobró' if q0 > 0 else 'faltó'} "
                                 f"{es(abs(q0))} {u}; ahora {'sobra' if x['q'] > 0 else 'falta'} "
                                 f"{es(abs(x['q']))} {u}. Puede ser un error de conteo o un "
@@ -2307,6 +2322,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                           f"también se llama «{x['pk']}», casi en la misma cantidad. Puede ser un "
                           "conteo, una receta o un documento con el código del otro.")
                 P.append({"t": "rubro", "f": int(cambio), "r": int(o["id"]), "tx": tx,
+                          "dato": _q(o["q"], o["u"] or "und"),
                           "ti": "Vendido con el código del otro" if cambio
                           else f"{'Sobra' if q < 0 else 'Falta'} uno de nombre parecido"})
         P.sort(key=lambda p_: (-p_["f"], TIPOS.index(p_["t"])))

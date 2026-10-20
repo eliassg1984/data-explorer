@@ -1,0 +1,80 @@
+/* La lista de «Análisis de diferencias» (regla #680). Vive en el shadow root
+   del componente (graficos/ajuste/_diferencias.py::_lista): ninguna regla de
+   acá sale de la lista, y ninguna de estilos/ entra. Los colores son las
+   variables de estilos/_00_base.py, que SÍ cruzan el shadow root; los dos de
+   Ajuste (faltante, sobrante) los manda Python como --ld-neg / --ld-pos,
+   porque viven en tema.py y no en :root. Ningún selector :has (regla #469). */
+
+.ld {
+  color: var(--text-primary);
+  font-size: 12.5px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.ld button { font: inherit; }
+.ld button:focus-visible, .ld tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* La tabla desliza por dentro, con la cabecera fija: el alto lo manda Python
+   (`alturas.DIFERENCIAS_TABLA`). */
+.marco { border: 1px solid var(--border); border-radius: 10px; overflow: auto; }
+table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+th {
+  position: sticky; top: 0; z-index: 1; background: var(--bg-card);
+  font-size: 11px; font-weight: 600; color: var(--text-muted); text-align: left;
+  padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+th.n, td.n { text-align: right; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: var(--bg-primary); }
+tr.sel td { background: var(--accent-light) !important; }
+td.sev { width: 4px; padding: 0 0 0 6px; }
+td.sev i { display: block; width: 4px; height: 26px; border-radius: 2px; background: var(--ld-neg); }
+td.sev i.pos { background: var(--ld-pos); }
+td.prod { font-weight: 600; overflow-wrap: anywhere; }
+td.prod small { display: block; font-weight: 400; color: var(--text-muted); font-size: 11px; margin-top: 1px; }
+td.n { white-space: nowrap; }
+.neg { color: var(--ld-neg); }
+.pos { color: var(--ld-pos); }
+td.area { color: var(--text-secondary); overflow-wrap: anywhere; }
+.nada { color: var(--text-muted); }
+.vacio { padding: 22px 14px; text-align: center; color: var(--text-muted); }
+
+/* Las pistas, como fichas cortas: el nombre y su número. Morado si es
+   fuerte (los números calzan o es un hecho del kardex). */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip {
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
+  border-radius: 99px; padding: 2px 9px 2px 7px; font-size: 11.5px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; max-width: 100%;
+  min-width: 0;
+}
+.chip::before { content: ""; flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+.chip.f { border-color: var(--border-lavender); background: var(--accent-light); color: var(--accent-deep); font-weight: 600; }
+.chip.f::before { background: var(--accent); }
+.chip .t { overflow: hidden; text-overflow: ellipsis; }
+.chip .d { flex: 0 0 auto; font-weight: 500; opacity: .85; }
+.chip:hover { border-color: var(--accent); }
+
+/* El pop de una pista: fijo a la pantalla, para que la tabla que desliza no
+   lo recorte. */
+.pop {
+  position: fixed; z-index: 1000; width: 360px; max-width: calc(100vw - 24px);
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(16, 16, 20, .16); padding: 12px 14px 12px;
+  display: flex; flex-direction: column; gap: 8px; cursor: default;
+}
+.pop h4 { margin: 0; padding-right: 22px; font-size: 13px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.fz { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 4px; padding: 1px 5px; border: 1px solid var(--border); color: var(--text-muted); }
+.fz.f { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pop .dato { font-size: 17px; font-weight: 700; color: var(--text-primary); }
+.pop .linea { font-size: 11.5px; color: var(--text-muted); }
+/* La traza: el texto de la pista, una frase por paso. */
+.traza { border-left: 2px solid var(--border-lavender); margin-left: 4px; padding-left: 12px; display: flex; flex-direction: column; }
+.traza div { position: relative; font-size: 12px; color: var(--text-secondary); padding: 3px 0; }
+.traza div::before {
+  content: ""; position: absolute; left: -17px; top: 8px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--bg-card); border: 2px solid var(--accent);
+}
+.pop .ir { border: 0; background: none; padding: 0; text-align: left; color: var(--accent-deep); font-weight: 600; font-size: 12px; cursor: pointer; }
+.pop .x { position: absolute; top: 7px; right: 9px; border: 0; background: none; color: var(--text-muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 4px; }

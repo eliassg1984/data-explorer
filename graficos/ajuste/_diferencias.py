@@ -7,6 +7,10 @@ aprobado con los datos reales del cierre de setiembre 2026
   · A — POSIBLE ORIGEN. La lista de faltantes o sobrantes, una fila por
     línea (producto × área), con su pista principal, y filtros por tipo de
     pista. Arriba, cuánto del faltante y del sobrante tiene una pista fuerte.
+    Desde el 2026-10-20 (regla #680) es una pieza propia
+    (`lista_diferencias.js`): cada pista es una ficha corta con su número y
+    un clic abre lo que la origina; la ficha de B aparece sólo al elegir una
+    fila, y los totales de arriba son una tira de un renglón.
   · B — LA FICHA de la línea elegida, al costado, en PESTAÑAS desde el
     2026-10-18 («se verá en laptop»): sus pistas explicadas; la cuenta entre
     los dos conteos con entró y salió POR MOTIVO, el stock en el sistema entre
@@ -29,8 +33,8 @@ lo desliza la página, como en Compras › Producto (#382). Dentro, sólo se
 desliza la lista.
 """
 
-import hashlib
 import html
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -65,9 +69,6 @@ K_BUSCAR = "ajdif_buscar"
 K_AREA = "ajdif_filtro_area"
 K_VER = "ajdif_ver"
 _K_FOCO = "_ajdif_foco"
-_K_SALTO = "_ajdif_salto"
-_K_TABLA = "_ajdif_key"
-_K_FILAS = "_ajdif_filas"
 
 LADOS = ("fal", "sob")
 VER = ("junto", "area")
@@ -87,18 +88,20 @@ _CSS = f"""
 <style>
 .dif-sub {{ font-size: 12px; color: {GRIS_TEXTO}; margin: -2px 0 0 2px;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-.dif-kpis {{ display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
-             gap: 8px; margin: 2px 0 2px; }}
-/* Nombre y cifra; el comentario, al pasar el cursor (`title`): a pedido,
-   2026-10-18 -- con él en un tercer renglón, la fila medía ~78px. */
-.dif-kpi {{ border: 1px solid {GRIS_LINEA}; border-radius: 10px; padding: 5px 10px;
-            display: flex; flex-direction: column; gap: 1px; min-width: 0; cursor: help; }}
-.dif-kpi.a {{ border-color: {LAVANDA_BORDE}; background: {LAVANDA_SELECCION}; }}
+/* UNA TIRA (2026-10-20, regla #680, a pedido: «mucha letra»): nombre y
+   cifra en el mismo renglón, separados por una raya; hasta ese día eran
+   cinco tarjetas de dos renglones (~52px). El comentario, al pasar el
+   cursor (`title`), como desde el 2026-10-18. */
+.dif-kpis {{ display: flex; flex-wrap: wrap; border: 1px solid {GRIS_LINEA};
+             border-radius: 9px; overflow: hidden; margin: 2px 0 2px; }}
+.dif-kpi {{ flex: 1 1 150px; padding: 5px 12px; border-right: 1px solid {GRIS_LINEA};
+            display: flex; align-items: baseline; gap: 8px; min-width: 0; cursor: help; }}
+.dif-kpi:last-child {{ border-right: 0; }}
 .dif-kpi .r {{ font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
                color: {GRIS_TEXTO}; font-weight: 600; white-space: nowrap;
                overflow: hidden; text-overflow: ellipsis; }}
-.dif-kpi .v {{ font-size: 18px; font-weight: 700; color: {TEXTO_PRINCIPAL};
-               font-variant-numeric: tabular-nums; line-height: 1.2; }}
+.dif-kpi .v {{ font-size: 14.5px; font-weight: 700; color: {TEXTO_PRINCIPAL};
+               font-variant-numeric: tabular-nums; white-space: nowrap; }}
 .dif-neg {{ color: {AJUSTE_NEG_TEXTO} !important; }}
 .dif-pos {{ color: {AJUSTE_POS_TEXTO} !important; }}
 .dif-n {{ font-size: 15px; font-weight: 700; color: {ACENTO_TEXTO}; line-height: 1.25; }}
@@ -138,7 +141,7 @@ _CSS = f"""
 .dif-nota {{ font-size: 11.5px; color: {GRIS_TEXTO}; }}
 /* Lo vendido y sin descontar al contar (#650): una tarjeta más de la fila,
    en ámbar -- hasta el 2026-10-18 era un renglón propio, y ocupaba dos. */
-.dif-kpi.al {{ border-color: {AJUSTE_ALERTA_BORDE}; background: {AJUSTE_ALERTA_FONDO}; }}
+.dif-kpi.al {{ background: {AJUSTE_ALERTA_FONDO}; }}
 .dif-kpi.al .r {{ color: {AJUSTE_ALERTA_TEXTO}; }}
 .dif-viene {{ font-size: 12.5px; color: {GRIS_TEXTO_MEDIO}; line-height: 1.5; }}
 .dif-uso {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px;
@@ -165,6 +168,13 @@ _CSS = f"""
 .st-key-ajdif_ficha [class*="st-key-ajdif_ir_"] {{ margin-top: -10px; }}
 .st-key-ajdif_ficha [class*="st-key-ajdif_ir_"] button {{ min-height: 0; padding: 0 2px;
     font-size: 12px; color: {ACENTO_TEXTO}; }}
+/* La ficha abre sólo con una línea elegida (#680): su ✕, arriba a la
+   derecha, encima del nombre del producto. */
+.st-key-ajdif_ficha {{ position: relative; }}
+.st-key-ajdif_cerrar {{ position: absolute; top: -4px; right: 0; z-index: 2; width: auto !important; }}
+.st-key-ajdif_cerrar button {{ min-height: 0; padding: 0 6px; font-size: 16px;
+    color: {GRIS_TEXTO}; }}
+.st-key-ajdif_ficha .dif-n {{ padding-right: 28px; }}
 /* El último renglón de la tarjeta: Streamlit le pone −16px abajo a todo
    markdown, y como no sigue nada, la tarjeta se deslizaba por dentro. */
 [class*="st-key-ajdif_pie"] [data-testid="stMarkdownContainer"] {{ margin-bottom: 0 !important; }}
@@ -214,107 +224,69 @@ def _clave(fila):
     return f"{int(fila['acod'])}|{fila['cod']}"
 
 
-# ── la tabla ────────────────────────────────────────────────────────────
-
-def _filas_sel(ev):
-    try:
-        return (ev.get("selection") or {}).get("rows") or []
-    except AttributeError:
-        return getattr(getattr(ev, "selection", None), "rows", []) or []
-
-
-def _foco_anterior():
-    """La línea que la tabla tenía elegida en la corrida anterior. Se lee
-    ANTES de dibujar (regla #556): la selección es de la KEY, no de las
-    filas, y la key cambia con ellas."""
-    ss = st.session_state
-    key, claves = ss.get(_K_TABLA), ss.get(_K_FILAS) or []
-    filas = _filas_sel(ss.get(key) or {}) if key else []
-    if filas and 0 <= filas[0] < len(claves):
-        ss[_K_FOCO] = claves[filas[0]]
-
-
-def _key_tabla(claves):
-    firma = hashlib.md5("|".join(claves).encode("utf-8")).hexdigest()[:12]
-    return f"ajdif_tabla_{firma}_{st.session_state.get(_K_SALTO, 0)}"
+# ── la lista ────────────────────────────────────────────────────────────
+#
+# UNA PIEZA PROPIA desde el 2026-10-20 (regla #680), como los paneles de
+# fecha y de sesión: `lista_diferencias.js` + `.css`, un `st.components.v2`
+# sin iframe. Hasta ese día era un `st.dataframe` (regla #650), y una celda
+# de `st.dataframe` no tiene nada que se pueda clickear: «Posible origen»
+# eran títulos en fila, y para saber de dónde salía cada uno había que abrir
+# la ficha. Ahora cada pista es una ficha corta con su número (`dato`, de
+# `diferencias_ajuste`) y un clic abre lo que la origina. A Python le llega
+# sólo el trigger «fila».
+_AQUI = Path(__file__).parent
+_LISTA = st.components.v2.component(
+    "lista_diferencias_ajuste",
+    css=(_AQUI / "lista_diferencias.css").read_text(encoding="utf-8"),
+    js=(_AQUI / "lista_diferencias.js").read_text(encoding="utf-8"),
+)
+_K_LISTA = "ajdif_lista"
 
 
-# El alto de una fila de la lista (2026-10-20, a pedido: a 27px «se ven muy
-# delgadas, como aviso de periódico»). 66 y no 44: `st.dataframe` sólo parte
-# el texto en renglones si la fila mide MÁS de 4rem (64px; leído en el
-# bundle de la 1.59, `rowHeight > 4rem` → `isWrappingAllowed`). Con 44 la
-# fila crecía y el nombre y las pistas seguían cortados con «…».
-ALTO_FILA = 66
-
-
-def _origenes(f, fichas):
-    """«Posible origen» con TODAS las pistas de cada fila, la principal
-    primero (2026-10-20, a pedido: hasta ese día iba la principal y un
-    «+2»). `fichas` es, por id, la ficha de la línea o del producto (con
-    las áreas juntas), que trae sus pistas en orden. Hasta TRES: es lo que
-    entra en los tres renglones de la fila; las demás, «+N más», están en
-    la ficha."""
+def filas_lista(f, fichas, junto):
+    """Lo que recibe `lista_diferencias.js`, una entrada por fila de `f`, en
+    su orden. Pura (la prueba `test_graficos.py`). `fichas` es, por id, la
+    ficha de la línea —o la del producto, con las áreas juntas—, con sus
+    pistas en orden: TODAS van a la fila, cada una con su título, si es
+    fuerte, su número corto y su texto (el pop lo parte en pasos)."""
+    tope = float(f["v"].abs().max()) if len(f) else 1.0
     out = []
-    for i, p in zip(f["id"], f["pista"]):
-        tit = [x["ti"] for x in (fichas.get(int(i)) or {}).get("pistas") or []]
-        if p and (not tit or tit[0] != p):
-            tit = [p] + [t for t in tit if t != p]
-        tit = list(dict.fromkeys(tit))
-        mas = f" · +{len(tit) - 3} más" if len(tit) > 3 else ""
-        out.append(" · ".join(tit[:3]) + mas if tit else "—")
+    for x in f.to_dict("records"):
+        pistas = [{"ti": p_["ti"], "f": bool(p_["f"]), "dato": p_.get("dato") or "",
+                   "tx": p_.get("tx") or ""}
+                  for p_ in (fichas.get(int(x["id"])) or {}).get("pistas") or []]
+        fam = str(x.get("familia") or "").capitalize()
+        sub = str(x.get("subfamilia") or "").capitalize()
+        u = x.get("u") or "und"
+        out.append({
+            "k": _clave(x), "p": str(x["producto"]),
+            "sub": " › ".join(t for t in (fam, sub) if t) + f" · en {u}",
+            "a": str(x["areas"] if junto and x.get("areas") else x["area"]),
+            "q": ("+" if x["q"] > 0 else "") + da.es(x["q"]) + " " + u,
+            "v": _soles(float(x["v"])), "lado": "neg" if x["q"] < 0 else "pos",
+            "peso": round(min(1.0, abs(float(x["v"])) / max(tope, 1e-9)), 3),
+            "pistas": pistas,
+        })
     return out
 
 
-def _tabla(f, fichas):
-    return pd.DataFrame({
-        "Producto": f["producto"].tolist(),
-        "Área": f["area"].tolist(),
-        "Dif.": f["q"].tolist(),
-        "S/": f["v"].tolist(),
-        "Posible origen": _origenes(f, fichas),
-    })
+def _al_elegir_fila():
+    """Callback de la lista: la fila elegida pasa a ser el foco y la ficha
+    aparece. Corre ANTES del rerun de la vista."""
+    a = (st.session_state.get(_K_LISTA) or {}).get("fila") or {}
+    if a.get("k"):
+        st.session_state[_K_FOCO] = a["k"]
 
 
-def _estilo(tabla, f, pos):
-    """Formato y colores por COLUMNA entera (regla #645: fila por fila
-    costaba casi un segundo por clic)."""
-    sty = tabla.style.format({"S/": lambda v: _soles(v)})
-    # La unidad va DENTRO de «Dif.» (una columna menos) sin volverla texto:
-    # un formato por unidad, y la columna se sigue ordenando por número.
-    u = f["u"].replace("", "und").to_numpy()
-    for un in sorted(set(u)):
-        filas = np.flatnonzero(u == un).tolist()
-        sty = sty.format(lambda v, un=un: ("+" if v > 0 else "") + da.es(v) + " " + un,
-                         subset=pd.IndexSlice[filas, ["Dif."]])
-    sty = sty.set_properties(subset=pd.IndexSlice[[pos], :],
-                             **{"background-color": LAVANDA_FONDO})
-    rojo, verde = f"color: {AJUSTE_NEG_TEXTO}", f"color: {AJUSTE_POS_TEXTO}"
-    sty = sty.apply(lambda c: np.where(c < 0, rojo, verde), subset=["Dif.", "S/"], axis=0)
-    fuerte = np.array(f["pista_f"].tolist(), dtype=bool)
-    sty = sty.apply(lambda c: np.where(fuerte, f"color: {ACENTO_TEXTO}; font-weight: 600",
-                                       f"color: {GRIS_TEXTO}"),
-                    subset=["Posible origen"], axis=0)
-    return sty.set_properties(subset=["Producto"], **{"font-weight": "600"})
-
-
-# Suman 634 + los 36 de la casilla: lo que mide la columna de la lista a
-# 1323 (medido; con 676 «Posible origen» se salía por la derecha).
-_ANCHOS = {"Producto": 180, "Área": 80, "Dif.": 78, "S/": 66,
-           "Posible origen": 230}
-_AYUDA = {
-    "Dif.": "Contado menos sistema, en la unidad del producto.",
-    "S/": "La diferencia valorizada al precio promedio del cierre.",
-    "Posible origen": "Todas las pistas de la línea, la principal primero; en "
-                      "morado si la principal es fuerte (los números calzan o es "
-                      "un hecho del kardex). Cada una se explica en la ficha.",
-}
+def _cerrar_ficha():
+    st.session_state[_K_FOCO] = None
 
 
 # ── la ficha ────────────────────────────────────────────────────────────
 
 def _ir(clave, lado, soltar_area=True):
     """Callback de «Ver …»: la otra línea, en su lista y sin filtros que la
-    escondan. La key de la tabla cambia, así la selección nueva manda."""
+    escondan. La ficha se abre en ella."""
     ss = st.session_state
     ss[_K_FOCO] = clave
     ss[K_LADO] = lado
@@ -324,10 +296,6 @@ def _ir(clave, lado, soltar_area=True):
     # La otra línea puede ser de un área que el filtro esconde.
     if soltar_area and ss.get(K_AREA):
         poner_seleccion(K_AREA, [])
-    ss[_K_SALTO] = ss.get(_K_SALTO, 0) + 1
-    # Sin esto, `_foco_anterior` leería en la próxima corrida la fila que
-    # seguía elegida en la tabla vieja y devolvería el foco a ella.
-    ss[_K_TABLA] = None
 
 
 def _cabecera_ficha(x):
@@ -756,7 +724,6 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
     sembrar_seleccion(pd.DataFrame({col_familia or "f": opc_fam}), col_familia or "f",
                       K_FAM, list(FAMILIAS_DE_ENTRADA))
     fam_sel = [f for f in (ss.get(K_FAM) or []) if f in opc_fam]
-    _foco_anterior()
     with st.container(border=True, key=CARD):
         st.markdown(CSS_TITULOS_DRILL + _CSS + "<style>"
                     + css_filtros_vista("ajdif_ctrl_", "ajdif_nolist_") + "</style>",
@@ -871,47 +838,51 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         f = f.sort_values(["v", "q"], ascending=(lado == "fal"),
                           kind="stable").reset_index(drop=True)
 
-        # columnas-internas: la lista y la ficha de la línea elegida.
-        c_tab, c_fic = st.columns([1.5, 1], gap="medium")
         if f.empty:
-            with c_tab:
-                st.info("Ninguna línea con estos filtros.")
+            st.info("Ninguna línea con estos filtros.")
             return
+        # LA FICHA APARECE SÓLO CON UNA LÍNEA ELEGIDA (2026-10-20, regla #680, a
+        # pedido: «mucha letra»). Sin foco la lista usa todo el ancho; un clic
+        # en una fila la abre al costado y ✕ la cierra. Un foco que dejó de
+        # estar en la lista (otro filtro, otra sesión) no abre nada.
         claves = [_clave(x) for x in f.to_dict("records")]
         foco = ss.get(_K_FOCO)
         if foco not in claves:
-            fuerte = f.index[f["fuerte"]]
-            foco = claves[int(fuerte[0]) if len(fuerte) else 0]
-        pos = claves.index(foco)
-        ss[_K_FOCO] = foco
+            foco = None
+        fichas_lista = FG if junto else r["fichas"]
+        if foco is None:
+            c_tab, c_fic = st.container(), None
+        else:
+            # columnas-internas: la lista y la ficha de la línea elegida.
+            c_tab, c_fic = st.columns([1.45, 1], gap="medium")
         with c_tab:
-            key = _key_tabla(claves)
-            ss[_K_TABLA], ss[_K_FILAS] = key, claves
-            tabla = _tabla(f, FG if junto else r["fichas"])
-            st.dataframe(
-                _estilo(tabla, f, pos), key=key, on_select="rerun",
-                selection_mode="single-row-required",
-                selection_default={"selection": {"rows": [pos]}},
-                hide_index=True, row_height=ALTO_FILA,
+            _LISTA(key=_K_LISTA, data={
+                "filas": filas_lista(f, fichas_lista, junto), "sel": foco,
                 # Tope de una laptop (`DIFERENCIAS_TABLA`): la ficha de al
                 # lado va en pestañas y mide lo mismo.
-                height=alturas.por_filas(len(tabla), px_fila=ALTO_FILA, extra=38, minimo=0,
-                                         rol=alturas.DIFERENCIAS_TABLA),
-                column_config={c: st.column_config.Column(width=_ANCHOS.get(c),
-                                                          help=_AYUDA.get(c))
-                               for c in tabla.columns})
-            if junto:
-                comp = G[G["comp"]]
-                extra = (f" · {len(comp):,} se compensan entre áreas y no aparecen"
-                         if len(comp) else "")
-                st.caption(f"{len(f):,} producto{'s' if len(f) != 1 else ''} · "
-                           f"{_soles(float(f['v'].sum()))}{extra}.")
-            else:
-                st.caption(f"{len(f):,} línea{'s' if len(f) != 1 else ''} · "
-                           f"{_soles(float(f['v'].sum()))} · ordenada por "
-                           "soles; el círculo de una fila abre su ficha al costado.")
+                "alto": alturas.DIFERENCIAS_TABLA,
+                "neg": AJUSTE_NEG_TEXTO, "pos": AJUSTE_POS_TEXTO,
+                "vacio": "Ninguna línea con estos filtros."},
+                on_fila_change=_al_elegir_fila, width="stretch")
+            with st.container(key="ajdif_pie_lista"):
+                if junto:
+                    comp = G[G["comp"]]
+                    extra = (f" · {len(comp):,} se compensan entre áreas y no aparecen"
+                             if len(comp) else "")
+                    st.caption(f"{len(f):,} producto{'s' if len(f) != 1 else ''} · "
+                               f"{_soles(float(f['v'].sum()))}{extra} · clic en una fila para "
+                               "ver su ficha; en una pista, para ver de dónde sale.")
+                else:
+                    st.caption(f"{len(f):,} línea{'s' if len(f) != 1 else ''} · "
+                               f"{_soles(float(f['v'].sum()))} · ordenada por soles · clic en "
+                               "una fila para ver su ficha; en una pista, para ver de dónde "
+                               "sale.")
+        if c_fic is None:
+            return
         with c_fic, st.container(key="ajdif_ficha"):
-            x = f.iloc[pos]
+            st.button("✕", key="ajdif_cerrar", help="Cerrar la ficha", type="tertiary",
+                      on_click=_cerrar_ficha)
+            x = f.iloc[claves.index(foco)]
             if junto:
                 _ficha_junto(x, FG[int(x["id"])], r["fichas"])
             else:
