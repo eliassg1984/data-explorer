@@ -65,8 +65,10 @@ _AQUI = Path(__file__).parent
 _TABLA = st.components.v2.component(
     "costos_tabla",
     css=(_AQUI / "costos_tabla.css").read_text(encoding="utf-8"),
-    js=((_AQUI / "costos_paneles.js").read_text(encoding="utf-8")
-        + "\n" + (_AQUI / "costos_tabla.js").read_text(encoding="utf-8")),
+    # Un solo módulo: los paneles y las dos vistas de arriba (regla #679)
+    # definen funciones que usa `costos_tabla.js`, que exporta el default.
+    js="\n".join((_AQUI / f).read_text(encoding="utf-8")
+                  for f in ("costos_paneles.js", "costos_vistas.js", "costos_tabla.js")),
 )
 
 
@@ -200,8 +202,14 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
             datos, documental=documental, enlaces=costos_enlaces.enlaces(datos["granos"]),
             mes_inicial=mes_enlace if desde_resumen else None,
             desde_resumen=desde_resumen), width="stretch")
-    _editor_convenios(convenios)
-    _editor_presupuesto()
+    # Los dos editores, lado a lado y no como franjas a todo el ancho
+    # (regla #679): cerrados son dos renglones cortos.
+    # columnas-internas: dos desplegables de configuración, no un drill.
+    c_conv, c_ppto = st.columns(2)
+    with c_conv:
+        _editor_convenios(convenios)
+    with c_ppto:
+        _editor_presupuesto()
 
 
 _ACUSE_CONVENIOS = "_costos_conv_acuse"

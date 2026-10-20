@@ -31,7 +31,7 @@ function contexto(raiz) {
       <section><h2>Venta neta documentada</h2><p>Importes netos de comprobantes pagados y por cobrar, menos notas de crédito. Cada ítem se suma una vez aunque tenga varios pagos. El período utiliza el día del turno del comprobante.</p><p><strong>Referencia en Inforest:</strong> Registro de Ventas. Para comparar, usa los mismos comprobantes, filtros y criterio de fecha; la fecha de emisión puede diferir del día del turno.</p></section>
       <section><h2>Consumo operativo valorizado</h2><p>Inventario inicial + compras netas de notas de crédito − inventario final. Se utilizan los cierres del mes operativo y las cuatro familias indicadas.</p><p><strong>Porcentaje operativo:</strong> consumo operativo valorizado ÷ base de venta de Costos × 100. La base de Costos tiene su propio alcance, que se detalla en el panel de consumo.</p></section>
       <section><h2>Costo del Sistema</h2><p>Costo histórico completo de los pedidos, incluidos componentes de combos y propiedades, con notas de crédito restadas. Los descuentos se presentan como referencia comercial separada y no reducen este costo.</p><p><strong>Referencia en Inforest:</strong> Paloteo de Producción → Comparativo → Ventas en el rango. Sin «Evaluar por Día Contable», su selección combina fecha del pedido y del comprobante; para comparar, deben coincidir el período y los filtros.</p></section>
-      <section><h2>Diferencia pendiente de conciliación</h2><p>Consumo carta − costo del Sistema − bajas registradas. Es el residuo por explicar: revisar fechas, alcance y valorización antes de atribuirlo a una causa.</p><p><strong>Referencia:</strong> conciliación de la webapp entre inventarios, compras, salidas y ventas de Inforest.</p></section>
+      <section><h2>Sin explicar</h2><p>Consumo carta − costo del Sistema − bajas registradas. Es el residuo por explicar: revisar fechas, alcance y valorización antes de atribuirlo a una causa.</p><p><strong>Referencia:</strong> conciliación de la webapp entre inventarios, compras, salidas y ventas de Inforest.</p></section>
     </div></details></aside>`;
 }
 
@@ -73,7 +73,7 @@ function conciliacion(d) {
   const c = d.costo;
   if (!c) return '<div class="re-empty">La conciliación requiere el consumo mensual del período.</div>';
   const fila = (label, v, cl = '') => `<div class="re-ledger-row ${cl}"><span>${esc(label)}</span><b>${soles(v)}</b></div>`;
-  return `<div class="re-ledger">${fila('Consumo operativo valorizado', c.operativo)}${fila('− Consumos no vendidos', c.no_vendido)}${fila('= Consumo carta', c.carta, 'total')}${fila('Costo del Sistema', c.pos)}${fila('Diferencia consumo − Sistema', c.diferencia, 'total')}${fila('− Bajas registradas', c.bajas)}${fila('Diferencia pendiente de conciliación', c.faltante, 'total')}</div>
+  return `<div class="re-ledger">${fila('Consumo operativo valorizado', c.operativo)}${fila('− Consumos no vendidos', c.no_vendido)}${fila('= Consumo carta', c.carta, 'total')}${fila('Costo del Sistema', c.pos)}${fila('Diferencia consumo − Sistema', c.diferencia, 'total')}${fila('− Bajas registradas', c.bajas)}${fila('= Sin explicar', c.faltante, 'total')}</div>
     <p class="re-small">Los consumos no vendidos incluyen cortesías y salidas distintas de bajas. Los descuentos están separados del cálculo. La última fila resta las bajas a la diferencia total y muestra el residuo por explicar según fechas, alcance y valorización.</p>`;
 }
 

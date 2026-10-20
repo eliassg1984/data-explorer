@@ -15,7 +15,7 @@ LA CUENTA, período por período y por familia:
                             quitar una)
     Consumo carta     = consumo operativo − consumos no vendidos
     Diferencia        = consumo carta − costo histórico completo del Sistema
-                      = bajas registradas + diferencia pendiente de conciliación
+                      = bajas registradas + sin explicar (antes «pendiente de conciliación», #679)
 
 Las BAJAS no son un consumo no vendido: son pérdida, se quedan en el
 consumo carta y explican la diferencia, como en el cuadro de costos que el

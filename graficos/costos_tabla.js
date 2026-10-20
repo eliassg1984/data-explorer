@@ -88,8 +88,9 @@ function porFamilia(st, data, w, b) {
   // El plato vendido mantiene su costo histórico completo. Los descuentos
   // son referencia comercial y no modifican ninguno de los dos lados.
   r.dif = resta(r.carta, r.pos);
-  // Separar las bajas registradas deja un saldo pendiente de conciliar;
-  // por sí solo, ese saldo no identifica su causa.
+  // Separar las bajas registradas deja lo que sigue sin explicar; por sí
+  // solo, ese saldo no identifica su causa («Pendiente de conciliación»
+  // hasta el 2026-10-20, regla #679).
   r.falt = resta(r.dif, r.bajas);
   return r;
 }
@@ -113,7 +114,7 @@ function filas(st) {
   f.push({ k: 'pos', nom: 'Costo del Sistema', nota: 'costo histórico completo de platos, combos y propiedades; notas de crédito restadas', tipo: 'suma', sentido: 'mal', tasa: 'pos' },
     { k: 'dif', nom: 'Diferencia', nota: 'consumo carta − costo histórico completo del Sistema', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true, tasa: 'dif' },
     { k: 'bajas', nom: 'Bajas registradas', nota: 'salidas procesadas de tipo baja; permanecen en el consumo carta', tipo: 'suma', sentido: 'mal', hijo: true },
-    { k: 'falt', nom: 'Pendiente de conciliación', nota: 'diferencia − bajas registradas; el saldo no demuestra por sí solo pérdida física', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true, tasa: 'falt' });
+    { k: 'falt', nom: 'Sin explicar', nota: 'diferencia − bajas registradas; el saldo no demuestra por sí solo pérdida física', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true, tasa: 'falt' });
   return f;
 }
 
@@ -189,15 +190,15 @@ function dibujar(raiz) {
   // «1–15 abr – 16–30 set» junta dos guiones: entre rótulos que ya llevan uno, «a».
   const sep = esMes ? ' – ' : ' a ';
 
-  // UNA fila arriba (a pedido, 2026-10-09): el título y el rango a la
-  // izquierda; Período, Familias y Eventos a la derecha. Sin KPIs: la tabla
-  // sube y entra entera en la pantalla.
-  const hayMas = w.maximo - w.minimo > (st.cantidad || VENTANA);
+  // UNA fila arriba (a pedido, 2026-10-09): el título, el período elegido
+  // con ‹ ›, la vista y el rango a la izquierda; Período, Familias y Eventos
+  // a la derecha. Las ‹ › mueven el período ELEGIDO y arrastran la ventana
+  // cuando se sale de ella (regla #679: antes movían la ventana de a seis).
   const aviso = esMes ? '' : `Por ${st.grano}, el inventario es el del kardex al final de cada período, no lo contado: el ajuste de cada cierre cae entero en el período del cierre, y por eso las ${plural(st.grano)} no suman el mes.`;
   if (!w.per.some(p => p.k === st.seleccionado)) st.seleccionado = w.per[n - 1].k;
-  let html = `<div class="cv-cab"><div class="cv-tit"><h2>Estado de costo de venta</h2>
+  const isel = w.per.findIndex(p => p.k === st.seleccionado);
+  let html = `<div class="cv-cab"><div class="cv-tit"><h2>Estado de costo de venta</h2>${cabeceraVista(st, w, isel)}
     <span class="cv-rango">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)} · ${n} ${plural(st.grano)}${esMes ? ' operativos' : ''}</span>
-    ${hayMas ? `<span class="cv-ventana"><button type="button" data-ventana="-1" aria-label="Períodos anteriores" ${w.ini === w.minimo ? 'disabled' : ''}>‹</button><button type="button" data-ventana="1" aria-label="Períodos siguientes" ${w.fin >= w.maximo ? 'disabled' : ''}>›</button></span>` : ''}
     ${aviso ? `<span class="cv-kardex" title="${esc(aviso)}">inventario del kardex ⓘ</span>` : ''}</div>
     <div class="cv-controles">`;
   if (hay.length > 1) {
@@ -225,12 +226,15 @@ function dibujar(raiz) {
     <span>Venta y costo del Sistema: día contable del turno</span>
     <span>Familias: ${esc(F.join(', '))}</span>
     <span>${esc(estadoExtra.join(' · '))}</span></div>`;
-  html += observaciones(st, data, w, F);
-  html += coberturaSUNAT(st);
+
+  // Las cifras de la ventana: las usan la cabecera de la tabla (⚠), las dos
+  // vistas de arriba y la evolución (regla #679).
+  const c = cifras(st, data, w, F);
+  st.evo = { c, per: w.per };
 
   // La tabla
   const cols = `<col class="c-lab">${w.per.map(() => '<col class="c-mes">').join('')}<col class="c-tot">`;
-  const ths = w.per.map((p) => `<th scope="col" class="${p.k === st.seleccionado ? 'seleccionado' : ''}"><button type="button" data-seleccionar="${esc(p.k)}" aria-pressed="${p.k === st.seleccionado}">${esc(p.rot)}</button><span class="sub">${esc(p.sub || '')}</span></th>`).join('');
+  const ths = w.per.map((p) => `<th scope="col" class="${p.k === st.seleccionado ? 'seleccionado' : ''}"><button type="button" data-seleccionar="${esc(p.k)}" aria-pressed="${p.k === st.seleccionado}">${esc(p.rot)}${c.raro[w.per.indexOf(p)] ? ' <span class="cv-aviso" title="Lo sin explicar duplica la mediana de los períodos visibles">⚠</span>' : ''}</button><span class="sub">${esc(p.sub || '')}</span></th>`).join('');
   let cuerpo = '';
   for (const fila of filas(st)) {
     if (fila.sec) { cuerpo += `<tr class="sec"><td colspan="${n + 2}"><div class="fila-fija">${fila.sec}</div></td></tr>`; continue; }
@@ -252,22 +256,53 @@ function dibujar(raiz) {
       + `<td class="tot ${claseCelda(fila, val.tot)}">${fmtCelda(fila, val.tot)}${tasaCelda(st, data, w, F, fila, null)}</td></tr>`;
     if (abierta && !fila.calculo && !fila.grupo) cuerpo += detalle(st, data, w, fila, F, val);
   }
-  html += `<div class="desliza" role="region" aria-label="Tabla de costos con desplazamiento horizontal por períodos"><table><colgroup>${cols}</colgroup><thead><tr><th class="lab" scope="col">Concepto<span class="sub">${esMes ? 'mes operativo · cierre' : 'kardex'}</span></th>${ths}<th class="tot" scope="col">${n} ${plural(st.grano)}<span class="sub">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)}</span></th></tr></thead><tbody>${cuerpo}</tbody></table></div>`;
-  html += `<div class="estado-desliza"><span>← Períodos anteriores · recientes →</span><span class="periodos-visibles"></span></div>`;
+  const tabla = `<div class="desliza" role="region" aria-label="Tabla de costos con desplazamiento horizontal por períodos"><table><colgroup>${cols}</colgroup><thead><tr><th class="lab" scope="col">Concepto<span class="sub">${esMes ? 'mes operativo · cierre' : 'kardex'}</span></th>${ths}<th class="tot" scope="col">${n} ${plural(st.grano)}<span class="sub">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)}</span></th></tr></thead><tbody>${cuerpo}</tbody></table></div>`
+    + `<div class="estado-desliza"><span>← Períodos anteriores · recientes →</span><span class="periodos-visibles"></span></div>`;
 
-  html += graficoComparacion(st, data, w, F);
-  html += comercial(st, data, w, F);
-  html += notas(st, data, w);
+  // Arriba, una de las dos vistas (regla #679); debajo de las dos, la
+  // evolución y las pestañas. En Cascada la tabla es la primera pestaña.
+  if (st.vista === 'cascada') {
+    html += tira(st, w, c)
+      + `<div class="cv-b">${lectura(st, w, c, isel)}${cascadaGrande(st, w, c, isel)}</div>`
+      + (esMes ? `<div class="cv-b-estado">${calidadCorta(st, data, w, F)}${coberturaCorta(st)}</div>` : '');
+  } else {
+    html += indicadores(w, c, isel)
+      + `<div class="cv-principal"><div class="cv-principal-tabla">${tabla}${coberturaLinea(st)}</div>`
+      + `<aside class="cv-estado">${cascadaCompacta(w, c, isel)}${calidadCorta(st, data, w, F)}${coberturaCorta(st)}</aside></div>`;
+  }
+  html += observaciones(st, data, w, F);
+  html += evolucion(st, w, c);
+  html += pestanas(st, tabla, { comercial: comercial(st, data, w, F), ...notas(st, data, w) });
   raiz.innerHTML = html;
   prepararDesplazamiento(raiz, w);
   if (st.irCalculo) {
-    raiz.querySelector('.cv-calidad')?.scrollIntoView({ block: 'start' });
+    raiz.querySelector('.cv-calidad')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     st.irCalculo = false;
   }
 }
 
 function prepararDesplazamiento(raiz, w) {
   const st = raiz.__st, d = raiz.querySelector('.desliza');
+  // La tabla va al lado del estado del período si entra entera con él; si
+  // no, el estado baja (regla #679). El mínimo es el de `table` en el CSS.
+  const lado = () => {
+    const si = raiz.clientWidth - 352 >= 236 + 104 * w.per.length + 120;
+    if (raiz.classList.contains('cv-lado') !== si) raiz.classList.toggle('cv-lado', si);
+    // Los gráficos se dibujan al ancho real (regla #679): si cambió más que
+    // un poco, otra pasada; la siguiente mide lo mismo y no vuelve a pedirla.
+    const ancho = raiz.clientWidth;
+    st.angosta = ancho < 760;
+    if (ancho && Math.abs(ancho - (st.anchoGraf || 0)) > 24) {
+      st.anchoGraf = ancho;
+      requestAnimationFrame(() => dibujar(raiz));
+    }
+  };
+  lado();
+  if (!d) {
+    // En Cascada, con otra pestaña abierta, no hay tabla que desplazar.
+    st.actualizarAncho = lado;
+    return;
+  }
   const clave = `${st.grano}:${w.per[0].k}:${w.per[w.per.length - 1].k}`;
   st.scroll ||= {};
   const aplicarAncho = () => {
@@ -314,6 +349,7 @@ function prepararDesplazamiento(raiz, w) {
     actualizar();
   }, { passive: true });
   st.actualizarAncho = () => {
+    lado();
     aplicarAncho();
     const posicionNueva = (d.scrollWidth - d.clientWidth) * st.scroll[clave];
     if (Math.abs(d.scrollLeft - posicionNueva) > 0.5) d.scrollLeft = posicionNueva;
@@ -444,7 +480,6 @@ function detalle(st, data, w, fila, F, val) {
 function notas(st, data, w) {
   const tot = (arr) => cortar(arr, w).reduce((a, x) => a + x, 0);
   const vEx = data.venta_extra || {}, cEx = data.costo_extra || {};
-  const abiertos = st.notasAbiertas ||= new Set();
   const inventario = st.grano === 'mes'
     ? 'Inventario contado: último cierre de cada área en su mes operativo, valorizado como stock declarado × precio promedio. Los cierres registrados del 1 al 7 inclusive se asignan al mes anterior.'
     : 'Inventario del kardex al final del último día de cada período, sólo de productos activos, según la regla del Histórico del Almacén. El ajuste de un cierre cae en el período en que se registró: las semanas o quincenas pueden no sumar el resultado mensual basado en conteos.';
@@ -453,8 +488,8 @@ function notas(st, data, w) {
     const estado = g === 'Eventos' ? (incluido ? 'incluidos' : 'excluidos') : (incluido ? 'incluida' : 'excluida');
     return `<li><b>${g}: ${estado} en la selección actual.</b> En la ventana completa: venta neta S/ ${mil(tot(vEx[g]))} y costo histórico S/ ${mil(tot(cEx[g]))}. Sus casillas suman ambos importes a Alimentos; sólo tienen efecto cuando esa familia está seleccionada. Si se excluyen, su consumo puede seguir presente en inventarios y compras.</li>`;
   }).join('');
-  return `<div class="notas">
-  <details class="nota" data-nota="calculo"${abiertos.has('calculo') ? ' open' : ''}><summary>Cómo se calcula</summary><dl>
+  return {
+    calculo: `<dl>
     <dt>Venta neta documentada</dt><dd>Comprobantes pagados y por cobrar − notas de crédito, sin IGV ni recargo; excluye cortesías y anulados. Se agrupa por día contable del turno de caja, no por fecha del cobro. La selección de familias y las casillas de Eventos y Venta interna determinan el alcance.</dd>
     <dt>Inventario inicial y final</dt><dd>${inventario} El inicial de un período es el final del anterior. El total de la ventana muestra el primer inventario inicial y el último final, sin sumarlos.</dd>
     <dt>Compras y salidas</dt><dd>Compras a valor neto, sin IGV, con las notas de crédito de proveedores restadas, por fecha del documento. Notas de salida procesadas a valor neto, por fecha de registro. Todas las salidas que no son bajas entran como deducción inicialmente; la × permite quitar una.</dd>
@@ -464,10 +499,12 @@ function notas(st, data, w) {
     <dt>Consumo carta</dt><dd>Consumo operativo valorizado − consumos no vendidos seleccionados. Es la base de consumo que se compara con el costo completo del Sistema; puede contener diferencias pendientes de explicar.</dd>
     <dt>Costo histórico de lo vendido</dt><dd>Costo guardado en el pedido, incluidos componentes de combos y propiedades, respetando cantidades y ajustes positivos o negativos. Las notas de crédito revierten la parte correspondiente del costo de la venta. No se recalcula con la receta ni los precios actuales.</dd>
     <dt>Descuentos separados</dt><dd>El costo histórico completo de lo vendido se compara con el consumo carta. Los descuentos y el margen se presentan en el análisis comercial.</dd>
-    <dt>Diferencia y saldo pendiente</dt><dd>Diferencia = consumo carta − costo completo del Sistema. Diferencia pendiente de conciliación = diferencia − bajas registradas. El saldo por sí solo no demuestra una pérdida física: requiere revisar fechas, alcance, clasificación, recetas, valorización y registros.</dd>
+    <dt>Diferencia y sin explicar</dt><dd>Diferencia = consumo carta − costo completo del Sistema. Sin explicar = diferencia − bajas registradas (se llamó «Pendiente de conciliación» hasta el 2026-10-20). El saldo por sí solo no demuestra una pérdida física: requiere revisar fechas, alcance, clasificación, recetas, valorización y registros.</dd>
     <dt>Porcentajes y margen</dt><dd>Cada % de costo divide su costo o consumo entre la venta neta documentada de la misma selección. Margen bruto = venta neta documentada − consumo carta. Diferencia en puntos = % consumo carta − % costo completo del Sistema.</dd>
-  </dl></details>
-  <details class="nota alerta" data-nota="referencias"${abiertos.has('referencias') ? ' open' : ''}><summary>Referencias Inforest y alcance</summary><ul>
+      <dt>Lo que se sale de lo habitual</dt><dd>Se marca con ⚠ el período cuyo sin explicar, como % de la venta, pasa el doble de la mediana de los períodos visibles y está al menos 2 puntos encima de ella. Hacen falta tres períodos o más.</dd>
+    <dt>Cobertura SUNAT y Sistema</dt><dd>Entre los comprobantes SUNAT disponibles del mes seleccionado, antes de filtrar estados: (coinciden + con diferencia) ÷ documentos SUNAT. Los documentos solo del Sistema quedan fuera del denominador. No sigue los filtros de familias: SUNAT registra documentos, no insumos. Sin coincidencia documental no confirma falta de recepción física; no se añade ni se resta ningún importe a las compras o al consumo.</dd>
+  </dl>`,
+    referencias: `<ul>
     <li><b>Referencia del costo: Paloteo de Producción → Comparativo → «(a) Ventas en el rango» → Precio costo.</b> Sin «Evaluar por Día Contable», el comparativo revisado exige que tanto el pedido como el comprobante estén dentro del rango. Esta vista agrupa venta y costo por día contable del turno: para comparar deben conciliarse ambas fechas, las notas de crédito y los filtros.</li>
     <li><b>Referencia de venta: Registro de Ventas.</b> En modo por fecha de emisión, selecciona comprobantes por emisión y puede incluir cuentas por cobrar; aquí se agrupan por turno. La venta documentada no representa necesariamente cobros del período.</li>
     <li><b>Referencias del Almacén:</b> cierres de inventario o Histórico del Almacén para existencias, compras netas y «Relación de Notas de Salidas» para salidas. El consumo y su conciliación combinan esas fuentes en la webapp; no equivalen por sí solos a un reporte único de Inforest.</li>
@@ -476,7 +513,8 @@ function notas(st, data, w) {
     ${extras}
     <li><b>Costos de producción queda fuera</b> de inventarios, compras y salidas.</li>
     <li><b>Mes desde 2024.</b> Requiere inventario inicial y final y datos de venta del mes; las observaciones de valorización se muestran por período y familia. Semana y Quincena conservan su histórico desde octubre 2025, basado en Kardex.</li>
-  </ul></details></div>`;
+  </ul>`,
+  };
 }
 
 // ── Eventos: uno solo en la raíz, que sobrevive a cada dibujo ──────────
@@ -484,6 +522,7 @@ function enlazar(raiz) {
   raiz.addEventListener('click', (ev) => {
     const st = raiz.__st;
     const b = ev.target.closest('button, [data-seleccionar]');
+    raiz.querySelector('.cv-tip')?.setAttribute('hidden', '');
     if (!b || !raiz.contains(b)) return;
     if (b.dataset.fila) {
       st.abierta = st.abierta === b.dataset.fila ? null : b.dataset.fila;
@@ -501,12 +540,33 @@ function enlazar(raiz) {
       st.enfocarSeleccion = true;
     } else if (b.hasAttribute('data-calculo')) {
       st.calculoAbierto = !st.calculoAbierto;
+    } else if (b.dataset.vista) {
+      st.vista = b.dataset.vista;
+      guardar('costos_vista', st.vista);
+    } else if (b.dataset.paso) {
+      // El período elegido, de a uno, sobre TODOS los del grano (dentro del
+      // año, si hay uno); la ventana lo sigue si se sale de ella.
+      const w = ventana(st, st.data), todos = st.data.periodos;
+      const j = Math.max(w.minimo, Math.min(w.maximo - 1, todos.findIndex(p => p.k === st.seleccionado) + Number(b.dataset.paso)));
+      const cantidad = st.cantidad || VENTANA;
+      if (j < w.ini) st.ini[st.grano] = j;
+      else if (j >= w.fin) st.ini[st.grano] = j - cantidad + 1;
+      st.seleccionado = todos[j].k;
+      st.enfocarSeleccion = true;
+    } else if (b.dataset.pestana) {
+      st.pestana = b.dataset.pestana;
+    } else if (b.dataset.serie) {
+      st.series[b.dataset.serie] = !st.series[b.dataset.serie];
+    } else if (b.hasAttribute('data-ver-calidad')) {
+      if (st.notasAbiertas.has('calidad')) st.notasAbiertas.delete('calidad'); else st.notasAbiertas.add('calidad');
+      st.irCalculo = st.notasAbiertas.has('calidad');
     } else if (b.dataset.metrica) {
       st.metrica = b.dataset.metrica;
     } else if (b.hasAttribute('data-revisar-mes')) {
       st.calculoAbierto = true;
       st.notasAbiertas.add('calidad');
       st.irCalculo = true;
+      if (st.vista === 'cascada') st.pestana = 'tabla';
     } else if (b.hasAttribute('data-exportar-observaciones')) {
       exportarObservaciones(st);
       return;
@@ -518,8 +578,6 @@ function enlazar(raiz) {
       st.menu = !st.menu;
     } else if (b.dataset.modo) {
       st.modo = b.dataset.modo;
-    } else if (b.dataset.ventana) {
-      st.ini[st.grano] += Number(b.dataset.ventana) * (st.cantidad || VENTANA);
     } else {
       return;
     }
@@ -557,6 +615,8 @@ function enlazar(raiz) {
     if (ev.target.matches && ev.target.matches('details[data-nota]')) {
       const abiertas = raiz.__st.notasAbiertas, clave = ev.target.dataset.nota;
       if (ev.target.open) abiertas.add(clave); else abiertas.delete(clave);
+      // Cerrar el detalle de calidad lo saca de la página (sólo se dibuja abierto).
+      if (clave === 'calidad' && !ev.target.open) dibujar(raiz);
     }
   }, true);
   raiz.addEventListener('keydown', ev => {
@@ -572,6 +632,21 @@ function enlazar(raiz) {
     const dd = raiz.querySelector('details.dd');
     if (dd && dd.open && !ev.composedPath().includes(dd)) { dd.open = false; raiz.__st.ddAbierto = false; }
   });
+  // La ficha de la evolución: sigue al cursor sobre la columna de un período.
+  raiz.addEventListener('mousemove', (ev) => {
+    const tip = raiz.querySelector('.cv-tip');
+    if (!tip) return;
+    const hit = ev.target.closest?.('.cv-hit');
+    if (!hit) { if (!tip.hidden) tip.hidden = true; return; }
+    const caja = tip.parentElement.getBoundingClientRect(), i = Number(hit.dataset.i);
+    if (tip.dataset.i !== String(i)) { tip.innerHTML = ficha(raiz.__st, i); tip.dataset.i = String(i); }
+    tip.hidden = false;
+    let x = ev.clientX - caja.left + 14;
+    if (x + 236 > caja.width) x = ev.clientX - caja.left - 246;
+    tip.style.left = `${Math.max(4, x)}px`;
+    tip.style.top = `${Math.max(4, ev.clientY - caja.top - 24)}px`;
+  });
+  raiz.addEventListener('mouseleave', () => { const tip = raiz.querySelector('.cv-tip'); if (tip) tip.hidden = true; });
   const observador = new ResizeObserver(() => raiz.__st.actualizarAncho?.());
   observador.observe(raiz);
 }
@@ -598,6 +673,10 @@ export default function (component) {
       abierta: null, modo: 'total', menu: false, grano: leer('costos_grano', 'mes'),
       grupoAbierto: leer('costos_grupo_abierto', false) === true,
       notasAbiertas: new Set(),
+      // La vista de arriba (regla #679) y lo que dibuja la evolución.
+      vista: leer('costos_vista', 'tablero') === 'cascada' ? 'cascada' : 'tablero',
+      pestana: null,
+      series: { carta: true, pos: true, brecha: true, barras: true },
       ini: { mes: Number.MAX_SAFE_INTEGER, quincena: Number.MAX_SAFE_INTEGER, semana: Number.MAX_SAFE_INTEGER },
     };
     if (data?.desde_resumen) {
@@ -607,6 +686,7 @@ export default function (component) {
       raiz.__st.fams = new Set(BUCK);
       raiz.__st.extra = new Set(['Eventos']);
       raiz.__st.quitadas = [];
+      raiz.__st.vista = 'tablero';
       if (i >= 0) raiz.__st.ini.mes = Math.max(0, i - VENTANA + 1);
     }
     enlazar(raiz);

@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-678 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+679 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -873,7 +873,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 
-**SUNAT y SIRE** (63)
+**SUNAT y SIRE** (64)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -938,6 +938,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#674** — El original de SUNAT se espera DENTRO de la ficha: no hay que cerrarla y volver a abrirla…
 - **#675** — Documentos SUNAT pide EN LOTE los XML que faltan en la tabla…
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
+- **#679** — «Costo de ventas» tiene DOS formas de la parte de arriba —Tablero y Cascada— y, debajo de las…
 
 **Fechas, rangos y cortes** (17)
 
@@ -1010,7 +1011,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (193)
+**Decisiones de diseño y UX** (194)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1205,6 +1206,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#672** — Documentos SUNAT: la tarjeta de abajo ABRE en la fidelidad, y suma «Por tipo de compra»…
 - **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
 - **#677** — De los tres modos de «Distribución de diferencias» sólo el Pareto se podía analizar: la vista…
+- **#679** — «Costo de ventas» tiene DOS formas de la parte de arriba —Tablero y Cascada— y, debajo de las…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -52991,6 +52993,74 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-20.)
 
+679. **«Costo de ventas» tiene DOS formas de la parte de arriba —Tablero y
+     Cascada— y, debajo de las dos, una evolución que se lee sin abrir
+     nada; lo que antes eran franjas plegadas a todo el ancho son
+     tarjetas al costado y pestañas. Y «Pendiente de conciliación» pasó a
+     llamarse «Sin explicar».** 2026-10-20, a pedido y sobre un boceto
+     aprobado (https://claude.ai/artifact/RPV9HCSNWa9rrZtABRnRkj): «no me
+     gustan esas botoneras o cuadrantes largos horizontalmente que ocupan
+     toda la página, se ve sin diseño»; y después, «me gustaría tener
+     ambas vistas, que la parte de arriba alterne entre la opción A y B».
+
+     - **Las piezas nuevas viven en `graficos/costos_vistas.js`**, que
+       `costos.py` concatena entre `costos_paneles.js` y
+       `costos_tabla.js` (un solo módulo: el último exporta el default).
+       `cifras()` calcula una vez las series de la ventana para la
+       cabecera de la tabla, las dos vistas y la evolución.
+     - **Tablero**: cuatro indicadores del período elegido (venta,
+       consumo carta %, Sistema %, sin explicar) con su línea de la
+       ventana; la tabla, y al costado el estado del período: la cascada
+       compacta (dos barras y la diferencia partida en bajas y sin
+       explicar), las observaciones en corto y la cobertura SUNAT. **Al
+       costado sólo si la tabla entra entera** (`cv-lado`, lo decide
+       `prepararDesplazamiento` con el mismo mínimo que el CSS de
+       `table`); si no, el estado baja en una fila de tres. Al costado,
+       la cobertura va en un renglón debajo de la tabla (`cv-cob-linea`):
+       con las tres tarjetas la columna medía 125px más que la tabla.
+     - **Cascada**: una tira con los períodos (cada uno con su % sin
+       explicar), «Qué pasó» en palabras y la cascada consumo carta −
+       Sistema = diferencia − bajas = sin explicar. La tabla es la
+       primera pestaña de abajo. La vista se recuerda
+       (`costos_vista` en localStorage); el enlace del Resumen abre en
+       Tablero.
+     - **Las ‹ › de la cabecera mueven el período ELEGIDO**, de a uno, y
+       arrastran la ventana cuando se sale de ella. Antes movían la
+       ventana de a seis y el elegido saltaba solo.
+     - **La evolución ya no se pliega**: dos pisos con los mismos
+       períodos —consumo carta y Sistema arriba, con la diferencia
+       sombreada; abajo la diferencia en bajas + sin explicar, con la
+       mediana—, % o S/, series que se apagan, una ficha al pasar el
+       cursor (`.cv-hit` + un `mousemove` en la raíz) y un clic que elige.
+     - **«Se sale de lo habitual»** (⚠ en la cabecera de la tabla, rojo en
+       el indicador, la tira y las barras): lo sin explicar como % de la
+       venta pasa el doble de la mediana de los períodos visibles Y está 2
+       puntos encima de ella, con tres o más. El doble solo marcaba ruido
+       con medianas chicas. Es una pista para mirar, no un juicio: lo
+       dice «Cómo se calcula».
+     - **Un gráfico dentro del componente se dibuja al ANCHO REAL**: el
+       `viewBox` mide lo que su caja (`st.anchoGraf`, que se mide al
+       dibujar y redibuja si cambió más de 24px). Con un `viewBox` fijo de
+       1000 y `width: 100%`, a 1900px la letra salía a 20px y a 1323 a
+       12: el mismo SVG se ve como dos tamaños de letra.
+     - **El detalle de las observaciones sólo se dibuja abierto**, a todo
+       el ancho debajo de la tarjeta corta que lo abre; cerrarlo lo saca
+       de la página (el `toggle` del `<details>` redibuja). Cerrado era
+       una franja con un título y una flecha.
+     - **Convenios y Presupuesto** (los dos `st.expander` de Python, que
+       no pueden entrar al componente: llevan `st.data_editor`) van lado
+       a lado en `st.columns(2)`, no apilados a todo el ancho.
+     - **«Sin explicar» = diferencia − bajas registradas**, la misma
+       cuenta (`r.falt`); cambió sólo el nombre, en Costos y en la portada
+       del Resumen ejecutivo. «Pendiente» sonaba a trámite en cola; y
+       «faltante» o «pérdida» afirman lo que el número no prueba (#676).
+
+     Verificado con Playwright contra R2 a 1323 y 1900px: las dos vistas,
+     mes y quincena (con sin explicar negativo), abrir y cerrar el detalle,
+     las ‹ ›, la ficha de la evolución, sin errores de consola.
+
+     (2026-10-20.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53003,7 +53073,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#678**; la próxima toma el número siguiente.
+> última regla es la **#679**; la próxima toma el número siguiente.
 
 >
 

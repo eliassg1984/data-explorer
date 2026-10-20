@@ -1109,13 +1109,14 @@ consumo carta con el costo histórico COMPLETO del Sistema:
     Consumo operativo = inventario inicial + compras netas − inventario final
     Consumo carta     = consumo operativo − salidas que no son bajas − cortesías
     Diferencia        = consumo carta − costo histórico completo del Sistema
-    Pendiente         = diferencia − bajas registradas
+    Sin explicar      = diferencia − bajas registradas
 
 **Los descuentos están separados**, en «Margen y descuentos». Su costo
 proporcional, neto de las devoluciones de convenios configuradas, es una
 referencia comercial: no reduce ni consumo carta ni costo del Sistema.
 Las bajas permanecen en el consumo carta y explican parte de la diferencia.
-El saldo por sí solo no demuestra pérdida física. La portada de Resumen
+Lo que queda se llama «Sin explicar» («Pendiente» hasta la #679) y por sí
+solo no demuestra pérdida física. La portada de Resumen
 ejecutivo aplica la misma cuenta. Esta decisión sustituye la comparación
 ajustada por descuentos de la regla #661; ver regla #676.
 
@@ -1133,8 +1134,23 @@ histórico por haber validado los cierres mensuales.
 
 La tabla muestra seis períodos y seis filas principales; permite doce
 columnas, elegir año y abrir cálculo, no vendidos y evolución por fila.
-El gráfico compara consumo carta y Sistema, en importe o porcentaje de
-venta; elegir un mes resalta su columna y cambia observaciones y cobertura.
+
+**La parte de arriba tiene dos formas** (2026-10-20, regla #679), a
+elección con «Tablero | Cascada» en la cabecera:
+- **Tablero**: cuatro indicadores del período, la tabla y, al costado, la
+  cascada compacta, las observaciones en corto y la cobertura SUNAT. Al
+  costado sólo si la tabla entra entera (`cv-lado`); si no, debajo.
+- **Cascada**: tira de períodos, «Qué pasó» y la cascada consumo carta →
+  sin explicar; la tabla pasa a la primera pestaña.
+
+Debajo de las dos, la evolución SIEMPRE abierta (líneas arriba, la
+diferencia en barras abajo, ficha al pasar el cursor) y las pestañas
+Margen y descuentos / Cómo se calcula / Referencias. Nada de franjas
+plegadas a todo el ancho: fue la queja que lo originó. Las ‹ › mueven el
+período elegido; ⚠ marca el que duplica la mediana de lo sin explicar. Un
+SVG del componente se dibuja al ancho real (`st.anchoGraf`): con un
+`viewBox` fijo, la letra crece con la pantalla. Vive en
+`graficos/costos_vistas.js`.
 «SUNAT y Sistema» reutiliza el cruce documental existente sobre el registro
 cargado, antes de filtrar estados y sin XML/API en vivo. La cobertura es
 (Coincide + Diferencia) / documentos SUNAT; excluye Solo sistema. Notas e
