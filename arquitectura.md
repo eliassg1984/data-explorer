@@ -52916,6 +52916,13 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        «N de M líneas con stock cerraron con diferencia» pasó al tooltip
        del título, y Familia × Área perdió su pie («Ajuste Valorizado por
        familia y área»).
+     - **Y la lista de «Análisis de diferencias» (#650) parte el texto**
+       (2026-10-20, a pedido: «filas muy estrechas, como aviso de
+       periódico»): filas de 66px y «Posible origen» con hasta tres pistas
+       («+N más» si hay otras; en la ficha están todas). 66 y no 44:
+       `st.dataframe` sólo parte en renglones si la fila mide MÁS de 4rem
+       (64px, leído en su bundle); por debajo la fila crece y el texto
+       sigue cortado con «…».
 
      Lo vigilan `test_graficos.py` (Pareto por lado, el 80 %, las filas de
      la tabla separadas y juntas, el buscador y la pila de cinco vistas).

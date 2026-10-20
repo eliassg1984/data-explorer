@@ -239,14 +239,39 @@ def _key_tabla(claves):
     return f"ajdif_tabla_{firma}_{st.session_state.get(_K_SALTO, 0)}"
 
 
-def _tabla(f):
+# El alto de una fila de la lista (2026-10-20, a pedido: a 27px «se ven muy
+# delgadas, como aviso de periódico»). 66 y no 44: `st.dataframe` sólo parte
+# el texto en renglones si la fila mide MÁS de 4rem (64px; leído en el
+# bundle de la 1.59, `rowHeight > 4rem` → `isWrappingAllowed`). Con 44 la
+# fila crecía y el nombre y las pistas seguían cortados con «…».
+ALTO_FILA = 66
+
+
+def _origenes(f, fichas):
+    """«Posible origen» con TODAS las pistas de cada fila, la principal
+    primero (2026-10-20, a pedido: hasta ese día iba la principal y un
+    «+2»). `fichas` es, por id, la ficha de la línea o del producto (con
+    las áreas juntas), que trae sus pistas en orden. Hasta TRES: es lo que
+    entra en los tres renglones de la fila; las demás, «+N más», están en
+    la ficha."""
+    out = []
+    for i, p in zip(f["id"], f["pista"]):
+        tit = [x["ti"] for x in (fichas.get(int(i)) or {}).get("pistas") or []]
+        if p and (not tit or tit[0] != p):
+            tit = [p] + [t for t in tit if t != p]
+        tit = list(dict.fromkeys(tit))
+        mas = f" · +{len(tit) - 3} más" if len(tit) > 3 else ""
+        out.append(" · ".join(tit[:3]) + mas if tit else "—")
+    return out
+
+
+def _tabla(f, fichas):
     return pd.DataFrame({
         "Producto": f["producto"].tolist(),
         "Área": f["area"].tolist(),
         "Dif.": f["q"].tolist(),
         "S/": f["v"].tolist(),
-        "Posible origen": [(p + (f"  +{n - 1}" if n > 1 else "")) if p else "—"
-                           for p, n in zip(f["pista"], f["n_pistas"])],
+        "Posible origen": _origenes(f, fichas),
     })
 
 
@@ -272,14 +297,16 @@ def _estilo(tabla, f, pos):
     return sty.set_properties(subset=["Producto"], **{"font-weight": "600"})
 
 
-_ANCHOS = {"Producto": 205, "Área": 84, "Dif.": 82, "S/": 70,
-           "Posible origen": 205}
+# Suman 634 + los 36 de la casilla: lo que mide la columna de la lista a
+# 1323 (medido; con 676 «Posible origen» se salía por la derecha).
+_ANCHOS = {"Producto": 180, "Área": 80, "Dif.": 78, "S/": 66,
+           "Posible origen": 230}
 _AYUDA = {
     "Dif.": "Contado menos sistema, en la unidad del producto.",
     "S/": "La diferencia valorizada al precio promedio del cierre.",
-    "Posible origen": "La pista principal de la línea; en morado si es fuerte "
-                      "(los números calzan o es un hecho del kardex). «+2» "
-                      "dice cuántas más hay en la ficha.",
+    "Posible origen": "Todas las pistas de la línea, la principal primero; en "
+                      "morado si la principal es fuerte (los números calzan o es "
+                      "un hecho del kardex). Cada una se explica en la ficha.",
 }
 
 
@@ -860,15 +887,15 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         with c_tab:
             key = _key_tabla(claves)
             ss[_K_TABLA], ss[_K_FILAS] = key, claves
-            tabla = _tabla(f)
+            tabla = _tabla(f, FG if junto else r["fichas"])
             st.dataframe(
                 _estilo(tabla, f, pos), key=key, on_select="rerun",
                 selection_mode="single-row-required",
                 selection_default={"selection": {"rows": [pos]}},
-                hide_index=True, row_height=27,
+                hide_index=True, row_height=ALTO_FILA,
                 # Tope de una laptop (`DIFERENCIAS_TABLA`): la ficha de al
                 # lado va en pestañas y mide lo mismo.
-                height=alturas.por_filas(len(tabla), px_fila=27, extra=38, minimo=0,
+                height=alturas.por_filas(len(tabla), px_fila=ALTO_FILA, extra=38, minimo=0,
                                          rol=alturas.DIFERENCIAS_TABLA),
                 column_config={c: st.column_config.Column(width=_ANCHOS.get(c),
                                                           help=_AYUDA.get(c))
