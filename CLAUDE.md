@@ -1325,8 +1325,8 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   renglones.
 - **La lista es una pieza propia y la ficha abre sólo al elegir una línea**
   (2026-10-20, regla #680): `graficos/ajuste/lista_diferencias.js`. Cada
-  pista es una ficha corta con su número (`dato`, de la cuenta) y un clic
-  abre un pop con ese número y el texto partido en pasos. Los totales, una
+  pista es una ficha corta con su nombre, y un clic abre un pop con su
+  número (`dato`, de la cuenta) y el texto partido en pasos. Los totales, una
   tira de un renglón.
 - **En el Almacén Central el POS no descuenta ventas, nunca**: lo que sale,
   sale con requerimiento, transferencia o nota. Lo que falta ahí salió hacia

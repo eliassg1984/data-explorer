@@ -3,9 +3,10 @@
 // La monta graficos/ajuste/_diferencias.py::_lista con st.components.v2 (sin
 // iframe, estilos en un shadow root). Reemplazó al st.dataframe de la
 // regla #650 porque una celda de st.dataframe no puede tener una ficha que
-// se clickee: «Posible origen» son fichas cortas —el nombre de la pista y su
-// número (`dato`)— y un clic en una abre un pop con lo que la origina, el
-// texto de la pista partido en pasos.
+// se clickee: «Posible origen» son fichas cortas con el nombre de la pista, y
+// un clic en una abre un pop con su número (`dato`) y lo que la origina, el
+// texto de la pista partido en pasos. El número no va en la ficha: se quitó
+// a pedido el mismo día («quitemos el dato en la celda»).
 //
 // Python manda en `data`: las filas (ya ordenadas y con sus textos
 // escritos), la elegida, el alto y los dos colores de Ajuste. A Python le
@@ -27,8 +28,7 @@ function chips(fila) {
   if (!fila.pistas.length) return '<span class="nada">—</span>';
   return '<div class="chips">' + fila.pistas.map((p, j) =>
     `<button type="button" class="chip${p.f ? ' f' : ''}" data-k="${esc(fila.k)}" data-j="${j}"` +
-    ` title="${esc(p.ti)}"><span class="t">${esc(p.ti)}</span>` +
-    (p.dato ? ` <span class="d">${esc(p.dato)}</span>` : '') + '</button>').join('') + '</div>';
+    ` title="${esc(p.ti)}"><span class="t">${esc(p.ti)}</span></button>`).join('') + '</div>';
 }
 
 function dibujar(raiz) {

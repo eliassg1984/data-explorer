@@ -42,7 +42,7 @@ td.area { color: var(--text-secondary); overflow-wrap: anywhere; }
 .nada { color: var(--text-muted); }
 .vacio { padding: 22px 14px; text-align: center; color: var(--text-muted); }
 
-/* Las pistas, como fichas cortas: el nombre y su número. Morado si es
+/* Las pistas, como fichas cortas con su nombre (el número va en el pop). Morado si es
    fuerte (los números calzan o es un hecho del kardex). */
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip {
@@ -55,7 +55,6 @@ td.area { color: var(--text-secondary); overflow-wrap: anywhere; }
 .chip.f { border-color: var(--border-lavender); background: var(--accent-light); color: var(--accent-deep); font-weight: 600; }
 .chip.f::before { background: var(--accent); }
 .chip .t { overflow: hidden; text-overflow: ellipsis; }
-.chip .d { flex: 0 0 auto; font-weight: 500; opacity: .85; }
 .chip:hover { border-color: var(--accent); }
 
 /* El pop de una pista: fijo a la pantalla, para que la tabla que desliza no

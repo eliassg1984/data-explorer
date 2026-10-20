@@ -60,7 +60,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 680 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (215)
+**CSS y estilos** (214)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -276,7 +276,6 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
 - **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
-- **#680** — «Análisis de diferencias» lista con fichas cortas que traen su número, y la ficha de la línea…
 
 **Layout y alturas** (96)
 
@@ -53075,6 +53074,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        ficha corta con su título y su número; un clic abre un pop con ese
        número y el texto de la pista partido en pasos (la «traza»), y
        «Abrir la ficha de la línea». A Python llega sólo el trigger «fila».
+       **El número NO va en la ficha corta**: estuvo unas horas («Calientes
+       −32 und» al lado del título) y se quitó a pedido el mismo día; queda
+       sólo en el pop.
      - **El número lo pone la cuenta**: cada pista de `diferencias_ajuste`
        trae `dato` («Calientes −32 und», «−145 und», «≈ 5 und», «0 → 5
        und»…). `VERSION` pasa a 13. Una pista sin `dato` muestra sólo su
