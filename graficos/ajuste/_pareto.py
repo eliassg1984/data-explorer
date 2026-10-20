@@ -43,9 +43,12 @@ FALTANTES = "Faltantes"
 SOBRANTES = "Sobrantes"
 LADOS = (FALTANTES, SOBRANTES)
 
-# Cuántos productos llevan barra. Quince filas de 24px entran en el alto de
-# una figura protagonista; la cola no se dibuja (ver `_fig_pareto_ajuste`).
-TOP_N = 15
+# Cuántos productos llevan barra. Diez, y no quince (2026-10-20, a pedido):
+# con quince la tarjeta de Familia × Área se cortaba contra el borde de la
+# pantalla de la laptop (619px), y la opción elegida fue que la tarjeta
+# QUEPA, no que deslice por dentro (las tarjetas no llevan barra propia,
+# CLAUDE.md). La cola no se dibuja (ver `_fig_pareto_ajuste`).
+TOP_N = 10
 # El corte del ABC: el mismo de la columna «Productos 80 %» de Por familia
 # (`_cascada._PARETO`).
 UMBRAL = 0.80
@@ -151,8 +154,11 @@ def _fig_pareto_ajuste(df, col_ajuste_val, col_producto, top_n=TOP_N,
                for i in range(len(etiquetas))]
     nombre = "Faltante" if lado == FALTANTES else "Sobrante"
     if height is None:
-        height = alturas.por_filas(len(etiquetas), px_fila=24, extra=70,
-                                   rol=alturas.PROTAGONISTA)
+        # 16px por barra: el renglón de 10.5px del nombre y su aire. Con diez
+        # barras la figura mide 206 y la tarjeta entera entra debajo de la
+        # tabla de Familia × Área en 1323×619 (medido: con 17px se pasaba 9).
+        height = alturas.por_filas(len(etiquetas), px_fila=16, extra=46,
+                                   rol=alturas.MINI)
     fig = go.Figure()
     fig.add_bar(
         y=etiquetas, x=valores, orientation="h", marker_color=colores,
@@ -163,8 +169,8 @@ def _fig_pareto_ajuste(df, col_ajuste_val, col_producto, top_n=TOP_N,
     fig.update_layout(**_layout_aj(
         height=height,
         showlegend=False,
-        margin=dict(l=10, r=16, t=34, b=10),
-        bargap=0.25,
+        margin=dict(l=10, r=16, t=26, b=6),
+        bargap=0.22,
         xaxis=dict(showticklabels=True, tickprefix="S/ ", tickformat=",.0f",
                    showgrid=True, gridcolor=GRIS_BORDE, fixedrange=True),
         # `type="category"`: un nombre que sea sólo un número convertiría el
@@ -173,10 +179,16 @@ def _fig_pareto_ajuste(df, col_ajuste_val, col_producto, top_n=TOP_N,
         yaxis=dict(showticklabels=True, type="category",
                    categoryorder="array", categoryarray=etiquetas,
                    autorange="reversed", fixedrange=True,
-                   tickfont=dict(size=11)),
+                   tickfont=dict(size=10.5)),
     ))
     fig.update_layout(xaxis2=dict(
-        overlaying="x", side="top", range=[0, 102], ticksuffix=" %",
+        # De 20 en 20 con los valores escritos: con el `tickmode` automático
+        # la 1.64 de Cloud rotulaba 21.1 %, 42.1 %, 63.2 %… (captura del
+        # 2026-10-20).
+        # Con `tickvals` el `ticksuffix` no se aplica: el texto va escrito.
+        overlaying="x", side="top", range=[0, 102],
+        tickmode="array", tickvals=[0, 20, 40, 60, 80, 100],
+        ticktext=["0 %", "20 %", "40 %", "60 %", "80 %", "100 %"],
         showgrid=False, fixedrange=True, tickfont=dict(size=10,
                                                        color=GRIS_TEXTO)))
     fig.add_scatter(
