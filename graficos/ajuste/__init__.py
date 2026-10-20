@@ -11,7 +11,8 @@ ultimos 200 commits, 2,7x el siguiente) y sus dos funciones mayores
     _pivote.py           Tiempo › Detalle por producto: la tabla pivote (#504)
     _cascada.py          vista Cascada (la mas grande)
     _heatmap.py          vista "Mapa de calor" (hoy una tabla Familia x Area, #468)
-    _distribucion.py     vista Distribucion
+    _pareto.py           el Pareto del detalle de Cascada y Mapa de calor (#677)
+    _productos.py        la tabla de productos con areas desplegables (#677)
     _diferencias.py      vista Analisis de diferencias: por que no cuadra cada linea (#650)
 
 Este __init__ se queda con lo que define el dashboard como tal: la
@@ -75,8 +76,11 @@ from graficos.ajuste._pivote import (  # noqa: F401
 )
 from graficos.ajuste._cascada import _graf_waterfall_ajuste  # noqa: F401
 from graficos.ajuste._heatmap import _graf_heatmap_ajuste  # noqa: F401
-from graficos.ajuste._distribucion import (  # noqa: F401
-    _graf_distribucion_ajuste, _fig_pareto_ajuste, _pareto_datos,
+# El Pareto vivía en la vista «Distribución de diferencias», que se quitó el
+# 2026-10-19: hoy es una opción del detalle de Por familia y Familia × Área
+# (regla #677). test_graficos.py lo prueba como `_aj._pareto_datos`.
+from graficos.ajuste._pareto import (  # noqa: F401
+    _fig_pareto_ajuste, _pareto_datos,
 )
 from graficos.ajuste._diferencias import vista_diferencias
 
@@ -94,9 +98,10 @@ _AJUSTE_RAIL_CATEGORIAS = rail_sin_tablas((
     # una tabla Familia × Área (#468). Los IDS (primer elemento) no se tocan:
     # son la URL, las keys, el CSS y `_PILA_VISUAL`. Regla #584.
     ("Visual", (("Cascada",        "Por familia",   ":material/view_list:"),
-                     ("Mapa de calor",  "Familia × Área", ":material/grid_on:"),
-                     ("Distribución",   "Distribución de diferencias",
-                      ":material/bar_chart:"))),
+                     ("Mapa de calor",  "Familia × Área", ":material/grid_on:"))),
+    # «Distribución de diferencias» se fue el 2026-10-19: de sus tres modos
+    # sólo el Pareto se podía analizar, y pasó al detalle de las dos de
+    # arriba (regla #677).
     # Desde el 2026-09-23 «Comparativa mensual» y «Por fecha de corte» no
     # existen: miraban el mismo dato que Evolución y se fusionaron en ella
     # (#501). El mismo día la tabla volvió a salir de Evolución como vista
@@ -126,7 +131,6 @@ _AJUSTE_RAIL_CATEGORIAS = rail_sin_tablas((
 _PILA = pila_sin_tablas((
     ("aj_sec_cascada",      "Cascada"),
     ("aj_sec_heatmap",      "Mapa de calor"),
-    ("aj_sec_distribucion", "Distribución"),
     ("aj_sec_diferencias",  "Diferencias"),
     ("aj_sec_evolucion",    "Evolución"),
     ("aj_sec_detalle",      "Detalle por producto"),
@@ -144,7 +148,6 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     col_ajuste_val = _resolver(df_f, ["AJUSTE VALORIZADO", "AJUSTEVALORIZADO"])
     col_valorizado = _resolver(df_f, ["VALORIZADO TOTAL", "VALORIZADO", "VALORIZADOTOTAL"])
     col_producto   = _resolver(df_f, ["NOMBRE PRODUCTO", "PRODUCTO", "DESCRIPCION"])
-    col_codigo     = _resolver(df_f, ["CODIGO PRODUCTO", "Codigo Producto", "COD PRODUCTO"])
     col_cantidad   = _resolver(df_f, ["AJUSTE", "CANTIDAD AJUSTE", "CANTIDAD"])
     # Lo que registró el kardex por cada línea del cierre (regla #612). Sólo
     # existe si `data.cargar` encontró `ajustekardex.parquet` en R2.
@@ -215,13 +218,12 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     else:
         d = df_full
 
-    # Cascada, Mapa de calor y Distribución NO pasan por estos chips: tienen
+    # Cascada y Mapa de calor NO pasan por estos chips: tienen
     # los suyos. Cascada y Mapa de calor traen la fila entera de tres (corte ·
     # Área acotada a las que movieron algo · Familia sembrada con cinco), la
     # misma pieza — `graficos.ajuste._comun.estado_filtros_vista`; la
-    # estrenaron el 2026-09-14/15, a pedido. Distribución sumó un filtro de
-    # Familia propio el 2026-09-21 (mismas cinco familias de entrada) y se
-    # sumó al mismo régimen. Se guarda el df de acá, antes de recortar, porque
+    # estrenaron el 2026-09-14/15, a pedido. (Distribución, que
+    # también, se quitó el 2026-10-19: regla #677.) Se guarda el df de acá, antes de recortar, porque
     # filtrar dos veces dejaría la vista mostrando la intersección de dos
     # compartimentos y sólo uno visible. De los chips de arriba hoy sólo
     # cuelgan Evolución y la tabla dinámica. Ver arquitectura.md regla #425.
@@ -291,24 +293,6 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             df_full=df_full, col_valorizado=col_valorizado,
             col_cantidad=col_cantidad, col_unidad=col_unidad)
 
-    def _dib_distribucion():
-        """Distribución: dibuja sus PROPIAS tarjetas (el gráfico en la suya a la
-        izquierda y las tablas en la suya a la derecha), como la Cascada y el
-        Mapa de calor — ya NO una card única alrededor (2026-09-22, a pedido:
-        «que el gráfico en sus tres modos figuren en su propia tarjeta y las
-        tablas en una tarjeta, a la derecha»). Por eso no usa `_en_tarjeta`,
-        igual que `_dib_cascada`/`_dib_heatmap`: envolverla daría una tarjeta
-        alrededor de otras dos. Y como ellas, su `_vacio` mira el df de los
-        chips de arriba —que esta vista ya no usa—: recibe `d_sin_chips` y avisa
-        sola cuando se queda sin datos. Ver regla #494."""
-        _graf_distribucion_ajuste(
-            d_sin_chips, col_familia, col_area, col_ajuste_val, col_producto,
-            col_codigo=col_codigo, col_cantidad=col_cantidad,
-            col_fecha=col_fecha, col_unidad=col_unidad, df_full=df_full)
-        # Con «Por meses», su panel lleva «Mes del cierre»: si cambió, una
-        # corrida completa, después de dibujar la vista entera (regla #632).
-        recargar_si_cambio_mes()
-
     def _dib_diferencias():
         """Análisis de diferencias: su propia tarjeta, su sesión y su familia
         (regla #650). Recibe el parquet entero, como las de arriba: la cuenta
@@ -354,7 +338,6 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     _DIBUJANTES = {
         "aj_sec_cascada":      _dib_cascada,
         "aj_sec_heatmap":      _dib_heatmap,
-        "aj_sec_distribucion": _dib_distribucion,
         "aj_sec_diferencias":  _dib_diferencias,
         "aj_sec_tabla":        _dib_tabla,
         "aj_sec_evolucion":    _dib_evolucion,

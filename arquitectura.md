@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-676 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+677 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -375,7 +375,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
 - **#671** — «Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada receta base, quién y cuánto…
 
-**Plotly y figuras** (117)
+**Plotly y figuras** (118)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -494,6 +494,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#649** — La barra de las tarjetas «por período» de Movimientos es LISA y resalta UNA parte, elegida…
 - **#659** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
 - **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
+- **#677** — De los tres modos de «Distribución de diferencias» sólo el Pareto se podía analizar: la vista…
 
 **AgGrid y tablas** (95)
 
@@ -1007,7 +1008,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (192)
+**Decisiones de diseño y UX** (193)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1201,6 +1202,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#671** — «Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada receta base, quién y cuánto…
 - **#672** — Documentos SUNAT: la tarjeta de abajo ABRE en la fidelidad, y suma «Por tipo de compra»…
 - **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
+- **#677** — De los tres modos de «Distribución de diferencias» sólo el Pareto se podía analizar: la vista…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -52862,6 +52864,57 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-19.)
 
+677. **De los tres modos de «Distribución de diferencias» sólo el Pareto
+     se podía analizar: la vista se fue y el Pareto pasó al DETALLE de Por
+     familia y Familia × Área, junto con una tabla de productos con las
+     áreas desplegables.** Desde 2026-10-19, a pedido, con mockup aprobado:
+
+     - **Por qué se quitó.** El histograma de una sesión es una barra
+       gigante en el cero y colas que no se ven; los extremos que mostraba
+       el strip por familia ya los listan «Por producto» y «Análisis de
+       diferencias». Se borraron `_distribucion.py`, su sección de la pila,
+       su CSS (`ajdist_por`) y `alturas.AMPLIADO`, que sólo usaba ella
+       (#494).
+     - **El Pareto (`graficos/ajuste/_pareto.py`) sigue a lo elegido**: la
+       familia en foco («Detalle por: Pareto», cuarta opción) o la celda
+       («Lista · Tabla · Pareto»). Elige el LADO —faltantes o sobrantes:
+       muchos sobrantes son la otra mitad de un faltante— y pinta fuertes
+       las barras que explican el 80 % (`productos_80`, sobre TODOS los
+       productos: el 80 % puede caer adentro de «Otros»). Sigue sumando el
+       NETO de cada producto. Un clic en una barra lista sus áreas al
+       costado. **La figura no depende de la selección**: si el clic la
+       cambiara (un borde en la barra elegida), Streamlit podría tomarla
+       por otro elemento y soltar la selección; la marca la pone Plotly.
+       En Valorizado Total no se ofrece (no hay lados).
+     - **La tabla (`graficos/ajuste/_productos.py`)** tiene las columnas
+       en el orden pedido —Código · Familia · Subfamilia · Nombre · Unidad
+       kardex · Área · Stock sistema · Diferencia · Conteo · Valorizado— y
+       «Valorizado» es la DIFERENCIA valorizada (`AJUSTE VALORIZADO`).
+       «Áreas: Separadas» es una fila por línea con diferencia; «Juntas»,
+       una por producto, y un clic despliega cada área con stock (también
+       las que cerraron sin diferencia: si no, el stock de arriba no sería
+       la suma de lo de abajo). Lo que falta en un área y sobra en otra se
+       compensa en el total y la celda lo dice («3 áreas · se compensa»).
+       El despliegue es el de Stock por Producto (#466), y su JS se
+       IMPORTA de `inventario_productos.py`, no se copia.
+     - **Por familia › Por producto** suma «Áreas» y «Ver como» (Listas |
+       Tabla); abre en Juntas + Tabla. Los dos llevan ESPEJO
+       (`_eleccion_con_eco`) por la misma razón que el modo del detalle: el
+       clic en la tabla de familias hace `st.rerun()` antes de dibujarlos
+       (#373). Con «Listas» + «Juntas» las filas TOTAL dejan de ser el
+       «Faltó» y el «Sobró» de arriba: el grano vuelve a ser el producto.
+     - **Familia × Área**: el NOMBRE de la familia es un botón que abre el
+       detalle en todas las áreas, foco `(familia, None)`; sólo ahí la
+       Tabla ofrece «Áreas» (en una celda hay un área y nada que juntar).
+       El modo lleva una key por modo de la tabla (`hm_det_modo` /
+       `hm_det_modo_val`): en Valorizado Total no hay Pareto, y un valor
+       guardado fuera de las opciones revienta el control.
+
+     Lo vigilan `test_graficos.py` (Pareto por lado, el 80 %, las filas de
+     la tabla separadas y juntas, el buscador y la pila de cinco vistas).
+
+     (2026-10-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52874,7 +52927,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#676**; la próxima toma el número siguiente.
+> última regla es la **#677**; la próxima toma el número siguiente.
 
 >
 

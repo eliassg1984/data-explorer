@@ -169,14 +169,9 @@ MINI = 240
 # `height=` de `st.container()`, que scrollea su contenido por dentro.
 MARCO = PRESUPUESTO
 
-# Alto de una figura cuando el usuario pidió AMPLIAR una tarjeta deslizable
-# (Ajuste › Distribución, 2026-09-22). A propósito SUPERA el presupuesto de
-# una pantalla: mientras está ampliada, la tarjeta sale del techo `--alto-util`
-# y lo que no entra lo scrollea la página, igual que las tarjetas ENMARCADAS.
-# No entra en los asserts de coherencia de abajo por eso mismo — no es un rol
-# que deba caber en el laptop objetivo, es un modo de inspección que el
-# usuario enciende y apaga. Ver arquitectura.md regla #494.
-AMPLIADO = 620
+# (Acá vivió `AMPLIADO = 620`, el alto de una figura en el modo Ampliar de
+# Ajuste › Distribución, regla #494. Se fue con la vista el 2026-10-19,
+# regla #677.)
 
 # (Acá vivió `MINI_PROD_EVO = 270`, el alto de la Evolución de producto en
 # Compras. Se fue el 2026-09-12: desde que el Ranking de productos comparte

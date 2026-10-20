@@ -56,6 +56,13 @@ from graficos.ajuste._comun import (
 from tablas.ajuste_familias import (
     ALTO_BARRA_MOVIL, renderizar_desglose_ajuste, renderizar_familias_ajuste,
 )
+# El Pareto y la tabla de productos del detalle (regla #677): los comparte
+# con Familia × Área. Ninguno de los dos importa este módulo al cargarse.
+from graficos.ajuste._pareto import render_pareto
+from graficos.ajuste._productos import (
+    AREAS, COL_CODIGO, COL_SUBFAMILIA, COL_UNIDAD, VER_COMO, buscar,
+    filas_productos, renderizar_tabla_productos,
+)
 from tablas.compras_semanal import CROMO
 from tablas.compras_volatilidad import ALTO_FILA
 
@@ -92,7 +99,16 @@ _EPS = 1e-9
 _COL_SISTEMA = ["STOCK AL CIERRE", "Stock al Cierre", "STOCK SISTEMA"]
 _COL_FISICO = ["STOCK DECLARADO", "Stock Declarado", "STOCK FISICO"]
 
-_MODOS = ("Por producto", "Por área", "Por corte")
+# «Pareto» se sumó el 2026-10-19, cuando se quitó la vista «Distribución de
+# diferencias»: era su único modo analizable (regla #677).
+_MODOS = ("Por producto", "Por área", "Por corte", "Pareto")
+
+# Los dos controles de «Por producto» (regla #677), con su ESPEJO por la
+# misma razón que el del modo: el clic en la tabla de familias hace
+# `st.rerun()` antes de que se dibujen y se llevaría su estado. Abren en
+# áreas juntas y en tabla, que es como se pidieron.
+_K_AREAS = "ajcas_prod_areas"
+_K_COMO = "ajcas_prod_como"
 
 _K_FOCO = "ajuste_cascada_focus"
 _K_AREA = "ajcas_filtro_area"
@@ -346,6 +362,16 @@ def _css():
        nodo ya mide lo mismo que sus botones; lo que se corre es el
        contenedor, con margen automático. */
     div.st-key-{_K_MODO} {{ margin-left: auto !important; }}
+
+    /* Los dos selectores de «Por producto» (regla #677), a la misma talla
+       que el del detalle. */
+    div.st-key-{_K_AREAS} [data-testid="stButtonGroup"] button,
+    div.st-key-{_K_COMO} [data-testid="stButtonGroup"] button,
+    div.st-key-ajcas_par_lado [data-testid="stButtonGroup"] button {{
+        min-height: 26px !important; height: 26px !important;
+        padding: 0 10px !important; font-size: 12px !important; }}
+    /* El buscador de la tabla (`ajcas_buscar_tab_`) ya lo aplanan las
+       reglas de `ajcas_buscar_` de arriba, por prefijo. */
     </style>"""
 
 
@@ -532,12 +558,15 @@ def _detalle(foco, d, est, grp_col, col_val, col_prod, col_area,
     _id = _clave((est["corte"] or {}).get("clave"), est["sel_fam"],
                  est["sel_area"], foco)
     if modo == "Por producto":
-        _listas(foco, _det, _id, col_val, col_prod, col_area, col_cantidad,
-                col_unidad)
+        _por_producto(foco, _det, _id, col_val, col_prod, col_area,
+                      col_cantidad, col_unidad, col_sis, col_fis)
         return
 
     with st.container(border=True, key="ajcas_card_drill"):
-        if modo == "Por área":
+        if modo == "Pareto":
+            render_pareto(_det, col_val, col_prod, col_area, col_cantidad,
+                          col_unidad, "ajcas", _id)
+        elif modo == "Por área":
             _por_area(_det, _m, _id, col_val, col_prod, col_area,
                       col_sis, col_fis)
         else:
@@ -555,14 +584,81 @@ def _titulo_tarjeta(texto, n, color):
             f"color:{GRIS_TEXTO_SUAVE}'>{n:,} líneas</span></div>")
 
 
+def _eleccion_con_eco(etiqueta, opciones, defecto, key):
+    """Un `segmented_control` cuyo valor sobrevive al `st.rerun()` del clic
+    en la tabla de familias: lee y escribe un espejo (`<key>__eco`), como el
+    del modo del detalle."""
+    _eco = key + "__eco"
+    _previo = st.session_state.get(_eco, defecto)
+    if _previo not in opciones:
+        _previo = defecto
+    v = st.segmented_control(etiqueta, opciones, default=_previo, key=key,
+                             label_visibility="collapsed") or _previo
+    st.session_state[_eco] = v
+    return v
+
+
+def _por_producto(foco, _det, _id, col_val, col_prod, col_area, col_cantidad,
+                  col_unidad, col_sis, col_fis):
+    """«Por producto»: «Áreas» (separadas o juntas) y «Ver como» (las dos
+    listas de siempre o la tabla con todas las columnas). Regla #677."""
+    with st.container(key="ajcas_prod_ctrl"):
+        # columnas-internas: los dos selectores y el buscador de la tabla
+        _ca, _cv, _cb = st.columns([1.1, 1, 1.6], vertical_alignment="center")
+        with _ca:
+            areas = _eleccion_con_eco("Áreas", AREAS, "Juntas", _K_AREAS)
+        with _cv:
+            como = _eleccion_con_eco("Ver como", VER_COMO, "Tabla", _K_COMO)
+        _q = ""
+        if como == "Tabla":
+            with _cb:
+                _q = st.text_input(
+                    "Buscar en la tabla",
+                    key=f"ajcas_buscar_tab_{_slug(foco)}",
+                    placeholder="Buscar código, producto o área…",
+                    label_visibility="collapsed")
+    juntas = areas == "Juntas"
+    if como == "Listas":
+        _listas(foco, _det, _id, col_val, col_prod, col_area, col_cantidad,
+                col_unidad, juntas=juntas)
+        return
+    with st.container(border=True, key="ajcas_card_tabla"):
+        _filas = filas_productos(
+            _det, col_cod=_resolver(_det, COL_CODIGO),
+            col_fam=_resolver(_det, ["FAMILIA", "Nombre Familia",
+                                     "NOMBRE FAMILIA"]),
+            col_subfam=_resolver(_det, COL_SUBFAMILIA), col_prod=col_prod,
+            col_um=col_unidad or _resolver(_det, COL_UNIDAD),
+            col_area=col_area, col_sis=col_sis, col_dif=col_cantidad,
+            col_fis=col_fis, col_val=col_val, juntas=juntas)
+        _filas = buscar(_filas, _q)
+        if _filas.empty:
+            st.caption("Sin coincidencias." if _q
+                       else "Ningún producto con diferencia en esta familia.")
+            return
+        # Sin rótulo encima: un `st.markdown` arriba de la grilla cobra el
+        # −16px de margen de Streamlit y la grilla le pisaba el renglón
+        # (medido). Cuántos productos son lo dice la fila TOTAL, y la flecha
+        # de la primera columna avisa qué se despliega.
+        # La key lleva los datos y la forma, NO la búsqueda: escribir no
+        # estrena grilla (el orden elegido sobrevive a cada letra).
+        renderizar_tabla_productos(
+            _filas, f"ajcas_grid_tabla_{_id}_{'j' if juntas else 's'}",
+            juntas)
+
+
 def _listas(foco, _det, _id, col_val, col_prod, col_area, col_cantidad,
-            col_unidad):
+            col_unidad, juntas=False):
     """«Por producto»: faltantes y sobrantes, cada uno en su tarjeta.
 
     Una fila por LÍNEA (producto × área): así la fila TOTAL de faltantes es
     el «Faltó» de la tabla de arriba y la de sobrantes su «Sobró». Con el
     producto neteado entre áreas, el mismo producto faltando en una y
     sobrando en otra se cancelaba y no aparecía en ninguna.
+
+    Eso es «Áreas: Separadas». Con `juntas` (regla #677, a pedido) va una
+    fila por producto, y lo que se cancela lo avisa la celda del área
+    («se compensa»); las filas TOTAL dejan de ser el «Faltó» y el «Sobró».
 
     TODAS las líneas, no un top-N: la tabla se ordena, y un top-N ordenable
     miente (ordenar por cantidad reordena esos N, no las líneas). El scroll
@@ -595,6 +691,23 @@ def _listas(foco, _det, _id, col_val, col_prod, col_area, col_cantidad,
           .agg(valor=("valor", "sum"), cantidad=("cantidad", "sum"),
                um=("um", "first"))
           .rename(columns={"um": "__um"}))
+    if juntas and _has_area:
+        # «Áreas: Juntas» (regla #677): una fila por PRODUCTO. El área dice
+        # cuántas sumó y si se compensan —faltó en una y sobró en otra—,
+        # porque el neto esconde esa mitad (docstring del módulo). La lista
+        # en la que cae el producto la decide su neto.
+        _vivo = _g[_g["valor"].abs() > _EPS]
+        _neg = set(_vivo.loc[_vivo["valor"] < 0, "producto"])
+        _pos = set(_vivo.loc[_vivo["valor"] > 0, "producto"])
+        _g = (_g.groupby("producto", as_index=False)
+              .agg(valor=("valor", "sum"), cantidad=("cantidad", "sum"),
+                   __um=("__um", "first"), __n=("area", "nunique"),
+                   __una=("area", "first")))
+        _g["area"] = [
+            (f"{n} áreas" if n > 1 else u)
+            + (" · se compensa" if p in _neg and p in _pos else "")
+            for p, n, u in zip(_g["producto"], _g["__n"], _g["__una"])]
+        _g = _g.drop(columns=["__n", "__una"])
 
     # columnas-internas: las dos listas, cada una en su tarjeta
     _ca, _cb = st.columns(2, gap="small")
@@ -632,7 +745,8 @@ def _listas(foco, _det, _id, col_val, col_prod, col_area, col_cantidad,
             _cols.append(("valor", "Valor", clase, orden))
             # La key lleva el foco y el corte, NO la búsqueda: escribir no
             # estrena grilla, así el orden elegido sobrevive a cada letra.
-            _key = f"ajcas_grid_{k}_{_id}"
+            # Sí lleva la forma: juntas y separadas son otras filas.
+            _key = f"ajcas_grid_{k}_{_id}{'_j' if juntas else ''}"
             _alto = _alto_grilla(min(_FILAS_LISTA, len(tp)) + 1)
             _atar_alto(_key, _alto)
             renderizar_desglose_ajuste(

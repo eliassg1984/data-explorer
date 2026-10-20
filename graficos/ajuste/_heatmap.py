@@ -47,9 +47,15 @@ from graficos.ajuste._comun import (
 # sale también la lista de nombres de lo CONTADO (`_COL_FISICO`), que la
 # Cascada usa para la exactitud y este detalle para su cantidad.
 from graficos.ajuste._cascada import (
-    _COL_FISICO, _alto_grilla, _atar_alto, _clave,
+    _COL_FISICO, _COL_SISTEMA, _alto_grilla, _atar_alto, _clave,
 )
 from tablas.ajuste_familias import renderizar_desglose_ajuste
+# El Pareto y la tabla de productos, los mismos de Por familia (regla #677).
+from graficos.ajuste._pareto import render_pareto
+from graficos.ajuste._productos import (
+    AREAS, COL_CODIGO, COL_SUBFAMILIA, COL_UNIDAD, buscar, filas_productos,
+    renderizar_tabla_productos,
+)
 
 
 # LAS TRES CLAVES DE ESTA VISTA, distintas de las de la Cascada a
@@ -275,7 +281,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     `render_filtros_vista` los dibuja, así que abren igual — último corte,
     las cinco familias de `FAMILIAS_DE_ENTRADA`, todas las áreas que
     movieron algo. `df` llega SIN los chips Área/Familia de arriba de la
-    pila (los sigue usando Distribución) — filtrar por los dos lados dejaba
+    pila (hoy sólo los usan Evolución y la tabla dinámica) — filtrar por los dos lados dejaba
     la vista mostrando la intersección de dos compartimentos con uno solo
     visible.
     """
@@ -402,7 +408,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     #    deja abierta. Mismo modelo que la Cascada (`_cascada.py`, "la que
     #    más descuadró"), no el toggle que tenía el Mapa.
     _foco = st.session_state.get(_K_FOCO)
-    if _foco is None or _foco[0] not in _fams or _foco[1] not in _areas:
+    # `(familia, None)` es la familia en todas las áreas (clic en su nombre).
+    if (_foco is None or _foco[0] not in _fams
+            or (_foco[1] is not None and _foco[1] not in _areas)):
         _foco = _foco_inicial(_fams, _areas, pivot, _n_reg)
         st.session_state[_K_FOCO] = _foco
 
@@ -460,6 +468,13 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         'left: 0; top: 2px; bottom: 2px; width: var(--hm-pct, 0%); '
         'background: var(--hm-barra, transparent); border-radius: 4px; }',
         '.st-key-hm_tabla button > div { position: relative; z-index: 1; }',
+        # El nombre de la familia (un botón desde la regla #677) a la
+        # izquierda, como el rótulo que era: el <div> del label centraba.
+        '.st-key-hm_tabla [class*="st-key-hm_fam_"] button > div { width: '
+        '100%; justify-content: flex-start !important; }',
+        '.st-key-hm_tabla [class*="st-key-hm_fam_"] button p { overflow: '
+        'hidden; text-overflow: ellipsis; font-weight: 500 !important; '
+        'font-size: 11.5px !important; }',
         # El texto del botón vive en un <p> con su propio font-size (regla
         # #68): sin esto las celdas salen en los 14px de Streamlit.
         # El monto va a la IZQUIERDA, donde arranca su barra. El
@@ -515,8 +530,20 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 _cols_r = st.columns(len(_areas) + 2,
                                      vertical_alignment="center")
                 with _cols_r[0]:
-                    st.markdown(_rotulo(_fam, TEXTO_PRINCIPAL, titulo=_fam),
-                                unsafe_allow_html=True)
+                    # El NOMBRE es un botón (regla #677): abre el detalle de
+                    # la familia en TODAS las áreas, `(familia, None)`. Es
+                    # donde «Áreas: Juntas» de la tabla tiene algo que juntar.
+                    _kf = f"hm_fam_{_i}"
+                    _css.append(
+                        f'.st-key-hm_tabla .st-key-{_kf} button {{ color: '
+                        f'{TEXTO_PRINCIPAL} !important;'
+                        + (f' border: 2px solid {ACENTO} !important;'
+                           if _foco == (_fam, None) else '')
+                        + ' }')
+                    st.button(_fam, key=_kf,
+                              help=f"{_fam} en todas las áreas",
+                              on_click=_seleccionar_foco, args=((_fam, None),),
+                              width="stretch")
                 for _j, _area in enumerate(_areas):
                     with _cols_r[_j + 1]:
                         if not _n_reg.get((_fam, _area), 0):
@@ -593,11 +620,60 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         _detalle_celda(df, pivot, _foco, col_familia, col_area, col_producto,
                        col_metrica,
                        _col_cantidad_del_modo(df, col_cantidad, _modo_val),
-                       col_unidad, _modo_val)
+                       col_unidad, _modo_val, col_ajuste_val=col_ajuste_val,
+                       col_dif=col_cantidad)
+
+
+def _tabla_celda(det, todas, foco_id, col_familia, col_area, col_producto,
+                 col_val, col_dif, col_unidad):
+    """«Tabla» del detalle (regla #677): las mismas columnas que la de Por
+    familia. En una celda hay UNA área y no hay nada que juntar; con la
+    familia en todas las áreas (clic en su nombre) aparece «Áreas:
+    Separadas · Juntas» y, juntas, cada producto despliega sus áreas."""
+    juntas = False
+    with st.container(border=True, key="hm_card_tabla"):
+        # columnas-internas: «Áreas» (sólo con todas las áreas) y el buscador
+        _ca, _cb = st.columns([1, 1.6], vertical_alignment="center")
+        if todas:
+            with _ca:
+                juntas = st.segmented_control(
+                    "Áreas", AREAS, default="Juntas", key=_K_DET_AREAS,
+                    label_visibility="collapsed") == "Juntas"
+        with _cb:
+            _q = st.text_input("Buscar en la tabla",
+                               key=f"hm_buscar_tab_{foco_id}",
+                               placeholder="Buscar código, producto o área…",
+                               label_visibility="collapsed")
+        _filas = filas_productos(
+            det, col_cod=_resolver(det, COL_CODIGO), col_fam=col_familia,
+            col_subfam=_resolver(det, COL_SUBFAMILIA), col_prod=col_producto,
+            col_um=col_unidad or _resolver(det, COL_UNIDAD), col_area=col_area,
+            col_sis=_resolver(det, _COL_SISTEMA), col_dif=col_dif,
+            col_fis=_resolver(det, _COL_FISICO), col_val=col_val,
+            juntas=juntas)
+        _filas = buscar(_filas, _q)
+        if _filas.empty:
+            st.caption("Sin coincidencias." if _q
+                       else "Ningún producto con diferencia.")
+            return
+        renderizar_tabla_productos(
+            _filas, f"hm_grid_tabla_{foco_id}_{'j' if juntas else 's'}",
+            juntas)
+
+
+# El modo del detalle (regla #677). Una key por modo de la tabla: en
+# Valorizado Total no hay Pareto (no hay faltantes ni sobrantes que
+# ordenar), y un control cuyo valor guardado no está entre sus opciones
+# revienta. Abre en Tabla, como se pidió.
+_MODOS_DET = ("Lista", "Tabla", "Pareto")
+_MODOS_DET_VAL = ("Lista", "Tabla")
+_K_DET_MODO = "hm_det_modo"
+_K_DET_AREAS = "hm_det_areas"
 
 
 def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
-                   col_metrica, col_cantidad, col_unidad, modo_val):
+                   col_metrica, col_cantidad, col_unidad, modo_val,
+                   col_ajuste_val=None, col_dif=None):
     """El detalle de la celda en foco, debajo de la tarjeta: encabezado
     (familia × área, monto, registros) y el ranking de sus productos —
     Faltantes | Sobrantes en Ajuste, un solo Top en Valorizado Total, que
@@ -610,32 +686,58 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     dibujar, así que uno que calza aparece aunque no esté entre los primeros.
     """
     _fam_sel, _area_sel = foco
-    _val_sel = float(pivot.loc[_fam_sel, _area_sel])
-    _det = df[
-        (df[col_familia].astype(str) == str(_fam_sel)) &
-        (df[col_area].astype(str) == str(_area_sel))
-    ]
+    _todas = _area_sel is None
+    _en_fam = df[col_familia].astype(str) == str(_fam_sel)
+    if _todas:
+        _val_sel = float(pivot.loc[_fam_sel].sum())
+        _det = df[_en_fam]
+    else:
+        _val_sel = float(pivot.loc[_fam_sel, _area_sel])
+        _det = df[_en_fam & (df[col_area].astype(str) == str(_area_sel))]
 
     # MISMO TAMAÑO que la cabecera de detalle de la Cascada (`_cascada._detalle`,
     # a pedido 2026-09-22: el `**markdown**` de antes salía en los ~16px del
     # markdown de Streamlit, el doble). El nombre en 12px versalita y el resto
-    # —monto (con su color) y registros— en 11.5px gris, en la misma fila.
+    # —monto (con su color) y registros— en 11.5px gris, en la misma fila. A
+    # la derecha, el modo del detalle (regla #677), como en la Cascada.
     _color_total = _paleta(_val_sel, modo_val)[1]
+    _donde = "todas las áreas" if _todas else _area_sel
+    _modos = _MODOS_DET_VAL if modo_val else _MODOS_DET
+    _k_modo = _K_DET_MODO + ("_val" if modo_val else "")
+    with st.container(key="hm_detalle_cab"):
+        # columnas-internas: el título del detalle y su selector
+        _ct, _cm = st.columns([3, 1.6], vertical_alignment="center")
+        with _ct:
+            st.markdown(
+                f"<div style='display:flex;align-items:baseline;gap:10px;"
+                f"flex-wrap:wrap;padding-left:2px'>"
+                f"<span style='font-size:12px;font-weight:700;letter-spacing:.05em;"
+                f"text-transform:uppercase;color:{TEXTO_PRINCIPAL}'>"
+                f"{_fam_sel} × {_donde}</span>"
+                f"<span style='font-size:11.5px;color:{GRIS_TEXTO}'>"
+                f"<span style='color:{_color_total};font-weight:600'>"
+                f"S/ {_val_sel:,.0f}</span> · {len(_det):,} registros</span></div>",
+                unsafe_allow_html=True,
+            )
+        with _cm:
+            _modo = st.segmented_control(
+                "Detalle de la celda", _modos, default="Tabla", key=_k_modo,
+                label_visibility="collapsed") or "Tabla"
     st.markdown(
-        f"<div style='display:flex;align-items:baseline;gap:10px;"
-        f"flex-wrap:wrap;padding-left:2px'>"
-        f"<span style='font-size:12px;font-weight:700;letter-spacing:.05em;"
-        f"text-transform:uppercase;color:{TEXTO_PRINCIPAL}'>"
-        f"{_fam_sel} × {_area_sel}</span>"
-        f"<span style='font-size:11.5px;color:{GRIS_TEXTO}'>"
-        f"<span style='color:{_color_total};font-weight:600'>"
-        f"S/ {_val_sel:,.0f}</span> · {len(_det):,} registros</span></div>",
-        unsafe_allow_html=True,
-    )
+        '<style>div.st-key-hm_detalle_cab [data-testid="stColumn"]:last-child '
+        '[class*="st-key-hm_det_modo"] { margin-left: auto !important; }'
+        'div[class*="st-key-hm_det_modo"] [data-testid="stButtonGroup"] button,'
+        'div.st-key-hm_det_areas [data-testid="stButtonGroup"] button,'
+        'div.st-key-hm_par_lado [data-testid="stButtonGroup"] button '
+        '{ min-height: 26px !important; height: 26px !important; '
+        'padding: 0 10px !important; font-size: 12px !important; }'
+        '</style>', unsafe_allow_html=True)
 
     if not (col_producto and col_producto in _det.columns):
         st.caption("No hay columna de producto para desglosar.")
         return
+
+    _foco_id = _clave(_fam_sel, _area_sel, col_metrica)
 
     # cantidad/unidad al lado del monto — mismo criterio que ya usa el
     # drill de la Cascada (_filas_split_html): sum() para cantidad, "first"
@@ -656,9 +758,9 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     # que calza aparece aunque no esté entre los primeros. La grilla scrollea
     # por dentro las que no entran en las 6 filas visibles.
     _sub_prod = _sub_prod.sort_values("_abs", ascending=False)
-    # Clave estable del foco para las keys de grilla y de buscador: NO lleva
-    # el nº de filas (ver `_grilla`), así el filtro no re-monta nada.
-    _foco_id = _clave(_fam_sel, _area_sel, col_metrica)
+    # `_foco_id` (arriba) es la clave estable del foco para las keys de
+    # grilla y de buscador: NO lleva el nº de filas (ver `_grilla`), así el
+    # filtro no re-monta nada.
 
     # UNA GRILLA POR LADO, como la Cascada (regla #483): antes eran listas
     # HTML con barritas; ahora son las MISMAS AgGrid de desglose
@@ -755,6 +857,19 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     div[class*="st-key-hm_buscar_"] [data-testid="stTextInputRootElement"] input::placeholder {{
         color: {GRIS_TEXTO_SUAVE} !important; opacity: 1 !important; }}
     </style>""", unsafe_allow_html=True)
+
+    # Pareto y Tabla (regla #677) van DESPUÉS del CSS del buscador: la tabla
+    # trae el suyo (`hm_buscar_tab_`) y lo aplanan esas mismas reglas.
+    if _modo == "Pareto":
+        with st.container(border=True, key="hm_card_pareto"):
+            render_pareto(_det, col_ajuste_val or col_metrica, col_producto,
+                          col_area, col_dif, col_unidad, "hm", _foco_id)
+        return
+    if _modo == "Tabla":
+        _tabla_celda(_det, _todas, _foco_id, col_familia, col_area,
+                     col_producto, col_ajuste_val or col_metrica, col_dif,
+                     col_unidad)
+        return
 
     def _caja(_pool, lado, nombre, color_barra, color_texto, vacio):
         """Un cuadro del detalle, EN SU PROPIA TARJETA (2026-09-22, a pedido:

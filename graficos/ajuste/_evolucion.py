@@ -885,7 +885,7 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
             # `st.plotly_chart` pisa `fig.layout.width` con el de su
             # contenedor, y agrandando el contenedor el ResizeObserver de
             # Streamlit redimensiona la figura (mismo camino que
-            # `_distribucion._forzar_ancho`, regla #494). El `overflow-x`
+            # el `_forzar_ancho` de la vieja Distribución, regla #494). El `overflow-x`
             # del envoltorio deja deslizar lo que sobra. Sin guard de «una
             # sola vez» (regla #59).
             st.markdown(

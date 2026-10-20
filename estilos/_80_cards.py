@@ -6107,10 +6107,10 @@ CSS = """    /* ================================================================
     /* LAS FECHAS DE AJUSTE (regla #632)                                    */
     /* Dos controles, los dos con la píldora de Compras:                    */
     /*  · `ajf_<vista>` — el botón de MESES de Evolución, la tabla dinámica */
-    /*    y Distribución «Por meses»: `selector_fecha_tarjeta`, el mismo de */
-    /*    Movimientos, sin título en su fila. Al pie, «Mes del cierre».     */
+    /*    `selector_fecha_tarjeta`, el mismo de Movimientos (regla #677: */
+    /*    Distribución se fue), sin título. Al pie, «Mes del cierre».     */
     /*  · `ajses_<vista>` — la SESIÓN de Por familia, Familia × Área y      */
-    /*    Distribución: ‹ [sesión] › y su panel, botones de Streamlit.      */
+    /*    Diferencias: ‹ [sesión] › y su panel, botones de Streamlit.       */
     /* Por familia de key y sin `:has` (regla #469).                        */
     /* =================================================================== */
     [class*="st-key-ajf_"][class*="_fila"] {
@@ -6357,16 +6357,6 @@ CSS = """    /* ================================================================
         border-color: var(--border-lavender) !important;
         color: var(--accent-deep) !important;
     }
-    /* «Por sesión / Por meses» de Distribución, a la talla de la fila. */
-    .st-key-ajdist_por [data-testid="stButtonGroup"] button {
-        min-height: 26px !important;
-        height: 26px !important;
-        padding: 0 10px !important;
-    }
-    .st-key-ajdist_por [data-testid="stButtonGroup"] button p {
-        font-size: 12px !important;
-    }
-
     /* Análisis por Hora: modo → contexto → presentación (2026-10-18).
        Cada grupo tiene etiquetas permanentes; sólo la navegación lleva
        acento. Los filtros comparten sus keys en los tres modos. */

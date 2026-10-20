@@ -6727,31 +6727,28 @@ def _pruebas_fechas_ajuste():
           [r for r, c in data.REPORTES.items() if "cortes" in c], [])
     from graficos import ajuste as aj
     # «Diferencias» se sumó el 2026-10-13 (regla #650), entre las vistas de
-    # un conteo y las del tiempo.
-    check("una sola pila con las seis vistas",
+    # un conteo y las del tiempo. «Distribución» se fue el 2026-10-19: su
+    # Pareto pasó al detalle de las dos primeras (regla #677).
+    check("una sola pila con las cinco vistas",
           [c for c, _v in aj._PILA],
-          ["aj_sec_cascada", "aj_sec_heatmap", "aj_sec_distribucion",
+          ["aj_sec_cascada", "aj_sec_heatmap",
            "aj_sec_diferencias", "aj_sec_evolucion", "aj_sec_detalle"])
     check("se fue la partición del rango por categoría",
           hasattr(aj, "categoria_rango_ajuste"), False)
     fuentes = {n: (raiz / "graficos" / "ajuste" / f"{n}.py").read_text(
-        encoding="utf-8") for n in ("_cascada", "_heatmap", "_distribucion",
+        encoding="utf-8") for n in ("_cascada", "_heatmap",
                                     "_evolucion", "_pivote", "_diferencias")}
     check("las vistas de sesión dibujan el selector con flechas",
           [n for n in ("_cascada", "_heatmap", "_diferencias")
-           if '"ajses_' not in fuentes[n]]
-          + ([] if re.search(r'selector_sesion\(\s*"ajses_dist"',
-                             fuentes["_distribucion"])
-             else ["_distribucion"]), [])
+           if '"ajses_' not in fuentes[n]], [])
     check("las vistas de meses dibujan su botón",
-          [n for n, k in (("_evolucion", '"ajf_evo"'), ("_pivote", '"ajf_det"'),
-                          ("_distribucion", '"ajf_dist"'))
+          [n for n, k in (("_evolucion", '"ajf_evo"'), ("_pivote", '"ajf_det"'))
            if f"selector_meses({k}" not in fuentes[n]], [])
     ini = (raiz / "graficos" / "ajuste" / "__init__.py").read_text(encoding="utf-8")
     check("«Mes del cierre» se fue de Filtros",
           "_selector_mes_ajuste" in ini, False)
     check("las vistas de meses recargan si cambió el mes del cierre",
-          ini.count("recargar_si_cambio_mes()"), 3)
+          ini.count("recargar_si_cambio_mes()"), 2)
     css = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
     check("los dos controles tienen su CSS",
           ('st-key-ajf_' in css, 'st-key-ajses_' in css), (True, True))
@@ -6852,7 +6849,9 @@ def _pruebas_cantidad_del_mapa_ajuste():
     # Lo que le llega a la grilla del detalle, en Valorizado Total.
     pivot = d.pivot_table(index="FAMILIA", columns="AREA",
                           values="VALORIZADO TOTAL", aggfunc="sum")
-    with _mock.patch.object(_hm, "renderizar_desglose_ajuste") as _rd:
+    # Desde la regla #677 el detalle abre en «Tabla»: las listas son «Lista».
+    with _mock.patch.object(_hm, "renderizar_desglose_ajuste") as _rd,             _mock.patch.object(_hm.st, "segmented_control",
+                               return_value="Lista"):
         _hm._detalle_celda(
             d, pivot, ("ALIMENTOS", "PRODUCCION"), "FAMILIA", "AREA",
             "PRODUCTO", "VALORIZADO TOTAL",
@@ -7020,7 +7019,7 @@ def _pruebas_resumen_ajuste():
     check("por corte: la fila de 2025 queda fuera de d_anio",
           len(_e2["d_anio"]), 2)
 
-    # ── Pareto del faltante (modo «Valor (Pareto)» de Distribución, #489) ──
+    # ── Pareto de la diferencia (#489; desde la #677, en el detalle) ──
     # Agrega por producto el ajuste NETO, se queda con los faltantes, ordena
     # por magnitud y agrupa la cola en «Otros». El grano de entrada es la
     # LÍNEA (dos filas de p1 se suman a un solo producto).
@@ -7041,6 +7040,60 @@ def _pruebas_resumen_ajuste():
     check("pareto: sin faltantes no hay nada que graficar",
           _pareto_datos(pd.DataFrame({"P": ["a", "b"], "AV": [10.0, 20.0]}),
                         "AV", "P"), ([], [], [], [], []))
+    # Desde la #677 el Pareto elige el lado: los sobrantes son la otra mitad.
+    from graficos.ajuste._pareto import SOBRANTES, productos_80
+    check("pareto: el lado sobrantes ordena los netos positivos",
+          _pareto_datos(_dp, "AV", "P", lado=SOBRANTES)[0], ["p4"])
+    # 400 de 465 es el 86 %: un solo producto ya explica el 80 %.
+    check("pareto: cuántos productos explican el 80 % (de cuántos)",
+          productos_80(_dp, "AV", "P")[:2], (1, 4))
+    _d8 = pd.DataFrame({"P": list("abcde"), "AV": [-30.0, -30, -20, -10, -10]})
+    check("pareto: el 80 % cuenta todos los productos, no sólo el top",
+          productos_80(_d8, "AV", "P")[:2], (3, 5))
+
+    # ── La tabla de productos del detalle (regla #677) ──
+    # Un producto que faltó en COCINA y sobró en PERSONAL (se compensa), uno
+    # con una sola área, y una línea sin diferencia que igual entra al
+    # despliegue (su stock suma a la fila del producto).
+    from graficos.ajuste._productos import buscar, filas_productos
+    _dt = pd.DataFrame({
+        "COD": ["1", "1", "1", "2", "3"],
+        "FAM": ["ALIMENTOS"] * 5, "SUB": ["AVES"] * 5,
+        "PROD": ["Pollito", "Pollito", "Pollito", "Sal", "Arroz"],
+        "UM": ["UND", "UND", "UND", "KILOS", "KILOS"],
+        "AREA": ["COCINA", "PERSONAL", "ALMACEN", "COCINA", "COCINA"],
+        "SIS": [10.5, -54.0, 6.0, -2.3, 5.0],
+        "AJ": [-10.5, 54.0, 0.0, 2.6, 0.0],
+        "CON": [0.0, 0.0, 6.0, 0.3, 5.0],
+        "AV": [-150.0, 800.0, 0.0, 580.0, 0.0],
+    })
+    _kw = dict(col_cod="COD", col_fam="FAM", col_subfam="SUB", col_prod="PROD",
+               col_um="UM", col_area="AREA", col_sis="SIS", col_dif="AJ",
+               col_fis="CON", col_val="AV")
+    _sep = filas_productos(_dt, juntas=False, **_kw)
+    check("tabla separadas: una fila por línea CON diferencia, por |valor|",
+          list(zip(_sep["codigo"], _sep["area"])),
+          [("1", "PERSONAL"), ("2", "COCINA"), ("1", "COCINA")])
+    check("tabla: las columnas, en el orden pedido",
+          list(_sep.columns[:10]),
+          ["codigo", "familia", "subfamilia", "nombre", "unidad", "area",
+           "sistema", "dif", "conteo", "valor"])
+    _jun = filas_productos(_dt, juntas=True, **_kw)
+    _p1 = _jun[(_jun["__tipo"] == "p") & (_jun["codigo"] == "1")].iloc[0]
+    check("tabla juntas: el producto suma sus áreas y dice si se compensa",
+          (_p1["area"], round(_p1["sistema"], 2), round(_p1["valor"], 2),
+           bool(_p1["__comp"]), int(_p1["__n"])),
+          ("3 áreas", -37.5, 650.0, True, 3))
+    check("tabla juntas: cada producto seguido de sus áreas",
+          list(zip(_jun["__tipo"], _jun["area"])),
+          [("p", "3 áreas"), ("a", "PERSONAL"), ("a", "COCINA"),
+           ("a", "ALMACEN"), ("p", "COCINA")])
+    check("tabla juntas: una sola área no despliega nada",
+          int(_jun[_jun["codigo"] == "2"]["__n"].iloc[0]), 0)
+    check("tabla: un producto sin diferencia no entra", "3" in set(_jun["codigo"]),
+          False)
+    check("tabla: buscar un área trae a su producto",
+          list(buscar(_jun, "personal")["__tipo"]), ["p", "a", "a", "a"])
 
     return fallos
 
@@ -13213,11 +13266,10 @@ def main():
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO")),
         ("heatmap (Mapa de calor)", _aj._graf_heatmap_ajuste,
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO")),
-        ("distribucion (box por familia)", _aj._graf_distribucion_ajuste,
-            (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO", "NOMBRE PRODUCTO")),
-        ("distribucion (rama else: histograma)", _aj._graf_distribucion_ajuste,
-            (df_min, None, None, "AJUSTE VALORIZADO", None)),
-        ("pareto valor (Ajuste)", _aj._fig_pareto_ajuste,
+        ("pareto faltantes (Ajuste, detalle)", _aj._fig_pareto_ajuste,
+            (df, "AJUSTE VALORIZADO", "NOMBRE PRODUCTO")),
+        ("pareto sobrantes (Ajuste, detalle)",
+            lambda *a: _aj._fig_pareto_ajuste(*a, lado="Sobrantes"),
             (df, "AJUSTE VALORIZADO", "NOMBRE PRODUCTO")),
     ]
 
