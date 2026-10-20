@@ -609,12 +609,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             st.markdown(f"<style>{''.join(_css)}</style>",
                         unsafe_allow_html=True)
 
-        # Título al pie de la tarjeta, como lo ponía `_card(...)` antes de que
-        # la vista pasara a reabrir su contenedor por handle (`.chart-card-pie`
-        # lo estiliza en `estilos/_80_cards.py`).
-        st.markdown(
-            f'<p class="chart-card-pie">{_titulo_metrica} por familia y área'
-            f'</p>', unsafe_allow_html=True)
+        # (Acá iba el título al pie, «Ajuste Valorizado por familia y área».
+        # Se quitó el 2026-10-20 a pedido, para que el detalle de abajo suba:
+        # el modo ya lo dice el control de arriba. Regla #677.)
 
     if _foco is not None:
         _detalle_celda(df, pivot, _foco, col_familia, col_area, col_producto,
@@ -625,25 +622,27 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
 
 
 def _tabla_celda(det, todas, foco_id, col_familia, col_area, col_producto,
-                 col_val, col_dif, col_unidad):
+                 col_val, col_dif, col_unidad, cols):
     """«Tabla» del detalle (regla #677): las mismas columnas que la de Por
     familia. En una celda hay UNA área y no hay nada que juntar; con la
     familia en todas las áreas (clic en su nombre) aparece «Áreas:
-    Separadas · Juntas» y, juntas, cada producto despliega sus áreas."""
+    Separadas · Juntas» y, juntas, cada producto despliega sus áreas.
+
+    `cols` son las dos columnas de la fila del título donde van «Áreas» y
+    el buscador: todo en un renglón, para que la tabla suba (2026-10-20)."""
     juntas = False
+    _ca, _cb = cols
+    if todas:
+        with _ca:
+            juntas = st.segmented_control(
+                "Áreas", AREAS, default="Juntas", key=_K_DET_AREAS,
+                label_visibility="collapsed") == "Juntas"
+    with _cb:
+        _q = st.text_input("Buscar en la tabla",
+                           key=f"hm_buscar_tab_{foco_id}",
+                           placeholder="Buscar código, producto o área…",
+                           label_visibility="collapsed")
     with st.container(border=True, key="hm_card_tabla"):
-        # columnas-internas: «Áreas» (sólo con todas las áreas) y el buscador
-        _ca, _cb = st.columns([1, 1.6], vertical_alignment="center")
-        if todas:
-            with _ca:
-                juntas = st.segmented_control(
-                    "Áreas", AREAS, default="Juntas", key=_K_DET_AREAS,
-                    label_visibility="collapsed") == "Juntas"
-        with _cb:
-            _q = st.text_input("Buscar en la tabla",
-                               key=f"hm_buscar_tab_{foco_id}",
-                               placeholder="Buscar código, producto o área…",
-                               label_visibility="collapsed")
         _filas = filas_productos(
             det, col_cod=_resolver(det, COL_CODIGO), col_fam=col_familia,
             col_subfam=_resolver(det, COL_SUBFAMILIA), col_prod=col_producto,
@@ -704,9 +703,12 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     _donde = "todas las áreas" if _todas else _area_sel
     _modos = _MODOS_DET_VAL if modo_val else _MODOS_DET
     _k_modo = _K_DET_MODO + ("_val" if modo_val else "")
+    # UNA SOLA FILA (2026-10-20, a pedido): el título, «Áreas» y el buscador
+    # de la Tabla, y el modo. Las dos del medio las llena `_tabla_celda`.
     with st.container(key="hm_detalle_cab"):
-        # columnas-internas: el título del detalle y su selector
-        _ct, _cm = st.columns([3, 1.6], vertical_alignment="center")
+        # columnas-internas: título · Áreas · buscador · modo
+        _ct, _ca, _cb, _cm = st.columns([2.3, 1.15, 1.9, 1.6],
+                                        vertical_alignment="center")
         with _ct:
             st.markdown(
                 f"<div style='display:flex;align-items:baseline;gap:10px;"
@@ -724,7 +726,9 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
                 "Detalle de la celda", _modos, default="Tabla", key=_k_modo,
                 label_visibility="collapsed") or "Tabla"
     st.markdown(
-        '<style>div.st-key-hm_detalle_cab [data-testid="stColumn"]:last-child '
+        '<style>div.st-key-hm_detalle_cab [data-testid="stMarkdownContainer"] '
+        '{ margin-bottom: 0 !important; }'
+        'div.st-key-hm_detalle_cab [data-testid="stColumn"]:last-child '
         '[class*="st-key-hm_det_modo"] { margin-left: auto !important; }'
         'div[class*="st-key-hm_det_modo"] [data-testid="stButtonGroup"] button,'
         'div.st-key-hm_det_areas [data-testid="stButtonGroup"] button,'
@@ -868,7 +872,7 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     if _modo == "Tabla":
         _tabla_celda(_det, _todas, _foco_id, col_familia, col_area,
                      col_producto, col_ajuste_val or col_metrica, col_dif,
-                     col_unidad)
+                     col_unidad, (_ca, _cb))
         return
 
     def _caja(_pool, lado, nombre, color_barra, color_texto, vacio):

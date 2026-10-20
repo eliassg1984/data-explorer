@@ -52909,6 +52909,13 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        El modo lleva una key por modo de la tabla (`hm_det_modo` /
        `hm_det_modo_val`): en Valorizado Total no hay Pareto, y un valor
        guardado fuera de las opciones revienta el control.
+     - **La cabecera del detalle es UN renglón** (2026-10-20, a pedido,
+       para que la tabla entre en la laptop): título, «Áreas», «Ver como»,
+       buscador y modo. Las columnas se crean con el título y las llena
+       quien corre después del modo (`_por_producto`, `_tabla_celda`).
+       «N de M líneas con stock cerraron con diferencia» pasó al tooltip
+       del título, y Familia × Área perdió su pie («Ajuste Valorizado por
+       familia y área»).
 
      Lo vigilan `test_graficos.py` (Pareto por lado, el 80 %, las filas de
      la tabla separadas y juntas, el buscador y la pila de cinco vistas).

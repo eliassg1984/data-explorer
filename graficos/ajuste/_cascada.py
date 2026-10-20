@@ -363,6 +363,11 @@ def _css():
        contenedor, con margen automático. */
     div.st-key-{_K_MODO} {{ margin-left: auto !important; }}
 
+    /* El título del detalle comparte renglón con los controles (2026-10-20):
+       sin esto el −16px de margen de `st.markdown` lo baja (regla #162). */
+    div.st-key-ajcas_detalle_cab [data-testid="stMarkdownContainer"] {{
+        margin-bottom: 0 !important; }}
+
     /* Los dos selectores de «Por producto» (regla #677), a la misma talla
        que el del detalle. */
     div.st-key-{_K_AREAS} [data-testid="stButtonGroup"] button,
@@ -534,19 +539,24 @@ def _detalle(foco, d, est, grp_col, col_val, col_prod, col_area,
     _det = d[d[grp_col].astype(str) == foco]
     _m = metricas(_det, col_val, col_prod, col_sis, col_fis)
 
+    # UNA SOLA FILA (2026-10-20, a pedido: «que todo quepa en una fila», para
+    # que la tabla suba y entre en la laptop): el título, los controles de
+    # «Por producto» y el modo. Cuántas líneas cerraron con diferencia pasó
+    # al tooltip del título. Las columnas de los controles se crean acá y se
+    # llenan en `_por_producto`, que corre después del modo (regla #677).
     with st.container(key="ajcas_detalle_cab"):
-        # columnas-internas: el título del detalle y su selector
-        _ct, _cm = st.columns([3, 1.6], vertical_alignment="center")
+        # columnas-internas: título · Áreas · Ver como · buscador · modo
+        _ct, _ca, _cv, _cb, _cm = st.columns(
+            [1.25, 1.15, 0.95, 1.9, 2.55], vertical_alignment="center")
         with _ct:
             st.markdown(
-                f"<div style='display:flex;align-items:baseline;gap:10px;"
-                f"flex-wrap:wrap;padding-left:2px'>"
-                f"<span style='font-size:12px;font-weight:700;"
-                f"letter-spacing:.05em;text-transform:uppercase;"
+                f"<div style='padding-left:2px;white-space:nowrap;"
+                f"overflow:hidden;text-overflow:ellipsis' title='"
+                f"{_m['dif']:,} de {_m['lineas']:,} líneas con stock cerraron "
+                f"con diferencia'><span style='font-size:12px;font-weight:700;"
+                f"letter-spacing:.05em;text-transform:uppercase;cursor:help;"
                 f"color:{TEXTO_PRINCIPAL}'>Detalle · {nombre_propio(foco)}"
-                f"</span><span style='font-size:11.5px;color:{GRIS_TEXTO}'>"
-                f"{_m['dif']:,} de {_m['lineas']:,} líneas con stock "
-                f"cerraron con diferencia</span></div>",
+                f"</span></div>",
                 unsafe_allow_html=True)
         with _cm:
             _previo = st.session_state.get(_K_MODO_ECO, _MODOS[0])
@@ -559,7 +569,8 @@ def _detalle(foco, d, est, grp_col, col_val, col_prod, col_area,
                  est["sel_area"], foco)
     if modo == "Por producto":
         _por_producto(foco, _det, _id, col_val, col_prod, col_area,
-                      col_cantidad, col_unidad, col_sis, col_fis)
+                      col_cantidad, col_unidad, col_sis, col_fis,
+                      (_ca, _cv, _cb))
         return
 
     with st.container(border=True, key="ajcas_card_drill"):
@@ -599,24 +610,25 @@ def _eleccion_con_eco(etiqueta, opciones, defecto, key):
 
 
 def _por_producto(foco, _det, _id, col_val, col_prod, col_area, col_cantidad,
-                  col_unidad, col_sis, col_fis):
+                  col_unidad, col_sis, col_fis, cols):
     """«Por producto»: «Áreas» (separadas o juntas) y «Ver como» (las dos
-    listas de siempre o la tabla con todas las columnas). Regla #677."""
-    with st.container(key="ajcas_prod_ctrl"):
-        # columnas-internas: los dos selectores y el buscador de la tabla
-        _ca, _cv, _cb = st.columns([1.1, 1, 1.6], vertical_alignment="center")
-        with _ca:
-            areas = _eleccion_con_eco("Áreas", AREAS, "Juntas", _K_AREAS)
-        with _cv:
-            como = _eleccion_con_eco("Ver como", VER_COMO, "Tabla", _K_COMO)
-        _q = ""
-        if como == "Tabla":
-            with _cb:
-                _q = st.text_input(
-                    "Buscar en la tabla",
-                    key=f"ajcas_buscar_tab_{_slug(foco)}",
-                    placeholder="Buscar código, producto o área…",
-                    label_visibility="collapsed")
+    listas de siempre o la tabla con todas las columnas). Regla #677.
+
+    `cols` son las tres columnas de la fila del título donde van los dos
+    selectores y el buscador: todo en un renglón."""
+    _ca, _cv, _cb = cols
+    with _ca:
+        areas = _eleccion_con_eco("Áreas", AREAS, "Juntas", _K_AREAS)
+    with _cv:
+        como = _eleccion_con_eco("Ver como", VER_COMO, "Tabla", _K_COMO)
+    _q = ""
+    if como == "Tabla":
+        with _cb:
+            _q = st.text_input(
+                "Buscar en la tabla",
+                key=f"ajcas_buscar_tab_{_slug(foco)}",
+                placeholder="Buscar código, producto o área…",
+                label_visibility="collapsed")
     juntas = areas == "Juntas"
     if como == "Listas":
         _listas(foco, _det, _id, col_val, col_prod, col_area, col_cantidad,
