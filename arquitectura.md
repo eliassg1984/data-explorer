@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-677 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+678 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (214)
 
@@ -277,7 +277,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
 
-**Layout y alturas** (95)
+**Layout y alturas** (96)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -374,6 +374,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#655** — «Costo por kg útil» muestra de dónde sale cada número: la ventana dice sus días y empieza a…
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
 - **#671** — «Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada receta base, quién y cuánto…
+- **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 
 **Plotly y figuras** (118)
 
@@ -594,7 +595,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 
-**Streamlit** (164)
+**Streamlit** (165)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -760,6 +761,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 - **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
 - **#675** — Documentos SUNAT pide EN LOTE los XML que faltan en la tabla…
+- **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 
 **Datos, R2 y DuckDB** (107)
 
@@ -42540,6 +42542,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      «Modificar» para editar una receta del sistema; la tabla de precios es
      HTML con una sola celda de verdad, y el formato `plain` de un
      `NumberColumn` muestra el ruido de coma flotante.**
+     (Las dos tarjetas son una sola desde el 2026-10-20: ver la #678.)
      2026-09-24, a pedido y sobre un mockup aprobado: «hagamos más grande
      verticalmente la tarjeta […] separarlo en tarjetas la de la receta y
      la del cuadro de igv costo, precio […] una botonera que diga
@@ -52929,6 +52932,65 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-19.)
 
+678. **«Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al
+     armar va en una franja, y el precio desglosado, «Dónde se usa» y lo
+     nuevo en un panel que se abre ENCIMA; y el área de producción sale de
+     DOS listas del POS, no de una.** 2026-10-20, a pedido y sobre un
+     mockup aprobado (opción A): «la tarjeta de precio de venta no creo
+     sea necesario que siempre esté visible […] que la tarjeta principal
+     sea más larga horizontalmente, e indique el área de producción».
+     Reemplaza la forma de dos tarjetas de la #512.
+
+     - **La franja de resultado** (`formulario_receta._franja_resultado`,
+       `form_receta_franja`): costo, PRECIO DE VENTA, % de costo con su
+       semáforo, utilidad, el aviso de lo estimado y el botón del panel.
+       Es el ÚNICO sitio donde se escribe el precio: la fila del precio
+       en la tabla del panel pasó a ser HTML (dos widgets del mismo valor
+       no conviven). Con una receta base importada no hay precio: dice su
+       costo por unidad, el del sistema y el cambio.
+     - **El panel** (`form_receta_panel`) se dibuja ÚLTIMO dentro de la
+       tarjeta y el CSS lo saca del flujo (`position: absolute` contra
+       su borde derecho, desde 769px): abrirlo no le cambia el ancho a la
+       tabla. Streamlit lo envuelve en un `stLayoutWrapper` que queda en
+       el flujo con 0px y se cobraba el gap de la tarjeta (la alargaba
+       12px al abrir): va en `display: contents`. Cerrado NO se dibuja;
+       sus widgets ya se sembraban de su detalle (#597), así que volver a
+       abrirlo no pierde nada. Lo abren el botón de la franja y, solo, el
+       alta de algo nuevo (`_abrir_panel` en `_empezar_nuevo`).
+     - **Dos anchos**: 400px para consultar (Precio, Dónde se usa) y 600
+       para ARMAR —lo nuevo, el impacto de una receta base—, que marca
+       `fr-panel-ancho` en su cabecera (`:has()` con una clase sola,
+       #469). El boceto decía 640: medido a 1323px, tapaba la Utilidad de
+       la franja, y las cuatro cifras tienen que verse mientras se arma
+       algo nuevo. El panel tapa la mitad derecha del buscador de la
+       receta: para agregar insumos a la receta se cierra; lo nuevo tiene
+       su propio buscador adentro.
+     - **El área de producción NO es una lista.** La de un PLATO es el
+       puesto que recibe la comanda (`recetaventa.AREA PROD`: Bar,
+       Calientes, Pase, Cava, Pastelería…, diez); la de una RECETA BASE es
+       el subalmacén donde se prepara (`recetabase.RB AREA PROD`: Cocina,
+       Producción, Barra). El boceto proponía una sola; las dos salen de
+       `_areas_sistema`, cada una de su parquet. Va junto al nombre
+       (`_selector_area`) con el patrón valor + widget del precio (`area`
+       y `area_w`): «Importar» y «Volver al original» la escriben, y
+       viaja en la propuesta (`area_produccion`), en el PDF, el Excel y
+       el correo (segunda línea del encabezado) y en «Guardadas». Un combo
+       no la trae de `combosdetalle.parquet`: se elige a mano. La (Rs)
+       nueva nace en Cocina y «Partir de» le copia la de la receta base.
+     - **Alturas**: la tabla le paga a la franja `_ALTO_FRANJA` (60 + su
+       gap, medidos); el panel, que mide lo que la tarjeta, suma a su
+       cromo la cabecera en dos renglones (en 400px el título y su
+       subtítulo no caben lado a lado).
+
+     Verificado con Playwright a 1323×619 (abrir, cerrar, alta de una
+     (Rs) con el panel ancho, precio en la franja) y con AppTest
+     (Importar un plato trae su área, «Volver al original» la repone,
+     receta base con su lista). Pendiente: un clic en el nombre de algo
+     NUEVO en la tabla no abre su pestaña (el `data_editor` no avisa
+     clics de celda); se llega por el botón de la franja.
+
+     (2026-10-20.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -52941,7 +53003,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#677**; la próxima toma el número siguiente.
+> última regla es la **#678**; la próxima toma el número siguiente.
 
 >
 

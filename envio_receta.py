@@ -124,8 +124,12 @@ def _encabezado(resumen):
             "Modificación de combo": "Modificación de combo"}.get(
         resumen["tipo"], "Receta de venta")
     quien = f"Propuesta de {resumen['autor']}" if resumen["autor"] else "Propuesta"
+    # El área de producción va en la segunda línea de todo lo que se manda
+    # (PDF, Excel, correo), si se eligió (regla #678).
+    area = resumen.get("area_produccion")
+    donde = f" · Área de producción: {str(area).capitalize()}" if area else ""
     return (f"{tipo}: {resumen['nombre'] or '(sin nombre)'}",
-            f"{quien} · {resumen['fecha']}")
+            f"{quien}{donde} · {resumen['fecha']}")
 
 
 # ─── PDF ────────────────────────────────────────────────────────────────

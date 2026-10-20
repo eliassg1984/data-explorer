@@ -1531,18 +1531,6 @@ CSS = """    /* ================================================================
         /* slug "subalm").                                                  */
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-ajuste_graf_card_izq_mov_subalm, > .st-key-ajuste_graf_card_der_mov_subalm, > .st-key-ajuste_graf_card_der_mov_subalm_n2),
-        /* Y las dos de Recetas › Nuevo Costeo (2026-10-03, a pedido:     */
-        /* «iguala en tamaño vertical las tarjetas»). A 1323×619 la de     */
-        /* Receta medía 628 y la de Precio 597: las dos pasan su mínimo    */
-        /* (`--alto-util`) y cada una mide su contenido. Python las cuenta */
-        /* al mismo alto (`formulario_receta._CROMO_*`), pero el panel de  */
-        /* la derecha alterna cinco contenidos desde ese día (regla #597): */
-        /* el piso es la red.                                               */
-        .stColumn > .stVerticalBlock
-        > div:has(> .st-key-form_receta_card_receta, > .st-key-form_receta_card_precio) {
-            flex: 1 1 auto;
-        }
-
         /* Acá vivió, durante un rato del 2026-09-01, una EXCEPCIÓN para    */
         /* `compras_prov_card_ranking` (`flex: 0 1 auto`): el piso lo       */
         /* estiraba a los 383px de la Evolución de al lado y esos px eran   */
@@ -1971,16 +1959,16 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
-    /* «Nueva receta» (Recetas y Costos): DOS tarjetas                      */
+    /* «Nueva receta» (Recetas y Costos): UNA tarjeta y un panel           */
     /*                                                                       */
-    /* Desde el 2026-09-24 (mockup aprobado ese día) la vista son dos       */
-    /* tarjetas lado a lado: «Receta» (form_receta_card_receta) y «Precio   */
-    /* de venta» (form_receta_card_precio). El `rec_card_nueva` que pone el */
-    /* dispatcher sigue envolviéndolas, pero ya no pinta nada: si llevara   */
-    /* el fondo blanco, las dos tarjetas se leerían como una caja con dos   */
-    /* cajas adentro. Las dos miden al menos una pantalla (`--alto-util`)   */
-    /* en escritorio; el alto de la tabla de insumos y de la torta lo pone  */
-    /* Python para que ese mínimo sea también lo justo. Regla #512.         */
+    /* Del 2026-09-24 al 2026-10-20 eran dos tarjetas lado a lado, «Receta» */
+    /* y «Precio de venta» (regla #512). Desde la #678 es una sola a todo   */
+    /* el ancho (form_receta_card_receta) con una franja de resultado, y    */
+    /* el precio desglosado, «Dónde se usa» y lo nuevo van en un panel que  */
+    /* se abre ENCIMA, contra su borde derecho (form_receta_panel). El      */
+    /* `rec_card_nueva` que pone el dispatcher la envuelve sin pintar nada. */
+    /* Mide al menos una pantalla (`--alto-util`) en escritorio; el alto de */
+    /* la tabla de insumos lo pone Python para que ese mínimo sea lo justo. */
     /* =================================================================== */
     div.st-key-rec_card_nueva {
         background: transparent !important;
@@ -2660,8 +2648,7 @@ CSS = """    /* ================================================================
         font-size: 12px !important;
         color: var(--text-secondary);
     }
-    .st-key-form_receta_card_receta,
-    .st-key-form_receta_card_precio {
+    .st-key-form_receta_card_receta {
         background: var(--bg-card);
         border-radius: 20px;
         padding: 16px 18px;
@@ -2669,8 +2656,7 @@ CSS = """    /* ================================================================
         gap: 12px !important;
     }
     @media screen and (min-width: 769px) {
-        .st-key-form_receta_card_receta,
-        .st-key-form_receta_card_precio {
+        .st-key-form_receta_card_receta {
             min-height: var(--alto-util);
         }
     }
@@ -2678,7 +2664,6 @@ CSS = """    /* ================================================================
        Streamlit aplasta sus hijos (`flex: 0 1 auto`) y la tabla de precios
        se recortaba por abajo en vez de crecer la tarjeta. */
     .st-key-form_receta_card_receta > *,
-    .st-key-form_receta_card_precio > *,
     .st-key-form_receta_ptabla > * {
         flex-shrink: 0 !important;
     }
@@ -2686,10 +2671,137 @@ CSS = """    /* ================================================================
        comerse el margen del último <p>. Acá los st.markdown son <div>, sin
        ese margen: el -16 montaba cada fila sobre la siguiente (la del
        precio de venta tapaba la del costo). Regla #162. */
-    .st-key-form_receta_card_receta [data-testid="stMarkdownContainer"],
-    .st-key-form_receta_card_precio [data-testid="stMarkdownContainer"] {
+    .st-key-form_receta_card_receta [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
+    /* FRANJA DE RESULTADO (regla #678): costo, precio de venta (el único
+       sitio donde se escribe), % de costo, utilidad, el aviso de lo
+       estimado y el botón del panel, en un renglón bajo la tabla. */
+    .st-key-form_receta_franja {
+        background: var(--bg-primary);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 6px 14px;
+    }
+    .fr-cifra-rot {
+        font-size: 10.5px;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        line-height: 1.3;
+    }
+    .fr-cifra {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        line-height: 1.5;
+    }
+    .fr-cifra-nota {
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--text-secondary);
+    }
+    .fr-franja-aviso {
+        font-size: 12.5px;
+        color: var(--warning-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* El rótulo y el campo del precio, pegados como el rótulo y la cifra
+       de las demás: con el gap de Streamlit esa celda medía 60 y la franja
+       entera crecía 14px. */
+    .st-key-form_receta_franja [data-testid="stColumn"] > [data-testid="stVerticalBlock"] {
+        gap: 2px !important;
+    }
+    .st-key-form_receta_franja [data-testid="stNumberInputContainer"] {
+        height: 30px !important;
+        border-color: var(--focus-lavender) !important;
+        border-radius: 6px !important;
+    }
+    .st-key-form_receta_franja [data-testid="stNumberInputStepDown"],
+    .st-key-form_receta_franja [data-testid="stNumberInputStepUp"] {
+        display: none !important;
+    }
+    .st-key-form_receta_franja input {
+        text-align: right;
+        font-weight: 600;
+        font-size: 15px !important;
+        padding: 0 8px !important;
+    }
+
+    /* EL PANEL AL COSTADO (regla #678). Desde 769px sale del flujo y se
+       pone encima de la tarjeta, contra su borde derecho: abrirlo no le
+       cambia el ancho a la tabla (que AG/Glide tendrían que re-medir,
+       #350). Dos anchos: 400 para consultar y 600 para armar algo nuevo,
+       que marca `fr-panel-ancho` en su cabecera. Abajo de 769 va al pie de
+       la tarjeta, en el flujo. */
+    .st-key-form_receta_card_receta {
+        position: relative;
+    }
+    .st-key-form_receta_panel {
+        background: var(--bg-card);
+        gap: 12px !important;
+        border-top: 1px solid var(--line-soft);
+        padding-top: 12px;
+    }
+    .st-key-form_receta_panel > * {
+        flex-shrink: 0 !important;
+    }
+    /* Streamlit mete el panel en un `stLayoutWrapper` que queda en el
+       flujo con 0px y se cobra el gap de la tarjeta: abrir el panel la
+       alargaba 12px. Sin caja propia, el panel ancla en la tarjeta. */
+    .st-key-form_receta_card_receta > [data-testid="stLayoutWrapper"]:has(> .st-key-form_receta_panel) {
+        display: contents;
+    }
+    .st-key-form_receta_panel_cerrar {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        width: auto !important;
+        z-index: 1;
+    }
+    /* En 400px el título y su subtítulo no caben lado a lado: uno arriba
+       del otro, y a la derecha el lugar del ✕. */
+    .st-key-form_receta_panel .fr-cab {
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 0;
+        padding-right: 36px;
+    }
+    @media screen and (min-width: 769px) {
+        .st-key-form_receta_panel {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 400px;
+            z-index: 5;
+            /* 6 abajo y no 16: la fila de la torta la estira su leyenda
+               (cinco renglones), no la dona, y con 16 el panel de Precio
+               se deslizaba 9px por dentro a 1323×619. */
+            padding: 16px 18px 6px;
+            border-top: none;
+            border-left: 1px solid var(--border);
+            border-radius: 0 20px 20px 0;
+            box-shadow: -12px 0 28px rgba(16, 16, 20, 0.10);
+            overflow-y: auto;
+            transition: width .18s ease;
+        }
+        /* 600 y no los 640 del boceto: a 1323px el panel ancho tapaba la
+           Utilidad de la franja, y las cuatro cifras tienen que verse
+           mientras se arma algo nuevo. */
+        .st-key-form_receta_panel:has(.fr-panel-ancho) {
+            width: 600px;
+        }
+    }
+
     /* El pie (Guardar, PDF, Excel, correo) va contra el borde de abajo de
        la tarjeta aunque en una pantalla grande sobre alto. */
     .st-key-form_receta_pie {
@@ -2790,8 +2902,7 @@ CSS = """    /* ================================================================
        se come el clic del «+» de su buscador — medido con Playwright el
        2026-10-03 en la tabla de una (Rs) nueva, la misma trampa de la
        #572. La de la receta tapaba igual el «+» del buscador principal. */
-    .st-key-form_receta_card_receta .stElementToolbar,
-    .st-key-form_receta_card_precio .stElementToolbar {
+    .st-key-form_receta_card_receta .stElementToolbar {
         display: none !important;
     }
     /* «¿Qué es?» del artículo nuevo: las opciones de un radio son
@@ -2886,11 +2997,8 @@ CSS = """    /* ================================================================
         border-radius: 50%;
     }
 
-    /* TABLA DE PRECIOS. HTML, salvo la fila del precio de venta, que es un
-       st.number_input dentro de `form_receta_prow` (st.columns sin gap con
-       las MISMAS proporciones que estas grillas: 2.3/1.4 con una columna
-       de montos y 2.3/1/1.2 con Actual y Nuevo). Si cambia una, cambia la
-       otra, o la celda editable deja de caer bajo su cabecera. */
+    /* TABLA DE PRECIOS del panel. HTML entero desde la regla #678: el
+       precio de venta se escribe en la franja de la receta. */
     .st-key-form_receta_ptabla {
         flex: 0 0 auto !important;
         gap: 0 !important;
@@ -2946,39 +3054,11 @@ CSS = """    /* ================================================================
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    .st-key-form_receta_prow {
-        height: 36px;
-        justify-content: center;
+    /* La fila del precio de venta: resaltada, como cuando era la única
+       que se escribía. Desde la regla #678 se escribe en la franja. */
+    .fr-p-pv {
         background: var(--rail-fondo);
-        border-bottom: 1px solid var(--line-soft);
-        font-size: 13.5px;
         font-weight: 600;
-        color: var(--text-primary);
-        font-variant-numeric: tabular-nums;
-    }
-    .st-key-form_receta_prow .fr-p-concepto,
-    .st-key-form_receta_prow .fr-p-num {
-        padding: 0 10px;
-    }
-    .st-key-form_receta_prow .fr-p-num {
-        font-weight: 400;
-        color: var(--text-secondary);
-    }
-    .st-key-form_receta_prow [data-testid="stNumberInputStepDown"],
-    .st-key-form_receta_prow [data-testid="stNumberInputStepUp"] {
-        display: none !important;
-    }
-    .st-key-form_receta_prow [data-testid="stNumberInputContainer"] {
-        height: 28px !important;
-        margin-right: 6px;
-        border-color: var(--focus-lavender) !important;
-        border-radius: 6px !important;
-    }
-    .st-key-form_receta_prow input {
-        text-align: right;
-        font-weight: 600;
-        font-size: 13.5px !important;
-        padding: 0 8px !important;
     }
 
     /* Semáforo del % de costo y leyenda de la torta. */
