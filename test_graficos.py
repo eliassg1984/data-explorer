@@ -237,6 +237,37 @@ def _pruebas_articulos_nuevos():
           an.resumen_usos(an.usos_de(idx, "LOOP")), "sin usos")
     check("sin usos", an.resumen_usos(an.usos_de(idx, "NADA")), "sin usos")
 
+    # ── Por dónde más se va: porcionamientos y notas de salida (#681) ──
+    # LOMO se porciona dos veces (la cabecera repetida en cada corte no
+    # suma dos veces); MEDALLON sale de él; PAPA va a comida de personal en
+    # dos notas, una anulada que no cuenta, y a una baja, que no es un uso.
+    po = pd.DataFrame({
+        "COD PORC": ["P1", "P1", "P2", "P9"], "COD PROD INIC": ["LOMO"] * 4,
+        "PROD INICIAL": ["Lomo fino"] * 4,
+        "FEC REGIST": ["2026-10-01", "2026-10-01", "2026-10-05", "2025-01-01"],
+        "UNID PROD INIC": ["KILOS"] * 4, "CANT A PORCIONAR": [10.0, 10.0, 5.0, 99.0],
+        "COD PROD FINAL": ["MEDALLON", "TROZOS", "MEDALLON", "MEDALLON"],
+        "PROD FINAL RESULT": ["Medallón", "Trozos", "Medallón", "Medallón"]})
+    sal = pd.DataFrame({
+        "COD SALIDA": ["S1", "S2", "S3", "S4"], "COD PRODUCTO": ["PAPA"] * 4,
+        "TIPO DESCARGO": ["Comida Personal", "Comida Personal", "Comida Personal", "Bajas"],
+        "NOMBRE ESTADO SALIDA": ["PROCESADO", "PROCESADO", "ANULADO", "PROCESADO"],
+        "CANT SALIDA": [2.0, 3.0, 50.0, 1.0], "VALOR NETO": [10.0, 15.0, 250.0, 5.0],
+        "FECHA REGISTRO": ["2026-10-02", "2026-10-03", "2026-10-03", "2026-10-04"],
+        "AREA": ["COCINA PERSONAL"] * 4})
+    otros = an.indice_otros_usos(po, sal, desde="2026-07-20")
+    check("se porciona: cada porcionamiento una vez, fuera de la ventana no",
+          {k: otros["LOMO"]["porciona"][k] for k in ("n", "cant", "cortes")},
+          {"n": 2, "cant": 15.0, "cortes": ["Medallón", "Trozos"]})
+    check("el corte dice de qué sale", otros["MEDALLON"]["sale_de"], [("Lomo fino", 2)])
+    check("salidas por tipo, sin las anuladas",
+          [(s["tipo"], s["n"], s["cant"]) for s in otros["PAPA"]["salidas"]],
+          [("Comida Personal", 2, 5.0), ("Bajas", 1, 1.0)])
+    check("la celda nombra porcionamiento y comida de personal, no la baja",
+          (an.resumen_usos(u, otros["LOMO"]), an.resumen_usos([], otros["PAPA"])),
+          ("3 platos · 1 base · porciona", "c. personal"))
+    check("sin columnas, vacío", an.indice_otros_usos(pd.DataFrame(), None), {})
+
     # ── A quién afecta cambiar una receta base (Modificar › Receta base) ──
     # +10 soles el KILO de DEMI: el Asado lleva 20 g (+0,20); la Salsa lleva
     # 100 g por kilo (+1 el kilo) y el Lomo y el Combo llevan 50 g y 10 g de

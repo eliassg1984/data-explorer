@@ -295,18 +295,108 @@ def impacto(indice, cod, delta):
     return {"platos": out_platos, "bases": {b: d(b) for b in alcanzables}}
 
 
-def resumen_usos(filas):
-    """«11 platos · 7 bases», o «sin usos»: lo que va en la tabla."""
+def resumen_usos(filas, otros=None):
+    """«11 platos · 7 bases · porciona · c. personal», o «sin usos»: lo que
+    va en la tabla. `otros` es lo de `indice_otros_usos` para ese artículo:
+    sin él, sólo las recetas."""
     n_p = sum(1 for f in filas if f["clase"] == "Plato")
     n_b = len(filas) - n_p
-    if not filas:
-        return "sin usos"
     partes = []
     if n_p:
         partes.append(f"{n_p} {'plato' if n_p == 1 else 'platos'}")
     if n_b:
         partes.append(f"{n_b} {'base' if n_b == 1 else 'bases'}")
-    return " · ".join(partes)
+    if otros:
+        if otros.get("porciona"):
+            partes.append("porciona")
+        partes += [CORTO_SALIDA.get(s["tipo"], s["tipo"].lower())
+                   for s in otros.get("salidas", []) if s["tipo"] not in SALIDAS_NO_USO]
+    return " · ".join(partes) or "sin usos"
+
+
+# ─── Dónde más se va: porcionamientos y notas de salida ─────────────────
+# Una receta no es el único camino por el que sale un artículo del almacén
+# (pedido 2026-10-20: «no indica si se usa en porcionamiento o salida de
+# comida de personal»). Lo demás se mira en lo que PASÓ en la ventana, no
+# en una ficha: un porcionamiento o una nota de salida no son recetas.
+CORTO_SALIDA = {"Comida Personal": "c. personal", "Uso en el Area": "uso en área",
+                "Evento": "eventos", "Prueba": "pruebas",
+                "Consumo en Servicio": "servicio", "Despacho Mayta": "Mayta",
+                "Consumo Envase Embalaje": "envases"}
+"""Cómo se nombra cada `TIPO DESCARGO` de salidas.parquet en la celda."""
+SALIDAS_NO_USO = ("Bajas", "---")
+"""Las bajas son merma, no un uso: van en el detalle, no en la celda."""
+
+
+def indice_otros_usos(po, sal, desde=None):
+    """`{cod: {"porciona", "sale_de", "salidas"}}`: por dónde más se fue cada
+    artículo desde `desde`, fuera de las recetas.
+
+    - `porciona`: `{"n", "cant", "unidad", "cortes"}` si se PORCIONÓ (fue
+      la entrada de `n` porcionamientos, `cant` en su unidad, cada
+      porcionamiento una vez: la cabecera se repite por corte, #510).
+    - `sale_de`: `[(insumo, n)]` si salió COMO CORTE de un porcionamiento.
+    - `salidas`: `[{"tipo", "n", "cant", "valor", "areas"}]` de las notas de
+      salida no anuladas, por `TIPO DESCARGO`, la de más notas primero.
+
+    `po` y `sal` traen las columnas de porcionamientos.parquet y
+    salidas.parquet; sin alguna, esa parte queda vacía."""
+    out = {}
+
+    def de(cod):
+        return out.setdefault(str(cod), {"porciona": None, "sale_de": [], "salidas": []})
+
+    col_po = {"COD PORC", "COD PROD INIC", "PROD INICIAL", "FEC REGIST", "UNID PROD INIC",
+              "CANT A PORCIONAR", "COD PROD FINAL", "PROD FINAL RESULT"}
+    if po is not None and not po.empty and col_po <= set(po.columns):
+        d = po
+        if desde is not None:
+            d = d[pd.to_datetime(d["FEC REGIST"], errors="coerce") >= pd.Timestamp(desde)]
+        d = d.assign(_ini=d["COD PROD INIC"].astype(str).str.strip(),
+                     _fin=d["COD PROD FINAL"].astype(str).str.strip(),
+                     _porc=pd.to_numeric(d["CANT A PORCIONAR"], errors="coerce").fillna(0.0))
+        cab = (d.drop_duplicates("COD PORC").groupby("_ini", as_index=False)
+               .agg(n=("COD PORC", "nunique"), cant=("_porc", "sum"),
+                    unidad=("UNID PROD INIC", "first")))
+        cortes = (d.drop_duplicates(["_ini", "PROD FINAL RESULT"])
+                  .sort_values("PROD FINAL RESULT", kind="stable")
+                  .groupby("_ini")["PROD FINAL RESULT"].agg(list))
+        for ini, n, cant, unidad in cab.itertuples(index=False):
+            de(ini)["porciona"] = {"n": int(n), "cant": float(cant), "unidad": str(unidad),
+                                   "cortes": [str(c) for c in cortes.get(ini, [])]}
+        origen = (d[d["_fin"] != d["_ini"]]
+                  .groupby(["_fin", "PROD INICIAL"], as_index=False)
+                  .agg(n=("COD PORC", "nunique"))
+                  .sort_values(["_fin", "n"], ascending=[True, False], kind="stable"))
+        for fin, ini, n in origen.itertuples(index=False):
+            de(fin)["sale_de"].append((str(ini), int(n)))
+
+    col_sal = {"COD SALIDA", "COD PRODUCTO", "TIPO DESCARGO", "CANT SALIDA", "VALOR NETO",
+               "FECHA REGISTRO"}
+    if sal is not None and not sal.empty and col_sal <= set(sal.columns):
+        s = sal
+        if "NOMBRE ESTADO SALIDA" in s.columns:
+            s = s[s["NOMBRE ESTADO SALIDA"].astype(str).str.upper() != "ANULADO"]
+        if desde is not None:
+            s = s[pd.to_datetime(s["FECHA REGISTRO"], errors="coerce") >= pd.Timestamp(desde)]
+        area = "AREA" if "AREA" in s.columns else None
+        s = s.assign(_cod=s["COD PRODUCTO"].astype(str).str.strip(),
+                     _tipo=s["TIPO DESCARGO"].fillna("").astype(str).str.strip(),
+                     _cant=pd.to_numeric(s["CANT SALIDA"], errors="coerce").fillna(0.0),
+                     _valor=pd.to_numeric(s["VALOR NETO"], errors="coerce").fillna(0.0),
+                     _area=(s[area].fillna("").astype(str).str.strip() if area else ""))
+        s = s[(s["_cod"] != "") & (s["_tipo"] != "")]
+        g = (s.groupby(["_cod", "_tipo"], as_index=False)
+             .agg(n=("COD SALIDA", "nunique"), cant=("_cant", "sum"), valor=("_valor", "sum"))
+             .sort_values(["_cod", "n"], ascending=[True, False], kind="stable"))
+        areas = (s[s["_area"] != ""].drop_duplicates(["_cod", "_tipo", "_area"])
+                 .sort_values("_area", kind="stable")
+                 .groupby(["_cod", "_tipo"])["_area"].agg(list))
+        for cod, tipo, n, cant, valor in g.itertuples(index=False):
+            de(cod)["salidas"].append({"tipo": tipo, "n": int(n), "cant": float(cant),
+                                       "valor": float(valor),
+                                       "areas": list(areas.get((cod, tipo), []))})
+    return out
 
 
 # ─── Cómo se dice ────────────────────────────────────────────────────────

@@ -206,8 +206,10 @@ _ALTO_TABLA_USOS = _ALTO_PANEL - (40 + _ALTO_NOTA_USOS + 2 * 12)
 #     128 + la pista 19 + título 22 + la nota de dos renglones + 5 gaps.
 _ALTO_IMPACTO = _ALTO_PANEL - (40 + 128 + 19 + 22 + _ALTO_NOTA_USOS + 5 * 12)
 _ALTO_TABLA = alturas.PRESUPUESTO - _CROMO_TARJETA_RECETA
-# «Se usa en», en la tabla de la receta: «20 platos · 36 bases» entero.
-_ANCHO_USOS = 122
+# «Se usa en», en la tabla de la receta: «20 platos · 36 bases · porciona ·
+# c. personal» entero. La tabla va a todo el ancho de la tarjeta desde la
+# regla #678: sobra lugar.
+_ANCHO_USOS = 230
 
 
 def _alto_tabla(modo):
@@ -571,7 +573,7 @@ def _tabla_lineas(modo, origen=None):
             if _modelo(modo, l)["clase"] in ("p", "rs"):
                 fijos.add(i)
         else:
-            usos = an.resumen_usos(_usos(l["cod"])) if con_usos else ""
+            usos = an.resumen_usos(_usos(l["cod"]), _otros(l["cod"])) if con_usos else ""
             estilos.append("")
         fila = {
             "Quitar": False,
@@ -658,8 +660,10 @@ def _tabla_lineas(modo, origen=None):
                      "eligen más)."),
             "Se usa en": st.column_config.TextColumn(
                 "Se usa en", width=_ANCHO_USOS,
-                help="Recetas ACTIVAS que lo llevan, directo o por una receta "
-                     "base. Cuáles, en la pestaña «Dónde se usa» de la derecha."),
+                help=f"Recetas ACTIVAS que lo llevan, directo o por una receta "
+                     f"base, y por dónde más salió en {an.VENTANA_DIAS} días: "
+                     f"porcionamientos y notas de salida (comida de personal, uso "
+                     f"en el área…). Cuáles, en «Dónde se usa», debajo de la tabla."),
         },
     )
 
@@ -713,37 +717,51 @@ def _botonera_tabla(modo, lineas, marcadas, origen=None):
     de la tarjeta."""
     pv = float(st.session_state.get(_key(modo, "pv")) or 0.0)
     cambios = _cambios_vs_sistema(lineas, origen, pv)
-    # columnas-internas: tres botones al ancho de su texto y el resumen
-    # ocupa lo que sobra, alineado a la derecha.
-    c_q, c_v, c_o, c_res = st.columns([1.35, 0.8, 1.55, 2.3],
-                                      vertical_alignment="center")
-    with c_q:
-        if st.button("✕ Quitar marcadas", key=_key(modo, "quitar"),
-                     disabled=not marcadas, use_container_width=True):
-            st.session_state[_key_lineas(modo)] = [
-                l for i, l in enumerate(lineas) if i not in marcadas]
-            st.session_state.pop(_key(modo, "editor"), None)
-            st.rerun(scope="fragment")
-    with c_v:
-        if st.button("Vaciar", key=_key(modo, "vaciar"), disabled=not lineas,
-                     use_container_width=True):
-            _vaciar(modo)
-            st.rerun(scope="fragment")
-    if modo == "modificar":
-        with c_o:
-            if st.button("↺ Volver al original", key=_key(modo, "original"),
-                         disabled=not (origen and cambios),
-                         use_container_width=True,
-                         help="Deja la receta y el precio como están en el sistema"):
-                _reimportar(origen)
+    with st.container(key="form_receta_botonera"):
+        # columnas-internas: los botones al ancho de su texto, un hueco, y
+        # a la derecha el pop «Dónde se usa» bajo su columna y el resumen.
+        c_q, c_v, c_o, _, c_pop, c_res = st.columns([1.3, 0.85, 1.6, 2.6, 1.4, 0.7],
+                                                    vertical_alignment="center")
+        with c_q:
+            if st.button("Quitar marcadas", key=_key(modo, "quitar"),
+                         icon=":material/remove_selection:",
+                         disabled=not marcadas, use_container_width=True):
+                st.session_state[_key_lineas(modo)] = [
+                    l for i, l in enumerate(lineas) if i not in marcadas]
+                st.session_state.pop(_key(modo, "editor"), None)
                 st.rerun(scope="fragment")
-    n = len(lineas)
-    if n:
-        with c_res:
-            # El costo lo dice la franja de abajo (regla #678).
-            st.markdown(
-                f'<div class="fr-resumen">{n} {"ítem" if n == 1 else "ítems"}</div>',
-                unsafe_allow_html=True)
+        with c_v:
+            if st.button("Vaciar", key=_key(modo, "vaciar"), icon=":material/delete_sweep:",
+                         disabled=not lineas, use_container_width=True):
+                _vaciar(modo)
+                st.rerun(scope="fragment")
+        if modo == "modificar":
+            with c_o:
+                if st.button("Volver al original", key=_key(modo, "original"),
+                             icon=":material/history:",
+                             disabled=not (origen and cambios),
+                             use_container_width=True,
+                             help="Deja la receta y el precio como están en el sistema"):
+                    _reimportar(origen)
+                    st.rerun(scope="fragment")
+        if not _es_combo(modo):
+            with c_pop:
+                # La celda «Se usa en» dice cuántas; el pop, cuáles: una celda
+                # del data_editor no abre nada al clic.
+                with st.popover("Dónde se usa", icon=":material/account_tree:",
+                                disabled=not lineas, use_container_width=True):
+                    st.markdown('<div class="fr-titulo-2 fr-pop-usos">Dónde se usa</div>'
+                                f'<div class="fr-sub">recetas activas, y porcionamientos y '
+                                f'notas de salida de {an.VENTANA_DIAS} días</div>',
+                                unsafe_allow_html=True)
+                    _panel_usos(modo, lineas, sufijo="_pop", alto=280)
+        n = len(lineas)
+        if n:
+            with c_res:
+                # El costo lo dice la franja de abajo (regla #678).
+                st.markdown(
+                    f'<div class="fr-resumen">{n} {"ítem" if n == 1 else "ítems"}</div>',
+                    unsafe_allow_html=True)
 
     if modo == "modificar" and not origen:
         # La fila existe igual: su alto está contado en `_FILAS_MODIFICAR`.
@@ -1058,7 +1076,7 @@ def _botones_envio(modo, cols, tipo, nombre, guardado_por, lineas, precio_venta,
     c_pdf, c_xls, c_mail = cols
     with c_pdf:
         st.download_button(
-            "⬇ PDF", data=lambda: envio_receta.pdf_receta(resumen),
+            "PDF", icon=":material/picture_as_pdf:", data=lambda: envio_receta.pdf_receta(resumen),
             file_name=envio_receta.nombre_archivo(resumen, "pdf"),
             mime="application/pdf", key=_key(modo, "dl_pdf"),
             on_click="ignore", disabled=not listo, use_container_width=True,
@@ -1066,7 +1084,7 @@ def _botones_envio(modo, cols, tipo, nombre, guardado_por, lineas, precio_venta,
         )
     with c_xls:
         st.download_button(
-            "⬇ Excel", data=lambda: envio_receta.excel_receta(resumen),
+            "Excel", icon=":material/table_view:", data=lambda: envio_receta.excel_receta(resumen),
             file_name=envio_receta.nombre_archivo(resumen, "xlsx"),
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key=_key(modo, "dl_xlsx"), on_click="ignore", disabled=not listo,
@@ -1079,15 +1097,15 @@ def _botones_envio(modo, cols, tipo, nombre, guardado_por, lineas, precio_venta,
     with c_mail:
         if cred is None:
             st.link_button(
-                "✉ Enviar desde mi Gmail",
+                "Enviar desde mi Gmail",
                 envio_receta.url_gmail(resumen, correo) if listo else "https://mail.google.com",
-                disabled=not listo, use_container_width=True,
+                icon=":material/mail:", disabled=not listo, use_container_width=True,
                 help=falta or (
                     f"Abre {'el Gmail de ' + correo if correo else 'tu Gmail'} con "
                     "el correo ya escrito. Escribe a quién, arrastra el PDF y el "
                     "Excel que descargaste y dale Enviar."),
             )
-        elif st.button("✉ Enviar por correo", key=_key(modo, "envio_abrir"),
+        elif st.button("Enviar por correo", key=_key(modo, "envio_abrir"), icon=":material/mail:",
                        disabled=not listo, use_container_width=True,
                        help=falta or "Mandar la receta con el PDF y el Excel adjuntos"):
             st.session_state[k_abierto] = not st.session_state.get(k_abierto, False)
@@ -1810,6 +1828,23 @@ def _indice_usos():
 
 def _usos(cod):
     return an.usos_de(_indice_usos(), cod)
+
+
+_ARCHIVO_SALIDAS = "salidas.parquet"
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _indice_otros_usos():
+    """Por dónde más se fue cada artículo en los últimos `an.VENTANA_DIAS`
+    días: porcionamientos y notas de salida (comida de personal, uso en el
+    área…). `articulos_nuevos.indice_otros_usos`."""
+    desde = (datetime.now(_ZONA_LIMA) - timedelta(days=an.VENTANA_DIAS)).date()
+    return an.indice_otros_usos(_cargar_reporte(_ARCHIVO_PORCIONAMIENTOS),
+                                _cargar_reporte(_ARCHIVO_SALIDAS), desde=desde)
+
+
+def _otros(cod):
+    return _indice_otros_usos().get(str(cod))
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -2695,31 +2730,71 @@ def _estilo_pct_uso(v):
     return f"color: {color}; font-weight: 600"
 
 
-def _panel_usos(modo, lineas):
+def _filas_otros(cod, otros):
+    """Las filas de «Porcionamientos y salidas» de `cod` (de `_otros`)."""
+    filas = []
+    if not otros:
+        return filas
+    p = otros.get("porciona")
+    if p:
+        filas.append({"Dónde": "Se porciona", "Veces": f"{p['n']} porc.",
+                      "Cuánto": an.cantidad_en(round(p["cant"], 1), p["unidad"]),
+                      "S/": "", "Detalle": ", ".join(p["cortes"])})
+    for ini, n in otros.get("sale_de", []):
+        filas.append({"Dónde": "Sale de porcionar", "Veces": f"{n} porc.", "Cuánto": "",
+                      "S/": "", "Detalle": ini})
+    unidad = (_kardex().get(cod) or ("", ""))[1]
+    for s in otros.get("salidas", []):
+        baja = s["tipo"] in an.SALIDAS_NO_USO
+        filas.append({"Dónde": s["tipo"] + (" (merma)" if baja else ""),
+                      "Veces": f"{s['n']} {'nota' if s['n'] == 1 else 'notas'}",
+                      "Cuánto": an.cantidad_en(round(s["cant"], 1), unidad),
+                      "S/": f"{s['valor']:,.2f}",
+                      "Detalle": ", ".join(a.capitalize() for a in s["areas"])})
+    return filas
+
+
+def _panel_usos(modo, lineas, sufijo="", alto=None):
     """En qué recetas ACTIVAS se usa cada artículo de esta receta, directo o
     por una receta base (decisión del usuario, 2026-10-03: también los
-    indirectos). La tabla principal dice cuántas; acá, cuáles: una celda
-    del `data_editor` no puede abrir nada al clic."""
+    indirectos), y por dónde más salió en la ventana: porcionamientos y
+    notas de salida (2026-10-20). La tabla principal dice cuántas; acá,
+    cuáles: una celda del `data_editor` no puede abrir nada al clic.
+
+    Se dibuja en dos sitios: la pestaña del panel al costado y el pop
+    «Dónde se usa» de debajo de la tabla (`sufijo="_pop"`). En el pop el
+    artículo NO se siembra por `session_state`: un widget adentro de un
+    popover cerrado no se entera de lo que Python le escribe (#467). Su key
+    lleva la lista de artículos, así que cambia sólo cuando la receta
+    cambia, y abre en el primero del almacén."""
+    alto = alto or _ALTO_TABLA_USOS
     if not lineas:
         st.markdown(_html_vacio(
             "Agrega artículos a la receta: acá verás en qué otras recetas activas "
-            "se usa cada uno.", _ALTO_PANEL - 10), unsafe_allow_html=True)
+            "se usa cada uno.", (alto + _ALTO_NOTA_USOS + 30) if sufijo else _ALTO_PANEL - 10),
+            unsafe_allow_html=True)
         return
     por_cod = {l["cod"]: l for l in lineas}
     cods = list(por_cod)
-    k = _key(modo, "uso_sel")
-    if st.session_state.get(k) not in cods:
-        st.session_state[k] = next(
-            (c for c in cods if por_cod[c].get("tipo") != "nuevo"), cods[0])
+    primero = next((c for c in cods if por_cod[c].get("tipo") != "nuevo"), cods[0])
 
     def rotulo(c):
         l = por_cod[c]
         if l.get("tipo") == "nuevo":
             return f"{l['nombre']} · nuevo"
-        return f"{l['nombre']} · {an.resumen_usos(_usos(c))}"
+        return f"{l['nombre']} · {an.resumen_usos(_usos(c), _otros(c))}"
 
-    cod = st.selectbox("Artículo", cods, format_func=rotulo, key=k,
-                       label_visibility="collapsed")
+    if sufijo:
+        firma = abs(hash(tuple(cods))) % 10 ** 8
+        cod = st.selectbox("Artículo", cods, index=cods.index(primero), format_func=rotulo,
+                           key=_key(modo, f"uso_sel{sufijo}_{firma}"),
+                           label_visibility="collapsed")
+    else:
+        k = _key(modo, "uso_sel")
+        if st.session_state.get(k) not in cods:
+            st.session_state[k] = primero
+        cod = st.selectbox("Artículo", cods, format_func=rotulo, key=k,
+                           label_visibility="collapsed")
     linea = por_cod[cod]
     if linea.get("tipo") == "nuevo":
         m = _modelo(modo, linea)
@@ -2728,7 +2803,7 @@ def _panel_usos(modo, lineas):
             st.markdown(_html_vacio(
                 "Es nuevo: ninguna receta del sistema lo usa todavía."
                 + (f" Sale de {e[0]}, que también es nuevo." if e else ""),
-                _ALTO_TABLA_USOS + _ALTO_NOTA_USOS), unsafe_allow_html=True)
+                alto + _ALTO_NOTA_USOS), unsafe_allow_html=True)
             return
         st.markdown(f'<div class="fr-nota fr-nota-2">Es nuevo: ninguna receta lo usa '
                     f'todavía. Los otros cortes de {html.escape(e[0])} '
@@ -2741,18 +2816,70 @@ def _panel_usos(modo, lineas):
             filas.append({"Corte": n, "Se usa en": f"{an.resumen_usos(u)}: {nombres}" if u
                           else "sin usos"})
         st.dataframe(pd.DataFrame(filas, columns=["Corte", "Se usa en"]), hide_index=True,
-                     use_container_width=True, height=_ALTO_TABLA_USOS,
-                     key=_key(modo, "usos_hermanos"),
+                     use_container_width=True, height=alto,
+                     key=_key(modo, f"usos_hermanos{sufijo}"),
                      column_config={"Corte": st.column_config.TextColumn("Corte", width=170)})
         return
     filas = _usos(cod)
-    if not filas:
-        st.markdown(_html_vacio("Ninguna receta activa lo usa, ni directo ni por "
-                                "una receta base.", _ALTO_TABLA_USOS + _ALTO_NOTA_USOS),
-                    unsafe_allow_html=True)
+    otros = _filas_otros(cod, _otros(cod))
+    if not filas and not otros:
+        st.markdown(_html_vacio(
+            f"Ninguna receta activa lo usa, ni directo ni por una receta base, y en "
+            f"{an.VENTANA_DIAS} días no se porcionó ni salió con una nota de salida.",
+            alto + _ALTO_NOTA_USOS), unsafe_allow_html=True)
         return
-    st.markdown(f'<div class="fr-nota fr-nota-2">{html.escape(_texto_usos(filas))}</div>',
+    nota = " · ".join(t for t in (
+        _texto_usos(filas),
+        (f"en {an.VENTANA_DIAS} días: " + ", ".join(
+            f"{o['Dónde'].lower()} ({o['Veces']})" for o in otros)) if otros else "") if t)
+    st.markdown(f'<div class="fr-nota fr-nota-2">{html.escape(nota)}</div>',
                 unsafe_allow_html=True)
+    if not otros:
+        _tabla_recetas_usos(modo, filas, _alto_filas(len(filas), alto) if sufijo else alto,
+                            sufijo)
+        return
+    # Dos tablas en el alto de una: cada una en su pestaña, la de recetas
+    # primero si las hay. El rótulo dice cuántas filas tiene cada una.
+    alto_t = alto - _ALTO_PESTANAS - 12
+    if sufijo:
+        # En el pop nada tiene que medir lo mismo que otra cosa: cada tabla
+        # mide sus filas, hasta el alto disponible.
+        alto_t = None
+    nombres = ([f"Recetas ({len(filas)})"] if filas else []) + [
+        f"Porcionamientos y salidas ({len(otros)})"]
+    pestanas = st.tabs(nombres)
+    if filas:
+        with pestanas[0]:
+            _tabla_recetas_usos(modo, filas, alto_t or _alto_filas(len(filas), alto), sufijo)
+    with pestanas[-1]:
+        st.dataframe(
+            pd.DataFrame(otros, columns=["Dónde", "Veces", "Cuánto", "S/", "Detalle"]),
+            hide_index=True, use_container_width=True,
+            height=alto_t or _alto_filas(len(otros), alto),
+            key=_key(modo, f"usos_otros{sufijo}"),
+            column_config={
+                "Dónde": st.column_config.TextColumn(
+                    "Dónde", width=130, help="Porcionamiento, o el tipo de la nota de "
+                    "salida. Las bajas son merma: no cuentan como uso en la tabla."),
+                "Veces": st.column_config.TextColumn("Veces", width=62),
+                "Cuánto": st.column_config.TextColumn(
+                    "Cuánto", width=70, help="En la unidad del almacén"),
+                "S/": st.column_config.TextColumn("S/", width=58,
+                                                  help="Valorizado de las notas de salida"),
+                "Detalle": st.column_config.TextColumn(
+                    "Detalle", help="Los cortes que salen, el insumo del que sale, o las "
+                    "áreas que hicieron la nota"),
+            })
+
+
+def _alto_filas(n, tope):
+    """El alto de un `st.dataframe` de `n` filas (35 cada una y la
+    cabecera), hasta `tope`."""
+    return min(tope, 38 + 35 * max(n, 1))
+
+
+def _tabla_recetas_usos(modo, filas, alto, sufijo):
+    """Las recetas activas que llevan el artículo, con su vía y su % costo."""
     tabla = pd.DataFrame({
         "Receta": [f["receta"] for f in filas],
         "Es": ["plato" if f["clase"] == "Plato" else "base" for f in filas],
@@ -2763,8 +2890,8 @@ def _panel_usos(modo, lineas):
     })
     st.dataframe(
         tabla.style.map(_estilo_pct_uso, subset=["% costo"]),
-        hide_index=True, use_container_width=True, height=_ALTO_TABLA_USOS,
-        key=_key(modo, "usos_tabla"),
+        hide_index=True, use_container_width=True, height=alto,
+        key=_key(modo, f"usos_tabla{sufijo}"),
         column_config={
             "Receta": st.column_config.TextColumn("Receta", width=140),
             "Es": st.column_config.TextColumn("Es", width=40),
@@ -2841,7 +2968,7 @@ def _pestanas(modo, lineas):
         sub = (f"IGV {_tasa(tasa_igv())} · recargo al consumo {_tasa(_RECARGO)}, "
                "sobre el neto")
     elif sel == "usos":
-        titulo, sub = "Dónde se usa", "recetas activas, directo o por recetas base"
+        titulo, sub = "Dónde se usa", "recetas activas, porcionamientos y notas de salida"
     elif sel == "crear":
         titulo, sub = "Artículo nuevo", "no está en el almacén"
     else:
@@ -3094,7 +3221,7 @@ def _render_armado(modo, card):
                 )
             with c_boton:
                 guardar = st.button(
-                    "💾 Guardar propuesta", type="primary",
+                    "Guardar propuesta", type="primary", icon=":material/save:",
                     key=_key(modo, "guardar"), use_container_width=True,
                 )
             nuevos = _detalle_nuevos(modo, lineas)
@@ -3290,8 +3417,16 @@ def _cabecera(titulo):
         st.segmented_control(
             "Tipo", ["Receta de venta", "Combo", "Modificar", "Guardadas"],
             default="Receta de venta", key="form_receta_modo",
+            format_func=lambda m: f"{_ICONO_MODO[m]} {m}",
             label_visibility="collapsed",
         )
+
+
+# El ícono de cada modo en su control (regla #681). Sólo el RÓTULO: el
+# valor sigue siendo el nombre, que es lo que lee `_MODO_DE_ROTULO`.
+_ICONO_MODO = {"Receta de venta": ":material/restaurant_menu:",
+               "Combo": ":material/fastfood:", "Modificar": ":material/edit_note:",
+               "Guardadas": ":material/bookmarks:"}
 
 
 def render_formulario_receta():

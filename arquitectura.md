@@ -58,9 +58,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-680 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+681 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (214)
+**CSS y estilos** (215)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -276,6 +276,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#656** — «Simular» un plato abre una modal con la receta como ÁRBOL —las recetas base editables por…
 - **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
+- **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 
 **Layout y alturas** (96)
 
@@ -595,7 +596,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 
-**Streamlit** (165)
+**Streamlit** (166)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -762,6 +763,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#669** — El presupuesto de venta, por mes y servicio, editable en Costos y comparado en Ventas ›…
 - **#675** — Documentos SUNAT pide EN LOTE los XML que faltan en la tabla…
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
+- **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 
 **Datos, R2 y DuckDB** (107)
 
@@ -53102,6 +53104,53 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-20.)
 
+681. **«Se usa en» de Nuevo Costeo mira también porcionamientos y notas de
+     salida, y lo dice un pop debajo de la tabla; los botones de la tarjeta
+     tienen jerarquía.** Desde 2026-10-20, a pedido: «no indica si se usa en
+     porcionamiento o salida de comida de personal, […] sería bueno que un
+     pop muestre cuáles son», y los botones se veían «de fábrica».
+
+     - **Una receta no es el único camino de salida.** La Papa Amarilla
+       salía «4 platos · 3 bases» y además va a comida de personal; el
+       Calamar salía «sin usos» y se porcionó 14 veces en 90 días.
+       `articulos_nuevos.indice_otros_usos` cuenta, en la ventana de
+       `VENTANA_DIAS`, lo PORCIONADO (cada porcionamiento una vez, #510), de
+       qué porcionamiento sale un corte, y las notas de salida no anuladas
+       por `TIPO DESCARGO`. La celda nombra «porciona» y cada tipo con su
+       nombre corto (`CORTO_SALIDA`: «c. personal», «uso en área»…). **Las
+       bajas no**: son merma, no un uso; van sólo en el detalle, marcadas
+       «(merma)». Mira lo que PASÓ, no una ficha: un insumo que se porciona
+       una vez por trimestre sale con 90 días y no con 30.
+     - **El pop y no la celda**: una celda de `st.data_editor` no abre nada
+       al clic y Streamlit 1.59 no pinta los tooltips del Styler. El pop
+       «Dónde se usa» va en la fila de Quitar/Vaciar, debajo de la columna,
+       y dibuja la MISMA función que la pestaña del panel
+       (`formulario_receta._panel_usos`, `sufijo="_pop"`), con dos pestañas:
+       Recetas y Porcionamientos y salidas. Su selector de artículo NO se
+       siembra por `session_state` (#467): la key lleva la lista de
+       artículos y abre en el primero del almacén. En el pop cada tabla mide
+       sus filas; en el panel, el alto fijo de siempre.
+     - **`_ANCHO_USOS` pasó de 122 a 230**: con la tabla a todo el ancho
+       (#678) sobraba lugar, y «4 platos · 3 bases · c. personal» no entraba.
+     - **Los botones tienen jerarquía** (`estilos/_80_cards.py`, bloque
+       «LOS BOTONES DE LA TARJETA»): el modo es una pista gris con el elegido
+       en blanco (`button[kind="segmented_controlActive"]`); Quitar, Vaciar
+       y Volver son fantasmas (sin borde hasta el cursor); «Dónde se usa» un
+       chip lavanda porque abre algo; en el pie manda «Guardar propuesta» y
+       PDF, Excel y correo van contorneados. Los emojis y glifos (💾, ⬇, ✉,
+       ✕, ↺) pasaron a íconos Material con `icon=`; los del modo, en
+       `formulario_receta._ICONO_MODO`, sólo en el RÓTULO (el valor sigue
+       siendo el nombre que lee `_MODO_DE_ROTULO`). El pop, que es un
+       portal, se ensancha a 600px por `:has(.fr-pop-usos)` (una clase sola
+       adentro del `:has()`, #469).
+
+     Lo vigila `test_graficos.py::_pruebas_articulos_nuevos` (porcionamiento
+     contado una vez y fuera de la ventana no, el corte y su origen, salidas
+     sin anuladas, la celda sin la baja). Verificado con Playwright sobre R2 a
+     1323×619: la tabla, el pop y sus dos pestañas.
+
+     (2026-10-20.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53114,7 +53163,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#680**; la próxima toma el número siguiente.
+> última regla es la **#681**; la próxima toma el número siguiente.
 
 >
 

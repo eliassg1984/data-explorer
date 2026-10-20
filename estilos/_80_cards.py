@@ -2809,6 +2809,112 @@ CSS = """    /* ================================================================
         padding-top: 12px;
         border-top: 1px solid var(--line-soft);
     }
+    /* LOS BOTONES DE LA TARJETA, CON JERARQUÍA (2026-10-20, regla #681).
+       Se reportaron «de fábrica, genéricos»: todos medían lo mismo, con el
+       mismo borde gris y un emoji o un glifo Unicode por ícono. Ahora cada
+       fila dice cuál importa:
+       - el MODO es una pista gris con la opción elegida en blanco y en
+         relieve, como un interruptor de varias posiciones;
+       - lo que se hace SOBRE LA TABLA (quitar, vaciar, volver) es fantasma:
+         sin borde hasta que el cursor pasa; «Dónde se usa» es un chip
+         lavanda porque abre algo;
+       - en el pie manda «Guardar propuesta»; PDF, Excel y correo van
+         contorneados, más bajos de tono.
+       Los íconos son Material (`icon=` de Streamlit) en el color de acento. */
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] {
+        display: flex;
+        justify-content: flex-end;
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] > div {
+        width: fit-content;
+        gap: 2px !important;
+        padding: 3px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] button {
+        min-height: 30px !important;
+        padding: 0 14px !important;
+        border: 1px solid transparent !important;
+        border-radius: 8px !important;
+        background: transparent !important;
+        color: var(--text-secondary) !important;
+        box-shadow: none !important;
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] button:hover {
+        color: var(--accent-deep) !important;
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {
+        background: var(--bg-card) !important;
+        border-color: var(--border) !important;
+        color: var(--accent-deep) !important;
+        box-shadow: var(--shadow) !important;
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] button p {
+        font-size: 13px !important;
+        font-weight: 500 !important;
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {
+        font-weight: 600 !important;
+    }
+
+    .st-key-form_receta_botonera button[kind="secondary"] {
+        min-height: 32px !important;
+        padding: 0 10px !important;
+        background: transparent !important;
+        border: 1px solid transparent !important;
+        color: var(--text-secondary) !important;
+        box-shadow: none !important;
+    }
+    .st-key-form_receta_botonera button[kind="secondary"]:hover:not(:disabled) {
+        background: var(--bg-hover) !important;
+        border-color: var(--focus-lavender) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-form_receta_botonera button[kind="secondary"]:disabled {
+        opacity: .45;
+    }
+    .st-key-form_receta_botonera button[data-testid="stPopoverButton"] {
+        background: var(--accent-tint) !important;
+        border-color: transparent !important;
+        border-radius: 999px !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-form_receta_botonera button[data-testid="stPopoverButton"] p {
+        font-weight: 600 !important;
+    }
+    .st-key-form_receta_botonera [data-testid="stIconMaterial"],
+    .st-key-form_receta_pie button[kind="secondary"] [data-testid="stIconMaterial"],
+    .st-key-form_receta_pie a [data-testid="stIconMaterial"] {
+        color: var(--accent) !important;
+        font-size: 18px !important;
+    }
+    .st-key-form_receta_pie button,
+    .st-key-form_receta_pie a[data-testid^="stBaseLinkButton"] {
+        min-height: 38px !important;
+        border-radius: 10px !important;
+    }
+    .st-key-form_receta_pie button[kind="secondary"],
+    .st-key-form_receta_pie a[data-testid^="stBaseLinkButton"] {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text-primary) !important;
+        box-shadow: none !important;
+    }
+    .st-key-form_receta_pie button[kind="secondary"]:hover:not(:disabled),
+    .st-key-form_receta_pie a[data-testid^="stBaseLinkButton"]:hover {
+        background: var(--bg-hover) !important;
+        border-color: var(--focus-lavender) !important;
+    }
+    /* El pop «Dónde se usa» lleva dos tablas de cinco columnas: con el
+       ancho de su botón (≈180px) no se leía ninguna. Es un portal, se
+       ubica por su título (`fr-pop-usos`). */
+    [data-testid="stPopoverBody"]:has(.fr-pop-usos) {
+        width: 600px !important;
+        max-width: calc(100vw - 32px) !important;
+    }
+
     /* Botón "+" al costado del buscador: alto igual al selectbox
        (~40px) y ancho fijo por su glifo. Las keys (2) las escribe
        `formulario_receta._key(modo, "add_sel"/"add_nuevo")`. */
