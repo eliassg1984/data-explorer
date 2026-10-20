@@ -94,7 +94,7 @@ _CSS = f"""
    cursor (`title`), como desde el 2026-10-18. */
 .dif-kpis {{ display: flex; flex-wrap: wrap; border: 1px solid {GRIS_LINEA};
              border-radius: 9px; overflow: hidden; margin: 2px 0 2px; }}
-.dif-kpi {{ flex: 1 1 150px; padding: 5px 12px; border-right: 1px solid {GRIS_LINEA};
+.dif-kpi {{ flex: 1 1 auto; padding: 5px 12px; border-right: 1px solid {GRIS_LINEA};
             display: flex; align-items: baseline; gap: 8px; min-width: 0; cursor: help; }}
 .dif-kpi:last-child {{ border-right: 0; }}
 .dif-kpi .r {{ font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
@@ -102,6 +102,10 @@ _CSS = f"""
                overflow: hidden; text-overflow: ellipsis; }}
 .dif-kpi .v {{ font-size: 14.5px; font-weight: 700; color: {TEXTO_PRINCIPAL};
                font-variant-numeric: tabular-nums; white-space: nowrap; }}
+/* La letra de la app y no la de Streamlit: sin esto las cifras salían en
+   Source Sans y los rótulos en DM Sans (medido, 2026-10-20). */
+.dif-kpi, .dif-kpi * {{ font-family: "DM Sans", "Inter", -apple-system, BlinkMacSystemFont,
+                        sans-serif !important; }}
 .dif-neg {{ color: {AJUSTE_NEG_TEXTO} !important; }}
 .dif-pos {{ color: {AJUSTE_POS_TEXTO} !important; }}
 .dif-n {{ font-size: 15px; font-weight: 700; color: {ACENTO_TEXTO}; line-height: 1.25; }}

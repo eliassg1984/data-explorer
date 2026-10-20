@@ -7,11 +7,13 @@
 
 .ld {
   color: var(--text-primary);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
 }
-.ld button { font: inherit; }
+/* La familia de letra, heredada; el tamaño y el peso, de cada regla: con
+   `font: inherit` entero, las fichas salían en 12,5 y no en 11,5 (medido). */
+.ld button { font-family: inherit; }
 .ld button:focus-visible, .ld tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* La tabla desliza por dentro, con la cabecera fija: el alto lo manda Python
@@ -20,7 +22,7 @@
 table { border-collapse: collapse; width: 100%; table-layout: fixed; }
 th {
   position: sticky; top: 0; z-index: 1; background: var(--bg-card);
-  font-size: 11px; font-weight: 600; color: var(--text-muted); text-align: left;
+  font-size: 11px; font-weight: 600; color: var(--text-secondary); text-align: left;
   padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
 }
 th.n, td.n { text-align: right; }
@@ -32,7 +34,7 @@ td.sev { width: 4px; padding: 0 0 0 6px; }
 td.sev i { display: block; width: 4px; height: 26px; border-radius: 2px; background: var(--ld-neg); }
 td.sev i.pos { background: var(--ld-pos); }
 td.prod { font-weight: 600; overflow-wrap: anywhere; }
-td.prod small { display: block; font-weight: 400; color: var(--text-muted); font-size: 11px; margin-top: 1px; }
+td.prod small { display: block; font-weight: 400; color: var(--text-secondary); font-size: 11px; margin-top: 1px; }
 td.n { white-space: nowrap; }
 .neg { color: var(--ld-neg); }
 .pos { color: var(--ld-pos); }
@@ -45,7 +47,7 @@ td.area { color: var(--text-secondary); overflow-wrap: anywhere; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip {
   border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
-  border-radius: 99px; padding: 2px 9px 2px 7px; font-size: 11.5px; cursor: pointer;
+  border-radius: 99px; padding: 2px 9px 2px 7px; font-size: 11.5px; font-weight: 400; cursor: pointer;
   display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; max-width: 100%;
   min-width: 0;
 }
