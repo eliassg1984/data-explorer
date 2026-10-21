@@ -440,6 +440,16 @@ ese día la ficha va en PESTAÑAS («se verá en laptop») y mide ~500, y la
 lista la acompaña. La tarjeta sigue sin techo (`estilos/_80_cards.py`) y la
 lista se desliza por dentro."""
 
+DIFERENCIAS_CROMO = 222
+"""Lo que la tarjeta de «Análisis de diferencias» pone ARRIBA y ABAJO de su
+lista (regla #688): 150 de cabecera, filtros y totales, más 69 debajo con la
+ficha abierta —el pie se parte en dos renglones en la columna angosta—, más
+3 de aire. Medido a 1323×619. La lista mide `min(DIFERENCIAS_TABLA,
+--alto-util − esto)`: a 619 de alto son 353 y la tarjeta entra en los 575 de
+`--alto-util`; en una pantalla alta llega a los 470 de siempre. Con un tope
+fijo de 470 la tarjeta medía 668 y el final de la lista quedaba 23 px bajo
+el borde."""
+
 CONSISTENCIA_LISTA = 27 * 15 + 38
 """Tope de la lista de controles de Costos › «Consistencia del maestro»
 (regla #686): quince filas de 27 y la cabecera, lo que mide un grupo entero

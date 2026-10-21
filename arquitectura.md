@@ -58,9 +58,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-687 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+688 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (216)
+**CSS y estilos** (217)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -278,8 +278,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#687** — Una lista con scroll propio de una pieza nuestra lleva overscroll-behavior: contain; el…
+- **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 
-**Layout y alturas** (96)
+**Layout y alturas** (97)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -377,6 +378,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
 - **#671** — «Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada receta base, quién y cuánto…
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
+- **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 
 **Plotly y figuras** (119)
 
@@ -53373,6 +53375,30 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-21.)
 
+688. **La lista de «Análisis de diferencias» cede alto en una pantalla
+     baja: la tarjeta entra en `--alto-util`.** A 1323×619 la tarjeta medía
+     668 px contra los 575 de `--alto-util`, y el final de la lista quedaba
+     23 px bajo el borde: el tope de la lista era un número fijo
+     (`alturas.DIFERENCIAS_TABLA`, 470). Ahora su `max-height` es
+     `clamp(220px, calc(var(--alto-util) − DIFERENCIAS_CROMO), 470px)`, y
+     `DIFERENCIAS_CROMO` (222) es lo medido arriba y abajo de la lista: 150
+     de cabecera, filtros y totales, más 69 con la ficha abierta, porque el
+     pie se parte en dos renglones en la columna angosta. Viaja como
+     `alto_css` a `lista_diferencias.js`: `--alto-util` atraviesa el shadow
+     root, como toda variable heredada, y se acomoda sola al cambiar el
+     tamaño de la ventana, sin rerun.
+
+     Medido después del cambio en el navegador, con el servidor reiniciado:
+     a 1323×619 la tarjeta mide 551 sin línea elegida y 574 con la ficha
+     abierta, en sus cuatro pestañas (hasta 410 px); a 1323×768 la lista
+     vuelve a 470 y la tarjeta mide 691 de 724. **Lo que queda:** a 1100 de
+     ancho la cabecera ocupa 33 px más y la ficha, más angosta, crece a 469;
+     la lista entra, pero la tarjeta llega a 660. Ese exceso es de la ficha,
+     no de la lista. Y la ficha de otra línea puede traer más pistas: los
+     410 son de la primera línea del cierre de setiembre 2026.
+
+     (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53385,7 +53411,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#687**; la próxima toma el número siguiente.
+> última regla es la **#688**; la próxima toma el número siguiente.
 
 >
 

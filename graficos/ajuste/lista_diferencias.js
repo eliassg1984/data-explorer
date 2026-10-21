@@ -44,7 +44,10 @@ function dibujar(raiz) {
   // automático, las fichas —que no se parten— pedían su ancho entero y, con
   // la ficha de la línea abierta al costado, «S/» y «Posible origen» se salían
   // por la derecha (medido a 1323). Así la ficha corta se achica con «…».
-  let h = `<div class="marco" style="max-height:${Number(d.alto) || 470}px"><table>` +
+  // `alto_css` deja que la lista ceda en una pantalla baja (regla #688): la
+  // variable `--alto-util` atraviesa el shadow root, como toda heredada.
+  const tope = d.alto_css ? esc(d.alto_css) : `${Number(d.alto) || 470}px`;
+  let h = `<div class="marco" style="max-height:${tope}"><table>` +
     '<colgroup><col style="width:12px"><col style="width:29%"><col style="width:13%">' +
     '<col style="width:10%"><col style="width:10%"><col></colgroup><thead><tr>' +
     '<th></th><th>Producto</th><th>Área</th><th class="n">Dif.</th><th class="n">S/</th>' +

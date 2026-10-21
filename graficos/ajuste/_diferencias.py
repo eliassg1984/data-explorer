@@ -863,8 +863,13 @@ def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
             _LISTA(key=_K_LISTA, data={
                 "filas": filas_lista(f, fichas_lista, junto), "sel": foco,
                 # Tope de una laptop (`DIFERENCIAS_TABLA`): la ficha de al
-                # lado va en pestañas y mide lo mismo.
+                # lado va en pestañas y mide lo mismo. En una pantalla más
+                # baja la lista cede lo que haga falta para que la tarjeta
+                # entre en `--alto-util` (regla #688).
                 "alto": alturas.DIFERENCIAS_TABLA,
+                "alto_css": (f"clamp(220px, calc(var(--alto-util) - "
+                             f"{alturas.DIFERENCIAS_CROMO}px), "
+                             f"{alturas.DIFERENCIAS_TABLA}px)"),
                 "neg": AJUSTE_NEG_TEXTO, "pos": AJUSTE_POS_TEXTO,
                 "vacio": "Ninguna línea con estos filtros."},
                 on_fila_change=_al_elegir_fila, width="stretch")
