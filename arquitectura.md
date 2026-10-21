@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-690 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+691 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (219)
 
@@ -883,7 +883,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 
-**SUNAT y SIRE** (68)
+**SUNAT y SIRE** (69)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -953,6 +953,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#683** — «Documentos SUNAT» son TRES vistas, una por pantalla, y la tarjeta de debajo de la tabla ya…
 - **#684** — «Ingresar al Almacén» es UNA tabla con los dos lados, y lo que falta cargar dice cuánto es…
 - **#686** — «¿El maestro del sistema tiene lógica?» se contesta con CONTROLES, no con un tablero: Costos…
+- **#691** — «Consistencia de datos», ajustada a pedido: el Almacén Central tiene TODOS los productos, dos…
 
 **Fechas, rangos y cortes** (17)
 
@@ -1025,7 +1026,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (200)
+**Decisiones de diseño y UX** (201)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1227,6 +1228,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#686** — «¿El maestro del sistema tiene lógica?» se contesta con CONTROLES, no con un tablero: Costos…
 - **#687** — Una lista con scroll propio de una pieza nuestra lleva overscroll-behavior: contain; el…
 - **#689** — Un boceto aprobado se implementa con SU forma: si es una página con tarjetas, chips y ficha,…
+- **#691** — «Consistencia de datos», ajustada a pedido: el Almacén Central tiene TODOS los productos, dos…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53474,6 +53476,36 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-21.)
 
+691. **«Consistencia de datos», ajustada a pedido: el Almacén Central
+     tiene TODOS los productos, dos controles fuera, uno renombrado, uno de
+     grupo, y la descarga en Excel.** Quedan 26 controles
+     (`consistencia_maestro.VERSION` = 2).
+
+     - **«Habilitado en un área que no lo usa» no cuenta el Almacén Central**
+       (`AREA_CENTRAL` = "000"): por defecto tiene el kardex de todos los
+       productos, así que habilitado y quieto ahí es lo normal. Bajó de
+       2.463 a 2.147 casos al 20 oct 2026.
+     - **Fuera «Servicios que acumulan stock» y «Mercadería sin kardex».** El
+       primero ya lo resuelve Stock e Inventario (#598); el segundo salía en
+       cero. Sus funciones se borraron.
+     - **«Receta con insumo de baja» se llama «Receta con insumo
+       desactivado/sin área»**: dice las dos cosas que marca (el insumo
+       inactivo, y el que no está habilitado en el área de descargo).
+     - **«Factura en SUNAT sin ingresar» pasó a Compras** (id `p4`; era
+       `m6` de «Movimientos raros»): es una compra que falta, no un evento
+       sospechoso.
+     - **La descarga es un .xlsx, armado en el navegador sin librerías**
+       (`costos_consistencia.js::libro`): un ZIP sin comprimir (método 0,
+       sólo hace falta el CRC32) con el XML de cada hoja, la cabecera
+       congelada, el ancho de cada columna según su texto y los montos como
+       NÚMERO. El de un control lleva las columnas de su tabla y respeta lo
+       que se esté buscando; el de todo, una hoja «Controles» y otra «Casos».
+       Verificado bajándolos desde la vista con Playwright y abriéndolos con
+       openpyxl (2.148 × 4 y 4.537 × 8). El nombre de una hoja va recortado
+       a 31 caracteres y sin `[]:*?/\`: si no, Excel no abre el archivo.
+
+     (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53486,7 +53518,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#690**; la próxima toma el número siguiente.
+> última regla es la **#691**; la próxima toma el número siguiente.
 
 >
 

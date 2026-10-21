@@ -72,6 +72,7 @@ INV = pd.DataFrame([
     _inv("001", "COCINA", "0000001", "Vino de guarda", stock=5, precio=20),
     _inv("001", "COCINA", "0000002", "Palta", stock=-3, precio=8, us="GRAMOS", factor=1000),
     _inv("017", "BAJAS DE ALMACEN", "0000002", "Palta", us="GRAMOS", factor=1000),
+    _inv("000", "ALMACEN CENTRAL", "0000002", "Palta", us="GRAMOS", factor=1000),
     _inv("001", "COCINA", "0000003", "Sal ahumada", stock=2, precio=0),
     _inv("001", "COCINA", "0000004", "Producto viejo"),
     _inv("011", "BARRA", "0000004", "Producto viejo"),
@@ -330,12 +331,12 @@ ok(set(casos("s2")["codigo"]) == {"0000002"}, "s2 · la palta en negativo")
 ok(codigos("s3") == {"0000003"}, "s3 · la sal con stock y precio cero")
 ok("0000004" in codigos("s4") and "0000001" not in codigos("s4"),
    "s4 · el producto viejo sin vida; el vino con stock no")
-ok(codigos("s5") == {"0000005"}, "s5 · el servicio con existencia")
 ok(codigos("s6") == {"0000006"},
    "s6 · la leña KILOS → GRAMOS con factor 1; la palta con 1000 no")
 s7 = casos("s7")
 ok(list(zip(s7["codigo"], s7["area"])) == [("0000002", "BAJAS DE ALMACEN")],
-   "s7 · la palta sobra en Bajas, no en Cocina donde se mueve",
+   "s7 · la palta sobra en Bajas; no en Cocina, donde se mueve, ni en el Almacén Central, "
+   "que tiene todos los productos",
    f"casos: {list(zip(s7['codigo'], s7['area']))}")
 
 print("── recetas ──")
@@ -372,7 +373,10 @@ print("── compras ──")
 ok(codigos("p1") == {"0000009", "0000001"},
    "p1 · el hueso de pollo y el vino (comprado, y sin uso en 180 días); el papel "
    "toalla (operación) y la palta (se vende) no")
-ok(codigos("p2") == {"0000011"}, "p2 · el hielo comprado como servicio")
+p4 = casos("p4")
+ok(p4["codigo"].tolist() == ["F001-1"],
+   "p4 · sólo la mercadería sin ingresar de hace más de 15 días; ni servicios, "
+   "ni la anulada con nota", f"casos: {p4['codigo'].tolist()}")
 p3 = casos("p3")
 ok(len(p3) == 1 and p3["codigo"].iloc[0] == "0000012, 0000013",
    "p3 · «Azúcar Rubia» y «AZUCAR  RUBIA.» son el mismo producto")
@@ -394,10 +398,6 @@ ok(set(zip(m4["codigo"], m4["dato"])) == {("0000002", "×4.0"), ("0000001", "4.5
    f"casos: {list(zip(m4['codigo'], m4['dato']))}")
 ok(codigos("m5") == {"0000003"},
    "m5 · la sal sobró sin entrar; el aceite tuvo entrada y la palta estaba en negativo")
-m6 = casos("m6")
-ok(m6["codigo"].tolist() == ["F001-1"],
-   "m6 · sólo la mercadería sin ingresar de hace más de 15 días; ni servicios, "
-   "ni la anulada con nota", f"casos: {m6['codigo'].tolist()}")
 m7 = casos("m7")
 ok(len(m7) == 1 and m7["fecha"].iloc[0] == d(31, 0).normalize(),
    "m7 · el pedido del hueco entre corridas, en su día")
@@ -427,6 +427,11 @@ ok(dict(zip(res["id"], res["concentra"]))["s2"] == "COCINA 1",
    "resumen · dónde se concentran los casos")
 
 print("── el registro ──")
+ok(not {"s5", "p2", "m6"} & set(cm.POR_ID),
+   "quitados a pedido: servicios con stock y mercadería sin kardex; la factura de "
+   "SUNAT pasó a Compras (regla #691)")
+ok(cm.POR_ID["p4"].dominio == "compras" and cm.POR_ID["r2"].nombre == "Receta con insumo desactivado/sin área",
+   "la factura de SUNAT en Compras y el nombre pedido de la receta")
 ids = [c.id for c in cm.CONTROLES]
 ok(len(ids) == len(set(ids)), "cada control tiene su id")
 ok(all(c.dominio in dict(cm.DOMINIOS) for c in cm.CONTROLES),

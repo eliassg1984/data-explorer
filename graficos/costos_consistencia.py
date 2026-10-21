@@ -5,7 +5,7 @@ data maestra es lógico»), sobre un boceto con los datos reales
 (https://claude.ai/artifact/JDqYExY3U12yEfTrnewdhJ). Una lista de CONTROLES
 —preguntas que el maestro del POS y del Almacén, y sus movimientos, deberían
 poder contestar sin contradecirse— y, al costado, la ficha del elegido: por
-qué importa, la regla, qué hacer y TODOS sus casos, con su CSV.
+qué importa, la regla, qué hacer y TODOS sus casos, con su Excel.
 
 Nació el mismo día como «Consistencia del maestro» y dibujada con
 `st.dataframe`; se renombró a pedido («no sólo ve el maestro») y pasó a una

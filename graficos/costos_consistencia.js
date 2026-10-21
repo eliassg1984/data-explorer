@@ -5,7 +5,7 @@
 // (https://claude.ai/artifact/JDqYExY3U12yEfTrnewdhJ): indicadores, pestañas
 // por grupo, la lista de controles y la ficha del elegido con TODOS sus
 // casos. Todo pasa en el navegador: elegir un grupo, abrir un control,
-// buscar entre sus casos y bajar el CSV. Nada vuelve a Python.
+// buscar entre sus casos y bajarlos en Excel. Nada vuelve a Python.
 //
 // Python manda en `data`: `hoy` (el corte), `dominios` ([id, rótulo]) y
 // `controles`, uno por control de `consistencia_maestro.CONTROLES`, con sus
@@ -24,18 +24,103 @@ function soles(v) {
 const num = (n) => Number(n || 0).toLocaleString('en-US');
 const chip = (e) => `<span class="chip ${e}">${ESTADO[e] || e}</span>`;
 
-// El CSV de unos casos, con los rótulos de su ficha. BOM para que Excel lea
-// las tildes.
-function csv(cabeza, filas) {
-  const celda = (v) => {
-    const s = v == null ? '' : String(v);
-    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  return '﻿' + [cabeza, ...filas].map((f) => f.map(celda).join(',')).join('\n');
+// ── El Excel (.xlsx), armado acá sin librerías (regla #691) ──────────────
+// Un .xlsx es un ZIP de XML. Se guarda SIN comprimir (método 0), que Excel
+// lee igual: sólo hace falta el CRC32 de cada archivo. Los montos van como
+// número (se pueden sumar); el resto, como texto en la celda.
+const CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(b) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
 }
-function bajar(nombre, texto) {
+const u16 = (v) => [v & 255, (v >>> 8) & 255];
+const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+function zip(archivos) {
+  const enc = new TextEncoder();
+  const partes = [], central = [];
+  let off = 0;
+  archivos.forEach(([nombre, texto]) => {
+    const n = enc.encode(nombre), d = enc.encode(texto), c = crc32(d);
+    // Fecha 1-ene-1980 (0x21), nombres en UTF-8 (bit 11).
+    const comun = [...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21),
+      ...u32(c), ...u32(d.length), ...u32(d.length), ...u16(n.length), ...u16(0)];
+    const loc = new Uint8Array([...u32(0x04034b50), ...comun]);
+    partes.push(loc, n, d);
+    central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...comun,
+      ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(off)]), n);
+    off += loc.length + n.length + d.length;
+  });
+  const tam = central.reduce((s, x) => s + x.length, 0);
+  const fin = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(archivos.length),
+    ...u16(archivos.length), ...u32(tam), ...u32(off), ...u16(0)]);
+  return new Blob([...partes, ...central, fin],
+    { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+const xml = (s) => String(s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
+  .replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function letra(i) {
+  let s = '';
+  for (i += 1; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + ((i - 1) % 26)) + s;
+  return s;
+}
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+// Una hoja: la cabecera congelada y el ancho de cada columna según su texto.
+function hoja(cabeza, filas) {
+  const ancho = cabeza.map((h, i) => Math.min(60, Math.max(8, String(h).length + 2,
+    ...filas.slice(0, 400).map((f) => (f[i] == null ? 0 : String(f[i]).length + 2)))));
+  const celda = (v, ref) => {
+    if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}"><v>${Math.round(v * 100) / 100}</v></c>`;
+    if (v == null || v === '') return '';
+    return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xml(v)}</t></is></c>`;
+  };
+  const fila = (r, vals) => `<row r="${r}">${vals.map((v, i) => celda(v, letra(i) + r)).join('')}</row>`;
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + `<worksheet xmlns="${NS}"><sheetViews><sheetView workbookViewId="0">`
+    + '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+    + `<cols>${ancho.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`
+    + `<sheetData>${[fila(1, cabeza), ...filas.map((f, i) => fila(i + 2, f))].join('')}</sheetData></worksheet>`;
+}
+// `hojas`: [{nombre, cabeza, filas}]. El nombre de una hoja: hasta 31
+// caracteres y sin []:*?/\ (si no, Excel no abre el archivo).
+function libro(hojas) {
+  const nom = (s) => String(s).replace(/[[\]:*?/\\]/g, ' ').slice(0, 31);
+  const archivos = [
+    ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + hojas.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')
+      + '</Types>'],
+    ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+      + '</Relationships>'],
+    ['xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + `<workbook xmlns="${NS}" xmlns:r="${NS_R}"><sheets>`
+      + hojas.map((h, i) => `<sheet name="${xml(nom(h.nombre))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')
+      + '</sheets></workbook>'],
+    ['xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + hojas.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${NS_R}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')
+      + '</Relationships>'],
+    ...hojas.map((h, i) => [`xl/worksheets/sheet${i + 1}.xml`, hoja(h.cabeza, h.filas)]),
+  ];
+  return zip(archivos);
+}
+function bajar(nombre, blob) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([texto], { type: 'text/csv;charset=utf-8' }));
+  a.href = URL.createObjectURL(blob);
   a.download = nombre;
   document.body.appendChild(a);
   a.click();
@@ -60,7 +145,7 @@ function cabecera(data) {
     </div>
     <div class="cd-der">
       <span class="cd-corte" title="90 días hacia atrás; 180 para «no se usa»; un año para los movimientos raros">Corte ${esc(data.hoy)} · último día del kardex</span>
-      <button class="cd-btn" data-acc="csv-todo">Todos los casos (CSV)</button>
+      <button class="cd-btn" data-acc="xls-todo">Todos los casos (Excel)</button>
     </div>
   </div>`;
 }
@@ -140,7 +225,7 @@ function tablaCasos(x, q) {
   const filas = filtrar(x, q);
   const celda = (f, [, i, cls]) => `<td class="${cls}">${i === 4 ? soles(f[i]) : esc(f[i] ?? '')}</td>`;
   const pie = filas.length > MAX_FILAS
-    ? `Se ven ${num(MAX_FILAS)} de ${num(filas.length)}: el resto, buscando o en el CSV.`
+    ? `Se ven ${num(MAX_FILAS)} de ${num(filas.length)}: el resto, buscando o en el Excel.`
     : `${num(filas.length)} ${filas.length === 1 ? 'caso' : 'casos'}${q ? ' con «' + esc(q) + '»' : ''}, de mayor a menor monto.`;
   return `<div class="cd-tabla"><table>
       <thead><tr>${cols.map(([n, , cls]) => `<th class="${cls}">${esc(n)}</th>`).join('')}</tr></thead>
@@ -160,7 +245,7 @@ function ficha(data, st) {
   } else {
     casos = `<div class="cd-casos">
       <div class="cd-buscar"><input type="search" placeholder="Buscar entre los ${num(x.n)} casos…" value="${esc(st.q)}" data-acc="buscar" aria-label="Buscar entre los casos">
-        <button class="cd-btn" data-acc="csv">Descargar CSV</button></div>
+        <button class="cd-btn" data-acc="xls">Descargar Excel</button></div>
       <div class="cd-zona" data-zona="tabla">${tablaCasos(x, st.q)}</div>
     </div>`;
   }
@@ -230,15 +315,29 @@ function enlazar(raiz) {
       // Un indicador de arriba puede abrir un control de otro grupo.
       if (st.dom !== 'todo' && x.dom !== st.dom) { st.dom = 'todo'; guardar('cd_dom', st.dom); st.mismaLista = false; }
       st.sel = x.id; st.q = ''; guardar('cd_sel', st.sel);
-    } else if (acc === 'csv' || acc === 'csv-todo') {
-      const elegidos = acc === 'csv' ? data.controles.filter((c) => c.id === st.sel) : data.controles;
-      const filas = [];
-      elegidos.forEach((x) => filtrar(x, acc === 'csv' ? st.q : '').forEach((f) => filas.push([x.nombre, ...f])));
-      const x = elegidos[0];
-      const cabeza = acc === 'csv'
-        ? ['Control', 'Código', x.cols[0], x.cols[1] || 'Área', x.cols[2], 'S/', 'Fecha', 'Usuario']
-        : ['Control', 'Código', 'Nombre', 'Área', 'Dato', 'S/', 'Fecha', 'Usuario'];
-      bajar(acc === 'csv' ? `consistencia_${archivo(x.nombre)}.csv` : 'consistencia_de_datos.csv', csv(cabeza, filas));
+    } else if (acc === 'xls' || acc === 'xls-todo') {
+      const grupos = Object.fromEntries(data.dominios);
+      if (acc === 'xls') {
+        // El control elegido, con lo que se esté buscando.
+        const x = data.controles.find((c) => c.id === st.sel);
+        if (!x) return;
+        // Las mismas columnas que la tabla: sin las que el control no llena.
+        const cols = columnas(x);
+        bajar(`consistencia_${archivo(x.nombre)}.xlsx`, libro([{
+          nombre: x.nombre, cabeza: cols.map(([n]) => n),
+          filas: filtrar(x, st.q).map((f) => cols.map(([, i]) => f[i])),
+        }]));
+      } else {
+        // Todo: una hoja con la lista de controles y otra con todos los casos.
+        const resumen = data.controles.map((x) => [grupos[x.dom] || x.dom, x.nombre,
+          ESTADO[x.estado] || x.estado, x.n, x.soles, x.concentra || '', x.regla]);
+        const casos = [];
+        data.controles.forEach((x) => x.casos.forEach((f) => casos.push([x.nombre, ...f])));
+        bajar('consistencia_de_datos.xlsx', libro([
+          { nombre: 'Controles', cabeza: ['Grupo', 'Control', 'Estado', 'Casos', 'S/ en juego', 'Se concentra en', 'La regla'], filas: resumen },
+          { nombre: 'Casos', cabeza: ['Control', 'Código', 'Nombre', 'Área', 'Dato', 'S/', 'Fecha', 'Usuario'], filas: casos },
+        ]));
+      }
       return;
     } else {
       return;

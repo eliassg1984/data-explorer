@@ -26,7 +26,7 @@ from collections import namedtuple
 import numpy as np
 import pandas as pd
 
-VERSION = 1
+VERSION = 2
 
 VENTANA = 90
 """Días hacia atrás para «hace poco»: ventas, compras, stock parado."""
@@ -77,6 +77,9 @@ LOTE_NOTAS = 15
 minutos: un lote."""
 PAUSA_LOTE = 10
 DIAS_SUNAT = 15
+AREA_CENTRAL = "000"
+"""El Almacén Central: tiene el kardex de todos los productos por defecto, así
+que «habilitado y sin uso» ahí no es un error (regla #691)."""
 FAMILIA_OPERACION = "COSTOS PRODUCCION"
 """Los insumos de operación (leña, papel, limpieza): ninguna receta los
 descarga y su consumo sólo aparece al contar (regla #645)."""
@@ -247,16 +250,6 @@ def activo_sin_vida(t, hoy):
                   area="_areas", dato="_dato", fecha="_f")
 
 
-def servicio_con_stock(t, hoy):
-    """Un servicio o gasto con existencia: nadie lo da de baja y crece."""
-    inv = t["inv"]
-    d = inv[_activa(inv["TIPO PRODUCTO"], "SERVICIO")
-            & (_num(inv["STOCK AL DIA"]).fillna(0) != 0)]
-    d = d.assign(_dato=_cant(_num(d["STOCK AL DIA"]), d["UNIDAD KARDEX"]))
-    return _casos(d, codigo="CODIGO PRODUCTO", nombre="NOMBRE PRODUCTO",
-                  area="NOMBRE AREA", dato="_dato", soles="VALORIZADO TOTAL")
-
-
 def unidad_sin_factor(t, hoy):
     """La unidad de entrada y la de salida son distintas y el factor es 1."""
     inv = t["inv"]
@@ -271,9 +264,12 @@ def unidad_sin_factor(t, hoy):
 
 def habilitado_sin_uso(t, hoy):
     """Habilitado en un área donde no tiene stock ni un movimiento en
-    `VENTANA_LARGA` días, mientras SÍ se mueve en otra."""
+    `VENTANA_LARGA` días, mientras SÍ se mueve en otra. El Almacén Central
+    no cuenta: tiene el kardex de todos los productos por defecto (a pedido,
+    regla #691)."""
     inv = t["inv"]
-    d = inv[inv["_activo"] & (_num(inv["STOCK AL DIA"]).fillna(0) == 0)]
+    d = inv[inv["_activo"] & (_num(inv["STOCK AL DIA"]).fillna(0) == 0)
+            & (_txt(inv["CODIGO AREA"]) != AREA_CENTRAL)]
     k = _movidos(t, hoy - pd.Timedelta(days=VENTANA_LARGA))
     pares = set(zip(k["CODIGO AREA"], k["CODIGO PRODUCTO"]))
     _, area = _nombres(t)
@@ -523,24 +519,6 @@ def comprado_sin_uso(t, hoy):
     g = g.assign(_dato=_cant(g["cant"], g["um"]))
     return _casos(g, codigo="COD_PRODUCTO", nombre="NOMBRE_PRODUCTO", area="fam",
                   dato="_dato", soles="soles", fecha=_fecha(g["f"]))
-
-
-def mercaderia_sin_kardex(t, hoy):
-    """Comprado en la ventana como un producto de SERVICIO, en una familia
-    donde 8 de cada 10 productos son mercadería."""
-    inv = t["inv"].drop_duplicates("CODIGO PRODUCTO")
-    es_merc = _activa(inv["TIPO PRODUCTO"], "MERCADERIA")
-    parte = es_merc.groupby(inv["NOMBRE FAMILIA"]).mean()
-    serv = set(inv.loc[~es_merc, "CODIGO PRODUCTO"])
-    c = _compras_ventana(t, hoy)
-    c = c[c["COD_PRODUCTO"].isin(serv)]
-    fam_inv = inv.set_index("CODIGO PRODUCTO")["NOMBRE FAMILIA"]
-    c = c.assign(_fam=c["COD_PRODUCTO"].map(fam_inv))
-    c = c[c["_fam"].map(parte).fillna(0) >= 0.8]
-    g = c.groupby(["COD_PRODUCTO", "NOMBRE_PRODUCTO", "_fam"]).agg(
-        soles=("VALOR_COMPRA", "sum")).reset_index()
-    return _casos(g, codigo="COD_PRODUCTO", nombre="NOMBRE_PRODUCTO", area="_fam",
-                  dato="servicio", soles="soles")
 
 
 def _normal(s):
@@ -855,15 +833,6 @@ CONTROLES = (
             "kardex (salvo conteos) ni compras en 365 días.",
             "Desactivarlo en el maestro del Almacén (no borrarlo).",
             "", ("Producto", "Habilitado en", "Último mov."), None),
-    Control("s5", "stock", "Servicios que acumulan stock", servicio_con_stock, True,
-            "Servicios y gastos con existencia, como si fueran mercadería",
-            "Un servicio no se cuenta, así que nunca se da de baja y su «stock» "
-            "crece cada mes. Por eso Stock e Inventario los saca (regla #598).",
-            "TIPO PRODUCTO = SERVICIO y stock ≠ 0.",
-            "Darlos de baja con una nota de consumo cada mes, o configurarlos "
-            "sin control de stock.",
-            "Stock e Inventario, fila «Inactivos y servicios»",
-            ("Producto", "Área", "Stock"), "area"),
     Control("s6", "stock", "Unidad distinta y factor 1", unidad_sin_factor, False,
             "Unidad de entrada distinta de la de salida, y factor 1",
             "Si entra en kilos y sale en gramos, el factor tiene que ser 1000: "
@@ -878,7 +847,8 @@ CONTROLES = (
             "descargar el producto donde no corresponde, que es un origen de "
             "los negativos.",
             "Habilitado en el área (COMPARTIDO), stock 0 ahí, sin kardex en esa "
-            "área en 180 días y con kardex en otra.",
+            "área en 180 días y con kardex en otra. Sin el Almacén Central, que "
+            "tiene todos los productos a propósito.",
             "Deshabilitar el producto EN ESA ÁREA, sin desactivarlo. Si se "
             "concentra en pocas áreas, decidir antes qué se habilita por defecto.",
             "", ("Producto", "Área", "Se mueve en"), "area"),
@@ -892,7 +862,8 @@ CONTROLES = (
             "Desactivar las que ya no se hacen; si se hacen, ver con qué código "
             "se descargan.",
             "", ("Receta base", "Área", "Último mov."), "area"),
-    Control("r2", "recetas", "Receta con insumo de baja", receta_con_insumo_de_baja, True,
+    Control("r2", "recetas", "Receta con insumo desactivado/sin área",
+            receta_con_insumo_de_baja, True,
             "Una receta viva lleva un insumo inactivo, o uno no habilitado en "
             "el área de descargo",
             "El POS descarga igual: el insumo se va a negativo donde nadie lo "
@@ -971,14 +942,6 @@ CONTROLES = (
             "Sumarlo a la receta que lo usa, o hacer la nota de salida si es de "
             "uso del área.",
             "", ("Producto", "Familia", "Comprado"), "area"),
-    Control("p2", "compras", "Mercadería sin kardex", mercaderia_sin_kardex, False,
-            "Comprado como servicio en una familia de mercadería",
-            "No entra al stock: no se cuenta, no se descarga y su costo no llega "
-            "a ninguna receta.",
-            "Producto de tipo SERVICIO comprado en 90 días en una familia con 80 % "
-            "o más de mercadería.",
-            "Cambiar el tipo del producto en el maestro a mercadería.",
-            "", ("Producto", "Familia", "Tipo"), "area"),
     Control("p3", "compras", "Mismo producto con dos códigos", dos_codigos, False,
             "Dos códigos activos con el mismo nombre y unidad",
             "Se compra con uno y se descarga con el otro: uno sobra y el otro "
@@ -987,6 +950,19 @@ CONTROLES = (
             "activos.",
             "Unificar: desactivar el que no se compra.",
             "", ("Producto", "", "Códigos"), None),
+    # En Compras desde la regla #691 (nació en «Movimientos raros»): es una
+    # compra que falta, no un evento sospechoso.
+    Control("p4", "compras", "Factura en SUNAT sin ingresar", sunat_sin_ingresar, True,
+            "Factura de mercadería que el proveedor declaró y el Almacén no tiene",
+            "Mercadería que entró sin registrarse —y sobra al contar— o una "
+            "compra que nadie conoce. Sólo mercadería: alquileres, tarjetas y "
+            "bancos no entran al Almacén.",
+            "Comprobante del SIRE «Solo SUNAT» de tipo Mercadería (regla #640), "
+            "emitido en 90 días y hace más de 15, sin las facturas anuladas con "
+            "una nota del mismo monto.",
+            "Ingresarla con «Ingresar al Almacén» o averiguar quién la pidió.",
+            "Documentos SUNAT › Cruce con SUNAT", ("Proveedor", "", "Emitida hace"),
+            "nombre"),
     Control("m1", "raros", "Cambios de factor o unidad", cambios_de_factor, False,
             "Cambios de factor o de unidad de artículos que lleva una receta "
             "viva, en el último año",
@@ -1037,17 +1013,6 @@ CONTROLES = (
             "falta en la misma área.",
             "Ajuste › Análisis de diferencias («Sobró sin que entrara nada»)",
             ("Producto", "Área", "Sobrante"), "area"),
-    Control("m6", "raros", "Factura en SUNAT sin ingresar", sunat_sin_ingresar, True,
-            "Factura de mercadería que el proveedor declaró y el Almacén no tiene",
-            "Mercadería que entró sin registrarse —y sobra al contar— o una "
-            "compra que nadie conoce. Sólo mercadería: alquileres, tarjetas y "
-            "bancos no entran al Almacén.",
-            "Comprobante del SIRE «Solo SUNAT» de tipo Mercadería (regla #640), "
-            "emitido en 90 días y hace más de 15, sin las facturas anuladas con "
-            "una nota del mismo monto.",
-            "Ingresarla con «Ingresar al Almacén» o averiguar quién la pidió.",
-            "Documentos SUNAT › Cruce con SUNAT", ("Proveedor", "", "Emitida hace"),
-            "nombre"),
     Control("m7", "raros", "Ventas que nunca se descargaron", venta_sin_descargar, True,
             "Días vendidos que ninguna corrida del Descargo de Ventas tomó",
             "El descargo se corre a mano, y la corrida de fin de mes llega hasta "
