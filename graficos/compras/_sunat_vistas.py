@@ -78,7 +78,13 @@ _TRAMO = {"Coincide": "cuadran", "Diferencia": "diferencia",
 
 def _vacia():
     return {"doc": {k: 0 for k in ("sunat", "cuadran", "diferencia", "falta", "fuera")},
-            "soles": {k: 0.0 for k in ("sunat", "cuadran", "diferencia", "falta", "fuera")}}
+            "soles": {k: 0.0 for k in ("sunat", "cuadran", "diferencia", "falta", "fuera")},
+            # Las NOTAS DE CRÉDITO de cada tramo (2026-10-21, a pedido): la
+            # fidelidad las cuenta en valor absoluto, y sin decirlo «falta
+            # cargar S/ 4,426» se lee como compra real cuando una parte es
+            # plata que el proveedor devuelve.
+            "nc": {"falta": 0, "falta_s": 0.0, "diferencia": 0,
+                   "diferencia_s": 0.0, "n": 0, "s": 0.0}}
 
 
 def _tipos(df):
@@ -122,6 +128,9 @@ def _base(df):
             pd.to_numeric(df["total_sistema"], errors="coerce")).fillna(0.0),
         "fe": pd.to_datetime(df["fecha_emision"], errors="coerce"),
         "doc": df["documento"].fillna("").astype(str),
+        # Una nota de crédito viene en NEGATIVO en el cruce (regla #604).
+        "nc": pd.to_numeric(df["total_sunat"], errors="coerce").fillna(
+            pd.to_numeric(df["total_sistema"], errors="coerce")).fillna(0.0) < 0,
     }, index=df.index)
 
 
@@ -142,6 +151,20 @@ def _fid_por(b, por):
         for m in ("doc", "soles"):
             f[m]["sunat"] = f[m]["cuadran"] + f[m]["diferencia"] + f[m]["falta"]
         f["soles"]["sunat"] = round(f["soles"]["sunat"], 2)
+    # Las notas de crédito de cada grupo, por tramo: otro groupby, sólo
+    # sobre las notas.
+    bn = b[b["nc"] & (b["tramo"] != "fuera")] if "nc" in b.columns else b.iloc[0:0]
+    if not bn.empty:
+        g = (bn.groupby(por + ["tramo"], sort=False)["s"]
+             .agg(["size", "sum"]).reset_index())
+        claves = (list(zip(*(g[c] for c in por))) if len(por) > 1 else list(g[por[0]]))
+        for clave, tramo, n, s in zip(claves, g["tramo"], g["size"], g["sum"]):
+            nc = out[clave]["nc"]
+            nc["n"] += int(n)
+            nc["s"] = round(nc["s"] + float(s), 2)
+            if tramo in ("falta", "diferencia"):
+                nc[tramo] += int(n)
+                nc[tramo + "_s"] = round(nc[tramo + "_s"] + float(s), 2)
     return out
 
 
@@ -376,8 +399,9 @@ def _al_ir():
     if not pedido:
         return
     ss["_sunat_ir_t"] = pedido["t"]
+    # `prov` se anota también: «Quitar filtro» y «← Volver» lo sueltan.
     ss[K_LLEGADA] = {k: pedido.get(k) for k in ("desde", "tipo", "estados", "fini",
-                                                "ffin", "rotulo")}
+                                                "ffin", "rotulo", "prov")}
     # El proveedor, en el filtro de la tabla: es un control a la vista.
     ds.poner_proveedor(pedido.get("prov"))
     ds.poner_estado(None)

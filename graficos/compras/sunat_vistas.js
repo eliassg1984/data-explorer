@@ -15,6 +15,24 @@ const solesC = (v) => 'S/ ' + (Number(v) || 0).toLocaleString('en-US', { minimum
 const ent = (v) => Math.round(Number(v) || 0).toLocaleString('en-US');
 const PEND = ['Solo SUNAT', 'Diferencia'];
 
+// Las notas de crédito dentro de lo que falta cargar (a pedido): la
+// fidelidad las suma en valor absoluto, y sin decirlo el monto se lee como
+// compra real. `ncFalta` va debajo de la cifra de «Falta cargar»; `ncSub`,
+// en el renglón de un proveedor. El NETO resta la nota en vez de sumarla:
+// una factura anulada por una nota del mismo monto, las dos sin cargar,
+// es S/ 0 que falta, no el doble.
+function ncFalta(f, m) {
+  const nc = f.nc || {};
+  if (!nc.falta) return '';
+  const q = m === 'doc' ? `${nc.falta} ${nc.falta === 1 ? 'es nota' : 'son notas'} de crédito`
+    : `incl. ${soles(nc.falta_s)} en ${nc.falta === 1 ? 'nota' : 'notas'} de crédito · neto ${soles(f.soles.falta - 2 * nc.falta_s)}`;
+  return `<small class="nc-txt" title="Notas de crédito sin cargar: el proveedor devuelve o anula, no es compra">${q}</small>`;
+}
+const ncSub = (f) => {
+  const n = (f.nc || {}).falta;
+  return n ? `${n} ${n === 1 ? 'nota' : 'notas'} de crédito` : '';
+};
+
 function pct(f, m) {
   const b = f[m].sunat;
   return b ? (f[m].cuadran / b) * 100 : null;
@@ -87,7 +105,7 @@ function cruce(raiz) {
       `<td><b>${esc(r.nombre)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</td>` +
       `<td class="n">${soles(r.f.soles.sunat)}</td><td class="n gris">${ent(r.f.doc.sunat)}</td>` +
       `<td>${barra(r.f, m)}</td><td class="n fuerte">${pctTxt(pct(r.f, m))}</td>` +
-      `<td class="n">${r.f[m].falta ? val(r.f[m].falta, m) : '<span class="gris">—</span>'}</td>` +
+      `<td class="n">${r.f[m].falta ? val(r.f[m].falta, m) + ncFalta(r.f, m) : '<span class="gris">—</span>'}</td>` +
       `<td class="n">${dl}</td><td class="n gris">${r.f[m].fuera ? '+' + val(r.f[m].fuera, m) : '0'}</td>` +
       `<td class="flecha">${esTotal ? '' : abierto ? '▾' : '▸'}</td></tr>`;
     if (abierto) h += detalleCruce(st, r, modo, m);
@@ -114,11 +132,12 @@ function detalleCruce(st, r, modo, m) {
     h += '<table class="t-det"><colgroup><col style="width:24%"><col style="width:104px"><col style="width:60px"><col style="width:20%"><col style="width:80px"><col style="width:108px"><col style="width:96px"><col style="width:108px"><col style="width:26px"></colgroup><tbody>';
     for (const p of r.det) {
       const n = p.f.doc;
-      const sub = [n.falta ? `${n.falta} sin cargar` : '', n.diferencia ? `${n.diferencia} con diferencia` : ''].filter(Boolean).join(' · ');
+      const nnc = ncSub(p.f);
+      const sub = [n.falta ? `${n.falta} sin cargar${nnc ? ` (${nnc})` : ''}` : '', n.diferencia ? `${n.diferencia} con diferencia` : ''].filter(Boolean).join(' · ');
       h += `<tr class="sub-fila" tabindex="0" data-ir="${esc(JSON.stringify({ tipo: r.id, estados: PEND, prov: p.k }))}" title="Ver sus documentos pendientes en la tabla">` +
         `<td>${esc(p.nombre)}<small>${esc(sub)}</small></td><td class="n">${soles(p.f.soles.sunat)}</td><td class="n gris">${ent(n.sunat)}</td>` +
         `<td>${barra(p.f, m, true)}</td><td class="n">${pctTxt(pct(p.f, m))}</td>` +
-        `<td class="n">${p.f[m].falta ? val(p.f[m].falta, m) : '<span class="gris">—</span>'}</td>` +
+        `<td class="n">${p.f[m].falta ? val(p.f[m].falta, m) + ncFalta(p.f, m) : '<span class="gris">—</span>'}</td>` +
         `<td class="n gris">${p.f[m].diferencia ? 'dif. ' + val(p.f[m].diferencia, m) : ''}</td><td></td><td class="flecha">→</td></tr>`;
     }
   } else {
@@ -190,7 +209,7 @@ function provCuerpo(raiz) {
       `<td><b>${esc(r.nombre)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</td>` +
       `<td class="n gris">${ent(n.sunat)}</td><td class="n">${soles(s.sunat)}</td>` +
       `<td><div class="part"><div class="pista"><i style="width:${((s.sunat / maxV) * 100).toFixed(1)}%"></i></div><span>${((s.sunat / tot) * 100).toFixed(1)} %</span></div></td>` +
-      `<td class="n ${s.falta ? 'alerta' : 'gris'}">${s.falta ? `${soles(s.falta)} · ${n.falta}` : '—'}</td>` +
+      `<td class="n ${s.falta ? 'alerta' : 'gris'}">${s.falta ? `${soles(s.falta)} · ${n.falta}${ncFalta(r.f, 'soles')}` : '—'}</td>` +
       `<td class="n ${s.diferencia ? 'dif' : 'gris'}">${s.diferencia ? `${soles(s.diferencia)} · ${n.diferencia}` : '—'}</td>` +
       `<td>${spark}</td><td class="n gris">${esc(r.ult || '')}</td><td class="flecha">${ab ? '▾' : '▸'}</td></tr>`;
     if (ab) h += detalleProv(st, r, ag);
@@ -223,7 +242,7 @@ function detalleProv(st, r, ag) {
   const titDocs = ag === 'prov' ? 'Sus documentos del período' : 'Lo pendiente';
   const docs = r.docs.length ? r.docs.map((x) => `<button type="button" class="doc" data-ir="${esc(JSON.stringify(ir))}" title="Ver en la tabla">` +
     `<span class="gris">${esc(x.fe)}</span><span class="nom">${esc(ag === 'prov' ? x.doc : x.prov + ' · ' + x.doc)}</span>` +
-    `<span class="n">${solesC(x.total)}</span><span class="est ${CHIP[x.est] || ''}">${esc(x.est)}</span></button>`).join('')
+    `<span class="n">${solesC(x.total)}</span><span class="est ${CHIP[x.est] || ''}">${x.total < 0 ? '<b class="nc">NC</b>' : ''}${esc(x.est)}</span></button>`).join('')
     : '<div class="vacio">Nada pendiente.</div>';
   return `<tr class="det"><td colspan="9"><div class="det-dos"><div>${izq}</div><div>` +
     `<div class="det-cab"><b>${titDocs}</b><button type="button" class="ir" data-ir="${esc(JSON.stringify(ir))}">Ver sus documentos →</button></div>` +

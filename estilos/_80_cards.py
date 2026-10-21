@@ -1237,60 +1237,6 @@ CSS = """    /* ================================================================
         box-shadow: none !important;
     }
 
-    /* ─────────────────────────────────────────────────────────────── */
-    /* LAS DOS MITADES DEL CONVERSOR SUNAT-SISTEMA                      */
-    /*                                                                  */
-    /* Key `sunat_conv_` a propósito, NO `sunat_card_`: aquélla es la   */
-    /* familia que el bloque de arriba clampea a `--alto-util` con      */
-    /* scroll propio, y estas dos viven DENTRO de una de ellas          */
-    /* (`sunat_card_graf`, que lo alterna con el gráfico desde el      */
-    /* 2026-10-02; antes `sunat_card_conversor`). Con el prefijo grande */
-    /* heredarían un segundo scroll anidado adentro del de la tarjeta   */
-    /* que las contiene. Es la regla de CLAUDE.md ("antes de agregar    */
-    /* un widget dentro de una tarjeta: grep estilos/") leída al revés: */
-    /* elegir el prefijo que NO matchea.                                */
-    /*                                                                  */
-    /* BLANCAS, como su tarjeta madre y como todo Compras (a pedido     */
-    /* 2026-08-27). Nacieron con el gris `--bg-card-tenue`, que es el   */
-    /* MISMO `#faf9fb` del lienzo de la app: con la madre todavía       */
-    /* transparente, eso dejaba dos cajas grises sobre gris. Ahora la   */
-    /* madre es blanca y estas dos también; lo único que las separa es  */
-    /* la línea de 1px, que alcanza para que el ojo agrupe cada tabla   */
-    /* con su cabecera y lea las dos como los dos lados de una          */
-    /* comparación. Sin sombra a propósito: anidar sombras dentro de la */
-    /* sombra de la tarjeta madre ensucia el borde.                     */
-    /*                                                                  */
-    /* Y ESTE es el único marco que llevan las mitades: las tablas de   */
-    /* adentro se dibujan con `_css_grid(..., marco=False)`, sin borde  */
-    /* ni radio ni sombra propios. Si las dos cosas se marcan, quedan   */
-    /* dos líneas de 1px con el mismo radio a diez píxeles una de otra. */
-    /* Ver `_detalle_sistema` en graficos/compras/documentos_sunat.py.  */
-    /* ─────────────────────────────────────────────────────────────── */
-    /* `_izq`/`_der` COMPLETOS en el selector, no la familia `sunat_conv_`  */
-    /* a secas. Las dos tablas de adentro tienen key                        */
-    /* `sunat_conv_sunat_<doc>` y `sunat_conv_sistema_<doc>`, que CONTIENEN */
-    /* la subcadena `st-key-sunat_conv_`: con el wildcard corto, este       */
-    /* bloque le pegaba también a ellas y cada tabla nacía con su propia    */
-    /* caja blanca redondeada de 10/12/4 de padding. Es la trampa que       */
-    /* documenta CLAUDE.md («el CSS matchea por PREFIJO de key, no por      */
-    /* widget») mordiendo desde adentro de la propia familia. Reportado el  */
-    /* 2026-08-28 como "tarjetas dentro de tarjeta, dentro de tarjetas" y   */
-    /* confirmado con el inspector, que lista esta regla entre las que      */
-    /* matchean el AgGrid.                                                  */
-    div[class*="st-key-sunat_conv_izq"],
-    div[class*="st-key-sunat_conv_der"] {
-        border: 1px solid var(--border) !important;
-        border-radius: 12px !important;
-        padding: 10px 12px 4px !important;
-        background: var(--bg-card);
-    }
-    /* Streamlit pinta SU borde en el hijo directo cuando border=True;
-       con el de arriba puesto, serían dos líneas a 1px de distancia. */
-    div[class*="st-key-sunat_conv_izq"] > div,
-    div[class*="st-key-sunat_conv_der"] > div {
-        border: none !important;
-    }
-
     /* =================================================================== */
     /* ENCUADRE: UNA TARJETA = UNA PANTALLA (desktop)                        */
     /*                                                                       */
@@ -1473,14 +1419,6 @@ CSS = """    /* ================================================================
         > div:has(> .st-key-compras_prov_card_docs, > .st-key-compras_prov_card_ficha, > .st-key-compras_prov_card_ranking, > .st-key-compras_prov_card_vacio),
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-sunat_card_izq),
-        /* Las dos mitades del conversor entraron acá el 2026-08-29, al   */
-        /* ganar cada una un pie de totales de largo distinto: la de      */
-        /* SUNAT medía 388px y la del sistema 349 en el documento de      */
-        /* MAPFRE, porque una llevaba un aviso de descuadre y la otra no. */
-        /* Mientras los dos lados tuvieron contenido simétrico el piso no */
-        /* hizo falta; en cuanto uno pudo crecer solo, sí.                */
-        .stColumn > .stVerticalBlock
-        > div:has(> .st-key-sunat_conv_izq, > .st-key-sunat_conv_der),
         /* `compras_prod_card_` entró el 2026-09-02, cuando el Ranking de   */
         /* Productos partió su tarjeta única en dos (tabla | gráfico) y     */
         /* pasó a tener, por primera vez, una FILA de dos tarjetas. Sin el  */

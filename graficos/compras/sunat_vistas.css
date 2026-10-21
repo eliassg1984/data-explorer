@@ -150,3 +150,9 @@ tr.det > td { background: var(--bg-card-tenue); padding: 10px 12px 12px 22px; }
 .est.dif { background: var(--accent-light); color: var(--accent-deep); }
 .est.ok { color: var(--text-secondary); }
 .est.fuera { color: var(--text-secondary); }
+
+/* Las notas de crédito (a pedido): se dicen debajo de lo que falta cargar y
+   como «NC» en la lista de documentos, para no leerlas como compra. */
+small.nc-txt { display: block; font-size: 10.5px; font-weight: 400; color: var(--text-secondary); white-space: nowrap; }
+td.alerta small.nc-txt { color: var(--warning-text); opacity: .8; }
+.est b.nc { font-weight: 700; margin-right: 4px; color: var(--danger-text); }

@@ -2284,6 +2284,18 @@ def _pruebas_puras():
           ({"Mercadería"} if len(_ll) else set(), True))
     check("sin llegada, la tabla entera",
           len(_sv.aplicar_llegada(_c, None)), len(_c))
+    _ncx = pd.DataFrame({
+        "estado": ["Coincide", "Solo SUNAT", "Solo SUNAT", "Solo sistema"],
+        "total_sunat": [100.0, 50.0, -30.0, None],
+        "total_sistema": [100.0, None, None, 20.0],
+        "proveedor": ["A", "A", "A", ""], "proveedor_sistema": ["A", "", "", "A"],
+        "ruc_proveedor": ["1", "1", "1", ""], "ruc_sistema": ["1", "", "", "1"],
+        "fecha_emision": pd.to_datetime(["2026-09-01"] * 4),
+        "documento": ["F1", "F2", "N1", "F3"], "tipo": ["Mercadería"] * 4})
+    _fnc = _sv.datos_cruce(_ncx, [], "r")["total"]["f"]
+    check("lo que falta cargar dice cuánto es nota de crédito (no es compra)",
+          (_fnc["soles"]["falta"], _fnc["nc"]["falta"], _fnc["nc"]["falta_s"]),
+          (80.0, 1, 30.0))
     _reg = pd.DataFrame({"ruc_proveedor": ["1", "1", "2"],
                          "fecha_emision": ["2026-09-03", "2026-10-01", "2025-01-01"],
                          "total": [10.0, 5.0, 99.0]})

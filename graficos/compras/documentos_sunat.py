@@ -2279,22 +2279,10 @@ haría parpadear la celda que el usuario acaba de editar."""
 
 _ALTO_FILA_CONVERSOR = 30
 _ALTO_CABECERA_CONVERSOR = 32
-"""Alto de fila y de cabecera de las DOS tablas del conversor. Son una
-constante compartida y no dos literales porque de ellos depende que las
-filas de la izquierda caigan a la MISMA altura que las de la derecha —
-que es todo el punto de la vista partida en dos (pedido 2026-08-27: "dos
-tarjetas separadas, pero alineadas una con la otra, para que se vea la
-idea de comparación"). Si una tabla dibuja filas de 30px y la otra de 34,
-la comparación deja de leerse a la tercera fila."""
-
-
-def _alto_conversor(n_filas):
-    """El alto que comparten las dos tablas del conversor. Una función y no
-    dos llamadas sueltas a `alturas.por_filas`, por lo mismo que
-    `_ALTO_FILA_CONVERSOR`: dos tablas que tienen que alinearse no pueden
-    calcular su alto por separado."""
-    return alturas.por_filas(n_filas, px_fila=_ALTO_FILA_CONVERSOR,
-                             rol=alturas.MINI)
+"""Alto de fila y de cabecera de la tabla de «Ingresar al Almacén». Hasta
+el 2026-10-21 eran DOS tablas que tenían que compartirlos para que la fila
+de una cayera a la altura de la de la otra; desde ese día es una sola
+(`_grid_conversor`, regla #684) y la alineación sale sola."""
 
 
 def _titulo_panel(texto, detalle, derecha=""):
@@ -2678,69 +2666,6 @@ celda de una tabla de once líneas es ruido, y es como se imprime
 cualquier factura."""
 
 
-def _grid_lado_sunat(tv, doc_id):
-    """La tabla IZQUIERDA: el comprobante tal como lo emitió el proveedor,
-    leído COMO UN DOCUMENTO y no como un listado de nombres.
-
-    Desde el 2026-08-28 trae las cinco columnas que tiene una factura
-    impresa —código del proveedor, ítem, cantidad con su unidad, precio
-    unitario e importe— y debajo el pie con los subtotales
-    (`_pie_comprobante`). A pedido: el usuario quería poder mirar esta
-    mitad y reconocer el papel, no sólo los ítems a mapear.
-
-    Dos compresiones para que las cinco entren sin scroll horizontal en
-    media tarjeta (~435px útiles a 1360 de ancho): la unidad viaja dentro
-    de la cantidad («0.73 kg», que es como se imprime) y el símbolo de
-    moneda no se repite por celda, lo declara el pie una sola vez.
-    Medido en el navegador a 1360 de ancho: la mitad da 422px útiles y
-    las cinco columnas suman 406 de mínimo (66+118+74+72+76), así que
-    entran y `flex` en «Ítem» absorbe lo que sobra. El primer intento
-    sumaba 452 y scrolleaba — un documento que hay que arrastrar para
-    leerle el importe no es un documento.
-
-    De sólo lectura y sin `update_on` — no tiene por qué provocar ni un
-    viaje al servidor mientras se corrige la de al lado.
-    """
-    gb = GridOptionsBuilder.from_dataframe(tv)
-    gb.configure_default_column(resizable=True, sortable=False, filter=False,
-                                editable=False, suppressMovable=True)
-    # Angosta y con tooltip: es un código de 14 dígitos que nadie lee
-    # entero, sirve para RECONOCER que dos líneas son el mismo producto
-    # (las cuatro de «FG LOMO FINO» del documento de prueba comparten
-    # `00000000652940`). Recortado cumple esa función y deja el ancho para
-    # las tres columnas de plata.
-    gb.configure_column("Código prov.", width=78, minWidth=66,
-                        tooltipField="Código prov.",
-                        cellStyle={"color": GRIS_TEXTO_SUAVE})
-    gb.configure_column("Ítem (XML)", minWidth=118, flex=1,
-                        tooltipField="Ítem (XML)")
-    # `Cant.` ya viene armada como texto ("0.73 kg"), así que NO lleva
-    # `numericColumn` ni formatter: alinearla a la derecha como número
-    # dejaría la unidad pegada al borde.
-    gb.configure_column("Cant.", width=80, minWidth=74,
-                        cellStyle={"text-align": "right"})
-    gb.configure_column("P. unit.", type=["numericColumn"], width=78,
-                        minWidth=72, valueFormatter=_JS_IMPORTE_XML)
-    gb.configure_column("Importe", type=["numericColumn"], width=84,
-                        minWidth=76, valueFormatter=_JS_IMPORTE_XML)
-    gb.configure_grid_options(
-        rowHeight=_ALTO_FILA_CONVERSOR, headerHeight=_ALTO_CABECERA_CONVERSOR,
-        onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
-        suppressColumnVirtualisation=True,
-    )
-    AgGrid(
-        tv, gridOptions=gb.build(), height=_alto_conversor(len(tv)),
-        # `marco=False`: la tabla NO lleva borde/radio/sombra propios — ya
-        # los pone la mitad que la contiene (`sunat_conv_izq`/`_der` en
-        # estilos/_80_cards.py). Con los dos marcos se veían dos líneas de
-        # 1px con el mismo radio a diez píxeles una de otra.
-        theme="material", custom_css=dict(_css_grid(12, marco=False)),
-        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
-        update_on=[], data_return_mode=DataReturnMode.AS_INPUT,
-        key=f"sunat_conv_sunat_{doc_id}",
-    )
-
-
 _JS_PRECIO_DERIVADO = JsCode(
     "function(p){ return p.value==null || isNaN(p.value) ? '—' : "
     "Number(p.value).toLocaleString('es-PE',"
@@ -2778,79 +2703,91 @@ def _precio_derivado(importe, cantidad):
         return None
 
 
-def _grid_lado_sistema(tv, doc_id):
-    """La tabla DERECHA: el documento HOMOLOGADO, o sea con qué se va a
-    cargar al sistema de almacén.
+def _grid_conversor(tv, doc_id):
+    """LA tabla de «Ingresar al Almacén»: cada línea del XML a la izquierda
+    y, en la MISMA fila, cómo entra al Almacén a la derecha (2026-10-21, a
+    pedido y con mockup aprobado, regla #684).
 
-    Es la misma factura de la izquierda dicha en el idioma del ERP, y por
-    eso tiene las mismas columnas de plata: ítem, unidad, cantidad,
-    precio unitario e importe. Lo que cambia es de dónde sale cada una:
+    Hasta ese día eran dos grillas lado a lado (pedido 2026-08-27, «dos
+    tarjetas separadas, pero alineadas»), y alinearlas dependía de que
+    compartieran alto de fila, de cabecera y de tabla: en la ventana se
+    leían como dos cuadrantes sueltos con los números de una a distinta
+    altura que los de la otra. Una grilla con DOS GRUPOS de columnas
+    —«Comprobante SUNAT» y «Almacén», con una flecha en el medio— alinea
+    por construcción, y los totales de abajo caen bajo su grupo.
 
-      · **Ítem** — EDITABLE, contra el maestro de artículos
-        (`_JS_EDITOR_PRODUCTO`). Es el único campo que el usuario elige.
-      · **Und.** — la trae el producto elegido: es su unidad de KARDEX,
-        no la del comprobante. No se edita — cambiarla a mano sería
-        decirle al almacén que un kilo es una unidad.
-      · **Cant.** — EDITABLE. Arranca igual a la del comprobante y se
-        pisa cuando el grano no coincide: el proveedor factura 1 caja de
-        12 y el almacén ingresa 12 unidades.
-      · **P. unit.** — NO se edita: se DERIVA (`_precio_derivado`). Si la
-        cantidad pasa de 1 a 12, el unitario pasa de 126.27 a 10.5225.
-      · **Importe** — el INVARIANTE. Se copia del comprobante y no se
-        toca, y por eso tampoco se mueven los impuestos ni el total del
-        documento. Es la regla que hace que la homologación sea segura:
-        se puede cambiar el grano sin cambiar la plata.
+    Las columnas de cada lado son las de antes, con los MISMOS campos en el
+    lado del Almacén (`Ítem (sistema)`, `Und.`, `Cant.`, `P. unit.`,
+    `Importe`): de esos nombres cuelgan `_JS_RELLENAR_VECINAS` y la
+    detección de cambios de `_detalle_sistema`. Las del XML llevan sufijo
+    para no chocar. Lo que se edita y cómo se guarda no cambió:
 
-    El ORIGEN del emparejamiento dejó de ser columna (2026-08-28): son
-    120px en una mitad de 422 que ahora lleva también precio e importe, y
-    de un vistazo lo único que hace falta ver es SI hay que revisar la
-    fila — eso lo dice el ámbar del ítem. El detalle y el código del
-    sistema van al tooltip.
-
-    Devuelve la respuesta de AgGrid para que el llamador vea qué cambió;
-    ver `_detalle_sistema`.
+      · **Producto del Almacén** — EDITABLE contra el maestro
+        (`_JS_EDITOR_PRODUCTO`); sin producto dice «elegir producto» en
+        ámbar, que es lo que hay que hacer.
+      · **Und.** — la de kardex del producto elegido; no se edita.
+      · **Cant.** — EDITABLE; arranca en la del XML y se marca si difiere
+        (el yogur de 0.96 L entra en litros, la caja de 12 en unidades).
+      · **P. unit.** — DERIVADO (`_precio_derivado`): importe ÷ cantidad.
+      · **Importe** — el INVARIANTE: el del XML, intacto.
+      · **Cómo se eligió** — el origen, que antes iba sólo en el tooltip:
+        con una columna de sobra, se lee sin pasar el cursor.
     """
     gb = GridOptionsBuilder.from_dataframe(tv)
     gb.configure_default_column(resizable=True, sortable=False, filter=False,
                                 editable=False, suppressMovable=True)
-    for oculta in ("_idx", "_cod_auto", "_cant_xml", "_cod_sis", "_origen"):
+    for oculta in ("_idx", "_cod_auto", "_cant_xml", "_cod_sis", "_origen",
+                   "_cod_prov"):
         gb.configure_column(oculta, hide=True)
-    # LAS DOS columnas editables -- ver el docstring de `_detalle_sistema`.
-    # El tinte lavanda es la misma señal visual de "interactivo" que usa el
-    # resto de la app (`_ficha_html`, la barra de TOTAL), acá marcando
-    # "esta celda se puede tocar".
-    # El ORIGEN del emparejamiento ya no es columna: es el color del ítem
-    # y su tooltip. Costaba 120px en una mitad de 422 que ahora tiene que
-    # llevar también precio e importe, y lo único que hace falta ver de un
-    # vistazo es SI hay que revisar esa fila — ámbar cuando sí. El detalle
-    # («Sugerido», «Corregido»…) y el código del sistema van al tooltip,
-    # que es donde se mira de a una fila.
+    gb.configure_column("#", width=46, minWidth=46,
+                        cellStyle={"color": GRIS_TEXTO_SUAVE})
+    # ── lo que dice el XML ──────────────────────────────────────────────
     gb.configure_column(
-        "Ítem (sistema)", minWidth=110, flex=1, editable=True,
-        cellEditor=_JS_EDITOR_PRODUCTO,
+        "Ítem (XML)", headerName="Ítem del proveedor", minWidth=170, flex=1,
         tooltipValueGetter=JsCode(
-            "function(p){ var d=p.data||{}; return (d._origen||'') + "
-            "(d._cod_sis ? '  ·  cód. ' + d._cod_sis : ''); }"),
+            "function(p){ var c=(p.data||{})._cod_prov;"
+            " return p.value + (c ? '  ·  cód. del proveedor ' + c : ''); }"))
+    gb.configure_column("Cant. XML", headerName="Cant.", type=["numericColumn"],
+                        width=70, minWidth=64, valueFormatter=_JS_FORMATO_CANT)
+    gb.configure_column("Und. XML", headerName="Und.", width=78, minWidth=74,
+                        cellStyle={"color": GRIS_TEXTO})
+    gb.configure_column("P. unit. XML", headerName="P. unit.",
+                        type=["numericColumn"], width=82, minWidth=74,
+                        valueFormatter=_JS_IMPORTE_XML)
+    gb.configure_column("Importe XML", headerName="Importe",
+                        type=["numericColumn"], width=88, minWidth=80,
+                        valueFormatter=_JS_IMPORTE_XML)
+    gb.configure_column("→", headerName="", width=30, minWidth=30,
+                        cellStyle={"color": GRIS_TEXTO_SUAVE,
+                                   "textAlign": "center", "padding": "0"})
+    # ── cómo entra al Almacén ───────────────────────────────────────────
+    gb.configure_column(
+        "Ítem (sistema)", headerName="Producto del Almacén", minWidth=170,
+        flex=1, editable=True, cellEditor=_JS_EDITOR_PRODUCTO,
+        valueFormatter=JsCode(
+            "function(p){ return p.value ? p.value : 'Elegir producto \\u25be'; }"),
+        tooltipValueGetter=JsCode(
+            "function(p){ var d=p.data||{}; return d._cod_sis"
+            " ? 'cód. ' + d._cod_sis + ' · clic para cambiarlo'"
+            " : 'Clic y escribí para buscar en el maestro'; }"),
         cellStyle=JsCode(
             "function(p){ var base={'background':'%s','cursor':'text'};"
+            " if (!p.value) { base.color='%s'; base.fontWeight='600';"
+            "   base.background='%s'; return base; }"
             " var o=(p.data||{})._origen;"
-            " if (o==='Sugerido' || o==='Sin coincidencia') {"
-            "   base.color='%s'; base.fontWeight='600'; }"
+            " if (o==='Sugerido') { base.color='%s'; base.fontWeight='600'; }"
             " else if (o==='Corregido') { base.color='%s'; }"
             " return base; }"
-            % (LAVANDA_FONDO, ADVERTENCIA_TEXTO, ACENTO_TEXTO)))
-    # La unidad la manda el MAESTRO, no el comprobante: es la de kardex
-    # del producto elegido, así que cambia sola al cambiar el ítem y no
-    # se edita a mano.
+            % (LAVANDA_FONDO, ADVERTENCIA_TEXTO, ERROR_FONDO,
+               ADVERTENCIA_TEXTO, ACENTO_TEXTO)))
     gb.configure_column("Und.", width=62, minWidth=56,
-                        headerTooltip="Unidad de kardex del sistema. La trae "
+                        headerTooltip="Unidad de kardex del Almacén. La trae "
                                       "el producto elegido; no se edita.",
                         cellStyle={"color": GRIS_TEXTO})
-    # La cantidad arranca igual a la del comprobante y se puede pisar. Se
-    # marca con el acento cuando difiere: es la unica senal de que ese
-    # numero ya no es el que dice SUNAT.
     gb.configure_column(
         "Cant.", type=["numericColumn"], width=72, minWidth=66, editable=True,
+        headerTooltip="Arranca en la del XML y se puede cambiar: el proveedor "
+                      "factura 1 caja de 12 y el Almacén ingresa 12.",
         valueFormatter=_JS_FORMATO_CANT, valueParser=_JS_CANTIDAD_PARSER,
         cellStyle=JsCode(
             "function(p){ var base = {'background': '%s', 'cursor': 'text'};"
@@ -2858,66 +2795,77 @@ def _grid_lado_sistema(tv, doc_id):
             "     && Math.abs(p.value - p.data._cant_xml) > 1e-6) {"
             "   base.color = '%s'; base.fontWeight = '600'; }"
             " return base; }" % (LAVANDA_FONDO, ACENTO_TEXTO)))
-    # Precio DERIVADO: no se edita, se calcula (`_precio_derivado`). Va en
-    # gris para que se lea como lo que es — un resultado, no un campo.
     gb.configure_column(
-        "P. unit.", type=["numericColumn"], width=76, minWidth=70,
+        "P. unit.", type=["numericColumn"], width=84, minWidth=74,
         headerTooltip="Se calcula solo: importe ÷ cantidad. Al cambiar la "
                       "cantidad, cambia el unitario y el importe queda igual.",
-        valueFormatter=_JS_PRECIO_DERIVADO,
-        cellStyle={"color": GRIS_TEXTO})
-    # El IMPORTE es el invariante: se copia del comprobante y no se toca.
-    # Por eso NO lleva el tinte lavanda de "editable" ni marca de cambio.
+        valueFormatter=_JS_PRECIO_DERIVADO, cellStyle={"color": GRIS_TEXTO})
     gb.configure_column(
-        "Importe", type=["numericColumn"], width=82, minWidth=76,
-        headerTooltip="Lo que costó la línea según el comprobante. No "
-                      "cambia con la homologación — tampoco los impuestos.",
+        "Importe", type=["numericColumn"], width=88, minWidth=80,
+        headerTooltip="Lo que costó la línea según el comprobante. No cambia "
+                      "al ingresarla — tampoco los impuestos.",
         valueFormatter=_JS_IMPORTE_XML)
-    # `singleClickEdit` + `stopEditingWhenCellsLoseFocus`: un clic entra a
-    # editar y clickear afuera confirma, como una celda de Excel -- sin
-    # esto haría falta doble clic y Enter.
+    gb.configure_column(
+        "Cómo", headerName="Cómo se eligió", width=112, minWidth=100,
+        headerTooltip="Automático: cruzado con lo ya cargado de este "
+                      "documento. Sugerido: parecido de nombre en el maestro, "
+                      "revisalo. Corregido: elegido a mano. Sin producto: "
+                      "hay que elegirlo.",
+        cellStyle=JsCode(
+            "function(p){ var o=(p.data||{})._origen;"
+            " if (o==='Sugerido' || o==='Sin coincidencia')"
+            "   return {'color':'%s','fontSize':'11.5px'};"
+            " return {'color':'%s','fontSize':'11.5px'}; }"
+            % (ADVERTENCIA_TEXTO, GRIS_TEXTO)))
     gb.configure_grid_options(
         rowHeight=_ALTO_FILA_CONVERSOR, headerHeight=_ALTO_CABECERA_CONVERSOR,
+        groupHeaderHeight=_ALTO_CABECERA_CONVERSOR,
         singleClickEdit=True, stopEditingWhenCellsLoseFocus=True,
         context=_lookups_maestro()[2],
         onGridReady=_JS_MAESTRO_AL_NAVEGADOR,
         onCellValueChanged=_JS_RELLENAR_VECINAS,
         onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
-        # Esta tabla vive en media tarjeta, con más columnas de las que
-        # entran sin scroll horizontal -- eso es esperable (mismo criterio
-        # que `_tabla_cruce`). Lo que NO conviene es la virtualización de
-        # columnas por defecto: con el marco angosto, deja sin nodo DOM a
-        # "Ítem (sistema)" hasta que alguien scrollea hasta ahí, y esa es
-        # justo la columna editable. Ocho columnas es nada para el
-        # navegador — desactivarla cuesta cero acá y evita esa sorpresa.
         suppressColumnVirtualisation=True,
+        tooltipShowDelay=300,
     )
-    # Key con el documento adentro: sin esto, AG Grid retiene estado del
-    # lado del cliente al cambiar de documento -- antes fue la fila
-    # seleccionada y reventó en vivo con menos líneas que el documento
-    # anterior (IndexError, ver arquitectura.md regla #224); con edición en
-    # celda el mismo riesgo aplica igual. Con la key distinta, AG Grid
-    # monta un componente nuevo por documento y arranca limpio.
+    opciones = gb.build()
+    # LOS DOS GRUPOS. `GridOptionsBuilder` no arma grupos de columnas, así
+    # que se reacomodan las definiciones ya construidas: AG Grid Community
+    # los soporta (`children`). Las ocultas quedan sueltas al final.
+    defs = {c["field"]: c for c in opciones["columnDefs"]}
+    xml = ("Ítem (XML)", "Cant. XML", "Und. XML", "P. unit. XML", "Importe XML")
+    alm = ("Ítem (sistema)", "Und.", "Cant.", "P. unit.", "Importe", "Cómo")
+    usadas = set(xml) | set(alm) | {"#", "→"}
+    opciones["columnDefs"] = (
+        [defs["#"],
+         {"headerName": "COMPROBANTE SUNAT · lo que dice el XML",
+          "headerClass": "conv-grupo", "children": [defs[c] for c in xml]},
+         defs["→"],
+         {"headerName": "ALMACÉN · cómo entra",
+          "headerClass": "conv-grupo", "children": [defs[c] for c in alm]}]
+        + [c for f, c in defs.items() if f not in usadas])
+    # Key con el documento adentro: AG Grid retiene estado del lado del
+    # cliente, y al cambiar de documento con menos líneas reventaba
+    # (IndexError, regla #224). Con la key distinta arranca limpio.
     return AgGrid(
-        tv, gridOptions=gb.build(), height=_alto_conversor(len(tv)),
-        # `marco=False`: la tabla NO lleva borde/radio/sombra propios — ya
-        # los pone la mitad que la contiene (`sunat_conv_izq`/`_der` en
-        # estilos/_80_cards.py). Con los dos marcos se veían dos líneas de
-        # 1px con el mismo radio a diez píxeles una de otra.
-        theme="material", custom_css=dict(_css_grid(12, marco=False)),
+        tv, gridOptions=opciones,
+        height=alturas.por_filas(len(tv), px_fila=_ALTO_FILA_CONVERSOR,
+                                 extra=2 * _ALTO_CABECERA_CONVERSOR + 4,
+                                 rol=alturas.APOYO),
+        theme="material",
+        custom_css={**_css_grid(12, marco=False),
+                    ".conv-grupo": {"color": f"{ACENTO} !important",
+                                    "font-size": "10px !important",
+                                    "font-weight": "700 !important",
+                                    "letter-spacing": ".05em"}},
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
         update_on=["cellValueChanged"],
         data_return_mode=DataReturnMode.AS_INPUT,
-        # `server_wins` y no el `client_wins` por defecto: sin esto, "after
-        # first edit, grid ignores server data updates" (docstring de
-        # st_aggrid). Era el bug reportado el 2026-08-27 con captura --
-        # se elegía el ítem y "Código"/"Und. kardex"/"Origen" se quedaban
-        # vacíos y en "Sin coincidencia" para siempre, porque el navegador
-        # descartaba en silencio la fila ya resuelta que mandaba el
-        # servidor. Acá el servidor ES la fuente de verdad: guarda la
-        # corrección en R2 y recién entonces redibuja.
+        # `server_wins`: sin esto, después de la primera edición el
+        # navegador descarta lo que manda el servidor (regla #227) y el
+        # código, la unidad y el origen se quedan como estaban.
         server_sync_strategy="server_wins",
-        key=f"sunat_conv_sistema_{doc_id}",
+        key=f"sunat_conv_{doc_id}",
     )
 
 
@@ -2986,7 +2934,7 @@ def _bloque_importar(doc, lineas_xml, filas_sistema, xml_original):
                      if not str(f.get("_cod_sis") or "").strip())
     if sin_mapear:
         st.warning(f"Faltan {sin_mapear} línea(s) por asignarle producto. "
-                   f"Se completan arriba, en «Ítem (sistema)».")
+                   f"Se eligen arriba, en «Producto del Almacén».")
         return
 
     etiqueta = "Reintentar la importación" if recibo else "Importar al Almacén"
@@ -3007,13 +2955,14 @@ def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
     nombre y unidad de KARDEX del maestro de artículos
     (`_maestro_productos`) más la cantidad, editables EN LA PROPIA CELDA.
 
-    DOS TABLAS, FILA CONTRA FILA (pedido 2026-08-27). Hasta esa mañana era
-    una sola tabla de 8 columnas: se leía como una planilla, no como una
-    comparación. Ahora cada lado es su propia tarjeta y la fila `i` de una
-    cae a la misma altura que la fila `i` de la otra — eso NO es
-    automático, sale de que las dos compartan alto de fila, de cabecera y
-    de tabla (`_ALTO_FILA_CONVERSOR`, `_alto_conversor`) y de que las dos
-    cabeceras se dibujen con el mismo markup (`_titulo_panel`).
+    UNA TABLA CON LOS DOS LADOS desde el 2026-10-21 (regla #684,
+    `_grid_conversor`): cada línea del XML a la izquierda y cómo entra al
+    Almacén a la derecha, en la misma fila, con los totales de cada lado
+    debajo de su grupo. Del 2026-08-27 a ese día fueron dos tablas lado a
+    lado que se alineaban sólo si compartían alto de fila, de cabecera y
+    de tabla; en la ventana se leían como dos cuadrantes sueltos. (Y antes
+    del 2026-08-27, una tabla de 8 columnas que se leía como planilla: la
+    de ahora separa los lados con dos grupos de columnas y una flecha.)
 
     DOS FUENTES según si el documento YA ESTÁ REGISTRADO (tiene líneas en
     `compras.parquet`, `_lineas_parquet_del_documento`) o todavía no
@@ -3087,7 +3036,7 @@ def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
     # «Corregido», en el tooltip y en ámbar lo que hay que revisar), y cada
     # renglón de aviso le costaba alto a una pantalla única.
 
-    filas_sunat, filas_sistema = [], []
+    filas_sistema = []
     for i, xml_l in enumerate(lineas_xml):
         correccion = correcciones.get(i) or {}
         cod_auto = codigos_auto[i] if i < len(codigos_auto) else None
@@ -3105,64 +3054,70 @@ def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
 
         cant_xml = _num(xml_l.get("cantidad"))
         cant_cor = _num(correccion.get("cantidad"))
-        # La UNIDAD viaja pegada a la cantidad ("0.73 kg") y no en columna
-        # propia: es como se lee en cualquier comprobante, y libera los
-        # ~48px que necesitan «P. unit.» e «Importe» para entrar sin
-        # scroll horizontal en la mitad de la tarjeta.
-        _u = str(xml_l.get("unidad") or "").strip()
-        filas_sunat.append({
-            "Código prov.": xml_l.get("codigo", ""),
-            "Ítem (XML)": xml_l.get("descripcion", ""),
-            "Cant.": (f"{cant_xml:,.3f}".rstrip("0").rstrip(".")
-                      + (f" {_u}" if _u else "")) if cant_xml is not None else "",
-            "P. unit.": _num(xml_l.get("precio_unitario")),
-            "Importe": _num(xml_l.get("importe")),
-        })
         # EL IMPORTE DE LA LÍNEA ES EL INVARIANTE de la homologación: el
         # proveedor factura 1 caja de 12 y el almacén la ingresa como 12
         # unidades, así que cambian la cantidad y el precio unitario —
         # pero lo que se pagó por esa línea, y por lo tanto los impuestos
-        # y el total del documento, no. Ver `_grid_lado_sistema`.
+        # y el total del documento, no. Ver `_grid_conversor`.
         _imp = _num(xml_l.get("importe"))
         _cant_sis = cant_xml if cant_cor is None else cant_cor
+        # UNA fila con los dos lados (regla #684): lo que dice el XML, con
+        # sufijo, y cómo entra al Almacén con los nombres de siempre.
         filas_sistema.append({
             "_idx": i,
             "_cod_auto": cod_auto or "",
             "_cant_xml": cant_xml,
             "_cod_sis": cod_sis,
             "_origen": origen,
+            "_cod_prov": str(xml_l.get("codigo") or ""),
+            "#": i + 1,
+            "Ítem (XML)": xml_l.get("descripcion", ""),
+            "Cant. XML": cant_xml,
+            "Und. XML": str(xml_l.get("unidad") or "").strip(),
+            "P. unit. XML": _num(xml_l.get("precio_unitario")),
+            "Importe XML": _imp,
+            "→": "→",
             "Ítem (sistema)": nom_sis,
             "Und.": uni_sis,
             "Cant.": _cant_sis,
             "P. unit.": _precio_derivado(_imp, _cant_sis),
             "Importe": _imp,
+            "Cómo": {"Sin coincidencia": "Sin producto"}.get(origen, origen),
         })
 
-    tv_sunat = pd.DataFrame(filas_sunat)
     tv = pd.DataFrame(filas_sistema)
     _doc_id = str(doc.get("documento") or "")
     totales_doc = sunat.totales_xml(xml_original) if xml_original else None
 
-    # columnas-internas: las dos mitades de la comparación, mitad y mitad
-    # a propósito -- ninguna de las dos fuentes manda sobre la otra.
+    # Arriba, el documento y cuánto falta: lo único que hay que hacer antes
+    # de importar es que cada línea tenga su producto.
+    _con = sum(1 for f in filas_sistema if str(f.get("_cod_sis") or "").strip())
+    _faltan = len(filas_sistema) - _con
+    _titulo_panel(
+        "Comprobante SUNAT → Almacén",
+        (f"{_con} de {len(filas_sistema)} líneas con producto"
+         + (f" · falta elegir {_faltan}" if _faltan else " ✓")),
+        derecha=_datos_documento_html(doc))
+
+    # UNA tabla con los dos lados (regla #684): la fila del XML y cómo entra
+    # al Almacén a la misma altura, por construcción.
+    with st.container(key="sunat_ingreso_tabla"):
+        resp = _grid_conversor(tv, _doc_id)
+
+    # Los totales, cada uno bajo su lado: los del comprobante (del
+    # registro) y los que se van a cargar (la suma de las líneas). Tienen
+    # que dar lo mismo, y si no, el pie del Almacén lo dice.
+    # columnas-internas: los dos pies, bajo los dos grupos de la tabla.
     c_izq, c_der = st.columns(2, gap="small")
     with c_izq:
-        with st.container(border=True, key="sunat_conv_izq"):
-            _titulo_panel("Comprobante SUNAT", "",
-                          derecha=_datos_documento_html(doc))
-            _grid_lado_sunat(tv_sunat, _doc_id)
-            _pie_comprobante(doc, lineas_xml, totales_doc)
+        _pie_comprobante(doc, lineas_xml, totales_doc)
     with c_der:
-        with st.container(border=True, key="sunat_conv_der"):
-            _titulo_panel("Sistema", "",
-                          derecha=_datos_documento_html(doc))
-            resp = _grid_lado_sistema(tv, _doc_id)
-            _pie_sistema(doc, filas_sistema, lineas_xml)
+        _pie_sistema(doc, filas_sistema, lineas_xml)
 
-    st.caption("Clic en «Ítem (sistema)» para corregirlo — el buscador "
-               "sugiere mientras escribís, contra el catálogo completo. "
-               "«Cant.» arranca con la del comprobante y también se edita; "
-               "vaciar el ítem vuelve la línea a lo automático.")
+    st.caption("Clic en «Producto del Almacén» para elegirlo o cambiarlo — "
+               "el buscador sugiere mientras escribís, contra el maestro "
+               "completo. «Cant.» arranca con la del XML y también se edita; "
+               "vaciar el producto vuelve la línea a lo automático.")
 
     _bloque_importar(doc, lineas_xml, filas_sistema, xml_original)
 

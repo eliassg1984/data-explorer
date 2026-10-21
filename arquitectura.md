@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-683 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+684 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (215)
 
@@ -876,7 +876,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 
-**SUNAT y SIRE** (66)
+**SUNAT y SIRE** (67)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -944,6 +944,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#679** — «Costo de ventas» tiene DOS formas de la parte de arriba —Tablero y Cascada— y, debajo de las…
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 - **#683** — «Documentos SUNAT» son TRES vistas, una por pantalla, y la tarjeta de debajo de la tabla ya…
+- **#684** — «Ingresar al Almacén» es UNA tabla con los dos lados, y lo que falta cargar dice cuánto es…
 
 **Fechas, rangos y cortes** (17)
 
@@ -1016,7 +1017,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (196)
+**Decisiones de diseño y UX** (197)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1214,6 +1215,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#679** — «Costo de ventas» tiene DOS formas de la parte de arriba —Tablero y Cascada— y, debajo de las…
 - **#680** — «Análisis de diferencias» lista con fichas cortas que traen su número, y la ficha de la línea…
 - **#683** — «Documentos SUNAT» son TRES vistas, una por pantalla, y la tarjeta de debajo de la tabla ya…
+- **#684** — «Ingresar al Almacén» es UNA tabla con los dos lados, y lo que falta cargar dice cuánto es…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53230,6 +53232,43 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-21.)
 
+684. **«Ingresar al Almacén» es UNA tabla con los dos lados, y lo que falta
+     cargar dice cuánto es nota de crédito** (2026-10-21, a pedido, con el
+     mockup aprobado).
+
+     - **Una grilla, dos grupos de columnas** (`_grid_conversor`): «Comprobante
+       SUNAT · lo que dice el XML» (ítem, cantidad, unidad, precio, importe),
+       una flecha, y «Almacén · cómo entra» (producto, unidad de kardex,
+       cantidad, precio derivado, importe y «Cómo se eligió»). Hasta ese día
+       eran dos grillas lado a lado (#249) que se alineaban sólo si
+       compartían alto de fila, de cabecera y de tabla; en la ventana se
+       leían como dos cuadrantes sueltos. `GridOptionsBuilder` no arma grupos:
+       se reacomodan las `columnDefs` ya construidas (`children`, Community).
+     - **Los campos del lado del Almacén conservan su nombre** (`Ítem
+       (sistema)`, `Und.`, `Cant.`, `P. unit.`, `Importe`): de ellos cuelgan
+       `_JS_RELLENAR_VECINAS` y la detección de cambios de `_detalle_sistema`,
+       que no cambiaron. Los del XML llevan sufijo («Cant. XML»…) para no
+       chocar. Un producto vacío dice «Elegir producto ▾» en ámbar.
+     - **El contenedor es `sunat_ingreso_tabla`, no `sunat_conv_…`**: esa
+       familia la enumera el piso de alto de `_80_cards.py` y
+       `test_graficos.py` exige que toda key de la familia esté listada. Las
+       reglas de `sunat_conv_izq`/`_der` se fueron con las dos mitades.
+     - **Notas de crédito**: la fidelidad las cuenta en VALOR ABSOLUTO (#604),
+       y sin decirlo «falta cargar S/ 57,142» se leía como compra real. En
+       las dos vistas de resumen la cifra lleva debajo «incl. S/ 27,871 en
+       notas de crédito · neto S/ 1,400», el renglón del proveedor dice
+       cuántas son, y la lista de documentos marca «NC». El NETO resta la
+       nota en vez de sumarla: una factura anulada por una nota del mismo
+       monto, las dos sin cargar, es S/ 0 que falta y no el doble (medido:
+       CRUZ HUAMÁN, S/ 27,140 «sin cargar» con neto cero). Sale de
+       `_fid_por`, con un groupby aparte sobre las notas.
+
+     Lo vigila `test_graficos.py` (las notas dentro de lo que falta).
+     Verificado en el navegador con F001-6313 de VIBEJ: diez líneas, los
+     nombres al derecho (#682) y los dos totales en S/ 2,254.41.
+
+     (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53242,7 +53281,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#683**; la próxima toma el número siguiente.
+> última regla es la **#684**; la próxima toma el número siguiente.
 
 >
 
