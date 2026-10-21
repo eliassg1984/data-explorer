@@ -519,10 +519,13 @@ def fig_familias(sf, foco=None):
         margin=dict(l=10, r=10, t=24, b=6),
     ))
     _marcas = _marcas_eje(sf.drop_duplicates("_clave")["eje"], _ROTULOS_PANEL)
+    # 11px y no 9: a 9 el «6» de «feb 26» se dibuja como un «5» y el panel
+    # parecía decir el año anterior (regla #685). Cuatro rótulos por panel
+    # entran de sobra.
     fig.update_xaxes(type="category", showgrid=False, tickangle=0,
-                     tickfont=dict(size=9), tickmode="array",
+                     tickfont=dict(size=11), tickmode="array",
                      tickvals=_marcas, ticktext=_marcas)
-    fig.update_yaxes(showticklabels=True, nticks=4, tickfont=dict(size=9),
+    fig.update_yaxes(showticklabels=True, nticks=4, tickfont=dict(size=10),
                      gridcolor=GRIS_BORDE, zeroline=True,
                      zerolinecolor=GRIS_TEXTO, zerolinewidth=1,
                      tickformat="~s")

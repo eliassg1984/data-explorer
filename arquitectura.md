@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-684 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+685 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (215)
 
@@ -377,7 +377,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#671** — «Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada receta base, quién y cuánto…
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 
-**Plotly y figuras** (118)
+**Plotly y figuras** (119)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -497,6 +497,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#659** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
 - **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
 - **#677** — De los tres modos de «Distribución de diferencias» sólo el Pareto se podía analizar: la vista…
+- **#685** — A 9px un «6» se lee «5»: los paneles por familia de Ajuste › Evolución parecían rotular el…
 
 **AgGrid y tablas** (95)
 
@@ -53269,6 +53270,19 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-21.)
 
+685. **A 9px un «6» se lee «5»: los paneles por familia de Ajuste ›
+     Evolución parecían rotular el año anterior.** El eje decía «nov 25 ·
+     feb 26 · may 26 · oct 26» —el mismo texto que la serie grande, salen
+     del mismo `orden`—, pero con el `tickfont=dict(size=9)` de Plotly el 6 de esa
+     tipografía se dibujaba casi igual que un 5 y se reportó como «dicen
+     feb 25 / may 25 / oct 25». No era un bug de datos: se revisó el código
+     y la captura ampliada lo confirma. Pasan a 11px el eje X y a 10px el Y
+     (`_evolucion.py::fig_familias`); cuatro rótulos por panel entran de
+     sobra. Un rótulo con AÑO de dos cifras no va por debajo de 10px: es
+     justo la cifra que distingue un período del otro.
+
+     (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53281,7 +53295,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#684**; la próxima toma el número siguiente.
+> última regla es la **#685**; la próxima toma el número siguiente.
 
 >
 
