@@ -1129,14 +1129,11 @@ CSS = """    /* ================================================================
         border: none !important;
     }
 
-    /* AJUSTE › EVOLUCIÓN (regla #504): la línea que separa la serie de los
-       mini-gráficos DENTRO de la misma tarjeta — una tarjeta con dos
-       lecturas, no dos tarjetas —, y la pastilla «jul 26 ✕» que dice qué
-       período está resaltado. Las dos por su key/clase exacta. */
-    .ajevo-divisor {
-        font-size: 12px;
-        color: var(--text-secondary);
-    }
+    /* AJUSTE › EVOLUCIÓN (regla #504): desde el 2026-10-21 la serie, la
+       matriz, «¿Es mucho?» y la tabla son una pieza propia (regla #692,
+       `graficos/ajuste/evolucion_ajuste.css`, en su shadow root). Acá
+       quedan sólo la línea de totales y el filtro de Área de la cabecera,
+       que siguen siendo de Streamlit. */
     /* Los totales del rango, debajo del título (regla #631). Un renglón
        que se corta con «…»: no puede partirse en dos, porque la fila de la
        cabecera la manda el selector Corte | Mes y un tercer renglón sí
@@ -1159,73 +1156,6 @@ CSS = """    /* ================================================================
        más), sólo en Evolución. */
     div.st-key-ajevo_ctrl_area div button[data-testid="stPopoverButton"] {
         justify-content: flex-end !important;
-    }
-    /* Desde el 2026-10-02 (regla #585) la línea va en la FILA del divisor y
-       no en el texto: la fila lleva también el selector Familias | Tabla,
-       y una línea sobre el texto solo se cortaba en su columna. */
-    .st-key-ajevo_divisor_fila {
-        border-top: 1px solid var(--border);
-        padding-top: 6px;
-    }
-    /* El selector Familias | Tabla, compacto: que alternar no le sume a la
-       tarjeta más alto que el renglón de texto que ya existía. */
-    /* La tabla de resumen (regla #585) es un <table> de `st.markdown`, y
-       Streamlit le pone a esas tablas un marco y una línea entre columnas:
-       acá sólo van las líneas entre filas, que dibuja el propio HTML. */
-    .ajevo-tabla table,
-    .ajevo-tabla th,
-    .ajevo-tabla td {
-        border-left: 0 !important;
-        border-right: 0 !important;
-        border-top: 0 !important;
-    }
-    .ajevo-tabla table {
-        border: 0 !important;
-        margin: 0 !important;
-    }
-    /* El `stMarkdownContainer` nace con `margin-bottom: -16px` (medido):
-       sin devolverlos, el total de la tabla se salía 16px por el borde de
-       abajo de la tarjeta. Con ellos, la tarjeta mide lo mismo en
-       Familias que en Tabla (583px a 1366x768). */
-    .ajevo-tabla {
-        margin-bottom: 16px;
-    }
-    .st-key-ajuste_evo_abajo [data-testid="stButtonGroup"] {
-        justify-content: flex-end;
-    }
-    .st-key-ajuste_evo_abajo [data-testid="stButtonGroup"] button {
-        min-height: 26px !important;
-        height: 26px !important;
-        padding: 0 10px !important;
-        font-size: 12px !important;
-    }
-    /* La fila de mini-gráficos se desliza de costado (regla #505): el
-       ancho de la figura lo fuerza un <style> por render desde
-       `_evolucion.py` (n familias × PX_PANEL). QUIEN DESLIZA NO ES
-       `ajevo_multiplos` sino el `stElementContainer` de la figura, que ya
-       nace con `overflow-x: auto` (medido: 1204 de ancho, 2000 de
-       contenido). Acá sólo se le afina la barra. */
-    .st-key-ajevo_multiplos [data-testid="stElementContainer"]::-webkit-scrollbar {
-        height: 6px;
-    }
-    .st-key-ajevo_multiplos [data-testid="stElementContainer"]::-webkit-scrollbar-thumb {
-        background: var(--scroll-thumb);
-        border-radius: 3px;
-    }
-    .st-key-ajuste_evo_soltar button {
-        min-height: 0 !important;
-        padding: 3px 10px !important;
-        border-radius: 999px !important;
-        border: 1px solid var(--accent) !important;
-        background: var(--accent-tint) !important;
-        color: var(--accent-deep) !important;
-    }
-    .st-key-ajuste_evo_soltar button p {
-        font-size: 12px !important;
-        font-weight: 600 !important;
-    }
-    .st-key-ajuste_evo_soltar button:hover {
-        background: var(--accent-light) !important;
     }
     /* Cards internos (Paneles A/B via `_card()`): dejar transparentes para
        que no se doble-marquen dentro del contenedor externo. */

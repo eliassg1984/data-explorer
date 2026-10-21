@@ -193,6 +193,24 @@ AJUSTE_SOB_FONDO = "#e8f3e9"
 AJUSTE_SOB_BORDE = "#c9e3cd"
 """Borde fino del badge 'Sobrante'."""
 
+# Los POSIBLES ORIGENES de un ajuste en Ajuste › Evolución (regla #692): la
+# parte de una barra que una pista explica. Se distinguen por LUMINOSIDAD y
+# no sólo por tono, y ninguno es rojo ni verde: rojo y verde quedan para lo
+# que todavía nada explica. Salen del boceto aprobado.
+AJUSTE_ORIGEN_NEG = "#d4d4da"
+"""Sistema en negativo: el sobrante que corrige un descargo hecho sin ingreso."""
+
+AJUSTE_ORIGEN_VEN = "#b9aff2"
+"""Descargo de ventas: vendido y sin descontar al contar, área de descargo,
+combo sin marcar, receta."""
+
+AJUSTE_ORIGEN_PRO = "#e3b77d"
+"""Producción y porcionamiento."""
+
+AJUSTE_ORIGEN_REG = "#8eb0d6"
+"""Registro, traslado o código: otra área, nombre parecido, factura sin
+ingresar, requerimiento sin procesar, salida habitual, revierte."""
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # LAVANDA DE FOCO

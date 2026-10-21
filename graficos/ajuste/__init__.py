@@ -7,7 +7,7 @@ ultimos 200 commits, 2,7x el siguiente) y sus dos funciones mayores
 —cascada y mapa de calor— eran el 60% del archivo.
 
     _comun.py            layout del rail, fechas de corte, periodos
-    _evolucion.py        Tiempo › Evolucion: serie + mini-graficos, UNA tarjeta (#501/#504)
+    _evolucion.py        Tiempo › Evolucion: serie + matriz, UNA pieza propia (#504/#692)
     _pivote.py           Tiempo › Detalle por producto: la tabla pivote (#504)
     _cascada.py          vista Cascada (la mas grande)
     _heatmap.py          vista "Mapa de calor" (hoy una tabla Familia x Area, #468)
@@ -68,8 +68,7 @@ from graficos.ajuste._comun import (  # noqa: F401
     _layout_aj, mes_operativo_activo, recargar_si_cambio_mes,
 )
 from graficos.ajuste._evolucion import (  # noqa: F401
-    fig_familias, fig_serie, periodos_ajuste, serie_ajuste,
-    vista_evolucion_ajuste,
+    datos_pieza, periodos_ajuste, serie_ajuste, vista_evolucion_ajuste,
 )
 from graficos.ajuste._pivote import (  # noqa: F401
     _armar_tabla_pivote_ajuste, vista_detalle_ajuste,
@@ -301,16 +300,17 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                           col_ajuste_val, col_producto)
 
     def _dib_evolucion():
-        """Evolución dibuja su propia tarjeta (serie + familias), así que no
-        va en `_en_tarjeta`. Recibe `d`: el parquet entero con los chips; los
-        meses los elige ella (regla #632)."""
+        """Evolución dibuja su propia tarjeta (serie + matriz, regla #692),
+        así que no va en `_en_tarjeta`. Recibe `d`: el parquet entero con los
+        chips; los meses los elige ella (regla #632). `df_full`, sin filtros,
+        es para el consumo de «¿Es mucho?»."""
         if _vacio:
             with st.container(border=True, key="ajuste_graf_card_izq_evo_vacio"):
                 st.info("No hay datos para los filtros seleccionados.")
             return
         vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                                col_ajuste_val, col_valorizado,
-                               col_kardex=col_kardex)
+                               col_kardex=col_kardex, d_full=df_full)
         recargar_si_cambio_mes()
 
     def _dib_detalle():

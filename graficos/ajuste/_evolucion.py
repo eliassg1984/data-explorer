@@ -16,51 +16,54 @@ pedido («creo que dan similar informacion») en esta vista:
 
     1. La SERIE: sobrante hacia arriba, faltante hacia abajo y el neto como
        linea encima. Lo que se cancela se VE.
-    2. Los MINI-GRAFICOS por familia (small multiples), la misma serie una
-       vez por familia, cada uno con su escala. Reemplazan a las lineas
-       enredadas de la Evolucion vieja.
+    2. Debajo, quien la explica: hasta el 2026-10-21 los MINI-GRAFICOS por
+       familia; desde ese dia la MATRIZ familia × mes (regla #692).
     3. La TABLA pivote de siempre (`_pivote.py`), con los MISMOS periodos
        (`periodos_ajuste`, de aca).
 
-Serie y familias van en UNA tarjeta, con el grano y el periodo en foco en
-su cabecera; la tabla, desde el mismo dia, es su propia vista del rail
-(«Detalle por producto»), con su propio grano: de esta tarjeta solo
-recibia una marca de columna que casi no se veia (regla #504). Las dos
-miran el mismo rango: el de la franja, que para esta categoria abre en los
-ultimos 12 meses (`app.py`, regla #501).
+Serie y familias van en UNA tarjeta, con el grano en su cabecera; la tabla,
+desde el mismo dia, es su propia vista del rail («Detalle por producto»),
+con su propio grano (regla #504).
 
-SIN MODO «%», Y NO POR OLVIDO. Se propuso un «% de merma» (ajuste sobre
-el valor del periodo, a la manera de la tasa de shrink del National Retail
-Security Survey de la NRF, que alla va sobre ventas) y se descarto al
-medirlo contra el parquet real (2026-09-23, 5 familias, oct 25 - set 26):
+DESDE EL 2026-10-21 ES UNA PIEZA PROPIA (regla #692): el boceto aprobado
+(https://claude.ai/artifact/TNvQPfrb4Ty7RQVHvUtPjF), en
+`evolucion_ajuste.js`. Rojo y verde de entrada, y «Explicar con» suma de a
+uno los POSIBLES ORIGENES (la primera pista de cada linea en «Analisis de
+diferencias»): a pedido, «que los colores no se muestren todos a la vez».
 
-  · sobre el valor CONTADO (stock declarado x precio): ago 26 da -65 %. Si
-    falta casi todo, lo contado es casi cero y el cociente se dispara.
-  · sobre el valor EN SISTEMA (stock al cierre x precio): set 26 da -99 %.
-    10.188 filas tienen stock en sistema NEGATIVO y restan del denominador.
-  · y el 73 % del sobrante (S/ 358k de 487k) sale de esas filas: no es
-    mercaderia que aparecio, es el conteo corrigiendo un stock negativo.
-
-Con el dato asi, cualquier % le miente a quien lo lea. El valor contado
-queda en el hover del neto como contexto, no como denominador.
+EL «%» QUE SE DESCARTO EL 2026-09-23, Y EL QUE ENTRO. Un «% de merma» sobre
+el valor del periodo se midio contra el parquet real y daba cualquier cosa:
+sobre lo CONTADO, ago 26 -65 % (si falta casi todo, lo contado es casi
+cero); sobre el sistema ENTERO, set 26 -99 %, porque 10.188 filas tienen
+stock NEGATIVO y restan del denominador. El 2026-10-21 el usuario lo pidio
+con su ejemplo («tenia 1 kg de harina a 2 soles, se ajusto -0,5 kg: perdi
+el 50 %»), y entro con dos cambios que lo hacen creible
+(`sistema_por_periodo`): la base es sólo el stock POSITIVO del sistema, y
+el ajuste de lo que estaba en cero o en negativo va APARTE, en soles. Junto
+a el va el neto como % del CONSUMO del mes (`pct_consumo`), que mide otra
+cosa: cuanto se perdio de lo que paso por el restaurante.
 """
 
 import math
+from pathlib import Path
 
 import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit as st
 
+import costo_ventas
+import data
+import definicion_venta
+import diferencias_ajuste
+from cortes import sesiones_inventario
 from tema import (
-    AJUSTE_ALERTA_TEXTO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS,
-    AJUSTE_POS_TEXTO, BLANCO, GRIS_BORDE, GRIS_LINEA, GRIS_TEXTO,
-    GRIS_TEXTO_SUAVE, LAVANDA_SELECCION, TEXTO_PRINCIPAL,
+    AJUSTE_ALERTA_TEXTO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_ORIGEN_NEG,
+    AJUSTE_ORIGEN_PRO, AJUSTE_ORIGEN_REG, AJUSTE_ORIGEN_VEN, AJUSTE_POS,
+    AJUSTE_POS_TEXTO, GRIS_TEXTO_SUAVE, TEXTO_PRINCIPAL,
 )
 from graficos.base import publicar_contexto_ia
 from graficos import alturas
 from graficos.ajuste._comun import (
-    FAMILIAS_DE_ENTRADA, _MESES_ABR_ES, _layout_aj, _periodo_pivote_ajuste,
+    FAMILIAS_DE_ENTRADA, _MESES_ABR_ES, _periodo_pivote_ajuste,
     css_filtros_vista, ctx_meses, fechas_del_mes, filtro_area_en_titulo,
     mes_operativo_activo, rango_meses, recortar_meses, selector_meses,
 )
@@ -74,28 +77,6 @@ from utils import fmt_k
 GRANOS = ("Corte", "Mes")
 
 _K_GRAN = "ajuste_evo_gran"
-# Qué muestra la mitad de abajo de la tarjeta: los mini-gráficos por
-# familia o la tabla que resume la serie de arriba (regla #585).
-_K_ABAJO = "ajuste_evo_abajo"
-ABAJO = ("Familias", "Tabla")
-_K_FOCO = "ajuste_evo_foco"
-# Contador de la key de la serie: la seleccion de `on_select` PERSISTE
-# entre reruns, asi que se lee ANTES de dibujar y la key cambia tras cada
-# clic procesado. Misma receta que `compras_sem_nclic` (regla #399).
-_K_NCLIC = "ajuste_evo_nclic"
-
-# Mas periodos que esto y los rotulos del neto se pisan entre si: se
-# apagan y el valor queda en el hover.
-_MAX_ROTULOS = 16
-
-# Opacidad de los periodos que NO estan en foco.
-_APAGADO = 0.3
-
-# Redondeo de la PUNTA de las barras (regla #631). En `barmode="relative"`
-# Plotly redondea el extremo de afuera de cada pila, no la base: el verde
-# por arriba y el rojo por abajo, y el cero queda recto.
-_RADIO_SERIE = 5
-_RADIO_PANEL = 3
 
 # Desde cuántos soles el neto según el kardex «difiere» del del cierre: por
 # debajo es redondeo del precio promedio (regla #612).
@@ -260,204 +241,13 @@ def nota_kardex(s, gran):
             f"de {m} {unidad}</span>")
 
 
-def _texto_kardex(neto, kx):
-    """La línea del kardex en el hover del neto: «igual» o cuánto difiere."""
-    if kx is None or (isinstance(kx, float) and math.isnan(kx)):
-        return "sin dato"
-    if neto is None or (isinstance(neto, float) and math.isnan(neto)):
-        return f"S/ {kx:,.0f}"
-    if abs(kx - neto) <= TOL_KARDEX:
-        return "igual"
-    return f"S/ {kx:,.0f} · difiere en S/ {kx - neto:,.0f}"
-
-
-def _trazas(s, foco, leyenda=True):
-    """Las trazas de una serie: dos barras, la linea del neto y, si la serie
-    lo trae, la del neto según el kardex (regla #612).
-
-    Las comparten la serie grande y cada mini-grafico, asi los dos dicen lo
-    mismo con la misma forma. `foco` apaga los otros periodos. Los rotulos
-    del neto NO van aca: son anotaciones de `fig_serie` (regla #631).
-
-    LA DEL KARDEX VA ABAJO DE LA DEL NETO, punteada y un poco más fina:
-    donde los dos coinciden —todo desde sep 2025— la tapa la línea del neto
-    y no se ve; donde no, se separa y lleva un punto. Así la comparación
-    no le agrega nada a la serie mientras no haya nada que decir. Su número
-    va en el hover del NETO y no en el suyo (`hoverinfo="skip"`), para que
-    la caja diga «Neto … · Kardex: igual» en ese orden."""
-    opac = [1.0 if foco is None or k == foco else _APAGADO
-            for k in s["_clave"]]
-    fmt_hover = "S/ %{y:,.0f}"
-    kx = con_kardex(s)
-    sobr = go.Bar(
-        x=s["eje"], y=s["sobrante"], name="Sobrante",
-        marker=dict(color=AJUSTE_POS, opacity=opac),
-        showlegend=leyenda, legendgroup="sobrante",
-        hovertemplate=f"Sobrante: {fmt_hover}<extra></extra>",
-    )
-    falt = go.Bar(
-        x=s["eje"], y=s["faltante"], name="Faltante",
-        marker=dict(color=AJUSTE_NEG, opacity=opac),
-        showlegend=leyenda, legendgroup="faltante",
-        hovertemplate=f"Faltante: {fmt_hover}<extra></extra>",
-    )
-    neto_y = s["neto"]
-    # Contado en el hover del neto: cuanto valor se conto para producir
-    # ese ajuste. Contexto, no denominador (ver el docstring del modulo).
-    datos = [[c] for c in s["contado"]]
-    hover = (f"<b>Neto: {fmt_hover}</b><br>"
-             "Valor contado: S/ %{customdata[0]:,.0f}")
-    if kx:
-        datos = [[c, _texto_kardex(n, k)]
-                 for c, n, k in zip(s["contado"], neto_y, s["kardex"])]
-        hover += "<br>Kardex: %{customdata[1]}"
-    neto = go.Scatter(
-        x=s["eje"], y=neto_y, name="Neto",
-        mode="lines+markers",
-        line=dict(color=TEXTO_PRINCIPAL, width=1.3),
-        # El aro blanco despega el punto de la barra que tiene detrás.
-        marker=dict(size=7, color=TEXTO_PRINCIPAL, opacity=opac,
-                    line=dict(color=BLANCO, width=1.5)),
-        connectgaps=False,
-        showlegend=leyenda, legendgroup="neto",
-        customdata=datos,
-        hovertemplate=hover + "<extra></extra>",
-    )
-    if not kx:
-        return sobr, falt, neto
-    dif = difiere_kardex(s)
-    kardex = go.Scatter(
-        x=s["eje"], y=s["kardex"], name="Kardex",
-        mode="lines+markers",
-        line=dict(color=AJUSTE_ALERTA_TEXTO, width=1.3, dash="dot"),
-        # El punto, sólo donde difiere: es lo que se busca con la vista.
-        marker=dict(size=[6 if d else 0 for d in dif],
-                    color=AJUSTE_ALERTA_TEXTO, opacity=opac),
-        connectgaps=False, hoverinfo="skip",
-        showlegend=leyenda, legendgroup="kardex",
-    )
-    return sobr, falt, kardex, neto
-
-
-def _marcas_eje(ejes, maximo):
-    """Uno de cada `paso` rótulos del eje de categorías, para que entren.
-
-    Plotly NO ralea los rótulos de un eje de categorías con `tickangle=0`
-    (que `_layout` fija para todos): con 22 cortes en la serie, o 12 meses
-    en un panel de un tercio de tarjeta, salían pegados — «oct 25nov 25dic
-    25». La última marca se corre al último periodo, que es el más mirado;
-    queda a más de `paso` de la anterior, así que no se pisan."""
-    ejes = list(ejes)
-    paso = max(1, math.ceil(len(ejes) / maximo))
-    marcas = ejes[::paso]
-    if ejes and ejes[-1] not in marcas:
-        marcas[-1] = ejes[-1]
-    return marcas
-
-
-# Cuántos rótulos entran en el eje X: la serie ocupa el ancho de la tarjeta
-# (~1.200px a 1366) y el rótulo más largo de un corte, «15-17 set 26», mide
-# ~75px; un panel de familia es un tercio de eso.
-_ROTULOS_SERIE = 12
-_ROTULOS_PANEL = 4
-
-# Ancho de UN panel de familia. A 1366 la tarjeta deja ~1.230px útiles:
-# entran tres paneles enteros y el cuarto asoma, que es lo que avisa que la
-# fila se desliza (regla #505).
-PX_PANEL = 400
-
-
-def _rotulos_neto(fig, s, foco):
-    """El neto de cada periodo, en una pastilla blanca pegada a su punto.
-
-    Hasta el 2026-10-02 era el `text` de la traza, negro y encima de la
-    barra: «S/ -20.3k» se leia mal sobre el rojo y se pisaba con el borde
-    (regla #631). Una anotacion trae fondo y borde; el color dice el signo,
-    y va ARRIBA del punto si el neto es positivo y ABAJO si es negativo,
-    hacia afuera de la linea. Con mas de `_MAX_ROTULOS` periodos se pisan
-    entre si y no se dibujan: el valor queda en el hover."""
-    if len(s) > _MAX_ROTULOS:
-        return
-    for eje, clave, v in zip(s["eje"], s["_clave"], s["neto"]):
-        if pd.isna(v):
-            continue
-        fig.add_annotation(
-            x=eje, y=v, text=_fmt(v, signo=True), showarrow=False,
-            yshift=14 if v >= 0 else -14,
-            font=dict(size=10, color=AJUSTE_POS_TEXTO if v >= 0
-                      else AJUSTE_NEG_TEXTO),
-            bgcolor=BLANCO, bordercolor=GRIS_BORDE, borderwidth=1,
-            borderpad=2,
-            opacity=1.0 if foco is None or clave == foco else _APAGADO,
-        )
-
-
-def periodo_mas_movido(s):
-    """El periodo con mas ajuste BRUTO (sobrante − faltante), o None.
-
-    Es el que el neto esconde: set 26 dio +S/ 5.5k de neto sobre ~S/ 200k
-    movidos. Con menos de tres periodos no hay contra qué destacarlo."""
-    bruto = s["sobrante"].fillna(0) - s["faltante"].fillna(0)
-    if len(s) < 3 or not (bruto > 0).any():
-        return None
-    i = int(bruto.to_numpy().argmax())
-    return {"i": i, "eje": s["eje"].iloc[i], "bruto": float(bruto.iloc[i])}
-
-
-def _marca_mas_movido(fig, s):
-    """Banda gris detrás del periodo más movido y su rótulo arriba, en el
-    margen de la figura (regla #631). Gris y no lavanda: el lavanda es el
-    color de la SELECCIÓN (la fila en foco de la tabla), y esto no lo es."""
-    m = periodo_mas_movido(s)
-    if m is None:
-        return
-    # En un eje de categorías la posición i es la categoría i.
-    fig.add_vrect(x0=m["i"] - 0.45, x1=m["i"] + 0.45, fillcolor=GRIS_LINEA,
-                  line_width=0, layer="below")
-    fig.add_annotation(
-        x=m["eje"], y=1, yref="paper", yanchor="bottom", showarrow=False,
-        text=f"más movido · <b>{fmt_k(m['bruto'])}</b>",
-        font=dict(size=10, color=GRIS_TEXTO),
-    )
-
-
-def fig_serie(s, foco=None, alto=alturas.APOYO):
-    """La serie grande: barras divergentes + neto, en eje de CATEGORIAS.
-
-    `type="category"` explicito: sin el, «2025» o «S05 26» pueden parsearse
-    como numero o fecha y el eje cambia de tipo en silencio (reglas #325 y
-    #448)."""
-    fig = go.Figure(_trazas(s, foco))
-    fig.update_layout(**_layout_aj(
-        barmode="relative",
-        bargap=0.35,
-        barcornerradius=_RADIO_SERIE,
-        hovermode="x unified",
-        height=alto,
-        # Sin leyenda: la dice la fila del título (`_leyenda_html`), que ya
-        # existía — una leyenda de Plotly arriba del trazo costaba ~30px de
-        # un alto que no alcanza para entrar en la laptop (regla #505).
-        showlegend=False,
-        margin=dict(l=10, r=10, t=18, b=10),
-        xaxis=dict(type="category", gridcolor=GRIS_BORDE),
-        yaxis=dict(gridcolor=GRIS_BORDE, zeroline=False),
-    ))
-    _marcas = _marcas_eje(s["eje"], _ROTULOS_SERIE)
-    fig.update_xaxes(tickmode="array", tickvals=_marcas, ticktext=_marcas)
-    fig.add_hline(y=0, line_color=GRIS_TEXTO, line_width=1)
-    _marca_mas_movido(fig, s)
-    _rotulos_neto(fig, s, foco)
-    return fig
-
-
 def orden_familias(sf):
-    """Las familias en el orden en que se leen los paneles.
+    """Las familias en el orden en que se leen las filas de la matriz.
 
     Primero las de `FAMILIAS_DE_ENTRADA`, en SU orden —Alimentos, las dos
     bebidas, Vinos, Envases—, a pedido (2026-09-23: «mostrando primero
     alimentos, luego bebidas y luego vinos»): es el orden en que se piensa
-    el negocio, y con la fila deslizable lo primero que se ve es lo que más
-    se mira. Las demás (Costos producción, si el filtro la trae) van
+    el negocio. Las demás (Costos producción, si el filtro la trae) van
     después, de mayor a menor ajuste BRUTO (|sobrante| + |faltante|)."""
     presentes = set(sf["grupo"])
     fijas = [f for f in FAMILIAS_DE_ENTRADA if f in presentes]
@@ -468,243 +258,242 @@ def orden_familias(sf):
     return fijas + resto
 
 
-def alto_multiplos():
-    """Alto de la fila de mini-gráficos. Lo usa también la tabla que la
-    reemplaza, como techo de su scroll: alternar no mueve la tarjeta."""
-    return alturas.por_filas(1, px_fila=alturas.FILA_MULTIPLOS,
-                             extra=alturas.EXTRA_MULTIPLOS,
-                             minimo=alturas.FILA_MULTIPLOS)
+# ── EL «% DEL SISTEMA» Y LOS POSIBLES ORÍGENES (regla #692) ────────────────
+
+# Las columnas del parquet de ajuste que piden el % del sistema y el
+# «sistema en negativo». Sin alguna, esas dos piezas no se dibujan.
+COL_SISTEMA = "STOCK AL CIERRE"
+COL_CONTADO = "STOCK DECLARADO"
+COL_PRECIO = "PRECIO PROMEDIO"
+
+# De la PRIMERA pista de cada línea de «Análisis de diferencias» a su
+# posible origen. «neg» no está: el sistema en negativo es un HECHO de la
+# línea (stock en el sistema < 0 y sobrante), y sale del propio parquet de
+# ajuste (`negativo_por_periodo`) sin calcular ninguna pista. Lo que no
+# está acá —«nada», «nadie», sin pista— es «sin pista».
+ORIGEN_DE_PISTA = {
+    "lote": "ven", "desc": "ven", "combo": "ven", "receta": "ven",
+    "prod": "pro",
+    "area": "reg", "rubro": "reg", "rev": "reg", "sinent": "reg",
+    "sunat": "reg", "req": "reg", "uso": "reg",
+}
+ORIGENES = ("ven", "pro", "reg")
 
 
-def fig_familias(sf, foco=None):
-    """Mini-graficos (small multiples): la misma serie, una vez por familia,
-    en UNA fila que se desliza de costado (el ancho lo fuerza el CSS de
-    `vista_evolucion_ajuste`, `PX_PANEL` por familia).
-
-    UNA FILA y no una rejilla de tres, a pedido (2026-09-23): con dos filas
-    la tarjeta medía 840px y no entraba en la laptop; con una, los paneles
-    se leen de izquierda a derecha en el orden de `orden_familias` y el
-    alto es el de un solo panel (regla #505).
-
-    CADA UNO CON SU ESCALA, a proposito: la pregunta es como se MUEVE cada
-    familia, y con la escala compartida el ajuste de Alimentos —~20 veces
-    el de Vinos— deja a las demás como lineas planas. Por eso los ticks del
-    eje Y SI se ven aca (contra la convencion de `_layout`): con escalas
-    distintas, una figura sin numeros compararia alturas que no son
-    comparables. La magnitud entre familias la da el titulo de cada panel
-    (su neto del rango)."""
-    grupos = orden_familias(sf)
-    n = max(1, len(grupos))
-    titulos = [f"<b>{g.capitalize()}</b> · neto "
-               f"{fmt_k(sf.loc[sf['grupo'] == g, 'neto'].sum())}"
-               for g in grupos]
-    # El hueco entre paneles en PÍXELES, no en fracción: la figura mide
-    # `n * PX_PANEL` y una fracción fija daría huecos distintos con 2 o 6
-    # familias. 44px es lo que piden los ticks del eje Y del panel de la
-    # derecha («-50k»).
-    fig = make_subplots(rows=1, cols=n, subplot_titles=titulos,
-                        horizontal_spacing=min(0.2, 44 / (n * PX_PANEL)))
-    for i, g in enumerate(grupos):
-        sg = sf[sf["grupo"] == g]
-        for t in _trazas(sg, foco, leyenda=False):
-            fig.add_trace(t, row=1, col=i + 1)
-
-    fig.update_layout(**_layout_aj(
-        barmode="relative",
-        bargap=0.3,
-        barcornerradius=_RADIO_PANEL,
-        hovermode="x unified",
-        showlegend=False,
-        height=alto_multiplos(),
-        margin=dict(l=10, r=10, t=24, b=6),
-    ))
-    _marcas = _marcas_eje(sf.drop_duplicates("_clave")["eje"], _ROTULOS_PANEL)
-    # 11px y no 9: a 9 el «6» de «feb 26» se dibuja como un «5» y el panel
-    # parecía decir el año anterior (regla #685). Cuatro rótulos por panel
-    # entran de sobra.
-    fig.update_xaxes(type="category", showgrid=False, tickangle=0,
-                     tickfont=dict(size=11), tickmode="array",
-                     tickvals=_marcas, ticktext=_marcas)
-    fig.update_yaxes(showticklabels=True, nticks=4, tickfont=dict(size=10),
-                     gridcolor=GRIS_BORDE, zeroline=True,
-                     zerolinecolor=GRIS_TEXTO, zerolinewidth=1,
-                     tickformat="~s")
-    for a in fig.layout.annotations:
-        a.font = dict(size=11, color=TEXTO_PRINCIPAL)
-    return fig
+def _num(s):
+    return pd.to_numeric(s, errors="coerce").fillna(0.0)
 
 
-def _monto(v):
-    """«S/ -1,234», como el hover de la serie; vacío si no hubo conteo."""
-    if v is None or (isinstance(v, float) and math.isnan(v)):
-        return "—"
-    return f"S/ {v:,.0f}"
+def tiene_sistema(d):
+    return all(c in d.columns for c in (COL_SISTEMA, COL_CONTADO, COL_PRECIO))
 
 
-def tabla_resumen_html(s, foco=None, alto=None):
-    """La tabla que resume la serie de arriba: una fila por periodo, con
-    las mismas tres medidas que la figura (sobrante, faltante, neto) y el
-    valor contado que la figura deja en el hover del neto.
+def negativo_por_periodo(dp, col_ajuste_val):
+    """El sobrante de las líneas que el sistema tenía en NEGATIVO, por
+    periodo: `{clave: soles}`. No es mercadería que apareció: es el conteo
+    corrigiendo un descargo hecho sin ingreso. Barato —una cuenta sobre el
+    mismo `dp` de la serie—, así que el botón «Sistema en negativo» de
+    «Explicar con» no espera a ninguna pista."""
+    if COL_SISTEMA not in dp.columns or dp.empty:
+        return {}
+    v = _num(dp[col_ajuste_val])
+    m = (v > 0) & (_num(dp[COL_SISTEMA]) < 0)
+    x = pd.DataFrame({"_clave": dp["_clave"].values, "v": v.where(m, 0.0).values})
+    g = x.groupby("_clave", as_index=False)["v"].sum()
+    return {k: round(float(v_), 2) for k, v_ in zip(g["_clave"], g["v"])}
 
-    Se lee de ARRIBA hacia abajo del más nuevo al más viejo —lo último que
-    se contó es lo que se busca primero—, con el total del rango clavado al
-    pie. Un mes sin conteo sigue en la tabla, con «—» y «sin conteo»: es un
-    dato, igual que el hueco de la serie. El periodo en foco de la serie
-    sale marcado.
 
-    HTML y no AgGrid ni `st.dataframe`: es chica y de sólo lectura (una
-    AgGrid cuesta 1,28 MB por iframe, regla #540) y `st.dataframe` pinta
-    «None» en un vacío (regla #529). `alto` es el techo del scroll: el de
-    la fila de mini-gráficos, para que alternar no cambie el alto de la
-    tarjeta.
+def sistema_por_periodo(dp, col_fecha, col_ajuste_val, col_grupo, gran):
+    """El ajuste como % de lo que el SISTEMA decía, por periodo y familia.
 
-    Las líneas de la cabecera y del total son `box-shadow` y no `border`:
-    con `border-collapse` el borde de una celda `sticky` se queda en su
-    sitio y se va con el scroll.
+    `{grupo | "TOTAL": {clave: [sistema, faltante, sobrante, en_cero,
+    negativo]}}` en soles, sobre UNA foto: en «Mes», sólo las líneas del
+    CIERRE del mes (las sesiones `tipo == "cierre"` de
+    `cortes.sesiones_inventario`); en «Corte», las de cada sesión. Sumar
+    las parciales mezclaría el stock de días distintos.
 
-    Si la serie trae el kardex (regla #612), una columna más al lado del
-    neto: en gris donde coincide y en ámbar donde no, con la diferencia en
-    el `title`. Callada mientras no haya nada que decir, como su línea."""
+    LA BASE ES EL STOCK POSITIVO del sistema (stock al cierre × precio de
+    las líneas con stock > 0): de algo negativo no hay porcentaje, y con
+    esas líneas restando el denominador agosto 2026 daba −147 %. El ajuste
+    de las líneas en cero o en negativo va aparte (`negativo`), en soles.
+    `en_cero` es la parte del faltante de líneas CONTADAS en cero: «se
+    acabó sin registrarse» o «no se contó», dos problemas distintos.
+
+    Es lo que la docstring del módulo descartaba hasta el 2026-10-21 («sin
+    modo %»): el % sobre el sistema daba −99 % porque usaba el stock entero.
+    Con la base positiva y lo negativo aparte el número se puede creer."""
+    if not tiene_sistema(dp) or dp.empty:
+        return {}
+    ses = sesiones_inventario(pd.to_datetime(dp[col_fecha], errors="coerce"))
+    if gran == "Mes":
+        ses = [s for s in ses if s["tipo"] == "cierre"]
+    dias = set()
+    for s in ses:
+        dias.update(s["dias"])
+    dia = pd.to_datetime(dp[col_fecha], errors="coerce").dt.date
+    x = dp[dia.isin(dias).values]
+    if x.empty:
+        return {}
+    p = _num(x[COL_PRECIO])
+    sis = _num(x[COL_SISTEMA]) * p
+    cero = _num(x[COL_CONTADO]) == 0
+    v = _num(x[col_ajuste_val])
+    pos = sis > 0
+    t = pd.DataFrame({
+        "_clave": x["_clave"].values,
+        "grupo": (x[col_grupo].astype(str).values if col_grupo else "TOTAL"),
+        "sp": sis.where(pos, 0.0).values,
+        "fp": v.clip(upper=0).where(pos, 0.0).values,
+        "sb": v.clip(lower=0).where(pos, 0.0).values,
+        "c0": v.where(pos & cero, 0.0).values,
+        "ng": v.where(~pos, 0.0).values,
+    })
+    if col_grupo:
+        t = t[x[col_grupo].notna().values]
+    med = ["sp", "fp", "sb", "c0", "ng"]
+    out = {}
+    tot = t.groupby("_clave", as_index=False)[med].sum()
+    out["TOTAL"] = {r["_clave"]: [round(float(r[m]), 2) for m in med]
+                    for r in tot.to_dict("records")}
+    if col_grupo:
+        g = t.groupby(["grupo", "_clave"], as_index=False)[med].sum()
+        for r in g.to_dict("records"):
+            out.setdefault(r["grupo"], {})[r["_clave"]] = [
+                round(float(r[m]), 2) for m in med]
+    return out
+
+
+def origenes_de_lineas(lineas):
+    """Las líneas de UNA sesión de «Análisis de diferencias», sumadas por
+    familia, área, posible origen y lado. Sólo los tres orígenes que salen
+    de una pista (`ORIGENES`): el sistema en negativo y lo que queda «sin
+    pista» se calculan aparte, por diferencia, y así las barras suman
+    siempre lo mismo que el ajuste. Las líneas con el sistema en negativo y
+    sobrante no entran: son «sistema en negativo», tenga la pista que
+    tenga."""
+    cols = ["familia", "area", "origen", "lado", "v"]
+    if lineas is None or len(lineas) == 0:
+        return pd.DataFrame(columns=cols)
+    L = lineas
+    v = _num(L["v"])
+    neg = (v > 0) & (_num(L["s"]) < 0)
+    origen = L["pista_t"].map(ORIGEN_DE_PISTA)
+    x = pd.DataFrame({
+        "familia": L["familia"].astype(str).str.strip().str.upper().values,
+        "area": L["area"].astype(str).str.strip().str.upper().values,
+        "origen": origen.values,
+        "lado": pd.Series(v.values).gt(0).map({True: "s", False: "f"}).values,
+        "v": v.values,
+    })
+    x = x[(~neg).values & x["origen"].notna().values]
+    return x.groupby(["familia", "area", "origen", "lado"], as_index=False)["v"].sum()[cols]
+
+
+def origenes_por_periodo(por_sesion, dia_a_clave, familias=None, areas=None):
+    """`{clave: {"ven": [s, f], "pro": [s, f], "reg": [s, f]}}` en soles.
+
+    `por_sesion` es `[(sesión, origenes_de_lineas(...)), ...]`; cada sesión
+    cae en el periodo de su primer día que la serie tenga (`dia_a_clave`,
+    de `dp`): así vale igual para «Mes» —con o sin mes operativo— que para
+    «Corte». `familias` y `areas` filtran como lo hace la serie (sin
+    distinguir mayúsculas)."""
+    out = {}
+    fams = {str(f).strip().upper() for f in familias} if familias else None
+    ars = {str(a).strip().upper() for a in areas} if areas else None
+    for ses, agg in por_sesion:
+        clave = next((dia_a_clave[d] for d in sorted(ses["dias"]) if d in dia_a_clave), None)
+        if clave is None or agg is None or len(agg) == 0:
+            continue
+        a = agg
+        if fams is not None:
+            a = a[a["familia"].isin(fams)]
+        if ars is not None:
+            a = a[a["area"].isin(ars)]
+        dst = out.setdefault(clave, {o: [0.0, 0.0] for o in ORIGENES})
+        for r in a.to_dict("records"):
+            dst[r["origen"]][0 if r["lado"] == "s" else 1] += float(r["v"])
+    return {k: {o: [round(x, 2) for x in par] for o, par in v.items()}
+            for k, v in out.items()}
+
+
+# Desde qué mes el ajuste del cierre es el que de verdad movió el stock: antes
+# de setiembre 2025 el cierre lo escribía como lo contado ±5-10 % (regla
+# #612), y esos meses no entran en la banda de lo habitual.
+DESDE_BANDA = "2025-09"
+
+
+def pct_consumo(neto_por_clave, consumo_por_clave, cerrados):
+    """El neto como % del consumo operativo de su mes, y la banda de lo
+    habitual: la mitad central de los meses (cuartiles) y, por fuera, las
+    cercas de Tukey (1,5 × rango intercuartil; J. W. Tukey, «Exploratory
+    Data Analysis», 1977). Para la banda cuentan sólo los meses CERRADOS
+    desde `DESDE_BANDA`. Devuelve `{"pct": {clave: % | None}, "q1", "q3",
+    "med", "ci", "cs"}`; sin cuatro meses para la banda, sin banda."""
+    pct = {}
+    for k, n in neto_por_clave.items():
+        c = consumo_por_clave.get(k)
+        pct[k] = (round(100.0 * n / c, 2)
+                  if c and c > 0 and n is not None and not pd.isna(n) else None)
+    base = sorted(v for k, v in pct.items()
+                  if v is not None and k in cerrados and k >= DESDE_BANDA)
+    out = {"pct": pct}
+    if len(base) >= 4:
+        q1, med, q3 = (float(pd.Series(base).quantile(q)) for q in (0.25, 0.5, 0.75))
+        iqr = q3 - q1
+        out.update(q1=round(q1, 2), q3=round(q3, 2), med=round(med, 2),
+                   ci=round(q1 - 1.5 * iqr, 2), cs=round(q3 + 1.5 * iqr, 2),
+                   n=len(base))
+    return out
+
+
+def datos_pieza(s, sf, gran, *, sistema=None, negativo=None, origen=None,
+                origen_estado="no", consumo=None, consumo_estado="no",
+                consumo_nota=""):
+    """Lo que recibe `evolucion_ajuste.js`. Pura (la prueba
+    `test_graficos.py`): los periodos con sus tres medidas, las familias en
+    el orden de la matriz, el % del sistema, el sistema en negativo y, si
+    ya se pidieron, los posibles orígenes y el % del consumo. Un periodo sin
+    conteo va con `None`: es un dato («no se contó»), no un cero."""
+    def _v(x):
+        return None if x is None or pd.isna(x) else round(float(x), 2)
+
     kx = con_kardex(s)
-    th = (f"padding:4px 10px;font-weight:600;color:{GRIS_TEXTO};"
-          f"box-shadow:inset 0 -1px 0 {GRIS_BORDE};position:sticky;top:0;"
-          f"background:{BLANCO};white-space:nowrap")
-    td = "padding:3px 10px;white-space:nowrap;font-variant-numeric:tabular-nums"
-
-    def _celda(v, color, peso=400):
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return f"<td style='{td};text-align:right;color:{GRIS_TEXTO_SUAVE}'>—</td>"
-        return (f"<td style='{td};text-align:right;color:{color};"
-                f"font-weight:{peso}'>{_monto(v)}</td>")
-
-    def _celda_kx(neto, v, extra=""):
-        if not kx:
-            return ""
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return (f"<td style='{td};{extra}text-align:right;"
-                    f"color:{GRIS_TEXTO_SUAVE}' title='Sin dato del kardex'>—</td>")
-        if (neto is None or (isinstance(neto, float) and math.isnan(neto))
-                or abs(v - neto) <= TOL_KARDEX):
-            return (f"<td style='{td};{extra}text-align:right;"
-                    f"color:{GRIS_TEXTO_SUAVE}' title='Igual al neto'>"
-                    f"{_monto(v)}</td>")
-        return (f"<td style='{td};{extra}text-align:right;"
-                f"color:{AJUSTE_ALERTA_TEXTO};font-weight:600' "
-                f"title='Difiere del neto en S/ {v - neto:,.0f}'>"
-                f"{_monto(v)}</td>")
-
-    filas = []
-    for _, r in s.iloc[::-1].iterrows():
-        sin_conteo = pd.isna(r["neto"])
-        en_foco = foco is not None and r["_clave"] == foco
-        fondo = f"background:{LAVANDA_SELECCION};" if en_foco else ""
-        peso = 600 if en_foco else 400
-        nota = (f" <span style='color:{GRIS_TEXTO_SUAVE};font-size:11px'>"
-                "sin conteo</span>" if sin_conteo else "")
-        filas.append(
-            f"<tr style='{fondo}border-bottom:1px solid {GRIS_BORDE}'>"
-            f"<td style='{td};color:{TEXTO_PRINCIPAL};font-weight:{peso}'>"
-            f"{r['eje']}{nota}</td>"
-            + _celda(r["sobrante"], AJUSTE_POS_TEXTO, peso)
-            + _celda(r["faltante"], AJUSTE_NEG_TEXTO, peso)
-            + _celda(r["neto"], TEXTO_PRINCIPAL, 600)
-            + _celda_kx(r["neto"], r["kardex"] if kx else None)
-            + _celda(r["contado"], GRIS_TEXTO, peso)
-            + "</tr>")
-
-    tot = {c: float(s[c].sum()) for c in ("sobrante", "faltante", "neto",
-                                          "contado")}
-    pie = (f"position:sticky;bottom:0;background:{BLANCO};"
-           f"box-shadow:inset 0 1px 0 {GRIS_TEXTO_SUAVE}")
-
-    def _celda_pie(k, c):
-        return (f"<td style='{td};{pie};text-align:right;font-weight:600;"
-                f"color:{c}'>{_monto(tot[k])}</td>")
-
-    # El total del kardex sólo se compara si TODOS los periodos con conteo
-    # tienen su dato: si no, sumaría menos conteos que el neto.
-    kx_pie = ""
-    if kx:
-        _incompleto = bool((s["neto"].notna() & s["kardex"].isna()).any())
-        kx_pie = _celda_kx(tot["neto"],
-                           None if _incompleto else float(s["kardex"].sum()),
-                           extra=f"{pie};font-weight:600;")
-    total = (f"<tr style='{pie}'>"
-             f"<td style='{td};{pie};color:{TEXTO_PRINCIPAL};font-weight:600'>"
-             "Total del rango</td>"
-             + _celda_pie("sobrante", AJUSTE_POS_TEXTO)
-             + _celda_pie("faltante", AJUSTE_NEG_TEXTO)
-             + _celda_pie("neto", TEXTO_PRINCIPAL)
-             + kx_pie
-             + _celda_pie("contado", GRIS_TEXTO)
-             + "</tr>")
-
-    columnas = [
-        ("Período", "left", "El mismo período de la serie de arriba"),
-        ("Sobrante", "right", "Suma de los ajustes positivos"),
-        ("Faltante", "right", "Suma de los ajustes negativos"),
-        ("Neto", "right", "Sobrante + faltante: lo que se ve en la línea"),
-        ("Valor contado", "right",
-         "Stock declarado × precio de lo que se contó. Contexto: en un "
-         "mes con varias sesiones cuenta el stock más de una vez")]
-    if kx:
-        columnas.insert(4, ("Kardex", "right", AYUDA_KARDEX))
-    cab = "".join(
-        f"<th style='{th};text-align:{al}' title='{ayuda}'>{txt}</th>"
-        for txt, al, ayuda in columnas)
-    techo = f"max-height:{alto}px;" if alto else ""
-    return (f"<div class='ajevo-tabla' style='{techo}overflow-y:auto;overscroll-behavior:contain'>"
-            "<table style='width:100%;border-collapse:collapse;font-size:12px'>"
-            f"<thead><tr>{cab}</tr></thead><tbody>{''.join(filas)}</tbody>"
-            f"<tfoot>{total}</tfoot></table></div>")
+    dif = difiere_kardex(s) if kx else pd.Series(False, index=s.index)
+    periodos = [{
+        "k": r["_clave"], "eje": r["eje"], "s": _v(r["sobrante"]),
+        "f": _v(r["faltante"]), "n": _v(r["neto"]), "contado": _v(r["contado"]),
+        "kx": _v(r["kardex"]) if kx else None, "dkx": bool(dif.loc[i]),
+    } for i, r in s.iterrows()]
+    claves = [p["k"] for p in periodos]
+    familias = []
+    if sf is not None and len(sf):
+        for g in orden_familias(sf):
+            x = sf[sf["grupo"] == g].set_index("_clave")
+            familias.append({
+                "id": g, "nombre": g.capitalize(),
+                "s": [_v(x["sobrante"].get(k)) for k in claves],
+                "f": [_v(x["faltante"].get(k)) for k in claves]})
+    sis = {}
+    for g, por in (sistema or {}).items():
+        sis[g] = [por.get(k) for k in claves]
+    return {
+        "gran": gran, "kardex": kx, "periodos": periodos, "familias": familias,
+        "sistema": sis,
+        "neg": [round(float((negativo or {}).get(k, 0.0)), 2) for k in claves],
+        "origen": ([(origen or {}).get(k) for k in claves]
+                   if origen_estado == "listo" else None),
+        "origen_estado": origen_estado,
+        "consumo": consumo, "consumo_estado": consumo_estado,
+        "consumo_nota": consumo_nota,
+    }
 
 
 # ── LA VISTA ─────────────────────────────────────────────────────────────
 
-def _titulo(texto, sub=""):
-    st.markdown(
-        f"<div style='font-size:14px;font-weight:600;color:{TEXTO_PRINCIPAL};"
-        f"line-height:1.3'>{texto}"
-        + (f"<span style='font-weight:400;color:{GRIS_TEXTO};font-size:12px'>"
-           f" · {sub}</span>" if sub else "")
-        + "</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def _leyenda_html(kardex=False):
-    """La leyenda de la serie y de los paneles, escrita en la fila del
-    título: dos cuadritos y una raya, con los MISMOS colores de las trazas.
-    Reemplaza a las dos leyendas de Plotly (una por figura), que se comían
-    ~60px de alto entre las dos (regla #505). Con `kardex`, una raya
-    punteada más, que explica en su `title` qué es (regla #612)."""
-    def _item(muestra, texto, ayuda=""):
-        _t = f" title='{ayuda}'" if ayuda else ""
-        return (f"<span{_t} style='display:inline-flex;align-items:center;"
-                f"gap:4px;margin-left:12px'>{muestra}"
-                f"<span style='font-size:11.5px;color:{GRIS_TEXTO};"
-                f"font-weight:400'>{texto}</span></span>")
-    _cuad = ("<span style='width:9px;height:9px;border-radius:2px;"
-             "background:{c};display:inline-block'></span>")
-    _raya = (f"<span style='width:14px;height:2px;background:{TEXTO_PRINCIPAL};"
-             "display:inline-block'></span>")
-    _puntos = (f"<span style='width:14px;border-top:2px dotted "
-               f"{AJUSTE_ALERTA_TEXTO};display:inline-block'></span>")
-    return (_item(_cuad.format(c=AJUSTE_POS), "Sobrante")
-            + _item(_cuad.format(c=AJUSTE_NEG), "Faltante")
-            + _item(_raya, "Neto")
-            + (_item(_puntos, "Kardex", AYUDA_KARDEX) if kardex else ""))
-
-
 def kpis_rango_html(s):
     """Los totales del rango —sobrante, faltante y neto— en UNA línea, para
-    ir debajo del título (regla #631). Hasta el 2026-10-02 el total del
-    rango no salía en ninguna parte de la tarjeta, salvo al pie de la tabla.
-
-    Va en la columna del título y no en una fila propia: esa fila la manda
-    el selector Corte | Mes, que mide lo que dos renglones de texto, así
-    que la línea no empuja la serie ni los mini-gráficos hacia abajo (la
-    tarjeta tiene que entrar en la laptop, regla #505)."""
+    ir debajo del título (regla #631). Va en la columna del título y no en
+    una fila propia: la tarjeta tiene que entrar en la laptop."""
     def _item(nombre, v, color):
         return (f"<span>{nombre} <b style='color:{color};font-weight:600'>"
                 f"{_fmt(v, signo=True) or '—'}</b></span>")
@@ -717,43 +506,108 @@ def kpis_rango_html(s):
             + "</div>")
 
 
-def _soltar_foco():
-    """Callback de la pastilla «jul 26 ✕»: suelta el periodo en foco.
-
-    Sube además el contador de la key de la serie: la seleccion de
-    `on_select` persiste en la key vieja, y sin el cambio el rerun volveria
-    a leer el clic y a poner el foco que se acaba de soltar (#399)."""
-    st.session_state[_K_FOCO] = None
-    st.session_state[_K_NCLIC] = st.session_state.get(_K_NCLIC, 0) + 1
-
-
+# UNA PIEZA PROPIA (regla #692), como la lista de «Análisis de diferencias»:
+# `evolucion_ajuste.js` + `.css`, un `st.components.v2` sin iframe. Dibuja
+# la serie, el panel del período, la matriz familia × mes, «¿Es mucho?» y
+# la tabla de resumen. Elegir un mes, prender un origen, abrir una familia
+# o cambiar de modo es del navegador: no cuesta una corrida. A Python le
+# llega sólo el trigger «pedir» —{que: "origen" | "consumo"}— cuando hace
+# falta un dato caro que todavía no se calculó.
+_AQUI = Path(__file__).parent
+_PIEZA = st.components.v2.component(
+    "evolucion_ajuste",
+    css=(_AQUI / "evolucion_ajuste.css").read_text(encoding="utf-8"),
+    js=(_AQUI / "evolucion_ajuste.js").read_text(encoding="utf-8"),
+)
+_K_PIEZA = "ajevo_pieza"
 _K_AREA = "ajuste_evo_filtro_area"
+# Lo que ya se pidió en esta sesión: los orígenes y el consumo se calculan
+# desde el primer pedido y quedan para las corridas siguientes.
+_K_QUIERE_ORIGEN = "ajuste_evo_quiere_origen"
+_K_QUIERE_CONSUMO = "ajuste_evo_quiere_consumo"
+# `(llave, [(sesión, suma)], faltan)`: los orígenes ya calculados para las
+# sesiones de la llave (sus claves, el sello del parquet y la versión).
+_K_ORIGEN_RES = "ajuste_evo_origen_res"
+
+
+def _al_pedir():
+    a = (st.session_state.get(_K_PIEZA) or {}).get("pedir") or {}
+    if a.get("que") == "origen":
+        st.session_state[_K_QUIERE_ORIGEN] = True
+    elif a.get("que") == "consumo":
+        st.session_state[_K_QUIERE_CONSUMO] = True
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _origen_de_sesion(clave, sello, version):
+    """Los posibles orígenes de UNA sesión, ya sumados (`origenes_de_lineas`).
+    `sello` y `version` son la clave: la de disco de `data` ya guarda la
+    cuenta pesada. Si no se pudo calcular, LANZA: no se cachea un vacío."""
+    r = data.diferencias_ajuste_sesion(clave)
+    if r is None:
+        raise RuntimeError(f"sin diferencias para {clave}")
+    return origenes_de_lineas(r["lineas"])
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _consumo_mensual(_ajuste, sellos, version):
+    """El consumo operativo de cada mes con cierres —inventario inicial +
+    compras − inventario final, por cubeta—, la MISMA cuenta del reporte
+    Costos (`costo_ventas.armar`, regla #676). `_ajuste` no entra en la
+    clave: la dicen los sellos. Si falta un parquet, LANZA."""
+    compras = data.cargar("compras.parquet")
+    salidas = data.cargar("salidas.parquet")
+    ventas = data.venta_por_grupo_dia()
+    if compras is None or salidas is None or ventas is None:
+        raise RuntimeError("no se pudo leer compras, salidas o ventas")
+    cv = costo_ventas.armar(_ajuste, compras, salidas, ventas)
+    fl = cv["filas"]
+    return {p["k"]: {c: fl["inv_inicial"][c][i] + fl["compras"][c][i]
+                     - fl["inv_final"][c][i] for c in costo_ventas.CUBETAS}
+            for i, p in enumerate(cv["periodos"])}
+
+
+def _calcular_origen(ses):
+    """Los posibles orígenes de cada sesión, con una barra de avance DEBAJO
+    de la pieza (que ya se dibujó con «calculando»): la primera vez de cada
+    sesión son ~30 s —la cuenta de «Análisis de diferencias»—, y después
+    salen de la caché de disco de `data`. Devuelve `[(sesión, suma)]` y
+    cuántas no se pudieron calcular."""
+    sello = data.sello_datos("ajusteinventario.parquet")
+    version = diferencias_ajuste.VERSION
+    por_sesion, faltan = [], 0
+    barra = st.progress(0.0, text="Buscando los posibles orígenes…")
+    try:
+        for i, s_ in enumerate(ses):
+            barra.progress(i / max(len(ses), 1),
+                           text=f"Buscando los posibles orígenes · {s_['nombre']} "
+                                f"({i + 1} de {len(ses)}). La primera vez son ~30 s "
+                                "por sesión; después queda guardado.")
+            try:
+                por_sesion.append((s_, _origen_de_sesion(s_["clave"], sello, version)))
+            except Exception:
+                faltan += 1
+    finally:
+        barra.empty()
+    return por_sesion, faltan
 
 
 def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
-                           col_ajuste_val, col_valorizado, col_kardex=None):
-    """UNA tarjeta: la serie y, debajo, quien la explica (las familias).
+                           col_ajuste_val, col_valorizado, col_kardex=None,
+                           d_full=None):
+    """UNA tarjeta: la serie y, debajo, quien la explica (regla #504).
 
-    Son una sola superficie a proposito (2026-09-23, a pedido, regla #504):
-    dependen de verdad —el grano, el área y el periodo en foco mandan en
-    las dos— y la dependencia tiene que VERSE. Por eso los controles van en
-    la cabecera, arriba de las dos, y el periodo en foco se escribe en una
-    pastilla «jul 26 ✕»: el filtro activo queda dicho, no hay que deducirlo
-    de las barras apagadas.
-
-    ENTRA EN UNA LAPTOP (regla #505): la leyenda va en la fila del título,
-    la serie mide `alturas.EVO_SERIE` y los paneles son UNA fila que se
-    desliza de costado. Medía 840px; ahora cabe en el `--alto-util` de
-    1366x768.
+    Desde el 2026-10-21 (regla #692) es el boceto aprobado: la serie en rojo
+    y verde con «Explicar con» para sumar posibles orígenes de a uno, el
+    panel del período al costado, y abajo la matriz familia × mes (en soles
+    o como % del sistema, con filas que se despliegan), «¿Es mucho?» (el
+    neto como % del consumo, con la banda de lo habitual) y la tabla de
+    resumen. Entra en una pantalla de 1323×619.
 
     `d` llega ENTERO, con la Familia del compartimento de arriba de la pila:
-    los meses los elige la propia vista, con el panel de Compras en modo
-    «sólo meses» (regla #632), y el Área también.
-
-    `col_kardex` es el ajuste valorizado que registró el kardex por cada
-    línea (`kardex.COL_VALOR_KX`); sin él —falta `ajustekardex.parquet`— la
-    vista es la de siempre. Con él, la línea punteada, la columna de la
-    tabla y, en el rótulo de abajo, en cuántos periodos difiere (#612).
+    los meses los elige la propia vista (regla #632), y el Área también.
+    `d_full` es el parquet sin filtros, para el consumo (la cuenta de
+    Costos lo necesita entero). `col_kardex`, el ajuste del kardex (#612).
     """
     if not col_fecha or col_fecha not in d.columns:
         st.info("Sin columna de fecha: no se puede armar la evolución.")
@@ -766,14 +620,10 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
     # que una laptop, lo que sobra lo scrollea la PÁGINA y no la tarjeta.
     with st.container(border=True, key="ajuste_graf_card_izq_evo"):
         # Los controles se dibujan ANTES de calcular nada: en Streamlit el
-        # orden de ejecucion es el orden en que se leen los valores. Las
-        # columnas se crean aca y la pastilla se llena mas abajo, cuando ya
-        # se sabe si hay foco.
-        # El Área va pegada al grano, a la derecha: los dos son filtros de
-        # la tarjeta. Al medio se leía suelta (regla #631).
-        c_tit, c_foco, c_fecha, c_area, c_gran = st.columns(
-            # columnas-internas: titulo | foco | meses | area | grano
-            [3.0, 0.7, 1.45, 0.95, 1.1],
+        # orden de ejecucion es el orden en que se leen los valores.
+        c_tit, c_fecha, c_area, c_gran = st.columns(
+            # columnas-internas: titulo | meses | area | grano
+            [3.7, 1.45, 0.95, 1.1],
             vertical_alignment="center")
         with c_gran:
             # Una sesión vieja puede traer «Semana» guardada (regla #585):
@@ -783,130 +633,142 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
             gran = st.segmented_control(
                 "Agrupar por", GRANOS, default="Mes", key=_K_GRAN,
                 label_visibility="collapsed",
-                help="Agrupa la serie y los mini-gráficos por familia. "
-                     "«Corte» es cada sesión de inventario.",
+                help="Agrupa la serie y la matriz por mes o por sesión de "
+                     "inventario («Corte»).",
             ) or "Mes"
-        # LOS MESES DE ESTA VISTA (regla #632): su botón, y el recorte antes
-        # que el Área, que ofrece las áreas que movieron algo en el rango.
         ctx_m = ctx_meses("evo", d[col_fecha])
         with c_fecha:
             selector_meses("ajf_evo", ctx_m)
         d = recortar_meses(d, col_fecha, rango_meses(ctx_m))
         d = filtro_area_en_titulo(c_area, d, col_area, col_ajuste_val,
                                   _K_AREA, "ajevo_ctrl_area")
-        # El asistente IA tiene que ver lo que ESTA tarjeta muestra (CLAUDE.md
-        # § El asistente IA): el Área ya no está en el compartimento.
         publicar_contexto_ia("Ajuste de Inventario", d, {
             "Familia": st.session_state.get("ajuste_graf_filtro_familia"),
             "Área": st.session_state.get(_K_AREA)})
 
-        dp, orden = periodos_ajuste(d, col_fecha, gran,
-                                    operativo=mes_operativo_activo())
+        operativo = mes_operativo_activo()
+        dp, orden = periodos_ajuste(d, col_fecha, gran, operativo=operativo)
         if orden.empty:
             with c_tit:
-                _titulo("Sobrante, faltante y neto")
+                st.markdown("<div style='font-size:14px;font-weight:600'>"
+                            "Sobrante, faltante y neto</div>", unsafe_allow_html=True)
             st.info("Sin datos en el rango y el área seleccionados.")
             return
-
-        # El clic se resuelve ANTES de dibujar (regla #399).
-        eje_a_clave = dict(zip(orden["eje"], orden["_clave"]))
-        foco = st.session_state.get(_K_FOCO)
-        k_fig = f"ajuste_evo_serie_{st.session_state.get(_K_NCLIC, 0)}"
-        _ev = st.session_state.get(k_fig) or {}
-        _pts = (_ev.get("selection") or {}).get("points") or []
-        if _pts:
-            _cl = eje_a_clave.get(_pts[0].get("x"))
-            foco = None if _cl is None or _cl == foco else _cl
-            st.session_state[_K_FOCO] = foco
-            st.session_state[_K_NCLIC] = st.session_state.get(_K_NCLIC, 0) + 1
-            k_fig = f"ajuste_evo_serie_{st.session_state[_K_NCLIC]}"
-        if foco not in set(orden["_clave"]):
-            # Otro grano u otro rango: el periodo en foco ya no existe.
-            foco = None
-            st.session_state[_K_FOCO] = None
 
         s = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
                          col_kardex=col_kardex)
         with c_tit:
-            # Título y totales en UN `st.markdown`: dos se cobrarían el gap
-            # de 16px de Streamlit entre ellos.
             st.markdown(
-                f"<div style='font-size:14px;font-weight:600;"
-                f"color:{TEXTO_PRINCIPAL};line-height:1.3;white-space:nowrap' "
-                f"title='Clic en una barra para resaltar ese período'>"
-                f"Sobrante, faltante y neto{_leyenda_html(con_kardex(s))}</div>"
-                + kpis_rango_html(s),
-                unsafe_allow_html=True)
-        if foco is not None:
-            with c_foco:
-                st.button(
-                    orden.loc[orden["_clave"] == foco, "eje"].iloc[0],
-                    icon=":material/close:", key="ajuste_evo_soltar",
-                    on_click=_soltar_foco,
-                    help="Período resaltado en la serie y en las familias. "
-                         "Clic para soltarlo.",
-                )
+                f"<div style='font-size:14px;font-weight:600;color:{TEXTO_PRINCIPAL};"
+                "line-height:1.3;white-space:nowrap'>Sobrante, faltante y neto</div>"
+                + kpis_rango_html(s), unsafe_allow_html=True)
 
-        st.plotly_chart(
-            fig_serie(s, foco, alto=alturas.EVO_SERIE),
-            use_container_width=True, key=k_fig,
-            on_select="rerun", selection_mode="points",
-            config={"displayModeBar": False},
-        )
+        hay_fam = bool(col_familia and col_familia in dp.columns)
+        sf = (serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
+                           col_grupo=col_familia) if hay_fam else None)
+        # Con un área elegida, los orígenes se filtran por las áreas que
+        # quedaron en `dp`; sin ninguna, todas.
+        areas = (sorted(dp[col_area].dropna().astype(str).str.strip().unique())
+                 if st.session_state.get(_K_AREA) and col_area in dp.columns
+                 else None)
+        familias = (sorted(dp[col_familia].dropna().astype(str).unique())
+                    if hay_fam else None)
 
-        # ── Debajo, en la MISMA tarjeta: quien explica cada periodo ──────
-        # Dos lecturas que se alternan (regla #585): los mini-gráficos por
-        # familia, o la tabla que resume la serie de arriba. Con una sola
-        # familia los paneles no dicen nada que la serie no diga, así que
-        # queda la tabla sola, sin selector.
-        hay_familias = bool(col_familia and col_familia in dp.columns
-                            and dp[col_familia].nunique() > 1)
-        nota_kx = nota_kardex(s, gran)
-        with st.container(key="ajevo_divisor_fila"):
-            c_txt, c_abajo = st.columns(
-                [4, 1.2],  # columnas-internas: rótulo | Familias/Tabla
-                vertical_alignment="center")
-            abajo = "Tabla"
-            if hay_familias:
-                with c_abajo:
-                    abajo = st.segmented_control(
-                        "Abajo", ABAJO, default="Familias", key=_K_ABAJO,
-                        label_visibility="collapsed",
-                    ) or "Familias"
+        # LOS POSIBLES ORÍGENES, sólo si alguien prendió uno. El cálculo de
+        # todas las sesiones del rango se guarda en la sesión del usuario:
+        # si ya está, se usa; si no, la pieza se dibuja primero con
+        # «calculando», la barra de avance va DEBAJO, y al terminar una
+        # corrida más la redibuja con los datos. Con la barra arriba, la
+        # vista entera desaparecía durante el cálculo (medido: ~30 s por
+        # sesión la primera vez, 22 sesiones en 12 meses).
+        origen, origen_estado, pendiente = None, "no", None
+        if st.session_state.get(_K_QUIERE_ORIGEN):
+            fechas = pd.to_datetime(dp[col_fecha], errors="coerce")
+            ses = sesiones_inventario(fechas)
+            llave = (tuple(s_["clave"] for s_ in ses),
+                     data.sello_datos("ajusteinventario.parquet"),
+                     diferencias_ajuste.VERSION)
+            guardado = st.session_state.get(_K_ORIGEN_RES)
+            if guardado and guardado[0] == llave:
+                origen = origenes_por_periodo(
+                    guardado[1], dict(zip(fechas.dt.date, dp["_clave"])),
+                    familias, areas)
+                origen_estado = "listo"
+                if guardado[2]:
+                    st.caption(f"{guardado[2]} sesión(es) sin «Análisis de "
+                               "diferencias»: su parte queda «sin pista».")
+            else:
+                origen_estado, pendiente = "calculando", (ses, llave)
 
-        if abajo == "Familias":
-            sf = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
-                              col_grupo=col_familia, col_kardex=col_kardex)
-            _n = sf["grupo"].nunique()
-            _desliza = " · deslizá para ver las demás →" if _n > 3 else ""
-            with c_txt:
-                st.markdown(
-                    f'<div class="ajevo-divisor">Por familia · cada panel con '
-                    f'su propia escala{_desliza}{nota_kx}</div>',
-                    unsafe_allow_html=True)
-            # El ancho de la fila lo fuerza el CSS sobre el CONTENEDOR:
-            # `st.plotly_chart` pisa `fig.layout.width` con el de su
-            # contenedor, y agrandando el contenedor el ResizeObserver de
-            # Streamlit redimensiona la figura (mismo camino que
-            # el `_forzar_ancho` de la vieja Distribución, regla #494). El `overflow-x`
-            # del envoltorio deja deslizar lo que sobra. Sin guard de «una
-            # sola vez» (regla #59).
-            st.markdown(
-                "<style>.st-key-ajevo_multiplos [data-testid='stPlotlyChart'],"
-                ".st-key-ajevo_multiplos [data-testid='stFullScreenFrame']"
-                f"{{width:max(100%, {_n * PX_PANEL}px) !important;}}</style>",
-                unsafe_allow_html=True)
-            with st.container(key="ajevo_multiplos"):
-                st.plotly_chart(fig_familias(sf, foco),
-                                use_container_width=True,
-                                key="ajuste_evo_familias",
-                                config={"displayModeBar": False})
-        else:
-            _por = "corte" if gran == "Corte" else "mes"
-            with c_txt:
-                st.markdown(
-                    f'<div class="ajevo-divisor">Resumen por {_por} · lo mismo '
-                    'que la serie de arriba, del más nuevo al más viejo'
-                    f'{nota_kx}</div>', unsafe_allow_html=True)
-            st.markdown(tabla_resumen_html(s, foco, alto=alto_multiplos()),
-                        unsafe_allow_html=True)
+        consumo, consumo_estado, consumo_nota = None, "no", ""
+        if gran != "Mes":
+            consumo_estado, consumo_nota = "no_aplica", (
+                "El consumo es mensual: elegí «Mes» arriba para compararlo.")
+        elif areas:
+            consumo_estado, consumo_nota = "no_aplica", (
+                "El consumo no se lleva por área: con un área elegida no hay "
+                "con qué compararlo.")
+        elif st.session_state.get(_K_QUIERE_CONSUMO):
+            try:
+                with st.spinner("Calculando el consumo de cada mes…"):
+                    base = d_full if d_full is not None else d
+                    cons = _consumo_mensual(
+                        base, (data.sello_datos("ajusteinventario.parquet"),
+                               *(data.sello_datos(a) for a in (
+                                   "compras.parquet", "salidas.parquet",
+                                   "ventas.parquet", "notascreditocompras.parquet"))),
+                        (costo_ventas.VERSION, definicion_venta.VERSION))
+                consumo = consumo_vs_neto(sf, s, cons, familias)
+                consumo_estado = "listo"
+            except Exception as e:
+                consumo_estado, consumo_nota = "error", (
+                    f"No se pudo calcular el consumo ({e}).")
+
+        _PIEZA(key=_K_PIEZA, data={
+            **datos_pieza(
+                s, sf, gran,
+                sistema=(sistema_por_periodo(dp, col_fecha, col_ajuste_val,
+                                             col_familia if hay_fam else None, gran)
+                         if tiene_sistema(dp) else None),
+                negativo=negativo_por_periodo(dp, col_ajuste_val),
+                origen=origen, origen_estado=origen_estado,
+                consumo=consumo, consumo_estado=consumo_estado,
+                consumo_nota=consumo_nota),
+            "nota_kx": nota_kardex(s, gran).strip(" ·"),
+            "ayuda_kx": AYUDA_KARDEX,
+            "alto": {"graf": alturas.EVO_GRAFICO, "abajo": alturas.EVO_ABAJO},
+            "col": {"pos": AJUSTE_POS, "neg": AJUSTE_NEG,
+                    "post": AJUSTE_POS_TEXTO, "negt": AJUSTE_NEG_TEXTO,
+                    "alerta": AJUSTE_ALERTA_TEXTO, "ven": AJUSTE_ORIGEN_VEN,
+                    "pro": AJUSTE_ORIGEN_PRO, "reg": AJUSTE_ORIGEN_REG,
+                    "gneg": AJUSTE_ORIGEN_NEG},
+        }, on_pedir_change=_al_pedir, width="stretch")
+        if pendiente:
+            por_sesion, faltan = _calcular_origen(pendiente[0])
+            st.session_state[_K_ORIGEN_RES] = (pendiente[1], por_sesion, faltan)
+            st.rerun()
+
+
+def consumo_vs_neto(sf, s, cons, familias):
+    """El neto como % del consumo de cada mes, con la banda (`pct_consumo`).
+
+    El consumo viene por CUBETA de Costos (Alimentos, Bebidas, Vinos,
+    Envases); el neto se toma de las familias que caen en las cubetas
+    elegidas, y el consumo, de esas mismas cubetas: Costos producción no
+    tiene consumo propio y no entra. Un mes sin consumo calculado (el que
+    está en curso, uno sin cierre) queda sin %."""
+    if sf is not None and len(sf):
+        x = sf.assign(_cub=sf["grupo"].map(costo_ventas.FAMILIAS))
+        x = x[x["_cub"].notna()]
+        cubetas = sorted(x["_cub"].unique())
+        neto = x.groupby("_clave", as_index=False)["neto"].sum(min_count=1)
+        neto_k = dict(zip(neto["_clave"], neto["neto"]))
+    else:
+        cubetas = list(costo_ventas.CUBETAS)
+        neto_k = dict(zip(s["_clave"], s["neto"]))
+    cons_k = {k: sum(v.get(c, 0.0) for c in cubetas) for k, v in cons.items()}
+    claves = list(s["_clave"])
+    r = pct_consumo({k: neto_k.get(k) for k in claves}, cons_k, set(cons_k))
+    r["pct"] = [r["pct"].get(k) for k in claves]
+    r["banda_desde"] = DESDE_BANDA
+    return r

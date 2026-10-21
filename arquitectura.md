@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-691 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+692 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (219)
 
@@ -383,7 +383,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
 
-**Plotly y figuras** (119)
+**Plotly y figuras** (120)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -504,6 +504,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#660** — Ventas › Comparativo vs Año Pasado: el total cuenta sólo lo que tiene año pasado, un mes NO…
 - **#677** — De los tres modos de «Distribución de diferencias» sólo el Pareto se podía analizar: la vista…
 - **#685** — A 9px un «6» se lee «5»: los paneles por familia de Ajuste › Evolución parecían rotular el…
+- **#692** — Ajuste › Evolución es una pieza propia: la serie en rojo y verde con «Explicar con», el panel…
 
 **AgGrid y tablas** (95)
 
@@ -1026,7 +1027,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (201)
+**Decisiones de diseño y UX** (202)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1229,6 +1230,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#687** — Una lista con scroll propio de una pieza nuestra lleva overscroll-behavior: contain; el…
 - **#689** — Un boceto aprobado se implementa con SU forma: si es una página con tarjetas, chips y ficha,…
 - **#691** — «Consistencia de datos», ajustada a pedido: el Almacén Central tiene TODOS los productos, dos…
+- **#692** — Ajuste › Evolución es una pieza propia: la serie en rojo y verde con «Explicar con», el panel…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53506,6 +53508,66 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-21.)
 
+692. **Ajuste › Evolución es una pieza propia: la serie en rojo y verde con
+     «Explicar con», el panel del período y, abajo, la matriz familia × mes
+     con el «% del sistema».** El boceto aprobado el 2026-10-21
+     (https://claude.ai/artifact/TNvQPfrb4Ty7RQVHvUtPjF) reemplazó a las dos
+     figuras de Plotly y a la tabla HTML: `graficos/ajuste/evolucion_ajuste.js`
+     + `.css` (un `st.components.v2` sin iframe), con los números de
+     `_evolucion.py::datos_pieza`. Elegir un mes, prender un origen, abrir
+     una familia o cambiar de modo es del navegador: no cuesta una corrida.
+     Lo que muerde:
+
+     · **Abre en rojo y verde, y los orígenes se suman de a uno** —a pedido,
+       «que los colores no se muestren todos a la vez»—. Se marca «en
+       prueba»: son POSIBLES orígenes, la primera pista de cada línea en
+       «Análisis de diferencias» (`ORIGEN_DE_PISTA`), y lo que queda en rojo
+       o verde es lo que nada explica, por diferencia, así las partes suman
+       siempre la barra.
+     · **El sistema en negativo NO es una pista: es un hecho de la línea**
+       (stock del sistema < 0 y sobrante), y sale del propio parquet de
+       ajuste (`negativo_por_periodo`), sin esperar a ninguna cuenta. Así
+       medido es el 74 % del sobrante de nov 25 – oct 26 (S/ 349k de 470k);
+       por la primera pista daba 58 %, porque otra pista le ganaba el lugar.
+     · **Los otros tres orígenes son CAROS**: ~30 s por sesión la primera
+       vez y 22 sesiones en 12 meses, unos 11 minutos (medido en la laptop).
+       Se calculan sólo cuando alguien prende uno (trigger «pedir»), se
+       guardan en la sesión del usuario (`_K_ORIGEN_RES`) y, por sesión, en
+       la caché de disco de `data`. La pieza se dibuja ANTES del cálculo,
+       con la barra de avance debajo, y una corrida más la redibuja: con la
+       barra arriba, la vista entera desaparecía durante el cálculo.
+     · **El «% del sistema» que la docstring descartaba en la #501 entró**,
+       con el ejemplo del usuario («1 kg de harina a 2 soles, se ajustó
+       −0,5 kg: perdí el 50 %») y dos cambios que lo hacen creíble
+       (`sistema_por_periodo`): la base es sólo el stock POSITIVO del
+       sistema, y lo que estaba en cero o en negativo va aparte, en soles
+       (con todo el stock, agosto 2026 daba −147 %). Se toma de UNA foto: el
+       cierre del mes en «Mes», cada sesión en «Corte». Lo contado en cero se
+       separa del resto del faltante: «se acabó sin registrarse» o «no se
+       contó» son problemas distintos (agosto 2026: S/ 42k de 63k).
+     · **«¿Es mucho?» es el neto como % del CONSUMO del mes**, la misma
+       cuenta de Costos (`costo_ventas.armar`), sólo por mes y sin área. La
+       banda es la mitad central de los meses cerrados y, por fuera, las
+       cercas de Tukey (1,5 × rango intercuartil; J. W. Tukey, 1977); antes
+       de setiembre 2025 los meses no entran en la banda, porque el ajuste
+       del cierre no era el del kardex (#612). Se calcula al abrir esa vista.
+     · **La matriz abre plegada**: el color dice el neto, medido contra SU
+       fila, y la cifra sale sólo donde se sale de lo normal (≥ 60 % del
+       mayor neto de la fila). Un clic en la familia despliega Sobrante,
+       Faltante y Se movió —o, en «% del sistema», Faltante, de eso en cero,
+       Sobrante y En negativo—, con cifra y barrita por celda.
+     · **Entra en una pantalla de 1323×619** (tarjeta de 561 px, medida con
+       Playwright): los totales en la fila del título, el trazo en
+       `alturas.EVO_GRAFICO` y el hueco de abajo en `EVO_ABAJO`, que alterna
+       matriz, «¿Es mucho?» y tabla sin mover la tarjeta. Con muchos cortes,
+       el eje rotula uno de cada tantos, como el `_marcas_eje` que se fue.
+     · **Se fueron**: `fig_serie`, `fig_familias`, `tabla_resumen_html`, la
+       pastilla «jul 26 ✕» (la reemplaza «Ver todos» del panel) y la marca
+       del período «más movido» (lo dice la fila «Se movió» de la matriz).
+
+     Lo vigilan `test_graficos.py::_pruebas_evolucion_ajuste` (las cuentas
+     puras) y la prueba del kardex. (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53518,7 +53580,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#691**; la próxima toma el número siguiente.
+> última regla es la **#692**; la próxima toma el número siguiente.
 
 >
 

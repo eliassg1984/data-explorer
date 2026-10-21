@@ -1,0 +1,233 @@
+/* Ajuste › Evolución (regla #692). Vive en el shadow root del componente
+   (graficos/ajuste/_evolucion.py::_PIEZA): ninguna regla de acá sale de la
+   pieza, y ninguna de estilos/ entra. Los colores neutros son las variables
+   de estilos/_00_base.py, que SÍ cruzan el shadow root; los de Ajuste
+   (sobrante, faltante, alerta) los manda Python como --ev-*, porque viven
+   en tema.py. Ningún selector :has (regla #469). */
+
+.ev {
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.ev button { font-family: inherit; color: inherit; }
+.ev button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* La serie a la izquierda y el panel a la derecha, a todo el alto; abajo,
+   el hueco que alterna, sólo bajo la serie. */
+.cuerpo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  grid-template-areas: "izq panel" "abajo panel";
+  gap: 8px 14px;
+}
+.izq { grid-area: izq; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.panel { grid-area: panel; }
+.abajo { grid-area: abajo; min-width: 0; }
+@media (max-width: 900px) {
+  .cuerpo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "izq" "panel" "abajo"; }
+}
+
+/* ── «Explicar con» y la leyenda ── */
+.explicar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.chips .tit { font-weight: 600; color: var(--text-secondary); }
+.prueba {
+  font-size: 10.5px; font-weight: 600; color: var(--ev-alerta);
+  border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; opacity: 0.85;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 26px;
+  border: 1px solid var(--border); background: var(--bg-card); border-radius: 999px;
+  padding: 1px 9px; font-size: 11.5px; cursor: pointer; color: var(--text-secondary);
+}
+.chip i { width: 9px; height: 9px; border-radius: 3px; border: 1px solid var(--text-muted); }
+.chip.on { border-color: var(--focus-lavender); background: var(--accent-tint); color: var(--text-primary); }
+.chip.on i { border-color: transparent; }
+.chip .m { color: var(--text-secondary); }
+.chip:hover { border-color: var(--focus-lavender); }
+.quitar, .inv {
+  border: 0; background: none; padding: 2px 4px; font-size: 11.5px; cursor: pointer;
+}
+.quitar { color: var(--text-secondary); text-decoration: underline; }
+.inv { color: var(--accent-deep); font-weight: 600; }
+.carga { font-size: 11px; color: var(--text-secondary); }
+.leyenda { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 11px; color: var(--text-secondary); }
+.leyenda span { display: inline-flex; align-items: center; gap: 4px; }
+.leyenda i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.leyenda i.raya { width: 14px; height: 2px; border-radius: 0; background: var(--text-primary); }
+.leyenda i.puntos { width: 14px; height: 0; border-radius: 0; border-top: 2px dotted var(--ev-alerta); }
+
+/* ── la serie ── */
+.serie { position: relative; }
+.serie .cero { position: absolute; left: 0; right: 0; height: 1px; background: var(--text-muted); }
+.cols { position: absolute; left: 0; right: 0; top: 0; display: flex; }
+.col {
+  flex: 1 1 0; min-width: 0; position: relative; border: 0; padding: 0; margin: 0;
+  background: transparent; border-radius: 8px; cursor: pointer; height: 100%;
+}
+.col:hover { background: var(--line-soft); }
+.col.foco { background: var(--accent-tint); }
+.col.apag .sup, .col.apag .inf, .col.apag .pto { opacity: 0.4; }
+.col.apag .rot { opacity: 0.5; }
+.sup, .inf { position: absolute; left: 22%; right: 22%; display: flex; flex-direction: column; }
+.sup { justify-content: flex-end; }
+.sup i, .inf i { display: block; }
+.sup i { border-top: 1px solid var(--bg-card); }
+.sup i:first-child { border-radius: 4px 4px 0 0; }
+.inf i { border-bottom: 1px solid var(--bg-card); }
+.inf i:last-child { border-radius: 0 0 4px 4px; }
+.pto {
+  position: absolute; left: 50%; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%;
+  background: var(--text-primary); box-shadow: 0 0 0 2px var(--bg-card); z-index: 2;
+}
+.serie b.kx {
+  position: absolute; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%;
+  background: var(--ev-alerta); z-index: 1;
+}
+.rot {
+  position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; z-index: 3;
+  font-size: 10px; font-weight: 600; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 4px; padding: 0 4px; pointer-events: none;
+}
+.rot.neg { color: var(--ev-negt); }
+.rot.pos { color: var(--ev-post); }
+svg.linea { position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; overflow: visible; z-index: 1; }
+svg.linea polyline { fill: none; stroke: var(--text-primary); stroke-width: 1.3; vector-effect: non-scaling-stroke; }
+svg.linea polyline.kx { stroke: var(--ev-alerta); stroke-dasharray: 2 3; }
+.ejes { position: absolute; left: 0; right: 0; bottom: 0; height: 16px; display: flex; }
+/* Sin `overflow: hidden`: con muchos cortes sólo se rotula uno de cada
+   tantos, y el rótulo puede ocupar el hueco de las columnas vecinas. */
+.ejes span { flex: 1 1 0; min-width: 0; text-align: center; font-size: 11px; color: var(--text-secondary); white-space: nowrap; display: flex; justify-content: center; }
+.ejes span:first-child { justify-content: flex-start; }
+.ejes span:last-child { justify-content: flex-end; }
+.ejes.apretado span { font-size: 9.5px; }
+.ejes span.foco { color: var(--text-primary); font-weight: 700; }
+
+/* ── el panel del período ── */
+.panel {
+  border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--bg-primary);
+  display: flex; flex-direction: column; gap: 6px; min-width: 0; align-self: start;
+}
+.panel .cab { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.panel h3 { margin: 0; font-size: 14px; font-weight: 700; }
+.soltar {
+  border: 1px solid var(--border); background: var(--bg-card); border-radius: 999px;
+  padding: 1px 9px; font-size: 11px; color: var(--text-secondary); cursor: pointer;
+}
+.panel .neto { font-size: 18px; font-weight: 700; }
+.panel .neto.neg, .panel .neg { color: var(--ev-negt); }
+.panel .neto.pos, .panel .pos { color: var(--ev-post); }
+.panel .consumo { font-size: 11.5px; color: var(--text-secondary); }
+.panel .frase { font-size: 11.5px; color: var(--text-secondary); }
+.panel .g { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px; align-items: center; font-size: 11.5px; }
+.panel .g .t { font-size: 10.5px; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.02em; }
+.panel .g .sep { margin-top: 4px; }
+.panel .g .v { text-align: right; }
+.panel .g .o { display: inline-flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel .g .o i { flex: 0 0 8px; height: 8px; border-radius: 2px; }
+.panel .nota { font-size: 11px; color: var(--text-muted); }
+.sis { border-top: 1px solid var(--line-soft); padding-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+.sis .cab span { font-size: 10.5px; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.02em; }
+.sis .cab b { font-size: 13px; }
+.sis .base { font-size: 11px; color: var(--text-secondary); }
+.sis .sub { padding-left: 10px; color: var(--text-secondary); }
+.sis .g .v:not(.neg):not(.pos) { color: var(--text-secondary); }
+
+/* ── el hueco de abajo ── */
+.abajo { border-top: 1px solid var(--border); padding-top: 6px; }
+.abajo .cab { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 4px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--bg-card); padding: 3px 11px; font-size: 11.5px; cursor: pointer; color: var(--text-secondary); }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.on { background: var(--accent-tint); color: var(--accent-deep); }
+.seg.mini button { padding: 2px 8px; font-size: 11px; }
+.ayuda { font-size: 11px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.ayuda i { display: inline-block; width: 12px; height: 9px; }
+.ayuda i.bh { background: var(--accent-light); }
+.ayuda i.bf { background: var(--accent-tint); border: 1px solid var(--accent-light); }
+.ayuda i.med { height: 0; border-top: 1px dashed var(--accent-deep); }
+.hueco { overflow: hidden; }
+.aviso { padding: 24px 8px; color: var(--text-secondary); font-size: 12px; text-align: center; }
+
+/* La matriz desliza por dentro (con una familia abierta, o con muchos
+   cortes de costado). Al llegar al final, la rueda no pasa a la página
+   (regla #687). */
+.mz-marco { height: 100%; overflow: auto; overscroll-behavior: contain; }
+.mz {
+  display: grid; grid-template-columns: 150px repeat(var(--mz-n), minmax(52px, 1fr)) 76px;
+  gap: 2px; align-items: center; font-size: 11px;
+}
+/* La cabecera se parte en dos renglones si hace falta: «16-18 ago 26» no
+   entra en los 54 px de una columna de corte. */
+.mz .h { text-align: center; color: var(--text-secondary); line-height: 1.15; position: sticky; top: 0; background: var(--bg-card); z-index: 1; padding-bottom: 1px; align-self: end; }
+.mz .h.r { text-align: right; padding-right: 4px; }
+.mz .h.foco { color: var(--text-primary); font-weight: 700; }
+.fam {
+  display: flex; align-items: center; gap: 5px; height: 25px; border: 0; background: transparent;
+  border-radius: 5px; padding: 0 4px; text-align: left; font-size: 11.5px; cursor: pointer; white-space: nowrap; overflow: hidden;
+}
+.fam:hover { background: var(--line-soft); }
+.fam.abierta { background: var(--accent-tint); }
+.fam.total { font-weight: 700; }
+.fam .fl { flex: 0 0 10px; color: var(--text-secondary); font-size: 10px; }
+.fam .nm { overflow: hidden; text-overflow: ellipsis; }
+.mz .c {
+  height: 25px; display: flex; align-items: center; justify-content: center; border-radius: 5px;
+  font-size: 10.5px; font-weight: 600;
+}
+.mz .c.tot { background: var(--accent-light); justify-content: flex-end; padding-right: 6px; }
+.mz .c.total b { font-weight: 700; }
+.mz .foco { box-shadow: inset 0 0 0 1.5px var(--focus-lavender); }
+.mz b.neg, .mz span.neg { color: var(--ev-negt); }
+.mz b.pos, .mz span.pos { color: var(--ev-post); }
+.mz span.cero { color: var(--ev-negt); opacity: 0.8; }
+.mz span.gris { color: var(--text-secondary); }
+.sn { display: flex; align-items: center; height: 23px; padding-left: 19px; font-size: 11px; }
+.sc {
+  height: 23px; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  padding: 0 5px; border-radius: 4px; background: var(--bg-card);
+}
+.sc span { font-size: 10.5px; line-height: 1; text-align: right; }
+.sc i { display: block; height: 4px; border-radius: 2px; }
+.sc.tot { background: var(--bg-primary); }
+
+/* «¿Es mucho?» */
+.mucho { position: relative; }
+.mucho .bf, .mucho .bh, .mucho .med, .mucho .cero { position: absolute; left: 0; right: 0; }
+.mucho .bf { background: var(--accent-tint); }
+.mucho .bh { background: var(--accent-light); }
+.mucho .med { border-top: 1px dashed var(--accent-deep); }
+.mucho .cero { height: 1px; background: var(--text-muted); }
+.mucho .c0 { position: absolute; left: 0; font-size: 10px; color: var(--text-secondary); background: var(--bg-card); padding: 0 3px; z-index: 2; }
+.mucho svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mucho svg polyline { fill: none; stroke: var(--text-secondary); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.mcols { position: absolute; inset: 0; display: flex; }
+.mc { flex: 1 1 0; min-width: 0; position: relative; }
+.mc.apag { opacity: 0.45; }
+.mc .pto { background: var(--text-secondary); }
+.mc .pto.fuera { background: var(--ev-alerta); }
+.mc .pto.antes { background: var(--bg-card); box-shadow: 0 0 0 1.5px var(--text-muted); }
+.mc .rot { border: 0; background: transparent; color: var(--text-secondary); font-weight: 500; font-size: 10.5px; }
+.mc .rot.fuera { color: var(--ev-alerta); font-weight: 700; }
+.mc .vacio { position: absolute; left: 0; right: 0; text-align: center; font-size: 10.5px; color: var(--text-muted); }
+.mc .eje { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; }
+.mc.foco .eje { color: var(--text-primary); font-weight: 700; }
+
+/* La tabla de resumen: cabecera y total fijos, desliza por dentro. */
+.tabla { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+.tabla table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tabla th {
+  position: sticky; top: 0; background: var(--bg-card); font-weight: 600; color: var(--text-secondary);
+  text-align: left; padding: 4px 10px; box-shadow: inset 0 -1px 0 var(--border); white-space: nowrap;
+}
+.tabla td { padding: 3px 10px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.tabla .n { text-align: right; }
+.tabla .pos { color: var(--ev-post); }
+.tabla .neg { color: var(--ev-negt); }
+.tabla .neto { font-weight: 600; }
+.tabla .suave { color: var(--text-muted); }
+.tabla .alerta { color: var(--ev-alerta); font-weight: 600; }
+.tabla tr.foco td { background: var(--accent-tint); font-weight: 600; }
+.tabla tfoot td { position: sticky; bottom: 0; background: var(--bg-card); box-shadow: inset 0 1px 0 var(--text-muted); font-weight: 600; }

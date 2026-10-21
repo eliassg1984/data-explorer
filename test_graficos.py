@@ -6661,52 +6661,92 @@ def _pruebas_evolucion_ajuste():
     # Sin «Semana» (regla #585): el ajuste se mide por conteo, no por semana.
     check("los granos son Corte y Mes", _ev.GRANOS, ("Corte", "Mes"))
 
-    # La tabla que alterna con los mini-gráficos resume la MISMA serie.
-    html = _ev.tabla_resumen_html(s.reset_index(), foco="2026-01", alto=184)
-    check("tabla: una fila por período más el total",
-          html.count("<tr"), 1 + len(s) + 1)
-    check("tabla: del más nuevo al más viejo",
-          html.index("ene 26") < html.index("nov 25"), True)
-    check("tabla: el mes sin conteo dice «sin conteo», no «None» ni 0",
-          ("sin conteo" in html, "None" in html, "nan" in html),
-          (True, False, False))
-    check("tabla: el total es el neto del rango",
-          "S/ -99<" in html.split("Total del rango")[1], True)
-    check("tabla: el período en foco sale marcado",
-          html.count(_ev.LAVANDA_SELECCION), 1)
-
-    # El estilo de la serie (regla #631): el neto se rotula en pastillas
-    # (anotaciones) y no con el `text` de la traza, que iba negro encima
-    # de la barra roja; el período más movido lleva su marca; los totales
-    # del rango van en una línea bajo el título.
+    # LA PIEZA (regla #692): lo que recibe `evolucion_ajuste.js`. Un
+    # período sin conteo viaja como None («no se contó»), no como cero, y
+    # las familias van en el orden de la matriz.
     sr = s.reset_index()
-    fig = _ev.fig_serie(sr)
-    _neto = [t for t in fig.data if t.name == "Neto"][0]
-    check("serie: la traza del neto ya no lleva texto",
-          (_neto.mode, _neto.text), ("lines+markers", None))
-    _pills = [a for a in fig.layout.annotations if a.yref != "paper"]
-    check("serie: una pastilla por período con conteo, con signo",
-          [a.text for a in _pills], ["S/ -100", "S/ +1"])
-    check("serie: la pastilla dice el signo con su color",
-          [a.font.color for a in _pills],
-          [_ev.AJUSTE_NEG_TEXTO, _ev.AJUSTE_POS_TEXTO])
-    check("serie: con foco, la pastilla de los otros períodos se apaga",
-          [a.opacity for a in _ev.fig_serie(sr, "2026-01").layout.annotations
-           if a.yref != "paper"], [_ev._APAGADO, 1.0])
-    check("serie: el más movido es el de más sobrante − faltante",
-          (_ev.periodo_mas_movido(sr) or {}).get("eje"), "nov 25")
-    check("serie: el más movido se rotula arriba, en el margen",
-          [a.text for a in fig.layout.annotations if a.yref == "paper"],
-          ["más movido · <b>S/ 300</b>"])
-    check("serie: con menos de tres períodos no hay más movido",
-          _ev.periodo_mas_movido(sr.iloc[:2]), None)
-    _largo = pd.concat([sr] * 6, ignore_index=True)
-    _largo["eje"] = [f"p{i}" for i in range(len(_largo))]
-    check("serie: con más de _MAX_ROTULOS períodos no hay pastillas",
-          len([a for a in _ev.fig_serie(_largo).layout.annotations
-               if a.yref != "paper"]), 0)
-    check("serie: las barras llevan la punta redondeada",
-          fig.layout.barcornerradius, _ev._RADIO_SERIE)
+    pz = _ev.datos_pieza(sr, sf, "Mes")
+    check("pieza: un período por columna, con sus tres medidas",
+          [(p["k"], p["s"], p["f"], p["n"]) for p in pz["periodos"]],
+          [("2025-11", 100.0, -200.0, -100.0), ("2025-12", None, None, None),
+           ("2026-01", 6.0, -5.0, 1.0)])
+    check("pieza: las familias, con sus valores alineados a los períodos",
+          [(f_["id"], f_["s"]) for f_ in pz["familias"]],
+          [("A", [100.0, None, 5.0]), ("B", [0.0, None, 0.0])])
+    check("pieza: sin pedirlos, sin orígenes ni consumo",
+          (pz["origen"], pz["origen_estado"], pz["consumo_estado"]),
+          (None, "no", "no"))
+
+    # EL % DEL SISTEMA (regla #692): la base es el stock POSITIVO del
+    # sistema de UNA foto —el cierre del mes—, lo que estaba en negativo va
+    # aparte, y lo contado en cero se separa del resto del faltante.
+    ds = pd.DataFrame({
+        "F": pd.to_datetime(["2026-09-02", "2026-09-02", "2026-09-02",
+                             "2026-09-02", "2026-08-15"]),
+        "FAM": ["A", "A", "A", "B", "A"],
+        "STOCK AL CIERRE": [10.0, 5.0, -3.0, 4.0, 99.0],
+        "STOCK DECLARADO": [5.0, 0.0, 1.0, 4.0, 0.0],
+        "PRECIO PROMEDIO": [2.0, 2.0, 2.0, 1.0, 1.0],
+        "AV": [-10.0, -10.0, 8.0, 0.0, -99.0],
+        "VT": [10.0, 0.0, 2.0, 4.0, 0.0],
+    })
+    dps, ords = _ev.periodos_ajuste(ds, "F", "Mes")
+    sis = _ev.sistema_por_periodo(dps, "F", "AV", "FAM", "Mes")
+    check("% del sistema: sólo el cierre (el 2 de setiembre), no el parcial",
+          sis["TOTAL"], {"2026-09": [34.0, -20.0, 0.0, -10.0, 8.0]})
+    check("% del sistema: por familia también",
+          (sis["A"]["2026-09"], sis["B"]["2026-09"]),
+          ([30.0, -20.0, 0.0, -10.0, 8.0], [4.0, 0.0, 0.0, 0.0, 0.0]))
+    dpc, ordc = _ev.periodos_ajuste(ds, "F", "Corte")
+    check("% del sistema: en «Corte» cada sesión es su foto",
+          sorted(_ev.sistema_por_periodo(dpc, "F", "AV", None, "Corte")["TOTAL"]),
+          sorted(ordc["_clave"]))
+    check("sistema en negativo: el sobrante con stock < 0, por período",
+          _ev.negativo_por_periodo(dps, "AV"), {"2026-08": 0.0, "2026-09": 8.0})
+    check("sin las columnas del sistema, no hay % ni negativo",
+          (_ev.sistema_por_periodo(dp, "F", "AV", "FAM", "Mes"),
+           _ev.negativo_por_periodo(dp, "AV")), ({}, {}))
+
+    # LOS POSIBLES ORÍGENES: de la primera pista de cada línea; el sistema
+    # en negativo con sobrante no entra (es un hecho, no una pista), y la
+    # sesión cae en el período de su primer día.
+    lineas = pd.DataFrame({
+        "familia": ["ALIMENTOS", "ALIMENTOS", "VINOS", "ALIMENTOS", "ALIMENTOS"],
+        "area": ["Cocina", "Barra", "Cava", "Cocina", "Cocina"],
+        "v": [-10.0, -5.0, -2.0, 7.0, 3.0],
+        "s": [4.0, 1.0, 2.0, -6.0, 0.0],
+        "pista_t": ["lote", "prod", "rubro", "prod", "nada"],
+    })
+    agg = _ev.origenes_de_lineas(lineas)
+    check("orígenes: por familia, área, origen y lado; sin pista y "
+          "negativo afuera",
+          sorted(map(tuple, agg[["familia", "area", "origen", "lado", "v"]].values.tolist())),
+          [("ALIMENTOS", "BARRA", "pro", "f", -5.0),
+           ("ALIMENTOS", "COCINA", "ven", "f", -10.0),
+           ("VINOS", "CAVA", "reg", "f", -2.0)])
+    import datetime as _dt
+    ses = {"dias": {_dt.date(2026, 10, 1), _dt.date(2026, 10, 6)}}
+    por = _ev.origenes_por_periodo(
+        [(ses, agg)], {_dt.date(2026, 10, 1): "2026-09"},
+        familias=["Alimentos"], areas=["cocina"])
+    check("orígenes: la sesión cae en el período de su primer día, filtrada",
+          por, {"2026-09": {"ven": [0.0, -10.0], "pro": [0.0, 0.0],
+                            "reg": [0.0, 0.0]}})
+
+    # «¿ES MUCHO?»: el neto como % del consumo, y la banda sólo con meses
+    # cerrados desde setiembre 2025 (regla #612).
+    cs = _ev.pct_consumo(
+        {"2025-08": -50.0, "2025-09": -5.0, "2025-10": -10.0, "2025-11": -8.0,
+         "2025-12": -6.0, "2026-01": -40.0, "2026-02": None},
+        {"2025-08": 100.0, "2025-09": 100.0, "2025-10": 100.0, "2025-11": 100.0,
+         "2025-12": 100.0, "2026-01": 100.0},
+        cerrados={"2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01"})
+    check("consumo: un mes sin consumo o sin conteo queda sin %",
+          (cs["pct"]["2025-09"], cs["pct"]["2026-02"]), (-5.0, None))
+    check("consumo: la banda no usa los meses anteriores a setiembre 2025",
+          (cs["n"], cs["q1"], cs["q3"]), (5, -10.0, -6.0))
+    check("consumo: las cercas de Tukey, a 1,5 rango intercuartil",
+          (cs["ci"], cs["cs"]), (-16.0, 0.0))
     kp = _ev.kpis_rango_html(sr)
     check("totales del rango: sobrante, faltante y neto, con signo",
           [t in kp for t in ("S/ +106", "S/ -205", "S/ -99")],
@@ -7839,21 +7879,16 @@ def _pruebas_ajuste_kardex():
           "no se sabe", _ev.difiere_kardex(s).tolist(), [True, False, False])
     check("la nota cuenta los periodos con dato",
           "difiere en 1 de 2 meses" in _ev.nota_kardex(s, "Mes"), True)
-    fig = _ev.fig_serie(s)
-    check("la línea del kardex va ANTES que la del neto (la tapa)",
-          [t.name for t in fig.data], ["Sobrante", "Faltante", "Kardex", "Neto"])
-    check("el hover del neto dice cuánto difiere el kardex",
-          [c[1] for c in fig.data[3].customdata],
-          ["S/ -26 · difiere en S/ -20", "igual", "sin dato"])
-    check("la tabla suma la columna «Kardex»",
-          ">Kardex</th>" in _ev.tabla_resumen_html(s), True)
+    pz = _ev.datos_pieza(s, None, "Mes")
+    check("la pieza recibe el kardex de cada período y si difiere",
+          (pz["kardex"], [(p["kx"], p["dkx"]) for p in pz["periodos"]]),
+          (True, [(-26.0, True), (-5.4, False), (None, False)]))
 
     s0 = _ev.serie_ajuste(dp, orden, "AV", "VT")
     check("sin el parquet del kardex, la serie de siempre",
-          ("kardex" in s0.columns, [t.name for t in _ev.fig_serie(s0).data],
-           ">Kardex</th>" in _ev.tabla_resumen_html(s0),
+          ("kardex" in s0.columns, _ev.datos_pieza(s0, None, "Mes")["kardex"],
            _ev.nota_kardex(s0, "Mes")),
-          (False, ["Sobrante", "Faltante", "Neto"], False, ""))
+          (False, False, ""))
     return fallos
 
 
@@ -13377,21 +13412,20 @@ def main():
     from graficos import ajuste as _aj
 
     pruebas = [
-        # Evolución (regla #501): las figuras puras, en sus dos magnitudes
-        # y con un período en foco. La vista entera lleva AgGrid.
-        ("evolucion · serie con foco", lambda: _aj.fig_serie(
+        # Evolución (regla #692): lo que recibe la pieza, por mes con las
+        # familias y por corte sin valorizado (la rama else de la serie).
+        ("evolucion · pieza por mes con familias", lambda: _aj.datos_pieza(
             _aj.serie_ajuste(*_aj.periodos_ajuste(
                 df, "FECHA APERTURA INVENTARIO", "Mes"),
-                "AJUSTE VALORIZADO", "VALORIZADO TOTAL"), "2024-03"), ()),
-        ("evolucion · familias por corte", lambda: _aj.fig_familias(
+                "AJUSTE VALORIZADO", "VALORIZADO TOTAL"),
             _aj.serie_ajuste(*_aj.periodos_ajuste(
-                df, "FECHA APERTURA INVENTARIO", "Corte"),
-                "AJUSTE VALORIZADO", "VALORIZADO TOTAL", col_grupo="FAMILIA")),
-         ()),
-        ("evolucion · serie sin valorizado (rama else)", lambda: _aj.fig_serie(
-            _aj.serie_ajuste(*_aj.periodos_ajuste(
-                df_min, "FECHA APERTURA INVENTARIO", "Corte"),
-                "AJUSTE VALORIZADO")), ()),
+                df, "FECHA APERTURA INVENTARIO", "Mes"),
+                "AJUSTE VALORIZADO", "VALORIZADO TOTAL", col_grupo="FAMILIA"),
+            "Mes"), ()),
+        ("evolucion · pieza por corte sin valorizado (rama else)",
+         lambda: _aj.datos_pieza(_aj.serie_ajuste(*_aj.periodos_ajuste(
+             df_min, "FECHA APERTURA INVENTARIO", "Corte"),
+             "AJUSTE VALORIZADO"), None, "Corte"), ()),
         ("waterfall (Cascada)", _aj._graf_waterfall_ajuste,
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO")),
         ("heatmap (Mapa de calor)", _aj._graf_heatmap_ajuste,

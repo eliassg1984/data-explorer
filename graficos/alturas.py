@@ -827,27 +827,19 @@ una tarjeta que ya estaba llena, así que los píxeles que ocupan hay que
 restárselos a la figura, o la tarjeta crece y su eje X termina debajo del
 borde (el modo de fallo de `FRANJA_CONTROLES`)."""
 
-FILA_MULTIPLOS = 150
-"""Alto del trazo + ejes de la fila de mini-gráficos (small multiples) de
-Ajuste › Evolución: los paneles por familia. Nació el 2026-09-23 con la
-fusión de las tres vistas de Tiempo (regla #501), en una rejilla de tres
-por fila; el mismo día pasó a UNA sola fila deslizable para que la tarjeta
-entrara en la laptop (regla #505). La figura mide
-`por_filas(1, px_fila=FILA_MULTIPLOS, extra=EXTRA_MULTIPLOS)`."""
+EVO_GRAFICO = 186
+"""Alto del trazo de la serie de Ajuste › Evolución desde que es una pieza
+propia (`evolucion_ajuste.js`, regla #692): las barras de sobrante arriba,
+las de faltante abajo y sus rótulos. Con la fila de «Explicar con» encima,
+el eje de meses debajo y el hueco de abajo (`EVO_ABAJO`), la tarjeta entra
+en los 575 px de `--alto-util` a 1323×619. Reemplazó a `EVO_SERIE` (270) y
+a la fila de mini-gráficos (`FILA_MULTIPLOS` + `EXTRA_MULTIPLOS`)."""
 
-EXTRA_MULTIPLOS = 34
-"""Lo que la fila de mini-gráficos suma a `FILA_MULTIPLOS`: el título de
-cada panel (subplot title, 11px) y su margen. Sin leyenda: la leyenda vive
-en la fila del título de la tarjeta (regla #505)."""
-
-EVO_SERIE = 270
-"""Alto de la serie de sobrante/faltante/neto de Ajuste › Evolución, que
-comparte tarjeta con la fila de mini-gráficos (`FILA_MULTIPLOS`) y tiene
-que entrar con ella en el `--alto-util` de la laptop objetivo (613px a
-1366x768 con el cromo del navegador). Era `con_franja(APOYO,
-FRANJA_CTRL_EVO)` = 380 con la leyenda de Plotly adentro; bajó el
-2026-09-23 a pedido («es más grande que una pantalla de laptop»), junto
-con la leyenda, que se mudó a la fila del título. Regla #505."""
+EVO_ABAJO = 172
+"""El hueco de abajo de Ajuste › Evolución, que alterna la matriz familia ×
+mes, «¿Es mucho?» y la tabla de resumen: los tres miden lo mismo, así que
+alternar no mueve la tarjeta. Con una familia desplegada, la matriz
+desliza por dentro (regla #692)."""
 
 FRANJA_VEREDICTO = 24
 """Alto del renglón del PORCENTAJE de la cascada —«−62.6% vs año pasado ·
