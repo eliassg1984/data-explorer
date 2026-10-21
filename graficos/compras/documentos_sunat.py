@@ -161,12 +161,16 @@ KPIs de cada columna — que lo busca por esa key y no por «el primer AgGrid
 de la página», que en esta página es otro (regla #455)."""
 
 
-_FILAS_DOCS = 8
+_FILAS_DOCS = 16
 """Filas que RESERVA la tabla de documentos. Un techo, no un alto: lo que
 sobra scrollea adentro (y sobra casi siempre — 244 comprobantes en un mes
 corriente, 4.618 en doce meses).
 
-8 a pedido (2026-10-02, «que la tabla solo muestre 8 filas»: la idea es ver
+16 desde el 2026-10-21 (a pedido, «la tabla debería ser más larga ahora»):
+desde la regla #683 la tabla es la única pieza de su vista, sin la tarjeta
+de abajo con la que compartía la pantalla. 16 filas de 24 más la cabecera,
+la fila de filtros y el aviso de llegada entran en la tarjeta a 1323×619
+sin que saque barra propia (medido). Antes, 8 a pedido (2026-10-02, «que la tabla solo muestre 8 filas»: la idea es ver
 la tabla y la tarjeta de abajo en UNA pantalla). Antes 10 (2026-09-18,
 «mostremos menos filas en el cuadro, solo 10»).
 Venía de `alturas.APOYO` como techo, que a 24px por fila daba 14. Mismo
@@ -4220,7 +4224,7 @@ def renderizar_documentos_sunat(d, col_fecha, vista=None):
     (2026-10-02, a pedido; antes eran cuatro tarjetas apiladas):
 
       1. **La tabla** a lo ancho — controles, KPIs del cruce y los
-         comprobantes, ocho filas (`_FILAS_DOCS`). Una sola tabla desde
+         comprobantes, dieciséis filas (`_FILAS_DOCS`). Una sola tabla desde
          que `_tabla` y `_tabla_cruce` se fundieron en `_tabla_documentos`.
       2. **La ficha del documento elegido**, en una ventana modal sobre la
          página: la tarjeta SUNAT y la del sistema, con una ✕ que la
