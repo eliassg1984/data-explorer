@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -137,6 +137,15 @@ exonerada, el supermercado al 92 %, la ferretería que vende de todo, la
 nota exonerada, el RUC con un espacio al final— y, con `ast`, que la vista
 clasifique el cruce y cachee con la versión de las reglas. Ver
 `arquitectura.md` regla #640.
+
+`test_consistencia_maestro.py` vigila los CONTROLES del maestro
+(`consistencia_maestro.py`, Costos › «Consistencia del maestro»): un
+parquet de mentira por fuente con el caso que cada control tiene que marcar
+y el que se le parece y no —el stock que sólo se contó, el cambio de factor
+que la receta sí acompañó, el artículo nuevo de la auditoría, el código de
+10 dígitos del cierre, la factura de servicios—, el color de cada control y
+que uno roto no tape a los demás. La cifra sobre R2 la da
+`herramientas/consistencia_maestro.py`. Ver `arquitectura.md` regla #686.
 
 ## El asistente IA no adivina: consulta
 

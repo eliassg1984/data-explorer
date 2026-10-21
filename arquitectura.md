@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-685 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+686 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (215)
 
@@ -877,7 +877,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 
-**SUNAT y SIRE** (67)
+**SUNAT y SIRE** (68)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -946,6 +946,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 - **#683** — «Documentos SUNAT» son TRES vistas, una por pantalla, y la tarjeta de debajo de la tabla ya…
 - **#684** — «Ingresar al Almacén» es UNA tabla con los dos lados, y lo que falta cargar dice cuánto es…
+- **#686** — «¿El maestro del sistema tiene lógica?» se contesta con CONTROLES, no con un tablero: Costos…
 
 **Fechas, rangos y cortes** (17)
 
@@ -1018,7 +1019,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (197)
+**Decisiones de diseño y UX** (198)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1217,6 +1218,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#680** — «Análisis de diferencias» lista con fichas cortas que traen su número, y la ficha de la línea…
 - **#683** — «Documentos SUNAT» son TRES vistas, una por pantalla, y la tarjeta de debajo de la tabla ya…
 - **#684** — «Ingresar al Almacén» es UNA tabla con los dos lados, y lo que falta cargar dice cuánto es…
+- **#686** — «¿El maestro del sistema tiene lógica?» se contesta con CONTROLES, no con un tablero: Costos…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53283,6 +53285,58 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-21.)
 
+686. **«¿El maestro del sistema tiene lógica?» se contesta con CONTROLES,
+     no con un tablero: Costos › «Consistencia del maestro».** Pedido así:
+     «item con stock sin moverse, en negativo, recetas que no se mueven,
+     items de venta que no se venden», y después «cosas raras que estén en
+     otros reportes, como un cambio de factor que disparó un costo, o que
+     evidencien mala manipulación». Aprobado sobre un boceto con los datos
+     reales (https://claude.ai/artifact/JDqYExY3U12yEfTrnewdhJ).
+
+     - **Un control es una PREGUNTA con sus casos**: `consistencia_maestro.py`
+       (puro, `CONTROLES`) devuelve una fila por caso con las mismas
+       columnas (`CASOS`: código, nombre, área, dato, soles, fecha, quién).
+       28 controles en cinco grupos; los cuatro primeros miran el ESTADO del
+       maestro hoy y «Movimientos raros» junta EVENTOS con fecha que otros
+       reportes ya marcan de a uno (la auditoría del POS, #658; la merma
+       rara, #647; la marca «revisar» de Compras, #653; Solo SUNAT, #640;
+       el día sin Descargo de Ventas y el sobrante sin entrada, #650). Cada
+       control dice dónde ya lo marca otro reporte.
+     - **El color no es un umbral**: verde sin casos, y con casos, rojo si el
+       control es `grave` (el error ya mueve un costo o un stock: negativo,
+       receta con insumo de baja, venta sin descargo) y ámbar si pide mirar.
+       Un control que revienta sale «No se pudo calcular» y no tapa a los
+       demás.
+     - **«Movimientos raros» son señales, no pruebas.** Un plato anulado por
+       error de comanda deja el mismo rastro que uno anulado después de
+       servido. La vista lo dice arriba y en cada ficha.
+     - **Trampas medidas al llenar el boceto** (corte 20 oct 2026):
+       `ajusteinventario` escribe los códigos con 10 dígitos y el kardex con
+       7 y 3 (sin normalizar, «sobró sin que entrara nada» no encontraba
+       ninguna entrada); el `%COSTO` de la carta costeada se dispara a 95.000 %
+       con los platos a S/ 0,01 (se calcula sobre el neto, desde S/ 1); el
+       cruce con SUNAT trae alquileres y comisiones de tarjeta (sólo
+       `tipo_compra` = Mercadería, y sin la factura que una nota del mismo
+       monto anula); los insumos de operación no los descarga nadie (#645) y
+       no van en «se compra y nada lo usa»; y el conteo (93) no es USO: un
+       vino con stock que sólo se cuenta sigue parado.
+     - **La carga** es `data.consistencia_maestro` (caché de disco con los
+       sellos de catorce parquets, `cm.VERSION`, la de la venta y la de
+       `tipo_compra`): la primera vez de cada versión, alrededor de un
+       minuto. `herramientas/consistencia_maestro.py` corre lo mismo sin
+       caché e imprime cada control. La vista es un destino aparte del rail
+       de Costos (`graficos/costos_consistencia.py`), como las de Documentos
+       SUNAT (#683): lista a la izquierda y, al costado, la ficha con TODOS
+       los casos y su CSV. Su tarjeta no lleva techo (`_80_cards.py`).
+     - **Falta**: comparar contra el cierre anterior (el maestro de stock es
+       una foto de hoy; el pasado hay que reconstruirlo del kardex) y
+       «marcar a propósito» un caso (el vino de guarda).
+
+     Lo vigila `test_consistencia_maestro.py`. Tocar qué cuenta un control
+     es subir `consistencia_maestro.VERSION`.
+
+     (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53295,7 +53349,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#685**; la próxima toma el número siguiente.
+> última regla es la **#686**; la próxima toma el número siguiente.
 
 >
 

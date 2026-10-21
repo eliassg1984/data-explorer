@@ -1437,6 +1437,7 @@ def limpiar_cache(archivo):
     _sin_plato_cacheable.clear()
     _diferencias_cacheable.clear()
     _sunat_sin_ingresar_cacheable.clear()
+    _consistencia_cacheable.clear()
     _sello_r2.clear()
     _SELLOS.pop(archivo, None)
 
@@ -2195,6 +2196,101 @@ def sin_plato_por_cierre():
             sellos=tuple((a, sello_datos(a)) for a in _ARCHIVOS_SIN_PLATO),
             version=(sin_plato.VERSION, kardex.VERSION,
                      _version_preparar("ventas.parquet")))
+    except Exception:
+        return None
+
+
+# Lo que lee «Consistencia del maestro» de Costos (`consistencia_maestro`,
+# regla #686), además del maestro de stock, que manda: sus sellos van en la
+# clave de la caché. `_ARCHIVOS_CONSISTENCIA_CRUDOS` se leen tal cual.
+_ARCHIVOS_CONSISTENCIA_CRUDOS = (
+    "recetaventa.parquet", "recetabase.parquet", "cartacosteada.parquet",
+    "auditoriacostos.parquet", "porcionamientos.parquet", "salidas.parquet",
+    "pedidos.parquet", "descargosventas.parquet", "ajusteinventario.parquet")
+_ARCHIVOS_CONSISTENCIA = (
+    *_ARCHIVOS_CONSISTENCIA_CRUDOS, kardex.ARCHIVO, "compras.parquet",
+    "notascreditocompras.parquet", "ventas.parquet", "sunat_compras.parquet")
+_COLS_KARDEX_CONSISTENCIA = ("FECHA HORA", "CODIGO AREA", "CODIGO PRODUCTO",
+                             "COD TIPO", "CANT INGRESO", "CANT SALIDA",
+                             "VALOR SALIDA")
+
+
+def consistencia_entradas(hoy=None):
+    """`(t, hoy)`: el dict de `consistencia_maestro.ENTRADAS` leído de R2 y
+    la fecha de corte (el último día del kardex, si no se da). LANZA si
+    algo falla. Lo usan la caché de abajo y
+    `herramientas/consistencia_maestro.py`, que no cachea."""
+    import consistencia_maestro as cm
+    import sunat
+    import tipo_compra
+    from graficos.compras import documentos_sunat as ds
+    from graficos.inventario import separar_activos
+    from graficos.ventas import unico_por_item
+
+    t = {"inv": cargar("inventariovalorizado.parquet")}
+    for clave, archivo in zip(("rv", "rb", "cc", "aud", "porc", "sal", "ped", "dsc", "ajs"),
+                              _ARCHIVOS_CONSISTENCIA_CRUDOS):
+        t[clave] = cargar(archivo)
+    faltan = [k for k, v in t.items() if v is None]
+    if faltan:
+        raise RuntimeError("no se pudo leer: " + ", ".join(faltan))
+    t["inv"] = t["inv"].copy()
+    t["inv"]["_activo"] = t["inv"].index.isin(separar_activos(t["inv"])[0].index)
+    bucket = st.secrets["R2_BUCKET"]
+    cols = ", ".join(f'"{c}"' for c in _COLS_KARDEX_CONSISTENCIA)
+    t["kdx"] = get_conn().execute(
+        f"SELECT {cols} FROM read_parquet('s3://{bucket}/{kardex.ARCHIVO}')").df()
+    if hoy is None:
+        hoy = pd.to_datetime(t["kdx"]["FECHA HORA"]).max().normalize()
+    hoy = pd.Timestamp(hoy).normalize()
+    t["cmp"] = cargar("compras.parquet")
+    ini = (hoy - pd.Timedelta(days=cm.VENTANA)).date()
+    # Por la fecha del documento, no la del turno: los controles miran días
+    # de calendario y no tienen por qué seguir el selector de Ventas.
+    t["ven"] = unico_por_item(cargar_rango("ventas.parquet", "FEC REG DOCUMENTO",
+                                           ini, hoy.date(), turno=False))
+    reg = sunat._registro_de_parquet()
+    if reg is not None and len(reg):
+        compras = cargar("compras.parquet", notas_credito=False)
+        g = ds._parquet_agrupado_por_documento(compras, "FECHA_EMISION_DOC", ini,
+                                               hoy.date(), notas=notas_credito_compras())
+        f = pd.to_datetime(reg["fecha_emision"], errors="coerce")
+        cruce = ds.cruzar_con_parquet(reg[f >= pd.Timestamp(ini)], g)
+        cruce = cruce[~cruce["proveedor"].astype(str).str.contains(_NO_MERCADERIA, case=False)]
+        tablas = tipo_compra.tablas_almacen(compras, tipo_compra.tipos_de_producto(t["inv"]))
+        t["sunat"] = tipo_compra.clasificar(cruce, reg, tablas)
+    return t, hoy
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False, max_entries=2)
+def _consistencia_cacheable(archivo, sello, sellos=(), version=None):
+    """Los casos de cada control de «Consistencia del maestro» (regla #686):
+    `{"hoy", "casos": {id: DataFrame o el texto de su error}}`. Si la carga
+    falla, LANZA: no se cachea. `archivo` es el maestro de stock; `sellos`,
+    los de `_ARCHIVOS_CONSISTENCIA`, y `version`, la de los controles y la
+    definición de venta. Ninguno se usa en el cuerpo: son la clave."""
+    if not secrets_disponibles():
+        return None
+    import consistencia_maestro as cm
+    t, hoy = consistencia_entradas()
+    res = cm.calcular(t, hoy)
+    return {"hoy": hoy, "casos": {k: (v if isinstance(v, pd.DataFrame)
+                                      else f"{type(v).__name__}: {v}")
+                                  for k, v in res.items()}}
+
+
+def consistencia_maestro():
+    """Lo de `_consistencia_cacheable`, o None si no se pudo —sin secrets,
+    R2 caído—: quien lo pide avisa. La primera vez de cada versión de los
+    parquets tarda ~1 min. No cacheada (la interna sí)."""
+    import consistencia_maestro as cm
+    import tipo_compra
+    try:
+        return _consistencia_cacheable(
+            "inventariovalorizado.parquet", sello_datos("inventariovalorizado.parquet"),
+            sellos=tuple((a, sello_datos(a)) for a in _ARCHIVOS_CONSISTENCIA),
+            version=(cm.VERSION, _version_preparar("ventas.parquet"),
+                     tipo_compra.VERSION))
     except Exception:
         return None
 

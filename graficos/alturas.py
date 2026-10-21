@@ -440,6 +440,15 @@ ese día la ficha va en PESTAÑAS («se verá en laptop») y mide ~500, y la
 lista la acompaña. La tarjeta sigue sin techo (`estilos/_80_cards.py`) y la
 lista se desliza por dentro."""
 
+CONSISTENCIA_LISTA = 27 * 15 + 38
+"""Tope de la lista de controles de Costos › «Consistencia del maestro»
+(regla #686): quince filas de 27 y la cabecera, lo que mide un grupo entero
+con su ficha al lado. Con «Todo» (28) se desliza por dentro."""
+
+CONSISTENCIA_CASOS = 27 * 10 + 38
+"""Tope de los casos del control elegido, en su ficha: diez filas y la
+cabecera; la lista entera, deslizando o en el CSV."""
+
 DIFERENCIAS_FIG = 120
 """El stock en el sistema entre los dos conteos de la línea elegida en
 «Análisis de diferencias» (regla #650): una escalera, con el cero marcado."""

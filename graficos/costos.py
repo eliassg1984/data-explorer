@@ -50,8 +50,14 @@ from graficos.base import (
 # ventas»: renombrar es cambiar sólo el rótulo. El rail se declara igual —con `rail_sin_tablas`, como
 # todos (regla #507)— porque de él salen el panel del reporte en la columna
 # (`graficos/__init__.py::_RAILS`, regla #568) y el rótulo de la franja.
+#
+# Desde el 2026-10-21, dos vistas (regla #686): «Consistencia del maestro»
+# es un DESTINO APARTE, como las de Documentos SUNAT (#683) —el rail elige
+# cuál se dibuja—, no una pila: cada una es una tarjeta alta.
 _COSTOS_RAIL_CATEGORIAS = rail_sin_tablas((
-    ("Costos", (("Costo de ventas", "Costo de ventas", ":material/calculate:"),)),
+    ("Costos", (("Costo de ventas", "Costo de ventas", ":material/calculate:"),
+                ("Consistencia del maestro", "Consistencia del maestro",
+                 ":material/rule:"))),
 ))
 
 # Vacía y no ausente: `_render_rail` distingue `secciones=()` («destino
@@ -157,7 +163,11 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
     `archivo` del reporte), sin filtro de fecha: el reporte no tiene. El
     resto lo trae `_datos`. `tabla_cb` se acepta por la firma única del
     dispatcher y no se usa: el reporte no tiene vista «Tabla»."""
-    _render_rail(_COSTOS_RAIL_CATEGORIAS, "costos_graf_tipo", secciones=_PILA)
+    vista = _render_rail(_COSTOS_RAIL_CATEGORIAS, "costos_graf_tipo", secciones=_PILA)
+    if vista == "Consistencia del maestro":
+        from graficos import costos_consistencia
+        costos_consistencia.renderizar()
+        return
     ajuste = df_full if df_full is not None else df_f
     sellos = (data.sello_datos("ajusteinventario.parquet"),
               *(data.sello_datos(a) for a in _ARCHIVOS))
