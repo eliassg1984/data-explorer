@@ -1249,6 +1249,23 @@ def _texto_ubl(nodo, ruta):
     return hijo.text
 
 
+def _codigo_es_descripcion(codigo, descripcion):
+    """¿El emisor escribió el NOMBRE del producto en el casillero del código?
+
+    Hay facturadores que lo hacen al revés: `SellersItemIdentification/ID`
+    trae «FILETE DE ATUN FLORIDA AV X 140 GR» y `Description` sólo la marca
+    («FLORIDA»), o «OTROS». Leído tal cual, «Código prov.» mostraba el
+    nombre y «Ítem (XML)» la marca, y el emparejamiento contra el maestro
+    buscaba por la marca (VIBEJ F001-6313, 2026-10-20). Regla #682.
+
+    Un código de verdad no lleva tres palabras; un nombre sí. Y el nombre es
+    más largo que lo que vino como descripción.
+    """
+    if len(codigo.split()) < 3 or len(codigo) <= len(descripcion):
+        return False
+    return sum(ch.isalpha() for ch in codigo) >= 8
+
+
 def lineas_xml(xml_bytes):
     """Las líneas de detalle de un XML de comprobante → lista de dicts.
 
@@ -1290,10 +1307,13 @@ def lineas_xml(xml_bytes):
                             _NS_UBL)
 
         unidad = (cant.get("unitCode") or "") if cant is not None else ""
+        txt_codigo = (codigo.text or "").strip() if codigo is not None else ""
+        txt_desc = (desc.text or "").strip() if desc is not None else ""
+        if _codigo_es_descripcion(txt_codigo, txt_desc):
+            txt_codigo, txt_desc = "", txt_codigo
         fila = {
-            "codigo": (codigo.text or "").strip() if codigo is not None else "",
-            "descripcion": _descripcion_limpia(
-                (desc.text or "").strip()) if desc is not None else "",
+            "codigo": txt_codigo,
+            "descripcion": _descripcion_limpia(txt_desc),
             "cantidad": _num_xml(cant.text) if cant is not None else None,
             "unidad": _UNIDADES.get(unidad.upper(), unidad),
             # El código CRUDO del catálogo 03 (NIU, KGM, LTR…), que

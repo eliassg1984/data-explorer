@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-681 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+682 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (215)
 
@@ -765,7 +765,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 
-**Datos, R2 y DuckDB** (107)
+**Datos, R2 y DuckDB** (108)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -874,8 +874,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#670** — Las dos vistas de salidas dicen qué se pierde, cada cuánto y cuánto se deja de anotar…
 - **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
+- **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 
-**SUNAT y SIRE** (64)
+**SUNAT y SIRE** (65)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -941,6 +942,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#675** — Documentos SUNAT pide EN LOTE los XML que faltan en la tabla…
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 - **#679** — «Costo de ventas» tiene DOS formas de la parte de arriba —Tablero y Cascada— y, debajo de las…
+- **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 
 **Fechas, rangos y cortes** (17)
 
@@ -53151,6 +53153,24 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-20.)
 
+682. **Hay emisores que escriben el NOMBRE del producto en el casillero del
+     código del XML** (`SellersItemIdentification/ID`) y la marca —o
+     «OTROS»— en `Description`. VIBEJ, un proveedor de abarrotes: «FILETE DE ATUN
+     FLORIDA AV X 140 GR» como código y «FLORIDA» como descripción. Leído tal
+     cual, el conversor mostraba el nombre bajo «Código prov.» y la marca bajo
+     «Ítem (XML)», y la sugerencia del maestro buscaba por la marca: siete
+     líneas distintas quedaban pegadas al mismo «Yogurt Griego X Lt».
+
+     `sunat.lineas_xml` las da vuelta con `_codigo_es_descripcion`: el código
+     tiene tres palabras o más, es más largo que la descripción y lleva al
+     menos ocho letras. Un código de verdad no lleva tres palabras. Medido
+     sobre 600 XML al azar de los 5.142 de R2: cambian 126 de 2.305 líneas,
+     TODAS de ese emisor; ningún otro cae en la regla. El parquet no se toca
+     y no hay caché que vaciar: las líneas se leen del XML en cada vista, y la
+     sugerencia del maestro se cachea por descripción.
+
+     (2026-10-20.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53163,7 +53183,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#681**; la próxima toma el número siguiente.
+> última regla es la **#682**; la próxima toma el número siguiente.
 
 >
 
