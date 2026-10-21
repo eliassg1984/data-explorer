@@ -783,6 +783,45 @@ CSS = """
         border: none !important;
         background: var(--border) !important;
     }
+    /* Los subtítulos de grupo (2026-10-21), a la x de los nombres. En el
+       árbol las gemelas NO van en un renglón: con la sangría, dos «Por
+       Período» · «Por Área» piden ~240px de los 236 que hay. Se apilan como
+       cualquier vista; en un renglón van sólo en el panel (más abajo). */
+    .st-key-nav_rail_lateral .rail-grupo {
+        margin: 6px 0 0 0 !important;
+        padding: 4px 10px 2px calc(var(--icono-x) + 16px) !important;
+        font-size: 11.5px !important;
+        font-weight: 600 !important;
+        line-height: 16px !important;
+        color: var(--text-muted) !important;
+        white-space: nowrap !important;
+    }
+    .st-key-nav_rail_lateral .rail-grupo-sep {
+        height: 1px !important;
+        margin: 6px 16px 6px calc(var(--icono-x) + 16px) !important;
+        background: var(--border) !important;
+    }
+    .st-key-nav_rail_lateral [class*="st-key-raillatpar_"] {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+        width: 100% !important;
+    }
+    /* UNA LISTA AGRUPADA SCROLLEA SOLA. Es larga por definición (8 vistas o
+       más), y debajo de los reportes no entra: medido a 1340×640, la de
+       Movimientos terminaba en 820px —ya antes de los grupos, en 715—, y
+       «Consumo» no se podía alcanzar. Sólo ella: con `overflow-y: auto` el
+       navegador recorta también a los costados, y eso se comería el panel
+       del KPI de una vista, que sale por la derecha (#482) — esos puntos los
+       tiene Compras, que no agrupa. Plegada la columna, la lista es un panel
+       y manda su propia regla (más abajo, `max-height: none`). */
+    .st-key-nav_rail_lateral:has(.rail-grupo) {
+        max-height: calc(100vh - var(--franja-rep-alto) - var(--arbol-cab)
+                         - var(--arbol-filas, 6) * var(--fila-rep)) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        scrollbar-width: thin;
+    }
     /* (El punto del KPI de cada vista, `railkpi_<slug>` —regla #482—, tenía
        acá su regla para esconderse con la columna plegada. Ya no la
        necesita: plegada se va con la lista entera.) */
@@ -830,7 +869,9 @@ CSS = """
         position: fixed !important;
         top: var(--fly-top, 56px) !important;
         bottom: auto !important;
-        left: calc(var(--rail-plegado-w) - 2px) !important;
+        /* `--fly-left` sólo existe cuando el panel del activo se abrió desde
+           la vista de la franja (2026-10-21): cae debajo de ella. */
+        left: var(--fly-left, calc(var(--rail-plegado-w) - 2px)) !important;
         width: 278px !important;
         height: auto !important;
         max-height: none !important;
@@ -925,13 +966,41 @@ CSS = """
     :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-cab-nom::before {
         content: none;
     }
-    .fly-pie {
-        margin: 6px 0 0 0;
-        padding: 8px 8px 2px 8px;
-        border-top: 1px solid var(--border);
-        font-size: 11.5px;
-        color: var(--text-muted);
-        white-space: nowrap;
+    /* LOS GRUPOS (2026-10-21, 2026-10-21): desde 8 vistas el panel se parte
+       con subtítulos —hoy sólo Movimientos— y las dos gemelas de un grupo
+       («Por Período» · «Por Área») van en un renglón. Los arma
+       `graficos/base.py::bloques_de_vistas`, igual para los dos paneles. El
+       subtítulo no es un botón: se lee, no se cliquea. Hasta ese día el pie
+       decía «Clic en una vista: entra al reporte justo ahí»; se quitó a
+       pedido, y su alto es el de los subtítulos. */
+    .fly-grupo,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-grupo {
+        margin: 6px 0 0 0 !important;
+        padding: 4px 10px 2px 10px !important;
+        font-size: 11.5px !important;
+        font-weight: 600 !important;
+        line-height: 16px !important;
+        color: var(--text-muted) !important;
+        white-space: nowrap !important;
+    }
+    .fly-sep,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-grupo-sep {
+        margin: 5px 8px !important;
+        border-top: 1px solid var(--border) !important;
+    }
+    .st-key-nav_paneles [class*="st-key-navflypar_"],
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [class*="st-key-raillatpar_"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 2px !important;
+        width: 100% !important;
+    }
+    .st-key-nav_paneles [class*="st-key-navflypar_"] > [data-testid="stElementContainer"],
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [class*="st-key-raillatpar_"] > [data-testid="stElementContainer"] {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: auto !important;
     }
     /* Cada vista: una fila de 32px con su ícono, que en el panel SÍ se ve
        (en el árbol no: ahí guarda la sangría, más arriba). */
@@ -1126,6 +1195,35 @@ CSS = """
     .barra-vista:not(:empty)::before {
         content: "›";
         margin-right: 8px;
+        color: var(--text-muted);
+    }
+    /* CON LA COLUMNA PLEGADA, LA VISTA ABRE SU PANEL (2026-10-21, regla
+       2026-10-21): un clic la despliega debajo, como el selector de vista de una
+       app con barra lateral. Lo abre `navegacion.py::_SCRIPT_CAPAS`. Fijada
+       no: las vistas ya están en el árbol de la izquierda, y un ▾ que abre
+       lo que ya se ve sería un control de más. El texto va en una píldora
+       que se ilumina como las filas del panel, para que se lea como botón. */
+    :root:has(.st-key-rail_pestillo_plegado) .barra-vista:not(:empty) {
+        display: inline-flex;
+        align-items: center;
+        max-width: 280px;
+        margin-left: -2px;
+        padding: 3px 4px 3px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background-color 120ms linear;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .barra-vista:not(:empty):hover {
+        background: var(--accent-tint);
+        color: var(--accent-deep);
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .barra-vista:not(:empty)::after {
+        content: "expand_more";
+        font-family: "Material Symbols Rounded";
+        font-feature-settings: "liga";
+        font-size: 18px;
+        line-height: 1;
+        margin-left: 2px;
         color: var(--text-muted);
     }
     /* Acá vivían los KPIs de la franja (`.barra-kpis`, `.barra-kpi`,

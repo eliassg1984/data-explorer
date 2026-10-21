@@ -55,6 +55,7 @@ cambiar de reporte es fiable en cada pulsación (no se cuelga ni "deja de
 hacer caso"). app.py lee la selección desde st.session_state["_nav_reporte"].
 """
 
+import contextlib
 import html
 import json
 import re
@@ -114,6 +115,13 @@ _SCRIPT_CAPAS = """<script>
   // siga ahí: una lista que se queda abierta después de elegir tapa lo que
   // se eligió.
   var cerrado = null;
+  // ── Abierto desde la FRANJA (2026-10-21, 2026-10-21) ─────────────────
+  // Un clic en la vista de la franja («› Por familia ▾») abre el panel del
+  // reporte activo DEBAJO de ella, y queda abierto hasta elegir una vista,
+  // hacer clic afuera o apretar Esc: es un desplegable, no una capa de
+  // cursor. Sólo con la columna plegada — fijada, las vistas ya están a la
+  // vista en el árbol, y la franja no ofrece el clic (`_28_arbol.py`).
+  var desdeFranja = false;
   function panelDe(fila, plegado) {
     if (fila.querySelector('button[kind="primary"]')) {
       return plegado ? doc.querySelector(".st-key-nav_rail_lateral") : null;
@@ -139,8 +147,26 @@ _SCRIPT_CAPAS = """<script>
     }
     return fila ? [panelDe(fila, plegado), fila] : [null, null];
   }
+  function franja(obj) {
+    var v = doc.querySelector(".barra-vista");
+    var r = v && v.getBoundingClientRect();
+    if (!r || !r.width) { desdeFranja = false; return false; }
+    // 18px a la izquierda del texto: el puente de 10 y el relleno de 8 del
+    // panel, para que sus nombres caigan bajo el de la vista.
+    var arriba = Math.round(r.bottom + 4) + "px", izq = Math.round(r.left - 18) + "px";
+    if (obj.style.getPropertyValue("--fly-top") !== arriba) obj.style.setProperty("--fly-top", arriba);
+    if (obj.style.getPropertyValue("--fly-left") !== izq) obj.style.setProperty("--fly-left", izq);
+    return true;
+  }
   function paneles() {
-    var par = elegir(), obj = par[0], fila = par[1];
+    var activo = doc.querySelector(".st-key-nav_rail_lateral");
+    if (desdeFranja && !(ANCHO.matches && activo
+                         && doc.querySelector(".st-key-rail_pestillo_plegado")
+                         && franja(activo))) desdeFranja = false;
+    if (!desdeFranja && activo && activo.style.getPropertyValue("--fly-left")) {
+      activo.style.removeProperty("--fly-left");
+    }
+    var par = desdeFranja ? [activo, null] : elegir(), obj = par[0], fila = par[1];
     if (cerrado) { if (obj === cerrado) obj = null; else cerrado = null; }
     var abiertos = doc.querySelectorAll("[data-fly]");
     for (var i = 0; i < abiertos.length; i++) {
@@ -159,10 +185,22 @@ _SCRIPT_CAPAS = """<script>
   }
   function alClic(ev) {
     var t = ev.target;
-    if (t && t.closest && t.closest("button")) {
+    if (!t || !t.closest) return;
+    if (t.closest(".barra-vista")) {
+      desdeFranja = !desdeFranja;
+      cerrado = null;
+      return;
+    }
+    if (desdeFranja && (t.closest("button") || !t.closest(".st-key-nav_rail_lateral"))) {
+      desdeFranja = false;
+    }
+    if (t.closest("button")) {
       var p = t.closest("[data-fly]");
       if (p) cerrado = p;
     }
+  }
+  function alTeclear(ev) {
+    if (ev.key === "Escape" && desdeFranja) { desdeFranja = false; pronto(); }
   }
   function recalcular() {
     for (var i = 0; i < CAPAS.length; i++) {
@@ -187,7 +225,8 @@ _SCRIPT_CAPAS = """<script>
   try { if (w.__capasApagar) w.__capasApagar(); } catch (e) {}
   var EVENTOS = [["mouseover", pronto], ["mouseout", pronto],
                  ["focusin", pronto], ["focusout", pronto],
-                 ["click", alClic], ["click", despues], ["keyup", despues]];
+                 ["click", alClic], ["click", despues], ["keyup", despues],
+                 ["keydown", alTeclear]];
   EVENTOS.forEach(function (e) { doc.addEventListener(e[0], e[1], true); });
   var reloj = setInterval(recalcular, 300);
   w.__capasApagar = function () {
@@ -247,6 +286,18 @@ def _vistas_de(nombre):
     except ImportError:
         return None
     return vistas_de(nombre)
+
+
+def _bloques_de(nombre):
+    """Las vistas de `nombre` agrupadas para su panel (2026-10-21). Si en
+    Cloud este módulo quedó hablando con un `graficos` viejo (#357), cae en
+    la lista plana de `_vistas_de`: un renglón por vista, como antes."""
+    try:
+        from graficos import bloques_de
+    except ImportError:
+        par = _vistas_de(nombre)
+        return par and (par[0], [("vistas", (v,)) for v in par[1]])
+    return bloques_de(nombre)
 
 
 def _fmt_kpi(etiqueta, agregacion, v):
@@ -1357,12 +1408,12 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     for nombre, info in visibles.items():
         if nombre == reporte_activo or info.get("grupo_nav") or info.get("tool"):
             continue
-        _rail = _vistas_de(nombre)
+        _rail = _bloques_de(nombre)
         if _rail and _rail[1]:
             _paneles.append((nombre, info, _rail))
     if _paneles:
         with st.container(key="nav_paneles"):
-            for nombre, info, (_sk, _vistas) in _paneles:
+            for nombre, info, (_sk, _bloques) in _paneles:
                 _ico = (info.get("icono") or "").removeprefix(":material/").removesuffix(":")
                 _nom = info.get("label_largo") or info.get("label_corto") or nombre
                 with st.container(key=f"navfly_{_slug(nombre)}"):
@@ -1372,12 +1423,29 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                            if _ico else "")
                         + f'<span class="fly-nom">{html.escape(_nom)}</span></div>',
                         unsafe_allow_html=True)
-                    for _oid, _rot, _vico in _vistas:
-                        st.button(
-                            _rot, key=f"navflyv_{_slug(nombre)}_{_slug(_oid)}",
-                            icon=_vico, on_click=_ir_a_vista,
-                            args=(nombre, _sk, _oid),
-                        )
-                    st.markdown('<div class="fly-pie">Clic en una vista: entra '
-                                'al reporte justo ahí.</div>',
-                                unsafe_allow_html=True)
+                    # Subtítulos y gemelas en un renglón desde las 8 vistas
+                    # (2026-10-21). Sin el pie «Clic en una vista: entra al
+                    # reporte justo ahí» desde el mismo día, a pedido: lo
+                    # que dice ya se lee en la fila que se ilumina, y en un
+                    # panel que llega al borde de una pantalla de 619px
+                    # ese renglón es el de los subtítulos.
+                    for _bl in _bloques:
+                        if _bl[0] == "grupo":
+                            st.markdown(f'<div class="fly-grupo">{html.escape(_bl[1])}</div>',
+                                        unsafe_allow_html=True)
+                            continue
+                        if _bl[0] == "sep":
+                            st.markdown('<div class="fly-sep"></div>',
+                                        unsafe_allow_html=True)
+                            continue
+                        _fila = _bl[1]
+                        _ctx = (st.container(horizontal=True, gap="small",
+                                             key=f"navflypar_{_slug(nombre)}_{_slug(_fila[0][0])}")
+                                if len(_fila) > 1 else contextlib.nullcontext())
+                        with _ctx:
+                            for _oid, _rot, _vico in _fila:
+                                st.button(
+                                    _rot, key=f"navflyv_{_slug(nombre)}_{_slug(_oid)}",
+                                    icon=_vico, on_click=_ir_a_vista,
+                                    args=(nombre, _sk, _oid),
+                                )

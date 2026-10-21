@@ -1006,6 +1006,28 @@ CSS = f"""
         border-top: 1px solid var(--border) !important;
         margin: 6px 14px !important;
     }}
+    /* Los grupos de una lista larga (2026-10-21, `base.py::bloques_de_vistas`):
+       el subtítulo, la línea de un grupo de una vista y las gemelas, que en
+       esta columna angosta van una debajo de la otra. */
+    .st-key-nav_rail_lateral .rail-grupo {{
+        padding: 10px 14px 2px 14px !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        color: var(--text-muted) !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }}
+    .st-key-nav_rail_lateral .rail-grupo-sep {{
+        border-top: 1px solid var(--border) !important;
+        margin: 6px 14px !important;
+    }}
+    .st-key-nav_rail_lateral [class*="st-key-raillatpar_"] {{
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+        width: 100% !important;
+    }}
 }}
 
 /* ── LOS ENVOLTORIOS NO APORTAN GAP ───────────────────────────────────

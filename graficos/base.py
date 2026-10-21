@@ -151,6 +151,69 @@ def pila_sin_tablas(pila):
     return tuple(s for s in pila if not es_vista_tabla(s[1]))
 
 
+# Desde cuántas vistas la lista de un reporte se parte en grupos con
+# subtítulo (2026-10-21, 2026-10-21). Hoy sólo Movimientos llega (12): las
+# demás tienen de 1 a 6, y ahí un subtítulo cada dos renglones es ruido.
+# Además las categorías de esos rails son nombres INTERNOS («Visual», «Más»,
+# «Dimensión»), escritos para ordenar el código y no para leerse.
+AGRUPAR_VISTAS_DESDE = 8
+
+
+def _rotulo_en_grupo(rotulo, grupo):
+    """«Salidas por Período» bajo el subtítulo «Salidas» → «Por Período».
+    None si el rótulo no empieza con el nombre del grupo."""
+    pre = grupo.casefold() + " "
+    if not rotulo.casefold().startswith(pre):
+        return None
+    resto = rotulo[len(pre):]
+    return resto[:1].upper() + resto[1:] if resto else None
+
+
+def bloques_de_vistas(categorias):
+    """La lista de vistas de un reporte como bloques para dibujar (2026-10-21).
+
+    Cada bloque es uno de:
+      · `("grupo", nombre)` — el subtítulo;
+      · `("sep",)` — una línea, antes de un grupo de UNA vista que se llama
+        como él («Producción» bajo «Producción» diría lo mismo dos veces);
+      · `("vistas", (item, …))` — un renglón con una vista o, si son las dos
+        gemelas de un grupo («Por Período» · «Por Área»), con las dos.
+
+    Cada `item` es `(id, rótulo, ícono)`, con el rótulo ya acortado dentro
+    de su grupo. Con menos de `AGRUPAR_VISTAS_DESDE` vistas no hay grupos:
+    un renglón por vista, con el rótulo entero.
+
+    La usan los DOS sitios que listan las vistas de un reporte —el panel de
+    otro reporte (`navegacion.py`, `navfly_<slug>`) y la lista del activo
+    (`_render_rail`, `nav_rail_lateral`)—: si cada uno agrupara a su manera,
+    pasar el cursor por el reporte activo mostraría otra lista."""
+    items = [(nombre, tuple((it[0], it[1], it[2] if len(it) > 2 else None)
+                            for it in its))
+             for nombre, its in categorias]
+    if sum(len(its) for _, its in items) < AGRUPAR_VISTAS_DESDE:
+        return [("vistas", (it,)) for _, its in items for it in its]
+    bloques = []
+    for nombre, its in items:
+        if len(its) == 1 and its[0][1].casefold() == nombre.casefold():
+            if bloques:
+                bloques.append(("sep",))
+            bloques.append(("vistas", its))
+            continue
+        bloques.append(("grupo", nombre))
+        cortos = [_rotulo_en_grupo(it[1], nombre) for it in its]
+        i = 0
+        while i < len(its):
+            fila = []
+            for j in (i, i + 1):
+                if j < len(its) and (cortos[j] or not fila):
+                    fila.append((its[j][0], cortos[j] or its[j][1], its[j][2]))
+                if not cortos[i]:
+                    break
+            bloques.append(("vistas", tuple(fila)))
+            i += len(fila)
+    return bloques
+
+
 def publicar_contexto_ia(reporte, df, filtros=None, extras=None):
     """Publica el df EFECTIVO (con los chips ya aplicados) para el asistente IA.
 
@@ -1324,73 +1387,91 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
             # posición fija.
             _ids_pila = {_oid for _, _oid in secciones}
             _prev_en_pila = None
-            for _cat_nombre, items in categorias:
-                for item in items:
-                    oid, label = item[0], item[1]
-                    _en_pila = oid in _ids_pila
-                    if _prev_en_pila is not None and _en_pila != _prev_en_pila:
-                        st.markdown('<div class="nav-rail-lat-sep"></div>',
-                                   unsafe_allow_html=True)
-                    _prev_en_pila = _en_pila
-                    # El icono SÍ se dibuja acá (a diferencia de la franja
-                    # horizontal, que lo ignora por falta de alto): esta copia
-                    # es vertical y tiene sitio. Y hace falta — el rail que
-                    # reemplaza, el de Reportes, tiene iconos, y sin ellos el
-                    # intercambio se ve como un salto de formato.
-                    # 3er elemento opcional: hay rails con tuplas de 2.
-                    icono = item[2] if len(item) > 2 else None
-                    # SIN KPI, igual que la franja horizontal (ver arriba).
-                    # Lo tuvo del 2026-09-07 al 2026-09-18 — llego aca
-                    # porque la franja de arriba se va al scrollear y el
-                    # numero desaparecia justo cuando esta columna toma el
-                    # relevo; se fue cuando la columna entera paso a
-                    # aparecer solo con el cursor encima.
-                    # EL KPI COMO TOOLTIP, no como texto (2026-09-19). El
-                    # punto de color de la fila (`estados`) se deriva de este
-                    # mismo número —sube, baja, o hay algo que revisar— y sin
-                    # él no hay forma de saber qué dice: se reportó tal cual,
-                    # «veo que algunas vistas tienen un punto rojo, eso qué
-                    # significa?». En línea no va porque el KPI en el label se
-                    # retiró a pedido el 2026-09-18 (#465): así el dato está
-                    # cuando se lo busca y no ensucia la lista.
-                    #
-                    # Y NO ES EL `help=` DE STREAMLIT desde el 2026-09-21
-                    # (#482), a pedido: ese tooltip lo dispara el BOTÓN
-                    # entero —hover en cualquier parte de la fila—, sale a
-                    # 464px de ancho y baseweb lo clava en la esquina de la
-                    # pantalla, lejos del punto que explica. Acá el punto es
-                    # un elemento de verdad y el panel cuelga de ÉL: se
-                    # muestra sólo con el cursor encima del punto, mide lo
-                    # que dice `estilos/`, y aparece a su lado.
-                    _ayuda = (kpis or {}).get(oid)
-                    st.button(
-                        label,
-                        key=f"{btn_prefix}lat_{_slug_url(oid)}",
-                        type="secondary",
-                        on_click=_rail_set, args=(state_key, oid),
-                        **({"icon": icono} if icono else {}),
-                    )
-                    # EL PUNTO Y SU PANEL, en un contenedor de alto CERO
-                    # pegado DEBAJO de su botón: el CSS lo sube media fila
-                    # (`--rail-fila-alto`) y así no empuja la lista ni pide
-                    # envolver cada fila —hay reglas colgadas de que el
-                    # `stElementContainer` del botón sea la unidad del rail
-                    # (el hairline de `_26_rails_scroll.py`)—.
-                    #
-                    # El texto va por `st.markdown` y no por HTML armado a
-                    # mano para que lo renderice Streamlit: ya viene con
-                    # `**negrita**` y `:red[▲12%]` de quien lo escribió, y
-                    # un conversor propio se quedaría viejo con el primer
-                    # KPI que use otra marca.
-                    #
-                    # Se dibuja si hay KPI *o* si hay estado: hoy en Compras
-                    # todo estado trae su texto, pero un dashboard podría
-                    # pasar sólo `estados` y ahí el punto sigue siendo la
-                    # señal, sin panel que abrir.
-                    if _ayuda or (estados or {}).get(oid):
-                        with st.container(key=f"railkpi_{_slug_url(oid)}"):
-                            if _ayuda:
-                                st.markdown(_ayuda)
+            # Desde 8 vistas, con subtítulos y las gemelas en un renglón
+            # (2026-10-21): los MISMOS bloques que el panel de un reporte que
+            # no es el activo (`navegacion.py`), para que pasar el cursor por
+            # el activo no muestre otra lista. Los rótulos acortados («Por
+            # Período») son sólo de esta lista: la franja escribe la vista
+            # con `_rotulos`, el nombre entero.
+            for _bl in bloques_de_vistas(categorias):
+                if _bl[0] == "grupo":
+                    st.markdown(f'<div class="rail-grupo">{html.escape(_bl[1])}</div>',
+                                unsafe_allow_html=True)
+                    continue
+                if _bl[0] == "sep":
+                    st.markdown('<div class="rail-grupo-sep"></div>',
+                                unsafe_allow_html=True)
+                    continue
+                _par = (st.container(horizontal=True, gap="small",
+                                     key=f"raillatpar_{_slug_url(_bl[1][0][0])}")
+                        if len(_bl[1]) > 1 else nullcontext())
+                with _par:
+                    for item in _bl[1]:
+                        oid, label = item[0], item[1]
+                        _en_pila = oid in _ids_pila
+                        if _prev_en_pila is not None and _en_pila != _prev_en_pila:
+                            st.markdown('<div class="nav-rail-lat-sep"></div>',
+                                       unsafe_allow_html=True)
+                        _prev_en_pila = _en_pila
+                        # El icono SÍ se dibuja acá (a diferencia de la franja
+                        # horizontal, que lo ignora por falta de alto): esta copia
+                        # es vertical y tiene sitio. Y hace falta — el rail que
+                        # reemplaza, el de Reportes, tiene iconos, y sin ellos el
+                        # intercambio se ve como un salto de formato.
+                        # 3er elemento opcional: hay rails con tuplas de 2.
+                        icono = item[2] if len(item) > 2 else None
+                        # SIN KPI, igual que la franja horizontal (ver arriba).
+                        # Lo tuvo del 2026-09-07 al 2026-09-18 — llego aca
+                        # porque la franja de arriba se va al scrollear y el
+                        # numero desaparecia justo cuando esta columna toma el
+                        # relevo; se fue cuando la columna entera paso a
+                        # aparecer solo con el cursor encima.
+                        # EL KPI COMO TOOLTIP, no como texto (2026-09-19). El
+                        # punto de color de la fila (`estados`) se deriva de este
+                        # mismo número —sube, baja, o hay algo que revisar— y sin
+                        # él no hay forma de saber qué dice: se reportó tal cual,
+                        # «veo que algunas vistas tienen un punto rojo, eso qué
+                        # significa?». En línea no va porque el KPI en el label se
+                        # retiró a pedido el 2026-09-18 (#465): así el dato está
+                        # cuando se lo busca y no ensucia la lista.
+                        #
+                        # Y NO ES EL `help=` DE STREAMLIT desde el 2026-09-21
+                        # (#482), a pedido: ese tooltip lo dispara el BOTÓN
+                        # entero —hover en cualquier parte de la fila—, sale a
+                        # 464px de ancho y baseweb lo clava en la esquina de la
+                        # pantalla, lejos del punto que explica. Acá el punto es
+                        # un elemento de verdad y el panel cuelga de ÉL: se
+                        # muestra sólo con el cursor encima del punto, mide lo
+                        # que dice `estilos/`, y aparece a su lado.
+                        _ayuda = (kpis or {}).get(oid)
+                        st.button(
+                            label,
+                            key=f"{btn_prefix}lat_{_slug_url(oid)}",
+                            type="secondary",
+                            on_click=_rail_set, args=(state_key, oid),
+                            **({"icon": icono} if icono else {}),
+                        )
+                        # EL PUNTO Y SU PANEL, en un contenedor de alto CERO
+                        # pegado DEBAJO de su botón: el CSS lo sube media fila
+                        # (`--rail-fila-alto`) y así no empuja la lista ni pide
+                        # envolver cada fila —hay reglas colgadas de que el
+                        # `stElementContainer` del botón sea la unidad del rail
+                        # (el hairline de `_26_rails_scroll.py`)—.
+                        #
+                        # El texto va por `st.markdown` y no por HTML armado a
+                        # mano para que lo renderice Streamlit: ya viene con
+                        # `**negrita**` y `:red[▲12%]` de quien lo escribió, y
+                        # un conversor propio se quedaría viejo con el primer
+                        # KPI que use otra marca.
+                        #
+                        # Se dibuja si hay KPI *o* si hay estado: hoy en Compras
+                        # todo estado trae su texto, pero un dashboard podría
+                        # pasar sólo `estados` y ahí el punto sigue siendo la
+                        # señal, sin panel que abrir.
+                        if _ayuda or (estados or {}).get(oid):
+                            with st.container(key=f"railkpi_{_slug_url(oid)}"):
+                                if _ayuda:
+                                    st.markdown(_ayuda)
         # (Acá se publicaban `--arbol-n` y `--arbol-seps`, las filas y los
         # separadores de esta lista, para que la fila del reporte activo
         # del árbol se estirara lo que ella medía. Desde el 2026-09-26 la

@@ -137,6 +137,17 @@ def vistas_de(reporte):
     return state_key, vistas
 
 
+def bloques_de(reporte):
+    """`(state_key, bloques)` para el panel de `reporte`, o None: sus vistas
+    agrupadas como las dibuja `base.bloques_de_vistas` (2026-10-21)."""
+    par = _RAILS.get(reporte)
+    if par is None:
+        return None
+    from graficos.base import bloques_de_vistas
+    categorias, state_key = par
+    return state_key, bloques_de_vistas(categorias)
+
+
 def tiene_dashboard(reporte):
     """True si `reporte` tiene un dashboard dedicado registrado arriba.
 
