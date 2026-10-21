@@ -44,12 +44,19 @@ from graficos.base import (
 )
 
 
-# Una sola vista. El rail se declara igual —con `rail_sin_tablas`, como
-# todos (regla #507)— porque de él salen el panel del reporte en la columna
-# (`graficos/__init__.py::_RAILS`, regla #568) y el rótulo de la vista en la
-# franja. Ícono = el del reporte en `data.py::REPORTES`.
+# TRES VISTAS desde el 2026-10-21 (regla #683; hasta ese día, una sola con
+# una tarjeta debajo de la tabla que alternaba seis modos). La primera es la
+# que abre. Los ids son los nombres de `_sunat_vistas.VISTAS`, escritos
+# literales: `test_graficos.py` lee los rails con `ast`. El rail se declara
+# con `rail_sin_tablas`, como todos (regla #507), porque de él salen el
+# panel del reporte en la columna (`graficos/__init__.py::_RAILS`, regla
+# #568) y el rótulo de la vista en la franja.
 _SUNAT_RAIL_CATEGORIAS = rail_sin_tablas((
-    ("SUNAT", (("Documentos SUNAT", "Documentos SUNAT", ":material/fact_check:"),)),
+    ("SUNAT", (
+        ("Cruce con SUNAT", "Cruce con SUNAT", ":material/fact_check:"),
+        ("Proveedores y fechas", "Proveedores y fechas", ":material/storefront:"),
+        ("Documentos", "Documentos", ":material/receipt_long:"),
+    )),
 ))
 
 # SIN PILA, a propósito: la página es UNA tarjeta alta con su propia tabla,
@@ -113,11 +120,11 @@ def _kpi_de_la_vista():
     if _cruce.get("revisar"):
         txt += (f" · {_fmt(_cruce['revisar'])} a revisar (con diferencia o "
                 f"sin cargar)")
-        estados = {"Documentos SUNAT": "warning"}
+        estados = {"Cruce con SUNAT": "warning"}
     if _cruce.get("fuera"):
         txt += (f" · {_fmt(_cruce['fuera'])} cargados sin comprobante en "
                 f"SUNAT")
-    return {"Documentos SUNAT": txt}, estados
+    return {"Cruce con SUNAT": txt}, estados
 
 
 def renderizar_graficos_sunat(df_f, nombre_reporte, df_full=None, tabla_cb=None):
@@ -152,12 +159,12 @@ def renderizar_graficos_sunat(df_f, nombre_reporte, df_full=None, tabla_cb=None)
                 break
 
     kpis, estados = _kpi_de_la_vista()
-    _render_rail(_SUNAT_RAIL_CATEGORIAS, "sunat_graf_tipo",
-                 secciones=_PILA, estados=estados, kpis=kpis)
+    vista = _render_rail(_SUNAT_RAIL_CATEGORIAS, "sunat_graf_tipo",
+                         secciones=_PILA, estados=estados, kpis=kpis)
 
     # Import local a propósito: arrastra `sunat.py` y, con él, `requests` —
     # no hay por qué pagarlo al importar `graficos` si nadie abre el reporte.
     from graficos.compras.documentos_sunat import renderizar_documentos_sunat
     with st.container(key="compras_sunat_drill_wrap"):
         renderizar_documentos_sunat(
-            df_full if df_full is not None else df_f, col_fecha)
+            df_full if df_full is not None else df_f, col_fecha, vista)

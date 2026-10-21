@@ -1472,7 +1472,7 @@ CSS = """    /* ================================================================
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-compras_prov_card_docs, > .st-key-compras_prov_card_ficha, > .st-key-compras_prov_card_ranking, > .st-key-compras_prov_card_vacio),
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-sunat_card_graf, > .st-key-sunat_card_izq),
+        > div:has(> .st-key-sunat_card_izq),
         /* Las dos mitades del conversor entraron acá el 2026-08-29, al   */
         /* ganar cada una un pie de totales de largo distinto: la de      */
         /* SUNAT medía 388px y la del sistema 349 en el documento de      */
@@ -1640,177 +1640,32 @@ CSS = """    /* ================================================================
     }
 
     /* ─────────────────────────────────────────────────────────────── */
-    /* LA COLUMNA DE ÍCONOS DE LA TARJETA DE ABAJO (2026-10-02)         */
+    /* LA LLEGADA A LA TABLA DESDE UN RESUMEN (2026-10-21)              */
     /*                                                                  */
-    /* El selector de vistas de la tarjeta de debajo de la tabla        */
-    /* (gráficos, resumen, conversor) dejó de ser un renglón arriba y   */
-    /* es una columna de 40px al costado: no ocupa alto. Mismo idioma   */
-    /* que la columna de reportes: ícono gris, la vista activa en       */
-    /* lavanda, el nombre en el tooltip, y una línea que separa la      */
-    /* columna del contenido. La activa es el botón `primary` que pone  */
-    /* Python (`_panel_abajo`); el resto son `tertiary`. Regla #586.    */
+    /* «Cruce con SUNAT» y «Proveedores y fechas» llevan a la vista     */
+    /* «Documentos» ya filtrada; este renglón dice desde dónde y qué    */
+    /* filtra, con la vuelta y «Quitar filtro» (`_aviso_llegada`). La   */
+    /* tarjeta de debajo de la tabla, sus íconos y la fidelidad en      */
+    /* barras de HTML se fueron ese día: los resúmenes son una pieza    */
+    /* propia con su CSS (`graficos/compras/sunat_vistas.css`).         */
+    /* Regla #683.                                                      */
     /* ─────────────────────────────────────────────────────────────── */
-    .st-key-sunat_abajo_nav {
-        border-right: 1px solid var(--border);
-        padding-right: 6px;
-        gap: 4px !important;
-        flex: 0 0 auto;
-    }
-    .st-key-sunat_abajo_cuerpo {
-        min-width: 0;   /* sin esto, un gráfico ancho empuja la fila */
-    }
-    .st-key-sunat_abajo_nav button {
-        width: 32px !important;
-        min-width: 32px !important;
-        height: 32px !important;
-        min-height: 32px !important;
-        padding: 0 !important;
-        border-radius: 9px !important;
-        border: none !important;
-        background: transparent !important;
-        color: var(--text-secondary) !important;
-        box-shadow: none !important;
-    }
-    .st-key-sunat_abajo_nav button:hover {
-        background: var(--accent-tint) !important;
-        color: var(--accent) !important;
-    }
-    .st-key-sunat_abajo_nav button[kind="primary"] {
-        background: var(--accent-light) !important;
-        color: var(--accent) !important;
-    }
-
-    /* El renglón de controles del «Resumen del cruce»: la leyenda, los  */
-    /* años que se comparan y Gráfico / Tabla. Botones DELGADOS (a       */
-    /* pedido: «son muy gruesos y empujan el gráfico hacia abajo»): 24px */
-    /* de alto contra los ~34 de una pastilla de Streamlit. La leyenda   */
-    /* empuja los botones a la derecha. Regla #586.                      */
-    .st-key-sunat_res_cab,
-    .st-key-sunat_tipo_cab {
+    .st-key-sunat_llegada_fila {
+        background: var(--accent-light);
+        border-radius: 8px;
+        padding: 2px 8px;
         min-height: 0 !important;
     }
-    /* Entre el renglón de los controles y lo de abajo, la mitad del gap */
-    /* de Streamlit (16px): el gráfico sube y la tarjeta se acorta, a     */
-    /* pedido (2026-10-02, «acortar un poco la tarjeta de abajo, subir    */
-    /* un poco el gráfico»). Regla #588.                                  */
-    .st-key-sunat_abajo_cuerpo {
-        gap: 8px !important;
+    .st-key-sunat_llegada_fila button {
+        min-height: 28px !important;
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
     }
-    .st-key-sunat_res_cab [data-testid="stElementContainer"]:first-child,
-    .st-key-sunat_tipo_cab [data-testid="stElementContainer"]:first-child {
-        margin-right: auto;
+    .st-key-sunat_llegada_fila [data-testid="stElementContainer"]:nth-child(2) {
+        flex: 1 1 auto;
+        min-width: 0;
     }
-    .st-key-sunat_res_medida button,
-    .st-key-sunat_res_anios button,
-    .st-key-sunat_res_vista button,
-    .st-key-sunat_tipo_medida button {
-        min-height: 24px !important;
-        height: 24px !important;
-        padding: 0 10px !important;
-        font-size: 11.5px !important;
-        line-height: 1 !important;
-    }
-    .st-key-sunat_res_medida p,
-    .st-key-sunat_res_anios p,
-    .st-key-sunat_res_vista p,
-    .st-key-sunat_tipo_medida p {
-        font-size: 11.5px !important;
-    }
-
-    /* ─────────────────────────────────────────────────────────────── */
-    /* LA FIDELIDAD RESPECTO DE SUNAT (2026-10-02, mockup aprobado)     */
-    /*                                                                  */
-    /* `_kpi_fidelidad_html` y `_barras_fidelidad`: la fidelidad grande */
-    /* y una barra apilada al 100 % por período, con «Fuera de SUNAT»   */
-    /* punteado al costado. Los tres tramos: cuadran (lavanda), con     */
-    /* diferencia (naranja claro) y falta cargar (naranja oscuro): se   */
-    /* distinguen por la luminosidad, no sólo por el tono. Regla #630.  */
-    /* ─────────────────────────────────────────────────────────────── */
-    /* Los dos bloques son `st.markdown`, y su `stMarkdownContainer` trae */
-    /* `margin-bottom: -16px` (regla #162): sin estos 16px de relleno, la  */
-    /* línea de abajo de la fidelidad se montaba sobre el renglón         */
-    /* siguiente y la última barra quedaba cortada por el borde de la     */
-    /* tarjeta.                                                           */
-    .sunat-fid-kpi { display: flex; flex-direction: column; gap: 2px; cursor: help; padding-bottom: 16px; }
-    .sunat-fid-kpi-rot {
-        font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
-        text-transform: uppercase; color: var(--text-secondary);
-    }
-    .sunat-fid-kpi-fila { display: flex; align-items: center; gap: 10px; }
-    .sunat-fid-kpi-val {
-        font-size: 28px; font-weight: 700; line-height: 1.1;
-        color: var(--text-primary); font-variant-numeric: tabular-nums;
-    }
-    .sunat-fid-kpi-sub { font-size: 12px; color: var(--text-secondary); }
-    .sunat-fid-chip {
-        font-size: 12px; font-weight: 600; border-radius: 999px;
-        padding: 2px 9px; white-space: nowrap;
-        color: var(--text-secondary); background: var(--line-soft);
-        border: 1px solid var(--border);
-    }
-    .sunat-fid-chip.baja {
-        color: var(--warning-text); background: var(--warning-bg);
-        border-color: var(--warning-border);
-    }
-    .sunat-fid-chip.sube {
-        color: var(--success-text); background: var(--success-bg);
-        border-color: var(--success-bg);
-    }
-    .sunat-fid { display: flex; flex-direction: column; gap: 8px; padding-bottom: 16px; }
-    .sunat-fid-fila { display: flex; gap: 14px; align-items: center; }
-    .sunat-fid-per {
-        width: 160px; flex: none; display: flex; flex-direction: column;
-        font-size: 12.5px; color: var(--text-primary);
-    }
-    .sunat-fid-per b { font-weight: 400; }
-    .sunat-fid-fila.actual .sunat-fid-per b { font-weight: 700; }
-    .sunat-fid-per span { font-size: 11px; color: var(--text-secondary); }
-    .sunat-fid-medio { flex: 1; min-width: 0; }
-    .sunat-fid-fuera-col { width: 150px; flex: none; }
-    .sunat-fid-cab {
-        font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-        text-transform: uppercase; color: var(--text-muted);
-    }
-    .sunat-fid-cab .sunat-fid-per { font-size: 10.5px; color: var(--text-muted); }
-    .sunat-fid-cab .sunat-fid-medio {
-        display: flex; justify-content: space-between; gap: 12px;
-    }
-    .sunat-fid-leyenda {
-        display: flex; gap: 12px; text-transform: none; letter-spacing: 0;
-        font-weight: 500; color: var(--text-secondary); white-space: nowrap;
-    }
-    .sunat-fid-leyenda span { display: inline-flex; align-items: center; gap: 5px; cursor: help; }
-    .sunat-fid-sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
-    .sunat-fid-barra {
-        flex: 1; min-width: 0; height: 30px; display: flex;
-        border-radius: 8px; overflow: hidden; background: var(--line-soft);
-    }
-    .sunat-fid-fila.actual .sunat-fid-barra { box-shadow: 0 0 0 2px var(--accent-light); }
-    .sunat-fid-tramo {
-        height: 100%; display: flex; align-items: center; justify-content: center;
-        font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden;
-        font-variant-numeric: tabular-nums; cursor: help;
-    }
-    .sunat-fid-tramo.cuadran, .sunat-fid-sw.cuadran { background: var(--accent-hover); color: var(--bg-card); }
-    .sunat-fid-tramo.cuadran { justify-content: flex-start; padding-left: 10px; box-sizing: border-box; font-size: 12px; }
-    .sunat-fid-tramo.diferencia, .sunat-fid-sw.diferencia { background: var(--warning-border); color: var(--text-primary); }
-    .sunat-fid-tramo.falta, .sunat-fid-sw.falta { background: var(--warning-text); color: var(--bg-card); }
-    .sunat-fid-vacia {
-        flex: 1; display: flex; align-items: center; padding-left: 10px;
-        font-size: 11.5px; color: var(--text-secondary);
-    }
-    .sunat-fid-fuera {
-        width: 150px; flex: none; box-sizing: border-box;
-        display: flex; align-items: baseline; gap: 6px;
-        border: 1px dashed var(--text-muted); border-radius: 8px;
-        padding: 5px 9px; cursor: help;
-    }
-    .sunat-fid-fuera b { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-    .sunat-fid-fuera span { font-size: 11px; color: var(--text-secondary); }
-    .sunat-fid-nota { margin-top: -4px; }
-    .sunat-fid-nota .sunat-fid-medio {
-        text-align: right; font-size: 11px; color: var(--warning-text);
-    }
+    .sunat-llegada-txt { font-size: 12.5px; color: var(--text-primary); }
 
     /* ─────────────────────────────────────────────────────────────── */
     /* LA FICHA DEL DOCUMENTO, EN UNA VENTANA MODAL (2026-10-02)        */

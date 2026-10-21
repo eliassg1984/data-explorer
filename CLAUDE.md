@@ -614,6 +614,12 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
   y su rango es `clave_rango("Documentos SUNAT")`. No tiene pila:
   `_render_rail(..., secciones=())`, y la TUPLA VACÍA no es `None` — con
   ella se dibujan la lista de vistas y el temporizador. Regla #577.
+  **Desde el 2026-10-21 son tres vistas, una por pantalla** (regla #683):
+  «Cruce con SUNAT» (abre), «Proveedores y fechas» —una pieza propia,
+  `graficos/compras/_sunat_vistas.py` + `sunat_vistas.js`— y «Documentos»,
+  la tabla. Los resúmenes llevan a la tabla filtrada (`K_LLEGADA`) y el
+  conversor es la ventana «Ingresar al Almacén», desde la fila «Solo
+  SUNAT». La tarjeta de debajo de la tabla, con sus seis modos, ya no existe.
 - **Y un `st.rerun` al tope de un fragment los esconde a TODOS**: aborta la
   corrida antes de que se registren, así que la escalada de fecha de una
   tarjeta le borraba lo elegido a sus propios controles — la granularidad

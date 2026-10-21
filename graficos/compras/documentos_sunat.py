@@ -85,7 +85,6 @@ import time
 import unicodedata
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, JsCode
 
@@ -98,11 +97,11 @@ from estado_rango import clave_rango, restaurar_eco
 from tema import (
     ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR_FONDO, ERROR_TEXTO,
     GRIS_BORDE, GRIS_FONDO, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
-    LAVANDA_CABECERA_GRUPO, LAVANDA_FOCO, LAVANDA_FONDO,
+    LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO,
     TEXTO_PRINCIPAL,
 )
 from graficos.base import (
-    _compras_layout, _compras_truncar, selector_fecha_tarjeta, una_vez_por_corrida)
+    _compras_truncar, selector_fecha_tarjeta, una_vez_por_corrida)
 from graficos.compras._comun import (
     ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK,
 )
@@ -783,6 +782,21 @@ def _filtro_proveedor(slot, df_cruce, claves):
     return mapa.get(sel)
 
 
+def poner_proveedor(clave):
+    """Deja elegido el proveedor `clave` (o todos, con `None`) en el filtro
+    de la tabla, desde afuera: lo usan las vistas de resumen al llevar a la
+    tabla (regla #683). Se escribe el ESPEJO y se suelta la key del widget,
+    que al dibujarse se re-siembra desde él (ver `_filtro_proveedor`)."""
+    st.session_state["sunat_prov__eco"] = clave or None
+    st.session_state.pop("sunat_prov", None)
+
+
+def poner_estado(estado):
+    """Lo mismo para el filtro «Está vs Sistema»."""
+    st.session_state["sunat_estado__eco"] = estado or None
+    st.session_state.pop("sunat_estado", None)
+
+
 _TODOS_ESTADOS = "Todos los estados"
 
 _ESTADOS_CRUCE = ("Coincide", "Diferencia", "Solo SUNAT", "Solo sistema")
@@ -1325,6 +1339,9 @@ def _tabla_documentos(df_cruce, df_sire):
             # El sello del clic en el ojo/número (lo escribe `onCellClicked`):
             # es lo que distingue «abrí la ficha» de «elegí la fila».
             "_ver": 0,
+            # El sello del clic en «Ingresar» (regla #683): mismo mecanismo
+            # que `_ver`, pero abre la ventana de «Ingresar al Almacén».
+            "_ing": 0,
             "Fecha": r.get("fecha_emision"),
             "Documento": str(r.get("documento") or ""),
             "Proveedor": str(r.get("proveedor") or "")
@@ -1343,6 +1360,10 @@ def _tabla_documentos(df_cruce, df_sire):
             "XML": "✓" if ex and sunat.claves_original(ex)[1] in _xml_en_r2
                    else "",
             _COL_ESTADO: str(r.get("estado") or ""),
+            # Sólo lo que SUNAT tiene y el sistema no: es lo único que hay
+            # que ingresar. Sin fila del SIRE no hay XML que convertir.
+            "Ingresar": ("Ingresar" if ex and str(r.get("estado") or "")
+                         == "Solo SUNAT" else ""),
         })
 
     tv = pd.DataFrame(filas)
@@ -1353,7 +1374,7 @@ def _tabla_documentos(df_cruce, df_sire):
     gb.configure_default_column(resizable=True, sortable=True, filter=False,
                                 editable=False, suppressMovable=True)
     for oculta in ("_car", "_chips", "_sim", "_base_sis", "_igv_sis",
-                   "_total_sis", "_conv", "_dos", "_ver", "_tipo_por"):
+                   "_total_sis", "_conv", "_dos", "_ver", "_ing", "_tipo_por"):
         gb.configure_column(oculta, hide=True)
     # `_tipo` va oculta pero NO muerta: con el tipo de COMPROBANTE fuera de
     # las columnas visibles (es un chip), ésta es la que permite ordenar y
@@ -1419,6 +1440,18 @@ def _tabla_documentos(df_cruce, df_sire):
             "return c ? {'color':c,'fontWeight':'600'} : {'color':'%s'}; }"
             % (ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, GRIS_TEXTO_MEDIO,
                GRIS_TEXTO)))
+    # «Ingresar» (2026-10-21, regla #683): el conversor dejó de ser un modo
+    # de la tarjeta de abajo y es una ventana sobre la tabla, que se abre
+    # desde la fila que hay que ingresar. Se ve como un enlace.
+    gb.configure_column(
+        "Ingresar", headerName="", width=84, minWidth=84, sortable=False,
+        headerTooltip="Abre «Ingresar al Almacén» para un comprobante que "
+                      "SUNAT tiene y el sistema no.",
+        tooltipValueGetter=JsCode(
+            "function(p){ return p.value ? 'Ingresar al Almacén' : ''; }"),
+        valueFormatter=JsCode(
+            "function(p){ return p.value ? '↓ Ingresar' : ''; }"),
+        cellStyle={"color": ACENTO, "fontWeight": "600", "cursor": "pointer"})
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(
         headerHeight=ALTO_HEADER_RANK,
@@ -1458,10 +1491,13 @@ def _tabla_documentos(df_cruce, df_sire):
         # ojo de una fila YA elegida no cambiaría la selección y el clic no
         # llegaría a Python; y aunque la fila sea nueva, no depende de si
         # AG Grid despacha el clic de la celda antes o después de elegirla.
+        # «Ingresar» deja su propio sello (`_ing`) con el mismo truco.
         onCellClicked=JsCode(
-            "function(e){ if (!e.data || !e.colDef"
-            " || e.colDef.field !== 'Documento') return;"
-            " e.data._ver = Date.now(); var n = e.node;"
+            "function(e){ if (!e.data || !e.colDef) return;"
+            " var f = e.colDef.field;"
+            " if (f === 'Documento') { e.data._ver = Date.now(); }"
+            " else if (f === 'Ingresar' && e.value) { e.data._ing = Date.now(); }"
+            " else { return; } var n = e.node;"
             " setTimeout(function(){ try { n.setSelected(false);"
             " n.setSelected(true); } catch(x) {} }, 0); }"),
         onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
@@ -1517,6 +1553,7 @@ def _tabla_documentos(df_cruce, df_sire):
         return None
     doc = _fila_de(df_sire, fila)
     _atender_pedido_de_ficha(fila, doc)
+    _atender_pedido_de_ingreso(fila, doc)
     return doc
 
 
@@ -1565,247 +1602,6 @@ def _sello_origen(origen):
     return (f'<span style="white-space:nowrap;color:{color};" '
             f'title="Última sincronización del registro: '
             f'{pd.Timestamp(fecha):%d/%m/%Y %H:%M} UTC">{cuando}</span>')
-
-
-# Alto de una fila del ranking de proveedores del PANEL DEL GRÁFICO (el modo
-# «Por proveedor»). Nació copiando el del ranking de `proveedor.py` —es la
-# misma lectura: un proveedor por fila, ordenado por valor— y quedó DESFASADO
-# el 2026-09-11, cuando ese número se mudó a `_comun.ALTO_FILA_RANK` y bajó a
-# 24 con el resto del look de tabla-ranking (`CSS_RANKING_GRID`).
-#
-# Sigue en 28 con el tema `material` a propósito de nada: es deuda, no
-# decisión. El 2026-09-18 se pidió ese look para LA TABLA de esta vista (la
-# de documentos, arriba) y sólo se migró ésa. Cuando le toque a este panel,
-# el cambio son tres líneas —`ALTO_FILA_RANK`, `ALTO_HEADER_RANK` y
-# `CSS_RANKING_GRID`— y el alto y el CSS viajan JUNTOS (regla #404). El
-# nombre lleva el sufijo para que no se confunda con el importado, que vale
-# otra cosa.
-_ALTO_FILA_PANEL_PROVS = 28
-
-
-def _ranking_proveedores(df):
-    """Ranking de proveedores del período como TABLA, no como barras.
-
-    2026-08-24, a pedido ("no me muestra mucha información"): reemplaza al
-    `go.Bar` horizontal de «Top proveedores del período». Esa barra
-    mostraba UN dato (el monto) de DIEZ proveedores, con el nombre cortado
-    a 30 caracteres. Acá cada proveedor trae cuatro, el nombre se ellipsea
-    con el ancho real y el tooltip lo completa, y ya no son diez: entran
-    todos los del rango, y lo que no cabe scrollea DENTRO del frame, que
-    mide lo mismo que medía el gráfico.
-
-    Las dos participaciones no responden la misma pregunta y por eso van
-    las dos: «% valor» dice cuánta plata se le va a ese proveedor, «% docs»
-    cuánto papeleo genera. Un proveedor con el 2% del valor y el 25% de los
-    documentos es exactamente el caso que la barra de monto escondía.
-
-    Las dos son sobre lo que muestra ESTA tabla (el rango, ya filtrado por
-    situación), no sobre los KPIs de arriba, que se calculan sin ese
-    filtro. Por eso el subtítulo dice contra qué base están sacadas.
-
-    La barra de progreso es el FONDO de la celda de «Total» (un
-    `linear-gradient` cortado en el % contra el mayor del rango), la misma
-    receta que el ranking de `proveedor.py`: no hace falta `cellRenderer`
-    —que acá pediría la clase `init()/getGui()` de la regla #25— ni los
-    sparklines de AG Grid, que son Enterprise. Los colores salen de
-    `tema.py` y no de `var(--...)` a propósito: el grid vive en un iframe
-    propio y las variables CSS del documento padre no llegan.
-    """
-    val = pd.to_numeric(df.get("total"), errors="coerce").fillna(0.0)
-    # Se agrupa por RUC y no por razón social: el RUC es la identidad del
-    # proveedor (mismo criterio que `_fila_de`). SUNAT devuelve el nombre
-    # tal como está en su padrón y basta una tilde o un "S.A.C." abreviado
-    # distinto entre períodos para partir un proveedor en dos filas.
-    clave = (df["ruc_proveedor"].astype(str) if "ruc_proveedor" in df
-             else df["proveedor"].astype(str))
-    g = pd.DataFrame({
-        "ruc": clave.values,
-        "nombre": df["proveedor"].astype(str).values,
-        "valor": val.values,
-    })
-    # `size` y no `nunique(documento)`: cada fila del registro ES un
-    # comprobante —lo mismo que cuenta el KPI "docs" de arriba— y
-    # serie-número NO identifica uno (ver `_fila_de`: 1.422 colisiones
-    # medidas), así que deduplicar por ahí perdería documentos reales.
-    agg = (g.groupby("ruc", sort=False)
-             .agg(nombre=("nombre", "first"), valor=("valor", "sum"),
-                  docs=("valor", "size"))
-             .reset_index()
-             .sort_values("valor", ascending=False)
-             .reset_index(drop=True))
-    if agg.empty:
-        st.info("Sin datos para el ranking.")
-        return
-
-    tot_val = float(agg["valor"].sum())
-    tot_docs = int(agg["docs"].sum())
-    # Las notas de crédito RESTAN (`sunat.py`), así que un proveedor puede
-    # cerrar el rango en negativo. El máximo se toma sólo si es positivo:
-    # dividir por un máximo negativo daría barras largas justo en las filas
-    # que menos valor tienen.
-    _max = float(agg["valor"].max())
-    _max = _max if _max > 0 else 1.0
-
-    st.markdown(
-        f'<div style="font-size:14px;font-weight:600;color:{TEXTO_PRINCIPAL};'
-        'margin:2px 0 0;">Proveedores del período</div>'
-        f'<div style="font-size:11.5px;color:{GRIS_TEXTO};margin:0 0 6px;">'
-        f'{len(agg):,} proveedor{"es" if len(agg) != 1 else ""} · {tot_docs:,} docs · '
-        f'S/ {tot_val:,.2f} — los % son sobre esta base</div>',
-        unsafe_allow_html=True)
-
-    tv = pd.DataFrame({
-        "Proveedor": agg["nombre"],
-        "Total": agg["valor"].astype(float),
-        "Docs": agg["docs"].astype(int),
-        "% docs": agg["docs"] / tot_docs * 100 if tot_docs else 0.0,
-        "% valor": agg["valor"] / tot_val * 100 if tot_val else 0.0,
-        # Ocultas: el % de LLENADO de la barra (contra el MAYOR, que no es
-        # el mismo número que "% valor", que va sobre el TOTAL) y el RUC,
-        # que sólo se usa en el tooltip del nombre.
-        "_barra": agg["valor"] / _max * 100,
-        "_ruc": agg["ruc"],
-    })
-
-    # El texto va a la DERECHA y la barra tiene prohibido llegar hasta él:
-    # si se pisan queda texto oscuro sobre fondo oscuro. `proveedor.py`
-    # resuelve eso con un tope del 62% del ancho, y acá NO alcanza —
-    # medido en el navegador: con la columna en 192px la barra más larga
-    # llegaba a 119px y el monto arrancaba en 105, o sea 14px de "S/ " en
-    # ilegible. Aquella columna es más ancha (`flex: 2`) y su monto va
-    # redondeado, sin centavos; ésta muestra los centavos porque es plata
-    # que se concilia contra un papel.
-    #
-    # Así que el tope no es un %, es un GUTTER FIJO en px: la barra ocupa
-    # el ancho de la celda menos lo que mide el monto más largo. 110px sale
-    # de medir el string más ancho que puede aparecer ("S/ 1,234,567.89" =
-    # 88px con la fuente del grid) más los 15px de padding y un margen. Se
-    # reparte igual para todas las filas, así que las proporciones entre
-    # filas se mantienen. La pista va TRANSPARENTE, no tintada: con fondo,
-    # la columna entera se lee como un bloque lavanda que compite con las
-    # barras (eso sí es lección tal cual de `proveedor.py`).
-    _js_barra = JsCode(
-        "function(p){"
-        " var ancho = (p.column && p.column.getActualWidth)"
-        "   ? p.column.getActualWidth() : 0;"
-        " var util = Math.max(0, ancho - 110);"
-        " var pct = Math.max(0, Math.min(100, p.data._barra||0));"
-        " var w = (util ? (pct / 100 * util) : (pct * 0.45)) + (util ? 'px' : '%');"
-        " return {'background': 'linear-gradient(90deg,"
-        f" {ACENTO} 0 ' + w + ', transparent ' + w + ' 100%)',"
-        " 'display':'flex','alignItems':'center',"
-        " 'justifyContent':'flex-end',"
-        f" 'color':'{TEXTO_PRINCIPAL}'"
-        "};"
-        "}")
-    _js_soles = JsCode(
-        "function(p){ return p.value==null ? '' :"
-        " 'S/ ' + Number(p.value).toLocaleString('es-PE',"
-        " {minimumFractionDigits:2, maximumFractionDigits:2}); }")
-    # Un decimal, no cero: con 60+ proveedores en el rango la mayoría queda
-    # por debajo del 1% y redondear al entero los deja a todos en "0%".
-    _js_pct = JsCode(
-        "function(p){ return p.value==null ? '' : p.value.toFixed(1) + '%'; }")
-
-    gb = GridOptionsBuilder.from_dataframe(tv)
-    gb.configure_default_column(resizable=True, sortable=True, filter=False,
-                                editable=False, suppressMovable=True)
-    gb.configure_column("_barra", hide=True)
-    gb.configure_column("_ruc", hide=True)
-    # El ancho del nombre se decide por MEDICIÓN, no a ojo, y no con `flex`:
-    # `sizeColumnsToFit` reparte el sobrante en proporción a los anchos
-    # base y NO le da nada extra a una columna por ser flexible (medido:
-    # con `flex=1` todas crecieron por el mismo factor 1.44). O sea que la
-    # palanca real es el ancho base. 320 sale de medir los nombres de un
-    # rango real con la fuente del grid: mediana 182px, el más largo 328,
-    # y con la columna en 289 se cortaban 4 de 19. Con 320 de base termina
-    # cerca de 400 en pantalla y no se corta prácticamente ninguno — y el
-    # que se corte lo completa el tooltip, que además agrega el RUC porque
-    # el nombre solo no identifica al emisor.
-    gb.configure_column(
-        "Proveedor", width=320, minWidth=190,
-        tooltipValueGetter=JsCode(
-            "function(p){ return p.value + ' · RUC ' + (p.data._ruc||''); }"))
-    # `minWidth` no es cosmético en ESTA columna: de su ancho sale el largo
-    # de la barra (ancho − gutter). Medido con la ventana angosta, con la
-    # columna en 169px la barra más larga quedaba en 59px; con el piso en
-    # 190 nunca baja de 80. Por debajo del piso el grid scrollea en
-    # horizontal, que es preferible a una barra que no se puede comparar.
-    gb.configure_column("Total", type=["numericColumn"], width=190,
-                        minWidth=190,
-                        cellStyle=_js_barra, valueFormatter=_js_soles,
-                        headerTooltip="Suma de los comprobantes del período. "
-                                      "La barra compara contra el mayor.")
-    gb.configure_column("Docs", type=["numericColumn"], width=80,
-                        headerTooltip="Comprobantes emitidos por ese "
-                                      "proveedor en el período.")
-    gb.configure_column("% docs", type=["numericColumn"], width=95,
-                        valueFormatter=_js_pct,
-                        headerTooltip="Participación por CANTIDAD de "
-                                      "documentos: cuánto del papeleo del "
-                                      "período es de este proveedor.")
-    gb.configure_column("% valor", type=["numericColumn"], width=95,
-                        valueFormatter=_js_pct,
-                        headerTooltip="Participación por VALOR comprado: "
-                                      "cuánto del gasto del período se le "
-                                      "va a este proveedor.")
-    # Sin selección: esta tabla informa, no filtra. La que responde al clic
-    # es la de documentos de abajo, que abre la ficha en el panel.
-    # El ancho de la celda entra en el cálculo de la barra, así que cada vez
-    # que cambia hay que RE-EVALUAR el `cellStyle`: AG Grid no lo hace solo
-    # al redimensionar, deja el estilo en línea que calculó al montar y la
-    # barra se queda con el largo de un ancho que ya no existe. No entra en
-    # bucle: `refreshCells` no dispara ninguno de los dos eventos.
-    gb.configure_grid_options(
-        rowHeight=_ALTO_FILA_PANEL_PROVS, headerHeight=32,
-        suppressCellFocus=True,
-        onGridSizeChanged=JsCode(
-            "function(p){ p.api.sizeColumnsToFit();"
-            " p.api.refreshCells({force:true, columns:['Total']}); }"),
-        # `finished` filtra los eventos intermedios del arrastre: sin eso se
-        # repinta la columna en cada píxel que se mueve el mouse.
-        onColumnResized=JsCode(
-            "function(p){ if(p.finished){"
-            " p.api.refreshCells({force:true, columns:['Total']}); } }"),
-    )
-
-    AgGrid(
-        tv, gridOptions=gb.build(),
-        # Mismo techo (`MINI`) que tenía el gráfico al que reemplaza: la
-        # tarjeta comparte alto con la tabla de documentos de abajo y con la
-        # ficha, y esta vista ya se pasaba de pantalla (ver el docstring de
-        # `renderizar_documentos_sunat`). Lo que no entra en el frame
-        # scrollea dentro del grid.
-        height=alturas.por_filas(len(tv), px_fila=_ALTO_FILA_PANEL_PROVS,
-                                 extra=45, rol=alturas.MINI),
-        theme="material", custom_css=dict(_css_grid(13)),
-        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
-        key="sunat_rank_prov",
-    )
-
-
-def _grafico_por_fecha(df):
-    """Barras del período por día de emisión."""
-    fe = pd.to_datetime(df["fecha_emision"], errors="coerce")
-    g = (pd.to_numeric(df["total"], errors="coerce")
-         .groupby(fe.dt.date).sum().sort_index())
-    if g.empty:
-        st.info("Sin datos para graficar.")
-        return
-    fig = go.Figure(go.Bar(
-        x=list(g.index), y=g.values, marker=dict(color=ACENTO, opacity=0.9),
-        hovertemplate="%{x|%d/%m/%Y}<br>S/ %{y:,.2f}<extra></extra>",
-    ))
-    _compras_layout(fig, alto=alturas.MINI)
-    # `tickformat` explícito: sin él Plotly rotula el eje con los meses en
-    # INGLÉS ("Aug 2"), porque toma su locale por defecto. El
-    # `hovertemplate` de arriba ya venía en formato local; el eje se había
-    # quedado atrás y se notó el 2026-08-28, al quedar este gráfico y el
-    # del proveedor —que sí rotula en español— como dos modos del mismo
-    # panel, uno al lado del otro.
-    fig.update_layout(title="Comprobantes por fecha de emisión")
-    fig.update_xaxes(tickformat="%d/%m")
-    st.plotly_chart(fig, use_container_width=True, key="sunat_g_dia")
 
 
 def _fila_de(df, fila_vista):
@@ -3545,171 +3341,6 @@ def _ficha_sunat(doc):
                 _pedir_original(doc)
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def _serie_proveedor(ruc, meses=12):
-    """Total comprado a un proveedor, mes a mes, sobre el registro COMPLETO
-    —no sobre el rango de la pantalla—: es lo que le da sentido al gráfico
-    al lado de la ficha, que habla de un documento y no de un período.
-
-    Devuelve `(etiquetas, valores, docs)` ya recortado a los últimos
-    `meses` con movimiento. Cacheado una hora, igual que el registro del
-    que sale.
-    """
-    d = sunat._registro_de_parquet()
-    if d is None or getattr(d, "empty", True) or not ruc:
-        return [], [], []
-    p = d[d["ruc_proveedor"].astype(str) == str(ruc)]
-    if p.empty:
-        return [], [], []
-    mes = pd.to_datetime(p["fecha_emision"], errors="coerce").dt.to_period("M")
-    g = (pd.DataFrame({"mes": mes,
-                       "total": pd.to_numeric(p["total"], errors="coerce")})
-         .dropna(subset=["mes"])
-         .groupby("mes")
-         .agg(total=("total", "sum"), docs=("total", "size"))
-         .sort_index().tail(meses))
-    # `%b` sale en INGLÉS ("Sep 25"): `strftime` usa el locale del proceso
-    # y en Streamlit Cloud es el C. `MESES_ABR_ES` es la tupla que ya usan
-    # `franja_fecha` y `cortes` — una sola lista de meses en el proyecto.
-    return ([f"{MESES_ABR_ES[m.month - 1]} {m.year % 100:02d}"
-             for m in g.index.to_timestamp()],
-            [float(v) for v in g["total"]], [int(v) for v in g["docs"]])
-
-
-def _grafico_proveedor(doc):
-    """Barras del proveedor del documento elegido, mes a mes.
-
-    El tercer modo del panel de la derecha, y el que lo justifica: a pedido
-    2026-08-28 el gráfico bajó de arriba de la tabla —donde mostraba el
-    período y no cambiaba nunca, o sea decorado— al costado de la ficha,
-    que es el panel de UN documento. Ahí un gráfico del período entero
-    queda fuera de contexto; éste habla del proveedor de la fila elegida.
-
-    Medido con datos reales al diseñarlo: COMPANIA FOOD RETAIL pasó de
-    S/ 203 en enero a S/ 5.953 en agosto — casi ×30 en ocho meses. Eso no
-    estaba en ninguna pantalla de este drill y aparece solo con mirar uno
-    de sus comprobantes.
-    """
-    if doc is None:
-        st.caption("Elegí un documento de la tabla para ver a su proveedor.")
-        return
-    ruc = str(doc.get("ruc_proveedor") or "")
-    etiquetas, valores, docs = _serie_proveedor(ruc)
-    if not valores:
-        st.caption("Sin historial para este proveedor.")
-        return
-
-    # La última barra es el mes del documento elegido: se pinta con el
-    # acento y las demás en lavanda claro, para que el mes del que se está
-    # mirando un comprobante se ubique sin leer el eje.
-    colores = [LAVANDA_FOCO] * len(valores)
-    colores[-1] = ACENTO
-    fig = go.Figure(go.Bar(
-        x=etiquetas, y=valores, marker=dict(color=colores),
-        hovertemplate="%{x}<br>S/ %{y:,.2f}<extra></extra>"))
-    _compras_layout(fig, alto=alturas.MINI)
-    fig.update_layout(
-        title=_compras_truncar(str(doc.get("proveedor") or ruc), 34),
-        margin=dict(t=44, b=28, l=8, r=8))
-    st.plotly_chart(fig, use_container_width=True,
-                    key=f"sunat_g_prov_{ruc or 'none'}")
-
-    ultimo, previo = valores[-1], (valores[-2] if len(valores) > 1 else None)
-    partes = [f"<b>S/ {ultimo:,.2f}</b> {etiquetas[-1]}",
-              f"<b>{docs[-1]}</b> docs"]
-    if previo:
-        partes.append(f"<b>{(ultimo / previo - 1) * 100:+.0f}%</b> vs el mes previo")
-    st.markdown(
-        f'<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;'
-        f'color:{GRIS_TEXTO};">' + " · ".join(partes) + '</div>',
-        unsafe_allow_html=True)
-
-
-_MODOS_GRAFICO = ("Este proveedor", "Por fecha", "Por proveedor")
-
-
-def _panel_grafico(vis, doc, modo):
-    """El gráfico de la tarjeta de abajo, en uno de sus tres modos. El
-    selector lo dibuja `_panel_abajo`, que lo comparte con el conversor.
-
-    «Por fecha» y «Por proveedor» son los dos resúmenes que hasta el
-    2026-08-28 vivían ARRIBA de la tabla, elegidos con un `selectbox`
-    llamado «Ver» que también ofrecía «Cruce». Al fundirse las dos tablas,
-    «Cruce» dejó de ser una vista; y al bajar el gráfico acá, el selector
-    bajó con él — queda pegado a lo único que controlaba, que era la
-    confusión que el usuario reportó al preguntar en qué se diferenciaban
-    las dos primeras opciones (la respuesta era: sólo en este widget).
-
-    """
-    if modo == "Este proveedor":
-        _grafico_proveedor(doc)
-        return
-    # Los otros dos resumen el RANGO, así que sin df no tienen nada que
-    # dibujar. `vis` llega en `None` por cualquiera de las salidas
-    # tempranas de `_cuerpo` (sin rango, SUNAT caído, sin comprobantes):
-    # es la regla #115 — la tarjeta se dibuja igual y decide adentro.
-    if vis is None or getattr(vis, "empty", True):
-        st.caption("Sin comprobantes en el rango para resumir.")
-        return
-    if modo == "Por proveedor":
-        _ranking_proveedores(vis)
-    else:
-        _grafico_por_fecha(vis)
-
-
-def _necesita_conversor(doc, fila_cruce):
-    """¿Se dibuja la tarjeta del conversor?
-
-    Sólo cuando el documento NO está cargado en el sistema (a pedido
-    2026-08-28): el conversor existe para mapear las líneas del XML contra
-    el maestro y así poder cargarlo. Si ya está cargado no hay nada que
-    convertir, y la tarjeta ocupaba pantalla para no decir nada.
-
-    Medido sobre las 326 filas del rango: se dibuja en 122 («Solo SUNAT»)
-    y desaparece en 204 — 169 «Coincide» y 16 «Diferencia» que ya están
-    cargados, más 19 «Solo sistema» que ni siquiera tienen comprobante en
-    SUNAT. O sea que en 2 de cada 3 documentos la pantalla ahora termina
-    en la ficha, que era el pedido de fondo: la vista era demasiado larga.
-
-    «Diferencia» queda AFUERA a propósito aunque el documento tenga algo
-    raro: ahí el documento ya está cargado y la pregunta es dónde está el
-    descuadre, que la responde el cotejo de la ficha — no un mapeo de
-    líneas contra el maestro.
-    """
-    if doc is None:
-        return False
-    if fila_cruce is None:
-        # Sin fila de cruce no se puede afirmar que esté cargado; se
-        # dibuja, que es el comportamiento que había antes de esta regla.
-        return True
-    return str(fila_cruce.get("estado") or "") == "Solo SUNAT"
-
-
-_MODO_CONVERSOR = "Conversor SUNAT-Sistema"
-_MODO_RESUMEN = "Resumen del cruce"
-_MODO_POR_TIPO = "Por tipo de compra"
-_MODOS_ABAJO = _MODOS_GRAFICO + (_MODO_RESUMEN, _MODO_POR_TIPO,
-                                 _MODO_CONVERSOR)
-"""Las opciones del selector de la tarjeta de abajo: los tres modos del
-gráfico y el conversor. UN selector y no dos (gráfico/conversor y, adentro,
-el modo del gráfico) porque son cuatro vistas excluyentes de la misma
-tarjeta, y dos filas de botones le costarían alto a la pantalla única."""
-
-_MODO_ABAJO_INICIAL = _MODO_RESUMEN
-"""Con qué vista ABRE la tarjeta de abajo: la fidelidad respecto de SUNAT
-(2026-10-19, a pedido: «que este cruce sea el gráfico que primero se
-muestre»). Hasta ese día abría en «Este proveedor», que depende de la fila
-elegida y al entrar al reporte mostraba al primer proveedor de la lista.
-Es un default: lo que el usuario elige después se recuerda en
-`_K_MODO_ABAJO`. Regla #672."""
-
-
-_COMPARACIONES = {"Año pasado": 1, "Hace 2 años": 2}
-"""Con qué se compara el período en el «Resumen del cruce»: el MISMO rango
-de fechas, corrido uno o dos años atrás. Mes corriente contra el mismo mes
-del año pasado o del antepasado, que es lo pedido (2026-10-02). Los botones
-no dicen estos nombres sino el año (`_rotulo_anio`), también a pedido."""
-
 def _rango_hace(f_ini, f_fin, anos):
     """`(ini, fin)` corridos `anos` años atrás (29-feb cae en el 28)."""
     return ((pd.Timestamp(f_ini) - pd.DateOffset(years=anos)).date(),
@@ -3724,41 +3355,60 @@ def _rotulo_rango(ini, fin):
     return f"{a} – {fin.day} {MESES_ABR_ES[fin.month - 1]} {fin.year}"
 
 
-def _conteos_de_periodo(d, col_fecha, ini, fin, prov):
-    """`(conteos, None)` del cruce de un período ANTERIOR, o `(None, motivo)`.
+def _cruces_previos(d, col_fecha, f_ini, f_fin, prov, tablas):
+    """El cruce del MISMO rango corrido un año atrás, ya clasificado por
+    tipo de compra, para «Cruce con SUNAT»: `[(año, rango, cruce, None) |
+    (año, rango, None, motivo)]`. Un año y no dos: cada cruce de doce meses
+    cuesta ~16 s en la laptop (medido el 2026-10-21) y la vista abre acá;
+    sumar otro es agregarlo a la tupla del bucle.
 
     Mismo cálculo que la tabla —`comprobantes_rango` del registro y
     `_parquet_agrupado_por_documento` del parquet, cruzados— con el filtro
     de proveedor si está puesto. «Mes en SUNAT» NO se aplica: en un año
     cerrado todos los meses están presentados, y «Mes abierto» daría cero.
 
-    El motivo existe porque un período sin una de las dos fuentes no es
-    «cero documentos»: antes del primer comprobante del registro, todo lo
-    del sistema saldría «Solo sistema», y antes del primero del parquet,
-    todo lo de SUNAT «Solo SUNAT». Barras así se leerían como un desastre
-    contable que no existió. Se dice por qué no hay barra.
+    Un período sin una de las dos fuentes no es «cero documentos»: antes
+    del primer comprobante del registro todo lo del sistema saldría «Solo
+    sistema», y antes del primero del parquet, todo lo de SUNAT «Solo
+    SUNAT». Se dice el motivo en vez de dibujarlo. Cacheado en la sesión
+    por rango, proveedor y versión de las reglas de tipo: cada año cuesta
+    ~0,4 s. Regla #630 y #683.
     """
     lim = sunat.limites_registro()
-    if lim and ini < lim[0]:
-        return None, (f"el registro de SUNAT empieza el "
-                      f"{lim[0]:%d/%m/%Y}")
+    _min = None
     if d is not None and col_fecha in getattr(d, "columns", ()):
         _min = pd.to_datetime(d[col_fecha], errors="coerce").min()
-        if pd.notna(_min) and ini < _min.date():
-            return None, (f"las compras del sistema empiezan el "
-                          f"{_min:%d/%m/%Y}")
-    try:
-        df, _ = sunat.comprobantes_rango(ini, fin)
-    except Exception as e:  # SUNAT caído no tumba el resumen del actual
-        return None, f"no se pudo leer el registro ({e})"
-    if df is None or df.empty:
-        return None, "SUNAT no tiene comprobantes en ese rango"
-    cr = cruzar_con_parquet(
-        df, _parquet_agrupado_por_documento(
-            d, col_fecha, ini, fin, notas=data.notas_credito_compras()))
-    if prov:
-        cr = cr[_claves_proveedor_cruce(cr) == prov]
-    return _fidelidad_cruce(cr), None
+    out = []
+    for anios in (1,):
+        ini, fin = _rango_hace(f_ini, f_fin, anios)
+        etiqueta, rotulo = _rotulo_anio(ini, fin), _rotulo_rango(ini, fin)
+        k = (f"sunat_prev_{ini}_{fin}_{prov or ''}_{tipo_compra.VERSION}_"
+             f"{len(d) if d is not None else 0}")
+        if k not in st.session_state:
+            if lim and ini < lim[0]:
+                res = (None, f"el registro de SUNAT empieza el {lim[0]:%d/%m/%Y}")
+            elif _min is not None and pd.notna(_min) and ini < _min.date():
+                res = (None, f"las compras del sistema empiezan el {_min:%d/%m/%Y}")
+            else:
+                try:
+                    df, _ = sunat.comprobantes_rango(ini, fin)
+                except Exception as e:  # SUNAT caído no tumba el período actual
+                    df, res = None, (None, f"no se pudo leer el registro ({e})")
+                if df is not None and df.empty:
+                    res = (None, "SUNAT no tiene comprobantes en ese rango")
+                elif df is not None:
+                    cr = cruzar_con_parquet(df, _parquet_agrupado_por_documento(
+                        d, col_fecha, ini, fin, notas=data.notas_credito_compras()))
+                    cr = tipo_compra.clasificar(cr, df, tablas)
+                    if prov:
+                        cr = cr[_claves_proveedor_cruce(cr) == prov]
+                    res = (cr, None)
+            st.session_state[k] = res
+        cr, motivo = st.session_state[k]
+        out.append((etiqueta, rotulo, cr, motivo))
+    return out
+
+
 
 
 def _rotulo_anio(ini, fin):
@@ -3766,540 +3416,6 @@ def _rotulo_anio(ini, fin):
     el rango corrido cruza el año nuevo."""
     a, b = pd.Timestamp(ini).year, pd.Timestamp(fin).year
     return str(b) if a == b else f"{a}-{b % 100:02d}"
-
-
-def _soles_corto(v):
-    """«S/ 2.72 M», «S/ 84.3 K», «S/ 950»: lo que entra adentro de un tramo."""
-    v = float(v or 0)
-    if abs(v) >= 1e6:
-        return f"S/ {v / 1e6:.2f} M"
-    if abs(v) >= 1e3:
-        return f"S/ {v / 1e3:.1f} K"
-    return f"S/ {v:,.0f}"
-
-
-def _valor_fid(v, medida, corto=False):
-    if medida == "doc":
-        return f"{int(v):,}"
-    return _soles_corto(v) if corto else f"S/ {float(v):,.0f}"
-
-
-def _pct_num(n, total):
-    return None if not total else n / total * 100
-
-
-def _panel_resumen(d, resumen):
-    """«Resumen del cruce»: la FIDELIDAD del sistema respecto de SUNAT, en
-    el período y contra el mismo período de años anteriores.
-
-    Desde el 2026-10-02 la base es SUNAT (a pedido: «mi referencia principal
-    debe ser SUNAT; el análisis es la fidelidad respecto de la data de
-    SUNAT»), con el mockup aprobado ese día. Hasta ahí eran siete barras
-    sobre la UNIÓN de las dos fuentes, y «Total» se leía como «¿total de
-    qué?». Ahora:
-
-      · **La fidelidad arriba, grande**: cargados y cuadran ÷ lo que reporta
-        SUNAT, con la diferencia en puntos contra el año anterior más
-        cercano que se esté comparando.
-      · **Documentos o soles** (`sunat_res_medida`): un documento de
-        S/ 15,000 sin cargar pesa más que diez de S/ 20.
-      · **Una barra apilada al 100 % por período**, del más viejo al
-        actual (`_barras_fidelidad`): cuadran, con diferencia, falta cargar.
-        **«Fuera de SUNAT»** («Solo sistema») va al costado, punteado: no
-        es parte de la base y no suma al 100 %.
-      · **Lo que falta cargar de los últimos días** se dice aparte, y sólo
-        si el período llega hasta esos días: puede ser demora de carga.
-
-    El período actual es el CENSO de la tabla: rango, «Mes en SUNAT» y
-    proveedor aplicados, «Está vs Sistema» no (es el filtro que elige
-    dentro de este censo, ver `_filtro_estado`). Los anteriores se cachean
-    en `session_state` por rango y proveedor: el cruce de un año cuesta
-    ~0,4 s y el selector de la tarjeta la re-corre en cada clic. Regla #630.
-    """
-    if not resumen or resumen.get("censo") is None:
-        st.caption("Sin comprobantes en el rango para resumir.")
-        return
-    f_ini, f_fin = resumen["f_ini"], resumen["f_fin"]
-    prov, col_fecha = resumen.get("prov"), resumen.get("col_fecha")
-    rangos = {a: _rango_hace(f_ini, f_fin, a) for a in _COMPARACIONES.values()}
-
-    with st.container(horizontal=True, vertical_alignment="center",
-                      gap="small", key="sunat_res_cab"):
-        _slot_kpi = st.empty()
-        medida = st.pills(
-            "Medir en", ["doc", "soles"], selection_mode="single",
-            default="doc", key="sunat_res_medida",
-            format_func=lambda m: "Documentos" if m == "doc" else "Soles",
-            label_visibility="collapsed") or "doc"
-        # Las opciones son 1 y 2 (años atrás) y el rótulo es el año: así
-        # el valor guardado no cambia cuando el rango pasa a otro año. Del
-        # más viejo al más nuevo, como las barras y la tabla.
-        comparar = st.pills(
-            "Comparar con", sorted(rangos, reverse=True),
-            selection_mode="multi",
-            default=[1], key="sunat_res_anios",
-            format_func=lambda a: _rotulo_anio(*rangos[a]),
-            label_visibility="collapsed") or []
-        vista = st.pills(
-            "Ver como", ["grafico", "tabla"], selection_mode="single",
-            default="grafico", key="sunat_res_vista",
-            format_func=lambda v: (":material/bar_chart:" if v == "grafico"
-                                   else ":material/table_rows:"),
-            label_visibility="collapsed") or "grafico"
-
-    # Lo que falta cargar de los últimos días sólo cuenta si el período
-    # llega hasta ellos: en un rango cerrado hace meses no es demora.
-    hoy = datetime.date.today()
-    desde_rec = hoy - datetime.timedelta(days=_DIAS_RECIENTES)
-    recientes_desde = (max(pd.Timestamp(f_ini).date(), desde_rec)
-                       if pd.Timestamp(f_fin).date() >= desde_rec else None)
-
-    periodos = [{"edad": 0, "rango": _rotulo_rango(f_ini, f_fin),
-                 "f": _fidelidad_cruce(resumen["censo"], recientes_desde)}]
-    avisos = []
-    for anios in sorted(comparar):
-        ini, fin = rangos[anios]
-        # `fid` en la clave: hasta el 2026-10-02 esta caché guardaba los
-        # conteos de la unión, con otra forma (regla #630).
-        k_cache = (f"sunat_res_fid_{ini}_{fin}_{prov or ''}_"
-                   f"{len(d) if d is not None else 0}")
-        if k_cache not in st.session_state:
-            with st.spinner(f"Cruzando {_rotulo_rango(ini, fin)}…"):
-                st.session_state[k_cache] = _conteos_de_periodo(
-                    d, col_fecha, ini, fin, prov)
-        fid, motivo = st.session_state[k_cache]
-        if fid is None:
-            avisos.append(f"{_rotulo_anio(ini, fin)} "
-                          f"({_rotulo_rango(ini, fin)}): sin datos — "
-                          f"{motivo}.")
-        else:
-            periodos.append({"edad": anios, "rango": _rotulo_rango(ini, fin),
-                             "anio": _rotulo_anio(ini, fin), "f": fid})
-    # DEL MÁS VIEJO AL ACTUAL, de arriba abajo en las barras y de izquierda
-    # a derecha en la tabla (regla #588).
-    periodos.sort(key=lambda p: -p["edad"])
-
-    nota = ("Fidelidad = cargados y cuadran ÷ lo que reporta SUNAT en el "
-            "período (documentos o soles). Lo cargado sin comprobante en "
-            "SUNAT va aparte y no suma al 100 %. Origen del período actual: "
-            f"{_sello_origen(resumen.get('origen'))}.")
-    if resumen.get("mes_filtrado") and len(periodos) > 1:
-        nota += (" «Mes en SUNAT» se aplica sólo al período actual: en los "
-                 "años anteriores todos los meses están presentados.")
-
-    _slot_kpi.markdown(_kpi_fidelidad_html(periodos, medida, nota),
-                       unsafe_allow_html=True)
-    if vista == "tabla":
-        _tabla_resumen(periodos, medida, nota)
-    else:
-        st.markdown(_barras_fidelidad(periodos, medida),
-                    unsafe_allow_html=True)
-
-    if avisos:
-        st.markdown(
-            f'<div style="font-size:11px;color:{GRIS_TEXTO};line-height:1.45;">'
-            + "<br>".join(avisos) + "</div>", unsafe_allow_html=True)
-
-
-_SIN_TIPO = "Sin clasificar"
-
-
-def _panel_por_tipo(resumen):
-    """«Por tipo de compra»: lo del período agrupado por QUÉ se compró
-    —Mercadería (lo que tiene kardex), Otros bienes, Servicios, Financiero
-    (`tipo_compra.py`, reglas #640 y #673)— y, en cada tipo, la misma
-    barra de fidelidad que el
-    «Resumen del cruce». 2026-10-19, a pedido. Regla #672.
-
-    Una fila por tipo y no una torta: lo que se compró de cada uno se lee
-    en el renglón (soles y su % del total), y la barra dice cuánto de eso
-    ya está cargado. Juntas responden lo que una torta no: cuánto baja la
-    fidelidad entera un tipo que nadie carga (los bancos facturan, y su
-    comisión no entra al Almacén).
-
-    Mismo censo que el resumen (rango, «Mes en SUNAT» y proveedor; el
-    filtro de estado no), así que las filas suman lo que dice el resumen.
-    Abre en SOLES: «qué se compró» se pregunta en plata; un documento de
-    S/ 15 del banco pesa lo que uno de S/ 4.000 de carne.
-    """
-    censo = (resumen or {}).get("censo")
-    if censo is None or getattr(censo, "empty", True):
-        st.caption("Sin comprobantes en el rango para resumir.")
-        return
-    tipo = (censo["tipo"].fillna("").astype(str).str.strip()
-            if "tipo" in censo.columns
-            else pd.Series("", index=censo.index))
-    tipo = tipo.where(~tipo.isin(("", "—")), _SIN_TIPO)
-
-    with st.container(horizontal=True, vertical_alignment="center",
-                      gap="small", key="sunat_tipo_cab"):
-        _slot_kpi = st.empty()
-        medida = st.pills(
-            "Medir en", ["soles", "doc"], selection_mode="single",
-            default="soles", key="sunat_tipo_medida",
-            format_func=lambda m: "Documentos" if m == "doc" else "Soles",
-            label_visibility="collapsed") or "soles"
-
-    base_total = _fidelidad_cruce(censo)[medida]["sunat"]
-    orden = [t for t in tipo_compra.TIPOS if (tipo == t).any()]
-    orden += sorted(set(tipo) - set(orden) - {_SIN_TIPO})
-    if (tipo == _SIN_TIPO).any():
-        orden.append(_SIN_TIPO)
-    filas, partes = [], []
-    for t in orden:
-        f = _fidelidad_cruce(censo[tipo == t])
-        v = f[medida]["sunat"]
-        pct = _pct_de(v, base_total)
-        sub = (f'{_valor_fid(v, medida, corto=True)} en SUNAT'
-               + (f' · {pct}' if pct else ""))
-        filas.append({"edad": 0, "actual": False, "rango": t, "sub": sub,
-                      "f": f})
-        if pct:
-            partes.append(f"{t} {pct}")
-
-    rango = _rotulo_rango(resumen["f_ini"], resumen["f_fin"])
-    nota = ("Tipo = qué se compró, según el Almacén y el registro de SUNAT "
-            "(columna «Tipo» de la tabla). Cada barra reparte lo que SUNAT "
-            "reporta de ese tipo entre cargado y cuadra, cargado con "
-            "diferencia y falta cargar. Lo cargado sin comprobante en SUNAT "
-            "va aparte y no suma al 100 %.")
-    que = " documentos" if medida == "doc" else ""
-    _slot_kpi.markdown(
-        f'<div class="sunat-fid-kpi" title="{html.escape(nota)}">'
-        '<div class="sunat-fid-kpi-rot">Qué se compró · según SUNAT</div>'
-        '<div class="sunat-fid-kpi-fila"><span class="sunat-fid-kpi-val">'
-        f'{_valor_fid(base_total, medida)}{que}</span></div>'
-        f'<div class="sunat-fid-kpi-sub">{html.escape(" · ".join(partes))}'
-        f' · {rango}</div></div>', unsafe_allow_html=True)
-    st.markdown(_barras_fidelidad(filas, medida, cab="Tipo"),
-                unsafe_allow_html=True)
-
-
-def _kpi_fidelidad_html(periodos, medida, nota):
-    """La fidelidad del período actual, grande, con la diferencia en puntos
-    contra el período anterior más cercano que se esté comparando."""
-    actual = next(p for p in periodos if p["edad"] == 0)
-    f = actual["f"][medida]
-    pct = _pct_num(f["cuadran"], f["sunat"])
-    chip = ""
-    previos = [p for p in periodos if p["edad"] > 0]
-    if pct is not None and previos:
-        prev = min(previos, key=lambda p: p["edad"])
-        fp = prev["f"][medida]
-        pct_prev = _pct_num(fp["cuadran"], fp["sunat"])
-        if pct_prev is not None:
-            dif = round(pct - pct_prev, 1)
-            if dif > 0:
-                chip = (f'<span class="sunat-fid-chip sube">▲ {dif:.1f} pts vs '
-                        f'{prev["anio"]}</span>')
-            elif dif < 0:
-                chip = (f'<span class="sunat-fid-chip baja">▼ {abs(dif):.1f} '
-                        f'pts vs {prev["anio"]}</span>')
-            else:
-                chip = (f'<span class="sunat-fid-chip">= igual que '
-                        f'{prev["anio"]}</span>')
-    if f["sunat"]:
-        que = ("documentos de SUNAT" if medida == "doc"
-               else "facturados en SUNAT")
-        sub = (f'{_valor_fid(f["cuadran"], medida)} de los '
-               f'{_valor_fid(f["sunat"], medida)} {que} están cargados y '
-               f'cuadran · {actual["rango"]}')
-    else:
-        sub = f'SUNAT no tiene documentos en el período · {actual["rango"]}'
-    rot = "Fidelidad respecto de SUNAT" + (" · en soles" if medida == "soles"
-                                           else "")
-    return (
-        f'<div class="sunat-fid-kpi" title="{html.escape(nota)}">'
-        f'<div class="sunat-fid-kpi-rot">{rot}</div>'
-        f'<div class="sunat-fid-kpi-fila"><span class="sunat-fid-kpi-val">'
-        f'{"—" if pct is None else f"{pct:.1f}%"}</span>{chip}</div>'
-        f'<div class="sunat-fid-kpi-sub">{sub}</div></div>')
-
-
-def _barras_fidelidad(periodos, medida, cab="Período"):
-    """Una barra apilada al 100 % por período: en qué se reparte lo que
-    reporta SUNAT. Al costado, «Fuera de SUNAT», punteado.
-
-    Las filas no tienen por qué ser períodos: «Por tipo de compra» le pasa
-    una por tipo (`_panel_por_tipo`), con `cab` = «Tipo» y, en cada fila,
-    su propio `sub` y `actual=False` — así ninguna sale resaltada ni carga
-    la nota de lo reciente, que es del período actual.
-
-    HTML y no Plotly: son tres barras horizontales con su texto adentro, y
-    el tooltip de cada tramo es el del navegador (`title`). Los colores
-    viven en `estilos/_80_cards.py` (`.sunat-fid-*`). Un tramo dice su
-    cifra sólo si le entra; si no, la dice su tooltip.
-    """
-    que = ("cada documento de SUNAT" if medida == "doc"
-           else "lo facturado en SUNAT")
-    leyenda = "".join(
-        f'<span title="{html.escape(ayuda)}"><i class="sunat-fid-sw {clave}">'
-        f'</i>{nombre}</span>' for clave, _e, nombre, ayuda in _TRAMOS_FIDELIDAD)
-    filas = [
-        '<div class="sunat-fid-fila sunat-fid-cab">'
-        f'<div class="sunat-fid-per">{html.escape(cab)}</div>'
-        f'<div class="sunat-fid-medio"><span>Qué pasó con {que}</span>'
-        f'<span class="sunat-fid-leyenda">{leyenda}</span></div>'
-        f'<div class="sunat-fid-fuera-col" title="{html.escape(_AYUDA_FUERA)}">'
-        'Fuera de SUNAT</div></div>']
-    nota_rec = ""
-    for p in periodos:
-        f = p["f"][medida]
-        base = f["sunat"]
-        actual = p.get("actual", p["edad"] == 0)
-        sub = p.get("sub") or (f'{_valor_fid(base, medida, corto=True)} en '
-                               f'SUNAT' + (" · actual" if actual else ""))
-        tramos = []
-        for clave, _e, nombre, ayuda in _TRAMOS_FIDELIDAD:
-            v = f[clave]
-            pc = _pct_num(v, base)
-            if not pc:
-                continue
-            pct_txt = _pct_de(v, base)
-            val_c = _valor_fid(v, medida, corto=True)
-            umbral_val = 3.5 if medida == "doc" else 7
-            if pc >= (22 if clave == "cuadran" else 12):
-                txt = f"{val_c} · {pct_txt}"
-            elif clave == "cuadran" and pc >= 8:
-                txt = pct_txt
-            elif clave != "cuadran" and pc >= umbral_val:
-                txt = val_c
-            else:
-                txt = ""
-            tip = (f"{nombre}: {_valor_fid(v, medida)} · {pct_txt} de lo que "
-                   f"reporta SUNAT. {ayuda}")
-            tramos.append(
-                f'<div class="sunat-fid-tramo {clave}" style="width:{pc:.3f}%"'
-                f' title="{html.escape(tip)}">{txt}</div>')
-        barra = ("".join(tramos) if tramos else
-                 '<div class="sunat-fid-vacia">SUNAT no tiene documentos en '
-                 'el período</div>')
-        fuera = f["fuera"]
-        fuera_txt = (f'+{_valor_fid(fuera, medida)}' if fuera else "0")
-        filas.append(
-            f'<div class="sunat-fid-fila{" actual" if actual else ""}">'
-            f'<div class="sunat-fid-per"><b>{p["rango"]}</b>'
-            f'<span>{sub}</span></div>'
-            f'<div class="sunat-fid-barra">{barra}</div>'
-            f'<div class="sunat-fid-fuera" title="{html.escape(_AYUDA_FUERA)}">'
-            f'<b>{fuera_txt}</b>'
-            + ('<span>sin comprobante</span>' if medida == "doc" else "")
-            + '</div></div>')
-        if actual:
-            n_rec, s_rec = p["f"]["recientes"]
-            falta = f["falta"]
-            rec = n_rec if medida == "doc" else s_rec
-            if n_rec and falta:
-                nota_rec = (
-                    '<div class="sunat-fid-fila sunat-fid-nota">'
-                    '<div class="sunat-fid-per"></div>'
-                    f'<div class="sunat-fid-medio">↳ {_valor_fid(rec, medida)} '
-                    f'de los {_valor_fid(falta, medida)} que faltan cargar son '
-                    f'de los últimos {_DIAS_RECIENTES} días: puede ser sólo '
-                    'demora de carga</div><div class="sunat-fid-fuera-col">'
-                    '</div></div>')
-                filas.append(nota_rec)
-    return '<div class="sunat-fid">' + "".join(filas) + "</div>"
-
-
-def _tabla_resumen(periodos, medida, nota=""):
-    """La fidelidad como tabla: una fila por caso —la base, los tres tramos
-    y «Fuera de SUNAT» aparte—, una columna por período del más viejo al
-    actual, «cantidad · %» en cada celda (el % sobre lo de SUNAT).
-
-    La fila de «cuadran» va resaltada: es la fidelidad. «Fuera de SUNAT»
-    va en gris y sin %: no es parte de la base. Cada fila explica qué
-    cuenta en el tooltip de su nombre, y cada columna, la nota de los %
-    en el de su cabecera — tooltips del NAVEGADOR (`enableBrowserTooltips`),
-    que no se cortan contra el iframe del componente.
-
-    CON EL LOOK DE LA TABLA DE DOCUMENTOS de arriba (2026-10-02): mismo
-    AgGrid, tema `streamlit` + `CSS_RANKING_GRID`, filas de `ALTO_FILA_RANK`
-    y cabecera de `ALTO_HEADER_RANK` — el alto y el CSS viajan juntos
-    (regla #404). Paga una grilla más (#540), sólo en la vista de tabla.
-    """
-    base_rot = ("Documentos en SUNAT (la base)" if medida == "doc"
-                else "Facturado en SUNAT (la base)")
-    col_rot = "Respecto de lo que reporta SUNAT"
-    filas = [{col_rot: base_rot,
-              "_ayuda": "Todo lo que reporta SUNAT en el período: el 100 %.",
-              "_fid": False, "_gris": False}]
-    for clave, _e, nombre, ayuda in _TRAMOS_FIDELIDAD:
-        filas.append({col_rot: nombre + (" = fidelidad" if clave == "cuadran"
-                                         else ""),
-                      "_ayuda": ayuda, "_fid": clave == "cuadran",
-                      "_gris": False})
-    filas.append({col_rot: "Fuera de SUNAT: cargados sin comprobante",
-                  "_ayuda": _AYUDA_FUERA, "_fid": False, "_gris": True})
-    claves = ("sunat",) + tuple(t[0] for t in _TRAMOS_FIDELIDAD) + ("fuera",)
-    for p in periodos:
-        f = p["f"][medida]
-        for fila, clave in zip(filas, claves):
-            v = f[clave]
-            if clave == "fuera":
-                txt = _valor_fid(v, medida)
-            else:
-                txt = f"{_valor_fid(v, medida)} · {_pct_de(v, f['sunat']) or '—'}"
-            if clave == "falta" and p["edad"] == 0:
-                n_rec, s_rec = p["f"]["recientes"]
-                if n_rec and v:
-                    rec = n_rec if medida == "doc" else s_rec
-                    txt += (f" ({_valor_fid(rec, medida)} de los últimos "
-                            f"{_DIAS_RECIENTES} días)")
-            fila[p["rango"]] = txt
-    tv = pd.DataFrame(filas)
-
-    gb = GridOptionsBuilder.from_dataframe(tv)
-    gb.configure_default_column(resizable=True, sortable=False, filter=False,
-                                editable=False, suppressMovable=True)
-    gb.configure_column(col_rot, minWidth=230, flex=1.4,
-                        tooltipField="_ayuda",
-                        headerTooltip="Pasá el cursor por cada fila para "
-                                      "ver qué cuenta.")
-    for oculta in ("_ayuda", "_fid", "_gris"):
-        gb.configure_column(oculta, hide=True)
-    for p in periodos:
-        gb.configure_column(p["rango"], minWidth=150, flex=1,
-                            type=["rightAligned"],
-                            headerTooltip=f"{p['rango']} · {nota}")
-    gb.configure_grid_options(
-        headerHeight=ALTO_HEADER_RANK, rowHeight=ALTO_FILA_RANK,
-        suppressCellFocus=True, enableBrowserTooltips=True,
-        getRowStyle=JsCode(
-            "function(p){ return (p.data && p.data._fid)"
-            " ? {'background':'%s','fontWeight':'600'} : null; }"
-            % LAVANDA_FONDO),
-        # El gris de «Fuera de SUNAT» va por CLASE: el violeta de `.ag-cell`
-        # (`CSS_RANKING_GRID`) le gana a un color puesto en la fila.
-        rowClassRules={"fid-gris": "data && data._gris"},
-        onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"))
-    AgGrid(
-        tv, gridOptions=gb.build(),
-        height=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
-                                 extra=CROMO_GRID_RANK, minimo=0),
-        theme="streamlit",
-        custom_css={**CSS_RANKING_GRID,
-                    ".fid-gris .ag-cell": {"color": f"{GRIS_TEXTO} !important"}},
-        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
-        # La key lleva la medida y los períodos: con otro año o en soles
-        # son otras celdas, y la grilla tiene que estrenarse (regla #556).
-        key=f"sunat_t_fid_{medida}_" + "_".join(
-            re.sub(r"\W+", "", p["rango"]) for p in periodos),
-    )
-
-
-@una_vez_por_corrida
-@st.fragment
-def _tarjeta_abajo(vis, doc, fila_cruce, d, resumen=None):
-    """La tarjeta de debajo de la tabla, en su PROPIO fragment.
-
-    Sin él, cualquier clic adentro —el selector Gráfico/Conversor, una
-    celda corregida del conversor, el ranking «Por proveedor»— re-corría
-    el drill entero: la consulta al SIRE, el cruce y la tabla de arriba,
-    que se re-monta y se queda «Actualizando…» unos segundos (reportado el
-    2026-10-02: «la tabla se actualiza a cada rato, cuando hago cualquier
-    clic, incluso abajo en los toggles del conversor»). Ahora esos clics
-    re-corren sólo esta tarjeta, y el `st.rerun(scope="fragment")` del
-    conversor también se queda acá adentro.
-
-    CERRADO SOBRE SUS ARGUMENTOS: Streamlit lo re-ejecuta con los de la
-    última corrida del drill, así que nada se lee del scope de afuera —
-    mismo trato que `vs_ano_pasado.py::_tarjeta_cascada` (regla #447). Un
-    clic en la TABLA sí re-corre el drill, que lo vuelve a llamar con la
-    fila nueva. Y `una_vez_por_corrida` porque se llama adentro de otro
-    fragment (`app.py::_render_contenido`, regla #456).
-    """
-    with st.container(border=True, key="sunat_card_graf"):
-        _panel_abajo(vis, doc, fila_cruce, d, resumen)
-
-
-def _panel_abajo(vis, doc, fila_cruce, d, resumen=None):
-    """La tarjeta de debajo de la tabla: el gráfico O el conversor.
-
-    Hasta el 2026-10-02 eran dos tarjetas apiladas (el gráfico a lo ancho y,
-    debajo, el conversor cuando el documento faltaba en el sistema); a
-    pedido se alternan en el mismo sitio, para que la tabla y lo que se
-    mira de ella entren en una pantalla.
-
-    El selector es una columna de botones-ícono al costado (ver más
-    abajo), y la vista elegida vive en `_K_MODO_ABAJO`, que escribe el
-    callback de cada botón: no es la clave de ningún widget, así que un
-    `st.rerun()` a media corrida no se la lleva (regla #211).
-
-    La ficha se abre SÓLO con el ojo / el número del documento en la
-    tabla: el botón «📄 Ver <doc>» que vivía al costado del selector
-    se quitó a pedido (2026-10-02).
-    """
-    modo = st.session_state.get(_K_MODO_ABAJO, _MODO_ABAJO_INICIAL)
-    if modo not in _MODOS_ABAJO:
-        modo = _MODO_ABAJO_INICIAL
-
-    # EL SELECTOR ES UNA COLUMNA DE ÍCONOS AL COSTADO, no un renglón arriba
-    # (2026-10-02, a pedido: «que los toggles no me ocupen una fila»). Un
-    # botón por vista, el nombre en el tooltip y la activa en lavanda: el
-    # mismo idioma que la columna de reportes de la app. La fila es un
-    # contenedor horizontal: la columna mide 40px fijos y el contenido se
-    # queda con el resto. El CSS, en `estilos/_80_cards.py`.
-    with st.container(horizontal=True, wrap=False, gap="small",
-                      key="sunat_abajo_fila"):
-        with st.container(width=40, gap=None, key="sunat_abajo_nav"):
-            for nombre, icono in _ICONOS_ABAJO.items():
-                st.button("", icon=icono, help=nombre,
-                          key=f"sunat_abajo_{_SLUG_ABAJO[nombre]}",
-                          type="primary" if nombre == modo else "tertiary",
-                          on_click=_elegir_modo_abajo, args=(nombre,))
-        with st.container(key="sunat_abajo_cuerpo"):
-            _contenido_abajo(modo, vis, doc, fila_cruce, d, resumen)
-
-
-_K_MODO_ABAJO = "sunat_graf_modo__eco"
-"""La vista elegida en la tarjeta de abajo. Conserva el nombre del espejo de
-cuando era un `segmented_control`, así quien venía usando una la conserva."""
-
-_ICONOS_ABAJO = {
-    "Este proveedor": ":material/storefront:",
-    "Por fecha": ":material/calendar_month:",
-    "Por proveedor": ":material/leaderboard:",
-    _MODO_RESUMEN: ":material/bar_chart:",
-    _MODO_POR_TIPO: ":material/category:",
-    _MODO_CONVERSOR: ":material/swap_horiz:",
-}
-"""Un ícono por vista de `_MODOS_ABAJO`, en el mismo orden."""
-
-_SLUG_ABAJO = {
-    "Este proveedor": "este_prov", "Por fecha": "fecha",
-    "Por proveedor": "por_prov", _MODO_RESUMEN: "resumen",
-    _MODO_POR_TIPO: "por_tipo", _MODO_CONVERSOR: "conversor",
-}
-
-
-def _elegir_modo_abajo(nombre):
-    st.session_state[_K_MODO_ABAJO] = nombre
-
-
-def _contenido_abajo(modo, vis, doc, fila_cruce, d, resumen):
-    """Lo que dibuja la tarjeta de abajo para la vista `modo`."""
-    if modo == _MODO_RESUMEN:
-        _panel_resumen(d, resumen)
-    elif modo == _MODO_POR_TIPO:
-        _panel_por_tipo(resumen)
-    elif modo != _MODO_CONVERSOR:
-        _panel_grafico(vis, doc, modo)
-    elif doc is not None and not _necesita_conversor(doc, fila_cruce):
-        # Antes la tarjeta del conversor directamente no se dibujaba en
-        # este caso (ver `_necesita_conversor`); con un selector que la
-        # nombra, desaparecer sin decir nada se leería como un bug.
-        estado = str(fila_cruce.get("estado") or "")
-        st.markdown(
-            f'<div style="padding:20px 16px;text-align:center;'
-            f'color:{GRIS_TEXTO};font-size:13px;line-height:1.6;">'
-            f'{doc.get("documento", "Este documento")} ya está cargado en el '
-            f'sistema («{estado}»): no hay líneas que convertir.'
-            + ('<br>La diferencia de montos la muestra la ficha del '
-               'documento.' if estado == "Diferencia" else '')
-            + '</div>', unsafe_allow_html=True)
-    else:
-        _card_conversor_sistema(doc, d)
 
 
 _K_FICHA_ABIERTA = "sunat_ficha_abierta"
@@ -4329,6 +3445,60 @@ def _atender_pedido_de_ficha(fila, doc):
     if sello and sello != st.session_state.get(_K_FICHA_PEDIDO):
         st.session_state[_K_FICHA_PEDIDO] = sello
         st.session_state[_K_FICHA_ABIERTA] = _id_ficha(doc) or None
+
+
+_K_INGRESO_ABIERTO = "sunat_ingreso_abierto"
+_K_INGRESO_PEDIDO = "sunat_ingreso_pedido"
+"""Lo mismo que la ficha, para la ventana de «Ingresar al Almacén»
+(regla #683): el documento cuya ventana está abierta y el último sello
+`_ing` atendido."""
+
+
+def _atender_pedido_de_ingreso(fila, doc):
+    """Si la fila elegida trae un sello `_ing` NUEVO —el clic en
+    «Ingresar»—, abre la ventana. Cierra la ficha: van de a una."""
+    try:
+        sello = float(fila.get("_ing") or 0)
+    except (TypeError, ValueError):
+        sello = 0.0
+    if sello and sello != st.session_state.get(_K_INGRESO_PEDIDO):
+        st.session_state[_K_INGRESO_PEDIDO] = sello
+        st.session_state[_K_INGRESO_ABIERTO] = _id_ficha(doc) or None
+        st.session_state[_K_FICHA_ABIERTA] = None
+
+
+def _ingreso_abierto(doc):
+    actual = _id_ficha(doc)
+    return bool(actual) and st.session_state.get(_K_INGRESO_ABIERTO) == actual
+
+
+def _cerrar_ingreso():
+    st.session_state[_K_INGRESO_ABIERTO] = None
+
+
+def _ingresar_modal(doc, d):
+    """«Ingresar al Almacén» —el conversor que antes era el sexto modo de la
+    tarjeta de abajo, «Conversor SUNAT-Sistema»— en una ventana GRANDE
+    sobre la tabla (2026-10-21, a pedido, regla #683). Se renombró por lo
+    que hace y no por cómo: meter al Almacén un comprobante que SUNAT tiene
+    y el sistema no.
+
+    Es una tarea sobre UN documento, con principio y fin, y por eso va en
+    una ventana y no en una pantalla: al cerrarla se vuelve a la misma fila.
+    `large` (1280px) porque son dos tablas de líneas lado a lado. Mismo
+    trato que la ficha: `on_dismiss` para que la próxima corrida no la
+    reabra, y `una_vez_por_corrida` (regla #456).
+    """
+    titulo = " · ".join(t for t in (
+        "Ingresar al Almacén", str(doc.get("documento") or ""),
+        _compras_truncar(str(doc.get("proveedor") or ""), 48)) if t)
+
+    def _contenido():
+        with st.container(key="sunat_ingreso"):
+            _card_conversor_sistema(doc, d)
+
+    una_vez_por_corrida(st.dialog(titulo, width="large",
+                                  on_dismiss=_cerrar_ingreso)(_contenido))()
 
 
 def _ficha_abierta(doc):
@@ -4988,8 +4158,108 @@ perfectamente cargados. Mismo estado en SUNAT, situación opuesta en la
 contabilidad."""
 
 
-def renderizar_documentos_sunat(d, col_fecha):
+def _aviso_origen(origen):
+    """El caso de ALERTA del sello de origen —«faltan los últimos días»,
+    regla #197—: un total creíble al que le falta la cola. Se dice arriba
+    del contenido, y sólo cuando pasa."""
+    if origen == "parquet-sin-cola":
+        st.markdown(
+            f'<div style="font-size:12px;color:{ADVERTENCIA_TEXTO};'
+            f'text-align:right;">⚠ Faltan los últimos días: el sync '
+            f'todavía no los trajo y SUNAT no respondió la consulta '
+            f'en vivo. Probá de nuevo con ⟳.</div>',
+            unsafe_allow_html=True)
+
+
+def _excel(slot, df_cruce, f_ini, f_fin):
+    """Rellena el hueco del botón de Excel, reservado ARRIBA. Se exporta el
+    CRUCE que se está mirando — sin `car`, que es una clave interna y en una
+    planilla es ruido."""
+    _sufijo = f"{pd.Timestamp(f_ini):%Y%m%d}_{pd.Timestamp(f_fin):%Y%m%d}"
+    with slot:
+        st.download_button(
+            "⬇", data=_excel_bytes(df_cruce.drop(columns=["car"],
+                                                 errors="ignore")),
+            file_name=f"sunat_documentos_{_sufijo}.xlsx",
+            mime=("application/vnd.openxmlformats-officedocument"
+                  ".spreadsheetml.sheet"),
+            key="sunat_dl_xlsx", use_container_width=True,
+            help="Exportar a Excel los documentos del cruce que se ven",
+        )
+
+
+def _vista_resumen(vista, censo, d, col_fecha, f_ini, f_fin, prov, tablas):
+    """«Cruce con SUNAT» o «Proveedores y fechas»: sus datos y su pieza
+    (`_sunat_vistas.py`, regla #683). Al entrar a un resumen se suelta lo
+    que la tabla traía de la llegada anterior: volver a «Documentos» por el
+    rail muestra la tabla entera."""
+    from graficos.compras import _sunat_vistas as sv
+    st.session_state.pop(sv.K_LLEGADA, None)
+    rango = _rotulo_rango(f_ini, f_fin)
+    if vista == sv.VISTA_PROV:
+        series = sv.series_proveedores(sunat._registro_de_parquet(), f_fin)
+        sv.dibujar(sv.datos_proveedores(censo, series, f_fin), "sunat_pieza_prov")
+        return
+    # Lo que falta cargar de los últimos días sólo cuenta si el período
+    # llega hasta ellos: en un rango cerrado hace meses no es demora.
+    desde_rec = datetime.date.today() - datetime.timedelta(days=_DIAS_RECIENTES)
+    rec_desde = (max(pd.Timestamp(f_ini).date(), desde_rec)
+                 if pd.Timestamp(f_fin).date() >= desde_rec else None)
+    n_rec, s_rec = _fidelidad_cruce(censo, rec_desde)["recientes"]
+    with st.spinner("Cruzando el mismo período de años anteriores…"):
+        previos = _cruces_previos(d, col_fecha, f_ini, f_fin, prov, tablas)
+    sv.dibujar(sv.datos_cruce(censo, previos, rango,
+                              {"doc": n_rec, "soles": round(s_rec, 2),
+                               "dias": _DIAS_RECIENTES}),
+               "sunat_pieza_cruce")
+
+
+def _volver_de_llegada(desde):
+    from graficos.compras import _sunat_vistas as sv
+    lleg = st.session_state.pop(sv.K_LLEGADA, None) or {}
+    if lleg.get("prov"):
+        poner_proveedor(None)
+    st.session_state[sv.K_VISTA] = desde
+
+
+def _quitar_llegada():
+    from graficos.compras import _sunat_vistas as sv
+    lleg = st.session_state.pop(sv.K_LLEGADA, None) or {}
+    if lleg.get("prov"):
+        poner_proveedor(None)
+
+
+def _aviso_llegada(lleg):
+    """El renglón que dice de dónde se llegó y qué filtra, con la vuelta y
+    «Quitar filtro» (regla #683)."""
+    from graficos.compras import _sunat_vistas as sv
+    desde = lleg.get("desde") or sv.VISTA_CRUCE
+    texto = sv.texto_llegada(lleg)
+    if lleg.get("prov"):
+        texto = " · ".join(t for t in (texto, "el proveedor elegido") if t)
+    with st.container(horizontal=True, vertical_alignment="center",
+                      gap="small", key="sunat_llegada_fila"):
+        st.button(f"← Volver a {desde}", key="sunat_llegada_volver",
+                  type="tertiary", on_click=_volver_de_llegada, args=(desde,))
+        st.markdown(f'<span class="sunat-llegada-txt">Llegaste desde '
+                    f'<b>{html.escape(desde)}</b>: {html.escape(texto)}</span>',
+                    unsafe_allow_html=True)
+        st.button("Quitar filtro ✕", key="sunat_llegada_quitar",
+                  type="tertiary", on_click=_quitar_llegada)
+
+
+def renderizar_documentos_sunat(d, col_fecha, vista=None):
     """Punto de entrada del drill. Lo llama `graficos/sunat_reporte.py`.
+
+    TRES VISTAS DESDE EL 2026-10-21 (regla #683), una por pantalla: «Cruce
+    con SUNAT» (la que abre), «Proveedores y fechas» y «Documentos», la
+    tabla. Las tres comparten la fila de filtros y el cálculo del cruce; las
+    dos primeras dibujan su pieza (`_sunat_vistas.py`) en lugar de la
+    tabla, y llevan a ella ya filtrada. La tarjeta de debajo de la tabla
+    —que alternaba seis modos y quedaba a medio mostrar— se fue: sus
+    resúmenes son esas dos vistas, y el conversor es la ventana «Ingresar
+    al Almacén» (`_ingresar_modal`). Lo de abajo describe la vista
+    «Documentos»; la numeración de las tarjetas es la de antes de ese día.
 
     DOS TARJETAS Y UNA MODAL, para que todo entre en una pantalla
     (2026-10-02, a pedido; antes eran cuatro tarjetas apiladas):
@@ -5037,6 +4307,9 @@ def renderizar_documentos_sunat(d, col_fecha):
     tarjeta arrancaba en y=266 (contra ~165 de Proveedor) y su borde
     inferior quedaba en 990 con un viewport de 900.
     """
+    from graficos.compras import _sunat_vistas as sv
+    vista = vista or sv.VISTA_DOCS
+    es_docs = vista == sv.VISTA_DOCS
     f_ini, f_fin = _rango_vigente()
 
     # Lo que `_cuerpo` deja para las tarjetas de abajo. Se inicializa acá
@@ -5201,11 +4474,11 @@ def renderizar_documentos_sunat(d, col_fecha):
             # también al Excel. El SIRE no lo dice: sale del Almacén y de
             # dos señales del registro, en el orden de `tipo_compra.py`.
             # Regla #640.
-            df_cruce = tipo_compra.clasificar(
-                df_cruce, vis,
-                _tablas_tipo((data.sello_datos(definicion_compra.ARCHIVO),
-                              data.sello_datos("inventariovalorizado.parquet")),
-                             tipo_compra.VERSION, d))
+            _tablas = _tablas_tipo(
+                (data.sello_datos(definicion_compra.ARCHIVO),
+                 data.sello_datos("inventariovalorizado.parquet")),
+                tipo_compra.VERSION, d)
+            df_cruce = tipo_compra.clasificar(df_cruce, vis, _tablas)
 
             # EL FILTRO DE PROVEEDOR VA ACÁ, sobre el cruce ya armado, y no
             # sobre `vis` antes de cruzar. Recortar el lado SUNAT primero
@@ -5233,6 +4506,17 @@ def renderizar_documentos_sunat(d, col_fecha):
             # «Resumen del cruce» de la tarjeta de abajo, que es el censo
             # del que este filtro elige (ver `_filtro_estado`).
             _cruce_censo = df_cruce
+            if not es_docs:
+                # Las vistas de resumen: su pieza en lugar de la tabla, sobre
+                # el censo (el filtro de estado elige DENTRO del censo, así
+                # que no se dibuja; su espejo lo conserva). Regla #683.
+                estado["resumen"] = {"censo": _cruce_censo}
+                _publicar_conteos(_cruce_censo)
+                _aviso_origen(_origen)
+                _vista_resumen(vista, _cruce_censo, d, col_fecha, f_ini, f_fin,
+                               _prov, _tablas)
+                _excel(_slot_excel, _cruce_censo, f_ini, f_fin)
+                return None
             _est = _filtro_estado(_slot_est, df_cruce)
             if _est:
                 df_cruce = df_cruce[df_cruce["estado"] == _est]
@@ -5250,6 +4534,15 @@ def renderizar_documentos_sunat(d, col_fecha):
                 if "car" in vis.columns and "car" in df_cruce.columns:
                     vis = vis[vis["car"].astype(str).isin(
                         set(df_cruce["car"].astype(str)))]
+            # Lo que pidió el resumen del que se llegó (tipo, estados, días),
+            # con su aviso y la vuelta. El proveedor ya vino en su filtro.
+            _lleg = st.session_state.get(sv.K_LLEGADA)
+            if _lleg:
+                _aviso_llegada(_lleg)
+                df_cruce = sv.aplicar_llegada(df_cruce, _lleg)
+                if "car" in vis.columns and "car" in df_cruce.columns:
+                    vis = vis[vis["car"].astype(str).isin(
+                        set(df_cruce["car"].astype(str)))]
             estado["vis"], estado["cruce"] = vis, df_cruce
             estado["resumen"] = {
                 "censo": _cruce_censo, "origen": _origen,
@@ -5258,17 +4551,7 @@ def renderizar_documentos_sunat(d, col_fecha):
             }
             _publicar_conteos(_cruce_censo)
 
-            # El sello de origen vivía en la tira. Lo que no puede perderse
-            # es su caso de ALERTA —«faltan los últimos días», regla #197—:
-            # un total creíble al que le falta la cola. Ése se dice acá,
-            # arriba de la tabla, y sólo cuando pasa.
-            if _origen == "parquet-sin-cola":
-                st.markdown(
-                    f'<div style="font-size:12px;color:{ADVERTENCIA_TEXTO};'
-                    f'text-align:right;">⚠ Faltan los últimos días: el sync '
-                    f'todavía no los trajo y SUNAT no respondió la consulta '
-                    f'en vivo. Probá de nuevo con ⟳.</div>',
-                    unsafe_allow_html=True)
+            _aviso_origen(_origen)
             # El pedido en lote de los XML que faltan (regla #675): su
             # avance arriba de la tabla mientras dura, y el botón en la
             # botonera, sobre las filas que la tabla muestra.
@@ -5277,20 +4560,7 @@ def renderizar_documentos_sunat(d, col_fecha):
             _avance_lote_xml(df_cruce, vis)
             doc = _tabla_documentos(df_cruce, vis)
 
-            # Se rellena el hueco reservado ARRIBA. Se exporta el CRUCE,
-            # que es lo que la tabla muestra — sin `car`, que es una clave
-            # interna y en una planilla es ruido.
-            _sufijo = f"{pd.Timestamp(f_ini):%Y%m%d}_{pd.Timestamp(f_fin):%Y%m%d}"
-            with _slot_excel:
-                st.download_button(
-                    "⬇", data=_excel_bytes(df_cruce.drop(columns=["car"],
-                                                         errors="ignore")),
-                    file_name=f"sunat_documentos_{_sufijo}.xlsx",
-                    mime=("application/vnd.openxmlformats-officedocument"
-                          ".spreadsheetml.sheet"),
-                    key="sunat_dl_xlsx", use_container_width=True,
-                    help="Exportar a Excel lo que muestra la tabla",
-                )
+            _excel(_slot_excel, df_cruce, f_ini, f_fin)
             return doc
 
         estado["doc"] = _cuerpo()
@@ -5307,9 +4577,9 @@ def renderizar_documentos_sunat(d, col_fecha):
     # para el gráfico y el conversor de abajo. Regla #586.
     if _ficha_abierta(doc):
         _ficha_modal(doc)
-
-    # Debajo de la tabla, UNA tarjeta que alterna el gráfico y el conversor
-    # (2026-10-02, a pedido: «que se alternen debajo de la tabla»). Antes
-    # eran dos tarjetas apiladas, y el conversor sólo aparecía cuando el
-    # documento faltaba en el sistema. Ver `_panel_abajo`.
-    _tarjeta_abajo(estado["vis"], doc, fila_cruce, d, estado["resumen"])
+    # «Ingresar al Almacén», la ventana que reemplazó a la tarjeta de debajo
+    # de la tabla (regla #683). Sólo para lo que falta cargar: el botón de
+    # la fila no aparece en otro estado, y una selección vieja no la abre.
+    elif (_ingreso_abierto(doc) and fila_cruce is not None
+          and str(fila_cruce.get("estado") or "") == "Solo SUNAT"):
+        _ingresar_modal(doc, d)

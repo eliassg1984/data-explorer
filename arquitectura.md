@@ -58,7 +58,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-682 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+683 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (215)
 
@@ -876,7 +876,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 
-**SUNAT y SIRE** (65)
+**SUNAT y SIRE** (66)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -943,6 +943,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 - **#679** — «Costo de ventas» tiene DOS formas de la parte de arriba —Tablero y Cascada— y, debajo de las…
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
+- **#683** — «Documentos SUNAT» son TRES vistas, una por pantalla, y la tarjeta de debajo de la tabla ya…
 
 **Fechas, rangos y cortes** (17)
 
@@ -1015,7 +1016,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (195)
+**Decisiones de diseño y UX** (196)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1212,6 +1213,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#677** — De los tres modos de «Distribución de diferencias» sólo el Pareto se podía analizar: la vista…
 - **#679** — «Costo de ventas» tiene DOS formas de la parte de arriba —Tablero y Cascada— y, debajo de las…
 - **#680** — «Análisis de diferencias» lista con fichas cortas que traen su número, y la ficha de la línea…
+- **#683** — «Documentos SUNAT» son TRES vistas, una por pantalla, y la tarjeta de debajo de la tabla ya…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53171,6 +53173,63 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-20.)
 
+683. **«Documentos SUNAT» son TRES vistas, una por pantalla, y la tarjeta
+     de debajo de la tabla ya no existe** (2026-10-21, a pedido y con mockup
+     aprobado). Esa tarjeta alternaba seis modos —«Este proveedor», «Por
+     fecha», «Por proveedor», «Resumen del cruce», «Por tipo de compra» y el
+     conversor— y quedaba a medio mostrar: tabla y tarjeta no caben juntas a
+     1323×619. Lo que se pidió: los resúmenes, PANTALLAS que llevan a la
+     tabla; la tarea sobre un documento, una ventana.
+
+     - **El rail del reporte** (`sunat_reporte.py`) lista «Cruce con SUNAT»
+       (abre), «Proveedores y fechas» y «Documentos». Las tres comparten la
+       fila de filtros y el cálculo del cruce de `renderizar_documentos_sunat`;
+       las dos primeras dibujan su pieza en lugar de la tabla. El filtro
+       «Está vs Sistema» no se dibuja en los resúmenes (elige DENTRO del
+       censo, regla #461) y su espejo lo conserva.
+     - **Los resúmenes son una pieza propia** (`graficos/compras/_sunat_vistas.py`
+       + `sunat_vistas.js`/`.css`, `st.components.v2` sin iframe, como las
+       listas de Ajuste #680): Python manda las dos medidas, las particiones
+       y el detalle de cada fila, y abrir una fila, pasar de soles a
+       documentos, buscar o reordenar es del navegador. A Python le llega
+       un trigger, «ir».
+     - **«Cruce con SUNAT»** une «Resumen del cruce» y «Por tipo de compra»:
+       la misma tabla con «Filas: Por tipo de compra | Por año». Un tipo se
+       abre en los proveedores que le bajan la fidelidad; un año, en sus
+       tipos. Compara con UN año atrás, no dos: cada cruce de doce meses son
+       ~16 s en la laptop.
+     - **«Proveedores y fechas»** une los otros tres: «Agrupar por:
+       Proveedor | Mes | Día». Un proveedor se abre en sus doce meses (del
+       registro COMPLETO, `series_proveedores`, un groupby) y sus
+       documentos; un mes o un día, en sus proveedores y lo pendiente.
+     - **«Ver estos documentos» lleva a la tabla filtrada**: el trigger
+       escribe `K_LLEGADA` (tipo, estados, días) y la vista; el proveedor
+       va al ESPEJO del filtro de proveedor (`poner_proveedor`), que es un
+       control a la vista. La tabla dice de dónde se llegó, con «← Volver»
+       y «Quitar filtro» (`_aviso_llegada`). Entrar a un resumen suelta la
+       llegada: volver por el rail muestra la tabla entera.
+     - **El conversor es la ventana «Ingresar al Almacén»** (`st.dialog`
+       `large`, `_ingresar_modal`), con el nombre de lo que hace y no de
+       cómo. Se abre con «↓ Ingresar», una columna de la tabla que sólo
+       tienen las filas «Solo SUNAT», con un sello `_ing` como el `_ver` del
+       ojo (regla #586). Ficha e ingreso van de a uno. Su contenido no
+       cambió.
+     - **Lo que costó medir**: la primera versión de los datos filtraba el
+       cruce proveedor por proveedor y «Proveedores y fechas» tardaba 21 s
+       en un año (5.373 documentos); con un `groupby` por partición
+       (`_fid_por`), 1,5 s (regla #537). Y la primera columna de la tabla se
+       quedaba en cero con `table-layout: fixed` y las demás en px: va con
+       ancho propio y la tabla con `min-width`.
+
+     Lo vigila `test_graficos.py` (las particiones suman el censo, el año
+     sin datos se dice, la llegada recorta por tipo y estado, la serie de
+     doce meses). Verificado en el navegador a 1323×619 sobre R2: las dos
+     vistas, el salto a la tabla con su aviso y la ventana desde «Ingresar».
+     Reemplaza el despliegue de la tarjeta de abajo de las reglas #586,
+     #588, #630 y #672.
+
+     (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53183,7 +53242,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#682**; la próxima toma el número siguiente.
+> última regla es la **#683**; la próxima toma el número siguiente.
 
 >
 

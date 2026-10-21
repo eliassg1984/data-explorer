@@ -1,0 +1,152 @@
+/* Las dos vistas de resumen de «Documentos SUNAT» (regla #683). Viven en el
+   shadow root de la pieza (graficos/compras/_sunat_vistas.py): ninguna regla
+   de acá sale, y ninguna de estilos/ entra. Los colores son las variables de
+   estilos/_00_base.py, que SÍ cruzan el shadow root. Ningún :has (#469).
+
+   Las barras son de UN color en tres tonos (a pedido, «menos pintoresco»):
+   lo que cuadra, claro; con diferencia, medio; lo que falta cargar, oscuro.
+   El tono oscuro es lo que hay que hacer. */
+
+.sv {
+  --c-ok: color-mix(in srgb, var(--accent) 24%, var(--bg-card));
+  --c-dif: color-mix(in srgb, var(--accent) 58%, var(--bg-card));
+  --c-falta: var(--accent-deep);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sv button, .sv input { font-family: inherit; }
+.sv button:focus-visible, .sv tr:focus-visible, .sv input:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.gris { color: var(--text-secondary); }
+
+/* ── cabecera ─────────────────────────────────────────────────────────── */
+.cab { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
+.kpi { margin-right: auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rot { font-size: 11px; color: var(--text-secondary); }
+.kpi .rot { font-weight: 600; font-size: 11.5px; }
+.fila-kpi { display: flex; align-items: baseline; gap: 10px; }
+.grande { font-size: 26px; font-weight: 700; line-height: 1.1; }
+.chip-kpi { font-size: 12.5px; color: var(--text-secondary); }
+.sub { font-size: 12px; color: var(--text-secondary); }
+.campo { display: flex; flex-direction: column; gap: 4px; }
+.seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button {
+  border: 0; background: var(--bg-card); color: var(--text-secondary);
+  padding: 6px 12px; font-size: 12.5px; cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button:hover { color: var(--text-primary); }
+.seg button.on { background: var(--accent-light); color: var(--accent-deep); font-weight: 600; }
+.buscar {
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+  font-size: 12.5px; width: 210px; background: var(--bg-card); color: var(--text-primary);
+}
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); padding-bottom: 6px; }
+.chk input { accent-color: var(--accent); }
+.resumen { margin-left: auto; font-size: 12px; padding-bottom: 6px; }
+
+/* ── tabla ────────────────────────────────────────────────────────────── */
+/* Se desliza por dentro, con la cabecera fija: la tarjeta no saca barra
+   propia (tarjetas sin scroll interno). El tope sale del alto útil de la
+   pantalla menos la cabecera de la tarjeta y la de la vista. */
+.marco {
+  border: 1px solid var(--border); border-radius: 10px; overflow: auto;
+  max-height: max(260px, calc(var(--alto-util, 640px) - 210px));
+}
+/* Con anchos mínimos: por debajo de ~900px la tabla se desliza de
+   costado dentro de su marco en vez de comerse la columna de nombres. */
+table { border-collapse: collapse; width: 100%; min-width: 900px; table-layout: fixed; }
+.t-det { min-width: 0; }
+th {
+  position: sticky; top: 0; z-index: 1; background: var(--bg-card);
+  font-size: 11px; font-weight: 600; color: var(--text-secondary); text-align: left;
+  padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+th[data-orden] { cursor: pointer; }
+th[data-orden]:hover, th.ord { color: var(--text-primary); }
+th.n, td.n { text-align: right; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }
+td b { font-weight: 600; }
+td small { display: block; font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+td > b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.t-det td:first-child { white-space: nowrap; }
+.fila { cursor: pointer; }
+.fila:hover, .fila.abierta { background: var(--bg-card-tenue); }
+.fila.total { cursor: default; background: var(--bg-card-tenue); }
+.fila.total b { font-weight: 700; }
+td.fuerte { font-weight: 700; }
+td.flecha { color: var(--text-secondary); text-align: center; padding-left: 0; padding-right: 6px; }
+td.alerta { color: var(--warning-text); font-weight: 600; }
+td.dif { color: var(--text-primary); font-weight: 600; }
+
+.ley { display: inline-flex; align-items: center; gap: 4px; }
+.ley i { width: 10px; height: 6px; border-radius: 2px; display: inline-block; }
+.ley i.c, .barra i.c { background: var(--c-ok); }
+.ley i.d, .barra i.d { background: var(--c-dif); }
+.ley i.f, .barra i.f { background: var(--c-falta); }
+
+.barra { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line-soft); }
+.barra.chica { height: 6px; border-radius: 3px; }
+.barra i { display: block; height: 100%; }
+
+/* ── el detalle de una fila ───────────────────────────────────────────── */
+tr.det > td { background: var(--bg-card-tenue); padding: 10px 12px 12px 22px; }
+.det-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.det-cab b { font-size: 12.5px; }
+.det-cab .gris { font-size: 12px; margin-right: auto; }
+.det-cab .ir { margin-left: auto; }
+.ir {
+  border: 1px solid var(--border-lavender); background: var(--bg-card); color: var(--accent-deep);
+  border-radius: 8px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.ir:hover { background: var(--accent-light); }
+.t-det td { border-bottom: 0; padding: 5px 10px; font-size: 12.5px; }
+.sub-fila { cursor: pointer; }
+.sub-fila:hover td { background: var(--accent-tint); }
+.sub-fila.quieta { cursor: default; }
+.sub-fila.quieta:hover td { background: transparent; }
+.vacio { padding: 10px 4px; color: var(--text-secondary); font-size: 12.5px; }
+.notas { display: flex; gap: 6px 18px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--text-secondary); }
+
+/* Proveedores: la participación y la serie corta */
+.part { display: flex; align-items: center; gap: 8px; }
+.pista { flex: 1; height: 7px; border-radius: 4px; background: var(--line-soft); overflow: hidden; }
+.pista i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.part span { width: 44px; text-align: right; font-size: 12px; color: var(--text-secondary); }
+.spark { display: flex; align-items: flex-end; gap: 3px; height: 22px; }
+.spark i { width: 9px; border-radius: 2px; background: var(--c-dif); display: block; }
+.spark i.u { background: var(--accent); }
+
+.det-dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 22px; }
+.det-tit { font-size: 12.5px; font-weight: 600; margin-bottom: 8px; }
+.cols { display: flex; align-items: flex-end; gap: 5px; height: 130px; border-bottom: 1px solid var(--border); }
+.col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; height: 100%; min-width: 0; }
+.col span { font-size: 10px; color: var(--text-secondary); }
+.col i { display: block; width: 100%; border-radius: 3px 3px 0 0; background: var(--c-dif); }
+.col i.u { background: var(--accent); }
+.col small { font-size: 10px; color: var(--text-secondary); white-space: nowrap; margin-bottom: -16px; }
+.kps { margin-top: 22px; font-size: 12px; color: var(--text-secondary); }
+.kps b { color: var(--text-primary); }
+.hbarras { display: flex; flex-direction: column; gap: 6px; }
+.hb { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 84px; gap: 8px; align-items: center; font-size: 12px; }
+.hb span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb b { text-align: right; font-weight: 600; }
+.docs { display: flex; flex-direction: column; gap: 1px; max-height: 230px; overflow: auto; }
+.doc {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) 96px 92px; gap: 10px; align-items: center;
+  border: 0; background: transparent; text-align: left; padding: 5px 6px; border-radius: 6px;
+  font-size: 12.5px; color: var(--text-primary); cursor: pointer;
+}
+.doc:hover { background: var(--accent-tint); }
+.doc .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doc .n { text-align: right; }
+.est { justify-self: end; font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.est.falta { background: var(--warning-bg); color: var(--warning-text); }
+.est.dif { background: var(--accent-light); color: var(--accent-deep); }
+.est.ok { color: var(--text-secondary); }
+.est.fuera { color: var(--text-secondary); }

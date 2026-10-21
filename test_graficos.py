@@ -2252,18 +2252,44 @@ def _pruebas_puras():
     check("fidelidad: sin cruce, todo en cero",
           _ds._fidelidad_cruce(None)["doc"],
           {"sunat": 0, "cuadran": 0, "diferencia": 0, "falta": 0, "fuera": 0})
-    # Las barras: HTML con los tres tramos y el de fuera, sin romperse con
-    # un período vacío.
-    _per = [{"edad": 1, "rango": "1 ene – 2 oct 2025", "anio": "2025",
-             "f": _ds._fidelidad_cruce(None)},
-            {"edad": 0, "rango": "1 ene – 2 oct 2026", "f": _fid}]
-    _html = _ds._barras_fidelidad(_per, "doc")
-    check("barras de fidelidad: un tramo por caso con datos",
-          (_html.count("sunat-fid-tramo cuadran"),
-           _html.count("sunat-fid-tramo diferencia"),
-           _html.count("sunat-fid-tramo falta")), (1, 1, 1))
-    check("barras de fidelidad: el período sin SUNAT lo dice",
-          "SUNAT no tiene documentos" in _html, True)
+    # Las vistas de resumen (regla #683): «Cruce con SUNAT» parte el MISMO
+    # censo por tipo y por año, y «Proveedores y fechas» por proveedor, mes
+    # y día. Las filas de cada partición suman el total.
+    from graficos.compras import _sunat_vistas as _sv
+    _c = _cruce.copy()
+    _c["tipo"] = ["Mercadería", "Servicios", "Mercadería", "Financiero"] * 2
+    _dc = _sv.datos_cruce(_c, [("2025", "rango", None, "sin datos")], "rango")
+    check("cruce: los tipos suman el total, en documentos",
+          sum(r["f"]["doc"]["sunat"] for r in _dc["tipos"]),
+          _dc["total"]["f"]["doc"]["sunat"])
+    check("cruce: un año sin datos se dice, no se dibuja en cero",
+          (len(_dc["anios"]), len(_dc["avisos"])), (1, 1))
+    _pend = [r for r in _dc["tipos"] if r["det"]]
+    check("cruce: el detalle de un tipo son sus proveedores con algo pendiente",
+          all(p["f"]["doc"]["falta"] + p["f"]["doc"]["diferencia"] > 0
+              for r in _pend for p in r["det"]), True)
+    _dp = _sv.datos_proveedores(_c, {}, _c["fecha_emision"].max())
+    check("proveedores: las filas suman el censo",
+          sum(r["f"]["doc"]["sunat"] for r in _dp["prov"]),
+          _dc["total"]["f"]["doc"]["sunat"])
+    check("proveedores: los días suman lo mismo que los proveedores",
+          sum(r["f"]["doc"]["sunat"] for r in _dp["dia"]),
+          sum(r["f"]["doc"]["sunat"] for r in _dp["prov"]))
+    check("proveedores: doce meses de serie por proveedor",
+          {len(r["serie"]) for r in _dp["prov"]}, {12})
+    _ll = _sv.aplicar_llegada(_c, {"tipo": "Mercadería",
+                                   "estados": ["Solo SUNAT", "Diferencia"]})
+    check("la llegada a la tabla recorta por tipo y estado",
+          (set(_ll["tipo"]), set(_ll["estado"]) <= {"Solo SUNAT", "Diferencia"}),
+          ({"Mercadería"} if len(_ll) else set(), True))
+    check("sin llegada, la tabla entera",
+          len(_sv.aplicar_llegada(_c, None)), len(_c))
+    _reg = pd.DataFrame({"ruc_proveedor": ["1", "1", "2"],
+                         "fecha_emision": ["2026-09-03", "2026-10-01", "2025-01-01"],
+                         "total": [10.0, 5.0, 99.0]})
+    _se = _sv.series_proveedores(_reg, "2026-10-19")
+    check("serie por proveedor: los 12 meses que terminan en el del rango",
+          (_se["1"][-1], _se["1"][-2], "2" in _se), (5.0, 10.0, False))
     check("comparar con el año pasado corre el MISMO rango un año",
           _ds._rango_hace(_dt.date(2026, 9, 3), _dt.date(2026, 10, 2), 1),
           (_dt.date(2025, 9, 3), _dt.date(2025, 10, 2)))
