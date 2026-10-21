@@ -141,7 +141,7 @@ body { font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-
 .pie { color: var(--suave); font-size: 12.5px; }
 
 /* tabla dinámica */
-.td-wrap { overflow: auto; max-height: var(--alto-tabla, 520px); border: 1px solid var(--borde); border-radius: 8px; }
+.td-wrap { overflow: auto; overscroll-behavior: contain; max-height: var(--alto-tabla, 520px); border: 1px solid var(--borde); border-radius: 8px; }
 table.td { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
 .td th, .td td { padding: 7px 10px; border-bottom: 1px solid var(--linea); white-space: nowrap; }
 .td th { position: sticky; top: 0; z-index: 2; background: var(--cabecera); color: var(--suave); text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; vertical-align: bottom; }
@@ -190,7 +190,7 @@ table.td { border-collapse: separate; border-spacing: 0; width: max-content; min
 .caja { border: 1px solid var(--borde); border-radius: 10px; }
 .caja > .card-h { padding: 12px 14px 8px; }
 .caja > .filtros { padding: 0 14px 10px; }
-.tabla-wrap { max-height: var(--alto-tabla, 520px); overflow: auto; border-top: 1px solid var(--borde); }
+.tabla-wrap { max-height: var(--alto-tabla, 520px); overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--borde); }
 .tabla-wrap table { width: 100%; border-collapse: collapse; min-width: 560px; }
 .tabla-wrap th { position: sticky; top: 0; z-index: 1; background: var(--cabecera); color: var(--suave); text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 8px 10px; border-bottom: 1px solid var(--borde); vertical-align: bottom; white-space: nowrap; }
 .tabla-wrap th.r, .tabla-wrap td.r { text-align: right; }

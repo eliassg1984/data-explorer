@@ -303,7 +303,7 @@ def fig_cascada(M, rot_ini, rot_fin):
 
 
 CSS_MOVIMIENTOS = f"""
-.inv-mov-caja {{ max-height: {alturas.STOCK_MOVIMIENTOS}px; overflow-y: auto;
+.inv-mov-caja {{ max-height: {alturas.STOCK_MOVIMIENTOS}px; overflow-y: auto; overscroll-behavior: contain;
     border-top: 1px solid {GRIS_BORDE}; }}
 .inv-mov-t {{ width: 100%; border-collapse: collapse; font-size: 12px;
     font-variant-numeric: tabular-nums; color: {TEXTO_PRINCIPAL}; }}

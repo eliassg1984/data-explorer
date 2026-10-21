@@ -58,9 +58,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-686 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+687 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (215)
+**CSS y estilos** (216)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -277,6 +277,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#658** — La ficha de Costo Carta lee la AUDITORÍA del POS: un cambio de factor o de unidad de un…
 - **#663** — Compras › Proveedor: «Total del rango» lleva su fila TOTAL, y la ✕ del producto en foco va en…
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
+- **#687** — Una lista con scroll propio de una pieza nuestra lleva overscroll-behavior: contain; el…
 
 **Layout y alturas** (96)
 
@@ -1019,7 +1020,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (198)
+**Decisiones de diseño y UX** (199)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1219,6 +1220,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#683** — «Documentos SUNAT» son TRES vistas, una por pantalla, y la tarjeta de debajo de la tabla ya…
 - **#684** — «Ingresar al Almacén» es UNA tabla con los dos lados, y lo que falta cargar dice cuánto es…
 - **#686** — «¿El maestro del sistema tiene lógica?» se contesta con CONTROLES, no con un tablero: Costos…
+- **#687** — Una lista con scroll propio de una pieza nuestra lleva overscroll-behavior: contain; el…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53337,6 +53339,40 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-21.)
 
+687. **Una lista con scroll propio de una pieza nuestra lleva
+     `overscroll-behavior: contain`; el encaje de la pila sigue OBLIGATORIO.**
+     Pregunta del usuario (2026-10-21): ¿el scroll por error le hace perder
+     la vista? Medido con la rueda de verdad, a 1323×619, cada clic 100 px
+     y una vista ~607 px:
+
+     · **Encaje.** Con `mandatory` (#533), un gesto de hasta media
+       pantalla se DESHACE solo —1 y 3 clics vuelven a la misma vista en
+       ~1 s— y 4 clics pasan a la siguiente. Con `proximity`, 2 y 3 clics
+       dejaron la página a mitad de camino: la queja que originó la #533.
+       No se cambia.
+     · **AgGrid** no arrastra la página al llegar al final de su grilla, ni
+       en el mismo gesto ni en uno nuevo: no necesita nada.
+     · **Las piezas propias SÍ** (la lista de «Análisis de diferencias»: la
+       página bajó 70 px con la lista en su final). Con `contain`, quieta;
+       la lista sigue scrolleando y fuera de ella la página baja y encaja
+       igual. Va en el CSS de CADA pieza: viven en un shadow root o un
+       iframe, y el CSS global no les llega. Lo tienen las doce cajas de
+       `graficos/` con `overflow` en `auto`/`scroll` (lista_diferencias,
+       panel_sesion, sunat_vistas ×2, simulador_plato, la página de
+       consumo ×2, la tabla de Evolución, las dos de Proveedor, la lista de
+       Producto y Movimientos de Stock).
+     · **`st.dataframe`** arrastró 2 veces en 8 intentos (293 y 502 px), una
+       de ellas CON `contain` puesto, y ninguna en 6 intentos preparados
+       igual: depende de qué scrolleó último, y no se controla desde acá.
+       El encaje tapa el arrastre corto; el largo salta de vista.
+
+     Lo vigila `test_graficos.py::_pruebas_scroll_propio_contenido`, que
+     barre el CSS de `graficos/`. Hallazgo aparte, sin tocar: a 1323×619 la
+     sección «Análisis de diferencias» mide 668 px y el final de su lista
+     queda 23 px bajo el borde.
+
+     (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53349,7 +53385,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#686**; la próxima toma el número siguiente.
+> última regla es la **#687**; la próxima toma el número siguiente.
 
 >
 

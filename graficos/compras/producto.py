@@ -980,7 +980,7 @@ _CSS_PROPIO = """
         .cpp-f.sel { background: var(--accent-tint); }
         .cpp-f.tot { background: var(--bg-primary); font-weight: 700;
                      border-bottom: none; border-radius: 8px; }
-        .cpp-l { overflow-y: auto; }
+        .cpp-l { overflow-y: auto; overscroll-behavior: contain; }
         .cpp-l::-webkit-scrollbar { width: 6px; }
         .cpp-l::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 3px; }
         .cpp-t .r { text-align: right; white-space: nowrap; }

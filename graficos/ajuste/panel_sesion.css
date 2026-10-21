@@ -44,7 +44,7 @@
 }
 
 /* La lista del año: dos renglones por sesión, el neto a la derecha. */
-.lista { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; padding-right: 2px; }
+.lista { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
 .fila {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline;
   text-align: left; border: 0; border-radius: 8px; padding: 6px 9px;

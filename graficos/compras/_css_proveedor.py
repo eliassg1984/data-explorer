@@ -336,6 +336,7 @@ CSS = """        <style>
                alto del grafico, no a un px suelto. */
             max-height: 330px !important;
             overflow-y: auto !important;
+            overscroll-behavior: contain;
         }
         /* Cada fila apila nombre y monto (antes eran dos columnas). El
            bloque de la fila no debe meter aire entre esas dos lineas. */
@@ -1934,6 +1935,7 @@ CSS = """        <style>
         .cp-pl-head .r, .cp-pm-head .r, .cp-dl-head .r { text-align: right; }
         .cp-pl-lista {
             overflow-y: auto; overflow-x: hidden;
+            overscroll-behavior: contain;
         }
         .cp-pl-lista::-webkit-scrollbar { width: 6px; }
         .cp-pl-lista::-webkit-scrollbar-thumb {

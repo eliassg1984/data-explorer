@@ -653,7 +653,7 @@ def tabla_resumen_html(s, foco=None, alto=None):
         f"<th style='{th};text-align:{al}' title='{ayuda}'>{txt}</th>"
         for txt, al, ayuda in columnas)
     techo = f"max-height:{alto}px;" if alto else ""
-    return (f"<div class='ajevo-tabla' style='{techo}overflow-y:auto'>"
+    return (f"<div class='ajevo-tabla' style='{techo}overflow-y:auto;overscroll-behavior:contain'>"
             "<table style='width:100%;border-collapse:collapse;font-size:12px'>"
             f"<thead><tr>{cab}</tr></thead><tbody>{''.join(filas)}</tbody>"
             f"<tfoot>{total}</tfoot></table></div>")

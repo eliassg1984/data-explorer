@@ -55,6 +55,8 @@
    pantalla menos la cabecera de la tarjeta y la de la vista. */
 .marco {
   border: 1px solid var(--border); border-radius: 10px; overflow: auto;
+  /* Al llegar al final, la rueda no pasa a la página (regla #687). */
+  overscroll-behavior: contain;
   max-height: max(260px, calc(var(--alto-util, 640px) - 210px));
 }
 /* Con anchos mínimos: por debajo de ~900px la tabla se desliza de
@@ -136,7 +138,7 @@ tr.det > td { background: var(--bg-card-tenue); padding: 10px 12px 12px 22px; }
 .hb { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 84px; gap: 8px; align-items: center; font-size: 12px; }
 .hb span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hb b { text-align: right; font-weight: 600; }
-.docs { display: flex; flex-direction: column; gap: 1px; max-height: 230px; overflow: auto; }
+.docs { display: flex; flex-direction: column; gap: 1px; max-height: 230px; overflow: auto; overscroll-behavior: contain; }
 .doc {
   display: grid; grid-template-columns: 52px minmax(0, 1fr) 96px 92px; gap: 10px; align-items: center;
   border: 0; background: transparent; text-align: left; padding: 5px 6px; border-radius: 6px;

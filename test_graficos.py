@@ -3812,6 +3812,49 @@ def _pruebas_encaje_pila():
     return fallos
 
 
+def _pruebas_scroll_propio_contenido():
+    """Una lista con scroll propio de una pieza nuestra lleva
+    `overscroll-behavior: contain`. Regla #687.
+
+    Sin él, al llegar al final de la lista la rueda pasa a mover la página,
+    y en la pila encajada eso puede saltar a la vista siguiente (medido en
+    la lista de «Análisis de diferencias»: la página bajó 70 px; con
+    `contain`, nada). Barre el CSS de `graficos/` —los `.css` de las piezas,
+    los `<style>` de los `.py` y los `style='…'` en línea—: todo bloque con
+    `overflow`/`overflow-y` en `auto` o `scroll` tiene que llevarlo. Las
+    grillas AgGrid y las `st.dataframe` no pasan por acá: AgGrid no arrastra
+    la página, y en una `st.dataframe` el `contain` no fue confiable."""
+    import pathlib
+    import re
+
+    raiz = pathlib.Path(__file__).parent / "graficos"
+    faltas = []
+    patron = re.compile(r"overflow(?:-y)?\s*:\s*(?:auto|scroll)")
+    for p in sorted(raiz.rglob("*")):
+        if p.suffix not in (".css", ".js", ".py") or "__pycache__" in p.parts:
+            continue
+        texto = re.sub(r"/\*.*?\*/", "", p.read_text(encoding="utf-8"), flags=re.S)
+        for m in patron.finditer(texto):
+            i = m.start()
+            ini = max(texto.rfind("{", 0, i), texto.rfind("style='", 0, i),
+                      texto.rfind('style="', 0, i))
+            fines = [j for j in (texto.find("}", i), texto.find("'", i),
+                                 texto.find('"', i)) if j >= 0]
+            bloque = texto[ini:min(fines) if fines else len(texto)]
+            if "overscroll-behavior" not in bloque:
+                linea = texto.count("\n", 0, i) + 1
+                faltas.append(f"{p.relative_to(raiz.parent).as_posix()}:{linea}")
+    if faltas:
+        print("FALLA css · scroll propio sin overscroll-behavior: contain "
+              "(la rueda pasaría a la página):")
+        for f_ in faltas:
+            print(f"      {f_}")
+        return 1
+    print("OK    css · toda lista con scroll propio de graficos/ lleva "
+          "overscroll-behavior: contain")
+    return 0
+
+
 def _pruebas_widgets_de_fragment_escalado():
     """Un `st.rerun` al tope de un fragment le borra el estado a SUS widgets.
 
@@ -13488,6 +13531,7 @@ def main():
     fallos += _pruebas_has_solo_clases()
     fallos += _pruebas_has_de_streamlit()
     fallos += _pruebas_encaje_pila()
+    fallos += _pruebas_scroll_propio_contenido()
     fallos += _pruebas_periodo_por_vista()
 
     # ── El panel del selector de fecha de las tarjetas (regla #616) ──────

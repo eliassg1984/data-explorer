@@ -38,7 +38,7 @@
 .pv-in { width: 84px; font-size: 15px; font-weight: 600; }
 .u { color: var(--text-muted); font-size: 11px; }
 
-.tabla { overflow: auto; max-height: 52vh; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg-card); }
+.tabla { overflow: auto; overscroll-behavior: contain; max-height: 52vh; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg-card); }
 table { width: 100%; min-width: 680px; border-collapse: collapse; font-size: 12.5px; }
 th { position: sticky; top: 0; z-index: 1; background: var(--bg-primary); color: var(--text-muted); font-weight: 500; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 td { padding: 4px 8px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }

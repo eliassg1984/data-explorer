@@ -18,7 +18,8 @@
 
 /* La tabla desliza por dentro, con la cabecera fija: el alto lo manda Python
    (`alturas.DIFERENCIAS_TABLA`). */
-.marco { border: 1px solid var(--border); border-radius: 10px; overflow: auto; }
+/* Al llegar al final, la rueda no pasa a la página (regla #687). */
+.marco { border: 1px solid var(--border); border-radius: 10px; overflow: auto; overscroll-behavior: contain; }
 table { border-collapse: collapse; width: 100%; table-layout: fixed; }
 th {
   position: sticky; top: 0; z-index: 1; background: var(--bg-card);
