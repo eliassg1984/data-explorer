@@ -58,9 +58,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-689 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+690 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (218)
+**CSS y estilos** (219)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -280,8 +280,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#687** — Una lista con scroll propio de una pieza nuestra lleva overscroll-behavior: contain; el…
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 - **#689** — Un boceto aprobado se implementa con SU forma: si es una página con tarjetas, chips y ficha,…
+- **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
 
-**Layout y alturas** (97)
+**Layout y alturas** (98)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -380,6 +381,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#671** — «Cambios Recetas Base»: qué insumo o qué cantidad cambió en cada receta base, quién y cuánto…
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
+- **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
 
 **Plotly y figuras** (119)
 
@@ -53434,6 +53436,44 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-21.)
 
+690. **«Consistencia de datos» entra en UNA pantalla de la laptop
+     (1323×619): arriba tres renglones bajos, abajo la lista y la ficha a la
+     altura que queda, cada una con su scroll.** Pregunta del usuario:
+     «¿esto está hecho para laptop el tamaño?». El ancho sí; el alto no: las
+     capturas de la #689 se sacaron a 900 de alto y a 619 lo de arriba
+     ocupaba 361 px, la lista 697 y la ficha 807 —para ver los casos había
+     que bajar la página y la lista se iba—. Medido después: la página mide
+     619, lo de arriba 163, la lista y la ficha 422 cada una.
+
+     - **Arriba**: el título con un «?» que lleva la explicación (el párrafo
+       y la nota del pie se fueron ahí), los indicadores en una tira de
+       ~50 px (rótulo arriba, cifra y casos al lado) y las pestañas a 30.
+     - **`--cd-arriba` lo mide el JS** (`medir`), no se adivina: lo de
+       arriba pasa a dos renglones según el ancho. El cuerpo es
+       `--alto-util − --cd-arriba − 20px`, con piso de 300.
+     - **La ficha compacta**: las cifras en un renglón, «Qué hacer» en una
+       caja baja y la regla PLEGADA (un `<details>` que recuerda si se
+       abrió). Los casos ocupan el resto de la ficha con su propio scroll.
+     - **Un renglón por fila**: la explicación de cada control con `…` (el
+       texto entero en el `title`) y los casos sin partir; partida en tres,
+       cada fila medía 65 px y la lista mostraba cinco.
+     - **Rehacer el HTML devuelve la lista arriba de todo**: con scroll
+       propio, un clic en la fila 20 la perdía de vista. `dibujar` guarda y
+       repone su `scrollTop`, salvo al cambiar de grupo.
+     - **La trampa de la #689, un nivel más arriba**: con los casos en un
+       renglón, la tabla estiró la pieza ENTERA de lado (el botón del CSV y
+       la ficha salían de la tarjeta, en escritorio y en el celular). El
+       `min-width: 0` va también en los hijos de `.cd` y de `.cd-cuerpo`, y
+       `.cd` lleva `grid-template-columns: minmax(0, 1fr)`.
+     - **Debajo de 900 px** no hay alto fijo: la lista arriba con su tope y
+       la ficha debajo; en el celular, dos indicadores por fila.
+
+     Antes de dar por buena una vista, medirla a 1323×619 (la página del
+     usuario), no a la ventana del navegador
+     automatizado.
+
+     (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53446,7 +53486,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#689**; la próxima toma el número siguiente.
+> última regla es la **#690**; la próxima toma el número siguiente.
 
 >
 

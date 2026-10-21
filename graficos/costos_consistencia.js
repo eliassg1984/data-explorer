@@ -1,4 +1,4 @@
-// Costos › «Consistencia de datos» (reglas #686 y #689).
+// Costos › «Consistencia de datos» (reglas #686, #689 y #690).
 //
 // La monta graficos/costos_consistencia.py con st.components.v2 (sin iframe,
 // estilos en un shadow root). Es la forma del boceto aprobado
@@ -41,20 +41,26 @@ function bajar(nombre, texto) {
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
 }
-const archivo = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_');
+const archivo = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_');
 
 // ── Partes de la página ──────────────────────────────────────────────────
+// La explicación va en el «?» y no en un párrafo: a 619px de alto, cada
+// renglón de arriba es uno menos de la lista (regla #690).
+const AYUDA = 'Cada fila es un control: una pregunta que el maestro y los movimientos deberían '
+  + 'poder responder sin contradecirse. Rojo pide acción en el POS, ámbar pide mirar, verde '
+  + 'está en orden. «Movimientos raros» son señales, no pruebas. Los montos de «S/ en juego» '
+  + 'no se suman entre controles: cada uno mide otra cosa (stock, venta, compra). Falta '
+  + 'comparar contra el cierre anterior: el maestro de stock es una foto de hoy.';
+
 function cabecera(data) {
   return `<div class="cd-cab">
     <div class="cd-tit">
       <h2>¿Los datos del sistema tienen lógica?</h2>
-      <p>Cada fila es un control: una pregunta que el maestro y los movimientos deberían poder
-      responder sin contradecirse. Rojo pide acción en el POS, ámbar pide mirar, verde está en
-      orden. «Movimientos raros» son señales, no pruebas.</p>
+      <span class="cd-ayuda" tabindex="0" role="note" aria-label="${esc(AYUDA)}" title="${esc(AYUDA)}">?</span>
     </div>
     <div class="cd-der">
-      <span class="cd-corte" title="90 días hacia atrás; 180 para «no se usa»; un año para los movimientos raros">Corte: ${esc(data.hoy)}, el último día del kardex</span>
-      <button class="cd-btn prim" data-acc="csv-todo">Todos los casos (CSV)</button>
+      <span class="cd-corte" title="90 días hacia atrás; 180 para «no se usa»; un año para los movimientos raros">Corte ${esc(data.hoy)} · último día del kardex</span>
+      <button class="cd-btn" data-acc="csv-todo">Todos los casos (CSV)</button>
     </div>
   </div>`;
 }
@@ -68,15 +74,15 @@ function indicadores(ctrl) {
     .sort((a, b) => Math.abs(b.soles) - Math.abs(a.soles)).slice(0, 3);
   return `<div class="cd-kpis">
     <div class="cd-kpi"><span class="cd-kpi-rot">Controles</span>
-      <div class="cd-cuenta"><span><b>${c.rojo}</b> <span class="r">para revisar ya</span></span>
-        <span><b>${c.ambar}</b> <span class="a">para mirar</span></span>
+      <div class="cd-cuenta"><span><b>${c.rojo}</b> <span class="r">revisar ya</span></span>
+        <span><b>${c.ambar}</b> <span class="a">mirar</span></span>
         <span><b>${c.verde}</b> <span class="v">en orden</span></span></div>
       <div class="cd-barra"><div class="r" style="flex:${c.rojo}"></div><div class="a" style="flex:${c.ambar}"></div><div class="v" style="flex:${c.verde}"></div></div>
     </div>
-    ${top.map((x) => `<button class="cd-kpi" data-acc="abrir" data-id="${x.id}">
+    ${top.map((x) => `<button class="cd-kpi" data-acc="abrir" data-id="${x.id}" title="${esc(x.concentra ? 'Se concentra en ' + x.concentra : x.nombre)}">
       <span class="cd-kpi-rot">${esc(x.nombre)}</span>
-      <span class="cd-kpi-val">${soles(x.soles)}</span>
-      <span class="cd-kpi-sub">${num(x.n)} casos${x.concentra ? ' · ' + esc(x.concentra) : ''}</span>
+      <span class="cd-kpi-lin"><span class="cd-kpi-val">${soles(x.soles)}</span>
+        <span class="cd-kpi-sub">${num(x.n)} casos</span></span>
     </button>`).join('')}
   </div>`;
 }
@@ -101,7 +107,7 @@ function lista(data, st) {
     previo = x.dom;
     return `${grupo}<button class="cd-fila${x.id === st.sel ? ' sel' : ''}" data-acc="abrir" data-id="${x.id}" aria-pressed="${x.id === st.sel}">
       ${chip(x.estado)}
-      <span class="cd-nom"><b>${esc(x.nombre)}</b><span>${esc(x.mide)}</span></span>
+      <span class="cd-nom"><b>${esc(x.nombre)}</b><span title="${esc(x.mide)}">${esc(x.mide)}</span></span>
       <span class="cd-n">${num(x.n)}</span>
       <span class="cd-s">${soles(x.soles)}</span>
       <span class="cd-donde">${esc(x.concentra || '—')}</span>
@@ -155,31 +161,49 @@ function ficha(data, st) {
     casos = `<div class="cd-casos">
       <div class="cd-buscar"><input type="search" placeholder="Buscar entre los ${num(x.n)} casos…" value="${esc(st.q)}" data-acc="buscar" aria-label="Buscar entre los casos">
         <button class="cd-btn" data-acc="csv">Descargar CSV</button></div>
-      <div data-zona="tabla">${tablaCasos(x, st.q)}</div>
+      <div class="cd-zona" data-zona="tabla">${tablaCasos(x, st.q)}</div>
     </div>`;
   }
+  // Compacta (regla #690): las cifras en un renglón, «qué hacer» en una
+  // caja baja y la regla plegada, para que los casos tengan alto.
+  const cifras = [`<b>${num(x.n)}</b> casos`];
+  if (x.soles != null) cifras.push(`<b>${soles(x.soles)}</b> en juego`);
+  if (x.concentra) cifras.push(`se concentra en ${esc(x.concentra)}`);
   return `<div class="cd-ficha">
-    <div class="cd-fcab">${chip(x.estado)}<span class="cd-fdom">${esc((nombres[x.dom] || '').toUpperCase())}</span></div>
-    <h3>${esc(x.nombre)}</h3>
+    <div class="cd-fcab">${chip(x.estado)}<h3>${esc(x.nombre)}</h3><span class="cd-fdom">${esc((nombres[x.dom] || '').toUpperCase())}</span></div>
     <p>${esc(x.porque)}</p>
-    <div class="cd-mini">
-      <div><small>Casos</small><b>${num(x.n)}</b></div>
-      <div><small>S/ en juego</small><b>${soles(x.soles)}</b></div>
-      <div><small>Se concentra en</small><span class="txt">${esc(x.concentra || '—')}</span></div>
-    </div>
-    <div class="cd-regla"><span class="rot">La regla</span><span>${esc(x.regla)}</span>
-      ${x.ya ? `<span class="ya">Ya lo marca: ${esc(x.ya)}</span>` : ''}</div>
+    <div class="cd-cifras">${cifras.join(' · ')}</div>
+    <div class="cd-hacer"><b>Qué hacer:</b> ${esc(x.accion)}</div>
+    <details class="cd-regla"${st.regla ? ' open' : ''}><summary>La regla${x.ya ? ' y dónde ya se ve' : ''}</summary>
+      <div><span>${esc(x.regla)}</span>${x.ya ? `<span class="ya">Ya lo marca: ${esc(x.ya)}</span>` : ''}</div></details>
     ${casos}
-    <div class="cd-hacer"><span class="rot">Qué hacer</span><span>${esc(x.accion)}</span></div>
   </div>`;
 }
 
 function dibujar(raiz) {
   const { data, st } = raiz.__d;
-  raiz.innerHTML = `${cabecera(data)}${indicadores(data.controles)}${pestanas(data, st)}
-    <div class="cd-cuerpo">${lista(data, st)}${ficha(data, st)}</div>
-    <p class="cd-nota">Falta comparar contra el cierre anterior: el maestro de stock es una foto de hoy.
-    Los montos de «S/ en juego» no se suman entre controles: cada uno mide otra cosa (stock, venta, compra).</p>`;
+  // Rehacer el HTML devuelve la lista arriba de todo: con scroll propio, un
+  // clic en la fila 20 la perdía de vista.
+  const previa = raiz.querySelector('.cd-lista');
+  const scroll = previa ? previa.scrollTop : 0;
+  raiz.innerHTML = `<div class="cd-arriba">${cabecera(data)}${indicadores(data.controles)}${pestanas(data, st)}</div>
+    <div class="cd-cuerpo">${lista(data, st)}${ficha(data, st)}</div>`;
+  const nueva = raiz.querySelector('.cd-lista');
+  if (nueva && st.mismaLista) nueva.scrollTop = scroll;
+  st.mismaLista = true;
+  medir(raiz);
+}
+
+// Lo de arriba (título, indicadores, pestañas) puede ocupar uno o dos
+// renglones según el ancho: se mide y la lista y la ficha toman el resto.
+function medir(raiz) {
+  const arriba = raiz.querySelector('.cd-arriba');
+  if (!arriba) return;
+  const alto = Math.ceil(arriba.getBoundingClientRect().height) + 10;  // + el gap de .cd
+  if (raiz.__d.arriba !== alto) {
+    raiz.__d.arriba = alto;
+    raiz.style.setProperty('--cd-arriba', `${alto}px`);
+  }
 }
 
 // El control que abre: el primero que pide acción del grupo, si el guardado
@@ -199,11 +223,12 @@ function enlazar(raiz) {
     const acc = b.dataset.acc;
     if (acc === 'dom') {
       st.dom = b.dataset.id; guardar('cd_dom', st.dom); elegirEn(data, st); st.q = '';
+      st.mismaLista = false;
     } else if (acc === 'abrir') {
       const x = data.controles.find((c) => c.id === b.dataset.id);
       if (!x) return;
       // Un indicador de arriba puede abrir un control de otro grupo.
-      if (st.dom !== 'todo' && x.dom !== st.dom) { st.dom = 'todo'; guardar('cd_dom', st.dom); }
+      if (st.dom !== 'todo' && x.dom !== st.dom) { st.dom = 'todo'; guardar('cd_dom', st.dom); st.mismaLista = false; }
       st.sel = x.id; st.q = ''; guardar('cd_sel', st.sel);
     } else if (acc === 'csv' || acc === 'csv-todo') {
       const elegidos = acc === 'csv' ? data.controles.filter((c) => c.id === st.sel) : data.controles;
@@ -220,6 +245,12 @@ function enlazar(raiz) {
     }
     dibujar(raiz);
   });
+  // La regla plegada o abierta se recuerda al cambiar de control.
+  raiz.addEventListener('toggle', (ev) => {
+    if (ev.target.classList && ev.target.classList.contains('cd-regla')) raiz.__d.st.regla = ev.target.open;
+  }, true);
+  // Con otro ancho, lo de arriba puede pasar a dos renglones.
+  window.addEventListener('resize', () => medir(raiz));
   // Buscar sólo redibuja la tabla: el campo no pierde el foco.
   raiz.addEventListener('input', (ev) => {
     if (ev.target.dataset.acc !== 'buscar') return;

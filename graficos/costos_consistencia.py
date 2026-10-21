@@ -20,7 +20,7 @@ La cuenta vive en `consistencia_maestro.py` (pura, con su test); la carga,
 en `data.consistencia_maestro` (caché de disco con los sellos de catorce
 parquets: la primera vez de cada versión tarda alrededor de un minuto).
 
-Reglas #686 y #689.
+Reglas #686, #689 y #690.
 """
 
 from pathlib import Path
