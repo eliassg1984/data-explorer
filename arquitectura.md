@@ -17,7 +17,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 ## Resumen ejecutivo mensual — 2026-10-17
 
 La portada `graficos/resumen_ejecutivo.py` reúne ventas y consumo/costo,
-sin indicadores de compras ni stock al día. Las cuentas se resumen en
+sin indicadores de compras ni stock al día. Desde el 2026-10-21 entra en
+una pantalla de laptop con seis indicadores —venta, clientes, ticket,
+descuentos, costo real y costo del Sistema— y las señales por importancia
+(regla #693). Las cuentas se resumen en
 `resumen_ejecutivo.py` desde venta preparada y `costo_ventas.armar`, con
 las cuatro familias, Eventos incluido, Venta interna excluida y todas las
 salidas no bajas deducidas (los defaults de Costos). El costo operativo
@@ -58,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-692 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+693 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (219)
 
@@ -884,7 +887,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 
-**SUNAT y SIRE** (69)
+**SUNAT y SIRE** (70)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -955,6 +958,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#684** — «Ingresar al Almacén» es UNA tabla con los dos lados, y lo que falta cargar dice cuánto es…
 - **#686** — «¿El maestro del sistema tiene lógica?» se contesta con CONTROLES, no con un tablero: Costos…
 - **#691** — «Consistencia de datos», ajustada a pedido: el Almacén Central tiene TODOS los productos, dos…
+- **#693** — La portada del Resumen ejecutivo entra en una pantalla de laptop y no repite un número
 
 **Fechas, rangos y cortes** (17)
 
@@ -1027,7 +1031,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (202)
+**Decisiones de diseño y UX** (203)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1231,6 +1235,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#689** — Un boceto aprobado se implementa con SU forma: si es una página con tarjetas, chips y ficha,…
 - **#691** — «Consistencia de datos», ajustada a pedido: el Almacén Central tiene TODOS los productos, dos…
 - **#692** — Ajuste › Evolución es una pieza propia: la serie en rojo y verde con «Explicar con», el panel…
+- **#693** — La portada del Resumen ejecutivo entra en una pantalla de laptop y no repite un número
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53568,6 +53573,31 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      Lo vigilan `test_graficos.py::_pruebas_evolucion_ajuste` (las cuentas
      puras) y la prueba del kardex. (2026-10-21.)
 
+693. **La portada del Resumen ejecutivo entra en una pantalla de laptop y no
+     repite un número.** Medida con Playwright en 1323×619 con datos reales:
+     medía 1.184 px (casi dos pantallas), el 40,3 % del costo salía dos
+     veces, la diferencia de S/ 11.273 otras dos, y de las tres señales que
+     cabían una era una buena noticia que no pedía nada mientras «la venta
+     cae 10,9 %» quedaba afuera. A pedido (2026-10-21), sin presupuesto:
+     · **Seis indicadores**: venta neta, clientes, ticket por cliente,
+       descuentos, costo real y costo del Sistema. Clientes y ticket son los
+       de Ventas › Resumen (`pax_por` y `con_clientes`, #591: S/ 119,77 en
+       setiembre 2026); los descuentos, `DESCUENTO ITEM` sobre la carta, como
+       allá — S/ 50.481, el mismo del reporte del POS. El costo del Sistema va
+       sobre la MISMA venta de Costos que el real (`porcentaje_pos`): la
+       distancia entre los dos es lo que explica la conciliación.
+     · **Primera pantalla = indicadores + venta del mes + «Para revisar»**;
+       el gráfico se estira con `calc(100vh - 280px)` hasta cerrar en ~596
+       px. Abajo, costo por familia (real y Sistema) y la conciliación; el
+       método, plegado al pie. El aviso de mes en curso va en el subtítulo:
+       en un renglón propio sacaba el pie del gráfico de la pantalla.
+     · **Las señales van por importancia** (venta contra el año pasado con
+       su causa —clientes y ticket—, sin explicar, costo real que subió,
+       descuentos que suben ≥ 1 pp, ventas sin costo con sus platos,
+       observaciones del cierre), cuatro como máximo. Una que sólo repite
+       una buena noticia del indicador no entra.
+     Lo vigila `test_resumen_ejecutivo.py`. (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53580,7 +53610,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#692**; la próxima toma el número siguiente.
+> última regla es la **#693**; la próxima toma el número siguiente.
 
 >
 

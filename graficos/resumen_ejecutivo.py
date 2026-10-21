@@ -13,7 +13,7 @@ import costo_ventas
 import data
 import definicion_venta as dv
 import resumen_ejecutivo as resumen
-from cortes import MESES_LARGOS_ES
+from cortes import MESES_ABR_ES, MESES_LARGOS_ES
 from graficos.base import (
     _render_rail, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
 )
@@ -49,6 +49,12 @@ def _meses_costos(_ajuste, _grupos, sellos, version, convenios):
 def _rotulo(mes):
     p = pd.Period(mes, freq="M")
     return f"{MESES_LARGOS_ES[p.month - 1].capitalize()} {p.year}"
+
+
+def _corto(mes):
+    """«set 2025»: entra en el renglón de una tarjeta de 190px."""
+    p = pd.Period(mes, freq="M")
+    return f"{MESES_ABR_ES[p.month - 1].lower()} {p.year}"
 
 
 def renderizar_graficos_resumen(df_f, nombre_reporte, df_full=None, tabla_cb=None):
@@ -106,9 +112,12 @@ def renderizar_graficos_resumen(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     parcial = fin < resumen.rango_mes(mes)[1]
     costo = resumen.costo_del_mes(costos, mes) if not parcial else None
     previo = resumen.costo_del_mes(costos, str(pd.Period(mes, freq="M") - 1))
-    cambio_costo = (costo["porcentaje"] - previo["porcentaje"]
-                    if costo and previo and costo["porcentaje"] is not None
-                    and previo["porcentaje"] is not None else None)
+
+    def cambio(k):
+        a, b = (costo or {}).get(k), (previo or {}).get(k)
+        return a - b if a is not None and b is not None else None
+
+    cambio_costo, cambio_pos = cambio("porcentaje"), cambio("porcentaje_pos")
     links = {
         "ventas": resumen.enlace_reporte("Ventas", "resumen_ejecutivo", ini, fin),
         "costos": resumen.enlace_reporte("Costos", "costo_de_ventas", mes=mes),
@@ -119,8 +128,10 @@ def renderizar_graficos_resumen(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         "meses": [{"k": m, "nombre": _rotulo(m)} for m in meses],
         "ini": ini.isoformat(), "fin": fin.isoformat(), "parcial": parcial,
         "anterior_rotulo": _rotulo(str(pd.Period(mes, freq="M") - 12)),
+        "anterior_corto": _corto(str(pd.Period(mes, freq="M") - 12)),
+        "previo_corto": _corto(str(pd.Period(mes, freq="M") - 1)),
         "actual": actual, "anterior": anterior, "costo": costo,
-        "cambio_costo": cambio_costo, "links": links,
+        "cambio_costo": cambio_costo, "cambio_pos": cambio_pos, "links": links,
         "error_costos": error_costos,
         "demo": not data.secrets_disponibles(),
     }
@@ -134,7 +145,8 @@ def renderizar_graficos_resumen(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 width="stretch")
     hechos = []
     if actual:
-        hechos.extend((mes, k, v) for k, v in actual.items() if k != "dias")
+        hechos.extend((mes, k, v) for k, v in actual.items()
+                      if isinstance(v, (float, int)))
     if costo:
         hechos.extend((mes, "costo: " + k, v) for k, v in costo.items()
                       if isinstance(v, (float, int)))

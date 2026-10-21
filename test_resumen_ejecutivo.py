@@ -84,6 +84,44 @@ class ResumenTest(unittest.TestCase):
         self.assertIsNone(r["familias"][-1]["porcentaje"])
         self.assertIsNone(re.costo_del_mes(datos, "2026-08"))
 
+    def test_clientes_ticket_descuentos_y_platos_sin_costo(self):
+        cols = [dv.FECHA, re.PEDIDO, dv.LLAVE_DOC, dv.LLAVE_ITEM, dv.CLASE,
+                dv.NETO_ITEM, dv.PAX, dv.CANAL, dv.CARTA_UNIT, dv.CANTIDAD,
+                dv.DESCUENTO_ITEM, dv.COSTO, re.NOMBRE]
+        filas = [
+            # Mesa de 4 con dos formas de pago: los adultos, una vez.
+            ("2026-09-01", "P1", "B1", "I1", dv.VENTA, 300, 4, "Salon", 100, 4, 54, 90, "Lomo"),
+            ("2026-09-01", "P1", "B1", "I1", dv.VENTA, 300, 4, "Salon", 100, 4, 54, 90, "Lomo"),
+            # Cuenta dividida: el mismo pedido, otro comprobante.
+            ("2026-09-01", "P1", "B2", "I2", dv.VENTA, 100, 4, "Salon", 118, 1, 0, 0, "Agua"),
+            # Rappi vende sin pax: suma a la venta, no al ticket.
+            ("2026-09-02", "P2", "B3", "I3", dv.VENTA, 200, 0, "Rappi", 236, 1, 0, 0, "Pisco"),
+            # Devolución parcial del agua: resta de su plato.
+            ("2026-09-03", "P1", "N1", "I4", dv.NOTA_CREDITO, -40, -4, "Salon", 118, -1, 0, 0, "Agua"),
+        ]
+        d = pd.DataFrame(filas, columns=cols)
+        r = re.ventas_del_rango(d, *re.rango_mes("2026-09"))
+        self.assertEqual(r["venta"], 560)
+        self.assertEqual(r["clientes"], 4)
+        self.assertAlmostEqual(r["ticket"], 360 / 4)
+        self.assertEqual(r["descuentos"], 54)
+        self.assertAlmostEqual(r["pct_descuento"], 54 / (400 + 118 + 236 - 118))
+        self.assertEqual(r["sin_costo"], 260)
+        self.assertEqual([x["plato"] for x in r["sin_costo_top"]], ["Pisco", "Agua"])
+        self.assertEqual(r["sin_costo_n"], 2)
+
+    def test_costo_del_sistema_sobre_la_misma_venta(self):
+        def serie(v):
+            return {c: [v if c == "Alimentos" else 0] for c in cv.CUBETAS}
+        datos = {"periodos": [{"k": "2026-09"}],
+                 "filas": {k: serie(v) for k, v in {
+                     "inv_inicial": 500, "compras": 400, "inv_final": 500,
+                     "venta": 1000, "costo_pos": 300, "cortesias": 0}.items()}}
+        r = re.costo_del_mes(datos, "2026-09")
+        self.assertAlmostEqual(r["porcentaje"], 0.4)
+        self.assertAlmostEqual(r["porcentaje_pos"], 0.3)
+        self.assertAlmostEqual(r["porcentaje_faltante"], 0.1)
+
     def test_enlaces_llevan_periodo_y_validan_fecha(self):
         ini, fin = re.rango_mes("2026-09")
         url = re.enlace_reporte("Ventas", "resumen_ejecutivo", ini, fin)

@@ -1,99 +1,135 @@
-// Ventas y costo mensual. Sólo el cambio de mes solicita datos a Python.
+// Portada mensual. Arriba, lo que entra en una pantalla de laptop (6
+// indicadores, la venta del mes y las señales); abajo, el costo por familia,
+// la conciliación y el método. Sólo el cambio de mes pide datos a Python.
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const valido = v => v != null && Number.isFinite(v);
 const num = (v, dec = 0) => valido(v) ? v.toLocaleString('en-US', {minimumFractionDigits: dec, maximumFractionDigits: dec}) : '—';
-const soles = (v, dec = 0) => valido(v) ? `S/ ${num(v, dec)}` : '—';
+const soles = (v, dec = 0) => valido(v) ? `${v < 0 ? '−' : ''}S/ ${num(Math.abs(v), dec)}` : '—';
 const pct = v => valido(v) ? `${num(v * 100, 1)}%` : '—';
-const pp = v => valido(v) ? `${v >= 0 ? '+' : '−'}${num(Math.abs(v) * 100, 1)} pp` : '—';
+const signo = v => v >= 0 ? '+' : '−';
+const pp = v => valido(v) ? `${signo(v)}${num(Math.abs(v) * 100, 1)} pp` : '—';
+const varp = v => valido(v) ? `${signo(v)}${pct(Math.abs(v))}` : '—';
 const variacion = (a, b) => valido(a) && valido(b) && b > 0 ? (a - b) / b : null;
 const fecha = s => s ? s.split('-').reverse().join('/') : '';
 const abrir = (url, texto) => `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(texto)}, abre en otra pestaña">${esc(texto)} ↗</a>`;
 
-function delta(v, base, inverso = false, puntos = false) {
-  if (!valido(v)) return `<span>Sin base comparable</span>`;
-  const clase = v === 0 ? '' : ((inverso ? v < 0 : v > 0) ? 'good' : 'bad');
-  const texto = puntos ? pp(v) : `${v >= 0 ? '+' : '−'}${pct(Math.abs(v))}`;
-  return `<span class="re-delta ${clase}">${esc(texto)}</span> ${esc(base)}`;
+// Un cambio se pinta por lo que SIGNIFICA: en costo y descuentos, subir es malo.
+function delta(v, base, {inverso = false, puntos = false} = {}) {
+  if (!valido(v)) return '<span>Sin base comparable</span>';
+  const clase = Math.abs(v) < 1e-9 ? '' : ((inverso ? v < 0 : v > 0) ? 'good' : 'bad');
+  return `<span class="re-delta ${clase}">${esc(puntos ? pp(v) : varp(v))}</span> ${esc(base)}`;
 }
 
 function kpi(label, value, context, tip) {
-  return `<section class="re-kpi" aria-label="${esc(label)}"><div class="re-label" title="${esc(tip || label)}">${esc(label)}</div><div class="re-value">${esc(value)}</div><div class="re-context">${context}</div></section>`;
+  return `<section class="re-kpi" title="${esc(tip)}"><div class="re-label">${esc(label)}</div><div class="re-value">${esc(value)}</div><div class="re-context">${context}</div></section>`;
 }
 
-function senal(titulo, detalle, valor, clase, link, texto) {
-  return `<div class="re-signal"><span class="re-symbol ${clase}" aria-hidden="true">${clase === 'good' ? '↗' : '!'}</span><div><strong>${esc(titulo)}</strong><p>${esc(detalle)}</p>${abrir(link, texto)}</div><span class="amount ${clase}">${esc(valor)}</span></div>`;
+function kpis(d) {
+  const a = d.actual, b = d.anterior, c = d.costo;
+  const ap = b ? `vs ${d.anterior_corto}` : '';
+  const mp = `vs ${d.previo_corto}`;
+  const sinCierre = d.parcial ? '<span>Al cerrar el mes</span>' : '<span>Sin cierre comparable</span>';
+  const descCtx = valido(a?.pct_descuento)
+    ? `${esc(pct(a.pct_descuento))} de la carta${b && valido(b.pct_descuento) ? ` · ${delta(a.pct_descuento - b.pct_descuento, '', {inverso: true, puntos: true})}` : ''}`
+    : '<span>Sin dato</span>';
+  return [
+    kpi('Venta neta', soles(a?.venta), delta(variacion(a?.venta, b?.venta), ap),
+      'Todos los grupos de Ventas, por día del turno del comprobante; pagados y por cobrar, menos notas de crédito; sin IGV ni recargo.'),
+    kpi('Clientes', num(a?.clientes), delta(variacion(a?.clientes, b?.clientes), ap),
+      `Adultos, una vez por pedido; una nota de crédito resta. ${valido(a?.pedidos) ? `${num(a.pedidos)} pedidos en el período.` : ''}`),
+    kpi('Ticket por cliente', soles(a?.ticket, 2), delta(variacion(a?.ticket, b?.ticket), ap),
+      'Venta neta de los canales que registran clientes ÷ clientes: el «Ticket Pro.» de la Liquidación de Cajero. Rappi vende sin clientes y no entra.'),
+    kpi('Descuentos', soles(a?.descuentos), descCtx,
+      'Lo que se dejó de cobrar sobre el precio de carta, con impuestos, como «Descuentos» de Ventas › Resumen. El cambio es en puntos del % sobre la carta.'),
+    kpi('Costo real', pct(c?.porcentaje), c ? delta(d.cambio_costo, mp, {inverso: true, puntos: true}) : sinCierre,
+      'Consumo según inventario: inicial + compras − final, sobre la venta de Costos (Alimentos, Bebidas, Vinos y Envases; con Eventos, sin Venta interna).'),
+    kpi('Costo del Sistema', pct(c?.porcentaje_pos), c ? delta(d.cambio_pos, mp, {inverso: true, puntos: true}) : sinCierre,
+      'Costo histórico de lo vendido según las recetas del POS, sobre la misma venta de Costos. La distancia con el costo real es lo que explica la conciliación.'),
+  ].join('');
 }
 
-function contexto(raiz) {
-  return `<aside class="re-data-context" aria-label="Contexto de los datos">
-    <div class="re-context-columns"><p><strong>Ventas · día del turno de caja</strong><span>Todos los grupos · neto sin IGV ni recargo · comprobantes pagados y por cobrar, menos notas de crédito.</span></p><p><strong>Costos · mes operativo</strong><span>Eventos incluidos · Venta interna excluida · Alimentos, Bebidas, Vinos y Envases.</span></p></div>
-    <details class="re-method" ${raiz.__contextoAbierto ? 'open' : ''}><summary>Cómo se calcula</summary><div class="re-method-body">
-      <section><h2>Venta neta documentada</h2><p>Importes netos de comprobantes pagados y por cobrar, menos notas de crédito. Cada ítem se suma una vez aunque tenga varios pagos. El período utiliza el día del turno del comprobante.</p><p><strong>Referencia en Inforest:</strong> Registro de Ventas. Para comparar, usa los mismos comprobantes, filtros y criterio de fecha; la fecha de emisión puede diferir del día del turno.</p></section>
-      <section><h2>Consumo operativo valorizado</h2><p>Inventario inicial + compras netas de notas de crédito − inventario final. Se utilizan los cierres del mes operativo y las cuatro familias indicadas.</p><p><strong>Porcentaje operativo:</strong> consumo operativo valorizado ÷ base de venta de Costos × 100. La base de Costos tiene su propio alcance, que se detalla en el panel de consumo.</p></section>
-      <section><h2>Costo del Sistema</h2><p>Costo histórico completo de los pedidos, incluidos componentes de combos y propiedades, con notas de crédito restadas. Los descuentos se presentan como referencia comercial separada y no reducen este costo.</p><p><strong>Referencia en Inforest:</strong> Paloteo de Producción → Comparativo → Ventas en el rango. Sin «Evaluar por Día Contable», su selección combina fecha del pedido y del comprobante; para comparar, deben coincidir el período y los filtros.</p></section>
-      <section><h2>Sin explicar</h2><p>Consumo carta − costo del Sistema − bajas registradas. Es el residuo por explicar: revisar fechas, alcance y valorización antes de atribuirlo a una causa.</p><p><strong>Referencia:</strong> conciliación de la webapp entre inventarios, compras, salidas y ventas de Inforest.</p></section>
-    </div></details></aside>`;
+function senal(clase, simbolo, titulo, detalle, link, texto) {
+  return `<div class="re-signal"><span class="re-symbol ${clase}" aria-hidden="true">${simbolo}</span><div><strong>${titulo}</strong><p>${detalle}</p>${abrir(link, texto)}</div></div>`;
 }
 
+// Las señales van por importancia y no repiten un número sin agregarle algo:
+// una buena noticia que no pide nada ya está en su indicador.
 function alertas(d) {
-  const a = d.actual, c = d.costo, out = [];
-  if (c && valido(d.cambio_costo)) out.push(senal(
-    d.cambio_costo > 0 ? 'El porcentaje de consumo operativo subió' : 'Variación del porcentaje de consumo operativo',
-    'Comparación entre meses completos y con la misma base de venta de Costos.', pp(d.cambio_costo),
-    d.cambio_costo > 0 ? 'bad' : 'good', d.links.costos, 'Revisar costos'));
-  if (c && Math.abs(c.diferencia) > 0.01) out.push(senal(
-    c.diferencia > 0 ? 'El consumo carta supera el costo del Sistema' : 'El consumo carta es menor que el costo del Sistema',
-    'Diferencia total antes de separar las bajas registradas. Revisar fechas, alcance y valorización para explicar el residuo.', soles(c.diferencia),
-    c.diferencia > 0 ? 'warn' : '', d.links.costos, 'Ver diferencia'));
-  if (a && a.sin_costo > 0) out.push(senal('Ventas sin costo registrado en el POS',
-    'El costo de estos platos queda en cero en la foto del POS y reduce su porcentaje de costo.',
-    soles(a.sin_costo), 'warn', d.links.platos, 'Revisar platos'));
-  if (a && d.anterior) {
-    const v = variacion(a.venta, d.anterior.venta);
-    if (valido(v)) out.push(senal(v >= 0 ? 'La venta crece frente al año pasado' : 'La venta disminuye frente al año pasado',
-      `Mismas fechas del calendario: ${fecha(d.ini)} – ${fecha(d.fin)}.`, `${v >= 0 ? '+' : '−'}${pct(Math.abs(v))}`,
-      v >= 0 ? 'good' : 'bad', d.links.ventas, 'Abrir ventas'));
+  const a = d.actual, b = d.anterior, c = d.costo, out = [];
+  const v = variacion(a?.venta, b?.venta);
+  if (valido(v)) {
+    const vc = variacion(a?.clientes, b?.clientes), vt = variacion(a?.ticket, b?.ticket);
+    const causa = valido(vc) && valido(vt) ? `Clientes ${varp(vc)} · ticket ${varp(vt)}. ` : '';
+    out.push(senal(v >= 0 ? 'good' : 'bad', v >= 0 ? '▲' : '▼',
+      `La venta ${v >= 0 ? 'crece' : 'cae'} ${esc(pct(Math.abs(v)))} frente a ${esc(d.anterior_corto)} <span class="amount">${esc(soles(a.venta - b.venta))}</span>`,
+      `${esc(causa)}${d.parcial ? 'Mismo tramo' : 'Mismas fechas'}: ${fecha(d.ini)} – ${fecha(d.fin)}.`, d.links.ventas, 'Abrir ventas'));
   }
-  return out.slice(0, 3).join('') || '<p class="muted">No hay una base suficiente para generar señales comparables en este período.</p>';
+  if (c && Math.abs(c.faltante) > 0.5) out.push(senal(c.faltante > 0 ? 'warn' : '', '!',
+    `${esc(soles(c.faltante))} de costo sin explicar <span class="amount">${esc(pct(c.porcentaje_faltante))} de la venta</span>`,
+    `Consumo carta ${esc(soles(c.carta))} contra Sistema ${esc(soles(c.pos))}, ya restadas las bajas (${esc(soles(c.bajas))}).`,
+    d.links.costos, 'Ver la conciliación'));
+  if (c && valido(d.cambio_costo) && d.cambio_costo >= 0.005) out.push(senal('bad', '▲',
+    `El costo real subió ${esc(pp(d.cambio_costo))} frente a ${esc(d.previo_corto)}`,
+    'Comparación entre meses cerrados y con la misma venta de Costos.', d.links.costos, 'Revisar costos'));
+  if (a && b && valido(a.pct_descuento) && valido(b.pct_descuento) && a.pct_descuento - b.pct_descuento >= 0.01) out.push(senal('bad', '▲',
+    `Los descuentos suben a ${esc(pct(a.pct_descuento))} de la carta`,
+    `${esc(pp(a.pct_descuento - b.pct_descuento))} frente a ${esc(d.anterior_corto)} · ${esc(soles(a.descuentos))} en el período.`, d.links.ventas, 'Abrir ventas'));
+  if (a && valido(a.sin_costo_pct) && a.sin_costo_pct >= 0.005) {
+    const top = (a.sin_costo_top || []).map(x => x.plato), resto = (a.sin_costo_n || 0) - top.length;
+    out.push(senal('warn', '!',
+      `${esc(soles(a.sin_costo))} vendidos sin costo en el POS <span class="amount">${esc(pct(a.sin_costo_pct))} de la venta</span>`,
+      `${top.length ? `${esc(top.join(', '))}${resto > 0 ? ` y ${resto} más` : ''}. ` : ''}Bajan el costo del Sistema.`, d.links.platos, 'Revisar platos'));
+  }
+  const n = (c?.observaciones?.detalle || []).length;
+  if (n) out.push(senal('warn', '!', `${n} líneas de inventario con observaciones`,
+    'Stock a precio cero, negativos o áreas que faltan en el cierre: revisarlas antes de leer el costo real.', d.links.costos, 'Ver observaciones'));
+  return out.slice(0, 4).join('') || '<p class="muted">Nada que revisar con los datos de este período.</p>';
 }
 
-function bloqueCosto(d) {
+function familias(d) {
   const c = d.costo;
-  if (!c) return `<div class="re-empty">${esc(d.error_costos || (d.parcial ? 'Mes en curso: el consumo mensual estará disponible cuando existan sus cierres.' : 'Sin dos cierres consecutivos para calcular el consumo de este mes.'))}</div>`;
+  if (!c) return `<div class="re-empty">${esc(d.error_costos || (d.parcial ? 'Mes en curso: el costo por familia estará cuando existan sus cierres.' : 'Sin dos cierres consecutivos para calcular este mes.'))}</div>`;
   const max = Math.max(1, ...c.familias.map(f => Math.abs(f.operativo)));
-  const n = (c.observaciones?.detalle || []).length;
-  return `<div class="re-total"><strong>${pct(c.porcentaje)}</strong><span class="re-context">${delta(d.cambio_costo, 'vs. mes anterior', true, true)}</span></div>
-    ${n ? `<p class="re-note warning">Con observaciones de valorización · ${n} líneas de inventario por revisar. ${abrir(d.links.costos, 'Ver observaciones')}</p>` : ''}
-    <p class="muted">Consumo operativo valorizado ${soles(c.operativo)}</p>
-    <div class="re-familias">${c.familias.map(f => `<div class="re-fila"><span>${esc(f.familia)}</span><div class="re-track"><div class="re-bar ${f.familia.toLowerCase()}" style="width:${Math.min(100, Math.abs(f.operativo) / max * 100)}%"></div></div><div class="num"><b>${pct(f.porcentaje)}</b><div class="re-small">${soles(f.operativo)}</div></div></div>`).join('')}</div>
-    <p class="re-small">Base de venta de Costos: ${soles(c.venta_base)}. Alimentos, Bebidas, Vinos y Envases; incluye Eventos, sin Venta interna. Envases no tiene venta propia.</p>`;
+  const filas = c.familias.map(f => {
+    const pos = f.venta_base > 0 ? f.pos / f.venta_base : null;
+    return `<div class="re-fila"><span>${esc(f.familia)}</span><div class="re-track"><div class="re-bar ${f.familia.toLowerCase()}" style="width:${Math.min(100, Math.abs(f.operativo) / max * 100)}%"></div></div><b class="num">${pct(f.porcentaje)}</b><span class="num muted">${pct(pos)}</span><span class="num re-small">${soles(f.operativo)}</span></div>`;
+  }).join('');
+  return `<div class="re-fila re-fila-cab"><span></span><span></span><span class="num">Real</span><span class="num">Sistema</span><span class="num">Consumo</span></div>${filas}
+    <p class="re-small">Venta de Costos: ${soles(c.venta_base)}. Incluye Eventos, sin Venta interna. Envases no tiene venta propia.</p>`;
 }
 
 function conciliacion(d) {
   const c = d.costo;
   if (!c) return '<div class="re-empty">La conciliación requiere el consumo mensual del período.</div>';
   const fila = (label, v, cl = '') => `<div class="re-ledger-row ${cl}"><span>${esc(label)}</span><b>${soles(v)}</b></div>`;
-  return `<div class="re-ledger">${fila('Consumo operativo valorizado', c.operativo)}${fila('− Consumos no vendidos', c.no_vendido)}${fila('= Consumo carta', c.carta, 'total')}${fila('Costo del Sistema', c.pos)}${fila('Diferencia consumo − Sistema', c.diferencia, 'total')}${fila('− Bajas registradas', c.bajas)}${fila('= Sin explicar', c.faltante, 'total')}</div>
-    <p class="re-small">Los consumos no vendidos incluyen cortesías y salidas distintas de bajas. Los descuentos están separados del cálculo. La última fila resta las bajas a la diferencia total y muestra el residuo por explicar según fechas, alcance y valorización.</p>`;
+  return `<div class="re-ledger">${fila('Consumo real (inventario)', c.operativo)}${fila('− Consumos no vendidos', c.no_vendido)}${fila('= Consumo carta', c.carta, 'total')}${fila('− Costo del Sistema', c.pos)}${fila('= Diferencia', c.diferencia, 'total')}${fila('− Bajas registradas', c.bajas)}${fila('= Sin explicar', c.faltante, 'total')}</div>
+    <p class="re-small">Los consumos no vendidos son cortesías y salidas que no son bajas. Los descuentos no entran en esta cuenta.</p>`;
+}
+
+function metodo(raiz) {
+  return `<details class="re-method" ${raiz.__contextoAbierto ? 'open' : ''}><summary>Qué se cuenta y cómo se calcula</summary><div class="re-method-body">
+      <section><h2>Venta neta</h2><p>Comprobantes pagados y por cobrar, menos notas de crédito, de todos los grupos; sin IGV ni recargo. Cada ítem se suma una vez aunque tenga varios pagos. El período usa el día del turno de caja.</p><p><strong>En Inforest:</strong> Registro de Ventas, con los mismos comprobantes y criterio de fecha.</p></section>
+      <section><h2>Clientes, ticket y descuentos</h2><p>Clientes son adultos, una vez por pedido. El ticket es la venta de los canales que registran clientes ÷ clientes, como el «Ticket Pro.» de la Liquidación de Cajero. Los descuentos se miden sobre el precio de carta.</p></section>
+      <section><h2>Costo real</h2><p>Inventario inicial + compras netas de notas de crédito − inventario final, con los cierres del mes operativo, sobre la venta de Costos: Alimentos, Bebidas, Vinos y Envases, con Eventos y sin Venta interna.</p></section>
+      <section><h2>Costo del Sistema y sin explicar</h2><p>Costo histórico de los pedidos según el POS, incluidos combos, con notas de crédito restadas. Sin explicar = consumo carta − costo del Sistema − bajas: revisar fechas, alcance y valorización antes de atribuirlo a una causa.</p><p><strong>En Inforest:</strong> Paloteo de Producción → Comparativo → Ventas en el rango.</p></section>
+    </div></details>`;
 }
 
 function render(raiz, d) {
   const a = d.actual, b = d.anterior, c = d.costo;
-  const ap = b ? `vs. ${d.anterior_rotulo}${d.parcial ? ' · mismo tramo' : ''}` : '';
-  raiz.innerHTML = `<header class="re-head"><div><h1>Resumen ejecutivo</h1><p class="muted">Ventas, consumo y costo del restaurante.</p></div><label class="re-select">Mes <select aria-label="Mes del resumen">${d.meses.map(m => `<option value="${esc(m.k)}" ${m.k === d.mes ? 'selected' : ''}>${esc(m.nombre)}</option>`).join('')}</select></label></header>
+  // El aviso del mes en curso va en el subtítulo: un renglón propio sacaba
+  // el pie del gráfico de la primera pantalla.
+  const alcance = d.parcial
+    ? `<span class="re-encurso">Mes en curso</span> · ventas del ${fecha(d.ini)} al ${fecha(d.fin)}, sin el día de hoy · el costo espera el cierre`
+    : `Ventas al ${fecha(d.fin)} · día del turno, sin IGV${c?.cierre ? ` · Costos del cierre ${esc(c.cierre)}` : ''}`;
+  raiz.innerHTML = `<header class="re-head"><div class="re-titulo"><h1>Resumen ejecutivo</h1><p class="muted">${alcance}</p></div><label class="re-select">Mes <select aria-label="Mes del resumen">${d.meses.map(m => `<option value="${esc(m.k)}" ${m.k === d.mes ? 'selected' : ''}>${esc(m.nombre)}</option>`).join('')}</select></label></header>
     ${d.demo ? '<div class="re-note warning">Modo demo · datos de ejemplo, sin conexión a los datos del restaurante.</div>' : ''}
-    ${d.parcial ? `<div class="re-note">Mes en curso · ventas del ${fecha(d.ini)} al ${fecha(d.fin)}. Se excluye el día de hoy para comparar días completos.</div>` : ''}
     ${!a ? '<div class="re-note warning">No se pudo leer la venta del período. Reintentá en unos segundos.</div>' : ''}
-    ${contexto(raiz)}
-    <div class="re-kpis">
-      ${kpi('Venta neta documentada', soles(a?.venta), delta(variacion(a?.venta, b?.venta), ap), 'Todos los grupos de Ventas, por día del turno del comprobante; pagados y por cobrar, menos notas de crédito; sin IGV ni recargo.')}
-      ${kpi('Pedidos netos', num(a?.pedidos), delta(variacion(a?.pedidos, b?.pedidos), ap), 'Un pedido una vez; las notas de crédito restan y el canje no duplica pedidos.')}
-      ${kpi('Venta neta por pedido', soles(a?.promedio, 2), delta(variacion(a?.promedio, b?.promedio), ap), 'Venta neta dividida entre pedidos netos; no es el ticket por adulto del POS.')}
-      ${kpi('Consumo operativo / venta de Costos', pct(c?.porcentaje), c ? delta(d.cambio_costo, 'vs. mes anterior', true, true) : (d.parcial ? 'Disponible al cerrar el mes' : 'Sin cierre comparable'), 'Consumo operativo valorizado dividido entre la base de venta de Costos, detallada en el panel de consumo.')}
-    </div>
-    <div class="re-grid"><section class="re-panel"><div class="re-panel-head"><div><h2>Venta neta documentada durante el mes</h2><p class="muted">${esc(d.rotulo)} · ${d.parcial ? 'mismo tramo del año pasado' : 'mismo mes del año pasado'}</p></div>${abrir(d.links.ventas, 'Abrir ventas')}</div><div class="re-head"><div class="re-legend"><span><i class="re-swatch"></i>${esc(d.rotulo)}</span>${b ? `<span><i class="re-swatch prior"></i>${esc(d.anterior_rotulo)}</span>` : '<span>Sin año pasado comparable</span>'}</div><div class="re-toggle" aria-label="Tipo de evolución"><button type="button" data-modo="acumulado" aria-pressed="${raiz.__modo !== 'diario'}">Acumulado</button><button type="button" data-modo="diario" aria-pressed="${raiz.__modo === 'diario'}">Diario</button></div></div><div class="re-chart" role="img" aria-label="Evolución de venta neta documentada en soles, período actual y año pasado"></div><p class="re-small">Venta documentada de todos los grupos · día del turno de caja · sin IGV ni recargo.</p></section>
-    <section class="re-panel"><div class="re-panel-head"><div><h2>Control de costo operativo</h2><p class="muted">Consumo del mes operativo cerrado</p></div>${abrir(d.links.costos, 'Abrir costos')}</div>${bloqueCosto(d)}</section></div>
-    <div class="re-lower"><section class="re-panel"><div class="re-panel-head"><h2>Señales para revisar</h2></div><div>${alertas(d)}</div></section><section class="re-panel"><div class="re-panel-head"><h2>Consumo y diferencia de costo</h2>${abrir(d.links.costos, 'Ver detalle')}</div>${conciliacion(d)}</section></div>
+    <div class="re-kpis">${kpis(d)}</div>
+    <div class="re-grid"><section class="re-panel"><div class="re-panel-head"><h2>Venta neta del mes</h2><div class="re-legend"><span><i class="re-swatch"></i>${esc(d.rotulo)}</span>${b ? `<span><i class="re-swatch prior"></i>${esc(d.anterior_rotulo)}${d.parcial ? ' · mismo tramo' : ''}</span>` : '<span>Sin año pasado comparable</span>'}</div><div class="re-toggle" aria-label="Tipo de evolución"><button type="button" data-modo="acumulado" aria-pressed="${raiz.__modo !== 'diario'}">Acumulado</button><button type="button" data-modo="diario" aria-pressed="${raiz.__modo === 'diario'}">Diario</button></div>${abrir(d.links.ventas, 'Ventas')}</div><div class="re-chart" role="img" aria-label="Evolución de la venta neta en soles, período actual y año pasado"></div></section>
+    <section class="re-panel"><div class="re-panel-head"><h2>Para revisar</h2></div><div class="re-signals">${alertas(d)}</div></section></div>
+    <div class="re-lower"><section class="re-panel"><div class="re-panel-head"><h2>Costo por familia</h2>${abrir(d.links.costos, 'Costos')}</div>${familias(d)}</section><section class="re-panel"><div class="re-panel-head"><h2>Del consumo real al costo del Sistema</h2>${abrir(d.links.costos, 'Ver detalle')}</div>${conciliacion(d)}</section></div>
+    ${metodo(raiz)}
     <footer class="re-foot"><span>Período: ${fecha(d.ini)} – ${fecha(d.fin)}${c?.cierre ? ` · Cierre registrado: ${esc(c.cierre)}` : ''}</span><span>Los reportes se abren en otra pestaña ↗</span></footer>`;
 }
 
@@ -110,7 +146,7 @@ function dibujarGrafico(raiz) {
   const actual = serie(d.actual), anterior = d.anterior ? serie(d.anterior) : [];
   const valores = [...actual, ...anterior, 0], min = Math.min(...valores), max = Math.max(...valores);
   const rango = Math.max(1, max - min), inferior = min < 0 ? min - rango * .08 : 0, superior = max + rango * .15;
-  const L = 66, R = 18, T = 24, B = 42;
+  const L = 52, R = 14, T = 10, B = 22;
   const x = i => L + (W - L - R) * i / Math.max(1, dias - 1);
   const y = v => H - B - (v - inferior) / (superior - inferior) * (H - T - B);
   const path = s => s.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
@@ -121,13 +157,15 @@ function dibujarGrafico(raiz) {
     svg += `<line class="gridline" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${esc(compacto(v))}</text>`;
   }
   const ticks = [...new Set([1, Math.ceil(dias / 2), dias])];
-  for (const t of ticks) svg += `<text x="${x(t - 1)}" y="${H - 24}" text-anchor="${t === 1 ? 'start' : t === dias ? 'end' : 'middle'}">${t}</text>`;
-  svg += `<text x="0" y="12">Soles</text><text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">Día del mes</text>`;
+  for (const t of ticks) svg += `<text x="${x(t - 1)}" y="${H - 6}" text-anchor="${t === 1 ? 'start' : t === dias ? 'end' : 'middle'}">${t === dias ? `día ${t}` : t}</text>`;
   if (anterior.length) svg += `<path class="prior-line" d="${path(anterior)}"/>`;
   svg += `<path class="line" d="${path(actual)}"/>`;
   if (dias === 1) svg += `<circle class="point" cx="${x(0)}" cy="${y(actual[0])}" r="4"/>`;
   const z = dias - 1;
-  svg += `<text class="endpoint" x="${x(z)}" y="${Math.max(14, y(actual[z]) - 12)}" text-anchor="end">${esc(soles(actual[z]))}</text>`;
+  // El rótulo va del lado de la línea que deja libre el año pasado.
+  const abajo = anterior.length && anterior[z] > actual[z];
+  const yr = abajo ? Math.min(H - B - 4, y(actual[z]) + 18) : Math.max(14, y(actual[z]) - 10);
+  svg += `<text class="endpoint" x="${x(z)}" y="${yr}" text-anchor="end">${esc(soles(actual[z]))}</text>`;
   for (let i = 0; i < dias; i++) {
     const ancho = Math.max(1, (W - L - R) / Math.max(1, dias - 1));
     svg += `<rect class="hit" x="${Math.max(L, x(i) - ancho / 2)}" y="${T}" width="${Math.min(ancho, W - R - Math.max(L, x(i) - ancho / 2))}" height="${H - T - B}"><title>Día ${i + 1}: ${esc(soles(actual[i]))}${anterior.length ? ` · Año pasado: ${esc(soles(anterior[i]))}` : ''}</title></rect>`;

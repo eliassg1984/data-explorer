@@ -14,8 +14,9 @@ import pandas as pd
 import costo_ventas as cv
 import definicion_venta as dv
 
-VERSION = 2
+VERSION = 3
 PEDIDO = "LLAVE LOCAL PEDIDO"
+NOMBRE = "NOMB ITEM VENTA"
 
 
 def rango_mes(mes, hasta=None):
@@ -71,7 +72,9 @@ def ventas_del_rango(df, ini, fin):
     if not (fecha and neto):
         if df.empty:
             return {"venta": 0.0, "pedidos": 0.0, "promedio": None,
-                    "dias": [], "sin_costo": 0.0}
+                    "clientes": 0.0, "ticket": None, "descuentos": 0.0,
+                    "pct_descuento": None, "dias": [], "sin_costo": 0.0,
+                    "sin_costo_pct": None, "sin_costo_top": [], "sin_costo_n": 0}
         raise ValueError("Faltan la fecha o el neto de la venta")
     d = dv.solo_venta(df)
     f = pd.to_datetime(d[fecha], errors="coerce")
@@ -97,11 +100,46 @@ def ventas_del_rango(df, ini, fin):
             lambda c: -1.0 if c == dv.NOTA_CREDITO else 1.0)
         pedidos = dv.pax_por(d, ped, "_pedido_signo", doc=doc)
     costo = dv.columna(d, dv.COSTO)
-    sin_costo = (float(valores[pd.to_numeric(d[costo], errors="coerce")
-                               .fillna(0).eq(0)].sum()) if costo else None)
+    sin_costo, sin_costo_top, sin_costo_n = None, [], 0
+    if costo:
+        cero = pd.to_numeric(d[costo], errors="coerce").fillna(0).eq(0)
+        sin_costo = float(valores[cero].sum())
+        nombre = dv.columna(d, NOMBRE)
+        if nombre:
+            # Los platos que la explican, como «Sin costo» de Ventas: una
+            # nota resta de su plato y lo que queda en cero no se nombra.
+            g = valores[cero].groupby(d.loc[cero, nombre].astype(str)).sum()
+            g = g[g > 0.5].sort_values(ascending=False)
+            sin_costo_n = int(len(g))
+            sin_costo_top = [{"plato": k, "venta": float(v)}
+                             for k, v in g.head(3).items()]
+    clientes, ticket = None, None
+    pax = dv.columna(d, dv.PAX)
+    if ped and pax:
+        clientes = dv.pax_por(d, ped, pax, doc=doc)
+        # El ticket del POS: neto de los canales que registran clientes ÷
+        # adultos (regla #591). Rappi vende sin pax y no entra.
+        base = valores[dv.con_clientes(d, dv.columna(d, dv.CANAL), pax)]
+        ticket = float(base.sum()) / clientes if clientes > 0 else None
+    carta = descuentos = None
+    c_carta, c_cant = dv.columna(d, dv.CARTA_UNIT), dv.columna(d, dv.CANTIDAD)
+    c_desc = dv.columna(d, dv.DESCUENTO_ITEM)
+    if c_desc:
+        # De la línea y con impuestos, como «Descuentos» de Ventas › Resumen:
+        # lo que se dejó de cobrar sobre el precio de carta.
+        descuentos = float(pd.to_numeric(d[c_desc], errors="coerce").fillna(0).sum())
+        if c_carta and c_cant:
+            carta = float((pd.to_numeric(d[c_carta], errors="coerce").fillna(0)
+                           * pd.to_numeric(d[c_cant], errors="coerce").fillna(0)).sum())
     return {"venta": venta, "pedidos": pedidos,
             "promedio": venta / pedidos if pedidos and pedidos > 0 else None,
-            "dias": dias, "sin_costo": sin_costo}
+            "clientes": clientes, "ticket": ticket,
+            "descuentos": descuentos,
+            "pct_descuento": descuentos / carta if descuentos is not None
+            and carta and carta > 0 else None,
+            "dias": dias, "sin_costo": sin_costo,
+            "sin_costo_pct": sin_costo / venta if sin_costo and venta > 0 else None,
+            "sin_costo_top": sin_costo_top, "sin_costo_n": sin_costo_n}
 
 
 def costo_del_mes(datos, mes):
@@ -149,9 +187,15 @@ def costo_del_mes(datos, mes):
         "venta_base", "operativo", "no_vendido", "carta", "pos", "bajas", "diferencia")}
     total["porcentaje"] = (total["operativo"] / total["venta_base"]
                            if total["venta_base"] > 0 else None)
+    # El costo del Sistema sobre la MISMA venta: la distancia entre los dos
+    # porcentajes es lo que la conciliación tiene que explicar.
+    total["porcentaje_pos"] = (total["pos"] / total["venta_base"]
+                               if total["venta_base"] > 0 else None)
     total["diferencia_pct"] = (total["diferencia"] / total["pos"]
                                if total["pos"] > 0 else None)
     total["faltante"] = total["diferencia"] - total["bajas"]
+    total["porcentaje_faltante"] = (total["faltante"] / total["venta_base"]
+                                    if total["venta_base"] > 0 else None)
     total["familias"] = familias
     total["cierre"] = periodos[i].get("sub", "")
     total["observaciones"] = datos.get("calidad", {}).get(str(mes), {})
