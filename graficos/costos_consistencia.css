@@ -1,0 +1,124 @@
+/* Costos › «Consistencia de datos» (reglas #686 y #689).
+   Vive en el shadow root del componente (graficos/costos_consistencia.py):
+   ninguna regla de acá sale de la pieza, y ninguna de estilos/ entra. Los
+   colores son las variables de estilos/_00_base.py, que SÍ cruzan el shadow
+   root. Ningún selector :has, por la regla #469; y lo que se desliza por
+   dentro no arrastra la página al llegar al final (#687). */
+
+.cd { display: grid; gap: 14px; min-width: 0; color: var(--text-primary); font-size: 13px; line-height: 1.4; }
+.cd button { font: inherit; color: inherit; }
+.cd button:focus-visible, .cd input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Cabecera: título y explicación a la izquierda, corte y CSV a la derecha. */
+.cd-cab { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; }
+.cd-tit { display: grid; gap: 4px; max-width: 760px; min-width: 0; }
+.cd-tit h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.cd-tit p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.cd-der { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.cd-corte { border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12px;
+  color: var(--text-secondary); background: var(--bg-card-tenue); white-space: nowrap; }
+.cd-btn { height: 34px; padding: 0 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  border: 1px solid var(--border-lavender); background: var(--bg-card); color: var(--accent-deep); white-space: nowrap; }
+.cd-btn:hover { background: var(--accent-tint); }
+.cd-btn.prim { border-color: var(--accent); background: var(--accent); color: var(--bg-card); font-weight: 600; }
+.cd-btn.prim:hover { background: var(--accent-hover); }
+
+/* Tira de indicadores. */
+.cd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.cd-kpi { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); padding: 12px 14px;
+  display: grid; gap: 4px; align-content: start; text-align: left; }
+button.cd-kpi { cursor: pointer; }
+button.cd-kpi:hover { border-color: var(--border-lavender); background: var(--accent-tint); }
+.cd-kpi-rot { font-size: 12px; color: var(--text-secondary); }
+.cd-kpi-val { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cd-kpi-sub { font-size: 12px; color: var(--text-secondary); line-height: 1.35; }
+.cd-cuenta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.cd-cuenta b { font-size: 24px; font-weight: 700; }
+.cd-cuenta .r { color: var(--danger-text); } .cd-cuenta .a { color: var(--warning-text); } .cd-cuenta .v { color: var(--success-text); }
+.cd-barra { display: flex; height: 6px; border-radius: 3px; overflow: hidden; gap: 2px; margin-top: 4px; }
+.cd-barra .r { background: var(--danger); } .cd-barra .a { background: var(--warning); } .cd-barra .v { background: var(--success); }
+
+/* Pestañas por grupo, con sus puntos rojos y ámbar. */
+.cd-tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.cd-tab { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); cursor: pointer; font-size: 13px; }
+.cd-tab:hover { border-color: var(--border-lavender); }
+.cd-tab.sel { background: var(--accent); border-color: var(--accent); color: var(--bg-card); font-weight: 600; }
+.cd-pts { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; }
+.pt { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.pt.r { background: var(--danger); } .pt.a { background: var(--warning); margin-left: 3px; }
+
+/* Lista | ficha. La lista se desliza por dentro; la tarjeta no tiene techo. */
+.cd-cuerpo { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.cd-lista { flex: 999 1 560px; min-width: 0; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-card); overflow: auto; overscroll-behavior: contain;
+  max-height: calc(var(--alto-util) + 120px); }
+.cd-fila, .cd-lcab { display: grid; grid-template-columns: 92px minmax(0, 1fr) 52px 92px minmax(100px, 140px);
+  gap: 12px; align-items: center; padding: 11px 16px; }
+.cd-lcab { position: sticky; top: 0; z-index: 1; padding: 9px 16px; font-size: 11px; font-weight: 600;
+  color: var(--text-secondary); background: var(--bg-card-tenue); border-bottom: 1px solid var(--border); }
+.cd-grupo { position: sticky; top: 33px; z-index: 1; padding: 8px 16px 6px; font-size: 11px; font-weight: 700;
+  letter-spacing: .04em; color: var(--accent-deep); background: var(--accent-light); border-bottom: 1px solid var(--border); }
+.cd-fila { width: 100%; border: 0; border-bottom: 1px solid var(--line-soft); background: var(--bg-card);
+  text-align: left; cursor: pointer; }
+.cd-fila:hover { background: var(--bg-hover); }
+.cd-fila.sel { background: var(--accent-tint); box-shadow: inset 3px 0 0 var(--accent); }
+.cd-nom { display: grid; gap: 2px; min-width: 0; }
+.cd-nom b { font-size: 14px; font-weight: 600; }
+.cd-nom span { font-size: 12px; color: var(--text-secondary); line-height: 1.35; }
+.cd-n { text-align: right; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cd-s { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cd-donde { font-size: 12px; color: var(--text-secondary); line-height: 1.35; }
+
+.chip { display: inline-flex; align-items: center; justify-content: center; height: 24px; padding: 0 10px;
+  border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; }
+.chip.rojo { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
+.chip.ambar { background: var(--warning-bg); color: var(--warning-text); border-color: var(--warning-border); }
+.chip.verde { background: var(--success-bg); color: var(--success-text); }
+.chip.fallo { background: var(--bg-secondary); color: var(--text-secondary); }
+
+/* La ficha del control elegido. */
+.cd-ficha { flex: 1 1 420px; min-width: 0; max-width: 600px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-card); padding: 16px; display: grid; gap: 12px; align-content: start; }
+/* Sin esto, la tabla de casos estira la ficha más allá de su columna: un
+   hijo de grid no se achica por debajo de su contenido. */
+.cd-ficha > *, .cd-casos > * { min-width: 0; }
+.cd-fcab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.cd-fdom { font-size: 11px; color: var(--text-secondary); letter-spacing: .03em; }
+.cd-ficha h3 { margin: 0; font-size: 18px; font-weight: 700; }
+.cd-ficha p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.cd-mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cd-mini > div { background: var(--bg-card-tenue); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.cd-mini small { display: block; font-size: 11px; color: var(--text-secondary); }
+.cd-mini b { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cd-mini .txt { font-size: 12px; font-weight: 600; line-height: 1.35; }
+.cd-regla { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: grid; gap: 4px; font-size: 12px; }
+.cd-regla .rot { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.cd-regla .ya { color: var(--accent-deep); font-size: 11.5px; }
+.cd-hacer { background: var(--accent-light); border-radius: 8px; padding: 10px 12px; display: grid; gap: 3px; }
+.cd-hacer .rot { font-size: 11px; font-weight: 600; color: var(--accent-deep); }
+
+/* Los casos: buscador, tabla que se desliza por dentro y su pie. */
+.cd-casos { display: grid; gap: 6px; }
+.cd-buscar { display: flex; gap: 8px; align-items: center; }
+.cd-buscar input { flex: 1; min-width: 0; height: 32px; border: 1px solid var(--border); border-radius: 8px;
+  padding: 0 10px; font: inherit; font-size: 12.5px; background: var(--bg-card); color: var(--text-primary); }
+.cd-tabla { overflow: auto; overscroll-behavior: contain; max-height: 310px; border: 1px solid var(--line-soft); border-radius: 8px; }
+.cd-tabla table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.cd-tabla th { position: sticky; top: 0; background: var(--bg-card-tenue); text-align: left; font-weight: 600;
+  color: var(--text-secondary); font-size: 11px; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.cd-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.cd-tabla td.num, .cd-tabla th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cd-tabla td.cod { color: var(--text-secondary); white-space: nowrap; }
+/* El nombre no se parte en tres renglones: la tabla se desliza de lado. */
+.cd-tabla td:nth-child(2) { min-width: 200px; }
+.cd-pie { font-size: 11px; color: var(--text-muted); }
+.cd-vacio { font-size: 13px; color: var(--success-text); background: var(--success-bg); border-radius: 8px; padding: 10px 12px; }
+.cd-nota { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+/* Celular: la lista pierde la columna de dónde se concentra. */
+@media (max-width: 640px) {
+  .cd-fila, .cd-lcab { grid-template-columns: 84px minmax(0, 1fr) 52px 84px; gap: 8px; padding: 10px 12px; }
+  .cd-fila > :nth-child(5), .cd-lcab > :nth-child(5) { display: none; }
+  .cd-mini { grid-template-columns: 1fr 1fr; }
+}

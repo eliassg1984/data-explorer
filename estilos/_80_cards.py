@@ -1333,7 +1333,7 @@ CSS = """    /* ================================================================
         /* 2026-10-13: la ficha de la línea elegida va al costado de la      */
         /* lista y pasa de una pantalla; adentro sólo se desliza la lista.   */
         /* #650.                                                             */
-        /* Y `…_izq_cmaestro` (Costos › Consistencia del maestro), al nacer  */
+        /* Y `…_izq_cmaestro` (Costos › Consistencia de datos), al nacer     */
         /* el 2026-10-21: lista y ficha con todos los casos, al costado; con */
         /* techo tendría barra propia encima de las de sus tablas. #686.     */
         div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_cmaestro):not(.st-key-ajuste_graf_card_izq_dif):not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_mov_prod_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_platos):not(.st-key-ajuste_graf_card_izq_mov_consumo):not(.st-key-ajuste_graf_card_izq_costos),

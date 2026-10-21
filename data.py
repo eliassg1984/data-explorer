@@ -2200,7 +2200,7 @@ def sin_plato_por_cierre():
         return None
 
 
-# Lo que lee «Consistencia del maestro» de Costos (`consistencia_maestro`,
+# Lo que lee «Consistencia de datos» de Costos (`consistencia_maestro`,
 # regla #686), además del maestro de stock, que manda: sus sellos van en la
 # clave de la caché. `_ARCHIVOS_CONSISTENCIA_CRUDOS` se leen tal cual.
 _ARCHIVOS_CONSISTENCIA_CRUDOS = (
@@ -2264,7 +2264,7 @@ def consistencia_entradas(hoy=None):
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False, max_entries=2)
 def _consistencia_cacheable(archivo, sello, sellos=(), version=None):
-    """Los casos de cada control de «Consistencia del maestro» (regla #686):
+    """Los casos de cada control de «Consistencia de datos» (regla #686):
     `{"hoy", "casos": {id: DataFrame o el texto de su error}}`. Si la carga
     falla, LANZA: no se cachea. `archivo` es el maestro de stock; `sellos`,
     los de `_ARCHIVOS_CONSISTENCIA`, y `version`, la de los controles y la

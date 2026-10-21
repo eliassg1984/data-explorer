@@ -1,4 +1,4 @@
-"""test_consistencia_maestro.py — Costos › «Consistencia del maestro» (regla #686).
+"""test_consistencia_maestro.py — Costos › «Consistencia de datos» (reglas #686 y #689).
 
 Sin secrets, sin red y sin navegador:
 
@@ -436,9 +436,32 @@ ok(all(len(c.columnas) == 3 and c.mide and c.porque and c.regla and c.accion
 ok(all(c.agrupar in (None, *cm.CASOS) for c in cm.CONTROLES),
    "«se concentra en» agrupa por una columna de CASOS")
 
+print("── lo que recibe la pieza ──")
+import json  # noqa: E402
+from graficos.costos_consistencia import armar  # noqa: E402
+_p = armar(RES, HOY)
+ok(len(_p["controles"]) == len(cm.CONTROLES) and _p["hoy"] == "20/10/2026",
+   "pieza · un control por CONTROLES y el corte escrito como fecha")
+_ok_json = True
+try:
+    json.dumps(_p, allow_nan=False)
+except ValueError:
+    _ok_json = False
+ok(_ok_json, "pieza · viaja como JSON: sin NaN (un NaN rompe el JSON del navegador)")
+_s2 = next(x for x in _p["controles"] if x["id"] == "s2")
+ok(_s2["estado"] == cm.ROJO and _s2["n"] == 1 and _s2["casos"][0][0] == "0000002",
+   "pieza · el control lleva su estado y sus casos como filas")
+_r2 = next(x for x in _p["controles"] if x["id"] == "r2")
+_montos = [f[4] for f in _r2["casos"]]
+ok(_montos[0] == 900 and all(m is None for m in _montos[1:] if m != 900),
+   "pieza · los casos van de mayor a menor monto, los sin monto al final")
+_roto_p = armar(_roto, HOY)
+ok(next(x for x in _roto_p["controles"] if x["id"] == "r4")["error"] != "",
+   "pieza · el control que reventó lleva su error, no casos")
+
 print("── el cableado ──")
 _costos = (RAIZ / "graficos" / "costos.py").read_text(encoding="utf-8")
-ok("Consistencia del maestro" in {n.value for n in ast.walk(ast.parse(_costos))
+ok("Consistencia de datos" in {n.value for n in ast.walk(ast.parse(_costos))
                                   if isinstance(n, ast.Constant)},
    "la vista está en el rail de Costos")
 ok("costos_consistencia.renderizar()" in _costos, "y Costos la despacha")

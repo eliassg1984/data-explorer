@@ -450,15 +450,6 @@ ficha abierta —el pie se parte en dos renglones en la columna angosta—, más
 fijo de 470 la tarjeta medía 668 y el final de la lista quedaba 23 px bajo
 el borde."""
 
-CONSISTENCIA_LISTA = 27 * 15 + 38
-"""Tope de la lista de controles de Costos › «Consistencia del maestro»
-(regla #686): quince filas de 27 y la cabecera, lo que mide un grupo entero
-con su ficha al lado. Con «Todo» (28) se desliza por dentro."""
-
-CONSISTENCIA_CASOS = 27 * 10 + 38
-"""Tope de los casos del control elegido, en su ficha: diez filas y la
-cabecera; la lista entera, deslizando o en el CSV."""
-
 DIFERENCIAS_FIG = 120
 """El stock en el sistema entre los dos conteos de la línea elegida en
 «Análisis de diferencias» (regla #650): una escalera, con el cero marcado."""

@@ -51,12 +51,12 @@ from graficos.base import (
 # todos (regla #507)— porque de él salen el panel del reporte en la columna
 # (`graficos/__init__.py::_RAILS`, regla #568) y el rótulo de la franja.
 #
-# Desde el 2026-10-21, dos vistas (regla #686): «Consistencia del maestro»
+# Desde el 2026-10-21, dos vistas (regla #686): «Consistencia de datos»
 # es un DESTINO APARTE, como las de Documentos SUNAT (#683) —el rail elige
 # cuál se dibuja—, no una pila: cada una es una tarjeta alta.
 _COSTOS_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Costos", (("Costo de ventas", "Costo de ventas", ":material/calculate:"),
-                ("Consistencia del maestro", "Consistencia del maestro",
+                ("Consistencia de datos", "Consistencia de datos",
                  ":material/rule:"))),
 ))
 
@@ -164,7 +164,7 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
     resto lo trae `_datos`. `tabla_cb` se acepta por la firma única del
     dispatcher y no se usa: el reporte no tiene vista «Tabla»."""
     vista = _render_rail(_COSTOS_RAIL_CATEGORIAS, "costos_graf_tipo", secciones=_PILA)
-    if vista == "Consistencia del maestro":
+    if vista == "Consistencia de datos":
         from graficos import costos_consistencia
         costos_consistencia.renderizar()
         return

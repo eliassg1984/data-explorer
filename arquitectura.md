@@ -58,9 +58,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-688 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+689 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (217)
+**CSS y estilos** (218)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -279,6 +279,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#687** — Una lista con scroll propio de una pieza nuestra lleva overscroll-behavior: contain; el…
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
+- **#689** — Un boceto aprobado se implementa con SU forma: si es una página con tarjetas, chips y ficha,…
 
 **Layout y alturas** (97)
 
@@ -1022,7 +1023,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (199)
+**Decisiones de diseño y UX** (200)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1223,6 +1224,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#684** — «Ingresar al Almacén» es UNA tabla con los dos lados, y lo que falta cargar dice cuánto es…
 - **#686** — «¿El maestro del sistema tiene lógica?» se contesta con CONTROLES, no con un tablero: Costos…
 - **#687** — Una lista con scroll propio de una pieza nuestra lleva overscroll-behavior: contain; el…
+- **#689** — Un boceto aprobado se implementa con SU forma: si es una página con tarjetas, chips y ficha,…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53399,6 +53401,39 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
      (2026-10-21.)
 
+689. **Un boceto aprobado se implementa con SU forma: si es una página con
+     tarjetas, chips y ficha, va una pieza propia, no `st.dataframe`.** La
+     #686 salió con la lista de controles en una tabla nativa y la ficha en
+     markdown: hacía lo mismo, pero el usuario mandó las dos capturas lado a
+     lado —«me mostraste esto, pero lo veo así»—. Lo aprobado era la FORMA:
+     indicadores arriba, pestañas con sus puntos rojos y ámbar, la lista
+     agrupada con el nombre y su explicación en dos renglones, el chip de
+     estado y la ficha con sus cajas. Una tabla nativa no tiene renglones de
+     grupo, ni dos líneas por celda, ni chips; aproximarla es otra vista.
+
+     - La vista pasó a `st.components.v2` (sin iframe, estilos en un shadow
+       root con las variables de `_00_base.py`), como la tabla de Costo de
+       ventas: `graficos/costos_consistencia.js` y `.css`. Python arma los
+       datos (`costos_consistencia.armar`, pura, con test: viaja como JSON,
+       sin NaN) y todo lo demás —grupo, control, buscar entre los casos, el
+       CSV— lo resuelve el navegador. Los casos son pocos miles y viajan
+       enteros; la tabla de la ficha dibuja 300 y el resto sale buscando o
+       en el CSV. La lista y la tabla llevan `overscroll-behavior: contain`
+       (#687).
+     - **Un hijo de grid no se achica por debajo de su contenido**: la tabla
+       de casos estiraba la ficha más allá de la tarjeta hasta poner
+       `min-width: 0` en los hijos de `.cd-ficha` y `.cd-casos`.
+     - **Y se renombró, a pedido: «Consistencia de datos»** («no sólo ve el
+       maestro»: también cambios de factor, mermas y facturas). Cambió sólo
+       lo que se lee —el rail, el título «¿Los datos del sistema tienen
+       lógica?»—; el módulo sigue siendo `consistencia_maestro.py` y la key
+       de la tarjeta, `ajuste_graf_card_izq_cmaestro`.
+
+     Antes de dar por terminada una vista que salió de un boceto, ponerla al
+     lado del boceto en la misma captura.
+
+     (2026-10-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53411,7 +53446,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#688**; la próxima toma el número siguiente.
+> última regla es la **#689**; la próxima toma el número siguiente.
 
 >
 

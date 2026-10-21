@@ -139,7 +139,7 @@ clasifique el cruce y cachee con la versión de las reglas. Ver
 `arquitectura.md` regla #640.
 
 `test_consistencia_maestro.py` vigila los CONTROLES del maestro
-(`consistencia_maestro.py`, Costos › «Consistencia del maestro»): un
+(`consistencia_maestro.py`, Costos › «Consistencia de datos»): un
 parquet de mentira por fuente con el caso que cada control tiene que marcar
 y el que se le parece y no —el stock que sólo se contó, el cambio de factor
 que la receta sí acompañó, el artículo nuevo de la auditoría, el código de
