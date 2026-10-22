@@ -1482,7 +1482,10 @@ cuenta corre en el navegador y vuelve en `cambios` con un `rev`: hasta que
 Python lo devuelve, lo que llega no pisa lo escrito. Cada línea lleva un
 `uid` estable (el código se repite: Sal Maldon ×2). Importar un plato trae
 sus precios por canal de `recetaventa.parquet`; guardar los suma a la
-propuesta (`precios_canal`).
+propuesta (`precios_canal`). **«Guardadas»** es una lista con ficha en otra
+pieza (`graficos/nc_guardadas.js`, regla #698) y «Abrir en el editor» carga
+una propuesta en su modo; una modificación vuelve a importar el original del
+sistema para compararse, y lo nuevo vuelve como compra con su precio.
 
 Antes de eso, **Costo Carta era «la tabla primero»** (regla #657): la
 carta a todo el ancho con sus 16 columnas, una fecha de tarjeta con ctx

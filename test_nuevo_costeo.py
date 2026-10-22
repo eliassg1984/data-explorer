@@ -75,5 +75,42 @@ class LaPieza(unittest.TestCase):
             self.assertIn(f, js)
 
 
+class Guardadas(unittest.TestCase):
+    """«Guardadas» (regla #698): lo que recibe la lista y en qué modo se
+    abre cada propuesta."""
+
+    def setUp(self):
+        import graficos  # noqa: F401  (formulario_receta se importa desde graficos.recetas)
+        import formulario_receta as fr
+        self.fr = fr
+
+    def test_la_lista(self):
+        props = [
+            {"_clave": "a.json", "tipo": "Receta de Venta", "nombre": "lomo", "guardado_por": "jose",
+             "guardado_en": "2026-08-13T15:00:41+00:00",
+             "lineas": [{"cod": "1", "nombre": "Lomo", "unidad": "KILOS", "cantidad": 1, "precio": 100.74}]},
+            {"_clave": "b.json", "tipo": "Modificación de receta", "nombre": "Lomo Saltado",
+             "guardado_en": "2026-10-22T14:00:00+00:00", "precio_venta": 79.0,
+             "plato_sistema": "0000959", "precio_venta_sistema": 79.0, "costo_sistema": 28.35,
+             "precios_canal": {"En el Local": 79, "Rappi": 89},
+             "lineas": [{"cod": "2", "nombre": "x", "unidad": "UND", "cantidad": 2, "precio": 14.0}]},
+        ]
+        d = self.fr.armar_guardadas(props, "b.json")
+        a, b = d["propuestas"]
+        self.assertEqual((a["cuando"], a["n"], a["costo"], a["pv"], a["pct"]), ("13 ago 26", 1, 100.74, 0.0, None))
+        self.assertAlmostEqual(b["pct"], 28 / (79 / d["divisor"]) * 100)
+        self.assertAlmostEqual(b["sistema"]["pct"], 28.35 / (79 / d["divisor"]) * 100)
+        self.assertEqual(b["canales"], [["En el Local", 79.0], ["Rappi", 89.0]])
+        self.assertEqual(d["sel"], "b.json")
+
+    def test_en_que_modo_se_abre(self):
+        m = self.fr._modo_de_propuesta
+        self.assertEqual(m({"tipo": "Receta de Venta"}), ("venta", None))
+        self.assertEqual(m({"tipo": "Combo"}), ("combo", None))
+        self.assertEqual(m({"plato_sistema": "1"}), ("modificar", "plato"))
+        self.assertEqual(m({"combo_sistema": "1"}), ("modificar", "combo"))
+        self.assertEqual(m({"receta_base_sistema": "1"}), ("modificar", "base"))
+
+
 if __name__ == "__main__":
     unittest.main()

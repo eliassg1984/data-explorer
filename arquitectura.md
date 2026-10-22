@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-697 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+698 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (221)
+**CSS y estilos** (222)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -286,6 +286,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
 - **#695** — «Simular Alza de Insumos» es una pieza propia: el escenario, los indicadores, la lista y la…
 - **#697** — «Nuevo Costeo» es una pieza propia: la receta y su precio se editan en el navegador, con los…
+- **#698** — «Guardadas» es una lista con ficha, y una propuesta se vuelve a abrir en el editor
 
 **Layout y alturas** (98)
 
@@ -778,7 +779,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 
-**Datos, R2 y DuckDB** (109)
+**Datos, R2 y DuckDB** (110)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -889,6 +890,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 - **#696** — «Costo de Carta» es una pieza propia con los CINCO CANALES del POS y su Excel
+- **#698** — «Guardadas» es una lista con ficha, y una propuesta se vuelve a abrir en el editor
 
 **SUNAT y SIRE** (71)
 
@@ -53786,6 +53788,35 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        sistema. Sin errores de consola.
      Lo vigila `test_nuevo_costeo.py`. (2026-10-22.)
 
+698. **«Guardadas» es una lista con ficha, y una propuesta se vuelve a abrir
+     en el editor.** A pedido (2026-10-22), la última parte del boceto de la
+     #697. Hasta ese día era un desplegable por propuesta con un
+     `st.dataframe` adentro, de sólo lectura.
+     · **La lista** (`graficos/nc_guardadas.js`, que comparte la hoja de
+       `nuevo_costeo.css`): buscar por nombre o por quién, filtrar por tipo,
+       y cada propuesta con quién, cuándo (en Lima), líneas, costo y un
+       estado —sin precio de venta, cuántos artículos nuevos o su % de
+       costo—. **La ficha**: costo, precio, % y utilidad; si es una
+       modificación, cómo estaba en el sistema; sus precios por canal (#697);
+       sus líneas y lo nuevo descrito en una línea (`an.describir`).
+     · **Arriba, lo que se hace con la elegida** (Python, porque el PDF y el
+       Excel los arma `envio_receta`): «Abrir en el editor», PDF, Excel y
+       «Actualizar lista». Elegir en la pieza vuelve en `elegir`.
+     · **«Abrir en el editor»** (`_abrir_propuesta`, un callback: escribe
+       la key del modo y del nombre antes de que se dibujen) la carga en su
+       modo según lo que guardó (`_modo_de_propuesta`): `plato_sistema`,
+       `combo_sistema` o `receta_base_sistema` → «Modificar», que vuelve a
+       importar el original para compararse y le devuelve a cada línea su
+       `sid` por código; si no, «Receta de venta» o «Combo». Lo nuevo vuelve
+       como compra con el precio que tenía: el detalle de un (P)/(Rs) nuevo
+       no se guarda en una forma que el editor pueda reabrir. Una propuesta
+       de antes de la #697, sin canales, deja los del sistema.
+     · **Medido con Playwright** sobre la única propuesta en R2 («lomo», de
+       jose, 13 ago 2026, sin precio): la lista y la ficha, el PDF baja, y
+       «Abrir en el editor» la deja en «Receta de venta» con sus dos líneas
+       y su nombre. Sin errores de consola.
+     Lo vigila `test_nuevo_costeo.py`. (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53798,7 +53829,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#697**; la próxima toma el número siguiente.
+> última regla es la **#698**; la próxima toma el número siguiente.
 
 >
 

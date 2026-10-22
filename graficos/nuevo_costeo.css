@@ -125,3 +125,24 @@ i.g { background: var(--serie-2); opacity: .55; }
   .nc-receta { flex: none; max-height: 480px; }
   .nc-precio { flex: none; min-width: 0; overflow: visible; }
 }
+
+/* «Guardadas» (regla #698, `nc_guardadas.js`): la lista y la ficha de la
+   elegida, con las mismas cajas que la receta. */
+.ng-cuerpo { height: calc(var(--alto-util) - 170px); }
+.ng-cab { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px;
+  border-bottom: 1px solid var(--line-soft); }
+.ng-buscar input { height: 30px; width: 240px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px;
+  font-size: 12.5px; background: var(--bg-card); }
+.ng-chip { height: 26px; padding: 0 10px; border-radius: 13px; font-size: 12px; cursor: pointer; border: 1px solid var(--border);
+  background: var(--bg-card); color: var(--text-primary) !important; white-space: nowrap; }
+.ng-chip.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-deep) !important; }
+.ng-cuerpo .nc-f { cursor: pointer; }
+.ng-cuerpo .nc-tabla td { padding: 6px 8px; }
+.ng-fcab span { font-size: 11px; color: var(--text-secondary); }
+.ng-fcab h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.nc-fbloque { display: flex; flex-direction: column; gap: 4px; }
+.ng-lineas { border-collapse: collapse; width: 100%; font-size: 12px; }
+.ng-lineas td { padding: 3px 4px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.ng-lineas td.num { text-align: right; }
+.ng-lineas .nc-ins { max-width: 210px; }
+.ng-und { font-size: 11px; color: var(--text-secondary); }

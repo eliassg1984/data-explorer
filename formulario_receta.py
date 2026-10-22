@@ -2965,57 +2965,194 @@ def _listar_propuestas_guardadas():
     return propuestas
 
 
-def _render_guardadas():
-    if not secrets_disponibles():
-        st.info("🧪 Modo demo: no hay R2 configurado, no hay nada para listar acá.")
-        return
+_PIEZA_GUARDADAS = st.components.v2.component(
+    "nc_guardadas",
+    css=(Path(__file__).parent / "graficos" / "nuevo_costeo.css").read_text(encoding="utf-8"),
+    js=(Path(__file__).parent / "graficos" / "nc_guardadas.js").read_text(encoding="utf-8"),
+)
+_K_GUARDADA = "form_receta_guardada_sel"
+"""La clave en R2 de la propuesta elegida en «Guardadas»."""
 
-    if st.button("🔄 Actualizar lista", key="form_receta_guardadas_refresh"):
-        _listar_propuestas_guardadas.clear()
-        st.rerun(scope="fragment")
+_MESES = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set", "oct", "nov", "dic")
 
-    propuestas = _listar_propuestas_guardadas()
-    if not propuestas:
-        st.info("Todavía no hay ninguna propuesta guardada.")
-        return
 
-    st.caption(f"{len(propuestas)} propuesta(s) guardada(s) — más nueva primero.")
+def _cuando(iso):
+    """(«13 ago 26», «13 ago 2026, 10:00») de la fecha de guardado, en Lima."""
+    try:
+        f = datetime.fromisoformat(str(iso)).astimezone(_ZONA_LIMA)
+    except (TypeError, ValueError):
+        return "—", "—"
+    return (f"{f.day} {_MESES[f.month - 1]} {f:%y}",
+            f"{f.day} {_MESES[f.month - 1]} {f:%Y}, {f:%H:%M}")
+
+
+def armar_guardadas(propuestas, sel):
+    """Lo que recibe la lista de «Guardadas» (regla #698). Pura: la lee el test.
+
+    Una propuesta: id (su clave en R2), tipo, nombre, quién y cuándo, sus
+    líneas, costo, precio de venta y % de costo, los precios por canal si
+    los guardó, lo nuevo descrito en una línea (`an.describir`) y, si es una
+    modificación, cómo estaba en el sistema."""
+    out = []
     for p in propuestas:
-        total = p.get("total", 0)
-        titulo = f"{p.get('tipo', '?')} · {p.get('nombre', '(sin nombre)')} · {_fmt(total)}"
-        with st.expander(titulo):
-            fecha = p.get("guardado_en", "")
-            st.caption(f"Guardado por **{p.get('guardado_por', '?')}** · {fecha}")
+        lineas = [{k: l.get(k) for k in ("nombre", "unidad", "cantidad", "precio", "tipo")}
+                  for l in p.get("lineas") or []]
+        for l in lineas:
+            l["cantidad"] = float(l.get("cantidad") or 0)
+            l["precio"] = float(l.get("precio") or 0)
+        costo = sum(l["cantidad"] * l["precio"] for l in lineas)
+        pv = float(p.get("precio_venta") or 0)
+        neto = pv / divisor_neto() if pv > 0 else 0
+        sistema = None
+        cs = p.get("costo_sistema", p.get("costo_ficha_sistema"))
+        if cs is not None:
+            pvs = float(p.get("precio_venta_sistema") or 0)
+            sistema = {"costo": float(cs), "pv": pvs,
+                       "pct": float(cs) / (pvs / divisor_neto()) * 100 if pvs > 0 else None}
+        canales = p.get("precios_canal")
+        corto, largo = _cuando(p.get("guardado_en"))
+        out.append({
+            "id": p.get("_clave") or "", "tipo": p.get("tipo") or "?",
+            "nombre": p.get("nombre") or "", "por": p.get("guardado_por") or "",
+            "cuando": corto, "cuando_largo": largo, "n": len(lineas), "lineas": lineas,
+            "costo": round(costo, 4), "pv": pv,
+            "pct": costo / neto * 100 if neto > 0 else None,
+            "area": _rotulo_area(p["area_produccion"]) if p.get("area_produccion") else "",
+            "canales": [[n, float(v or 0)] for n, v in canales.items()] if canales else None,
+            "nuevos": [an.describir(d) for d in p.get("articulos_nuevos") or []],
+            "sistema": sistema,
+        })
+    return {"propuestas": out, "sel": sel, "divisor": divisor_neto(),
+            "umbrales": [_UMBRAL_COSTO_OK, _UMBRAL_COSTO_WARN]}
 
-            extra_bits = []
-            if p.get("area_produccion"):
-                extra_bits.append(f"área {_rotulo_area(p['area_produccion'])}")
-            if p.get("porciones"):
-                extra_bits.append(f"{p['porciones']} porciones")
-            if p.get("precio_venta"):
-                extra_bits.append(f"precio de venta {_fmt(p['precio_venta'])}")
-            if extra_bits:
-                st.caption(" · ".join(extra_bits))
 
-            lineas = p.get("lineas") or []
-            if not lineas:
-                st.caption("(sin líneas)")
-                continue
-            df = pd.DataFrame(lineas)
-            df["Subtotal (S/)"] = (df["cantidad"] * df["precio"]).round(2)
-            df = df.rename(columns={
-                "cod": "Código", "nombre": "Producto", "unidad": "Unidad",
-                "cantidad": "Cantidad", "precio": "Precio unit. (S/)",
-            })
-            st.dataframe(
-                df[["Código", "Producto", "Unidad", "Cantidad", "Precio unit. (S/)", "Subtotal (S/)"]],
-                hide_index=True, use_container_width=True,
-            )
-            nuevos = p.get("articulos_nuevos") or []
-            if nuevos:
-                st.markdown("**Artículos nuevos**")
-                for d in nuevos:
-                    st.caption("• " + an.describir(d))
+def _modo_de_propuesta(p):
+    """En qué modo se abre una propuesta, y qué se modifica si es una
+    modificación: («venta» | «combo» | «modificar», «plato» | «combo» |
+    «base» | None)."""
+    if p.get("receta_base_sistema"):
+        return "modificar", "base"
+    if p.get("combo_sistema"):
+        return "modificar", "combo"
+    if p.get("plato_sistema"):
+        return "modificar", "plato"
+    return ("combo" if p.get("tipo") == "Combo" else "venta"), None
+
+
+def _abrir_propuesta(p):
+    """Carga una propuesta guardada en el editor (callback de «Abrir en el
+    editor»): su modo, nombre, área, líneas y precios. Una modificación
+    vuelve a importar la receta del sistema para compararse contra ella, y
+    cada línea recupera su `sid` por código. Lo nuevo vuelve como compra con
+    el precio que tenía: el detalle de un (P)/(Rs) nuevo no se guarda en una
+    forma que el editor pueda reabrir."""
+    modo, que = _modo_de_propuesta(p)
+    rotulo = {v: k for k, v in _MODO_DE_ROTULO.items()}[modo]
+    if modo == "modificar":
+        st.session_state["form_receta_modificar_que"] = que
+        cod = p.get({"base": "receta_base_sistema", "combo": "combo_sistema"}.get(que, "plato_sistema"))
+        {"base": _importar_base, "combo": _importar_combo}.get(que, _importar)(cod, con_nombre=False)
+        origen = st.session_state.get(_key(modo, "origen")) or {}
+        sids = {}
+        for l in st.session_state.get(_key_lineas(modo)) or []:
+            sids.setdefault(str(l["cod"]), []).append(l.get("sid"))
+    else:
+        _vaciar(modo)
+        origen, sids = {}, {}
+    lineas = []
+    for l in p.get("lineas") or []:
+        cod = str(l.get("cod") or "")
+        sid = (sids.get(cod) or [None]).pop(0) if sids.get(cod) else None
+        nueva = {"cod": cod, "nombre": l.get("nombre") or cod, "unidad": l.get("unidad") or "unidad",
+                 "cantidad": float(l.get("cantidad") or 0), "precio": float(l.get("precio") or 0),
+                 "tipo": l.get("tipo") or "almacen", "activo": None}
+        if sid:
+            nueva["sid"] = sid
+        lineas.append(nueva)
+    st.session_state[_key_lineas(modo)] = lineas
+    st.session_state[_key(modo, "nuevos")] = {}
+    st.session_state[_key(modo, "nombre")] = p.get("nombre") or ""
+    st.session_state[_key(modo, "pv")] = float(p["precio_venta"]) if p.get("precio_venta") else None
+    canales = p.get("precios_canal")
+    # Una propuesta de antes de la #697 no trae canales: en una modificación
+    # quedan los del sistema que acaba de traer la importación.
+    if canales or modo != "modificar":
+        st.session_state[_key(modo, "pv_canales")] = list(canales.values()) if canales else None
+    st.session_state[_key(modo, "area")] = p.get("area_produccion") or None
+    if que == "base" and p.get("rinde"):
+        st.session_state[_key(modo, "rinde")] = float(p["rinde"])
+    if origen:
+        st.session_state[_key(modo, "origen")] = origen
+    st.session_state["form_receta_modo"] = rotulo
+
+
+def _resumen_de_propuesta(p):
+    """Lo que `envio_receta` necesita para el PDF y el Excel de una
+    propuesta ya guardada: las mismas cuentas que al guardarla, con la fecha
+    en que se guardó."""
+    lineas = [{k: l.get(k) for k in ("cod", "nombre", "unidad", "cantidad", "precio", "tipo")}
+              for l in p.get("lineas") or []]
+    for l in lineas:
+        l["cantidad"], l["precio"] = float(l["cantidad"] or 0), float(l["precio"] or 0)
+    extra = {k: p[k] for k in ("area_produccion", "receta_base", "impacto") if k in p}
+    r = _resumen_envio(p.get("tipo") or "", p.get("nombre") or "", p.get("guardado_por") or "",
+                       lineas, float(p.get("precio_venta") or 0),
+                       p.get("articulos_nuevos") or (), extra)
+    r["fecha"] = _cuando(p.get("guardado_en"))[1]
+    return r
+
+
+def _render_guardadas():
+    """«Guardadas» (regla #698): la lista con ficha, en una pieza, y arriba
+    lo que se hace con la elegida —abrirla en el editor, bajarla en PDF o
+    Excel— y actualizar la lista."""
+    if not secrets_disponibles():
+        st.markdown(_html_vacio("Modo demo: no hay R2 configurado, no hay propuestas para "
+                                "listar.", 120), unsafe_allow_html=True)
+        return
+    propuestas = _listar_propuestas_guardadas()
+    ss = st.session_state
+    ids = [p.get("_clave") for p in propuestas]
+    if ss.get(_K_GUARDADA) not in ids:
+        ss[_K_GUARDADA] = ids[0] if ids else None
+    p = next((x for x in propuestas if x.get("_clave") == ss[_K_GUARDADA]), None)
+
+    with st.container(horizontal=True, vertical_alignment="center", key="form_receta_guardadas_fila"):
+        st.markdown(f'<div class="fr-sub">{html.escape("«" + (p.get("nombre") or "sin nombre") + "»") if p else "Ninguna propuesta todavía"}</div>',
+                    unsafe_allow_html=True)
+        if p:
+            st.button("Abrir en el editor", type="primary", icon=":material/edit_note:",
+                      key="form_receta_guardada_abrir", on_click=_abrir_propuesta, args=(p,),
+                      help="Carga la propuesta en «Receta de venta», «Combo» o «Modificar» "
+                           "para seguir trabajándola. Lo que haya en ese modo se reemplaza.")
+            r = _resumen_de_propuesta(p)
+            st.download_button("PDF", icon=":material/picture_as_pdf:",
+                               data=lambda: envio_receta.pdf_receta(r),
+                               file_name=envio_receta.nombre_archivo(r, "pdf"),
+                               mime="application/pdf", key="form_receta_guardada_pdf",
+                               on_click="ignore")
+            st.download_button("Excel", icon=":material/table_view:",
+                               data=lambda: envio_receta.excel_receta(r),
+                               file_name=envio_receta.nombre_archivo(r, "xlsx"),
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                               key="form_receta_guardada_xlsx", on_click="ignore")
+        if st.button("Actualizar lista", icon=":material/refresh:", key="form_receta_guardadas_refresh"):
+            _listar_propuestas_guardadas.clear()
+            st.rerun(scope="fragment")
+    if not propuestas:
+        st.markdown(_html_vacio("Todavía no hay ninguna propuesta guardada. Se guardan con "
+                                "«Guardar propuesta», al pie de la receta.", 160),
+                    unsafe_allow_html=True)
+        return
+
+    def _al_elegir():
+        v = (ss.get("form_receta_guardadas_pieza") or {}).get("elegir")
+        if v:
+            ss[_K_GUARDADA] = v
+
+    _PIEZA_GUARDADAS(key="form_receta_guardadas_pieza",
+                     data=armar_guardadas(propuestas, ss[_K_GUARDADA]),
+                     on_elegir_change=_al_elegir, width="stretch")
 
 
 # ─── Punto de entrada público ───────────────────────────────────────────────
