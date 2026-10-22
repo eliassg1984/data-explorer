@@ -11059,7 +11059,7 @@ def _pruebas_costo_recetas_base():
     # «Cambios Recetas Base», el 2026-10-19, al lado de su costo (#671).
     check("el rail, en el orden pedido",
           [v[1] for v in visibles],
-          ["Costo Carta", "Simular Alza de Insumos", "Costo Recetas Base", "Cambios Recetas Base",
+          ["Costo de Carta", "Simular Alza de Insumos", "Costo Recetas Base", "Cambios Recetas Base",
            "Revisar", "Nuevo Costeo"])
     check("la pila, en el mismo orden",
           [s for _k, s in rec._PILA if not s.startswith("Tabla")],
@@ -11219,6 +11219,7 @@ def _pruebas_ticket_sin_canales_sin_clientes():
         nonlocal fallos
         if got == exp:
             print(f"OK    ventas · ticket · {nombre}")
+    # «Costo Carta» pasó a «Costo de Carta» el mismo día (#696);
         else:
             fallos += 1
             print(f"FALLA ventas · ticket · {nombre}: got={got!r} exp={exp!r}")

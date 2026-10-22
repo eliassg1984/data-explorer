@@ -626,10 +626,14 @@ POR_PRODUCTO_DIA = ("producto", "dia", "unidades", "neto", "costo",
 """Las columnas de `por_producto_dia`, con nombre fijo (regla #481)."""
 
 
-def por_producto_dia(df):
+def por_producto_dia(df, canal=False):
     """Lo vendido de cada producto, día por día, sobre el df PREPARADO: una
     fila por (producto, día) con las unidades, el neto, el costo, las
     unidades que traen costo y el neto que se vendió SIN costo.
+
+    Con `canal=True`, una fila por (producto, día, canal): la columna
+    `canal` es el `CANAL VENTA` del POS («En el Local», «Rappi», …; «» si
+    falta). La lee «Costo de Carta» para lo vendido por canal (regla #696).
 
     Las mismas cuentas que suman las vistas de Ventas: sin cortesías ni
     anulados, las notas de crédito restando y un ítem una vez (regla #517).
@@ -642,7 +646,8 @@ def por_producto_dia(df):
     con costo 0 para siempre. Por eso ese neto viaja aparte
     (`neto_sin_costo`) y el costo por unidad se saca sólo de las unidades
     que SÍ lo traen (`unidades_costeadas`)."""
-    vacio = pd.DataFrame(columns=list(POR_PRODUCTO_DIA))
+    claves = ["producto", "dia"] + (["canal"] if canal else [])
+    vacio = pd.DataFrame(columns=claves + list(POR_PRODUCTO_DIA[2:]))
     if df is None or df.empty:
         return vacio
     c_prod, c_fecha, c_cant = (columna(df, PRODUCTO), columna(df, FECHA),
@@ -671,11 +676,14 @@ def por_producto_dia(df):
         "unidades_costeadas": cant.where(costo != 0, 0.0),
         "neto_sin_costo": neto.where(costo == 0, 0.0),
     }).dropna(subset=["producto", "dia"])
+    if canal:
+        c_canal = columna(d, CANAL)
+        b["canal"] = (d.loc[b.index, c_canal].astype("string").str.strip().fillna("")
+                      if c_canal else "")
     b = b[b["producto"] != ""]
     if b.empty:
         return vacio
-    g = b.groupby(["producto", "dia"], as_index=False)[
-        list(POR_PRODUCTO_DIA[2:])].sum()
+    g = b.groupby(claves, as_index=False)[list(POR_PRODUCTO_DIA[2:])].sum()
     g["producto"] = g["producto"].astype(object)
     return g
 

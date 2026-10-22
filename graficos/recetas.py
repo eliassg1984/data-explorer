@@ -5,7 +5,7 @@ Una sola página con las vistas que hasta el 2026-09-04 vivían repartidas en
 dos destinos que un chip alternaba (Receta base / Receta venta). A pedido:
 «quiero que las visualizaciones de estos toggles figuren todas juntas».
 
-    Costo Carta (cartacosteada.parquet)   Carta costeada, con la receta del
+    Costo de Carta (cartacosteada.parquet) Carta costeada, con la receta del
                                           producto elegido al costado y su
                                           «Simular» (regla #656)
     Simular Alza de Insumos               ¿y si suben los insumos de compra?,
@@ -98,7 +98,7 @@ from functools import partial
 
 import streamlit as st
 
-from data import cargar as _cargar_reporte, venta_por_producto_dia
+from data import cargar as _cargar_reporte, venta_por_canal_dia, venta_por_producto_dia
 from estilos import TAM_FUENTE
 from tablas import renderizar_aggrid_desktop
 from graficos.base import (
@@ -137,7 +137,9 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # Desde el 2026-09-28 un clic en un producto abre su receta: es lo que
     # hacía «Composición del plato», que se fue con «Costeo Receta Venta»
     # (regla #556).
-    ("Carta",  (("Carta costeada",                      "Costo Carta",     ":material/menu_book:"),)),
+    # Desde el 2026-10-22 el rail la llama «Costo de Carta», a pedido, y es
+    # una pieza propia con los cinco canales del POS (regla #696).
+    ("Carta",  (("Carta costeada",                      "Costo de Carta",  ":material/menu_book:"),)),
     # «¿Y si sube un insumo?» (2026-10-15, regla #656): elegir un insumo de
     # compra y cuánto sube, y ver qué platos lo llevan y cómo quedan. Al lado
     # de la carta porque mide lo mismo que ella, en todos los platos a la vez.
@@ -266,7 +268,8 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         # el producto elegido tiene receta.
         render_carta_costeada(
             _cargar_reporte(ARCHIVO_CARTA), df_rv=df_f,
-            ventas=venta_por_producto_dia, df_rb=df_rb,
+            ventas=venta_por_producto_dia, ventas_canal=venta_por_canal_dia,
+            df_rb=df_rb,
             porcionamientos=partial(_cargar_reporte, "porcionamientos.parquet"))
 
     def _dib_alza():

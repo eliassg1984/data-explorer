@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -146,6 +146,13 @@ que la receta sí acompañó, el artículo nuevo de la auditoría, el código de
 10 dígitos del cierre, la factura de servicios—, el color de cada control y
 que uno roto no tape a los demás. La cifra sobre R2 la da
 `herramientas/consistencia_maestro.py`. Ver `arquitectura.md` regla #686.
+
+`test_costo_carta.py` vigila «Costo de Carta» (`graficos/carta_costeada.py`):
+los CINCO CANALES del POS que trae `cartacosteada.parquet` —un precio y un
+costo por canal; precio de S/ 1 o menos, no se vende por ahí—, lo vendido
+por canal (el principal sale restando los otros del total) y que el `.js`
+lea las filas en las mismas posiciones en que Python las arma. Ver
+`arquitectura.md` regla #696.
 
 ## El asistente IA no adivina: consulta
 
@@ -558,8 +565,8 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
   la fila elegida pasa a ser otro producto. Y el contador en la key de la
   #399 estrena la tabla con cada clic y le borra al usuario el orden que
   eligió. En una tabla que se filtra: la key con la firma de la lista de
-  filas, `selection_default` y `single-row-required`
-  (`graficos/carta_costeada.py::_key_tabla`). Regla #556.
+  filas, `selection_default` y `single-row-required` (así lo resolvía la
+  tabla de Costo de Carta hasta que pasó a pieza propia, #696). Regla #556.
 - **Si un contenedor se ilumina en `:hover`, el contenedor entero tiene que
   responder al clic.** Un `st.button` con `padding: 0` se encoge hasta su
   glifo: el de la cascada de Ajuste medía **16×36 px dentro de una fila de
@@ -1448,7 +1455,19 @@ escribe; reemplazó a la `st.data_editor` de `recetaventa.py`. Lo que muerde:
   (`carta_costeada.py::_modal_simulador`), o el próximo clic la reabre.
 - **Guardar es una propuesta de Nuevo Costeo** (JSON en R2), nunca el POS.
 
-**Costo Carta es «la tabla primero»** desde el mismo día (regla #657): la
+**«Costo de Carta» es una PIEZA PROPIA desde el 2026-10-22** (regla #696;
+hasta ese día «Costo Carta» y un `st.dataframe` de 16 columnas):
+`graficos/carta_costeada.js` + `.css`, con indicadores que filtran, los
+grupos con su % de costo, la lista y, al costado, la ficha del elegido con
+los CINCO CANALES del POS (En el Local, Delivery, Para Llevar, Rappi,
+Pedidos Ya: un precio y un costo cada uno en `cartacosteada.parquet`), y
+el Excel de lo que se ve (`graficos/_xlsx.js`, compartido con
+Consistencia). Todo lo de la lista lo resuelve el navegador; sólo elegir
+un producto (`elegir`) y «Simular» vuelven a Python, que dibuja DEBAJO la
+receta y la evolución. Lo vendido por canal sale de
+`data.venta_por_canal_dia` (sólo los canales que no son «En el Local»).
+
+Antes de eso, **Costo Carta era «la tabla primero»** (regla #657): la
 carta a todo el ancho con sus 16 columnas, una fecha de tarjeta con ctx
 PROPIO (`carta_costeada.ctx_fecha`: `franja_fecha.contexto()` trae el del
 último reporte que publicó) y, debajo, la ficha: la receta como árbol de

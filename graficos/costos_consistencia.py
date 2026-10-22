@@ -35,7 +35,10 @@ _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "costos_consistencia",
     css=(_AQUI / "costos_consistencia.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "costos_consistencia.js").read_text(encoding="utf-8"),
+    # El Excel (`libro`, `bajar`) vive en `_xlsx.js`, compartido con
+    # «Costo de Carta» (#696): se antepone, y queda en el mismo módulo.
+    js=(_AQUI / "_xlsx.js").read_text(encoding="utf-8")
+    + (_AQUI / "costos_consistencia.js").read_text(encoding="utf-8"),
 )
 
 

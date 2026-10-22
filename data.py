@@ -1426,6 +1426,7 @@ def limpiar_cache(archivo):
     _rango_fechas_cacheable.clear()
     _resumen_kpis_cacheable.clear()
     _venta_por_producto_dia_cacheable.clear()
+    _venta_por_canal_dia_cacheable.clear()
     _venta_por_grupo_dia_cacheable.clear()
     _consumo_recetas_cacheable.clear()
     _demanda_nivel1_cacheable.clear()
@@ -1878,6 +1879,51 @@ def _venta_por_producto_dia_cacheable(archivo, sello, definicion=None):
     lista = ", ".join(f'"{c}"' for c in reales)
     df = con.execute(f"SELECT {lista} FROM read_parquet('{url}')").df()
     return prep.por_producto_dia(prep.preparar(df))
+
+
+CANAL_PRINCIPAL = "En el Local"
+"""El canal de casi toda la venta (99 % de las líneas desde julio de 2026):
+`venta_por_canal_dia` trae los OTROS, y el principal sale por diferencia."""
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _venta_por_canal_dia_cacheable(archivo, sello, definicion=None):
+    """Lo vendido de cada producto por día en los canales que NO son «En el
+    Local» (`definicion_venta.por_producto_dia(canal=True)`), para «Costo de
+    Carta» (regla #696). Si falla, LANZA: no se cachea.
+
+    El mismo camino que `_venta_por_producto_dia_cacheable` —las mismas
+    columnas, que ya traen el canal—; se guarda sólo lo de los otros canales
+    (Rappi, Para Llevar…: unos cientos de filas) y el principal se obtiene
+    restando del total, sin una segunda copia de lo vendido."""
+    prep = _PREPARAR[archivo]
+    if not secrets_disponibles():
+        g = prep.por_producto_dia(prep.preparar(_datos_demo(archivo)), canal=True)
+    else:
+        con = get_conn()
+        bucket = st.secrets["R2_BUCKET"]
+        url = f"s3://{bucket}/{archivo}"
+        nombres = [r[0] for r in con.execute(
+            f"DESCRIBE SELECT * FROM read_parquet('{url}')").fetchall()]
+        vacio = pd.DataFrame(columns=nombres)
+        reales = list(dict.fromkeys(
+            c for c in (prep.columna(vacio, q) for q in prep.COLUMNAS) if c))
+        lista = ", ".join(f'"{c}"' for c in reales)
+        df = con.execute(f"SELECT {lista} FROM read_parquet('{url}')").df()
+        g = prep.por_producto_dia(prep.preparar(df), canal=True)
+    return g[(g["canal"] != CANAL_PRINCIPAL) & (g["canal"] != "")].reset_index(drop=True)
+
+
+def venta_por_canal_dia(archivo="ventas.parquet"):
+    """Lo vendido por producto, día y canal fuera de «En el Local»; `None`
+    si no se pudo cargar. No cacheada (la interna sí), como las demás."""
+    if archivo not in _PREPARAR:
+        return None
+    try:
+        return _venta_por_canal_dia_cacheable(
+            archivo, sello_datos(archivo), definicion=_version_preparar(archivo))
+    except Exception:
+        return None
 
 
 def venta_por_producto_dia(archivo="ventas.parquet"):

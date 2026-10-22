@@ -369,6 +369,16 @@ _sin_cod = pd.DataFrame({"Fec Reg Documento": [pd.Timestamp(D1)],
 ok(dv.por_producto_dia(None).empty and dv.por_producto_dia(_sin_cod).empty,
    "sin datos, o sin código de producto, sale vacío")
 
+# Por canal (Costo de Carta, #696): la boleta B2 (el Pato) fue por Rappi.
+_xc = _x.assign(**{"CANAL VENTA": np.where(_x["NUMERO DOCUMENTO"] == "B2", "Rappi", "En el Local")})
+_pcc = dv.por_producto_dia(dv.preparar(_xc, D1, D3), canal=True)
+ok(list(_pcc.columns) == ["producto", "dia", "canal", *dv.POR_PRODUCTO_DIA[2:]],
+   "por canal: una columna más, con nombre fijo", str(list(_pcc.columns)))
+igual(float(_pcc.loc[(_pcc["producto"] == "Pato") & (_pcc["canal"] == "Rappi"), "unidades"].sum()),
+      1.0, "el Pato, en Rappi")
+igual(float(_pcc["unidades"].sum()), float(_pd["unidades"].sum()),
+      "por canal suma lo mismo que sin canal (el canje y la nota incluidos)")
+
 print("\n── venta y cortesía por producto y día (Movimientos, #645) ──")
 # El kardex descuenta lo vendido Y las cortesías; esto las separa.
 _uc = dv.unidades_por_clase_dia(dv.preparar(_x.assign(GRUPO="Alimentos"),

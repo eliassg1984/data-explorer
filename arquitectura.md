@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-695 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+696 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (220)
 
@@ -777,7 +777,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 
-**Datos, R2 y DuckDB** (108)
+**Datos, R2 y DuckDB** (109)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -887,6 +887,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#673** — «Mercadería» es lo que lleva KARDEX, no «Alimentos» (tipo_compra.py, VERSION 1 → 2)
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
+- **#696** — «Costo de Carta» es una pieza propia con los CINCO CANALES del POS y su Excel
 
 **SUNAT y SIRE** (71)
 
@@ -1033,7 +1034,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (205)
+**Decisiones de diseño y UX** (206)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1240,6 +1241,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#693** — La portada del Resumen ejecutivo entra en una pantalla de laptop y no repite un número
 - **#694** — «Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta son notas de crédito y…
 - **#695** — «Simular Alza de Insumos» es una pieza propia: el escenario, los indicadores, la lista y la…
+- **#696** — «Costo de Carta» es una pieza propia con los CINCO CANALES del POS y su Excel
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53688,6 +53690,56 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      insumo». Las clases `.rec-alza-kpi` de `estilos/_80_cards.py` siguen
      vivas: las usa «Cambios Recetas Base». (2026-10-22.)
 
+696. **«Costo de Carta» es una pieza propia con los CINCO CANALES del POS y
+     su Excel.** A pedido (2026-10-22), sobre un boceto aprobado
+     (https://claude.ai/artifact/SHeSJotXSbn5n5UCZBRdnz), con tres pedidos
+     sumados: los canales («el sistema tiene 5 canales de venta… tiene opción
+     de tener 5 costos»), el Excel y el nombre «Costo de Carta» (antes
+     «Costo Carta»; el id sigue siendo «Carta costeada»).
+     · **Los cinco canales** son `INFOREST.DBO.TCANALVENTA`: En el Local,
+       Delivery, Para Llevar, Rappi y Pedidos Ya. `cartacosteada.parquet` ya
+       traía `P.VENTA <canal>` y `COSTO <canal>` para los cinco (sufijos
+       SALON, DELIVERY, LLEVAR, RAPPI y 5); la app leía sólo Salón. Medido:
+       el costo es el MISMO en los cinco en los 647 productos activos, y el
+       precio no (Rappi difiere del Salón en 414) — el % de costo cambia con
+       el canal. Un precio de S/ 1 o menos en un canal: no se vende por ahí.
+       `preparar` agrega `Precio0..4` y `Costo0..4` (el orden de `CANALES`).
+     · **Lo vendido por canal**: `definicion_venta.por_producto_dia(canal=True)`
+       y `data.venta_por_canal_dia`, que guarda SÓLO los canales que no son
+       «En el Local» (cientos de filas): el principal sale restando del
+       total, sin una segunda copia de lo vendido. Desde julio de 2026, el
+       99 % es «En el Local»; Rappi, un 1 %; Delivery, nunca; Para Llevar y
+       Pedidos Ya, nada desde abril y diciembre. La pieza los marca «sin
+       ventas» en vez de esconderlos.
+     · **Todo lo de la lista lo resuelve el navegador** —canal, Carta |
+       Combos, grupo (con su % de costo ponderado por lo vendido), tipo,
+       carta impresa, inactivos, venta interna, buscar, ordenar por columna
+       y los cinco indicadores, que filtran—: la pieza recibe la carta entera
+       (`armar_pieza`, con inactivos y venta interna) y no pide una corrida.
+       Sólo `elegir` (un producto) y `simular` vuelven a Python: el primero
+       dibuja DEBAJO la receta como árbol y la evolución (lo de la #657, sin
+       cambios: Evolución, Costo / Utilidad, Sankey, Porcionados); el
+       segundo abre la modal de la #656.
+     · **La ficha del costado**: precio, neto, costo y margen del canal
+       elegido, una frase que compara el % de hoy con el vendido, la tabla
+       de los cinco canales (un clic en uno lo elige) y a cuánto llevar el
+       precio para quedar en 30 o 35 %. En un combo, su banda (#548).
+     · **El Excel** es la lista que se ve, con los cinco canales en columnas
+       (precio, neto, costo, %, margen, vendidos y venta neta de cada uno),
+       armado en el navegador. El código que arma el .xlsx salió de
+       Consistencia a `graficos/_xlsx.js`, y las dos piezas lo anteponen a
+       su `.js`.
+     · **Se fueron** la tabla de `st.dataframe` y su selección por key
+       (`_key_tabla`, `_leer_eleccion`, la #556 resuelta de otra forma), los
+       desplegables del renglón del título, los interruptores y el
+       «Cómo se calcula» desplegable (ahora en el «?»). Las reglas de
+       `estilos/_80_cards.py` para `rec_carta_cab_*` y `rec_carta_mas_fila`
+       quedaron sin a quién estilar.
+     · **Medido a 1323×619 con Playwright**: la lista mide lo que su caja
+       (737 px), 607 productos activos, sin errores de consola.
+     Lo vigilan `test_costo_carta.py` y `test_definicion_venta.py` (lo
+     vendido por canal suma lo mismo que sin canal). (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53700,7 +53752,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#695**; la próxima toma el número siguiente.
+> última regla es la **#696**; la próxima toma el número siguiente.
 
 >
 
