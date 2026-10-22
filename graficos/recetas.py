@@ -8,8 +8,8 @@ dos destinos que un chip alternaba (Receta base / Receta venta). A pedido:
     Costo Carta (cartacosteada.parquet)   Carta costeada, con la receta del
                                           producto elegido al costado y su
                                           «Simular» (regla #656)
-    Alza Insumo                           ¿y si sube un insumo de compra?,
-                                          en todos los platos (regla #656)
+    Simular Alza de Insumos               ¿y si suben los insumos de compra?,
+                                          en todos los platos (#656, #695)
     Costo Recetas Base                    lo que usan las ventas de cada
       (recetabase.parquet +               receta base, lo producido y su
        ordenesproduccion.parquet)         costo por unidad en el tiempo
@@ -141,7 +141,9 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # «¿Y si sube un insumo?» (2026-10-15, regla #656): elegir un insumo de
     # compra y cuánto sube, y ver qué platos lo llevan y cómo quedan. Al lado
     # de la carta porque mide lo mismo que ella, en todos los platos a la vez.
-    ("Alza",   (("Alza de insumo",                      "Alza Insumo",     ":material/trending_up:"),)),
+    # Desde el 2026-10-22 el rail la llama «Simular Alza de Insumos», a
+    # pedido, y es una pieza propia (regla #695); el id no cambió.
+    ("Alza",   (("Alza de insumo",                      "Simular Alza de Insumos", ":material/trending_up:"),)),
     # «Costo de recetas base» (2026-09-30, regla #576): reemplazó al Ranking
     # de recetas base. Lo usado por las ventas contra lo producido por
     # órdenes, y el costo por unidad en el tiempo; ver

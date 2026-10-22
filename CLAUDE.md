@@ -1463,7 +1463,12 @@ artículo sin ajustar las recetas explicó el 61 % del costo de más de los
 picos —la Berenjena de factor 1000 a 1—; se marca con ◆. Una fila con ANTES
 vacío es un artículo NUEVO, no un cambio.
 
-«¿Y si sube un insumo?» (vista «Alza Insumo») usa
+«Simular Alza de Insumos» (id «Alza de insumo»; hasta el 2026-10-22 «Alza
+Insumo») es una PIEZA PROPIA desde ese día (`graficos/recetas_alza.js`, regla
+#695): el escenario, los indicadores, la lista y la ficha los dibuja el
+navegador y la cuenta corre ahí mientras se escribe —nada vuelve a Python, el
+escenario vive en la raíz y en `localStorage`—, con las fórmulas de
+`simulador_receta.alzas`: si se toca una, se toca la otra. Usa
 `simulador_receta.exposicion_carta`: cuánto de cada insumo de compra lleva
 cada plato, con los cortes porcionados contados para su insumo de origen.
 Desde el 2026-10-18 permite varios insumos a la vez, editando % o precio
@@ -1474,8 +1479,8 @@ respaldo identificado). El calendario compartido tiene rango propio
 `resumen_alzas` compara costo y margen de toda la carta activa costeada,
 incluidos los platos no afectados. Usa las unidades y el neto real del
 período con recetas actuales; es margen sobre recetas, no utilidad final.
-Se verifica con `python -m unittest test_recetas_alza` (incluye AppTest de
-la edición sincronizada), además del smoke de gráficos.
+Se verifica con `python -m unittest test_recetas_alza` (rehace la cuenta del
+navegador y la compara con la de Python), además del smoke de gráficos.
 
 ## El eje temporal de la franja es un RANGO, con un solo dueño
 

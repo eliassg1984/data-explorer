@@ -1,0 +1,178 @@
+/* Recetas › «Simular Alza de Insumos» (regla #695).
+   Vive en el shadow root del componente (graficos/recetas_alza.py): ninguna
+   regla de acá sale de la pieza, y ninguna de estilos/ entra. Los colores
+   son las variables de estilos/_00_base.py, que SÍ cruzan el shadow root.
+   Ningún selector :has, por la regla #469.
+
+   UNA PANTALLA, como Consistencia (#690): arriba el escenario y la tira de
+   indicadores; abajo, la lista y la ficha a la altura que queda, cada una
+   con su scroll. El JS mide lo de arriba y lo escribe en `--sa-arriba`;
+   los 120px restantes son la cabecera de la tarjeta (título y fecha, que
+   dibuja Streamlit), su padding y el pie. */
+
+.sa { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; color: var(--text-primary);
+  font-size: 13px; line-height: 1.4; }
+.sa > *, .sa-cuerpo > * { min-width: 0; }
+.sa button { font: inherit; color: inherit; }
+.sa button:focus-visible, .sa input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.sube { color: var(--danger-text); }
+.baja { color: var(--success-text); }
+.sa-arriba { display: grid; gap: 10px; }
+
+/* El escenario: una ficha por insumo y la de «Agregar». */
+.sa-esc { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.sa-ins { flex: 1 1 260px; max-width: 360px; min-width: 0; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-card); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.sa-ins-cab { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.sa-ins-cab i { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.sa-ins-cab b { flex: 1; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-x { border: 0; background: none; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; }
+.sa-x:hover { color: var(--danger-text); }
+.sa-ins-mid { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sa-step { display: flex; align-items: center; height: 28px; border: 1px solid var(--border-lavender); border-radius: 8px;
+  overflow: hidden; flex: none; }
+.sa-step button { width: 26px; height: 28px; border: 0; background: var(--accent-tint); color: var(--accent-deep); cursor: pointer; }
+.sa-step button:hover { background: var(--accent-light); }
+.sa-step input { width: 54px; height: 26px; border: 0; text-align: right; font: inherit; font-weight: 700; padding: 0 2px;
+  background: var(--bg-card); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.sa-step input.sube { color: var(--danger-text); }
+.sa-step input.baja { color: var(--success-text); }
+.sa-step span { padding: 0 6px 0 2px; color: var(--text-secondary); }
+.sa-ins-precio { display: flex; flex-direction: column; min-width: 0; }
+.sa-precio { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+.sa-precio input { width: 72px; height: 22px; border: 1px solid var(--border); border-radius: 6px; padding: 0 4px; font: inherit;
+  font-weight: 600; color: var(--text-primary); background: var(--bg-card); text-align: right; font-variant-numeric: tabular-nums; }
+.sa-base { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-ins-pie { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.sa-ins-pie span { margin-left: auto; font-size: 11px; color: var(--text-secondary); }
+.sa-pre { height: 22px; padding: 0 8px; border-radius: 11px; font-size: 11px; cursor: pointer; border: 1px solid var(--border);
+  background: var(--bg-card); color: var(--text-secondary) !important; }
+.sa-pre:hover { border-color: var(--border-lavender); }
+.sa-pre.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-deep) !important; }
+
+.sa-agr { flex: 0 1 230px; position: relative; min-width: 180px; }
+.sa-agr-b { width: 100%; height: 100%; min-height: 96px; border: 1px dashed var(--focus-lavender); border-radius: 10px;
+  background: var(--bg-card); color: var(--accent-deep) !important; cursor: pointer; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; padding: 8px; text-align: center; }
+.sa-agr-b:hover { background: var(--accent-tint); }
+.sa-agr-b .mas { font-size: 18px; line-height: 1; }
+.sa-agr-b span:last-child { font-size: 11px; color: var(--text-secondary); }
+.sa-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 5; width: 360px; max-width: calc(100vw - 32px);
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--sombra-capa);
+  padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.sa-pop input { height: 30px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font: inherit;
+  background: var(--bg-card); color: var(--text-primary); }
+.sa-pop-nota { font-size: 11px; color: var(--text-secondary); padding: 2px 4px; }
+.sa-pop-lista { max-height: 320px; overflow: auto; overscroll-behavior: contain; }
+.sa-sug { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 10px; text-align: left; border: 0;
+  background: none; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
+.sa-sug:hover { background: var(--bg-hover); }
+.sa-sug b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-sug-s { font-weight: 600; font-variant-numeric: tabular-nums; }
+.sa-sug-d { font-size: 11px; color: var(--text-secondary); }
+.sa-sug-b { align-self: center; width: 80px; height: 4px; border-radius: 2px; background: var(--line-soft); overflow: hidden; }
+.sa-sug-b i { display: block; height: 4px; background: var(--focus-lavender); }
+.sa-sug-vacio { padding: 10px 8px; color: var(--text-secondary); font-size: 12px; }
+
+/* Indicadores, UNA tira. */
+.sa-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.sa-kpi { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 6px 12px; min-width: 0;
+  display: grid; gap: 1px; }
+.sa-kpi-rot { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-kpi-lin { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.sa-kpi-val { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sa-kpi-val.ambar { color: var(--warning-text); }
+.sa-kpi-sub { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums; }
+
+/* Lista | ficha, a la altura que queda. */
+.sa-cuerpo { display: flex; gap: 10px; align-items: stretch; min-height: 320px;
+  height: calc(var(--alto-util) - var(--sa-arriba, 170px) - 120px); }
+.sa-lista { flex: 1 1 0; min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card);
+  display: flex; flex-direction: column; overflow: hidden; }
+.sa-lcab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 7px 10px;
+  border-bottom: 1px solid var(--line-soft); flex: none; }
+.sa-tabs { display: flex; gap: 2px; background: var(--rail-fondo); border-radius: 8px; padding: 2px; }
+.sa-tabs button { height: 26px; padding: 0 12px; border-radius: 6px; border: 0; cursor: pointer; font-size: 12.5px;
+  background: transparent; color: var(--text-secondary) !important; }
+.sa-tabs button.on { background: var(--bg-card); color: var(--accent-deep) !important; font-weight: 600;
+  box-shadow: var(--shadow); }
+.sa-leyenda { font-size: 11.5px; color: var(--text-secondary); flex: 1; min-width: 0; }
+.sa-leyenda b { font-weight: 500; }
+.sa-leyenda .ambar { color: var(--warning-text); }
+.sa-leyenda .rojo { color: var(--danger-text); }
+.sa-btn { height: 28px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 12px; border: 1px solid var(--border);
+  background: var(--bg-card); color: var(--text-secondary) !important; }
+.sa-btn:hover { border-color: var(--border-lavender); color: var(--accent-deep) !important; }
+
+.sa-tabla { flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.sa-tabla table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.sa-tabla th { position: sticky; top: 0; z-index: 1; background: var(--bg-card-tenue); text-align: left; font-weight: 600;
+  color: var(--text-secondary); font-size: 11px; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.sa-tabla td { padding: 6px 7px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; white-space: nowrap; }
+.sa-tabla .num { text-align: right; font-variant-numeric: tabular-nums; }
+.sa-fila { cursor: pointer; }
+.sa-fila:hover td { background: var(--bg-hover); }
+.sa-fila.sel td { background: var(--accent-tint); }
+.sa-fila.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.sa-plato { max-width: 210px; }
+.sa-plato div { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.sa-plato b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-plato > span, .sa-sub { font-size: 11px; color: var(--text-secondary); }
+.sa-revisar { flex: none; font-size: 10.5px; padding: 1px 6px; border-radius: 9px; background: var(--danger-bg);
+  color: var(--danger-text); cursor: help; }
+.sa-seg { display: flex; width: 88px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--line-soft); }
+.sa-seg i { display: block; height: 6px; }
+.sa-pct .hoy { color: var(--text-secondary); }
+.sa-pct em { display: block; font-style: normal; font-size: 10.5px; color: var(--warning-text); text-align: right; }
+.pill { display: inline-block; padding: 1px 7px; border-radius: 9px; font-weight: 600; background: var(--line-soft);
+  font-variant-numeric: tabular-nums; }
+.pill.ambar { background: var(--warning-bg); color: var(--warning-text); }
+.pill.rojo { background: var(--danger-bg); color: var(--danger-text); }
+.sa-bar { display: flex; align-items: center; gap: 6px; }
+.sa-bar i { display: block; height: 8px; border-radius: 2px; flex: none; }
+.sa-bar i.sube { background: var(--danger-border); }
+.sa-bar i.baja { background: var(--success); opacity: .45; }
+.sa-vacio { margin: 12px; padding: 10px 12px; border-radius: 8px; background: var(--accent-tint); color: var(--accent-deep);
+  font-size: 12.5px; }
+
+/* La ficha del plato elegido. */
+.sa-ficha { flex: 0 1 320px; min-width: 280px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; overflow: auto; overscroll-behavior: contain; }
+.sa-ficha > * { flex: none; }
+.sa-fcab span { font-size: 11px; color: var(--text-secondary); }
+.sa-fcab h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.sa-fbloque { display: flex; flex-direction: column; gap: 6px; }
+.sa-frot { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-secondary); }
+.sa-frot b { color: var(--text-primary); }
+.sa-fseg { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--line-soft); }
+.sa-fseg i { display: block; height: 14px; }
+.sa-fseg i.resto, .sa-ley i.resto { background: var(--scroll-thumb); }
+.sa-ley { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto 76px; gap: 6px; align-items: center; font-size: 12px; }
+.sa-ley i { width: 9px; height: 9px; border-radius: 3px; }
+.sa-ley span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-ley span.num { color: var(--text-secondary); }
+.sa-ley b { text-align: right; font-weight: 600; }
+.sa-opc { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--border); }
+.sa-opc.prop { background: var(--accent-tint); border-color: var(--border-lavender); }
+.sa-opc span { font-size: 11px; color: var(--text-secondary); }
+.sa-opc span.num { text-align: right; }
+.sa-fpie { font-size: 11px; color: var(--text-muted); margin-top: auto; }
+.sa-pie { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+.sa-ayuda { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border);
+  color: var(--text-secondary); font-size: 10px; font-weight: 600; cursor: help; flex: none; }
+
+/* Angosto: sin altura fija; la lista con su tope y la ficha debajo. */
+@media (max-width: 1100px) {
+  .sa-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .sa-cuerpo { flex-direction: column; height: auto; min-height: 0; }
+  .sa-lista { flex: none; max-height: 460px; }
+  .sa-ficha { flex: none; overflow: visible; min-width: 0; }
+  .sa-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sa-agr { flex: 1 1 100%; }
+  .sa-pop { left: 0; right: auto; }
+}

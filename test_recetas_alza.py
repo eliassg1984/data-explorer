@@ -1,6 +1,7 @@
-"""Impacto conjunto, períodos inclusivos y edición sincronizada de precios."""
+"""Impacto conjunto, períodos inclusivos y la cuenta de la pieza (regla #695)."""
 import datetime as dt
 import unittest
+from pathlib import Path
 
 import pandas as pd
 from streamlit.testing.v1 import AppTest
@@ -116,51 +117,103 @@ class ImpactoAlza(unittest.TestCase):
         self.assertIsNone(vista.ctx_fecha(None, hoy))
 
 
+def como_el_js(data, cambios):
+    """La cuenta de `recetas_alza.js::calcular` sobre lo que recibe la pieza:
+    {cod: (DeltaUnitario, CostoNuevo, PctNuevo, PrecioMantener, DeltaPeriodo)}."""
+    idx = {x[0]: i for i, x in enumerate(data["insumos"])}
+    elegidos = [(idx[c], p / 100) for c, p in cambios.items() if c in idx]
+    out = {}
+    for cod, _plato, _sub, precio, neto, costo, vend, _vneto, lleva in data["platos"]:
+        lleva = {int(k): v for k, v in lleva.items()}
+        peso = sum(lleva.get(i, 0) for i, _ in elegidos)
+        if not peso:
+            continue
+        delta = sum(lleva.get(i, 0) * p for i, p in elegidos)
+        nuevo = costo + delta
+        out[cod] = (delta, nuevo, nuevo / neto * 100,
+                    precio * nuevo / costo if costo else precio, delta * vend)
+    return out
+
+
 SCRIPT_UI = '''
 from unittest.mock import patch
 from test_recetas_alza import datos
 from graficos import recetas_alza as v
 carta, ventas, expo, catalogo = datos()
-with patch.object(v, "cargar", return_value=carta), \\
-     patch.object(v, "preparar", return_value=(carta, 0)), \\
-     patch.object(v, "sello_datos", return_value="test"), \\
-     patch.object(v, "_exposicion", return_value=(expo, {"A": "Lomo", "B": "Aceite", "C": "Agua"})), \\
-     patch.object(v, "_precios_compra", return_value={}), \\
-     patch.object(v, "catalogo_insumos", return_value=catalogo), \\
-     patch.object(v, "selector_fecha_tarjeta"):
+with patch.object(v, "cargar", return_value=carta), \
+     patch.object(v, "preparar", return_value=(carta, 0)), \
+     patch.object(v, "sello_datos", return_value="test"), \
+     patch.object(v, "_exposicion", return_value=(expo, {"A": "Lomo", "B": "Aceite", "C": "Agua"})), \
+     patch.object(v, "_precios_compra", return_value={}), \
+     patch.object(v, "catalogo_insumos", return_value=catalogo), \
+     patch.object(v, "selector_fecha_tarjeta"), \
+     patch.object(v, "_PIEZA") as pieza:
     v.render_alza(ventas=ventas)
+import streamlit as st
+st.session_state["llamada"] = pieza.call_args.kwargs if pieza.called else None
 '''
 
 
-class EdicionPrecios(unittest.TestCase):
-    def test_porcentaje_valor_y_varios_insumos(self):
+class PiezaAlza(unittest.TestCase):
+    """La pieza propia (regla #695): lo que recibe alcanza para que el
+    navegador rehaga `sr.alzas` y `sr.resumen_alzas` al céntimo."""
+
+    def setUp(self):
+        carta, ventas, self.expo, catalogo = datos()
+        self.carta, self.rango = con_ventas(carta, ventas, rango=("2026-10-01", "2026-10-31"))
+        orden, tot = vista._ranking(self.expo, con_ventas(carta, ventas, 90)[0])
+        self.data = vista.armar(self.expo, {"A": "Lomo", "B": "Aceite"}, self.carta,
+                                orden, tot, vista._referencias(catalogo, {}), self.rango)
+
+    def test_la_cuenta_del_navegador_es_la_de_python(self):
+        for cambios in ({"A": 25, "B": -10}, {"A": 10}, {"B": -100}, {"C": 30}):
+            with self.subTest(cambios=cambios):
+                t = sr.alzas(self.expo, self.carta, cambios).set_index("Cod")
+                js = como_el_js(self.data, cambios)
+                self.assertEqual(set(js), set(t.index))
+                for cod, (du, cn, pn, pm, dp) in js.items():
+                    r = t.loc[cod]
+                    self.assertAlmostEqual(du, r.DeltaUnitario)
+                    self.assertAlmostEqual(cn, r.CostoNuevo)
+                    self.assertAlmostEqual(pn, r.PctNuevo)
+                    self.assertAlmostEqual(pm, r.PrecioMantener)
+                    self.assertAlmostEqual(dp, r.DeltaPeriodo)
+
+    def test_totales_de_toda_la_carta(self):
+        r = sr.resumen_alzas(self.carta, sr.alzas(self.expo, self.carta, {"A": 10}))
+        self.assertEqual(self.data["neto"], r["neto"])
+        self.assertEqual(self.data["costo"], r["costo"])
+        self.assertTrue(self.data["periodo"].startswith("01/10/2026"))
+
+    def test_insumos_con_su_precio_y_sus_platos(self):
+        ins = {x[0]: x for x in self.data["insumos"]}
+        self.assertEqual(ins["A"][2:5], [60.0, "kg", "promedio de almacén"])
+        self.assertEqual(ins["B"][3], "l")
+        self.assertEqual(ins["B"][6], 2)
+        self.assertIsNone(ins["C"][2])
+        self.assertEqual(ins["C"][4], "sin precio de referencia")
+
+    def test_sin_ventas_el_periodo_vale_cero(self):
+        carta, _ = con_ventas(datos()[0], None)
+        d = vista.armar(self.expo, {}, carta, ["A"], {"A": 1.0}, {}, None)
+        self.assertEqual((d["neto"], d["costo"], d["periodo"]), (0.0, 0.0, ""))
+        self.assertEqual(len(d["platos"]), 1)
+
+    def test_el_js_escribe_las_mismas_formulas(self):
+        js = (Path(vista.__file__).with_suffix(".js")).read_text(encoding="utf-8")
+        for f in ("delta += s * p", "const nuevo = costo + delta", "pH: costo / neto * 100",
+                  "pN: nuevo / neto * 100", "precio * nuevo / costo", "dPer: delta * vend"):
+            self.assertIn(f, js)
+
+    def test_la_vista_se_dibuja(self):
         at = AppTest.from_string(SCRIPT_UI, default_timeout=30).run()
+        # El componente se registra en el runtime del proceso, no en el de
+        # AppTest: se reemplaza y se mira con qué se lo llamó.
         self.assertFalse(at.exception)
-        at.multiselect(key="rec_alza_insumos").set_value(["A", "B"]).run()
-        at.number_input(key="rec_alza_pct_A").set_value(25.0).run()
-        self.assertFalse(at.exception)
-        self.assertAlmostEqual(at.number_input(key="rec_alza_valor_A").value, 75.0)
-        at.number_input(key="rec_alza_valor_B").set_value(18.0).run()
-        self.assertFalse(at.exception)
-        self.assertAlmostEqual(at.number_input(key="rec_alza_pct_B").value, -10.0)
-        self.assertAlmostEqual(at.number_input(key="rec_alza_pct_A").value, 25.0)
-        # Cambiar sólo la fecha conserva el escenario y recalcula ambas tablas.
-        ctx = vista.ctx_fecha(datos()[1])
-        at.session_state[ctx["k_rango"]] = (dt.date(2026, 10, 1), dt.date(2026, 10, 7))
-        at.run()
-        self.assertFalse(at.exception)
-        self.assertAlmostEqual(at.dataframe[0].value.loc[0, "Cambio"], 18.0)
-        self.assertAlmostEqual(at.dataframe[1].value["Δ costo período"].sum(), 18.0)
-        self.assertEqual(at.number_input(key="rec_alza_pct_A").value, 25.0)
-        at.number_input(key="rec_alza_valor_A").set_value(0.0).run()
-        self.assertFalse(at.exception)
-        self.assertEqual(at.number_input(key="rec_alza_pct_A").value, -100.0)
-        at.multiselect(key="rec_alza_insumos").set_value(["C"]).run()
-        self.assertFalse(at.exception)
-        self.assertTrue(at.number_input(key="rec_alza_valor_C").disabled)
-        at.multiselect(key="rec_alza_insumos").set_value([]).run()
-        self.assertFalse(at.exception)
-        self.assertTrue(at.info)
+        self.assertFalse(at.info)
+        llamada = at.session_state["llamada"]
+        self.assertEqual(llamada["key"], "rec_alza_pieza")
+        self.assertEqual({p[0] for p in llamada["data"]["platos"]}, {"P1", "P2", "P3"})
 
 
 if __name__ == "__main__":

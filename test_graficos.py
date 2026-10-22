@@ -11054,11 +11054,12 @@ def _pruebas_costo_recetas_base():
     # ── El rail: el orden y los nombres que se pidieron (2026-09-30) ──────
     visibles = [v for _cat, vistas in rec._RAIL_CATEGORIAS for v in vistas
                 if not v[1].startswith("Tabla")]
-    # «Alza Insumo» se sumó el 2026-10-15, al lado de la carta (regla #656);
+    # «Alza Insumo» se sumó el 2026-10-15, al lado de la carta (regla #656),
+    # y el 2026-10-22 pasó a llamarse «Simular Alza de Insumos» (#695);
     # «Cambios Recetas Base», el 2026-10-19, al lado de su costo (#671).
     check("el rail, en el orden pedido",
           [v[1] for v in visibles],
-          ["Costo Carta", "Alza Insumo", "Costo Recetas Base", "Cambios Recetas Base",
+          ["Costo Carta", "Simular Alza de Insumos", "Costo Recetas Base", "Cambios Recetas Base",
            "Revisar", "Nuevo Costeo"])
     check("la pila, en el mismo orden",
           [s for _k, s in rec._PILA if not s.startswith("Tabla")],

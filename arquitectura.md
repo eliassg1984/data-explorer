@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-694 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+695 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (219)
+**CSS y estilos** (220)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -284,6 +284,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 - **#689** — Un boceto aprobado se implementa con SU forma: si es una página con tarjetas, chips y ficha,…
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
+- **#695** — «Simular Alza de Insumos» es una pieza propia: el escenario, los indicadores, la lista y la…
 
 **Layout y alturas** (98)
 
@@ -1032,7 +1033,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (204)
+**Decisiones de diseño y UX** (205)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1238,6 +1239,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#692** — Ajuste › Evolución es una pieza propia: la serie en rojo y verde con «Explicar con», el panel…
 - **#693** — La portada del Resumen ejecutivo entra en una pantalla de laptop y no repite un número
 - **#694** — «Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta son notas de crédito y…
+- **#695** — «Simular Alza de Insumos» es una pieza propia: el escenario, los indicadores, la lista y la…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53643,6 +53645,49 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      que Streamlit ignora: las capturas salían del servidor viejo, con el
      JS de antes. Se ve con `Get-NetTCPConnection -LocalPort <puerto>`.
 
+695. **«Simular Alza de Insumos» es una pieza propia: el escenario, los
+     indicadores, la lista y la ficha los dibuja el navegador, y la cuenta
+     corre mientras se escribe.** A pedido (2026-10-22: «se ve más genérica,
+     con colores muy de fábrica» al lado de «Consistencia de datos»), sobre
+     un boceto aprobado (https://claude.ai/artifact/9Cyr741W82XtckkUzZheCJ).
+     Antes eran una fila de `st.number_input` por insumo, siete `st.info` y
+     dos `st.dataframe` de 14 columnas: los colores de Streamlit, no los de
+     la app. Ahora `graficos/recetas_alza.js` + `.css` (`st.components.v2`):
+     · **Una ficha por insumo** con − / % / +, el precio nuevo por unidad
+       de almacén (se siguen el uno al otro) y atajos −10/+5/+10/+20 %.
+       «Agregar insumo» lista los que más pesan en la carta (costo × lo
+       vendido en 90 días) con buscador: reemplaza al «Elige uno…» vacío.
+     · **Cinco indicadores**: costo del período, food cost de la carta en
+       puntos, margen, platos que los llevan (y cuántos con ventas) y cuántos
+       cruzan el 30 % o el 35 %.
+     · **La lista en 7 columnas** (de 14): lo que pesan los insumos en el
+       plato, en su color; el % «hoy → nuevo»; el Δ por plato y en el
+       período con su barra; el precio para mantener el %. «Por subgrupo»
+       la agrupa. «revisar costo» marca un plato que ya pasa el 60 % del
+       neto: el Langostino a la Brasa sale al 96 %, un error de receta que
+       deforma cualquier escenario con langostino.
+     · **La ficha del plato** parte el costo por insumo y da tres caminos
+       para el precio: mantener el %, absorberlo (cuánto margen cuesta en el
+       período) o llevarlo a 30 %.
+     · **NADA VUELVE A PYTHON.** `armar()` manda la exposición de TODOS los
+       insumos por plato y lo vendido del período; el escenario vive en la
+       raíz de la pieza y en `localStorage` (`sa_esc`). Así cambiar un % no
+       pide una corrida (eran 3-6 s por tecla) y cambiar la fecha conserva
+       el escenario. La cuenta está dos veces —`recetas_alza.js::calcular`
+       y `simulador_receta.alzas`—: `test_recetas_alza.py` rehace la del
+       navegador sobre lo que recibe y la compara con la de Python, y busca
+       las fórmulas escritas igual en el `.js`.
+     · **Una pantalla**: el JS mide el escenario y los indicadores
+       (`--sa-arriba`) y la lista y la ficha se deslizan por dentro. A
+       1323×619 la tabla mide 801 px en una lista de 797: un píxel más de
+       columna y la última se corta (medido con Playwright).
+     · **En AppTest el componente no está registrado** (se registra en el
+       runtime del proceso, no en el de AppTest): el test lo reemplaza con
+       `patch.object(v, "_PIEZA")` y mira con qué se lo llamó.
+     El rail la llama «Simular Alza de Insumos»; el id sigue siendo «Alza de
+     insumo». Las clases `.rec-alza-kpi` de `estilos/_80_cards.py` siguen
+     vivas: las usa «Cambios Recetas Base». (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53655,7 +53700,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#694**; la próxima toma el número siguiente.
+> última regla es la **#695**; la próxima toma el número siguiente.
 
 >
 
