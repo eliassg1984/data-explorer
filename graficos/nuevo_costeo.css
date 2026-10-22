@@ -47,7 +47,19 @@
 .nc-cant input, .nc-pre input { width: 66px; height: 26px; border: 1px solid var(--border); border-radius: 6px; text-align: right;
   padding: 0 4px; background: var(--bg-card); font-variant-numeric: tabular-nums; }
 .nc-cant input.cambio { border-color: var(--accent); background: var(--accent-tint); }
-.nc-cant span, .nc-pre span { font-size: 11px; color: var(--text-secondary); margin: 0 3px; }
+/* Cantidad y precio en columnas de verdad (2026-10-22): la unidad tiene
+   un ancho fijo, así el campo cae en el mismo x en todas las filas aunque
+   una diga «ml» y otra «porcion». Antes iban alineados a la derecha y el
+   campo se corría con el largo de la unidad. */
+.nc-cant, .nc-pre { text-align: left; }
+.nc-und { display: inline-block; width: 58px; margin-left: 4px; font-size: 11px; color: var(--text-secondary);
+  vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nc-sol { display: inline-block; width: 16px; font-size: 11px; color: var(--text-secondary); vertical-align: middle; }
+.nc-fijo { display: inline-block; width: 78px; text-align: right; padding-right: 5px; box-sizing: border-box; }
+.nc-cant input, .nc-pre input { vertical-align: middle; box-sizing: border-box; }
+.nc-tabla th.nc-th-in { text-align: left; }
+/* El precio lleva hasta 4 decimales (10.7034): en 66px se cortaba. */
+.nc-pre input { width: 78px; }
 .nc-costo div { display: flex; align-items: center; gap: 6px; }
 .nc-costo i { display: block; height: 8px; border-radius: 2px; background: var(--focus-lavender); flex: none; }
 .nc-costo b { font-weight: 600; }

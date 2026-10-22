@@ -83,15 +83,15 @@ function htmlTabla(d, st) {
     return `<tr class="nc-f${st.sel === l.uid ? ' sel' : ''}${l.cantidad === 0 ? ' cero' : ''}" data-uid="${esc(l.uid)}">
       <td class="nc-ins"><div>${chip(l)}<b title="${esc(l.nombre)}${l.cod ? ' · ' + esc(l.cod) : ''}">${esc(l.nombre.replace(/^\((L|P|Rs)\)\s*/, ''))}</b>${l.inactivo ? '<span class="nc-tag" title="Inactivo en el almacén">inactivo</span>' : ''}</div>
         ${sub ? `<span title="${esc(sub)}">${esc(sub)}</span>` : ''}</td>
-      <td class="num nc-cant"><input type="number" min="0" step="any" data-campo="cantidad" data-uid="${esc(l.uid)}" value="${num(l.cantidad)}" class="${cambiada ? 'cambio' : ''}" aria-label="Cantidad"><span>${esc(ur)}</span></td>
-      <td class="num nc-pre">${l.fijo ? `<span title="Sale de su detalle, en el panel de lo nuevo">${dinero(l.precio * f, f > 1 ? 2 : 4)}</span>`
-        : `<span>S/</span><input type="number" min="0" step="any" data-campo="precio" data-uid="${esc(l.uid)}" value="${num(l.precio * f)}" aria-label="Precio por ${esc(uc)}">`}<span>/ ${esc(uc)}</span></td>
+      <td class="nc-cant"><input type="number" min="0" step="any" data-campo="cantidad" data-uid="${esc(l.uid)}" value="${num(l.cantidad)}" class="${cambiada ? 'cambio' : ''}" aria-label="Cantidad"><span class="nc-und" title="${esc(l.unidad)}">${esc(ur)}</span></td>
+      <td class="nc-pre"><span class="nc-sol">S/</span>${l.fijo ? `<span class="nc-fijo num" title="Sale de su detalle, en el panel de lo nuevo">${num(l.precio * f)}</span>`
+        : `<input type="number" min="0" step="any" data-campo="precio" data-uid="${esc(l.uid)}" value="${num(l.precio * f)}" aria-label="Precio por ${esc(uc)}">`}<span class="nc-und" title="por ${esc(uc)}">/ ${esc(uc)}</span></td>
       <td class="nc-costo"><div><i style="width:${Math.max(2, c / max * 80)}px"></i><b class="num">${dinero(c)}</b><span class="num">${costo ? Math.round(c / costo * 100) : 0} %</span></div></td>
       ${conAntes ? `<td class="num">${vs}</td>` : ''}
       <td class="nc-x"><button type="button" data-acc="quitar" data-uid="${esc(l.uid)}" aria-label="Quitar ${esc(l.nombre)}">×</button></td></tr>`;
   }).join('');
-  return `<div class="nc-tabla"><table><thead><tr><th>${d.combo ? 'Producto' : 'Insumo'}</th><th class="num">Cantidad</th>
-      <th class="num" title="${d.combo ? 'Costo de una porción' : 'Precio promedio del almacén, por la unidad en que se compra'}">${d.combo ? 'Costo' : 'Precio de compra'}</th>
+  return `<div class="nc-tabla"><table><thead><tr><th>${d.combo ? 'Producto' : 'Insumo'}</th><th class="nc-th-in">Cantidad</th>
+      <th class="nc-th-in" title="${d.combo ? 'Costo de una porción' : 'Precio promedio del almacén, por la unidad en que se compra'}">${d.combo ? 'Costo' : 'Precio de compra'}</th>
       <th>Costo en ${d.combo ? 'el combo' : 'el plato'}</th>${conAntes ? '<th class="num">vs. sistema</th>' : ''}<th></th></tr></thead><tbody>${filas}</tbody></table></div>`;
 }
 function htmlPieTabla(d, st) {
