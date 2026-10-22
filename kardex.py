@@ -218,6 +218,47 @@ def sql_filas(relacion, desde, hasta):
     """
 
 
+TIPOS_SALIDA_USO = {
+    "ven": ("95",),               # descargo de ventas (las recetas)
+    "pro": ("94", "96", "90"),    # producción, porcionamiento, empacado
+    "nts": ("98", "91", "92"),    # nota de salida, control interno, merma fija
+}
+"""Por dónde SALE registrado de un área lo que pidió (regla #701): lo que la
+receta descontó al vender, lo que se usó para producir o porcionar y lo que
+se dio de baja con una nota. Más la transferencia neta (97) a otra área. Lo
+que no sale por ninguna de éstas reaparece como ajuste del cierre (93)."""
+
+
+def sql_pedido_y_salida(relacion):
+    """Por área (sin el Almacén Central, que es el que entrega), producto y
+    MES: lo que entró por requerimiento (`ped`), lo que salió por cada vía de
+    `TIPOS_SALIDA_USO` (`ven`, `pro`, `nts`), la transferencia neta a otra
+    área (`tra`, salida − ingreso) y el ajuste neto del cierre (`aj`, salida −
+    ingreso: positivo es faltante). En la unidad del kardex. Regla #701."""
+    def _en(tipos):
+        return ", ".join(f"'{t}'" for t in tipos)
+    _s = {k: _en(v) for k, v in TIPOS_SALIDA_USO.items()}
+    return f"""
+        SELECT "CODIGO AREA" AS area, "CODIGO PRODUCTO" AS cod,
+               strftime(date_trunc('month', "{COL_FECHA}"), '%Y-%m') AS mes,
+               sum(CASE WHEN "COD TIPO" = '99' THEN "CANT INGRESO" ELSE 0 END)
+                   AS ped,
+               sum(CASE WHEN "COD TIPO" IN ({_s['ven']}) THEN "CANT SALIDA"
+                        ELSE 0 END) AS ven,
+               sum(CASE WHEN "COD TIPO" IN ({_s['pro']}) THEN "CANT SALIDA"
+                        ELSE 0 END) AS pro,
+               sum(CASE WHEN "COD TIPO" IN ({_s['nts']}) THEN "CANT SALIDA"
+                        ELSE 0 END) AS nts,
+               sum(CASE WHEN "COD TIPO" = '97'
+                        THEN "CANT SALIDA" - "CANT INGRESO" ELSE 0 END) AS tra,
+               sum(CASE WHEN "COD TIPO" = '93'
+                        THEN "CANT SALIDA" - "CANT INGRESO" ELSE 0 END) AS aj
+        FROM {relacion}
+        WHERE "COD TIPO" <> 'SI' AND "CODIGO AREA" <> '000'
+        GROUP BY 1, 2, 3
+    """
+
+
 def sql_dias_ajuste(relacion):
     """Los días con algún ajuste de inventario (tipo 93): de ahí salen las
     sesiones de conteo (`cortes.sesiones_inventario`) que cortan los

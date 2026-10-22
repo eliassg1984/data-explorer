@@ -337,6 +337,135 @@ TIPO_BAJAS = "Bajas"
 Con él solo en el filtro de tipo se ofrece «Por causa» (regla #670)."""
 
 
+MARCA_REPETIDO = "Repetido en el día"
+MARCA_FUERA = "Fuera de lo habitual"
+MARCAS = (MARCA_REPETIDO, MARCA_FUERA)
+"""Las dos partes NUEVAS que la fila de KPI de «Requerimientos por Período»
+ofrece resaltar en la barra, además de las áreas (regla #701). No son
+tramos: se superponen con ellos y entre sí."""
+
+
+def texto_marca(veces, habitual, nuevo, repite_min, u=""):
+    """Lo que dice la columna «Marca» de una línea: «×4.7 su habitual (16
+    kg)», «1.ª vez en 90 días», «ya pedido hace 22 min». Vacío sin marca."""
+    partes = []
+    if veces and veces > 0:
+        h = (f" ({fmt_cant(round(float(habitual), 2))} {u})".replace(" )", ")")
+             if pd.notna(habitual) else "")
+        partes.append(f"×{veces:.1f} su habitual{h}")
+    if nuevo:
+        partes.append("1.ª vez en 90 días")
+    if pd.notna(repite_min):
+        m = float(repite_min)
+        partes.append("ya pedido hace "
+                      + (f"{m:.0f} min" if m < 60 else f"{m / 60:.1f} h"))
+    return " · ".join(partes)
+
+
+COLS_MARCA = ("habitual", "veces", "exceso", "nuevo", "repite_min")
+"""Las columnas de `movimientos_requerimientos.marcas_lineas` que la tarjeta
+pega a sus líneas."""
+
+
+def _mascaras_marca(dv):
+    """`(repetido, fuera)`: las líneas de cada marca. «Fuera» junta lo de
+    2,5 veces su habitual y la primera vez en 90 días."""
+    rep = dv["repite_min"].notna()
+    fuera = (dv["veces"] > 0) | dv["nuevo"].astype(bool)
+    return rep, fuera
+
+
+def marcas_de_vista(dv, claves):
+    """Lo que la barra, el Resumen y el Detalle dicen de las marcas, por
+    período (`claves`): `marcas` —`{nombre: soles por barra}`, la parte que
+    se resalta— y `marcas_tab` —los requerimientos por día, y las líneas y
+    los soles de cada marca—. `dv` son las líneas que suman, con `clave`.
+    Pura (regla #701)."""
+    rep, fuera = _mascaras_marca(dv)
+    g = dv.groupby("clave")
+
+    def _por(serie):
+        return [float(serie.get(c, 0.0)) for c in claves]
+    docs = g["doc"].nunique()
+    dias = g["fecha"].agg(lambda s: s.dt.normalize().nunique())
+    return {
+        "marcas": {
+            MARCA_REPETIDO: _por(dv[rep].groupby("clave")["valor"].sum()),
+            MARCA_FUERA: _por(dv[fuera].groupby("clave")["valor"].sum()),
+        },
+        "marcas_tab": {
+            "por_dia": [(float(docs.get(c, 0)) / float(dias.get(c, 0))
+                         if dias.get(c, 0) else None) for c in claves],
+            "rep_n": _por(rep.groupby(dv["clave"]).sum()),
+            "rep_v": _por(dv[rep].groupby("clave")["valor"].sum()),
+            "fuera_n": _por((dv["veces"] > 0).groupby(dv["clave"]).sum()),
+            "fuera_v": _por(dv.groupby("clave")["exceso"].sum()),
+            "nuevos_n": _por(dv["nuevo"].astype(bool).groupby(dv["clave"]).sum()),
+            "docs": int(dv["doc"].nunique()),
+            "dias": int(dv["fecha"].dt.normalize().nunique()),
+        },
+    }
+
+
+def kpi_de_marcas(dv):
+    """Las dos tarjetas de las marcas para la fila de KPI, `(nombre, soles,
+    renglón, tooltip)`, sólo las que tienen algo. Pura."""
+    rep, fuera = _mascaras_marca(dv)
+    out = []
+    n_r, v_r = int(rep.sum()), float(dv.loc[rep, "valor"].sum())
+    if n_r:
+        out.append((MARCA_REPETIDO, v_r, f"{n_r:,} líneas",
+                    f"④ {n_r:,} líneas por S/ {v_r:,.0f} pidieron un producto "
+                    "que el área ya había pedido ese mismo día en otro "
+                    "requerimiento"))
+    n_f = int((dv["veces"] > 0).sum())
+    n_n = int(dv["nuevo"].astype(bool).sum())
+    v_f = float(dv.loc[fuera, "valor"].sum())
+    if n_f or n_n:
+        out.append((MARCA_FUERA, v_f, f"{int(fuera.sum()):,} líneas",
+                    f"③ {n_f:,} pedidos de 2,5 veces o más su habitual —S/ "
+                    f"{float(dv['exceso'].sum()):,.0f} por encima de lo "
+                    f"normal— y {n_n:,} pedidos de un producto que el área no "
+                    "había pedido en los 90 días anteriores"))
+    return out
+
+
+def sumar_marcas_resumen(filas, total, v):
+    """Las columnas de las marcas en la grilla del Resumen (regla #701):
+    requerimientos por día, lo repetido en el día y lo fuera de lo habitual.
+    Escribe en `filas` y `total`."""
+    t = v.get("marcas_tab")
+    if not t:
+        return
+    filas["por_dia"] = [round(x, 1) if x is not None else None
+                        for x in t["por_dia"]]
+    filas["rep"] = [round(x, 2) for x in t["rep_v"]]
+    filas["fuera"] = [round(x, 2) for x in t["fuera_v"]]
+    filas["__rep_txt"] = [f"{int(n):,} líneas repetidas · S/ {x:,.2f}"
+                          for n, x in zip(t["rep_n"], t["rep_v"])]
+    filas["__fuera_txt"] = [
+        f"{int(n):,} pedidos fuera de lo habitual, S/ {x:,.2f} por encima"
+        f" · {int(nu):,} por primera vez en 90 días"
+        for n, x, nu in zip(t["fuera_n"], t["fuera_v"], t["nuevos_n"])]
+    total["por_dia"] = (f"{t['docs'] / t['dias']:.1f}" if t["dias"] else "")
+    total["rep"] = f"S/ {sum(t['rep_v']):,.2f}"
+    total["fuera"] = f"S/ {sum(t['fuera_v']):,.2f}"
+
+
+def sumar_marcas_documentos(filas_doc, total_doc, amb):
+    """Cuántas líneas de cada requerimiento repiten un pedido del día y
+    cuántas están fuera de lo habitual (regla #701). Escribe en `filas_doc`
+    y `total_doc`."""
+    ok = amb[~amb["vacio"]]
+    rep, fuera = _mascaras_marca(ok)
+    n_rep = rep.groupby(ok["doc"]).sum()
+    n_fuera = fuera.groupby(ok["doc"]).sum()
+    filas_doc["rep"] = filas_doc["__doc"].map(n_rep).fillna(0).astype(int)
+    filas_doc["fuera"] = filas_doc["__doc"].map(n_fuera).fillna(0).astype(int)
+    total_doc["rep"] = f"{int(filas_doc['rep'].sum()):,}"
+    total_doc["fuera"] = f"{int(filas_doc['fuera'].sum()):,}"
+
+
 def opciones_partir(tipos_elegidos, con_causa):
     """Las formas de partir la barra de SALIDAS que tienen sentido con el
     filtro de tipo puesto (regla #670). «Por tipo» no se ofrece con UN tipo
@@ -1138,6 +1267,12 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=(),
     k_res = (next((j for j, (_n, _c, _v) in enumerate(trazas)
                    if _n == resaltado), None)
              if partida and resaltado is not None else None)
+    # La parte resaltada: un tramo de la barra o, en requerimientos, una de
+    # las MARCAS (lo repetido en el día, lo fuera de lo habitual, regla
+    # #701), que no son tramos —se superponen con las áreas—.
+    parte = trazas[k_res][2] if k_res is not None else None
+    if parte is None and resaltado in (v.get("marcas") or {}):
+        parte = v["marcas"][resaltado]
     docs = res["docs"].astype(int).tolist()
 
     # ── La etiqueta de cada barra: lo que ENTRA (`_plan_etiquetas`) ──────
@@ -1151,9 +1286,9 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=(),
     # el hover) dice cuánto vale esa parte en la barra, como en Compras. En
     # porcionamientos no: ahí el segundo renglón es el % de merma (#510), y
     # la parte se lee en el hover y en la fila de KPI.
-    if k_res is not None and not lado.merma:
+    if parte is not None and not lado.merma:
         segundos = [renglon_resaltado(p, t) if t else None
-                    for p, t in zip(trazas[k_res][2], tot)]
+                    for p, t in zip(parte, tot)]
     _poco = v.get("poco") or [False] * n
     reng = [_renglones(fmt_k(t) if t else None, r, var, gran, lado, s, pc)
             for t, r, var, s, pc in zip(v["tot"], docs, v["variaciones"],
@@ -1191,10 +1326,9 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=(),
     # franja de 4px. Las franjas van con `hoverinfo="skip"`, que también les
     # apaga el clic (#388): lo recibe la capa. Es la receta de Compras.
     xs = list(range(n))
-    if k_res is None:
+    if parte is None:
         visibles = [(tot, [0.0] * n, SERIE_PRINCIPAL)]
     else:
-        parte = trazas[k_res][2]
         visibles = [(parte, [0.0] * n, SERIE_TRAMOS[0]),
                     ([max(t - p, 0.0) for t, p in zip(tot, parte)], parte,
                      SERIE_TRAMOS[2])]
@@ -1209,6 +1343,9 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=(),
     partes_hov = (_hover_partes(
         [(rotulo_tramo(_n, v), _c, _v) for _n, _c, _v in trazas], tot,
         v.get("partir", PARTIR_AREA), k_res) if partida else [""] * n)
+    if parte is not None and k_res is None:
+        partes_hov = [f"{h}<br><b>{escape(str(resaltado))}: S/ {p:,.2f}</b>"
+                      for h, p in zip(partes_hov, parte)]
     fig.add_bar(
         x=xs, y=tot, width=1.0, showlegend=False,
         marker=dict(color="rgba(0,0,0,0)"),
@@ -1578,7 +1715,7 @@ def _mayor_valido(amb, lado=None):
 def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
               costo_area=None, comps=(), aviso=None,
               unidad=("área", "áreas"), nombrar=_nombre_area, cantidad="",
-              resaltables=(), resaltado=None):
+              resaltables=(), resaltado=None, marcas=()):
     """La fila de KPI: el total de la vista y una tarjeta por TRAMO de la
     barra, con el color del tramo. Es también la leyenda del gráfico, dicha
     con números. `nota` es `(corto, largo)` de lo que no suma, o None.
@@ -1666,6 +1803,13 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
             else:
                 partes.append(_t(rot, fmt_k(v), f"{p:.0%}", tip=tip,
                                  color=None if resaltables else color))
+    # Las MARCAS de requerimientos (regla #701): dos botones más, que
+    # resaltan en la barra lo repetido en el día y lo fuera de lo habitual.
+    # `marcas` son `(nombre, soles, renglón de abajo, tooltip)`.
+    for nombre, val, sub, tip in marcas or ():
+        partes.append(_t_res(nombre, nombre, fmt_k(val), sub, tip)
+                      .replace('class="mp-kpi mp-kpi-res"',
+                               'class="mp-kpi mp-kpi-res mp-kpi-marca"', 1))
     if costo is not None:
         _pm = f"{total / costo:.1%}" if costo else "—"
         partes.append(_t("Porcionado", fmt_k(costo), f"{_pm} merma",
@@ -1969,6 +2113,18 @@ _CSS_MOLDE = """<style>
     background: var(--accent-hover);
     box-shadow: none;
 }
+/* Las marcas de requerimientos (regla #701): lo repetido en el día y lo
+   fuera de lo habitual. No son tramos del área, y el fondo naranja claro
+   lo dice; elegidas, resaltan su parte en la barra como un tramo. */
+.st-key-__C___kpi button.mp-kpi-marca {
+    background: var(--warning-bg);
+    box-shadow: inset 0 0 0 1px var(--warning-border);
+    border-left-color: transparent;
+    margin-left: 6px;
+}
+.st-key-__C___kpi button.mp-kpi-marca .mp-kpi-rot { color: var(--warning-text); }
+.st-key-__C___kpi button.mp-kpi-marca:hover { background: var(--warning-bg);
+    box-shadow: inset 0 0 0 1.5px var(--warning); }
 .st-key-__C___kpi .mp-kpi-nota { max-width: 300px; }
 /* Los años comparados y el aviso de pocos documentos (regla #614). */
 .st-key-__C___kpi .mp-kpi-aviso { max-width: 220px; }
@@ -2003,7 +2159,7 @@ def _css(lado):
 # ===========================================================================
 
 def tarjeta_requerimientos_periodo(d, *, cols, orden=(), rango=None,
-                                   fecha=None, rot_fecha=""):
+                                   fecha=None, rot_fecha="", marcas=None):
     """Requerimientos por período: barras, Resumen y Detalle.
 
     `d` son las líneas de requerimientos ya recortadas por la fecha de la
@@ -2017,9 +2173,14 @@ def tarjeta_requerimientos_periodo(d, *, cols, orden=(), rango=None,
     de fecha (`movimientos.fecha_de_vista`). Sin `rango`, el de la franja.
 
     `cols["fecha"]` es la que eligió el usuario —registro o proceso, regla
-    #639— y `rot_fecha` cómo se dice en el pie, como en salidas."""
+    #639— y `rot_fecha` cómo se dice en el pie, como en salidas.
+
+    `marcas` (regla #701) son las de `movimientos_requerimientos.marcas_de`,
+    alineadas con `d`: con ellas la fila de KPI suma «Repetido en el día» y
+    «Fuera de lo habitual», que se resaltan en la barra como un área, y el
+    Resumen y el Detalle las cuentan."""
     _tarjeta(d, REQUERIMIENTOS, cols, orden, rot_fecha=rot_fecha,
-             rango_ts=rango, fecha=fecha)
+             rango_ts=rango, fecha=fecha, marcas=marcas)
 
 
 def tarjeta_salidas_periodo(d, *, cols, orden=(), hist=None, anios=0,
@@ -2077,7 +2238,7 @@ def tarjeta_produccion_periodo(d, *, cols, orden=(), rango=None, fecha=None):
 
 def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
              precios=None, rango_ts=None, fecha=None, control=None,
-             faltante=None):
+             faltante=None, marcas=None):
     k, c = lado.k, lado.c
     with st.container(border=True, key=lado.card):
         st.markdown(_css(lado), unsafe_allow_html=True)
@@ -2094,6 +2255,13 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                 base = a_precio_de_hoy(base, precios)
         else:
             base, cortes_todos = lineas_documentos(d, **cols), None
+        # Las marcas ③ y ④ de cada línea (regla #701), por el índice de `d`.
+        con_marcas = marcas is not None and not lado.merma
+        if con_marcas:
+            base = base.join(marcas[[c for c in COLS_MARCA if c in marcas.columns]])
+            base["veces"] = base["veces"].fillna(0.0)
+            base["exceso"] = base["exceso"].fillna(0.0)
+            base["nuevo"] = base["nuevo"].fillna(False).astype(bool)
         lin = base[~base["vacio"]]
         valida = lin["estado"] != _ANULADO
         if _no_suma_sin_procesar(lado):
@@ -2360,6 +2528,11 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         # clic en el mismo lo suelta. El callback corre ANTES del rerun, así
         # que acá ya se lee lo nuevo, y lo leen la fila y la figura.
         ops_res = resaltables(v)
+        kpi_marcas = ()
+        if con_marcas:
+            v.update(marcas_de_vista(dv, v["claves"]))
+            kpi_marcas = kpi_de_marcas(dv)
+            ops_res = ops_res + [m[0] for m in kpi_marcas]
         estado_res = st.session_state.setdefault(f"{k}_resaltado", {})
         resaltado = resaltado_vigente(estado_res, partir, ops_res)
         k_fila = f"{k}_kpi_res"
@@ -2384,7 +2557,7 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                     unidad=_PARTIR_UNIDAD.get(partir, ("área", "áreas")),
                     nombrar=lambda n: nombre_tramo(n, partir),
                     cantidad=cant_v, resaltables=ops_res,
-                    resaltado=resaltado, **kw_kpi)})
+                    resaltado=resaltado, marcas=kpi_marcas, **kw_kpi)})
 
         # ── Foco, modo y clic: se resuelven ANTES de dibujar (#398, #399) ─
         # Todo como en Compras: cambiar la granularidad o un filtro suelta el
@@ -2486,6 +2659,8 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                         comp=comps[0] if comps else None,
                         tramos=partir != PARTIR_AREA, unidad=unidad_v,
                         poco=v["poco"], registro=registro)
+                    if con_marcas:
+                        sumar_marcas_resumen(filas, total, v)
                     clic_fila = renderizar_periodos_mov(
                         filas, altura=_ALTO_TABLA, key=k_res,
                         rotulo_periodo=_AGRUPADO_GRAN[gran].capitalize(),
@@ -2557,6 +2732,8 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
             filas_doc, total_doc = tabla_documentos(amb, sel, lado)
             lin_sel = (amb[(amb["doc"] == sel) & ~amb["vacio"]]
                        .sort_values("valor", ascending=False))
+            if con_marcas:
+                sumar_marcas_documentos(filas_doc, total_doc, amb)
             filas_lin = pd.DataFrame({
                 "prod": lin_sel["prod"],
                 "cant": pd.to_numeric(lin_sel["cant"], errors="coerce").round(3),
@@ -2567,6 +2744,13 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
             # #575): la grilla la escribe al lado del número.
             if lin_sel["unid"].ne("").any():
                 filas_lin["__unid"] = lin_sel["unid"].map(unidad_corta)
+            # Qué tiene de raro cada línea (regla #701): «×4.7 su habitual»,
+            # «1.ª vez en 90 días», «ya pedido hace 22 min».
+            if con_marcas:
+                filas_lin["marca"] = [
+                    texto_marca(a, b, c, e) for a, b, c, e in zip(
+                        lin_sel["veces"], lin_sel["habitual"],
+                        lin_sel["nuevo"], lin_sel["repite_min"])]
             _nl = len(filas_lin)
             total_lin = {
                 "prod": f"Total · {_nl} línea" + ("" if _nl == 1 else "s"),

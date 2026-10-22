@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-700 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+701 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (223)
 
@@ -782,7 +782,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 
-**Datos, R2 y DuckDB** (111)
+**Datos, R2 y DuckDB** (112)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -895,6 +895,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#696** — «Costo de Carta» es una pieza propia con los CINCO CANALES del POS y su Excel
 - **#698** — «Guardadas» es una lista con ficha, y una propuesta se vuelve a abrir en el editor
 - **#699** — El ranking de «Análisis de platos» es una pieza propia
+- **#701** — Las dos vistas de requerimientos dicen qué se pidió de más, qué se repite y qué no salió…
 
 **SUNAT y SIRE** (71)
 
@@ -1041,7 +1042,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (207)
+**Decisiones de diseño y UX** (208)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1250,6 +1251,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#695** — «Simular Alza de Insumos» es una pieza propia: el escenario, los indicadores, la lista y la…
 - **#696** — «Costo de Carta» es una pieza propia con los CINCO CANALES del POS y su Excel
 - **#697** — «Nuevo Costeo» es una pieza propia: la receta y su precio se editan en el navegador, con los…
+- **#701** — Las dos vistas de requerimientos dicen qué se pidió de más, qué se repite y qué no salió…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53890,6 +53892,84 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        puntos y 18 nombres; la tabla filtrada a caballos. Sin errores.
      Lo vigila `test_analisis_platos.py`. (2026-10-22.)
 
+701. **Las dos vistas de requerimientos dicen qué se pidió de más, qué se
+     repite y qué no salió (`graficos/movimientos_requerimientos.py`).**
+     2026-10-17 a 22, la gemela de la #670 y con la misma condición: nada
+     de vistas nuevas. Aprobado sobre un mockup clickeable con doce meses
+     reales (oct 2025 – sep 2026: 5.387 requerimientos procesados, S/ 2,60
+     millones).
+
+     - **① Salió registrado** («por Área»): de lo que un área pidió, qué
+       parte salió después de ella por una vía que el kardex registra —el
+       descargo de ventas (95), producción y porcionamiento (94/96/90), una
+       nota (98/91/92) o la transferencia neta (97)—, por producto, con tope
+       en 100 % (`kardex.sql_pedido_y_salida`, `salida_por_area`). Lo que no
+       sale reaparece casi entero como ajuste del cierre (93): Cocina pidió
+       2,840 L de aceite de frituras, las recetas descargaron 776 y el
+       cierre ajustó 2,211. Sin salida registrada: Cocina S/ 180,205
+       (15 %), Barra 16 %, Salón 58 %, Producción 2,4 %, Cocina personal
+       0,2 %. **Gastos y Limpieza no descargan nada**: «no descarga», no un
+       0 % en rojo.
+     - **② Frecuencia** («por Área»): días con pedido en la ventana —casi
+       diario 150 o más, semanal 53 a 149, ocasional 13 a 52, esporádico—,
+       cuatro botones que filtran la lista. En Cocina, 62 productos casi
+       diarios son el 66 % del valor.
+     - **③ Fuera de lo habitual** (las dos): 2,5 veces o más la mediana de
+       los pedidos del área de ese producto en los 90 días ANTERIORES (con
+       4 o más) y S/ 50 por encima —la regla de «revisar» de Compras ›
+       Producto, #653—, y la primera vez en 90 días. 922 líneas, S/ 185,322
+       de más; 1,061 primeras veces.
+     - **④ Repetido en el día** (las dos): el área ya lo había pedido ese
+       mismo día en OTRO requerimiento. 6,261 líneas, S/ 236,242; Cocina
+       5,752, la mitad a menos de 22 minutos. No distingue estaciones:
+       Cocina juntó Calientes, Fríos y Pastelería y el parquet no dice quién
+       digitó.
+     - **En «por Período»** las marcas son dos botones más de la fila de KPI
+       (fondo naranja claro, `mp-kpi-marca`) que resaltan su parte en la
+       barra como un área —`figura_periodos` toma la parte de
+       `v["marcas"]` si no es un tramo—; el Resumen suma «Por día»,
+       «Repetido» y «De más» (y esconde Líneas y % del total para que
+       entren) y el Detalle cuenta ③ y ④ por requerimiento y escribe la
+       marca de cada línea («×4.7 su habitual (16 kg) · ya pedido hace 22
+       min»), sin el precio unitario.
+     - **En «por Área»** la tabla de hojas cede su lugar a una tarjeta de
+       productos (`seccion_cadena(..., hojas=False)` devuelve la ruta) con
+       ①, ②, ③ y ④, y la ficha del elegido (⑤): pedido contra lo que
+       salió mes a mes —barra lisa, la parte oscura lo que salió (#649)—,
+       por dónde salió, el ajuste del cierre, las semanas y sus pedidos.
+       Sin código de producto (el demo) queda la tabla de hojas.
+
+     Lo que muerde:
+
+     - **① y ② se miden sobre los doce meses calendario que terminan con el
+       rango** (`ventana_meses`), sea cual sea: con 30 días, el stock que el
+       área ya tenía mueve la cuenta. Las columnas lo dicen («· 12 m»): al
+       lado está el valorizado del RANGO.
+     - **③ y ④ van siempre por fecha de REGISTRO y con todo el historial**,
+       cacheadas por el sello del parquet (`_marcas_cacheable`) y pegadas
+       por (requerimiento, código): el habitual mira 90 días atrás, y los
+       chips no parten un grupo área × producto.
+     - **`groupby().rolling(..., on=)` devuelve los GRUPOS en su propio
+       orden y, en pandas 3, la fecha como índice**: re-pegar por posición
+       sin reordenar desalineó la mediana con la fila (3.522 «fuera» en vez
+       de 922). `marcas_lineas` ordena por el orden de grupos del resultado
+       y lo vigila «alineadas con el índice» en el test.
+     - **No se propuso el tiempo entre registro y proceso**: en el 80 % de
+       los requerimientos las dos fechas tienen la misma hora del reloj, al
+       minuto, en días distintos —una se elige a mano— y el kardex mueve el
+       stock a la hora de PROCESO (99,8 % de las líneas).
+     - **El kardex del área se lee con su NOMBRE** (`CODIGO AREA` →
+       `NOMBRE AREA` del maestro de inventario), que es el `SUB ALMACEN` de
+       los requerimientos. `kardex.parquet` no está en los archivos del
+       botón Actualizar de Movimientos: lo refrescan otros reportes, y la
+       caché lleva su sello.
+
+     Lo vigila `test_graficos.py::_pruebas_marcas_requerimientos`. Medido en
+     la app local con los datos de R2 a 1323×619, con clics reales (los dos
+     botones de la fila de KPI, Resumen, Detalle, «Salió menos de la
+     mitad», «Casi diario», la ficha): sin excepciones ni errores de
+     consola. (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53902,7 +53982,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#700**; la próxima toma el número siguiente.
+> última regla es la **#701**; la próxima toma el número siguiente.
 
 >
 

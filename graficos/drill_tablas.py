@@ -908,7 +908,7 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
                    col_ctx=None, nombre_ctx="Área", col_cant=None,
                    col_punit=None, col_unidad=None, abre_en=(),
                    etiqueta_valor="Valorizado", titulo_ranking=None,
-                   fecha=None, nota=None):
+                   fecha=None, nota=None, hojas=True):
     """La sección entera: el ranking, sus desgloses y la tabla de hojas.
 
     `niveles` es la cadena de agrupación en pares (columna, nombre): el
@@ -934,7 +934,13 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
 
     `nota` es `(corto, largo)`, lo que `d` ya NO trae porque no suma (los
     requerimientos anulados, regla #641): va en la fila TOTAL del primer
-    cuadro, como en `seccion_cuadros`."""
+    cuadro, como en `seccion_cuadros`.
+
+    Con `hojas=False` no dibuja la tabla de hojas: quien llama dibuja la
+    suya debajo, con la RUTA que devuelve —tríos (columna, clave elegida o
+    None, texto), para `recorte`—. Así «Requerimientos por Área» lleva su
+    tarjeta de productos con lo que salió, la frecuencia y las marcas (regla
+    #701), como «Salidas por Área» (#670)."""
     # Sin guard de "inyectar una sola vez": un `st.markdown` de estilos con
     # ese guard DESAPARECE en el rerun siguiente (regla #59).
     st.markdown(CSS_TITULOS_DRILL, unsafe_allow_html=True)
@@ -996,6 +1002,8 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
                     formato=FORMATO_DETALLE[len(niveles)],
                     etiqueta_valor=etiqueta_valor)
                 ruta.append((_col_n, _sub, texto_cat(_nombre_n, _sub)))
+    if not hojas:
+        return ruta
     with st.container(border=True,
                       key=f"ajuste_graf_card_abajo_{pref}_{slug}"):
         tabla_hojas(d, tuple(ruta), col_hoja=col_hoja, col_val=col_val,
@@ -1004,6 +1012,7 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
                     nombre_ctx=nombre_ctx, col_cant=col_cant,
                     col_punit=col_punit, col_unidad=col_unidad,
                     etiqueta_valor=etiqueta_valor)
+    return ruta
 
 
 def claves_tarjetas_cuadros(pref, slug, n):

@@ -67,6 +67,19 @@ fecha de Compras (`compras_semanal._JS_FECHA`): ordenado como texto ES el
 orden del tiempo. Sin el año: todas las filas son del mismo período, y el
 período lo dice el caption."""
 
+_JS_UN_DECIMAL = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'number') return v == null ? '—' : String(v);"
+    " return v.toFixed(1); }")
+"""«8.8» requerimientos por día (regla #701). La fila TOTAL llega escrita."""
+
+_JS_ENTERO_O_NADA = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'number') return v == null ? '' : String(v);"
+    " return v ? v.toLocaleString('en-US') : ''; }")
+"""Una cuenta que sólo se escribe si no es cero: las marcas de un
+requerimiento son la excepción (regla #239)."""
+
 _JS_VALOR_MOV = JsCode(
     "function(p){ var d = p.data || {};"
     " if (d.__elbl) return d.__elbl;"
@@ -271,6 +284,9 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
     # esconden el monto del año comparado (queda su «vs») y el Estado (los
     # anulados los nombra la fila de KPI).
     con_reg = "falt" in tp.columns and "reg" in tp.columns
+    # Las marcas de requerimientos (regla #701): tres columnas más, y para
+    # que entren se esconden «Líneas» y «% del total».
+    con_marcas = "rep" in tp.columns and "fuera" in tp.columns
     gb.configure_column("docs", header_name=rotulo_docs,
                         type=["numericColumn"], valueFormatter=_JS_ENTERO,
                         headerTooltip=f"{rotulo_docs} del período. No cuenta "
@@ -281,7 +297,7 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                         suppressSizeToFit=True)
     con_ant = "ant" in tp.columns and "vs_ant" in tp.columns
     gb.configure_column("lineas", header_name="Líneas", type=["numericColumn"],
-                        hide=con_ant, valueFormatter=_JS_ENTERO,
+                        hide=con_ant or con_marcas, valueFormatter=_JS_ENTERO,
                         headerTooltip="Líneas de esos documentos: un "
                                       "producto es una línea",
                         width=82, minWidth=82, suppressSizeToFit=True)
@@ -302,7 +318,8 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                         type=["numericColumn"], valueFormatter=_JS_VALOR_MOV,
                         headerTooltip="Valorizado del período",
                         width=130, minWidth=130, suppressSizeToFit=True)
-    gb.configure_column("parte", header_name="% del total", hide=bool(tramos),
+    gb.configure_column("parte", header_name="% del total",
+                        hide=bool(tramos) or con_marcas,
                         type=["numericColumn"], valueFormatter=_JS_PARTE,
                         headerTooltip="Cuánto pesa esta barra en el total "
                                       "de la vista",
@@ -354,6 +371,27 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                                           "de su cierre. Rojo: menos de 2 %; "
                                           "ámbar: menos de 5 %",
                             width=100, minWidth=100, suppressSizeToFit=True)
+    if con_marcas:
+        gb.configure_column("por_dia", header_name="④ Por día",
+                            type=["numericColumn"], valueFormatter=_JS_UN_DECIMAL,
+                            headerTooltip="Requerimientos por día con pedido: "
+                                          "muchos por día son pedidos sueltos",
+                            width=92, minWidth=92, suppressSizeToFit=True)
+        gb.configure_column("rep", header_name="④ Repetido",
+                            type=["numericColumn"], valueFormatter=_JS_VALOR_MOV,
+                            tooltipField="__rep_txt",
+                            headerTooltip="Soles de las líneas que repiten un "
+                                          "producto que el área ya había "
+                                          "pedido ese mismo día en otro "
+                                          "requerimiento",
+                            width=112, minWidth=112, suppressSizeToFit=True)
+        gb.configure_column("fuera", header_name="③ De más",
+                            type=["numericColumn"], valueFormatter=_JS_VALOR_MOV,
+                            tooltipField="__fuera_txt",
+                            headerTooltip="Soles por encima de lo habitual en "
+                                          "los pedidos de 2,5 veces o más su "
+                                          "mediana de los 90 días anteriores",
+                            width=108, minWidth=108, suppressSizeToFit=True)
     gb.configure_column("estado", header_name="Estado", hide=con_reg,
                         cellClassRules=REGLAS_ESTADO,
                         headerTooltip="Sólo se escribe la excepción: "
@@ -361,7 +399,7 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                                       "todos se procesaron",
                         width=170, minWidth=120)
     for oculta in ("__vtxt", "__nota", "__anota", "__eclase", "__clave",
-                   "__sel", "__poco"):
+                   "__sel", "__poco", "__rep_txt", "__fuera_txt"):
         if oculta in tp.columns:
             gb.configure_column(oculta, hide=True)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
@@ -437,6 +475,20 @@ def renderizar_documentos_mov(tp, altura, key, rotulo_tipo="", total=None,
     gb.configure_column("lineas", header_name="Líneas", type=["numericColumn"],
                         valueFormatter=_JS_ENTERO,
                         width=72, minWidth=72, suppressSizeToFit=True)
+    # Las marcas de requerimientos (regla #701): cuántas líneas de cada uno
+    # repiten un pedido del día y cuántas están fuera de lo habitual.
+    if "rep" in tp.columns:
+        gb.configure_column("rep", header_name="④", type=["numericColumn"],
+                            valueFormatter=_JS_ENTERO_O_NADA,
+                            headerTooltip="Líneas que repiten un producto ya "
+                                          "pedido ese día por el área",
+                            width=52, minWidth=52, suppressSizeToFit=True)
+    if "fuera" in tp.columns:
+        gb.configure_column("fuera", header_name="③", type=["numericColumn"],
+                            valueFormatter=_JS_ENTERO_O_NADA,
+                            headerTooltip="Líneas fuera de lo habitual o "
+                                          "pedidas por primera vez en 90 días",
+                            width=52, minWidth=52, suppressSizeToFit=True)
     # `initialSort` y no `sort`, por la regla #471: st_aggrid le vuelve a
     # pasar las `columnDefs` en cada corrida y `sort` pisaría el orden que
     # haya elegido el usuario.
@@ -710,12 +762,25 @@ def renderizar_lineas_mov(tp, altura, key, total=None):
                         width=98, minWidth=98, suppressSizeToFit=True)
     if con_unidad:
         gb.configure_column("__unid", hide=True)
+    con_marca = "marca" in tp.columns
     gb.configure_column("punit", header_name="P. unit.", type=["numericColumn"],
-                        valueFormatter=_JS_SOLES,
+                        valueFormatter=_JS_SOLES, hide=con_marca,
                         width=100, minWidth=100, suppressSizeToFit=True)
     gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
                         valueFormatter=_JS_SOLES, initialSort="desc",
                         width=112, minWidth=112, suppressSizeToFit=True)
+    # Qué tiene de raro la línea (regla #701). Sin el precio unitario, que
+    # se despeja de los otros dos, para que entre.
+    if con_marca:
+        gb.configure_column("marca", header_name="③ ④ Marca", width=170,
+                            minWidth=110, tooltipField="marca",
+                            cellStyle={"color": ADVERTENCIA_TEXTO,
+                                       "fontWeight": "600"},
+                            headerTooltip="×N su habitual: N veces la mediana "
+                                          "de sus pedidos de 90 días. 1.ª vez: "
+                                          "no lo había pedido en 90 días. Ya "
+                                          "pedido: otro requerimiento del "
+                                          "área lo pidió ese mismo día")
     gb.configure_grid_options(**_con_total(dict(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
         suppressCellFocus=True, onGridReady=_AL_MONTAR), total))

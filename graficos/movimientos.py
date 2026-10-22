@@ -177,6 +177,10 @@ from graficos.movimientos_bajas import (
     faltante_cierres, lineas_salidas, seccion_productos, ventana,
 )
 from graficos.movimientos_consumo import tarjeta_consumo
+from graficos.movimientos_requerimientos import (
+    lineas_req, marcas_de, pedido_y_salida, seccion_productos as productos_req,
+    ventana_meses,
+)
 from graficos.movimientos_destino import tarjeta_por_producto, tarjeta_sin_plato
 from graficos.movimientos_merma import (
     VALOR_HOY, control_valorizacion, precios_hoy, tarjeta_proveedores,
@@ -999,6 +1003,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     col_fecha, fecha_req = columna_de_fecha(df_f, fecha_requerimientos())
     col_fecha_reg, _ = columna_de_fecha(df_f, FECHA_REGISTRO)
     col_req = _resolver(df_f, ["Cod Requerimiento", "COD REQUERIMIENTO"])
+    col_cod_req = _resolver(df_f, ["Codigo Producto", "CODIGO PRODUCTO"])
     col_estado = _resolver(df_f, ["Nombre Estado Requerimiento",
                                   "NOMBRE ESTADO REQUERIMIENTO"])
 
@@ -1174,7 +1179,10 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         validas, nota = requerimientos_que_suman(
             _req_de(rng), col_estado=col_estado, col_prod=col_prod,
             col_doc=col_req, col_val=col_metrica)
-        drill_tablas.seccion_cadena(
+        # Sin código de producto (el demo) queda la tabla de hojas de
+        # siempre: la tarjeta de productos (regla #701) cruza por código.
+        con_tarjeta = bool(col_cod_req and col_req)
+        ruta = drill_tablas.seccion_cadena(
             validas, pref="mov", slug="subalm", nota=nota,
             niveles=((col_sub, "sub almacén"), (col_fam, "familia"),
                      (col_subfam, "subfamilia")),
@@ -1187,7 +1195,38 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
             # en «…». «Procesado» mide lo mismo (187px contra 186).
             titulo_ranking=("Procesado" if fecha_req == FECHA_PROCESO
                             else "Requerido") + " por sub almacén",
-            fecha=fecha)
+            fecha=fecha, hojas=not con_tarjeta)
+        if not con_tarjeta:
+            return
+        # ── Los PRODUCTOS, con lo elegido en los cuadros (regla #701) ──────
+        # Lo que salió registrado y la frecuencia se miden sobre los doce
+        # meses que terminan con el rango, sea cual sea: con 30 días, el
+        # stock que el área ya tenía mueve la cuenta. Las marcas, por fecha
+        # de registro y con todo el historial (`marcas_de`).
+        vent = ventana_meses(rng[1] if rng else pd.Timestamp.today().normalize())
+        _vent, _ = requerimientos_que_suman(
+            _req_de(vent[:2]), col_estado=col_estado, col_prod=col_prod,
+            col_doc=col_req, col_val=col_metrica)
+        unid = unidades_kardex()
+        _kw = dict(fecha=col_fecha, doc=col_req, sub=col_sub, cod=col_cod_req,
+                   prod=col_prod, cant=col_cant, valor=col_metrica)
+        _km = dict(fecha=col_fecha_reg, doc=col_req, sub=col_sub,
+                   cod=col_cod_req, cant=col_cant, valor=col_metrica,
+                   estado=col_estado)
+
+        def _lineas(df):
+            df = drill_tablas.recorte(df, ruta or ())
+            lin = lineas_req(df, **_kw)
+            if unid is not None:
+                lin["unid"] = lin["cod"].map(unid).fillna("")
+            m = marcas_de(df, **_km)
+            if m is None:
+                m = pd.DataFrame({"habitual": float("nan"), "veces": 0.0,
+                                  "exceso": 0.0, "nuevo": False,
+                                  "repite_min": float("nan")}, index=df.index)
+            return lin.join(m).dropna(subset=["fecha"])
+        productos_req(_lineas(validas), _lineas(_vent), vent,
+                      pedido_y_salida())
 
     def _dib_periodo():
         # La tarjeta abre su propio contenedor (con la key de su familia de
@@ -1195,9 +1234,15 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # Compras. La fecha es la SUYA (regla #617): se recorta acá y el
         # botón lo dibuja la tarjeta.
         rng, fecha = _rango_y_boton("mov_sec_periodo", fechas_req)
+        _d_rng = _req_de(rng)
         tarjeta_requerimientos_periodo(
-            _req_de(rng), orden=orden, rango=rng, fecha=fecha,
+            _d_rng, orden=orden, rango=rng, fecha=fecha,
             rot_fecha=_ROT_FECHA[fecha_req],
+            # Lo repetido en el día y lo fuera de lo habitual (regla #701),
+            # siempre por fecha de REGISTRO.
+            marcas=marcas_de(_d_rng, fecha=col_fecha_reg, doc=col_req,
+                             sub=col_sub, cod=col_cod_req, cant=col_cant,
+                             valor=col_val, estado=col_estado),
             cols=dict(fecha=col_fecha, doc=col_req, area=col_sub,
                       estado=col_estado, fam=col_fam, prod=col_prod,
                       cant=col_cant, punit=col_punit, val=col_val))

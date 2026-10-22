@@ -10197,6 +10197,169 @@ def _pruebas_detalle_salidas():
     return fallos
 
 
+def _pruebas_marcas_requerimientos():
+    """Movimientos › las dos vistas de requerimientos, regla #701.
+
+      1. FUERA DE LO HABITUAL: 2,5 veces la mediana de los 90 días ANTERIORES
+         (con 4 pedidos o más) y S/ 50 por encima; la primera vez en 90 días.
+      2. REPETIDO EN EL DÍA: el mismo área y producto, otro requerimiento,
+         ese mismo día; dentro del mismo requerimiento no cuenta.
+      3. SALIÓ REGISTRADO: lo pedido contra lo que salió del área (ventas,
+         producción, notas, transferencia neta), con tope en 100 %; un área
+         sin ninguna salida es «no descarga», no 0 %.
+      4. LA FRECUENCIA por días con pedido.
+      5. La barra resalta una marca como un tramo, y la fila de KPI la ofrece.
+    """
+    from graficos import movimientos_periodo as mp
+    from graficos import movimientos_requerimientos as mr
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    requerimientos · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA requerimientos · {nombre}: got={got!r} exp={exp!r}")
+
+    # ── 1 y 2) Las marcas ─────────────────────────────────────────────────
+    filas = []
+    t0 = pd.Timestamp("2026-01-01 10:00")
+    # Cocina pide 2 kg de mantequilla (S/ 40 el kg) cada día, 100 días...
+    for i in range(100):
+        filas.append(("COCINA", "M", f"R{i:03d}", t0 + pd.Timedelta(days=i),
+                      2.0, 80.0))
+    # ...y un día 10 kg: 5 veces, S/ 320 de más.
+    filas.append(("COCINA", "M", "RX", t0 + pd.Timedelta(days=100, hours=2),
+                  10.0, 400.0))
+    # Ese mismo día, otro requerimiento repite la mantequilla 30 min después.
+    filas.append(("COCINA", "M", "RY",
+                  t0 + pd.Timedelta(days=100, hours=2, minutes=30), 2.0, 80.0))
+    # 3 limones de más no son alarma: el cuádruple, pero S/ 3 por encima.
+    for i in range(100):
+        filas.append(("COCINA", "L", f"R{i:03d}", t0 + pd.Timedelta(days=i),
+                      1.0, 1.0))
+    filas.append(("COCINA", "L", "RZ", t0 + pd.Timedelta(days=100, hours=5),
+                  4.0, 4.0))
+    # Barra pide un gin por primera vez el día 100.
+    filas.append(("BARRA", "G", "RB", t0 + pd.Timedelta(days=100), 1.0, 60.0))
+    lin = pd.DataFrame(filas, columns=["sub", "cod", "doc", "fecha", "cant",
+                                       "valor"])
+    lin.index = range(1000, 1000 + len(lin))
+    m = mr.marcas_lineas(lin)
+
+    def _i(doc, cod=None):
+        s = (lin["doc"] == doc) & ((lin["cod"] == cod) if cod else True)
+        return lin.index[s][0]
+    check("alineadas con el índice", list(m.index), list(lin.index))
+    check("10 kg contra 2 de costumbre: ×5",
+          round(float(m.loc[_i("RX"), "veces"]), 1), 5.0)
+    check("habitual = mediana de lo de antes",
+          float(m.loc[_i("RX"), "habitual"]), 2.0)
+    check("los soles de más", round(float(m.loc[_i("RX"), "exceso"]), 2), 320.0)
+    check("un pedido normal no se marca",
+          float(m.loc[_i("R050", "M"), "veces"]), 0.0)
+    check("el limón: el cuádruple pero menos de S/ 50, no se marca",
+          float(m.loc[_i("RZ"), "veces"]), 0.0)
+    check("repetido en otro requerimiento: 30 min",
+          float(m.loc[_i("RY"), "repite_min"]), 30.0)
+    check("el primero del día no es repetido",
+          bool(pd.isna(m.loc[_i("RX"), "repite_min"])), True)
+    check("la primera vez en 90 días", bool(m.loc[_i("RB"), "nuevo"]), True)
+    check("sin 90 días de historia no es «primera vez»",
+          bool(m.loc[_i("R000", "M"), "nuevo"]), False)
+    dup = pd.DataFrame([("COCINA", "Q", "R1", t0, 1.0, 5.0),
+                        ("COCINA", "Q", "R1", t0 + pd.Timedelta(minutes=5),
+                         1.0, 5.0)],
+                       columns=["sub", "cod", "doc", "fecha", "cant", "valor"])
+    check("dos veces en UN requerimiento no es repetido",
+          int(mr.marcas_lineas(dup)["repite_min"].notna().sum()), 0)
+
+    # ── 3) Lo que salió registrado ────────────────────────────────────────
+    meses = ["2026-01", "2026-02"]
+    kx = pd.DataFrame([
+        # Cocina pidió 100 L de aceite; las recetas descargaron 25 y el
+        # cierre ajustó 70.
+        ("COCINA", "A", "2026-01", 60.0, 15.0, 0.0, 0.0, 0.0, 40.0),
+        ("COCINA", "A", "2026-02", 40.0, 10.0, 0.0, 0.0, 0.0, 30.0),
+        # Salió más de lo pedido (stock de antes): tope en 100 %.
+        ("COCINA", "M", "2026-01", 10.0, 14.0, 0.0, 1.0, 0.0, 0.0),
+        # Gastos no descarga nada: todo lo da de baja el cierre.
+        ("GASTOS", "P", "2026-01", 50.0, 0.0, 0.0, 0.0, 0.0, 50.0),
+        # Fuera de la ventana: no cuenta.
+        ("COCINA", "A", "2025-12", 999.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+    ], columns=["area", "cod", "mes", "ped", "ven", "pro", "nts", "tra", "aj"])
+    sal = mr.salida_por_area(kx, meses)
+    _a = sal[(sal["area"] == "COCINA") & (sal["cod"] == "A")].iloc[0]
+    check("aceite: salió 25 de 100", round(float(_a["cubre"]), 2), 0.25)
+    _m = sal[(sal["area"] == "COCINA") & (sal["cod"] == "M")].iloc[0]
+    check("tope en 100 %", float(_m["cubre"]), 1.0)
+    check("Gastos no descarga",
+          bool(sal[sal["area"] == "GASTOS"].iloc[0]["descarga"]), False)
+    lv = pd.DataFrame({
+        "fecha": pd.to_datetime(["2026-01-05", "2026-02-05", "2026-01-07",
+                                 "2026-01-09"]),
+        "doc": ["D1", "D2", "D3", "D4"],
+        "sub": ["COCINA", "COCINA", "COCINA", "GASTOS"],
+        "cod": ["A", "A", "M", "P"],
+        "prod": ["Aceite", "Aceite", "Mantequilla", "Papel"],
+        "cant": [60.0, 40.0, 10.0, 50.0], "valor": [600.0, 400.0, 100.0, 80.0],
+        "unid": ["LITROS", "LITROS", "KILOS", "UND"],
+        "habitual": float("nan"), "veces": [0.0, 3.0, 0.0, 0.0],
+        "exceso": [0.0, 120.0, 0.0, 0.0], "nuevo": [False, False, True, False],
+        "repite_min": [float("nan"), 12.0, float("nan"), float("nan")]})
+    tab = mr.productos_requeridos(lv, lv, sal).set_index("cod")
+    check("sin salida: el 75 % de S/ 1,000",
+          round(float(tab.loc["A", "sin_salida"]), 2), 750.0)
+    check("salió: 25 %", round(float(tab.loc["A", "salio"]), 2), 0.25)
+    check("Gastos: no descarga", bool(tab.loc["P", "no_descarga"]), True)
+    check("Gastos no suma a «sin salida»",
+          bool(pd.isna(tab.loc["P", "sin_salida"])), True)
+    sin, ped, n_poco, _sp = mr.resumen_salida(tab.reset_index())
+    check("resumen ①: sin salida y lo pedido", (round(sin), round(ped)),
+          (750, 1100))
+    check("resumen ①: menos de la mitad", n_poco, 1)
+    check("③ y ④ por producto",
+          (int(tab.loc["A", "fuera"]), int(tab.loc["A", "repetidos"]),
+           int(tab.loc["M", "nuevos"])), (1, 1, 1))
+
+    # ── 4) La frecuencia y la ventana ─────────────────────────────────────
+    check("casi diario desde 150 días", mr.frecuencia(150), mr.CASI_DIARIO)
+    check("semanal desde 53", mr.frecuencia(53), mr.SEMANAL)
+    check("ocasional desde 13", mr.frecuencia(13), mr.OCASIONAL)
+    check("esporádico", mr.frecuencia(12), mr.ESPORADICO)
+    v = mr.ventana_meses(pd.Timestamp("2026-10-01"))
+    check("ventana: los 12 meses que terminan en setiembre",
+          (v[2][0], v[2][-1], str(v[0].date()), str(v[1].date())),
+          ("2025-10", "2026-09", "2025-10-01", "2026-10-01"))
+
+    # ── 5) La barra y la fila de KPI ──────────────────────────────────────
+    dv = lv.assign(clave=["E", "F", "E", "E"], area=lv["sub"])
+    mv = mp.marcas_de_vista(dv, ["E", "F"])
+    check("la parte «repetido» por barra",
+          mv["marcas"][mp.MARCA_REPETIDO], [0.0, 400.0])
+    check("la parte «fuera» junta ×N y primera vez",
+          mv["marcas"][mp.MARCA_FUERA], [100.0, 400.0])
+    check("los botones de la fila de KPI",
+          [x[0] for x in mp.kpi_de_marcas(dv)], list(mp.MARCAS))
+    res = pd.DataFrame({"docs": [1, 1], "lineas": [1, 1], "areas": [1, 1],
+                        "anulados": [0, 0], "sin_procesar": [0, 0],
+                        "valor": [780.0, 400.0]}, index=["E", "F"])
+    vv = {"claves": ["E", "F"], "res": res, "gran": "Mes",
+          "lado": mp.REQUERIMIENTOS, "tot": [780.0, 400.0], "trazas": [],
+          "eje": ["e", "f"], "hover": ["e", "f"], "variaciones": [None, None],
+          "var_hover": ["", ""], "dias": None, "marcas": mv["marcas"]}
+    fig = mp.figura_periodos(vv, 300, resaltado=mp.MARCA_REPETIDO)
+    check("resaltar una marca pinta su parte en el piso",
+          [float(x) for x in fig.data[0].y], [0.0, 400.0])
+    check("y lo demás encima", [float(x) for x in fig.data[1].y], [780.0, 0.0])
+    check("el texto de la marca de una línea",
+          mp.texto_marca(4.7, 16.0, False, 22.0, "kg"),
+          "×4.7 su habitual (16 kg) · ya pedido hace 22 min")
+    return fallos
+
+
 def _pruebas_requerimientos_por_area():
     """Movimientos › «Requerimientos por Área» suma lo que «por Período»
     (regla #641).
@@ -11056,6 +11219,7 @@ def _pruebas_costo_recetas_base():
                 if not v[1].startswith("Tabla")]
     # «Alza Insumo» se sumó el 2026-10-15, al lado de la carta (regla #656),
     # y el 2026-10-22 pasó a llamarse «Simular Alza de Insumos» (#695);
+    # «Costo Carta» pasó a «Costo de Carta» el mismo día (#696);
     # «Cambios Recetas Base», el 2026-10-19, al lado de su costo (#671).
     check("el rail, en el orden pedido",
           [v[1] for v in visibles],
@@ -11219,7 +11383,6 @@ def _pruebas_ticket_sin_canales_sin_clientes():
         nonlocal fallos
         if got == exp:
             print(f"OK    ventas · ticket · {nombre}")
-    # «Costo Carta» pasó a «Costo de Carta» el mismo día (#696);
         else:
             fallos += 1
             print(f"FALLA ventas · ticket · {nombre}: got={got!r} exp={exp!r}")
@@ -13643,6 +13806,7 @@ def main():
     fallos += _pruebas_detalle_salidas()
     fallos += _pruebas_bajas()
     fallos += _pruebas_requerimientos_por_area()
+    fallos += _pruebas_marcas_requerimientos()
     fallos += _pruebas_salidas_comparar()
     fallos += _pruebas_sin_plato()
     fallos += _pruebas_diferencias_ajuste()
