@@ -386,7 +386,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
 
-**Plotly y figuras** (121)
+**Plotly y figuras** (120)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -508,7 +508,6 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#677** — De los tres modos de «Distribución de diferencias» sólo el Pareto se podía analizar: la vista…
 - **#685** — A 9px un «6» se lee «5»: los paneles por familia de Ajuste › Evolución parecían rotular el…
 - **#692** — Ajuste › Evolución es una pieza propia: la serie en rojo y verde con «Explicar con», el panel…
-- **#694** — «Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta son notas de crédito y…
 
 **AgGrid y tablas** (95)
 
@@ -1033,7 +1032,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (203)
+**Decisiones de diseño y UX** (204)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1238,6 +1237,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#691** — «Consistencia de datos», ajustada a pedido: el Almacén Central tiene TODOS los productos, dos…
 - **#692** — Ajuste › Evolución es una pieza propia: la serie en rojo y verde con «Explicar con», el panel…
 - **#693** — La portada del Resumen ejecutivo entra en una pantalla de laptop y no repite un número
+- **#694** — «Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta son notas de crédito y…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53632,6 +53632,12 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        su %, y las notas del tramo. Es un nodo de la raíz de la pieza, no de
        la tabla, que la recortaría con su `overflow`; un clic en una barra
        la fija en vez de abrir la fila.
+     · **La barra se LLENA** (el mismo día, a pedido, sobre cuatro paletas):
+       lo que cuadra en lavanda medio, con diferencia más claro, y lo que
+       falta como pista casi vacía con un borde fino. Antes era al revés —lo
+       que falta en el tono más oscuro— y una fila sin nada cargado
+       (Financiero) se veía «como tinta derramada». Las notas sin cargar
+       siguen rayadas, en ámbar suave (`sunat_vistas.css`, `--c-*`).
      Ojo al probarla en local: otra sesión puede tener su servidor en el
      puerto de `launch.json`, y el preview arrancar el tuyo en un puerto
      que Streamlit ignora: las capturas salían del servidor viejo, con el

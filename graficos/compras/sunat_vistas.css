@@ -3,14 +3,18 @@
    de acá sale, y ninguna de estilos/ entra. Los colores son las variables de
    estilos/_00_base.py, que SÍ cruzan el shadow root. Ningún :has (#469).
 
-   Las barras son de UN color en tres tonos (a pedido, «menos pintoresco»):
-   lo que cuadra, claro; con diferencia, medio; lo que falta cargar, oscuro.
-   El tono oscuro es lo que hay que hacer. */
+   Las barras son de UN color en tres tonos (a pedido, «menos pintoresco»),
+   y desde el 2026-10-21 LA BARRA SE LLENA (regla #694, opción A): lo que
+   cuadra, lavanda medio; con diferencia, más claro; lo que falta cargar,
+   pista casi vacía con un borde fino. Hasta ese día era al revés —lo que
+   falta, en el tono más oscuro— y una fila sin nada cargado (Financiero)
+   se veía como «tinta derramada». */
 
 .sv {
-  --c-ok: color-mix(in srgb, var(--accent) 24%, var(--bg-card));
-  --c-dif: color-mix(in srgb, var(--accent) 58%, var(--bg-card));
-  --c-falta: var(--accent-deep);
+  --c-ok: color-mix(in srgb, var(--accent) 82%, var(--bg-card));
+  --c-dif: color-mix(in srgb, var(--accent) 42%, var(--bg-card));
+  --c-falta: var(--accent-light);
+  --c-nc: var(--warning-border);
   color: var(--text-primary);
   font-size: 13px;
   line-height: 1.35;
@@ -92,7 +96,8 @@ td.dif { color: var(--text-primary); font-weight: 600; }
 .ley i.d, .barra i.d { background: var(--c-dif); }
 .ley i.f, .barra i.f { background: var(--c-falta); }
 
-.barra { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line-soft); }
+.barra { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line-soft); box-shadow: inset 0 0 0 1px var(--border-lavender); }
+.ley i.f { box-shadow: inset 0 0 0 1px var(--border-lavender); }
 .barra.chica { height: 6px; border-radius: 3px; }
 .barra i { display: block; height: 100%; }
 
@@ -162,9 +167,9 @@ td.alerta small.nc-txt { color: var(--warning-text); opacity: .8; }
 /* ── comparar años (regla #694) ───────────────────────────────────────── */
 .sv { position: relative; }
 .fuerte { font-weight: 700; }
-/* El tramo de notas de crédito sin cargar: el oscuro de «falta», rayado. */
+/* El tramo de notas de crédito sin cargar: la pista de «falta», rayada. */
 .ley i.n, .barra i.n {
-  background: repeating-linear-gradient(135deg, var(--c-falta) 0 2px, var(--warning-text) 2px 4px);
+  background: repeating-linear-gradient(135deg, var(--c-falta) 0 2px, var(--c-nc) 2px 4px);
 }
 .barra i { cursor: help; }
 .chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
