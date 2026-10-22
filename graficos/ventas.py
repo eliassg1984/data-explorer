@@ -291,17 +291,19 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         elif graf == "Mix de carta":
             _ventas_mix(d, filtrar_cb=_filtrar_items)
 
-        # ── 1a-bis) Mapa de calor día × hora, hasta 4 períodos, y su modo
-        # «A medida» (graficos/ventas_franja.py, regla #627) ─────────────
-        # Trae sus propios tramos (uno por período comparado) con
-        # data.cargar_rango y les aplica _filtrar_items, igual que el
-        # comparativo: el `d` de acá está acotado al rango de la franja y los
-        # períodos que se comparan pueden caer fuera de él.
+        # ── 1a-bis) Análisis por hora: una pieza propia en dos tarjetas, la
+        # del mapa y la de las franjas (graficos/ventas_horario.py, regla
+        # #704). Trae de R2 el rango con sus 13 semanas anteriores y el año
+        # pasado, y les aplica _filtrar_items como el comparativo; `firma`
+        # identifica los chips para no rearmar lo ya traído.
         elif graf == "Mapa por hora":
             _ventas_horario(d, col_venta, col_fecha, col_pax=col_pax,
                             col_pedido=col_pedido, col_prod=col_prod,
                             col_cant=col_cant, col_fam=col_fam,
-                            col_sub=col_sub, filtrar_cb=_filtrar_items)
+                            col_sub=col_sub, filtrar_cb=_filtrar_items,
+                            firma=(tuple(fam_sel or ()), tuple(sub_sel or ()),
+                                   tuple(canal_sel or ()),
+                                   tuple(serv_sel or ())))
 
         # ── 1a) Comparativo día a día vs Año Pasado ──────────────────────
         # Trae su propio df del año pasado (data.cargar_rango) y le pasa
@@ -371,7 +373,8 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         # quitó el 2026-09-25 (regla #528).
         "vt_sec_resumen":    lambda: _cuerpo_grafico("Resumen ejecutivo"),
         "vt_sec_mix":        _seccion("mix", "Mix de carta"),
-        "vt_sec_hora":       _seccion("hora", "Mapa por hora"),
+        # Arma SUS dos tarjetas: la del mapa y la de las franjas (#704).
+        "vt_sec_hora":       lambda: _cuerpo_grafico("Mapa por hora"),
         "vt_sec_ano_pasado": _seccion("ano_pasado", "Comparativo vs Año Pasado"),
         # Como el Resumen, arma SUS tarjetas: la del ranking y, con un
         # plato en foco, la de su evolución debajo (regla #529).

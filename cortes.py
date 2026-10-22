@@ -91,10 +91,9 @@ def etiqueta_hora(h):
     no «19h» (pedido del usuario, 2026-08-14). El mediodía y la medianoche
     son los dos casos que se escriben mal solos: 12 pm y 12 am, nunca 0.
 
-    Nació en `graficos/ventas_horario.py` (que la sigue reexportando como
-    `_etiqueta_hora`); subió acá el 2026-09-26, cuando la pidió la ficha de
-    la hora (`graficos/ventas_ficha_hora.py`), que no puede importar el
-    módulo del mapa sin armar un ciclo."""
+    Nació en el mapa de Ventas › Por hora y subió acá el 2026-09-26, cuando
+    la pidió la ficha de la hora. Las dos se fueron con la vista vieja el
+    2026-10-22 (regla #704): la pieza nueva la escribe en su `.js` (`hh`)."""
     h = int(h) % 24
     return f"{h % 12 or 12} {'am' if h < 12 else 'pm'}"
 

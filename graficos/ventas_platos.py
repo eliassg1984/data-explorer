@@ -16,13 +16,14 @@ períodos —la Ingeniería clasifica el último elegido—, que no se mueven al
 cambiar de vista; lo demás es de cada una y se dibuja sólo con la suya, con
 `persist_state="page"` para que vuelva como quedó.
 
-DE DÓNDE SALEN LOS DATOS: como en «Año Pasado» y «Por hora», cada período se
-trae con `data.cargar_rango` y pasa por `filtrar_cb` (el `_filtrar_items` de
+DE DÓNDE SALEN LOS DATOS: como en «Año Pasado», cada período se trae con
+`data.cargar_rango` y pasa por `filtrar_cb` (el `_filtrar_items` de
 `ventas.py`: los chips de la franja, un ítem una vez y sólo venta). El `d`
 de la franja no alcanza: con el rango por defecto —un mes— pedir trece meses
-mostraría uno. El calendario de los períodos es el de «Por hora»
-(`ventas_horario._claves_hacia_atras`, `_rango_de_clave`,
-`_etiqueta_clave`), para que las dos vistas nombren igual el mismo mes.
+mostraría uno. El calendario de los períodos es el de «Año Pasado»
+(`ventas_comparativo`) con el Año, que allá no existe (`_claves_hacia_atras`,
+`_rango_de_clave`, `_etiqueta_clave`, acá abajo): hasta el 2026-10-22 vivía
+en `ventas_horario`, que lo usaba para los paneles del mapa viejo (#704).
 
 TRES COSAS QUE NO SON OBVIAS:
 
@@ -38,6 +39,7 @@ TRES COSAS QUE NO SON OBVIAS:
     evolución se muestra abajo.
 """
 
+import datetime as _dt
 from pathlib import Path
 
 import numpy as np
@@ -48,8 +50,9 @@ from data import REPORTES, cargar_rango, rango_fechas
 from tema import (PALETA_SERIES)
 from graficos.base import (_resolver,
                            preservar_widgets, scroll_a_seccion)
-from graficos.ventas_horario import (_claves_hacia_atras,
-                                     _etiqueta_clave, _rango_de_clave)
+from graficos.ventas_comparativo import (
+    _claves_hacia_atras as _claves_cmp, _etiqueta_clave as _etiqueta_cmp,
+    _rango_de_clave as _rango_cmp)
 from graficos import ventas_menu as _menu
 from graficos.ventas_menu import _KEYS_WIDGET_MENU
 # `_estilo_costo` ya no se usa acá (la tabla es de la pieza, regla #699), pero
@@ -109,6 +112,25 @@ _SALTO = 3
 # ===========================================================================
 # LAS CUENTAS (puras: las prueba test_graficos.py)
 # ===========================================================================
+
+def _claves_hacia_atras(ancla, grano, n):
+    """Las `n` claves de período que terminan en el período de `ancla`."""
+    if grano == "Año":
+        return list(range(ancla.year - n + 1, ancla.year + 1))
+    return _claves_cmp(ancla, grano, n)
+
+
+def _rango_de_clave(clave, grano):
+    """(primer_día, último_día) del período."""
+    if grano == "Año":
+        return _dt.date(clave, 1, 1), _dt.date(clave, 12, 31)
+    return _rango_cmp(clave, grano)
+
+
+def _etiqueta_clave(clave, grano):
+    """Etiqueta corta del período: «Ago 26», «2025»."""
+    return str(clave) if grano == "Año" else _etiqueta_cmp(clave, grano)
+
 
 def periodos(corte, ancla, primer_dia):
     """Las claves de período que ofrece `corte`, cronológicas, hasta la de
@@ -258,16 +280,13 @@ def _fila(evt):
 
 
 def _ir_a_hora(nombre):
-    """«Ver a qué hora se vende»: deja pedida la ficha del plato en «Por
-    hora» (filas «Platos») y marca el salto. El salto necesita una corrida
-    COMPLETA —«Por hora» es otra sección, con su propio fragment— y el
-    scroll va en la corrida siguiente a ésa (ver `_ventas_platos`)."""
+    """«Ver a qué hora se vende»: deja pedido el plato para «Análisis por
+    hora», que lo abre en «Qué se vende a cada hora» (`ventas_horario._K_IR`,
+    regla #704), y marca el salto. El salto necesita una corrida COMPLETA
+    —es otra sección, con su propio fragment— y el scroll va en la corrida
+    siguiente a ésa (ver `_ventas_platos`)."""
     ss = st.session_state
-    ss["vh_op_filas"] = "Platos"
-    # «Por hora» guarda la columna elegida en su sombra y reescribe
-    # el widget desde ahí (`ventas_horario._pastillas`, regla #555).
-    ss["_vh_op_cols_valor"] = "Hora"
-    ss["_vh_ficha_pedida"] = nombre
+    ss["_vh_ir"] = nombre
     ss["_vt_pl_ir_hora"] = 1
 
 

@@ -424,12 +424,12 @@ ok(not _mn["por_masa"] and abs(_mn["parte"] - 0.25) < 1e-9,
    "la manteca sale de su propio porcionamiento (el pellejo no tiene órdenes)", f"{_mn!r}")
 
 print("\n── el cableado ──")
-arbol = ast.parse((RAIZ / "graficos" / "ventas_ficha_hora.py").read_text(encoding="utf-8"))
+arbol = ast.parse((RAIZ / "graficos" / "ventas_comparativo.py").read_text(encoding="utf-8"))
 raros = next((ast.literal_eval(n.value) for n in ast.walk(arbol)
               if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "GRUPOS_RAROS" for t in n.targets)),
              None)
 ok(raros is not None and tuple(raros) == tuple(cr.GRUPOS_NO_SERVICIO),
-   "la venta interna es la misma de Ventas › Por hora (GRUPOS_RAROS)", f"{raros!r}")
+   "la venta interna es la misma de Ventas (GRUPOS_RAROS)", f"{raros!r}")
 _data = ast.parse((RAIZ / "data.py").read_text(encoding="utf-8"))
 # Sólo las de `consumo_recetas`: `sin_plato.calcular` (#645) es otra cuenta.
 _calc = [n for n in ast.walk(_data) if isinstance(n, ast.Call)

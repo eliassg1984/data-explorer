@@ -2393,7 +2393,9 @@ def _pruebas_puras():
 
     # LAS TRES VISTAS QUE COMPARAN CONTRA EL AÑO PASADO DICEN LO MISMO (regla
     # #659): el Comparativo, Mix › Detalle › «Año pasado» y Por hora. Día por
-    # día y semana por semana, de 2025 a 2029 (cruza la S53 de 2026).
+    # día y semana por semana, de 2025 a 2029 (cruza la S53 de 2026). «Por
+    # hora» es una pieza desde la regla #704: su año pasado es 364 días antes
+    # día por día, en Python (lo que carga) y en el `.js` (lo que compara).
     from graficos import ventas_horario as _vh_ap
     from graficos.ventas_mix import rango_ano_pasado as _mix_ap
     _dif_dia, _dif_sem = [], []
@@ -2401,21 +2403,24 @@ def _pruebas_puras():
     while _f <= _dt.date(2029, 12, 31):
         _c = _vc._fecha_equivalente(_f, "semana")
         if not (_c == _mix_ap(_f.isoformat(), "Día", None)[0]
-                == _vh_ap._ano_pasado(_f, "Día")):
+                == _f - _dt.timedelta(days=_vh_ap.DIAS_AP)):
             _dif_dia.append(_f)
         if _f.weekday() == 0:
             _k = _vc._clave_de_fecha(_f, "Semana")
             _r = _vc._rango_de_clave(_vc._clave_ap(_k, "Semana", "semana"),
                                      "Semana")
-            if not (_r == _mix_ap(f"{_k[0]}-S{_k[1]:02d}", "Semana", None)
-                    and _vc._clave_ap(_k, "Semana", "semana")
-                    == _vh_ap._ano_pasado(_k, "Semana")):
+            if _r != _mix_ap(f"{_k[0]}-S{_k[1]:02d}", "Semana", None):
                 _dif_sem.append(_k)
         _f += _dt.timedelta(days=1)
     check("año pasado · días en que Comparativo, Mix y Por hora difieren",
           _dif_dia[:3], [])
-    check("año pasado · semanas en que Comparativo, Mix y Por hora difieren",
+    check("año pasado · semanas en que Comparativo y Mix difieren",
           _dif_sem[:3], [])
+    from pathlib import Path as _P
+    _js_hora = (_P(__file__).parent / "graficos" / "ventas_horario.js"
+                ).read_text(encoding="utf-8")
+    check("año pasado · la pieza de Por hora compara contra 364 días antes",
+          ("const DIAS_AP = 364;" in _js_hora, _vh_ap.DIAS_AP), (True, 364))
 
     # Rango de clave: el mes cierra en su último día real (28/30/31)
     check("rango mes feb-2025 (no bisiesto)",
@@ -2640,540 +2645,6 @@ def _pruebas_puras():
     check("lectura · un canal de un solo lado se dice",
           any(t.startswith("Pedidos Ya: sólo el año pasado") for t in _txts),
           True)
-
-    # ── Mapa por hora (Ventas › Por hora) ───────────────────────────────
-    from graficos import ventas_horario as _vh
-
-    # Granularidad Año: la única que NO delega en ventas_comparativo
-    check("horario · claves año", _vh._claves_hacia_atras(_dt.date(2026, 8, 14),
-                                                          "Año", 3),
-          [2024, 2025, 2026])
-    check("horario · rango año", _vh._rango_de_clave(2025, "Año"),
-          (_dt.date(2025, 1, 1), _dt.date(2025, 12, 31)))
-    check("horario · etiqueta año", _vh._etiqueta_clave(2025, "Año"), "2025")
-    # ...y las otras tres siguen delegando (mismo resultado que allá)
-    check("horario · claves mes delegan",
-          _vh._claves_hacia_atras(_dt.date(2026, 1, 15), "Mes", 3),
-          _vc._claves_hacia_atras(_dt.date(2026, 1, 15), "Mes", 3))
-
-    # Columnas por período: en Mes dependen del mes REAL (febrero no lleva 31
-    # columnas vacías al final, que se leerían como una caída de ventas)
-    check("horario · columnas semana", _vh._columnas((2026, 32), "Semana")[0], 7)
-    check("horario · columnas día", _vh._columnas(_dt.date(2026, 8, 5), "Día")[0], 1)
-    check("horario · columnas año", _vh._columnas(2025, "Año")[0], 12)
-    check("horario · columnas feb bisiesto", _vh._columnas((2024, 2), "Mes")[0], 29)
-    check("horario · columnas feb normal", _vh._columnas((2025, 2), "Mes")[0], 28)
-
-    # El período EN CURSO se recorta al último día con datos: el 14 de agosto
-    # "agosto" son 14 columnas, no 31 con diecisiete vacías a la derecha (que
-    # se leerían como una caída). Los períodos CERRADOS no se tocan.
-    check("horario · el mes en curso se recorta al ancla",
-          _vh._columnas((2026, 8), "Mes", _dt.date(2026, 8, 14))[0], 14)
-    check("horario · el mes cerrado queda entero",
-          _vh._columnas((2026, 7), "Mes", _dt.date(2026, 8, 14))[0], 31)
-    check("horario · las etiquetas se recortan con las columnas",
-          _vh._columnas((2026, 8), "Mes", _dt.date(2026, 8, 14))[1][-1], "14")
-
-    # El eje X de granularidad Mes escribe "1 Ago", no "1" (2026-08-15): el
-    # mes vivía sólo en el título del panel. `_columnas` NO se toca —de sus
-    # etiquetas sale también el nombre de una marca, donde el mes ya viene
-    # por otro lado y quedaría "días 7 Ago–8 Ago"—, así que el sufijo se
-    # agrega en la figura y estas dos guardas van juntas: la de abajo mira
-    # el eje, ésta se asegura de que el crudo siga crudo.
-    check("horario · las etiquetas crudas de Mes son sólo el número",
-          _vh._columnas((2026, 8), "Mes")[1][:2], ["1", "2"])
-    check("horario · el nombre de la marca no lleva el mes dos veces",
-          _vh._etiqueta_columnas({"c0": 6, "c1": 7}, (2026, 8), "Mes"),
-          "días 7–8")
-    # Con el sufijo la etiqueta pasa de 2 caracteres a 6: si el paso siguiera
-    # midiendo la cruda, 31 días de "31 Ago" se pisarían unos a otros.
-    check("horario · el paso crece con la etiqueta más larga",
-          _vh._paso_etiquetas(31, 6) > _vh._paso_etiquetas(31, 2), True)
-    # Y la comprobación de punta a punta: lo que termina escrito en el eje.
-    _cd_eje = pd.DataFrame({"col": [0, 1], "hora": [19, 21],
-                            "venta": [100.0, 200.0], "cant": [3.0, 5.0],
-                            "desc": [0.0, 0.0], "pax": [2.0, 4.0],
-                            "ticket": [50.0, 50.0]})
-    _tt_mes = _vh._fig_mapa([_cd_eje], [(2026, 8)], "Mes", "venta", [],
-                            [19, 21]).layout.xaxis.ticktext
-    # Los ticks pueden venir envueltos en <span> (fin de semana / feriado),
-    # así que se comprueba por contenido y no por igualdad exacta.
-    check("horario · el eje de Mes escribe el mes en cada día",
-          all("Ago" in t for t in _tt_mes), True)
-    check("horario · y el primero es el día 1",
-          any("1 Ago" in t for t in _tt_mes), True)
-    _tt_sem = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "venta", [],
-                            [19, 21]).layout.xaxis.ticktext
-    check("horario · el eje de Semana se queda con el día",
-          any("Ago" in t for t in _tt_sem), False)
-
-    # ── El mosaico (regla #610) ─────────────────────────────────────────
-    # «Una pared mal pintada»: escala continua estirada por una hora con
-    # evento, rayado gris en filas alternas y cuadrícula encima. Ahora el
-    # aire entre celdas es el ÚNICO separador —sin shapes de cuadrícula ni
-    # de rayado—, y la hora sin ventas va en su propia capa gris, sólo
-    # dentro de los paneles (no en el hueco entre ellos).
-    import numpy as _np
-    _fig_rej = _vh._fig_mapa([_cd_eje, _cd_eje], [(2026, 32), (2026, 33)],
-                             "Semana", "venta", [], [19, 21])
-    check("horario · el mosaico no dibuja cuadrícula ni rayado",
-          [s.type for s in _fig_rej.layout.shapes], [])
-    _hm = [t for t in _fig_rej.data if t.type == "heatmap"]
-    check("horario · el aire entre celdas es el separador",
-          {(t.xgap, t.ygap) for t in _hm},
-          {(_vh._GAP_CELDA, _vh._GAP_CELDA)})
-    check("horario · la hora sin ventas tiene su capa (2×7×2 − 4 con dato)",
-          int(_np.isfinite(_np.array(_hm[0].z, dtype=float)).sum()), 24)
-    check("horario · el puente de JS sabe cuántas columnas hay",
-          _fig_rej.layout.meta["vh_cols"], 15)
-    # Los tonos: quintiles redondeados a dos cifras, y una hora con evento
-    # NO estira la escala (era el bug de la «blues» continua).
-    check("horario · los cortes son los quintiles redondeados",
-          _vh._cortes_tramos(_np.arange(1, 101, dtype=float)),
-          [21.0, 41.0, 60.0, 80.0])
-    check("horario · un evento de S/ 100.000 no estira los cortes",
-          max(_vh._cortes_tramos(list(range(1, 101)) + [100_000])) < 100,
-          True)
-    check("horario · cortes repetidos quedan uno (menos tonos, no iguales)",
-          _vh._cortes_tramos([5.0] * 50), [5.0])
-    check("horario · la leyenda de los tonos",
-          _vh._rotulos_tramos([300.0, 800.0], "venta"),
-          ["< 300", "300–800", "≥ 800"])
-    check("horario · con tres tonos, el más alto es el más oscuro",
-          _vh._idx_tramos(3), [0, 2, 4])
-    check("horario · la cifra corta de la celda",
-          [_vh._fmt_celda(v, "venta") for v in
-           (850, 999.6, 2548, 12_000, 1_300_000, -300)],
-          ["850", "1k", "2.5k", "12k", "1.3M", "−300"])
-    check("horario · el ticket va sin decimales y la resta con signo",
-          (_vh._fmt_celda(115.8, "ticket"),
-           _vh._fmt_celda(1200, "venta", signo=True)), ("116", "+1.2k"))
-    # La cifra en la celda: una capa de texto, tinta azul sobre los tonos
-    # claros y blanco sobre los oscuros; sin ella si no se pide o si la
-    # columna no tiene el ancho (dos meses enteros sin deslizar: 63
-    # columnas en el ancho estimado).
-    from tema import BLANCO as _BL, MAPA_TINTA as _TINTA
-    _txt = [t for t in _fig_rej.data if t.type == "scatter" and t.mode == "text"]
-    check("horario · el número va en la celda", len(_txt), 1)
-    _col_txt = dict(zip(_txt[0].text, _txt[0].textfont.color)) if _txt else {}
-    check("horario · tinta sobre lo claro, blanco sobre lo oscuro",
-          (_col_txt.get("100"), _col_txt.get("200")), (_TINTA, _BL))
-    _sin_num = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "venta", [],
-                             [19, 21], numeros=False)
-    check("horario · sin número, no hay capa de texto",
-          [t.mode for t in _sin_num.data if t.type == "scatter"
-           and t.mode == "text"], [])
-    _angosto = _vh._fig_mapa([_cd_eje, _cd_eje], [(2026, 7), (2026, 8)],
-                             "Mes", "venta", [], [19, 21])
-    check("horario · si la columna es angosta, el número no se escribe",
-          [t.mode for t in _angosto.data if t.type == "scatter"
-           and t.mode == "text"], [])
-    # «Puntos»: sin heatmap, y las horas en SU orden aunque la primera capa
-    # que las nombra sea la de las horas sin ventas (salían 12 pm, 4 pm…).
-    _pts = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "venta", [],
-                         [19, 21], forma="Puntos")
-    check("horario · en puntos no hay heatmap",
-          [t.type for t in _pts.data if t.type == "heatmap"], [])
-    check("horario · y las horas van en su orden",
-          list(_pts.layout.yaxis.categoryarray), ["7 pm", "9 pm"])
-    _tam = [t for t in _pts.data if t.type == "scatter"
-            and t.mode == "markers" and t.hoverinfo == "skip"
-            and t.customdata is None and len(t.x) == 2]
-    check("horario · el punto más grande es la hora que más vendió",
-          (list(_tam[0].marker.size)[0] < list(_tam[0].marker.size)[1])
-          if _tam else False, True)
-    # Los totales al margen: una tablita por hora —lo que mide el mapa con
-    # su barra, los clientes y el ticket— y una barra por columna, en ejes
-    # que COMPARTEN el de las horas y el de las columnas con el mapa; abajo,
-    # el total del período. El ticket se divide, no se suma; con
-    # «Diferencia» no hay totales.
-    _tot = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "venta", [],
-                         [19, 21], totales=True)
-    _bh = [t for t in _tot.data if t.type == "bar" and t.orientation == "h"]
-    _bc = [t for t in _tot.data if t.type == "bar" and t.orientation != "h"]
-    check("horario · la barra de cada hora, sobre las mismas filas",
-          (list(_bh[0].x), _bh[0].yaxis, _tot.layout.xaxis2.anchor)
-          if _bh else None, ([0.5, 1.0], "y", "y"))
-    _cols_tot = [list(t.text) for t in _tot.data
-                 if t.type == "scatter" and t.mode == "text"
-                 and t.xaxis == "x2"]
-    check("horario · por hora: venta, clientes y ticket",
-          _cols_tot, [["S/ 100", "S/ 200"], ["2", "4"], ["S/ 50", "S/ 50"]])
-    check("horario · y abajo, el total del período",
-          [a.text for a in _tot.layout.annotations
-           if a.yref == "y3 domain" and a.xref == "x2"],
-          ["<b>S/ 300</b>", "<b>6</b>", "<b>S/ 50</b>"])
-    check("horario · total por columna debajo, sobre las mismas columnas",
-          (list(_bc[0].y)[:2], _bc[0].xaxis, _tot.layout.yaxis3.anchor)
-          if _bc else None, ([100.0, 200.0], "x", "x"))
-    check("horario · las filas le dejan sitio a la tira de abajo",
-          _tot.layout.yaxis.domain[0] > 0, True)
-    _tk = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "ticket", [],
-                        [19, 21], totales=True)
-    check("horario · el ticket por hora es venta ÷ clientes, sin repetirlo",
-          [list(t.text) for t in _tk.data if t.type == "scatter"
-           and t.mode == "text" and t.xaxis == "x2"],
-          [["S/ 50", "S/ 50"], ["2", "4"]])
-    _td = _vh._fig_mapa([_cd_eje, _cd_eje], [(2026, 32), (2026, 33)],
-                        "Semana", "venta", [], [19, 21], dif=True,
-                        totales=True)
-    check("horario · con «Diferencia» no hay totales",
-          [t.type for t in _td.data if t.type == "bar"], [])
-    check("horario · los totales suman alto y ancho al deslizable",
-          (_vh._alto_mapa(10, totales=True) > _vh._alto_mapa(10),
-           _vh._ancho_desliza(10, True) - _vh._ancho_desliza(10)),
-          (True, _vh._PX_TOT_HORA))
-
-    # ── Capa de selección ───────────────────────────────────────────────
-    # Un punto por CELDA, haya venta o no. Si vuelve a haberlos sólo donde
-    # hay datos: un arrastre sobre celdas vacías no devuelve nada, Streamlit
-    # no ve cambio, no hay rerun, y el rectángulo punteado de Plotly se
-    # queda dibujado para siempre (pasó, 2026-08-15). Además la marca se
-    # encogería en silencio hasta el último día con venta.
-    _sel_pts = [t for t in _fig_rej.data
-                if t.type == "scatter" and t.hoverinfo == "skip"
-                and t.customdata is not None]
-    check("horario · la capa de selección cubre TODAS las celdas",
-          len(_sel_pts[0].x) if _sel_pts else 0,
-          2 * 7 * 2)          # 2 paneles × 7 días × 2 horas
-    # ...y el hover sigue colgando de las celdas CON datos, que son las que
-    # tienen números que mostrar.
-    _hov = [t for t in _fig_rej.data
-            if t.type == "scatter" and t.hoverinfo != "skip"]
-    check("horario · el hover sólo va donde hay datos",
-          len(_hov[0].x) if _hov else 0, 4)
-    check("horario · la selección no roba el hover",
-          _sel_pts[0].hoverinfo if _sel_pts else None, "skip")
-    # La semana en curso también: un viernes son 5 columnas, no 7.
-    check("horario · la semana en curso se recorta",
-          _vh._columnas((2026, 33), "Semana", _dt.date(2026, 8, 14))[0], 5)
-    check("horario · el año en curso se recorta al mes",
-          _vh._columnas(2026, "Año", _dt.date(2026, 8, 14))[0], 8)
-
-    # Etiquetas del eje X: el paso sale del ancho por columna del gráfico
-    # ENTERO, no de las columnas de UN panel. El bug que corrige: un mes en
-    # curso de 13 días saltaba un día de por medio (13 > 12 disparaba el paso
-    # 2) con medio gráfico vacío al lado.
-    check("horario · un mes solo muestra TODOS los días",
-          [_vh._paso_etiquetas(n, 2) for n in (11, 13, 20, 31)], [1, 1, 1, 1])
-    check("horario · comparando meses las etiquetas se ralean",
-          _vh._paso_etiquetas(126, 2) > 1, True)
-    check("horario · el paso crece con el largo de la etiqueta",
-          _vh._paso_etiquetas(51, 3) >= _vh._paso_etiquetas(51, 1), True)
-    check("horario · el paso nunca baja de 1",
-          _vh._paso_etiquetas(1, 9), 1)
-
-    # Con POCAS columnas la celda no se estira a lo ancho de la tarjeta: se
-    # topea. Sin esto, la semana en curso un martes son 2 celdas de 376px
-    # (medido) — dos banderas, no un mapa. Es el efecto lateral de abrir
-    # siempre en el período en curso.
-    _tope = _vh._RATIO_MAX_CELDA * _vh._PX_HORA
-
-    def _ancho_celda(n):
-        x0, x1 = _vh._rango_x(n)
-        return _vh._ANCHO_UTIL / (x1 - x0)
-
-    # El tope es APROXIMADO: el número de slots es entero, así que
-    # `ancho // tope` deja la celda un poco por encima (770/11 = 70 contra
-    # un tope de 66). Lo que se fija acá es lo que de verdad importa —que no
-    # se estire a bandera—, con sitio para ese redondeo: nunca más de cuatro
-    # veces el alto de fila. Si alguien sube el ratio, esto salta.
-    check("horario · una sola columna no se estira a bandera",
-          _ancho_celda(1) <= 4 * _vh._PX_HORA, True)
-    # El sobrante va TODO a la derecha: repartirlo a los dos lados metía
-    # 132px (medidos) entre el eje de horas y la primera celda.
-    check("horario · el mapa arranca SIEMPRE pegado al eje de horas",
-          [_vh._rango_x(n)[0] for n in (1, 2, 11, 31, 126)],
-          [-0.5, -0.5, -0.5, -0.5, -0.5])
-    check("horario · el sobrante queda a la derecha",
-          _vh._rango_x(2)[1], _vh._ANCHO_UTIL // _tope - 0.5)
-    check("horario · con muchas columnas el rango es el justo",
-          _vh._rango_x(31), [-0.5, 30.5])
-    # El caso que motivó recalibrar (2026-08-15): un mes EN CURSO de 13 días
-    # dejaba tres columnas de hueco entre el último día y la barra de color.
-    # Con el tope atado al alto de fila y el ancho puesto al día, el rango es
-    # el justo desde los 13 días.
-    check("horario · un mes en curso de 13 días no deja hueco",
-          _vh._rango_x(13), [-0.5, 12.5])
-
-    # ── Horas en am/pm, no en formato 24h ───────────────────────────────
-    # El mediodía y la medianoche son los dos que se escriben mal solos.
-    check("horario · hora am/pm",
-          [_vh._etiqueta_hora(h) for h in (0, 9, 12, 13, 19, 23)],
-          ["12 am", "9 am", "12 pm", "1 pm", "7 pm", "11 pm"])
-    check("horario · tramo de una sola hora", _vh._tramo_horas(19, 19), "7 pm")
-    check("horario · tramo de varias horas",
-          _vh._tramo_horas(18, 21), "6 pm–9 pm")
-
-    # ── Fin de semana y feriado (mismo calendario que "Año Pasado") ──────
-    _fer26 = set(_vc._feriados_peru(2026))
-    check("horario · 28 de julio marcado como feriado",
-          _vh._marca_dia(_dt.date(2026, 7, 28), _fer26), "feriado")
-    check("horario · un sábado común es finde",
-          _vh._marca_dia(_dt.date(2026, 8, 8), _fer26), "finde")
-    check("horario · un martes común no lleva marca",
-          _vh._marca_dia(_dt.date(2026, 8, 11), _fer26), "")
-    # Un feriado que cae en finde se marca como FERIADO: que era domingo ya
-    # se veía; lo que no se veía es que además era feriado.
-    _dom_fer = [d for d in _fer26 if d.weekday() >= 5]
-    if _dom_fer:
-        check("horario · el feriado gana al fin de semana",
-              _vh._marca_dia(_dom_fer[0], _fer26), "feriado")
-    check("horario · sin fecha (columna de un año) no hay marca",
-          _vh._marca_dia(None, _fer26), "")
-
-    # La columna → fecha, que es de donde sale la marca
-    check("horario · fecha de la columna en Mes",
-          _vh._fecha_de_columna((2026, 7), "Mes", 27), _dt.date(2026, 7, 28))
-    check("horario · fecha de la columna en Semana",
-          _vh._fecha_de_columna((2026, 32), "Semana", 0).weekday(), 0)
-    check("horario · en Año la columna no es un día",
-          _vh._fecha_de_columna(2026, "Año", 3), None)
-
-    # Elegir un período por una fecha CUALQUIERA (no sólo los recientes)
-    check("horario · una fecha suelta cae en su mes",
-          _vh._clave_de_fecha(_dt.date(2025, 2, 14), "Mes"), (2025, 2))
-    check("horario · una fecha suelta cae en su año",
-          _vh._clave_de_fecha(_dt.date(2025, 2, 14), "Año"), 2025)
-    check("horario · una fecha suelta cae en su día",
-          _vh._clave_de_fecha(_dt.date(2025, 2, 14), "Día"),
-          _dt.date(2025, 2, 14))
-
-    # El arranque es UN panel: el mes EN CURSO, que sale del rango con que
-    # abre el selector de fecha de la vista —del 1 al último día con datos—.
-    # Cortado por ESE día sigue siendo el mes entero, como siempre fue.
-    _D = _dt.date
-    check("horario · el mes en curso es UN panel entero",
-          _vh._paneles_del_rango(_D(2026, 8, 1), _D(2026, 8, 14), "Mes",
-                                 _D(2026, 8, 14)), [(2026, 8)])
-
-    # EL RANGO SE PARTE POR LA GRANULARIDAD (regla #531): «últimos 30 días»
-    # en Mes son dos paneles, y el primero es un TROZO de agosto que no
-    # dibuja los 25 días que no tiene (se leerían como días sin venta).
-    _p30 = _vh._paneles_del_rango(_D(2026, 8, 26), _D(2026, 9, 24), "Mes",
-                                  _D(2026, 9, 24))
-    check("horario · rango partido: un trozo + el mes en curso",
-          [_vh._base_clave(k) for k in _p30], [(2026, 8), (2026, 9)])
-    check("horario · el trozo se llama por sus días",
-          _vh._etiqueta_clave(_p30[0], "Mes"), "26–31 Ago 26")
-    check("horario · el selector escribe el rango corto",
-          [_vh._fmt_rango_corto(_D(2026, 9, 1), _D(2026, 9, 24)),
-           _vh._fmt_rango_corto(_D(2026, 8, 26), _D(2026, 9, 24)),
-           _vh._fmt_rango_corto(_D(2025, 12, 28), _D(2026, 1, 3))],
-          ["1–24 set 2026", "26 ago – 24 set 2026",
-           "28 dic 2025 – 3 ene 2026"])
-    check("horario · el trozo no dibuja los días que no tiene",
-          _vh._columnas(_p30[0], "Mes"),
-          (6, ["26", "27", "28", "29", "30", "31"]))
-    check("horario · la columna 0 del trozo es su primer día",
-          _vh._fecha_de_columna(_p30[0], "Mes", 0), _D(2026, 8, 26))
-    check("horario · cortado por el RANGO (no por los datos) es un trozo",
-          isinstance(_vh._paneles_del_rango(_D(2026, 9, 1), _D(2026, 9, 20),
-                                            "Mes", _D(2026, 9, 24))[0],
-                     _vh._Tramo), True)
-    _dft = pd.DataFrame({
-        "F": pd.to_datetime(["2026-08-26 20:00", "2026-08-31 13:00",
-                             "2026-08-10 13:00"]),
-        "V": [1.0, 2.0, 3.0]})
-    check("horario · el trozo cuenta sus columnas desde su primer día",
-          _vh._prep_tramo(_dft, {"fecha": "F", "venta": "V"}, "Mes",
-                          _D(2026, 8, 26), _D(2026, 8, 31))["col"].tolist(),
-          [0, 5])
-    _psem = _vh._paneles_del_rango(_D(2026, 9, 1), _D(2026, 9, 24), "Semana",
-                                   _D(2026, 9, 24))
-    check("horario · un mes en Semana son cuatro paneles", len(_psem), 4)
-    check("horario · la semana que el rango abre en martes arranca en Mar",
-          _vh._columnas(_psem[0], "Semana")[1][0], "Mar")
-    _ap = _vh._ano_pasado(_psem[0], "Semana")
-    check("horario · año pasado en Semana: el mismo día de SEMANA",
-          (_ap.desde.weekday(), _ap.hasta.weekday()),
-          (_psem[0].desde.weekday(), _psem[0].hasta.weekday()))
-    check("horario · año pasado en Mes: la misma fecha, trozo con trozo",
-          _vh._ano_pasado(_p30[0], "Mes"),
-          _vh._Tramo((2025, 8), _D(2025, 8, 26), _D(2025, 8, 31)))
-    check("horario · año pasado de un mes entero es el mes entero",
-          _vh._ano_pasado((2026, 9), "Mes"), (2025, 9))
-    # «Diferencia» resta la misma columna del CALENDARIO: un panel base que
-    # arranca el martes pone su martes en la columna 0, y la semana entera
-    # de al lado lo tiene en la 1. Martes contra martes da +50.
-    def _celda(col, v):
-        return pd.DataFrame({"col": [col], "hora": [19], "venta": [v],
-                             "cant": [0.0], "desc": [0.0], "pax": [0.0],
-                             "ticket": [float("nan")]})
-    _fg = _vh._fig_mapa([_celda(0, 100.0), _celda(1, 150.0)],
-                        [_psem[0], (2026, 37)], "Semana", "venta", [], [19],
-                        dif=True)
-    _cds = [c for t in _fg.data
-            if getattr(t, "customdata", None) is not None
-            and len(t.customdata) and len(t.customdata[0]) > 9
-            for c in t.customdata]
-    check("horario · la diferencia resta martes contra martes",
-          [c[-1] for c in _cds if c[0] == 1],
-          ["<br><b>Δ vs 1–6 Sep 26: +S/ 50</b>"])
-
-    _f = pd.Series(pd.to_datetime(["2026-08-05 13:00", "2026-08-09 20:30"]))
-    check("horario · columna en semana (mié=2, dom=6)",
-          list(_vh._columna_de_fecha(_f, "Semana")), [2, 6])
-    check("horario · columna en mes (día-1)",
-          list(_vh._columna_de_fecha(_f, "Mes")), [4, 8])
-    check("horario · columna en año (mes-1)",
-          list(_vh._columna_de_fecha(_f, "Año")), [7, 7])
-    check("horario · columna en día es siempre 0",
-          list(_vh._columna_de_fecha(_f, "Día")), [0, 0])
-
-    # OPCIÓN A: un arrastre que cruza de panel deja UNA MARCA POR PANEL, con
-    # las coordenadas que le tocaron a cada lado. Es la decisión del usuario
-    # (2026-08-14) y el corazón del gesto: arrastrar sobre dos semanas deja
-    # la comparación armada de una pasada.
-    _orden = _vh._orden_horas([12, 13, 19, 20, 21])
-    _pts = [(0, 4, 19), (0, 5, 19), (0, 5, 20), (1, 4, 19), (1, 6, 21)]
-    _ms = _vh._marcas_de_seleccion(_pts, _orden)
-    check("horario · un arrastre a dos paneles → dos marcas", len(_ms), 2)
-    check("horario · marca del panel 0 envuelve sus puntos", _ms[0],
-          {"sel": 0, "c0": 4, "c1": 5, "h0": 19, "h1": 20})
-    check("horario · marca del panel 1 envuelve LOS SUYOS", _ms[1],
-          {"sel": 1, "c0": 4, "c1": 6, "h0": 19, "h1": 21})
-    check("horario · una sola celda es un rectángulo 1x1",
-          _vh._marcas_de_seleccion([(2, 3, 13)], _orden),
-          [{"sel": 2, "c0": 3, "c1": 3, "h0": 13, "h1": 13}])
-
-    # Acumulación: sin repetir, y al pasar del tope se van las MÁS VIEJAS —
-    # un arrastre sobre los cuatro paneles tiene que dejar esas cuatro.
-    _m1 = {"sel": 0, "c0": 0, "c1": 0, "h0": 12, "h1": 12}
-    _m2 = {"sel": 1, "c0": 0, "c1": 0, "h0": 12, "h1": 12}
-    check("horario · no duplica una marca ya puesta",
-          _vh._agregar_marcas([_m1], [_m1]), [_m1])
-    check("horario · acumula la nueva",
-          _vh._agregar_marcas([_m1], [_m2]), [_m1, _m2])
-    _viejas = [dict(_m1, sel=i) for i in range(4)]
-    _nueva = {"sel": 3, "c0": 5, "c1": 5, "h0": 20, "h1": 20}
-    check("horario · pasado el tope se va la más vieja",
-          _vh._agregar_marcas(_viejas, [_nueva]), _viejas[1:] + [_nueva])
-
-    # Celdas de una marca: el denominador de «venta por celda», la única
-    # lectura honesta cuando dos marcas no miden lo mismo.
-    _o4 = _vh._orden_horas([18, 19, 20, 21])
-    check("horario · celdas de un rectángulo 3x4",
-          _vh._celdas_de_marca({"sel": 0, "c0": 4, "c1": 6, "h0": 18, "h1": 21},
-                               _o4), 12)
-    check("horario · celdas de una celda suelta",
-          _vh._celdas_de_marca({"sel": 0, "c0": 4, "c1": 4, "h0": 19, "h1": 19},
-                               _o4), 1)
-
-    # ── El turno cruza la medianoche ────────────────────────────────────
-    # Con datos reales de R2 el eje traía [0, 13, …, 23]: las 00h son el
-    # final de la noche anterior, no el principio del día. Ordenadas por
-    # número quedaban arriba de todo y el eje numérico dejaba doce filas
-    # vacías en el medio.
-    _os = _vh._orden_horas({0, 13, 14, 19, 22, 23})
-    check("horario · el orden arranca después del hueco mayor",
-          _os, [13, 14, 19, 22, 23, 0])
-    check("horario · una sola hora no rompe el orden",
-          _vh._orden_horas({19}), [19])
-    # «de 23h a 0h» son DOS horas. Con `h0 <= hora <= h1` habrían sido las
-    # veinticuatro, y la marca se habría comido el día entero en silencio.
-    check("horario · tramo que cruza la medianoche",
-          _vh._horas_entre(_os, 23, 0), [23, 0])
-    check("horario · tramo normal dentro del turno",
-          _vh._horas_entre(_os, 13, 19), [13, 14, 19])
-    check("horario · los extremos de una marca salen por POSICIÓN",
-          _vh._marca_de_puntos(0, [1], [0, 23], _os),
-          {"sel": 0, "c0": 1, "c1": 1, "h0": 23, "h1": 0})
-    check("horario · celdas de una marca que cruza la medianoche",
-          _vh._celdas_de_marca({"sel": 0, "c0": 1, "c1": 2, "h0": 23, "h1": 0},
-                               _os), 4)
-
-    check("horario · etiqueta de marca (semana)",
-          _vh._etiqueta_marca({"sel": 0, "c0": 4, "c1": 6, "h0": 18, "h1": 21},
-                              [(2026, 32)], "Semana"),
-          f"{_vc._etiqueta_clave((2026, 32), 'Semana')} · Vie–Dom · 6 pm–9 pm")
-    # En granularidad Día la columna ES el período: repetirlo daría
-    # "vie 08/08 · vie", que no informa nada.
-    check("horario · etiqueta de marca (día) no repite el período",
-          _vh._etiqueta_marca({"sel": 0, "c0": 0, "c1": 0, "h0": 19, "h1": 19},
-                              [_dt.date(2026, 8, 7)], "Día"),
-          f"{_vc._etiqueta_clave(_dt.date(2026, 8, 7), 'Día')} · 7 pm")
-
-    # La firma gobierna la `key` del chart, o sea CUÁNDO Streamlit remonta el
-    # componente. Tiene que cambiar con lo que hace que sea otro mapa —ahí el
-    # remonte es correcto, porque la selección vieja apunta a coordenadas que
-    # ya no significan lo mismo—.
-    check("horario · la firma cambia al cambiar la medida del mapa",
-          _vh._firma("Semana", [(2026, 32)], "venta")
-          != _vh._firma("Semana", [(2026, 32)], "pax"), True)
-    check("horario · la firma cambia al cambiar la granularidad",
-          _vh._firma("Semana", [(2026, 32)], "venta")
-          != _vh._firma("Mes", [(2026, 32)], "venta"), True)
-    check("horario · la firma cambia al comparar otro período",
-          _vh._firma("Semana", [(2026, 32)], "venta")
-          != _vh._firma("Semana", [(2026, 32), (2026, 33)], "venta"), True)
-    # Y NO tiene que cambiar con las marcas: eso remontaba el chart en cada
-    # arrastre y era el parpadeo que se reportó el 2026-08-15. Que la misma
-    # selección no se re-procese en bucle lo resuelve la huella (`_K_SEL`),
-    # no la key. La firma ya ni siquiera recibe las marcas — esta guarda deja
-    # constancia de que sacarlas fue deliberado.
-    check("horario · la firma NO mira las marcas (si no, parpadea)",
-          "marcas" in _vh._firma.__code__.co_varnames, False)
-
-    # ── Agregación por celda: pax NO se suma línea a línea ───────────────
-    # `CANT PAX` se repite en CADA línea del pedido. Sumarla cuenta la misma
-    # mesa una vez por plato: acá P1 tiene 2 líneas de 4 pax y P2 una de 2, o
-    # sea 6 personas — no 10. Es un error que no rompe nada, sólo miente.
-    _dfh = pd.DataFrame({
-        "FEC REG DOCUMENTO": pd.to_datetime(
-            ["2026-08-07 19:10", "2026-08-07 19:40", "2026-08-07 19:50",
-             "2026-08-08 13:05"]),
-        "VENTA ITEM DDOCUMENTO": [100.0, 60.0, 40.0, 90.0],
-        "CANT PAX": [4, 4, 2, 3],
-        "LLAVE LOCAL PEDIDO": ["P1", "P1", "P2", "P3"],
-        "CANTIDAD ITEM DDOCUMENTO": [1, 2, 1, 1],
-        "DESCUENTO ITEM DDOCUMENTO": [0.0, 10.0, 5.0, 0.0],
-        "NOMBRE DESCUENTO": [None, "BCP", "  ", "Socios"],
-        "GRUPO": ["Alimentos"] * 4,
-        "SUB GRUPO": ["Fondos"] * 4,
-        "NOMB ITEM VENTA": ["Lomo", "Lomo", "Ceviche", "Lomo"],
-    })
-    _colsh = {"fecha": "FEC REG DOCUMENTO", "venta": "VENTA ITEM DDOCUMENTO",
-              "pax": "CANT PAX", "pedido": "LLAVE LOCAL PEDIDO",
-              "prod": "NOMB ITEM VENTA", "cant": "CANTIDAD ITEM DDOCUMENTO",
-              "fam": "GRUPO", "sub": "SUB GRUPO",
-              "desc": "DESCUENTO ITEM DDOCUMENTO",
-              "tipo_desc": "NOMBRE DESCUENTO"}
-    _tr = _vh._prep_tramo(_dfh, _colsh, "Semana",
-                          _dt.date(2026, 8, 3), _dt.date(2026, 8, 9))
-    _cel = _vh._celdas(_tr)
-    _c19 = _cel[(_cel["col"] == 4) & (_cel["hora"] == 19)].iloc[0]
-    check("horario · pax deduplicado por pedido (4+4+2 → 6)",
-          float(_c19["pax"]), 6.0)
-    check("horario · venta de la celda suma las líneas",
-          float(_c19["venta"]), 200.0)
-    check("horario · descuento de la celda suma las líneas",
-          float(_c19["desc"]), 15.0)
-    check("horario · ticket = venta/pax (la definición del proyecto)",
-          round(float(_c19["ticket"]), 4), round(200.0 / 6.0, 4))
-    # Sin `NOMBRE DESCUENTO` no hay descuento: nulos y espacios en blanco caen
-    # en «Sin descuento», que NO es relleno — es lo vendido a precio de lista.
-    check("horario · tipo de descuento nulo → Sin descuento",
-          sorted(_tr["tipo"].unique().tolist()),
-          sorted([_vh._SIN_DSCTO, "BCP", "Socios"]))
-
-    # El recorte por fecha se re-aplica en pandas (en modo demo el loader
-    # devuelve el df entero): un tramo de un solo día deja fuera al resto.
-    _tr1 = _vh._prep_tramo(_dfh, _colsh, "Semana",
-                           _dt.date(2026, 8, 8), _dt.date(2026, 8, 8))
-    check("horario · el tramo recorta por fecha en pandas", len(_tr1), 1)
-
-    # Totales de una marca (el rectángulo del viernes 19h)
-    _oh = _vh._orden_horas(_tr["hora"].unique())
-    _tot = _vh._agregar_marca(_tr, {"sel": 0, "c0": 4, "c1": 4,
-                                    "h0": 19, "h1": 19}, _oh)
-    check("horario · total de marca: venta", _tot["venta"], 200.0)
-    check("horario · total de marca: pax deduplicado", _tot["pax"], 6.0)
-    _det = _vh._detalle_marca(_tr, {"sel": 0, "c0": 4, "c1": 4,
-                                    "h0": 19, "h1": 19}, _oh)
-    check("horario · el detalle parte el plato por tipo de descuento",
-          sorted(_det[_det["prod"] == "Lomo"]["tipo"].tolist()),
-          sorted([_vh._SIN_DSCTO, "BCP"]))
 
     # ── El calendario del eje del drill Semanal (arquitectura.md #362) ───
     # Bandas de fin de semana / feriado, punteada de separación y rótulo
@@ -11405,76 +10876,16 @@ def _pruebas_igv_y_sin_costo():
     return fallos
 
 
-def _pruebas_filas_por_area():
-    """«Por hora» › filas «Áreas» (regla #595): la venta por la estación del
-    POS que prepara cada plato. Fija el nombre (el POS escribe «PASTELERIA»
-    y la carta «Pastelería»), que el área viaje en el tramo sin tocar la
-    venta, y que las filas salgan por venta con la matriz sumando lo
-    mismo."""
-    import datetime as _dt
-
-    from graficos import ventas_horario as vh
-
-    fallos = 0
-
-    def check(nombre, got, exp):
-        nonlocal fallos
-        if got == exp:
-            print(f"OK    ventas · por área · {nombre}")
-        else:
-            fallos += 1
-            print(f"FALLA ventas · por área · {nombre}: got={got!r} exp={exp!r}")
-
-    check("el nombre como el resto de la carta",
-          vh.nombre_area(pd.Series(["CARNES Y PESCADOS", "PASTELERIA",
-                                    " frios ", None, ""])).tolist(),
-          ["Carnes y pescados", "Pastelería", "Fríos", "Sin área",
-           "Sin área"])
-    check("«Áreas» es una opción de filas, con su columna",
-          ("Áreas" in vh._FILAS, vh._QUE_FILAS.get("Áreas")), (True, "area"))
-    d = pd.DataFrame({
-        "FEC REG DOCUMENTO": pd.to_datetime(["2026-09-04 13:10",
-                                             "2026-09-04 13:20",
-                                             "2026-09-04 20:40",
-                                             "2026-09-05 21:00"]),
-        "VENTA ITEM DDOCUMENTO": [80.0, 30.0, 50.0, 40.0],
-        "GRUPO": ["Alimentos", "Bebidas s/ Alcohol", "Alimentos",
-                  "Alimentos"],
-        "AREA PRODUCCION": ["COCINA", "BAR", "CALIENTES", "COCINA"],
-    })
-    c = {"fecha": "FEC REG DOCUMENTO", "venta": "VENTA ITEM DDOCUMENTO",
-         "fam": "GRUPO", "area": "AREA PRODUCCION"}
-    t = vh._prep_tramo(d, c, "Semana", _dt.date(2026, 8, 31),
-                       _dt.date(2026, 9, 6))
-    check("el tramo trae el área", sorted(t["area"].unique()),
-          ["Bar", "Calientes", "Cocina"])
-    items = vh._items_filas([t], "area")
-    check("las filas, por venta", items, ["Cocina", "Calientes", "Bar"])
-    m = vh._matriz_filas(t, "area", items, True, "venta", list(range(24)),
-                         False)
-    check("la fila de Cocina: 80 a la 1 pm y 40 a las 9 pm",
-          (m[0, 13], m[0, 21]), (80.0, 40.0))
-    check("y la matriz suma la venta entera", float(m.sum()), 200.0)
-    check("sin la columna, el tramo no inventa un área",
-          "area" in vh._prep_tramo(d, {k: v for k, v in c.items()
-                                       if k != "area"}, "Semana",
-                                   _dt.date(2026, 8, 31),
-                                   _dt.date(2026, 9, 6)).columns, False)
-    return fallos
-
-
 def _pruebas_ticket_sin_canales_sin_clientes():
     """El TICKET de Ventas (regla #591): la venta de los canales que
     registran clientes ÷ clientes. Rappi vende sin pax, y con su venta
     arriba el ticket de septiembre de 2026 daba S/ 150,32 en vez de 147,43.
 
-    Fija las tres vistas que lo dibujan y la tabla que lo escribe: el mapa
-    de «Por hora» (una celda con un pedido de Rappi), la marca del mapa, y
-    las columnas del Resumen —el ticket neto en «Venta» y la subvista
-    «Clientes», con los niños sólo si la consulta los trae—."""
-    import datetime as _dt
-
-    from graficos import ventas_horario as vh
+    Fija la tabla que lo escribe: las columnas del Resumen —el ticket neto
+    en «Venta» y la subvista «Clientes», con los niños sólo si la consulta
+    los trae—. Las de «Por hora» se fueron con la vista vieja (#704): la
+    pieza parte el gasto por persona en el navegador, sobre los pedidos que
+    arma `ventas_horario.armar` (lo vigila `_pruebas_pieza_hora`)."""
     from graficos import ventas_resumen as vr
 
     fallos = 0
@@ -11486,30 +10897,6 @@ def _pruebas_ticket_sin_canales_sin_clientes():
         else:
             fallos += 1
             print(f"FALLA ventas · ticket · {nombre}: got={got!r} exp={exp!r}")
-
-    d = pd.DataFrame({
-        "FEC REG DOCUMENTO": pd.to_datetime(["2026-09-04 20:10",
-                                             "2026-09-04 20:20",
-                                             "2026-09-04 20:40"]),
-        "VENTA ITEM DDOCUMENTO": [300.0, 100.0, 90.0],
-        "CANT PAX": [3, 3, 0],
-        "LLAVE LOCAL PEDIDO": ["P1", "P1", "R1"],
-        "CANAL VENTA": ["En el Local", "En el Local", "Rappi"],
-    })
-    c = {"fecha": "FEC REG DOCUMENTO", "venta": "VENTA ITEM DDOCUMENTO",
-         "pax": "CANT PAX", "pedido": "LLAVE LOCAL PEDIDO"}
-    t = vh._prep_tramo(d, c, "Semana", _dt.date(2026, 8, 31),
-                       _dt.date(2026, 9, 6))
-    cel = vh._celdas(t).iloc[0]
-    check("la celda suma la venta entera", float(cel["venta"]), 490.0)
-    check("pero el ticket deja a Rappi afuera: 400 ÷ 3",
-          round(float(cel["ticket"]), 4), round(400.0 / 3.0, 4))
-    pin = {"c0": 0, "c1": 6, "h0": 20, "h1": 20}
-    tot = vh._agregar_marca(t, pin, list(range(24)))
-    check("la marca del mapa, igual", round(float(tot["ticket"]), 4),
-          round(400.0 / 3.0, 4))
-    check("la ficha de un día recibe la venta del ticket aparte",
-          vh._celda_de_un_dia(t, "2026-09-04", 20), (490.0, 3.0, 400.0))
 
     hay = {"ticket", "ticket_neto", "sin_cli"}
     subs = vr._subvistas("Clientes", [], hay)
@@ -11986,96 +11373,154 @@ def _pruebas_carta_costeada():
     return fallos
 
 
-def _pruebas_ventas_franja():
-    """Ventas › Análisis por Hora › «A medida» (regla #627): las cuentas.
+def _pruebas_pieza_hora():
+    """Ventas › Análisis por hora como pieza propia (regla #704): lo que
+    arma Python para el navegador, y que el `.js` lo lea en las mismas
+    posiciones.
 
-    Fija lo que no se ve hasta que miente: que «hasta» no se incluya (dos
-    horarios seguidos no cuentan dos veces el pedido de las 22:00), que un
-    horario que cruza la medianoche le dé lo de la madrugada al día ANTERIOR,
-    que los días elegidos sean los de la semana pedida dentro del rango, que
-    el detalle por día liste también los días SIN venta, que se agrupe por
-    nombre de columna, y que «Por hora» le pase su `filtrar_cb`: el
-    tramo viene aparte de R2.
+    Fija lo que no se ve hasta que miente: qué tramos se cargan (el rango
+    con sus 13 semanas antes y el año pasado, sin pisarse y sin pedir lo que
+    el parquet no tiene), que las personas se cuenten una vez por pedido y
+    la nota de crédito RESTE, qué pedido es del local (una mesa) y cuál no,
+    que un pedido «abierto» más de 6 horas no tenga tiempo de mesa, que las
+    líneas de un plato se sumen por tipo de descuento, el nombre de las
+    áreas, y el cableado: el salto desde «Análisis de platos», abrir con
+    eventos y sin venta interna, la segunda tarjeta como punto de encaje y
+    nada de `:has()`.
     """
+    import datetime as _dt
     import inspect
-    from datetime import date
+    import pathlib
+    import re
 
-    from graficos import ventas_franja as _f
-    from graficos import ventas_horario as _h
+    from graficos import ventas_horario as vh
+    from graficos import ventas_platos as vp
 
     fallos = 0
 
     def check(nombre, got, exp):
         nonlocal fallos
         if got == exp:
-            print(f"OK    ventas · franja · {nombre}")
+            print(f"OK    ventas · por hora · {nombre}")
         else:
             fallos += 1
-            print(f"FALLA ventas · franja · {nombre}: got={got!r} exp={exp!r}")
+            print(f"FALLA ventas · por hora · {nombre}: got={got!r} exp={exp!r}")
 
-    check("17:30 son 1050 minutos", _f.a_minutos("17:30"), 1050)
-    check("24:00 es el fin del día", _f.a_minutos("24:00"), 1440)
+    D = _dt.date
+    check("los tramos: el rango con 13 semanas antes, y el año pasado",
+          vh.ventanas(D(2026, 10, 1), D(2026, 10, 21), D(2025, 1, 1)),
+          [(D(2025, 10, 2), D(2025, 10, 22)), (D(2026, 7, 2), D(2026, 10, 21))])
+    check("un rango largo junta los dos tramos",
+          vh.ventanas(D(2025, 12, 1), D(2026, 10, 21), D(2025, 1, 1)),
+          [(D(2025, 1, 1), D(2026, 10, 21))])
+    check("lo que el parquet no tiene no se pide",
+          vh.ventanas(D(2025, 3, 1), D(2025, 3, 31), D(2025, 1, 1)),
+          [(D(2025, 1, 1), D(2025, 3, 31))])
+    check("ni lo que viene después del último día",
+          vh.ventanas(D(2026, 10, 1), D(2026, 10, 25), D(2025, 1, 1),
+                      D(2026, 10, 21))[-1][1], D(2026, 10, 21))
+    check("el nombre de las áreas, como el resto de la carta",
+          vh.nombre_area(pd.Series(["CARNES Y PESCADOS", "PASTELERIA",
+                                    " frios ", None, ""])).tolist(),
+          ["Carnes y pescados", "Pastelería", "Fríos", "Sin área", "Sin área"])
 
-    doms = _f.dias_elegidos(date(2026, 9, 7), date(2026, 10, 9), [6])
-    check("los domingos de un rango",
-          doms, [date(2026, 9, 13), date(2026, 9, 20), date(2026, 9, 27),
-                 date(2026, 10, 4)])
-    check("rango al revés: ningún día",
-          _f.dias_elegidos(date(2026, 10, 9), date(2026, 10, 1), range(7)), [])
+    d = pd.DataFrame({
+        "FECHA REGISTRO PEDIDO": pd.to_datetime([
+            "2026-10-02 20:00", "2026-10-02 20:00", "2026-10-02 20:00",
+            "2026-10-02 13:05",
+            "2026-10-03 21:10",
+            "2026-10-04 19:30", "2026-10-04 19:30"]),
+        "FECHA EMISION": pd.to_datetime([
+            "2026-10-02 22:00", "2026-10-02 22:00", "2026-10-02 22:00",
+            "2026-10-02 13:40",
+            "2026-10-04 04:00",
+            "2026-10-04 21:00", "2026-10-05 12:00"]),
+        "LLAVE LOCAL PEDIDO": ["P1", "P1", "P1", "R1", "P2", "P3", "P3"],
+        "LLAVE LOCAL DOCUMENTO": ["B1", "B1", "B1", "B2", "B3", "B4", "NC1"],
+        "CANAL VENTA": ["En el Local"] * 3 + ["Rappi", "En el Local",
+                                              "En el Local", "En el Local"],
+        "CANT PAX": [3, 3, 3, 0, 2, 2, -2],
+        "VENTA ITEM DDOCUMENTO": [100.0, 50.0, 30.0, 60.0, 80.0, 70.0, -70.0],
+        "CANTIDAD ITEM DDOCUMENTO": [1.0, 1.0, 2.0, 2.0, 1.0, 1.0, -1.0],
+        "DESCUENTO ITEM DDOCUMENTO": [0.0, 10.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        "NOMBRE DESCUENTO": ["", "BCP", "", "", "", "", ""],
+        "GRUPO": ["Alimentos", "Alimentos", "Bebidas", "Alimentos",
+                  "Eventos", "Alimentos", "Alimentos"],
+        "SUB GRUPO": ["Fondos", "Fondos", "Gaseosas", "Fondos", "Menú",
+                      "Fondos", "Fondos"],
+        "NOMB ITEM VENTA": ["Lomo", "Lomo", "Agua", "Lomo", "Menú evento",
+                            "Pulpo", "Pulpo"],
+        "AREA PRODUCCION": ["COCINA", "COCINA", "BAR", "COCINA", "CALIENTES",
+                            "PASTELERIA", "PASTELERIA"],
+    })
+    tramos = [(D(2026, 7, 2), D(2026, 10, 21))]
+    x = vh.armar(d, D(2026, 10, 1), D(2026, 10, 21), tramos, D(2026, 10, 21))
+    claves = [x["dias"][p[0]] + " " + str(p[1]) for p in x["P"]]
+    P = {k: dict(zip(vh.CAMPOS_P, p)) for k, p in zip(claves, x["P"])}
+    check("un pedido por llave, en orden de apertura", claves,
+          ["2026-10-02 785", "2026-10-02 1200", "2026-10-03 1270",
+           "2026-10-04 1170"])
+    p1, r1 = P["2026-10-02 1200"], P["2026-10-02 785"]
+    p2, p3 = P["2026-10-03 1270"], P["2026-10-04 1170"]
+    check("las personas, una vez por pedido", p1["pax"], 3)
+    check("la nota de crédito resta las personas del canje", p3["pax"], 0)
+    check("el local es una mesa posible; Rappi no",
+          (p1["local"], r1["local"], x["canales"][r1["canal"]]),
+          (1, 0, "Rappi"))
+    check("el tiempo en la mesa, de la apertura al último cobro",
+          (p1["dur"], r1["dur"]), (120, 35))
+    check("más de 6 horas abierto no es una mesa: sin tiempo", p2["dur"], None)
+    check("el cobro se ubica en su día", x["dias"][p2["dia_cobro"]], "2026-10-04")
+    prods = [q[0] for q in x["prods"]]
+    lineas = [dict(zip(vh.CAMPOS_L, ln)) for ln in x["L"]]
+    i1 = claves.index("2026-10-02 1200")
+    check("el mismo plato con otro descuento es otra línea",
+          sorted((ln["venta"], x["tdesc"][ln["tdesc"]]) for ln in lineas
+                 if ln["ped"] == i1 and prods[ln["prod"]] == "Lomo"),
+          [(50.0, "BCP"), (100.0, "")])
+    check("la venta llega entera (la nota resta)",
+          round(sum(ln["venta"] for ln in lineas), 2), 320.0)
+    check("el producto con su grupo, subgrupo y área",
+          [q for q in x["prods"] if q[0] == "Pulpo"],
+          [["Pulpo", "Alimentos", "Fondos", "Pastelería"]])
+    check("los grupos que no son servicio viajan para los interruptores",
+          x["grupos_raros"], ["Venta Interna", "Eventos"])
+    check("lo cargado viaja: el navegador sabe con qué puede comparar",
+          x["ventanas"], [["2026-07-02", "2026-10-21"]])
+    check("sin ventas, nada que armar",
+          vh.armar(d.iloc[0:0], D(2026, 10, 1), D(2026, 10, 21), tramos), None)
 
-    ts = pd.Series(pd.to_datetime([
-        "2026-10-04 17:29", "2026-10-04 17:30", "2026-10-04 21:59",
-        "2026-10-04 22:00", "2026-10-05 00:30", None]))
-    dentro, dia = _f.en_horario(ts, 1050, 1320)
-    check("17:30 → 22:00: entra de 17:30 a 21:59",
-          dentro.tolist(), [False, True, True, False, False, False])
-    dentro, dia = _f.en_horario(ts, 1200, 60)
-    check("20:00 → 01:00 cruza: la 00:30 entra",
-          dentro.tolist(), [False, False, True, True, True, False])
-    check("y la 00:30 del lunes es del DOMINGO",
-          dia[4].date(), date(2026, 10, 4))
-    check("cruza_medianoche", (_f.cruza_medianoche(1200, 60),
-                               _f.cruza_medianoche(0, 1440)), (True, False))
+    js = (pathlib.Path(vh.__file__).parent / "ventas_horario.js").read_text(encoding="utf-8")
+    css = (pathlib.Path(vh.__file__).parent / "ventas_horario.css").read_text(encoding="utf-8")
+    pos_p = {m.group(1).lower(): int(m.group(2))
+             for m in re.finditer(r"\bP_([A-Z_]+) = (\d+)", js)}
+    pos_l = {m.group(1).lower(): int(m.group(2))
+             for m in re.finditer(r"\bL_([A-Z_]+) = (\d+)", js)}
+    check("el .js lee cada pedido en las posiciones de CAMPOS_P",
+          [pos_p.get(c) for c in vh.CAMPOS_P], list(range(len(vh.CAMPOS_P))))
+    check("y cada línea en las de CAMPOS_L",
+          [pos_l.get(c) for c in vh.CAMPOS_L], list(range(len(vh.CAMPOS_L))))
+    check("abre con eventos y sin venta interna",
+          "eventos: true, vinterna: false" in js, True)
+    check("lo normal son las 8 semanas anteriores",
+          "const SEMANAS = [1, 2, 3, 4, 5, 6, 7, 8];" in js, True)
+    check("la pieza no usa :has() (regla #469)", ":has(" in css, False)
+    check("ni colores sueltos: las variables de estilos/",
+          re.findall(r"#[0-9a-fA-F]{3,8}\b",
+                     re.sub(r"/\*.*?\*/", "", css, flags=re.S)), [])
 
-    b = pd.DataFrame({
-        "dia": pd.to_datetime(["2026-09-13", "2026-09-13", "2026-09-27"]),
-        "grupo": ["Alimentos", "Alimentos", "Bebidas"],
-        "sub": ["Fondos", "Fondos", "Vinos"],
-        "prod": ["Lomo", "Lomo", "Malbec"],
-        "venta": [100.0, 50.0, 80.0], "cant": [2.0, 1.0, 1.0],
-        "pedido": ["P1", "P1", "P2"]})
-    pdia = _f.por_dia(b, doms)
-    check("por día: los 4 domingos, también los que no vendieron",
-          len(pdia), 4)
-    check("por día: el 20 sin venta queda en cero",
-          float(pdia.loc[pd.Timestamp("2026-09-20"), "venta"]), 0.0)
-    check("por día: pedidos distintos",
-          int(pdia.loc[pd.Timestamp("2026-09-13"), "pedidos"]), 1)
-    check("por día: columnas por nombre",
-          list(pdia.columns), ["venta", "cant", "pedidos"])
-    g = _f.por_grupo(b, "Plato")
-    check("por plato: columnas por nombre",
-          list(g.columns), ["grupo", "sub", "prod", "cant", "venta"])
-    check("por plato: el que más vende primero, sumado",
-          (g.loc[0, "prod"], float(g.loc[0, "venta"])), ("Lomo", 150.0))
-    check("por grupo", list(_f.por_grupo(b, "Grupo")["grupo"]),
-          ["Alimentos", "Bebidas"])
-
-    src = inspect.getsource(_h._ventas_horario)
-    check("«Por hora» le pasa su filtrar_cb al modo «A medida»",
-          "_franja.cuerpo(d, filtrar_cb," in src, True)
-    check("el interruptor tiene los tres modos",
-          _h.MODOS_VISTA, ("Patrones", "Comparar", "Franjas"))
-    # «Mapa» elige solo cómo partir las fechas: un día, meses o años.
-    check("Mapa · un solo día va en Día",
-          _h.grano_automatico(date(2026, 10, 4), date(2026, 10, 4)), "Día")
-    check("Mapa · 30 días que cruzan de mes van en Mes",
-          _h.grano_automatico(date(2026, 9, 11), date(2026, 10, 10)), "Mes")
-    check("Mapa · cuatro meses todavía en Mes",
-          _h.grano_automatico(date(2026, 7, 1), date(2026, 10, 10)), "Mes")
-    check("Mapa · doce meses van en Año",
-          _h.grano_automatico(date(2025, 10, 11), date(2026, 10, 10)),
-          "Año")
+    vps = pathlib.Path(vp.__file__).read_text(encoding="utf-8")
+    check("«A qué hora se vende» deja el plato donde la pieza lo busca",
+          f'ss["{vh._K_IR}"] = nombre' in vps, True)
+    pila = (pathlib.Path(vh.__file__).parent.parent / "estilos" / "_27_pila.py"
+            ).read_text(encoding="utf-8")
+    check("la segunda tarjeta es un punto de encaje propio",
+          ".st-key-ajuste_graf_card_izq_ventas_franjas {\n"
+          "            scroll-snap-align: start;" in pila, True)
+    import graficos.ventas as _v
+    fuente = inspect.getsource(_v.renderizar_graficos_ventas)
+    check("el dispatcher le pasa los chips para reconocer lo armado",
+          "_ventas_horario(" in fuente and "firma=(tuple(fam_sel" in fuente, True)
     return fallos
 
 
@@ -12652,532 +12097,6 @@ def _pruebas_ventas_menu():
     return fallos
 
 
-def _pruebas_por_hora_filas():
-    """Ventas › Por hora: las filas «Platos» y «Grupos» (regla #530).
-
-    Fija las cuentas que no se ven hasta que mienten: que la matriz ponga
-    cada venta en SU hora (en orden de servicio) o en su día de semana, que
-    «Por día» divida por los días CON VENTA —o por cuántos lunes, martes…
-    tuvo el período—, que las filas sean los platos del período MÁS NUEVO
-    (las mismas en todos los paneles, o la diferencia restaría platos
-    distintos), y el signo de la resta.
-    """
-    from graficos import ventas_horario as _h
-
-    fallos = 0
-
-    def check(nombre, got, exp):
-        nonlocal fallos
-        if got == exp:
-            print(f"OK    por hora · filas · {nombre}")
-        else:
-            fallos += 1
-            print(f"FALLA por hora · filas · {nombre}: got={got!r} exp={exp!r}")
-
-    # Lunes 3 y martes 4 de agosto de 2026; el 0 es la medianoche.
-    t = pd.DataFrame({
-        "hora": [13, 20, 20, 0, 13],
-        "dow": [0, 0, 1, 1, 1],
-        "dia": pd.to_datetime(["2026-08-03", "2026-08-03", "2026-08-04",
-                               "2026-08-04", "2026-08-04"]),
-        "prod": ["Lomo", "Lomo", "Lomo", "Pisco", "Pisco"],
-        "grupo": ["Alimentos", "Alimentos", "Alimentos", "Bebidas",
-                  "Bebidas"],
-        "venta": [100.0, 60.0, 40.0, 30.0, 10.0],
-        "cant": [2.0, 1.0, 1.0, 3.0, 1.0], "desc": 0.0,
-    })
-    horas = [13, 20, 0]
-    m = _h._matriz_filas(t, "prod", ["Lomo", "Pisco"], True, "venta", horas,
-                         False)
-    check("cada venta en su hora, en orden de servicio",
-          m.tolist(), [[100.0, 100.0, 0.0], [10.0, 0.0, 30.0]])
-    m = _h._matriz_filas(t, "prod", ["Lomo", "Pisco"], True, "venta", horas,
-                         True)
-    check("«Por día» divide por los dos días con venta",
-          m.tolist(), [[50.0, 50.0, 0.0], [5.0, 0.0, 15.0]])
-    m = _h._matriz_filas(t, "prod", ["Lomo"], False, "venta", horas, True)
-    check("por día de semana: lunes y martes, uno de cada uno",
-          m.tolist()[0][:3], [160.0, 40.0, 0.0])
-    viejo = t.assign(prod="Ceviche")
-    check("las filas son los platos del período MÁS NUEVO",
-          _h._items_filas([viejo, t], "prod"), ["Lomo", "Pisco"])
-    check("la resta lleva su signo", (_h._fmt_delta(-1240.0, "venta"),
-                                      _h._fmt_delta(3.0, "cant")),
-          ("−S/ 1,240", "+3"))
-    check("Pax y Ticket no son medidas de las filas",
-          set(_h._MED_FILAS) & {"pax", "ticket"}, set())
-    return fallos
-
-
-def _pruebas_ficha_hora():
-    """Ventas › Por hora: la ficha que abre un CLIC en una celda (regla #536).
-
-    Fija lo que no se ve hasta que miente: qué es una MESA (un pedido del
-    local con personas: ni Rappi, ni Venta Interna, ni sin personas), que
-    las cadenas cierren (mesas × venta por mesa = venta en mesas), que las
-    mesas abiertas se cuenten con el cobro como cierre y crucen la
-    medianoche, que un clic se distinga de un arrastre, y que el mapa siga
-    dando el hover de los números en su PRIMERA capa con hover.
-    """
-    import datetime as _dt
-
-    from graficos import ventas_ficha_hora as _f
-    from graficos import ventas_horario as _h
-    from tema import TEXTO_PRINCIPAL
-
-    fallos = 0
-
-    def check(nombre, got, exp):
-        nonlocal fallos
-        if got == exp:
-            print(f"OK    ficha hora · {nombre}")
-        else:
-            fallos += 1
-            print(f"FALLA ficha hora · {nombre}: got={got!r} exp={exp!r}")
-
-    ts = pd.Timestamp
-    # Sábado 5 de septiembre de 2026, 7 pm: dos mesas, una Venta Interna,
-    # un Rappi, un pedido sin personas y uno olvidado abierto 8 horas.
-    d = pd.DataFrame({
-        "PED": ["M1", "M1", "M2", "VI", "RP", "SP", "OL", "M9"],
-        "ABRE": [ts("2026-09-05 19:05"), ts("2026-09-05 19:05"),
-                 ts("2026-09-05 19:40"), ts("2026-09-05 19:50"),
-                 ts("2026-09-05 19:10"), ts("2026-09-05 19:20"),
-                 ts("2026-09-05 19:30"), ts("2026-08-29 19:15")],
-        "COBRO": [ts("2026-09-05 21:05"), ts("2026-09-05 21:05"),
-                  ts("2026-09-05 20:40"), ts("2026-09-05 19:52"),
-                  ts("2026-09-05 19:40"), ts("2026-09-05 19:30"),
-                  ts("2026-09-06 03:40"), ts("2026-08-29 20:45")],
-        "VENTA": [300.0, 100.0, 200.0, 1500.0, 80.0, 25.0, 90.0, 150.0],
-        "PAX": [4, 4, 2, 0, 1, 0, 2, 3],
-        "CANT": [1.0, 2.0, 1.0, 80.0, 1.0, 1.0, 1.0, 1.0],
-        "PROD": ["Lomo", "Pisco", "Ceviche", "Chorizo", "Lomo", "Café",
-                 "Pisco", "Lomo"],
-        "GRUPO": ["Alimentos", "Bebidas", "Alimentos", "Venta Interna",
-                  "Alimentos", "Bebidas", "Bebidas", "Alimentos"],
-        "Nombre Mesero": ["MESERO UNO", "MESERO UNO", "MESERA DOS", "", "", "",
-                          "MESERA DOS", "MESERA DOS"],
-        "Canal Venta": ["En el Local", "En el Local", "En el Local",
-                        "En el Local", "Rappi", "En el Local",
-                        "En el Local", "En el Local"],
-    })
-    c = {"tiempo": "ABRE", "apertura": "ABRE", "cobro": "COBRO",
-         "venta": "VENTA", "pax": "PAX", "pedido": "PED", "prod": "PROD",
-         "cant": "CANT", "grupo": "GRUPO"}
-    fl = _f.filas(d, c)
-    peds = _f.pedidos(fl).set_index("ped")
-    check("una mesa es un pedido del local con personas y venta",
-          sorted(peds.index[peds["mesa"]]), ["M1", "M2", "M9", "OL"])
-    check("la Venta Interna, Rappi y sin personas no son mesa",
-          sorted(peds.index[~peds["mesa"]]), ["RP", "SP", "VI"])
-    check("un pedido abierto más de 6 h no tiene duración",
-          bool(pd.isna(peds.loc["OL", "min"])), True)
-    check("la duración va del pedido al último cobro",
-          float(peds.loc["M1", "min"]), 120.0)
-
-    pc, items = _f.de_la_celda(fl, _f.pedidos(fl), "2026-09-05", 19,
-                               con_items=True)
-    check("los pedidos de la celda, del más grande al más chico",
-          list(pc["ped"]), ["VI", "M1", "M2", "OL", "RP", "SP"])
-    check("la venta de la celda es la de sus pedidos",
-          float(pc["v"].sum()), 2295.0)
-    check("lo que pidió cada uno, del más caro al más barato",
-          [p for p, _c, _v in items["M1"]], ["Lomo", "Pisco"])
-    m = _f.metricas(pc)
-    check("mesas de la celda (la del 29 es de otra celda)", m["mesas"], 3)
-    check("la cadena cierra: mesas × venta por mesa = venta en mesas",
-          round(m["mesas"] * m["vxm"], 6), round(m["v"], 6))
-    check("y venta por mesa = personas por mesa × gasto por persona",
-          round(m["pxm"] * m["gxp"], 6), round(m["vxm"], 6))
-    check("la venta por hora de mesa sólo cuenta mesas con duración",
-          round(m["vxh"], 4), round(600.0 / 3.0, 4))
-
-    ini, fin = _f.intervalos(_f.pedidos(fl))
-    check("mesas abiertas a las 7:45 (M1 y M2; OL no tiene duración)",
-          int(_f.abiertas(ini, fin, [ts("2026-09-05 19:45")])[0]), 2)
-    check("el cobro cierra: a las 8:40 M2 ya no cuenta",
-          int(_f.abiertas(ini, fin, [ts("2026-09-05 20:40")])[0]), 1)
-    check("lo más abierto entre las 7 y las 8",
-          _f.pico(ini, fin, ts("2026-09-05 19:00"), ts("2026-09-05 20:00")),
-          2)
-
-    horas = [12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 0]
-    check("el servicio es el tramo sin huecos", _f.bloque(horas, 20),
-          [18, 19, 20, 21, 22, 23, 0])
-    check("el almuerzo, aparte", _f.bloque(horas, 13), [12, 13, 14, 15, 16])
-    t0, t1, h0, h1 = _f.ventana_servicio("2026-09-06", horas, 0)
-    check("las 12 am del 6 son el final de la cena del 5",
-          (t0, h0), (ts("2026-09-05 17:30"), ts("2026-09-06 00:00")))
-    check("y la línea sigue una hora después de la última",
-          t1, ts("2026-09-06 02:00"))
-
-    check("la frase: la más alta",
-          _f.frase_normal(500.0, [100.0, 200.0], 5, 19),
-          "La más alta de 3 sábados a las 7 pm")
-    check("la frase: la 2.ª, y «a la 1 pm»",
-          _f.frase_normal(150.0, [100.0, 200.0], 0, 13),
-          "La 2.ª más alta de 3 lunes a la 1 pm")
-    check("la frase: nadie vendió",
-          _f.frase_normal(0.0, [0.0, 0.0], 2, 16),
-          "Ni esta ni las 2 semanas anteriores vendieron a las 4 pm")
-    # En la fila de Venta · Pax · Ticket va SIN la hora (2026-10-04): ya
-    # está en el título de al lado, y con ella la fila no entraba.
-    check("la frase corta, sin la hora",
-          (_f.frase_normal(150.0, [100.0, 200.0], 4, 22, con_hora=False),
-           _f.frase_normal(0.0, [0.0, 0.0], 6, 23, con_hora=False)),
-          ("La 2.ª más alta de 3 viernes", "Ningún domingo vendió en 2 semanas"))
-    # El resultado contra lo normal, junto al título: en lugar del rótulo
-    # «CONTRA LO NORMAL», que no decía nada.
-    check("el resultado: sube, baja, igual",
-          [_f.veredicto_normal(v, [100.0, 100.0, 120.0])
-           for v in (186.0, 82.0, 102.0)],
-          [("▲ 86% vs lo normal", "sube"), ("▼ 18% vs lo normal", "baja"),
-           ("≈ lo normal", "neutro")])
-    check("el resultado: sin semanas o sin ventas, nada que decir",
-          (_f.veredicto_normal(50.0, []), _f.veredicto_normal(0.0, [0.0, 0.0])),
-          (None, None))
-    check("el resultado: vendió donde lo normal es no vender",
-          _f.veredicto_normal(300.0, [0.0, 0.0, 50.0]),
-          ("▲ lo normal: sin ventas", "sube"))
-    check("la ventana trae 8 semanas antes y un día después",
-          _f.ventana(_dt.date(2026, 9, 1), _dt.date(2026, 9, 24)),
-          (_dt.date(2026, 7, 7), _dt.date(2026, 9, 25)))
-
-    # El clic que trae el puente de JS contra un arrastre sobre una celda.
-    clic = {"selection": {"points": [{"customdata": [0, 4, 19, "clic",
-                                                      1727380000000]}],
-                          "box": [], "lasso": []}}
-    caja = {"selection": {"points": [{"customdata": [0, 4, 19]}],
-                          "box": [{"x": [3.6, 4.4], "y": [5.6, 6.4]}],
-                          "lasso": []}}
-    check("un clic se reconoce con su sello",
-          _h._clic_de_evento(clic), (0, 4, 19, 1727380000000))
-    check("un arrastre no es un clic", _h._clic_de_evento(caja), None)
-    check("un arrastre sigue dando sus puntos para la marca",
-          _h._puntos_de_evento(caja), [(0, 4, 19)])
-    check("el puente reenvía el clic como selección",
-          all(x in _h._JS_CLIC_MAPA for x in
-              ("plotly_click", "plotly_selected", '"clic"', "__vhClicApagar")),
-          True)
-
-    # El mapa con la celda del clic: su borde oscuro, y el hover de los
-    # números sigue en la primera capa con hover (la de celdas vacías va
-    # después).
-    celdas = pd.DataFrame({"col": [0, 1], "hora": [19, 21],
-                           "venta": [100.0, 200.0], "cant": [3.0, 5.0],
-                           "desc": [0.0, 0.0], "pax": [2.0, 4.0],
-                           "ticket": [50.0, 50.0], "raro": [0.0, 80.0]})
-    fig = _h._fig_mapa([celdas], [(2026, 32)], "Semana", "venta", [],
-                       [19, 21], foco={"sel": 0, "c": 1, "h": 21})
-    bordes = [s for s in fig.layout.shapes
-              if s.type == "rect" and s.line.color == TEXTO_PRINCIPAL]
-    check("la celda del clic lleva su borde", len(bordes), 1)
-    hov = [t for t in fig.data if t.type == "scatter" and t.hoverinfo != "skip"]
-    check("la primera capa con hover es la de los números",
-          len(hov[0].x) if hov else 0, 2)
-    check("las celdas vacías también tienen hover (para el clic)",
-          len(hov[1].x) if len(hov) > 1 else 0, 7 * 2 - 2)
-    check("la Venta Interna o Eventos de la celda sale en el tooltip",
-          "Venta Interna" in (hov[0].customdata[1][9] if hov else ""), True)
-    # Desde la regla #610 es un punto naranja en la esquina, medido en
-    # píxeles (antes, un triángulo que se leía como una salpicadura).
-    from tema import ADVERTENCIA as _NAR
-    tri = [s for s in fig.layout.shapes
-           if s.type == "circle" and s.fillcolor == _NAR]
-    check("y su celda lleva el punto naranja", len(tri), 1)
-    check("medido en píxeles desde la esquina",
-          (tri[0].xsizemode, tri[0].ysizemode) if tri else None,
-          ("pixel", "pixel"))
-    sin = _h._fig_mapa([celdas], [(2026, 32)], "Semana", "venta", [],
-                       [19, 21], raros=False)
-    check("con el interruptor apagado no hay punto naranja",
-          len([s for s in sin.layout.shapes
-               if s.type == "circle" and s.fillcolor == _NAR]), 0)
-    return fallos
-
-
-def _pruebas_por_hora_semana_y_desliza():
-    """Ventas › Por hora: las dos formas de columnas de «Días × horas» y el
-    mapa deslizable (regla #551).
-
-    «Por día de semana» pinta PROMEDIOS: cada celda es la suma dividida por
-    los días de ese día de la semana que vendieron algo, a cualquier hora, y
-    la lista que abre su clic tiene que dar el mismo promedio — si no, la
-    celda y la lista dicen dos cosas. El deslizable son dos figuras (el mapa
-    y su eje de horas) que tienen que coincidir fila por fila sin que el
-    navegador mida nada: mismo alto, mismos márgenes de arriba y abajo,
-    mismo rango del eje Y.
-
-    Todo por NOMBRE de columna (CLAUDE.md: pandas 3 acá, 2.2 en Cloud).
-    """
-    import datetime as _dt
-
-    from graficos import ventas_horario as _h
-
-    fallos = 0
-
-    def check(nombre, got, exp):
-        nonlocal fallos
-        if got == exp:
-            print(f"OK    por hora · semana · {nombre}")
-        else:
-            fallos += 1
-            print(f"FALLA por hora · semana · {nombre}: got={got!r} exp={exp!r}")
-
-    # Septiembre 2026: sábados 5, 12, 19 y 26; el 19 sólo vendió al
-    # almuerzo, el 26 no vendió. Un domingo, el 6.
-    ts = pd.Timestamp
-    d = pd.DataFrame({
-        "FECHA": [ts("2026-09-05 19:10"), ts("2026-09-05 19:10"),
-                  ts("2026-09-12 19:40"), ts("2026-09-19 13:00"),
-                  ts("2026-09-06 20:00")],
-        "VENTA": [300.0, 100.0, 200.0, 90.0, 50.0],
-        "PAX": [4, 4, 2, 3, 1],
-        "PED": ["P1", "P1", "P2", "P3", "P4"],
-    })
-    c = {"fecha": "FECHA", "venta": "VENTA", "pax": "PAX", "pedido": "PED"}
-    ini, fin = _dt.date(2026, 9, 1), _dt.date(2026, 9, 30)
-    t = _h._prep_tramo(d, c, "Mes", ini, fin, semanal=True)
-    check("la columna es el día de la semana (0 = lunes)",
-          sorted(set(zip(t["dia"].dt.day, t["col"]))),
-          [(5, 5), (6, 6), (12, 5), (19, 5)])
-    g = _h._celdas(t, promedio=True).set_index(["col", "hora"])
-    check("sábado 7 pm: 600 entre los 3 sábados que vendieron",
-          round(float(g.loc[(5, 19), "venta"]), 6), 200.0)
-    check("el almuerzo del 19 hace que ese sábado cuente",
-          round(float(g.loc[(5, 13), "venta"]), 6), 30.0)
-    check("el pax también es por día (un valor por pedido)",
-          round(float(g.loc[(5, 19), "pax"]), 6), 2.0)
-    check("el ticket no cambia al promediar",
-          round(float(g.loc[(5, 19), "ticket"]), 6), round(600.0 / 6.0, 6))
-    s_ = _h._celdas(t).set_index(["col", "hora"])
-    check("sin promedio, la suma de siempre",
-          float(s_.loc[(5, 19), "venta"]), 600.0)
-
-    filas_, prom, n = _h._dias_de_la_celda(t, 5, 19, ini, fin)
-    check("la lista trae todos los sábados del mes",
-          [f.day for f, *_ in filas_], [5, 12, 19, 26])
-    check("con su venta a esa hora",
-          [v for _, v, _, _ in filas_], [400.0, 200.0, 0.0, 0.0])
-    check("y sus pedidos", [p for *_, p in filas_], [1, 1, 0, 0])
-    check("el promedio de la lista es el de la celda",
-          round(prom, 6), round(float(g.loc[(5, 19), "venta"]), 6))
-    check("y su divisor, los sábados que vendieron", n, 3)
-    check("sin tramo, la lista sale en cero",
-          _h._dias_de_la_celda(None, 5, 19, ini, fin)[1:], (0.0, 0))
-
-    check("una marca por día de semana se rotula con sus días",
-          _h._etiqueta_columnas({"sem": True, "c0": 4, "c1": 6}, (2026, 9),
-                                "Mes"), "Vie–Dom")
-    check("el mapa por día de semana tiene 7 columnas",
-          _h._columnas_mapa((2026, 9), "Mes", semanal=True)[0], 7)
-
-    # El deslizable: 1 mes entra, 2 no.
-    claves = [(2026, 8), (2026, 9)]
-    ancla = _dt.date(2026, 9, 27)
-    tot = _h._total_columnas(claves, "Mes", ancla)
-    check("agosto + 27 días de septiembre + el hueco", tot, 31 + 27 + 1)
-    check("un mes no desliza",
-          _h._total_columnas([(2026, 9)], "Mes", ancla)
-          > _h._MAX_COLS_SIN_DESLIZAR, False)
-    check("dos meses sí", tot > _h._MAX_COLS_SIN_DESLIZAR, True)
-    check("por día de semana nunca: 7 columnas por panel",
-          _h._total_columnas(claves, "Mes", ancla, semanal=True), 15)
-    check("24 px por columna más los márgenes",
-          _h._ancho_desliza(tot), 4 + 10 + 59 * 24)
-
-    celdas = pd.DataFrame({"col": [0, 3], "hora": [19, 21],
-                           "venta": [100.0, 200.0], "cant": [3.0, 5.0],
-                           "desc": [0.0, 0.0], "pax": [2.0, 4.0],
-                           "ticket": [50.0, 50.0], "raro": [0.0, 0.0]})
-    horas = [13, 19, 21]
-    alto = 300
-    fig = _h._fig_mapa([celdas, celdas], claves, "Mes", "venta", [], horas,
-                       ancla=ancla, alto=alto, desliza=True)
-    eje = _h._fig_eje_horas(horas, alto, _h._margen_arriba(len(claves)))
-    check("la figura mide lo que pide el deslizable",
-          fig.layout.width, _h._ancho_desliza(tot))
-    check("el mapa no dibuja sus horas (las dibuja el eje)",
-          fig.layout.yaxis.showticklabels, False)
-    check("ni la barra de colores, que se iría con el scroll",
-          [tr.showscale for tr in fig.data if tr.type == "heatmap"],
-          [False] * len([tr for tr in fig.data if tr.type == "heatmap"]))
-    check("mismo alto", eje.layout.height, fig.layout.height)
-    check("mismo margen de arriba", eje.layout.margin.t, fig.layout.margin.t)
-    check("mismo margen de abajo", eje.layout.margin.b, fig.layout.margin.b)
-    check("mismo rango del eje Y, fijo",
-          (tuple(eje.layout.yaxis.range), eje.layout.yaxis.autorange),
-          (tuple(fig.layout.yaxis.range), fig.layout.yaxis.autorange))
-    check("y las mismas horas, en el mismo orden",
-          list(eje.data[0].y), [_h._etiqueta_hora(x) for x in horas])
-    # Con los totales al margen (regla #610) las filas del mapa dejan abajo
-    # la tira de totales: el eje de al lado tiene que dejarla también, o
-    # cada hora cae sobre la fila de otra.
-    fig_t = _h._fig_mapa([celdas, celdas], claves, "Mes", "venta", [], horas,
-                         ancla=ancla, alto=alto, desliza=True, totales=True)
-    eje_t = _h._fig_eje_horas(horas, alto,
-                              _h._margen_arriba(len(claves), True),
-                              totales=True)
-    check("con totales, el eje y el mapa reparten igual las filas",
-          (tuple(eje_t.layout.yaxis.domain), eje_t.layout.margin.t),
-          (tuple(fig_t.layout.yaxis.domain), fig_t.layout.margin.t))
-    check("y el mapa mide lo que pide el deslizable con totales",
-          fig_t.layout.width, _h._ancho_desliza(tot, True))
-    sin = _h._fig_mapa([celdas], [(2026, 9)], "Mes", "venta", [], horas,
-                       ancla=ancla, alto=alto)
-    check("sin deslizar el mapa sigue rotulando sus horas",
-          sin.layout.yaxis.showticklabels is not False, True)
-    check("el puente de JS lleva el mapa al final sólo si cambió",
-          all(x in _h._JS_CLIC_MAPA for x in
-              ("st-key-vh_desliza", "data-firma", "scrollLeft")), True)
-
-    # El CSS del deslizable: adentro del `:has()`, una clase sola (#469).
-    from estilos._80_cards import CSS as _css
-    check("el deslizable se prende por la clase del eje",
-          ".st-key-vh_desliza:has(.st-key-vh_eje_horas)" in _css, True)
-
-    # La franja de la hora (regla #554): la fila bajo el cursor se enmarca
-    # con un <div> del puente de JS, no con el spike de Plotly (una línea
-    # punteada por el medio de la fila, encima del color de las celdas).
-    check("el mapa ya no dibuja el spike de Plotly",
-          bool(sin.layout.yaxis.showspikes), False)
-    check("el puente enmarca la fila con el cursor",
-          all(x in _h._JS_CLIC_MAPA for x in
-              ("plotly_hover", "plotly_unhover", "vh-franja-hora",
-               "vh-hora-activa", "vh_eje_horas")), True)
-    check("el marco le gana al `border: 0` de Plotly",
-          ".js-plotly-plot .plotly div.vh-franja-hora" in _css, True)
-    check("y la hora activa, al `fill` inline de Plotly",
-          ".ytick text.vh-hora-activa" in _css, True)
-    return fallos
-
-
-def _pruebas_cabecera_por_hora():
-    """Ventas › Por hora: la cabecera como tabla dinámica (regla #555).
-
-    Lo que no se ve hasta que miente: que una opción que no aplica REBOTE y
-    diga por qué en vez de quedar elegida; que lo elegido sobreviva a que
-    su botonera no se dibuje o no aplique (la sombra); que «Diferencia» se
-    apague sólo cuando no se puede; y que los dos controles que viven en el
-    popover de «Ajustes» no se monten con su default y pisen lo elegido
-    (#467). Sin navegador: se reemplaza `st` por uno de mentira.
-    """
-    import pathlib
-    import types
-
-    from graficos import ventas_horario as _h
-    from graficos import ventas_platos as _vp
-
-    fallos = 0
-
-    def check(nombre, got, exp):
-        nonlocal fallos
-        if got == exp:
-            print(f"OK    cabecera por hora · {nombre}")
-        else:
-            fallos += 1
-            print(f"FALLA cabecera por hora · {nombre}: got={got!r} exp={exp!r}")
-
-    check("los nombres de tabla dinámica",
-          (_h._FILAS, _h._COLS_DIAS, _h._COLS_FILAS, _h._ESCALAS),
-          (("Horas", "Platos", "Grupos", "Áreas"), ("Fecha", "Día de semana"),
-           ("Hora", "Día de semana"), ("Total", "Por día")))
-    check("«Cantidad» se llama «Unidades»", dict(_h._MEDIDAS)["cant"],
-          "Unidades")
-
-    md = _h._motivo_diferencia
-    check("Diferencia con un panel no se puede",
-          "uno solo" in md(1, False, False, "Semana"), True)
-    check("ni en Mes por fecha (el 1 no es el mismo día de semana)",
-          md(2, False, False, "Mes").startswith("En Mes"), True)
-    check("en Mes por día de semana sí", md(2, False, True, "Mes"), "")
-    check("con filas Platos, en Mes también", md(2, True, False, "Mes"), "")
-    check("en Semana sí", md(2, False, False, "Semana"), "")
-
-    # `st` de mentira: el estado es un dict y `st.selectbox` anota lo que
-    # recibe (desde el 2026-09-29 la cabecera son desplegables).
-    real, llamadas = _h.st, []
-    falso = types.SimpleNamespace(
-        session_state={},
-        selectbox=lambda *a, **k: llamadas.append((a, k)))
-    _h.st = falso
-    try:
-        ss = falso.session_state
-        ss["w"] = "Pax"
-        _h._al_elegir("w", "_w", {"Pax": "Pax es del pedido."})
-        check("un toque en lo que no aplica deja el motivo",
-              (ss.get(_h._K_MOTIVO), ss.get("_w")),
-              ("Pax es del pedido.", None))
-        ss.pop(_h._K_MOTIVO)
-        ss["w"] = "Unidades"
-        _h._al_elegir("w", "_w", {"Pax": "x"})
-        check("lo que aplica se guarda en la sombra", ss.get("_w"), "Unidades")
-        ss["w"] = None
-        _h._al_elegir("w", "_w", {})
-        check("soltar la opción no borra lo elegido", ss.get("_w"), "Unidades")
-
-        ss["_m"] = "Pax"
-        v = _h._pastillas("Valor", ["Venta", "Pax", "Unidades", "Ticket"],
-                          "m", "_m", "Venta", {"Pax": "a", "Ticket": "b"},
-                          ancho=110)
-        check("lo elegido que no aplica se ve como la primera que sí",
-              (v, ss["m"]), ("Venta", "Venta"))
-        check("y la sombra lo recuerda para cuando vuelva a aplicar",
-              ss["_m"], "Pax")
-        _fmt = llamadas[-1][1]["format_func"]
-        check("lo que no aplica se marca en la lista",
-              [_fmt(o) for o in ("Venta", "Pax")],
-              ["Venta", "Pax" + _h._NO_APLICA])
-        check("el desplegable no recibe `index=` (lo pone la sombra)",
-              "index" in llamadas[-1][1], False)
-        check("y lleva su ancho", llamadas[-1][1].get("width"), 110)
-        v = _h._pastillas("Escala", ["Total", "Por día"], "e", "_e", "Por día",
-                          {"Total": "x", "Por día": "x"}, forzado="Total")
-        check("«forzado» manda aunque las dos no apliquen", v, "Total")
-        ss.pop("_e", None)
-        v = _h._pastillas("Escala", ["Total", "Por día"], "e", "_e", "Por día")
-        check("sin sombra, el default", v, "Por día")
-    finally:
-        _h.st = real
-
-    src = pathlib.Path(_h.__file__).read_text(encoding="utf-8")
-    from graficos import ventas_hora_controles as _hc
-    src_contexto = pathlib.Path(_hc.__file__).read_text(encoding="utf-8")
-    check("el filtro compartido lleva su valor en `value=` (#467)",
-          'value=bool(ss.get("_vh_raros_valor", True))' in src_contexto,
-          True)
-    check("y Python no le escribe la key",
-          "setdefault(\n                        _K_RAROS" in src
-          or "session_state[_K_RAROS] =" in src, False)
-    vp = pathlib.Path(_vp.__file__).read_text(encoding="utf-8")
-    check("«Ver a qué hora se vende» deja la columna en su sombra",
-          'ss["_vh_op_cols_valor"] = "Hora"' in vp
-          and "Hora" in _h._COLS_FILAS, True)
-
-    from estilos._80_cards import CSS as _css
-    check("contexto y presentación tienen contenedores propios",
-          ".st-key-vh_filtros" in _css
-          and ".st-key-vh_presentacion" in _css, True)
-    check("los rótulos del mapa son visibles sin hover",
-          'visible=True' in src
-          and '.st-key-vh_cab_filas::before' not in _css, True)
-
-    # «Promedio por día» en el hover sólo si la celda ES un promedio.
-    celdas = pd.DataFrame({"col": [5], "hora": [19], "venta": [100.0],
-                           "cant": [3.0], "desc": [0.0], "pax": [2.0],
-                           "ticket": [50.0], "raro": [0.0]})
-    import datetime as _dt
-    for prom in (True, False):
-        fig = _h._fig_mapa([celdas], [(2026, 9)], "Mes", "venta", [], [19],
-                           ancla=_dt.date(2026, 9, 27), semanal=True,
-                           promedio=prom)
-        hov = [t for t in fig.data
-               if t.type == "scatter" and t.hoverinfo != "skip"]
-        check(f"el hover dice «promedio» sólo si lo es ({prom})",
-              "promedio por día" in hov[0].customdata[0][8], prom)
-    return fallos
-
-
 def _pruebas_movimientos_periodo():
     """Movimientos › las tarjetas «por período» (graficos/movimientos_periodo.py).
 
@@ -13725,34 +12644,6 @@ def main():
             (_o_s, _rbc.costo_por_mes(_o_s), 20.0, "KILOS")),
     ]
 
-    # ── Mapa por hora (Ventas › Por hora) ───────────────────────────────
-    # Dos paneles con distinta cantidad de columnas y una marca puesta: es la
-    # combinación que ejercita los offsets del eje X, el hueco entre paneles,
-    # el customdata de la capa de selección y las shapes de las marcas.
-    from graficos import ventas_horario as _vh_fig
-    _celdas_demo = pd.DataFrame({
-        "col":    [0, 1, 4, 6],
-        "hora":   [12, 19, 19, 21],
-        "venta":  [100.0, 400.0, 250.0, 80.0],
-        "cant":   [3.0, 9.0, 6.0, 2.0],
-        "desc":   [0.0, 40.0, 10.0, 0.0],
-        "pax":    [2.0, 8.0, 5.0, 1.0],
-        "ticket": [50.0, 50.0, 50.0, 80.0],
-    })
-    pruebas += [
-        ("ventas_horario · mapa (2 paneles + marca)",
-         lambda: _vh_fig._fig_mapa(
-             [_celdas_demo, _celdas_demo], [(2026, 32), (2026, 33)], "Semana",
-             "venta", [{"sel": 1, "c0": 4, "c1": 6, "h0": 19, "h1": 21}],
-             [12, 19, 21]), ()),
-        ("ventas_horario · mapa (granularidad Mes)",
-         lambda: _vh_fig._fig_mapa(
-             [_celdas_demo], [(2026, 2)], "Mes", "ticket", [], [12, 19, 21]), ()),
-        ("ventas_horario · mapa sin datos",
-         lambda: _vh_fig._fig_mapa([None], [2026], "Año", "venta", [], [12]), ()),
-    ]
-
-
     # ── Vs año pasado (Compras): serie mensual y puente precio/cantidad ──
     # El waterfall entra con un efecto de cada signo a propósito: es la
     # combinación donde `increasing`/`decreasing` tienen que pintar los dos
@@ -13887,7 +12778,7 @@ def main():
 
     # ── Ventas › Análisis de platos: puestos, movimiento, por día ────────
     fallos += _pruebas_ventas_platos()
-    fallos += _pruebas_ventas_franja()
+    fallos += _pruebas_pieza_hora()
 
     # ── Ventas › Ingeniería de menú: la clasificación de Kasavana-Smith ──
     fallos += _pruebas_ventas_menu()
@@ -13897,10 +12788,6 @@ def main():
     fallos += _pruebas_ventas_ver_por()
 
     # ── Ventas › Por hora: las filas «Platos» y «Grupos» ─────────────────
-    fallos += _pruebas_por_hora_filas()
-    fallos += _pruebas_ficha_hora()
-    fallos += _pruebas_por_hora_semana_y_desliza()
-    fallos += _pruebas_cabecera_por_hora()
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()
@@ -13928,7 +12815,6 @@ def main():
     fallos += _pruebas_ticket_sin_canales_sin_clientes()
     fallos += _pruebas_formas_de_pago()
     fallos += _pruebas_control_pedidos()
-    fallos += _pruebas_filas_por_area()
 
     # ── Recetas › Costo recetas base: uso, producción y costo (#576) ─────
     fallos += _pruebas_costo_recetas_base()

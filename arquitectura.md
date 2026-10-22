@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-703 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+704 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (224)
+**CSS y estilos** (225)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -289,8 +289,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#698** — «Guardadas» es una lista con ficha, y una propuesta se vuelve a abrir en el editor
 - **#699** — El ranking de «Análisis de platos» es una pieza propia
 - **#702** — «Mix de carta» es una pieza propia: Python manda las sumas por producto y período, y el…
+- **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 
-**Layout y alturas** (98)
+**Layout y alturas** (99)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -390,6 +391,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
+- **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 
 **Plotly y figuras** (121)
 
@@ -54093,6 +54095,90 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      entra en la pantalla; sin excepciones ni errores de consola.
      (2026-10-22.)
 
+704. **«Análisis por hora» es una pieza propia en dos tarjetas: Python
+     manda los pedidos y sus líneas, y el navegador arma todo lo demás.** A
+     pedido (2026-10-22), sobre el boceto 4 aprobado con cifras reales
+     (https://claude.ai/artifact/McRvFx5rdn1tKz8xfzrWeq), después de tres
+     bocetos y una crítica de usabilidad con el usuario. Hasta ese día era
+     el mapa de Plotly con tres modos —Patrones, Comparar (hasta 4 paneles,
+     marcas por arrastre, drill con su árbol) y Franjas («A medida»)—, la
+     ficha de la hora en Python, y cuatro módulos más: `ventas_franja`,
+     `ventas_ficha_hora`, `ventas_hora_controles` y `ventas_hora_detalle`.
+     · **Qué hay ahora** (`graficos/ventas_horario.js` + `.css`). La
+       primera tarjeta lleva arriba lo que vale para todo (la fecha, «Más
+       filtros» con canal, ámbito, hora del pedido o del cobro, eventos y
+       venta interna, «Medir» y «Comparar con»), seis indicadores (la hora
+       pico y el mejor día llevan a su celda) y dos pestañas: **Cuándo se
+       vende** (semana tipo, día por día deslizable con las horas fijas,
+       mes por mes; promedio o total; coloreado contra lo normal, el año
+       pasado u otro período, o lado a lado a todo el ancho) y **Qué se
+       vende a cada hora**, con un gráfico por pregunta: platos (cada fila
+       contra sí misma, sólo los de 10 unidades o más; los demás juntos y a
+       un clic), grupos (barras al 100 %, pálida la columna con menos del
+       5 % de la mayor) y áreas (una sola escala, en unidades). Al costado,
+       el detalle de lo elegido: la celda (Resumen con mesas × personas ×
+       gasto contra lo normal y «la N.ª de 9», Mesas, Pedidos) o el plato,
+       grupo o área. La segunda tarjeta compara las **franjas** —arrastradas
+       en el mapa o armadas a mano, con canal y ámbito propios, hasta
+       cuatro— en Cifras, Qué se vendió (hasta el tipo de descuento) y Día
+       por día. Una franja que cruza la medianoche cuenta en el día en que
+       empezó.
+     · **Qué viaja** (`armar`, puro): los pedidos —`CAMPOS_P`: día y
+       minuto de apertura, canal, personas, minutos en la mesa, día y
+       minuto del último cobro, local— y sus líneas —`CAMPOS_L`: pedido,
+       producto, cantidad, venta, descuento, tipo de descuento—, del rango,
+       de sus 13 semanas anteriores (lo normal son 8; «Otro período», 3, 8
+       o 13) y del mismo rango 364 días antes (`ventanas`, sin pisarse y
+       recortadas a lo que tiene el parquet). El `.js` lee las dos listas
+       POR POSICIÓN y el test fija los órdenes. Las personas van una vez
+       por pedido y la nota de crédito resta (`definicion_venta.pax_por`);
+       un pedido abierto más de 6 horas no tiene tiempo de mesa; una MESA es
+       un pedido del local con personas. Se carga por la fecha del PEDIDO
+       (#552) y se guarda en la sesión con el rango, los chips, el sello del
+       parquet, el turno y `VERSION`.
+     · **Dos montajes, un cerebro**. Las dos tarjetas son dos llamadas al
+       mismo componente; sin iframe comparten `window`, y el de la primera
+       deja ahí (`window.__vhHora`) el estado, las raíces y las funciones
+       que dibujan. El de la segunda manda sólo `parte: "franjas"` y el
+       `sello`, y le entrega su raíz (o la deja en espera si llega antes).
+       Así los pedidos viajan una vez y una franja arrastrada arriba aparece
+       abajo sin una corrida. Los clics se escuchan en cada raíz (desde
+       `document` el blanco sería el host de la pieza) y lo que pasa afuera
+       —soltar un arrastre, cerrar un desplegable— en la ventana.
+     · **Cada tarjeta mide una pantalla desde la pieza**: `--alto-util`
+       menos el cromo de su tarjeta (59 y 31 px, medidos a 1323×619: las
+       dos dan 575). Por eso van sin el techo de `_80_cards.py`, y la
+       segunda es un punto de encaje propio en `_27_pila.py` —medido: la
+       rueda se detiene con cada tarjeta a 20 px del borde—. «Comparar ↓»
+       baja con el `scroll-padding` de `.stMain`: `scrollIntoView` la
+       dejaba pegada al borde.
+     · **Lo que se recuerda y lo que no**: las franjas, la forma del mapa,
+       las cifras en las celdas, los paneles de lado a lado y las mesas del
+       salón, en `localStorage`. Lo demás abre siempre igual: con eventos y
+       sin venta interna (a pedido; antes un solo interruptor juntaba los
+       dos), en la semana tipo y la celda más fuerte.
+     · **Las horas salen de los datos** del rango, en el orden del día de
+       servicio y sin huecos (una hora sin venta entre dos que tienen se ve
+       y lo dice); lo pedido antes de las 6 es de la noche anterior, como
+       en `consumo_recetas.HORA_MADRUGADA`.
+     · El salto «A qué hora se vende» de «Análisis de platos» deja el plato
+       en `_vh_ir` y la pieza lo abre en «Qué se vende a cada hora». El
+       calendario de períodos que «Análisis de platos» tomaba de acá
+       (`_claves_hacia_atras`, `_rango_de_clave`, `_etiqueta_clave`) pasó a
+       `ventas_platos.py`, y `GRUPOS_RAROS` a `ventas_comparativo.py`.
+     · Se fueron ~5.800 renglones de Python, ~1.800 de CSS en
+       `estilos/_80_cards.py` (`vh_*`, `vhh-*`, `chartcard_ventas_horario_*`,
+       `vt_frj_*`) y sus pruebas (`test_ventas_hora_contexto.py`,
+       `test_ventas_hora_detalle.py` y siete funciones de
+       `test_graficos.py`). Las reglas de esa vista (#112 a #115, #529 a
+       #531, #536, #551, #555, #610, #627) quedan como historia.
+     Lo vigila `test_graficos.py::_pruebas_pieza_hora`. Probado en la app
+     local con R2 a 1323×619 con clics reales (arrastrar una franja,
+     «Comparar ↓», las dos pestañas, platos, grupos y áreas, «Más filtros»
+     sin eventos, lo normal coloreado y lado a lado, el salto desde
+     «Análisis de platos»): sin excepciones ni errores de consola.
+     (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54105,7 +54191,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#703**; la próxima toma el número siguiente.
+> última regla es la **#704**; la próxima toma el número siguiente.
 
 >
 

@@ -68,7 +68,6 @@ from graficos.base import _card, _es_movil, franja_cabecera
 from inyecciones._iframe import inyectar_html
 from graficos.compras._comun import _first_point, _fmt_variacion
 from graficos import alturas
-from graficos.ventas_ficha_hora import GRUPOS_RAROS
 from utils import fmt_k
 
 
@@ -127,6 +126,13 @@ MAX_ETIQUETAS = 14   # con más barras el %Var se pisa: queda sólo en el hover
 # nombre (`_vc._pascua(2026)`), y renombrar algo que ya está importado es
 # justo lo que en Cloud deja la app hablando con el paquete viejo hasta el
 # reboot (CLAUDE.md, arquitectura.md #357).
+GRUPOS_RAROS = ("Venta Interna", "Eventos")
+"""Los grupos del POS que venden sin ser servicio de salón: se venden por
+tanda y arman los picos del día y de la hora. Los separa este comparativo y
+los dos interruptores de «Análisis por hora» (`ventas_horario`), y es la
+misma lista que `consumo_recetas.GRUPOS_NO_SERVICIO` (el test lo vigila).
+Vivía en `ventas_ficha_hora.py`, que se fue con la vista vieja (#704)."""
+
 _DIAS_ES = tuple(_d.capitalize() for _d in cortes.DIAS_ABR_ES)
 _FERIADOS_FIJOS_PE = cortes.FERIADOS_FIJOS_PE
 _pascua = cortes.pascua

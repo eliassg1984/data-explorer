@@ -538,9 +538,9 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
 - **Una ayuda (`help=`) en un widget con `label_visibility="collapsed"` no
   se ve**: el «?» va dentro del rótulo oculto (medido: 0×0 px). Y `st.pills`
   no apaga una opción suelta, ni `st.selectbox`: para marcarla y que al
-  elegirla diga por qué, `graficos/ventas_horario.py::_pastillas` (el valor
-  en una sombra, un callback que rebota y «· no aplica» en la lista).
-  Reglas #555 y #561.
+  elegirla diga por qué hacen falta el valor en una sombra, un callback que
+  rebota y «· no aplica» en la lista (lo hacía `_pastillas` del mapa viejo
+  de «Por hora», que se fue con la regla #704). Reglas #555 y #561.
 - **La barrita de íconos de un `st.dataframe` (`.stElementToolbar`) flota
   ENCIMA del renglón de arriba** mientras el cursor está en la tabla, y se
   come el clic de lo que haya ahí (un botón, un interruptor). Y una tabla sin
@@ -561,11 +561,12 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
   modo sea select o lazo. Clic y caja no conviven solos en un
   `st.plotly_chart`: o se elige con qué gesto abre (el histograma de Ajuste ›
   Distribución abre en clic: `dragmode="pan"` + ejes `fixedrange`), o se
-  puentea el clic con JS, como el mapa de Ventas › Por hora
-  (`ventas_horario.py::_JS_CLIC_MAPA` lo reenvía como la selección de un
-  punto, con un sello para que tocar dos veces la misma celda cuente; su
-  celda vacía necesita una capa con hover, porque Plotly sólo emite el clic
-  sobre un punto con hover). Misma #388, y la #536.
+  puentea el clic con JS, como hacía el mapa viejo de Ventas › Por hora
+  (lo reenviaba como la selección de un punto, con un sello para que tocar
+  dos veces la misma celda contara; su celda vacía necesitaba una capa con
+  hover, porque Plotly sólo emite el clic sobre un punto con hover). Misma
+  #388, y la #536. Desde la #704 ese mapa es una pieza propia: el clic y el
+  arrastre son suyos.
 - **La selección de `st.plotly_chart(on_select=...)` persiste entre reruns.**
   Con `key` estática, cada rerun re-procesa el mismo clic → toggle infinito
   (parpadeo). La key tiene que cambiar tras cada clic procesado **y el
@@ -1072,6 +1073,30 @@ Y su total cuenta sólo los períodos que TIENEN año pasado: el parquet
 empieza el 1-ene-2025, y un mes del año pasado anterior a eso no es «cero
 ventas» (el KPI dice «10 de 12»). En Mes el día de semana NO se cancela —un
 octubre con cinco sábados—: la barra marca «cal. ±x %». Regla #660.
+
+## «Análisis por hora»: dos tarjetas, un cerebro
+
+Desde el 2026-10-22 (regla #704) Ventas › «Análisis por hora» es una pieza
+propia (`graficos/ventas_horario.py` + `.js` + `.css`) en DOS tarjetas: la
+del mapa —«Cuándo se vende» | «Qué se vende a cada hora», los indicadores y
+el detalle de lo elegido al costado— y la de la comparación de franjas.
+Python arma los pedidos y sus líneas del rango, de sus 13 semanas
+anteriores y del año pasado (`armar`, con `CAMPOS_P`/`CAMPOS_L` como
+contrato de posiciones); todo lo demás lo resuelve el navegador sin una
+corrida. Lo que muerde:
+
+- **Son dos montajes del mismo componente y comparten `window`**
+  (`window.__vhHora`): el del mapa trae los datos y es el que dibuja; el de
+  las franjas manda sólo `parte` y `sello` y le entrega su raíz. Una pieza
+  de `st.components.v2` no tiene iframe, así que es la misma ventana. Si
+  se cambia una tarjeta de lugar, las dos siguen hablando por ahí.
+- **Cada tarjeta mide UNA pantalla desde la pieza** (`--alto-util` menos el
+  cromo de su tarjeta), así que las dos van sin el techo; y la segunda es
+  un punto de encaje propio (`estilos/_27_pila.py`), o la página se
+  detendría con media tarjeta de cada una.
+- **Abre con eventos y sin venta interna** (dos interruptores), a pedido.
+  Lo que se recuerda entre sesiones son las franjas y la forma del mapa, en
+  `localStorage`; los filtros, no.
 
 ## La compra resta las notas de crédito: `definicion_compra.py`
 
@@ -1666,11 +1691,11 @@ tres vistas de arriba (Por familia, Familia × Área, Distribución) eligen una
   vacías, las filas salen salteadas. Escribilo con `categoryorder="array"`.
   Y **`update_xaxes`/`update_yaxes` sin selector tocan TODOS los ejes que
   existan**: un eje extra (`xaxis2`, `yaxis3`) se crea DESPUÉS de esas
-  llamadas o hereda categorías y rangos ajenos. Los dos, en el mapa de
-  «Por hora»: regla #610.
+  llamadas o hereda categorías y rangos ajenos. Los dos, en el mapa viejo
+  de «Por hora» (hasta la #704): regla #610.
 - **Un eje en OTRA figura sólo cae sobre sus filas si nadie calcula nada.**
-  El mapa deslizable de Ventas › Por hora lleva las horas en una figura
-  aparte, pegada a la izquierda: las dos necesitan el mismo alto, los
+  El mapa deslizable que tuvo Ventas › Por hora (hasta la #704) llevaba
+  las horas en una figura aparte, pegada a la izquierda: las dos necesitan el mismo alto, los
   mismos márgenes de arriba y abajo, `automargin=False` y el eje Y con
   `autorange=False` y el MISMO `range` — con el autorange de siempre un
   heatmap y un scatter redondean distinto y el eje quedó 4px corrido. Y
@@ -1679,8 +1704,8 @@ tres vistas de arriba (Por familia, Familia × Área, Distribución) eligen una
   `width: auto`, que pisa el ancho y dejó el mapa en 150px. Regla #551.
 - **Un `<div>` que metas adentro de una figura de Plotly nace sin borde.**
   Plotly trae `.js-plotly-plot .plotly div { border: 0; margin: 0;
-  padding: 0 }`, que le gana a una clase sola: el marco de la fila de
-  «Por hora» no se veía. Selector largo (`.js-plotly-plot .plotly
+  padding: 0 }`, que le gana a una clase sola: el marco de la fila del
+  mapa viejo de «Por hora» no se veía. Selector largo (`.js-plotly-plot .plotly
   div.mi-clase`). Regla #554.
 - **Un renglón de HTML puesto ENCIMA de una figura va por DEBAJO de
   ella.** Por encima tapa el hover (las fichas de una leyenda se pintaban

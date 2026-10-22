@@ -89,7 +89,7 @@ GRUPOS_NO_SERVICIO = ("Venta Interna", "Eventos")
 """Los grupos del POS que no son servicio de salón: se venden por tanda (el
 chorizo y la chistorra de pato para Mayta, 8 pedidos en 6 días de un mes) y
 corren el patrón por día y por hora. Es la lista de
-`graficos/ventas_ficha_hora.py::GRUPOS_RAROS`; el test vigila que no se
+`graficos/ventas_comparativo.py::GRUPOS_RAROS`; el test vigila que no se
 separen."""
 
 HORA_CENA = 17

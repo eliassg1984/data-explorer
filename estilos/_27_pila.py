@@ -206,5 +206,11 @@ CSS = """
         .st-key-aviso_dato_viejo {
             scroll-snap-align: start;
         }
+        /* Una sección de DOS tarjetas de una pantalla cada una (Ventas ›
+           Análisis por hora, regla #704): la segunda es un punto de encaje
+           propio, o la página se detendría con media tarjeta de cada una. */
+        .st-key-ajuste_graf_card_izq_ventas_franjas {
+            scroll-snap-align: start;
+        }
     }
 """

@@ -544,9 +544,12 @@ igual(round(sum(_venta(x) for x in _dias), 2),
                                       dt.date(2026, 9, 30))), 2),
       "día por día suma lo mismo que el mes: nada se cuenta dos veces")
 _fuente_h = (RAIZ / "graficos/ventas_horario.py").read_text(encoding="utf-8")
-ok("cargar_rango(_arch, _colp," not in _fuente_h
-   and "cargar_rango(_arch, _col_carga," in _fuente_h,
-   "ventas_horario.py: cada panel se carga por la fecha que lo ubica",
+# Desde la regla #704 es una pieza: carga sus tramos por la fecha del
+# PEDIDO —la que ubica cada venta en su hora— y sólo sin esa columna (el
+# demo) por la del comprobante.
+ok('col = _resolver(d, ["Fecha Registro Pedido"]) or cfg.get(' in _fuente_h
+   and "cargar_rango(archivo, col, a, b)" in _fuente_h,
+   "ventas_horario.py: cada tramo se carga por la fecha que lo ubica",
    "cargado por el cobro y ubicado por el pedido, el pedido que cruza el "
    "borde no cae en ningún panel")
 
