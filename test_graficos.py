@@ -11504,6 +11504,15 @@ def _pruebas_pieza_hora():
           "eventos: true, vinterna: false" in js, True)
     check("lo normal son las 8 semanas anteriores",
           "const SEMANAS = [1, 2, 3, 4, 5, 6, 7, 8];" in js, True)
+    # Las franjas (anexo de la #704): de entrada, las cenas que más venden,
+    # y en el mapa no se ven ni se crean hasta prender «Franjas».
+    check("sin franjas propias, abre con las cenas que más venden",
+          ("function cenasMayores()" in js, "franjasAuto: !Array.isArray(r.franjas)" in js,
+           "const N_CENAS = 3;" in js), (True, True, True))
+    check("el mapa abre sin los bordes de las franjas",
+          "verFranjas: false, factiva: null" in js, True)
+    check("sin el interruptor, arrastrar no crea una franja",
+          "|| !S.verFranjas) { S.sel = " in js, True)
     check("la pieza no usa :has() (regla #469)", ":has(" in css, False)
     check("ni colores sueltos: las variables de estilos/",
           re.findall(r"#[0-9a-fA-F]{3,8}\b",

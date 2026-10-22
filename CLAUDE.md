@@ -1097,6 +1097,11 @@ corrida. Lo que muerde:
 - **Abre con eventos y sin venta interna** (dos interruptores), a pedido.
   Lo que se recuerda entre sesiones son las franjas y la forma del mapa, en
   `localStorage`; los filtros, no.
+- **Las franjas de entrada son las tres cenas que más venden** en el rango
+  (`cenasMayores`, recalculadas con cada rango hasta que el usuario toca
+  una), y **el mapa abre sin sus bordes**: el interruptor «Franjas» los
+  muestra con las fichas para elegir, redibujar y quitar. Apagado, un
+  arrastre no crea nada — así nacían franjas sin querer.
 
 ## La compra resta las notas de crédito: `definicion_compra.py`
 

@@ -291,7 +291,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#702** — «Mix de carta» es una pieza propia: Python manda las sumas por producto y período, y el…
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 
-**Layout y alturas** (99)
+**Layout y alturas** (98)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -391,7 +391,6 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
-- **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 
 **Plotly y figuras** (121)
 
@@ -1047,7 +1046,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (209)
+**Decisiones de diseño y UX** (210)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1258,6 +1257,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#697** — «Nuevo Costeo» es una pieza propia: la receta y su precio se editan en el navegador, con los…
 - **#701** — Las dos vistas de requerimientos dicen qué se pidió de más, qué se repite y qué no salió…
 - **#703** — «Revisar recetas» es una pieza propia y se llama «Recetas vs porcionado»
+- **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -54172,6 +54172,25 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        `test_ventas_hora_detalle.py` y siete funciones de
        `test_graficos.py`). Las reglas de esa vista (#112 a #115, #529 a
        #531, #536, #551, #555, #610, #627) quedan como historia.
+     · **Anexo, el mismo día: las franjas de entrada y el interruptor.** El
+       usuario vio los recuadros en el mapa sin saber qué eran —dos venían
+       de ejemplo y dos los había creado un arrastre sin querer— y pidió:
+       abajo, de entrada, las cenas de mayor movimiento; arriba, los bordes
+       ocultos hasta prender un interruptor que deje verlas, elegirlas y
+       quitarlas. Quedó así: sin franjas propias, las de entrada son las
+       tres noches de la semana que más venden en el rango (`cenasMayores`),
+       en el horario de la cena —las horas de la noche, seguidas, con al
+       menos un cuarto de la venta de la hora pico; en octubre de 2026, de 7
+       a 10 pm—; se recalculan con cada rango y no se guardan hasta que el
+       usuario cambia o quita una (`franjasAuto`). El mapa abre con
+       «Franjas» apagado: sin bordes, y un arrastre sólo elige la celda.
+       Prendido, se ven los bordes, cada ficha con su ✕ y la leyenda dice
+       qué son; tocar una ficha la elige y el arrastre siguiente la
+       REDIBUJA (otros días, otro horario; el nombre automático se rehace),
+       y sin elegida el arrastre crea una. La clave de `localStorage` pasó
+       a `vh_hora_est_v2`: las de ejemplo quedaron guardadas con la vieja.
+       Medido: con los datos de 1–21 oct 2026 salen sábado, miércoles (lo
+       sube el evento «Menu Eventmovil») y viernes.
      Lo vigila `test_graficos.py::_pruebas_pieza_hora`. Probado en la app
      local con R2 a 1323×619 con clics reales (arrastrar una franja,
      «Comparar ↓», las dos pestañas, platos, grupos y áreas, «Más filtros»

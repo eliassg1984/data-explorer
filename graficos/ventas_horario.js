@@ -29,7 +29,9 @@
 
 const P_DIA = 0, P_ABRE = 1, P_CANAL = 2, P_PAX = 3, P_DUR = 4, P_DIA_COBRO = 5, P_COBRO = 6, P_LOCAL = 7;
 const L_PED = 0, L_PROD = 1, L_CANT = 2, L_VENTA = 3, L_DESC = 4, L_TDESC = 5;
-const CLAVE = 'vh_hora_est';
+// `_v2`: desde que las franjas de entrada son las cenas que más venden (las
+// de ejemplo de antes quedaron guardadas con la clave vieja).
+const CLAVE = 'vh_hora_est_v2';
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const DIAS_L = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 const DIAS_PL = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados', 'domingos'];
@@ -46,10 +48,8 @@ const MED = {
   pax: ['Personas', (v) => v.toFixed(v < 10 ? 1 : 0), false], gasto: ['Gasto/persona', (v) => `S/ ${v.toFixed(0)}`, false], desc: ['Descuento', (v) => soles(v), true],
 };
 const REF_NOM = { normal: 'lo normal', ap: 'el año pasado', otro: 'otro período' };
-const FRANJAS_INICIALES = [
-  { id: 1, nombre: 'Cena de fin de semana', tipo: 'semana', dias: [4, 5], fechas: [], desde: 39, hasta: 46, canal: null, ambito: null },
-  { id: 2, nombre: 'Almuerzo de fin de semana', tipo: 'semana', dias: [5, 6], fechas: [], desde: 25, hasta: 31, canal: null, ambito: null },
-];
+const N_CENAS = 3;
+const PISO_CENA = 0.25;
 
 const G = (window.__vhHora = window.__vhHora || {});
 
@@ -69,7 +69,9 @@ const esNoche = (h) => h >= 17 || h < MADRUGADA;
 function leer() { try { const v = localStorage.getItem(CLAVE); return v ? JSON.parse(v) : {}; } catch (_) { return {}; } }
 function guardar() {
   const S = G.S; if (!S) return;
-  try { localStorage.setItem(CLAVE, JSON.stringify({ franjas: S.franjas, nextId: S.nextId, salon: S.salon, forma: S.forma, cifras: S.cifras, paneles: [...S.paneles] })); } catch (_) { /* sin almacenamiento */ }
+  // Mientras las franjas sean las de entrada no se guardan: se vuelven a
+  // calcular con cada rango.
+  try { localStorage.setItem(CLAVE, JSON.stringify({ franjas: S.franjasAuto ? null : S.franjas, nextId: S.nextId, salon: S.salon, forma: S.forma, cifras: S.cifras, paneles: [...S.paneles] })); } catch (_) { /* sin almacenamiento */ }
 }
 
 // ── El estado: abre siempre en lo de siempre; se recuerdan las franjas y la forma ──
@@ -83,8 +85,12 @@ function estadoInicial() {
     cifras: !!r.cifras, forma: r.forma === 'puntos' ? 'puntos' : 'mosaico',
     pop: false, menu: false, tab: 'resumen', sel: null, item: null, salon: r.salon > 0 ? r.salon : null, ampliar: false, chicos: false, todos: false,
     areasUnid: false, areasAuto: false, ctab: 'cifras', fsel: null, abiertos: new Set(), arbol: 'venta', editando: null, borrador: null,
-    franjas: Array.isArray(r.franjas) ? r.franjas.slice(0, 4) : FRANJAS_INICIALES.map((f) => ({ ...f })),
-    nextId: r.nextId > 0 ? r.nextId : 3,
+    // Sin franjas propias, las de entrada: las cenas que más venden (`cenasMayores`).
+    franjas: Array.isArray(r.franjas) ? r.franjas.slice(0, 4) : [], franjasAuto: !Array.isArray(r.franjas),
+    nextId: r.nextId > 0 ? r.nextId : 1,
+    // El mapa abre sin los bordes de las franjas: el interruptor «Franjas» los
+    // muestra, y sólo con él prendido arrastrar crea o redibuja una.
+    verFranjas: false, factiva: null,
   };
 }
 
@@ -235,11 +241,31 @@ function cifrasFranja(f) {
   const ap = disponible('ap', dias) ? sumaFranja(f, correr(dias, -DIAS_AP)).a.venta / n : NaN;
   return { dias, n: dias.length, ...act, porDiaV: act.a.venta / n, normal, ap };
 }
+function cenasMayores() {
+  // Las franjas de entrada: las N_CENAS noches de la semana que más venden en
+  // el rango (venta por día, con los filtros de la vista), cada una en el
+  // horario de la cena — las horas de la noche, seguidas, con al menos un
+  // cuarto (PISO_CENA) de la venta de la hora pico.
+  const porHora = new Map();
+  for (const d of DIAS_R) for (const f of PORDIA.get(d) || []) { const h = Math.floor(f.min / 60); if (esNoche(h)) porHora.set(h, (porHora.get(h) || 0) + f.venta); }
+  if (!porHora.size) return [];
+  const orden = (h) => (h - MADRUGADA + 24) % 24;
+  const horas = [...porHora.keys()].sort((a, b) => orden(a) - orden(b));
+  const pico = horas.reduce((p, h) => (porHora.get(h) > porHora.get(p) ? h : p), horas[0]);
+  const piso = PISO_CENA * porHora.get(pico);
+  let i0 = horas.indexOf(pico), i1 = i0;
+  while (i0 > 0 && orden(horas[i0 - 1]) === orden(horas[i0]) - 1 && porHora.get(horas[i0 - 1]) >= piso) i0--;
+  while (i1 < horas.length - 1 && orden(horas[i1 + 1]) === orden(horas[i1]) + 1 && porHora.get(horas[i1 + 1]) >= piso) i1++;
+  const base = { tipo: 'semana', fechas: [], desde: horas[i0] * 2, hasta: ((horas[i1] + 1) * 2) % 48 || 48, canal: null, ambito: null };
+  const porDia = DIAS.map((_, w) => { const ds = DIAS_R.filter((d) => dow(d) === w); return ds.length ? sumaFranja({ ...base, dias: [w] }, ds).a.venta / ds.length : 0; });
+  return porDia.map((v, w) => [v, w]).filter(([v]) => v > 0).sort((a, b) => b[0] - a[0]).slice(0, N_CENAS)
+    .map(([, w], i) => ({ ...base, id: i + 1, dias: [w], nombre: `Cena del ${DIAS_L[w]}`, nombreAuto: true }));
+}
 function nuevaFranja(base, raiz) {
   if (S.franjas.length >= 4) { aviso('Hasta 4 franjas a la vez: quitá una en la tarjeta de abajo para crear otra.', raiz); return null; }
   const f = Object.assign({ nombre: '', tipo: 'semana', dias: [], fechas: [], desde: 38, hasta: 46, canal: null, ambito: null }, base, { id: S.nextId++ });
-  if (!f.nombre) f.nombre = nombreAuto(f);
-  S.franjas.push(f); S.fsel = f.id; guardar(); return f;
+  if (!f.nombre) { f.nombre = nombreAuto(f); f.nombreAuto = true; }
+  S.franjas.push(f); S.fsel = f.id; S.franjasAuto = false; guardar(); return f;
 }
 
 // ── Lo general: cabecera, Más filtros, Medir, Comparar ──────────────────
@@ -310,8 +336,10 @@ function contornos(cs, L, T, cw, filaH, dias) {
   // El contorno de cada franja sobre las filas que toca; media fila si
   // empieza o termina a la media hora.
   let s = '';
+  if (!S.verFranjas) return s;
   S.franjas.forEach((f, fi) => {
     const set = new Set(diasDe(f, dias)), cub = cs.map((c) => c.dias.some((d) => set.has(d)));
+    const act = S.factiva === f.id, apagada = S.factiva && !act;
     const filas = HORAS.map((h, i) => [i, enFranja(f, h * 2), enFranja(f, h * 2 + 1)]).filter(([, a, b]) => a || b);
     if (!filas.length) return;
     const pri = filas[0], ult = filas[filas.length - 1];
@@ -321,7 +349,7 @@ function contornos(cs, L, T, cw, filaH, dias) {
       if (!cub[j]) { j++; continue; }
       let j2 = j; while (j2 + 1 < cs.length && cub[j2 + 1]) j2++;
       const ins = 1 + fi * 2;
-      s += `<rect x="${L + j * cw + ins}" y="${y0 + ins}" width="${(j2 - j + 1) * cw - 2 * ins}" height="${Math.max(4, y1 - y0 - 2 * ins)}" rx="4" fill="none" style="stroke:${FCOL[fi]}" stroke-width="2.2" pointer-events="none"/>`;
+      s += `<rect x="${L + j * cw + ins}" y="${y0 + ins}" width="${(j2 - j + 1) * cw - 2 * ins}" height="${Math.max(4, y1 - y0 - 2 * ins)}" rx="4" fill="none" style="stroke:${FCOL[fi]}${apagada ? ';opacity:.35' : ''}" stroke-width="${act ? 3.4 : 2.2}" pointer-events="none"/>`;
       j = j2 + 1;
     }
   });
@@ -334,8 +362,10 @@ function cabeceraCuando() {
     ${comparando() ? seg('mostrar', [['mapa', 'Coloreado'], ['lado', 'Lado a lado']], S.mostrar) : ''}
     <button type="button" class="puntos" id="menu" title="Dibujo y cifras" aria-label="Dibujo y cifras">⋯</button>
     ${S.menu ? `<div class="mini-pop" id="minipop"><div><span class="rot">Dibujo</span> ${seg('forma', [['mosaico', 'Mosaico'], ['puntos', 'Puntos']], S.forma)}</div><label class="sw"><input type="checkbox" id="cifras" ${S.cifras ? 'checked' : ''}> Escribir la cifra en cada celda</label></div>` : ''}`;
-  const der = S.franjas.map((f, i) => `<button type="button" class="fchip" data-fchip="${f.id}" style="border-color:${FCOL[i]}" title="${esc(describir(f))}"><span>${esc(f.nombre)}</span></button>`).join('')
-    + (S.franjas.length ? `<button type="button" class="link" id="ir-comp">Comparar ${S.franjas.length} franja${S.franjas.length === 1 ? '' : 's'} ↓</button>` : '<span class="fi-de">Arrastrá sobre el mapa para crear una franja</span>');
+  const interr = `<label class="interruptor" title="Ver las franjas en el mapa; con esto prendido, arrastrar crea una o redibuja la elegida"><input type="checkbox" id="verfranjas" ${S.verFranjas ? 'checked' : ''}><span class="pista" aria-hidden="true"></span>Franjas</label>`;
+  const fichas = S.verFranjas ? S.franjas.map((f, i) => `<span class="fchip${S.factiva === f.id ? ' on' : ''}" style="border-color:${FCOL[i]}"><button type="button" class="fnom" data-factiva="${f.id}" title="${esc(describir(f))} · tocala y arrastrá sobre el mapa para redibujarla">${esc(f.nombre)}</button><button type="button" class="fx" data-fquitar="${f.id}" aria-label="Quitar ${esc(f.nombre)}" title="Quitar">✕</button></span>`).join('') : '';
+  const der = interr + fichas
+    + (S.franjas.length ? `<button type="button" class="link" id="ir-comp">Comparar ${S.franjas.length} franja${S.franjas.length === 1 ? '' : 's'} ↓</button>` : '');
   $('gcab').innerHTML = `<div class="izq">${izq}</div><div class="der">${der}</div>`;
 }
 function mapaHoras() {
@@ -343,7 +373,8 @@ function mapaHoras() {
   // La leyenda primero: si ocupa dos renglones, el mapa se mide con lo que queda.
   $('ley').innerHTML = (cmp ? `${ESC_D}<span>contra ${esc(refTexto())}: rojo menos, verde más · gris: muy chica para comparar</span>` : `${ESC_V}<span>${esc(MED[S.medida][0].toLowerCase())}${S.modo !== 'dia' ? (S.celda === 'prom' ? ', promedio por día' : ', total') : ''}: de menos a más</span>`)
     + '<span><i class="pt"></i> eventos en la celda</span>' + (S.modo === 'dia' ? '<span><span class="fer">*</span> feriado</span>' : '') + (S.modo === 'mes' ? '<span>* mes incompleto</span>' : '')
-    + '<span>al margen: % de la venta de cada hora · total de cada columna</span>';
+    + '<span>al margen: % de la venta de cada hora · total de cada columna</span>'
+    + (S.verFranjas ? `<span class="ley-fr">recuadros: tus franjas, del color de su ficha · ${S.factiva ? `arrastrá para redibujar «${esc((S.franjas.find((f) => f.id === S.factiva) || {}).nombre || '')}»` : S.franjas.length < 4 ? 'arrastrá para crear una · tocá una ficha para redibujarla' : 'hasta 4: quitá una para crear otra · tocá una ficha para redibujarla'}</span>` : '');
   const cont = $('svgw'), Wc = Math.max(420, cont.clientWidth - 2), Hc = Math.max(200, cont.clientHeight - 2);
   const L = 44, R = 60, T = 4, B = 40, n = cs.length;
   const filaH = Math.max(15, Math.min(26, (Hc - T - B) / HORAS.length));
@@ -640,14 +671,14 @@ function fichaItem(items) {
 function listaFranjas(cifras) {
   if (S.editando !== null) return formFranja();
   if (!S.franjas.length) return '<div class="fi-de">Todavía no hay franjas.</div><div class="acc"><button type="button" class="btn" id="nueva">+ Nueva franja</button></div>';
-  let h = '';
+  let h = S.franjasAuto ? `<div class="nota">Las ${S.franjas.length} noches que más venden en el rango, de ${sl(S.franjas[0].desde)} a ${sl(S.franjas[0].hasta)}. Cambiá o quitá cualquiera y quedan las tuyas.</div>` : '';
   S.franjas.forEach((f, i) => {
     const c = cifras[i];
     h += `<div class="fcard${S.fsel === f.id ? ' on' : ''}" data-fcard="${f.id}" style="border-left-color:${FCOL[i]}"><div class="t"><b>${esc(f.nombre)}</b><span class="acc"><button type="button" class="btn sec peq" data-editar="${f.id}">Editar</button><button type="button" class="btn sec peq" data-quitar="${f.id}" aria-label="Quitar">✕</button></span></div>
       <div class="d">${esc(describir(f))} · ${c.n} días${cruza(f) ? ' · cruza la medianoche' : ''}</div>${propios(f) ? `<span class="propio">${esc(propios(f))}</span>` : ''}
       <div class="v"><b>${soles(c.a.venta)}</b><span class="fi-de">${soles(c.porDiaV)}/día</span>${pill(c.porDiaV / c.normal - 1, 'vs normal')}${pill(c.porDiaV / c.ap - 1, 'vs año pasado')}</div></div>`;
   });
-  if (S.franjas.length < 4) h += '<div class="acc"><button type="button" class="btn" id="nueva">+ Nueva franja</button><span class="fi-de">o arrastrá sobre el mapa de arriba</span></div>';
+  if (S.franjas.length < 4) h += '<div class="acc"><button type="button" class="btn" id="nueva">+ Nueva franja</button><span class="fi-de">o prendé «Franjas» en el mapa y arrastrá</span></div>';
   return h;
 }
 function formFranja() {
@@ -664,7 +695,7 @@ function formFranja() {
     <div class="acc"><button type="button" class="btn" id="f-guardar">Guardar</button><button type="button" class="btn sec" id="f-cancelar">Cancelar</button></div></div>`;
 }
 function contenidoFranjas(cs) {
-  if (!S.franjas.length) return '<div class="vacio2"><b>Comparar horarios</b><span>Arrastrá sobre el mapa de arriba (por ejemplo, viernes y sábado de 7 a 11 pm) o creá una franja a mano. Hasta cuatro, cada una contra lo normal y contra el año pasado.</span></div>';
+  if (!S.franjas.length) return '<div class="vacio2"><b>Comparar horarios</b><span>Prendé «Franjas» en el mapa de arriba y arrastrá (por ejemplo, viernes y sábado de 7 a 11 pm), o creá una franja a mano. Hasta cuatro, cada una contra lo normal y contra el año pasado.</span></div>';
   const col = (i) => `<th><i style="background:${FCOL[i]}"></i>${esc(S.franjas[i].nombre)}</th>`;
   const cabT = `<thead><tr><th></th>${cs.map((_, i) => col(i)).join('')}</tr></thead>`;
   if (S.ctab === 'cifras') {
@@ -722,6 +753,10 @@ function render() {
   if (S.modo === 'mes' && DIAS_R.length <= 45) S.modo = 'semana';
   if (S.preg === 'que' && delPedido(S.medida)) S.medida = 'venta';
   construir();
+  if (S.franjasAuto && G.autoDe !== G.sello) {
+    S.franjas = cenasMayores(); G.autoDe = G.sello; S.factiva = null;
+    S.nextId = Math.max(S.nextId, S.franjas.length + 1);
+  }
   if (G.R1 && G.R1.isConnected && $('kpis')) {
     general(); kpis();
     const lado = S.preg === 'cuando' && comparando() && S.mostrar === 'lado';
@@ -812,7 +847,8 @@ function alClic(raiz, ev) {
   if (t.closest('#menu')) { S.menu = !S.menu; render(); return; }
   if (t.closest('#ampliar')) { S.ampliar = !S.ampliar; render(); return; }
   if (t.closest('#ir-comp')) { irAbajo(); return; }
-  const fc = t.closest('[data-fchip]'); if (fc) { S.fsel = +fc.dataset.fchip; render(); irAbajo(); return; }
+  const fa = t.closest('[data-factiva]'); if (fa) { const id = +fa.dataset.factiva; S.factiva = S.factiva === id ? null : id; S.fsel = id; render(); return; }
+  const fq = t.closest('[data-fquitar]'); if (fq) { quitarFranja(+fq.dataset.fquitar); return; }
   const bt = t.closest('[data-boton]'); if (bt) { if (bt.dataset.boton === 'todos') S.todos = !S.todos; else S.chicos = !S.chicos; render(); return; }
   const dd = t.closest('[data-dia]'); if (dd) { S.modo = 'dia'; S.sel = { col: dd.dataset.dia, h: S.sel.h }; render(); return; }
   const it = t.closest('[data-item]'); if (it) { S.item = S.item === it.dataset.item && S.por === 'grupos' ? null : it.dataset.item; render(); return; }
@@ -826,12 +862,12 @@ function alClic(raiz, ev) {
   if (t.closest('#franja-celda')) {
     const c = celdas(columnas()).find((z) => z.id === S.sel.col);
     const base = S.modo === 'semana' ? { tipo: 'semana', dias: [S.sel.col] } : { tipo: 'sueltos', fechas: c.dias.slice() };
-    if (nuevaFranja(Object.assign(base, { desde: S.sel.h * 2, hasta: (S.sel.h * 2 + 2) % 48 || 48 }), raiz)) aviso('Franja creada: está abajo, en «Comparación de franjas».', raiz);
+    if (nuevaFranja(Object.assign(base, { desde: S.sel.h * 2, hasta: (S.sel.h * 2 + 2) % 48 || 48 }), raiz)) { S.verFranjas = true; aviso('Franja creada: está abajo, en «Comparación de franjas».', raiz); }
     render(); return;
   }
   if (t.closest('#nueva')) { S.borrador = { id: null, nombre: '', tipo: 'semana', dias: [4, 5], fechas: [], desde: 38, hasta: 46, canal: null, ambito: null }; S.editando = 'nueva'; render(); return; }
   const ed = t.closest('[data-editar]'); if (ed) { ev.stopPropagation(); S.editando = +ed.dataset.editar; render(); return; }
-  const qu = t.closest('[data-quitar]'); if (qu) { ev.stopPropagation(); S.franjas = S.franjas.filter((f) => f.id !== +qu.dataset.quitar); guardar(); render(); return; }
+  const qu = t.closest('[data-quitar]'); if (qu) { ev.stopPropagation(); quitarFranja(+qu.dataset.quitar); return; }
   const fcd = t.closest('[data-fcard]'); if (fcd) { S.fsel = +fcd.dataset.fcard; render(); return; }
   const fe = () => (S.editando === 'nueva' ? S.borrador : S.franjas.find((z) => z.id === S.editando));
   const ft = t.closest('[data-ftipo]'); if (ft) { fe().tipo = ft.dataset.ftipo; render(); return; }
@@ -845,17 +881,24 @@ function alClic(raiz, ev) {
     const av = $('f-ambito').value; f.ambito = av === '__' ? null : av;
     if ((f.tipo === 'semana' && !f.dias.length) || (f.tipo === 'sueltos' && !f.fechas.length)) { aviso('Elegí al menos un día.', raiz); return; }
     if (f.desde === f.hasta) { aviso('El horario no puede empezar y terminar a la misma hora.', raiz); return; }
+    f.nombreAuto = !f.nombre;
     if (!f.nombre) f.nombre = nombreAuto(f);
     if (S.editando === 'nueva' && !nuevaFranja(f, raiz)) return;
-    S.editando = null; guardar(); render(); return;
+    S.editando = null; S.franjasAuto = false; guardar(); render(); return;
   }
   const ab = t.closest('[data-abrir]'); if (ab) { const key = ab.dataset.abrir; if (S.abiertos.has(key)) S.abiertos.delete(key); else S.abiertos.add(key); tarjeta2(); return; }
   if (S.pop && !t.closest('#pop')) { S.pop = false; render(); return; }
   if (S.menu && !t.closest('#minipop')) { S.menu = false; render(); }
 }
+function quitarFranja(id) {
+  S.franjas = S.franjas.filter((f) => f.id !== id);
+  if (S.factiva === id) S.factiva = null;
+  S.franjasAuto = false; guardar(); render();
+}
 function alCambiar(ev) {
   const id = ev.target.id;
-  if (id === 'eventos') S.eventos = ev.target.checked;
+  if (id === 'verfranjas') { S.verFranjas = ev.target.checked; if (!S.verFranjas) S.factiva = null; }
+  else if (id === 'eventos') S.eventos = ev.target.checked;
   else if (id === 'vinterna') S.vinterna = ev.target.checked;
   else if (id === 'cifras') { S.cifras = ev.target.checked; guardar(); }
   else if (id === 'ambito') S.ambito = ev.target.value;
@@ -873,7 +916,7 @@ function enlazar(raiz) {
     if (drag) {
       const c = celdaEn(ev); if (!c) return; drag.b = c;
       const j0 = Math.min(drag.a.j, c.j), j1 = Math.max(drag.a.j, c.j), i0 = Math.min(drag.a.i, c.i), i1 = Math.max(drag.a.i, c.i), e = $('arrastre');
-      if (e) { e.setAttribute('x', GEO.L + j0 * GEO.cw); e.setAttribute('y', GEO.T + i0 * GEO.filaH); e.setAttribute('width', (j1 - j0 + 1) * GEO.cw); e.setAttribute('height', (i1 - i0 + 1) * GEO.filaH); }
+      if (e && S.verFranjas) { e.setAttribute('x', GEO.L + j0 * GEO.cw); e.setAttribute('y', GEO.T + i0 * GEO.filaH); e.setAttribute('width', (j1 - j0 + 1) * GEO.cw); e.setAttribute('height', (i1 - i0 + 1) * GEO.filaH); }
       return;
     }
     const cel = ev.target.closest('#svgmapa .cel');
@@ -889,13 +932,23 @@ function alSoltar() {
   if (!drag || !GEO) { drag = null; return; }
   const { a, b } = drag; drag = null;
   const raiz = G.R1;
-  if (a.i === b.i && a.j === b.j) { S.sel = { col: GEO.cols[a.j].id, h: HORAS[a.i] }; render(); return; }
+  // Sin el interruptor, arrastrar no crea nada: elige la celda donde empezó.
+  if ((a.i === b.i && a.j === b.j) || !S.verFranjas) { S.sel = { col: GEO.cols[a.j].id, h: HORAS[a.i] }; render(); return; }
   const j0 = Math.min(a.j, b.j), j1 = Math.max(a.j, b.j), i0 = Math.min(a.i, b.i), i1 = Math.max(a.i, b.i);
   const base = { desde: HORAS[i0] * 2, hasta: (HORAS[i1] * 2 + 2) % 48 || 48 };
-  if (S.modo === 'semana') { base.tipo = 'semana'; base.dias = []; for (let j = j0; j <= j1; j++) base.dias.push(j); }
-  else { base.tipo = 'sueltos'; base.fechas = GEO.cols.slice(j0, j1 + 1).flatMap((c) => c.dias); }
-  const f = nuevaFranja(base, raiz);
-  if (f) aviso(`Franja creada: ${f.nombre}. Está abajo, en «Comparación de franjas»; ahí se edita.`, raiz);
+  if (S.modo === 'semana') { base.tipo = 'semana'; base.dias = []; base.fechas = []; for (let j = j0; j <= j1; j++) base.dias.push(j); }
+  else { base.tipo = 'sueltos'; base.dias = []; base.fechas = GEO.cols.slice(j0, j1 + 1).flatMap((c) => c.dias); }
+  const elegida = S.franjas.find((z) => z.id === S.factiva);
+  if (elegida) {
+    // Redibujar la elegida: otros días y otro horario; el nombre, si era automático, también.
+    Object.assign(elegida, base);
+    if (elegida.nombreAuto !== false) elegida.nombre = nombreAuto(elegida);
+    S.franjasAuto = false; guardar();
+    aviso(`«${elegida.nombre}» quedó en ${describir(elegida)}.`, raiz);
+  } else {
+    const f = nuevaFranja(base, raiz);
+    if (f) aviso(`Franja creada: ${f.nombre}. Está abajo, en «Comparación de franjas»; ahí se edita.`, raiz);
+  }
   render();
 }
 function enlazarVentana() {
