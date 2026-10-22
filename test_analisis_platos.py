@@ -56,5 +56,35 @@ class LoQueRecibeLaPieza(unittest.TestCase):
         self.assertEqual(vp.var_por_dia(3100.0, 31, 2100.0, 21), 0.0)
 
 
+class IngenieriaDeMenu(unittest.TestCase):
+    """La Ingeniería de menú en la pieza (regla #700): la cuenta sigue en
+    `ventas_menu.clasificar` y la pieza recibe cada plato ya clasificado."""
+
+    def test_lo_que_recibe(self):
+        from graficos import ventas_menu as vm
+        a = pd.DataFrame({
+            "prod": ["Lomo", "Pato", "Sopa", "Agua"], "grupo": ["Alimentos"] * 4,
+            "sub": ["Fondos"] * 4, "venta": [0.0] * 4, "cant": [100.0, 10.0, 80.0, 5.0],
+            "costo": [2000.0, 100.0, 1500.0, 0.0], "neto": [6000.0, 900.0, 2000.0, 50.0],
+            "pedidos": [90.0, 10.0, 70.0, 5.0]})
+        m, fuera, res = vm.clasificar(a, [("Alimentos", "Fondos")])
+        d = vm.armar_menu(m, fuera, res, {"Lomo": "caballo"}, "Oct 26", "Sep 26", 21)
+        p = {x[0]: x for x in d["platos"]}
+        self.assertEqual(set(p), set(m["prod"]))
+        self.assertEqual(p["Lomo"][2], m.set_index("prod").loc["Lomo", "clase"])
+        self.assertEqual(p["Lomo"][14], "caballo")
+        self.assertEqual(d["fuera"], [["Agua", "sin costo cargado", 10.0, 0.0]])
+        self.assertEqual(d["resumen"]["n"], res["n"])
+        self.assertEqual(d["umbrales_costo"], [45.0, 70.0])
+        self.assertEqual((d["etq"], d["etq_ant"], d["dias"]), ("Oct 26", "Sep 26", 21))
+
+    def test_el_js_no_reclasifica(self):
+        from graficos import ventas_menu as vm
+        js = Path(vm.__file__).with_suffix(".js").read_text(encoding="utf-8")
+        # La clase llega hecha: el .js no tiene el umbral del 70 % ni el promedio.
+        self.assertNotIn("0.7", js)
+        self.assertIn("p[F.clase] === k", js)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -166,7 +166,9 @@ platos» (`graficos/ventas_platos.py::armar_ranking` y `ventas_platos.js`):
 una posición por período, el grupo del período más nuevo, el código para
 saltar a Costo de Carta, y que el navegador rehaga los puestos (empates),
 el movimiento, la variación POR DÍA y el % de costo con las mismas
-fórmulas que Python. Ver `arquitectura.md` regla #699.
+fórmulas que Python. Ver `arquitectura.md` regla #699. Y la Ingeniería de
+menú (`ventas_menu.armar_menu` y `ventas_menu.js`, regla #700): que cada
+plato llegue con la clase de `clasificar` y que el `.js` no reclasifique.
 
 ## El asistente IA no adivina: consulta
 

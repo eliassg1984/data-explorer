@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-699 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+700 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (223)
 
@@ -390,7 +390,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
 
-**Plotly y figuras** (120)
+**Plotly y figuras** (121)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -512,6 +512,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#677** — De los tres modos de «Distribución de diferencias» sólo el Pareto se podía analizar: la vista…
 - **#685** — A 9px un «6» se lee «5»: los paneles por familia de Ajuste › Evolución parecían rotular el…
 - **#692** — Ajuste › Evolución es una pieza propia: la serie en rojo y verde con «Explicar con», el panel…
+- **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 
 **AgGrid y tablas** (95)
 
@@ -611,7 +612,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 
-**Streamlit** (166)
+**Streamlit** (167)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -779,6 +780,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#675** — Documentos SUNAT pide EN LOTE los XML que faltan en la tabla…
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
+- **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 
 **Datos, R2 y DuckDB** (111)
 
@@ -53859,6 +53861,35 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      Las reglas de `estilos/_80_cards.py` para `vt_pl_cabfila` siguen: el
      renglón del interruptor es el mismo. (2026-10-22.)
 
+700. **La Ingeniería de menú también es una pieza propia; la cuenta se
+     quedó en Python.** A pedido (2026-10-22), con los cuatro cuadros del
+     boceto de la #699. Hasta ese día eran `st.markdown` con HTML, una
+     figura de Plotly y un `st.dataframe`, con «Cuadros | Matriz | Tabla»
+     como widget.
+     · **Qué pasó a la pieza** (`graficos/ventas_menu.js` + `.css`): las
+       cuatro cifras por clase —un clic lleva a la Tabla filtrada por esa
+       clase—, la línea que explica los cortes, «Cuadros | Matriz | Tabla»
+       (en el navegador, sin corrida, recordado), y las tres formas:
+       los cuadros en su lugar de la matriz, cada uno con TODOS sus platos
+       y su propio scroll (antes, 7 y «el resto en la Tabla»); la matriz en
+       SVG al ancho de su caja, con los cuadrantes teñidos y los nombres
+       donde no pisan otro; y la tabla, ordenable por cualquier columna.
+       Debajo, lo que quedó fuera con su motivo.
+     · **Qué NO se mudó: la cuenta.** `clasificar` sigue en Python y la
+       pieza recibe cada plato con su clase, «al límite», la clase con
+       pedidos y la de antes (`armar_menu`). El método vive en un solo
+       lugar; el test verifica que el `.js` no tenga los umbrales.
+     · **La categoría** (qué subgrupos compiten) sigue siendo el
+       desplegable de Python: cambia la clasificación.
+     · Se fueron `_cuadros`, `_figura`, `_matriz`, `_tabla`, `_html_cab`,
+       `_filas_html`, `_chips` y `control_forma`. `rotulos` se queda: la
+       vigila `test_graficos.py`, y la matriz del `.js` coloca los nombres
+       con la misma idea.
+     · **Medido a 1323×619 con Playwright** con octubre de 2026 (Fondos):
+       1 estrella, 9 caballos, 6 rompecabezas y 4 perros; la matriz con 20
+       puntos y 18 nombres; la tabla filtrada a caballos. Sin errores.
+     Lo vigila `test_analisis_platos.py`. (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53871,7 +53902,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#699**; la próxima toma el número siguiente.
+> última regla es la **#700**; la próxima toma el número siguiente.
 
 >
 

@@ -1,0 +1,102 @@
+/* Ventas › «Análisis de platos» › Ingeniería de menú (regla #700).
+   Vive en el shadow root del componente (graficos/ventas_menu.py): ninguna
+   regla de acá sale de la pieza, y ninguna de estilos/ entra. Los colores
+   son las variables de estilos/_00_base.py. Ningún selector :has (#469).
+   Cada clase tiene su color en las cuatro formas: estrella verde, caballo
+   ámbar, rompecabezas lavanda, perro rojo. */
+
+.ig { display: grid; gap: 8px; min-width: 0; color: var(--text-primary); font-size: 13px; line-height: 1.4; }
+.ig button { font: inherit; color: inherit; }
+.ig button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.suave { color: var(--text-secondary); }
+
+.ig-cab { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.ig-kpis { flex: 1 1 520px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ig-kpi { text-align: left; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 6px 12px; cursor: pointer;
+  display: grid; gap: 1px; min-width: 0; }
+.ig-kpi:hover { border-color: var(--border-lavender); }
+.ig-kpi.on { border-color: var(--accent); background: var(--accent-tint); }
+.ig-kpi-rot { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+.ig-kpi-rot i, .ig-clase i { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+.ig-kpi-lin { display: flex; align-items: baseline; gap: 8px; }
+.ig-kpi-lin b { font-size: 17px; }
+.ig-kpi-lin span { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+.estrella .ig-kpi-rot i, .ig-clase.estrella i { background: var(--success); }
+.caballo .ig-kpi-rot i, .ig-clase.caballo i { background: var(--warning); }
+.rompecabezas .ig-kpi-rot i, .ig-clase.rompecabezas i { background: var(--accent); }
+.perro .ig-kpi-rot i, .ig-clase.perro i { background: var(--danger); }
+.ig-seg { align-self: center; display: flex; gap: 2px; background: var(--rail-fondo); border-radius: 8px; padding: 2px; }
+.ig-seg button { height: 28px; padding: 0 12px; border-radius: 6px; border: 0; cursor: pointer; font-size: 12.5px; background: transparent; color: var(--text-secondary) !important; }
+.ig-seg button.on { background: var(--bg-card); color: var(--accent-deep) !important; font-weight: 600; box-shadow: var(--shadow); }
+.ig-texto { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.ig-texto b { color: var(--text-primary); font-weight: 600; }
+.ig-pie { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.ig-pie b { color: var(--text-secondary); font-weight: 600; }
+
+/* Los cuatro cuadros, como en la matriz. */
+.ig-cuadros { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0 0 18px 18px;
+  height: calc(var(--alto-util) - 270px); min-height: 380px; grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.ig-eje-y { position: absolute; left: -2px; top: 50%; transform: translate(-50%, -50%) rotate(-90deg); transform-origin: center; font-size: 10.5px;
+  color: var(--text-muted); white-space: nowrap; margin-left: 9px; }
+.ig-eje-x { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); font-size: 10.5px; color: var(--text-muted); }
+.ig-cuadro { border: 1px solid var(--border); border-top-width: 3px; border-radius: 10px; background: var(--bg-card); padding: 8px 12px;
+  display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.ig-cuadro.estrella { border-top-color: var(--success); }
+.ig-cuadro.caballo { border-top-color: var(--warning); }
+.ig-cuadro.rompecabezas { border-top-color: var(--accent); }
+.ig-cuadro.perro { border-top-color: var(--danger); }
+.ig-ctit { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex: none; }
+.ig-ctit b { font-size: 14px; }
+.ig-ctit span { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+.ig-acc { font-size: 11.5px; color: var(--text-secondary); flex: none; }
+.ig-acc b { color: var(--text-primary); font-weight: 600; }
+.ig-filas { list-style: none; margin: 0; padding: 0; overflow: auto; overscroll-behavior: contain; flex: 1 1 0; min-height: 0; }
+.ig-filas li { display: grid; grid-template-columns: minmax(0, 1fr) 76px 52px; gap: 8px; align-items: center; padding: 3px 0;
+  border-top: 1px solid var(--line-soft); font-size: 12px; }
+.ig-filas.ped li { grid-template-columns: minmax(0, 1fr) 76px 52px 58px; }
+.ig-filas li span.num { text-align: right; }
+.ig-cols { position: sticky; top: 0; background: var(--bg-card); font-size: 10.5px !important; color: var(--text-muted); border-top: 0 !important; }
+.ig-cols span { text-align: right; }
+.ig-nom { display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: wrap; }
+.ig-nom b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ig-chip { font-size: 10px; padding: 0 5px; border-radius: 8px; background: var(--line-soft); color: var(--text-secondary); white-space: nowrap; cursor: help; }
+.ig-chip.lim { background: var(--warning-bg); color: var(--warning-text); }
+.ig-chip.ant { background: var(--accent-tint); color: var(--accent-deep); }
+.ig-vacio { font-size: 12px; color: var(--text-muted); padding: 8px 0; }
+
+/* La matriz. */
+.ig-cuerpo { min-width: 0; }
+.ig-cuerpo svg .q { opacity: .07; }
+.ig-cuerpo svg .q.estrella { fill: var(--success); } .ig-cuerpo svg .q.caballo { fill: var(--warning); }
+.ig-cuerpo svg .q.rompecabezas { fill: var(--accent); } .ig-cuerpo svg .q.perro { fill: var(--danger); }
+.ig-cuerpo svg .umbral { stroke: var(--text-muted); stroke-dasharray: 4 3; }
+.ig-cuerpo svg .qrot { font-size: 12px; font-weight: 700; fill: var(--text-secondary); }
+.ig-cuerpo svg .eje { font-size: 10.5px; fill: var(--text-muted); }
+.ig-cuerpo svg .nom { font-size: 10.5px; fill: var(--text-primary); }
+.ig-cuerpo svg .pt { stroke: var(--bg-card); stroke-width: 1.5; }
+.ig-cuerpo svg .pt.estrella { fill: var(--success); } .ig-cuerpo svg .pt.caballo { fill: var(--warning); }
+.ig-cuerpo svg .pt.rompecabezas { fill: var(--accent); } .ig-cuerpo svg .pt.perro { fill: var(--danger); }
+
+/* La tabla. */
+.ig-tabla { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); overflow: auto; overscroll-behavior: contain;
+  max-height: calc(var(--alto-util) - 270px); }
+.ig-tabla table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.ig-tabla th { position: sticky; top: 0; z-index: 1; background: var(--bg-card-tenue); text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.ig-tabla th.num, .ig-tabla td.num { text-align: right; }
+.ig-tabla th button { border: 0; background: none; cursor: pointer; font-size: 11px; font-weight: 600; color: var(--text-secondary) !important; padding: 2px; }
+.ig-tabla th button.on { color: var(--accent-deep) !important; }
+.ig-tabla td { padding: 4px 6px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.ig-tabla td.ig-nom { max-width: 260px; }
+.ig-clase { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.pill { display: inline-block; padding: 1px 7px; border-radius: 9px; font-weight: 600; background: var(--line-soft); }
+.pill.ambar { background: var(--warning-bg); color: var(--warning-text); }
+.pill.rojo { background: var(--danger-bg); color: var(--danger-text); }
+.ig-filtro { font-size: 12px; color: var(--text-secondary); padding: 6px 2px; }
+.ig-filtro button { border: 0; background: none; color: var(--accent-deep) !important; cursor: pointer; text-decoration: underline; padding: 0; }
+
+@media (max-width: 900px) {
+  .ig-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ig-cuadros { grid-template-columns: 1fr; grid-template-rows: none; height: auto; }
+  .ig-filas { max-height: 260px; }
+}

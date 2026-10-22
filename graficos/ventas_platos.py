@@ -349,8 +349,9 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
             st.info("La Ingeniería de menú se actualizó: hace falta "
                     "reiniciar la app («Manage app» → «Reboot app»).")
             return
+        # «Cuadros | Matriz | Tabla» es de la pieza desde la regla #700.
         with fila[1]:
-            forma = _menu.control_forma()
+            st.empty()
         with fila[3]:
             st.empty()      # la columna del Ámbito, vacía: ver FILA_MENU
 

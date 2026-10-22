@@ -39,18 +39,14 @@ elige en la carta, regla #547), el plato sin costo cargado y el que cuesta
 más de lo que se cobra (casi siempre una receta mal cargada).
 """
 
-from html import escape
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
-from tema import (ACENTO, BLANCO, GRIS_TEXTO, GRIS_TEXTO_SUAVE, LAVANDA_FOCO,
-                  LAVANDA_FONDO)
-from graficos import alturas
-from graficos.base import _compras_layout, _compras_truncar
-from graficos.ventas_mix import _estilo_costo
+from graficos.base import _compras_truncar
+from graficos.ventas_resumen import _COSTO_ALTO, _COSTO_ROTO
 
 FORMAS = ("Cuadros", "Matriz", "Tabla")
 _FORMA_DEFAULT = "Cuadros"
@@ -102,7 +98,8 @@ _DETALLE = {
     "perro": "Ni se piden ni dejan.",
 }
 
-_KEYS_WIDGET_MENU = ("vt_ing_forma", "vt_ing_subs")
+_KEYS_WIDGET_MENU = ("vt_ing_subs",)
+# «Cuadros | Matriz | Tabla» (`vt_ing_forma`) es de la pieza desde la regla #700.
 """Los controles de la vista. Van también en
 `ventas_platos._KEYS_WIDGET_PL`: la vista se dibuja dentro de ese fragment,
 y su salto a «Por hora» lo corta con un `st.rerun` (regla #373). Y los dos
@@ -250,253 +247,54 @@ def _soles(v, dec=2):
     return f"S/ {v:,.{dec}f}"
 
 
-def _chips(r, antes, etq_ant):
-    """Las marcas de un plato, en HTML: al límite, la clase que tendría
-    contado por pedidos, y la que tenía en el período anterior."""
-    h = ""
-    if r.al_limite:
-        h += ('<span class="ing-chip ing-limite" title="A menos de 5 % de un '
-              'umbral: su clase puede cambiar con poco. Sólo se marca en los '
-              'platos que venden al menos la mitad de lo que pide la '
-              'popularidad.">al límite</span>')
-    if r.clase_ped and r.clase_ped != r.clase:
-        h += (f'<span class="ing-chip" title="Si cada pedido contara una vez">'
-              f'con pedidos: {escape(_SING[r.clase_ped].lower())}</span>')
-    a = antes.get(r.prod)
-    if a and a != r.clase:
-        h += (f'<span class="ing-chip ing-antes" title="Su clase en '
-              f'{escape(etq_ant or "")}">antes: {escape(_SING[a].lower())}</span>')
-    return h
+# ===========================================================================
+# LA PIEZA PROPIA (regla #700)
+# ===========================================================================
+# Desde el 2026-10-22 lo que se ve —las cifras por clase, los cuatro cuadros
+# (abre ahí), la matriz y la tabla— es `ventas_menu.js` + `.css`
+# (`st.components.v2`), sobre el boceto aprobado
+# (https://claude.ai/artifact/Lzua6AASjVigJ8GJktVwM8). La CUENTA no se mudó:
+# `clasificar` corre acá y la pieza recibe cada plato ya clasificado, así que
+# el método vive en un solo lugar. «Cuadros | Matriz | Tabla» la elige el
+# navegador sin una corrida; la categoría (qué subgrupos compiten) sigue en
+# Python, porque cambia la clasificación.
+
+_PIEZA = st.components.v2.component(
+    "ventas_menu",
+    css=(Path(__file__).parent / "ventas_menu.css").read_text(encoding="utf-8"),
+    js=(Path(__file__).parent / "ventas_menu.js").read_text(encoding="utf-8"),
+)
 
 
-def _html_cab(res):
-    """Una cifra por clase, con el dibujo del Resumen (`.vt-cab`). Sin
-    título: lo dice el interruptor de la vista, que va a su izquierda, y la
-    categoría está en su desplegable (regla #569)."""
-    partes = []
-    for k in CLASES:
-        c = res["clases"][k]
-        parte = c["margen"] / res["margen"] if res["margen"] else 0.0
-        partes.append(
-            f'<div class="vt-kpi" title="{escape(_DETALLE[k])} '
-            f'{escape(_ACCION[k])}."><span class="vt-kpi-rot">{_NOMBRE[k]}</span>'
-            f'<span class="vt-kpi-val">{c["n"]}<span class="vt-kpi-sub">'
-            f'{parte:.0%} del margen</span></span></div>')
-    return ('<div class="vt-cab"><div class="vt-kpis">' + "".join(partes)
-            + "</div></div>")
+def _n(v, dec=4):
+    return round(float(v), dec) if pd.notna(v) else None
 
 
-def _filas_html(del_k, antes, etq_ant, con_pedidos, tope=_FILAS_CUADRO):
-    filas = []
-    for r in del_k.head(tope).itertuples():
-        ped = (f'<span class="ing-num ing-suave">{r.pedidos:,.0f} ped.</span>'
-               if con_pedidos and pd.notna(r.pedidos) else "")
-        filas.append(
-            f'<li><span class="ing-nom">{escape(r.prod)}'
-            f'{_chips(r, antes, etq_ant)}</span>'
-            f'<span class="ing-num">{_soles(r.margen)}</span>'
-            f'<span class="ing-num ing-suave">{r.u:,.0f} u</span>{ped}</li>')
-    resto = len(del_k) - tope
-    mas = (f'<p class="ing-mas">y {resto} más: en la Tabla.</p>'
-           if resto > 0 else "")
-    return "".join(filas), mas
+def armar_menu(m, fuera, res, antes, etq_ult, etq_ant, dias):
+    """Lo que recibe la pieza. Pura: la lee el test.
 
-
-def _cuadros(m, res, antes, etq_ant):
-    """Las cuatro clases en cuatro cuadros, en el lugar que ocupan en la
-    matriz: arriba lo que deja más, a la derecha lo que se pide más."""
-    con_ped = res["pedidos"] is not None
-    cuad = {}
-    for k in CLASES:
-        del_k = m[m["clase"] == k]
-        c = res["clases"][k]
-        parte = c["margen"] / res["margen"] if res["margen"] else 0.0
-        filas, mas = _filas_html(del_k, antes, etq_ant, con_ped)
-        cab_cols = ('<li class="ing-cols"><span></span><span>margen/plato</span>'
-                    '<span>unid.</span>' + ("<span>pedidos</span>" if con_ped
-                                            else "") + "</li>")
-        cuerpo = (f'<ul class="ing-filas{" ing-con-ped" if con_ped else ""}">'
-                  f'{cab_cols}{filas}</ul>{mas}' if len(del_k)
-                  else '<p class="ing-vacio">Ninguno en este período.</p>')
-        cuad[k] = (
-            f'<div class="ing-cuadro ing-{k}"><div class="ing-tit"><b>'
-            f'{_NOMBRE[k]}</b><span>{c["n"]} {"plato" if c["n"] == 1 else "platos"}'
-            f' · {parte:.0%} del margen</span></div>'
-            f'<p class="ing-acc">{_ACCION[k]} <span>· {_DETALLE[k]}</span></p>'
-            f'{cuerpo}</div>')
-    st.markdown(
-        '<div class="ing-cuadros">'
-        '<span class="ing-eje-y">deja más por plato →</span>'
-        f'{cuad["rompecabezas"]}{cuad["estrella"]}{cuad["perro"]}{cuad["caballo"]}'
-        '<span class="ing-eje-x">se pide más →</span></div>',
-        unsafe_allow_html=True)
-
-
-def _figura(m, res):
-    """La matriz: cada plato en su lugar, con los umbrales y los cuadrantes.
-    Un solo color: la clase la dice la posición, y los rótulos de las
-    esquinas."""
-    umbral, acm = res["umbral"], res["acm"]
-    x_max = max(umbral * 1.6, float(m["mm"].max())) * 1.08
-    y_max = max(acm * 1.5, float(m["margen"].max())) * 1.1
-    fig = go.Figure()
-    fig.add_shape(type="rect", x0=umbral, x1=x_max, y0=acm, y1=y_max,
-                  fillcolor=LAVANDA_FONDO, line_width=0, layer="below")
-    for forma in (dict(x0=umbral, x1=umbral, y0=0, y1=y_max),
-                  dict(x0=0, x1=x_max, y0=acm, y1=acm)):
-        fig.add_shape(type="line", line=dict(color=LAVANDA_FOCO, width=1.5),
-                      layer="below", **forma)
-    # Primero los que están al límite, después los que más margen dejan: si
-    # no hay lugar para todos, se quedan sin nombre los que menos importan.
-    prioridad = (list(m.loc[m["al_limite"], "prod"])
-                 + list(m.loc[~m["al_limite"], "prod"]))
-    pos = rotulos(m, x_max, y_max, alturas.VENTAS_MENU - 50, prioridad)
-    for limite in (False, True):
-        s = m[m["al_limite"] == limite]
-        if s.empty:
-            continue
-        fig.add_trace(go.Scatter(
-            x=s["mm"], y=s["margen"], mode="markers+text",
-            text=[_compras_truncar(p, 22) if p in pos else "" for p in s["prod"]],
-            textposition=[pos.get(p, "middle right") for p in s["prod"]],
-            textfont=dict(size=10.5, color=GRIS_TEXTO),
-            marker=dict(size=10, symbol="circle-open" if limite else "circle",
-                        color=ACENTO, line=dict(color=ACENTO if limite else BLANCO,
-                                                width=2)),
-            # Una lista y no un `np.stack`: con el nombre adentro, numpy
-            # volvería texto a todos los números y el cursor no los formatea.
-            customdata=[[r.prod, _SING[r.clase], r.u, r.mm,
-                         0 if pd.isna(r.pedidos) else r.pedidos, r.precio,
-                         r.costo_u, r.pct_costo, r.margen_tot]
-                        for r in s.itertuples()],
-            hovertemplate=(
-                "<b>%{customdata[0]}</b><br>%{customdata[1]}"
-                + (" · al límite" if limite else "")
-                + "<br>Unidades: %{customdata[2]:,.0f} (%{customdata[3]:.1%})"
-                "<br>Pedidos: %{customdata[4]:,.0f}"
-                "<br>Precio neto: S/ %{customdata[5]:,.2f}"
-                "<br>Costo: S/ %{customdata[6]:,.2f} (%{customdata[7]:.1%})"
-                "<br>Margen por plato: S/ %{y:,.2f}"
-                "<br>Margen total: S/ %{customdata[8]:,.0f}<extra></extra>"),
-            showlegend=False))
-    for txt, x, y, xa, ya, color in (
-            ("ESTRELLAS", x_max, y_max, "right", "top", ACENTO),
-            ("ROMPECABEZAS", 0, y_max, "left", "top", GRIS_TEXTO_SUAVE),
-            ("CABALLOS DE BATALLA", x_max, 0, "right", "bottom", GRIS_TEXTO_SUAVE),
-            ("PERROS", 0, 0, "left", "bottom", GRIS_TEXTO_SUAVE)):
-        fig.add_annotation(x=x, y=y, text=txt, showarrow=False, xanchor=xa,
-                           yanchor=ya, font=dict(size=10.5, color=color))
-    # Los valores de los dos umbrales no van adentro: con el umbral cerca del
-    # borde (Cocteles, 2,3 %) chocaban con los rótulos de las esquinas. Los
-    # dice la línea de arriba de la figura.
-    _compras_layout(fig, alto=alturas.VENTAS_MENU)
-    fig.update_layout(
-        margin=dict(l=8, r=8, t=8, b=8), dragmode=False,
-        xaxis=dict(range=[0, x_max], tickformat=".0%", fixedrange=True,
-                   title=dict(text="Popularidad: % de las unidades",
-                              font=dict(size=11, color=GRIS_TEXTO)),
-                   tickfont=dict(size=10.5, color=GRIS_TEXTO)),
-        yaxis=dict(range=[0, y_max], tickprefix="S/ ", fixedrange=True,
-                   showticklabels=True,
-                   title=dict(text="Margen por plato",
-                              font=dict(size=11, color=GRIS_TEXTO)),
-                   tickfont=dict(size=10.5, color=GRIS_TEXTO)))
-    return fig
-
-
-def _matriz(m, res, antes, etq_ant):
-    # columnas-internas: la matriz y, al costado, la lista por clase
-    c_graf, c_lista = st.columns([1.45, 1], gap="medium")
-    with c_graf:
-        st.plotly_chart(_figura(m, res), key="vt_ing_fig",
-                        config={"displaylogo": False, "displayModeBar": False})
-    with c_lista:
-        bloques = []
-        for k in CLASES:
-            del_k = m[m["clase"] == k]
-            filas, mas = _filas_html(del_k, antes, etq_ant, False,
-                                     _FILAS_LISTA)
-            bloques.append(
-                f'<div class="ing-bloque"><div class="ing-tit"><b>{_NOMBRE[k]}'
-                f'</b><span class="ing-acc">{_ACCION[k]}</span></div>'
-                + (f'<ul class="ing-filas">{filas}</ul>{mas}' if len(del_k)
-                   else '<p class="ing-vacio">Ninguno en este período.</p>')
-                + "</div>")
-        st.markdown('<div class="ing-lista">' + "".join(bloques) + "</div>",
-                    unsafe_allow_html=True)
-
-
-def _tabla(m, antes, etq_ant):
-    """Cada número de cada plato. Sin vacíos: un NaN se pinta «None» (regla
-    #529); sin pedidos va 0, que se escribe «—»."""
-    notas = []
-    for r in m.itertuples():
-        n = []
-        if r.al_limite:
-            n.append("al límite")
-        if r.clase_ped and r.clase_ped != r.clase:
-            n.append(f"con pedidos: {_SING[r.clase_ped].lower()}")
-        a = antes.get(r.prod)
-        if a and a != r.clase:
-            n.append(f"antes: {_SING[a].lower()}")
-        notas.append(" · ".join(n))
-    t = pd.DataFrame({
-        "Plato": m["prod"].to_numpy(),
-        "Clase": [_SING[k] for k in m["clase"]],
-        "Nota": notas,
-        "Unid.": m["u"].to_numpy(dtype=float),
-        "% unid.": m["mm"].to_numpy(dtype=float),
-        "Pedidos": m["pedidos"].fillna(0).to_numpy(dtype=float),
-        "% pedidos": m["mm_ped"].fillna(0).to_numpy(dtype=float),
-        "Precio neto": m["precio"].to_numpy(dtype=float),
-        "Costo": m["costo_u"].to_numpy(dtype=float),
-        "% costo": m["pct_costo"].to_numpy(dtype=float),
-        "Margen/plato": m["margen"].to_numpy(dtype=float),
-        "Margen total": m["margen_tot"].to_numpy(dtype=float),
-    })
-
-    def _pct(v):
-        return f"{v:.1%}" if v else "—"
-    sty = (t.style
-           .format(lambda v: f"{v:,.0f}" if v else "—", subset=["Unid.", "Pedidos"])
-           .format(_pct, subset=["% unid.", "% pedidos", "% costo"])
-           .format(lambda v: _soles(v), subset=["Precio neto", "Costo",
-                                              "Margen/plato"])
-           .format(lambda v: _soles(v, 0), subset=["Margen total"])
-           .map(_estilo_costo, subset=["% costo"]))
-    st.dataframe(
-        sty, key="vt_ing_tabla", hide_index=True, row_height=27,
-        height=alturas.VENTAS_MENU,
-        column_config={
-            "Plato": st.column_config.TextColumn(pinned=True, width=190),
-            "Nota": st.column_config.TextColumn(
-                width=170,
-                help="«Al límite»: a menos de 5 % de un umbral, sólo en los "
-                     "platos que venden al menos la mitad de lo que pide la "
-                     "popularidad. «Con pedidos»: la clase si cada pedido "
-                     "contara una vez. «Antes»: su clase en "
-                     f"{etq_ant or 'el período anterior'}."),
-            "% unid.": st.column_config.Column(
-                help="Su parte de las unidades de la categoría: la "
-                     "popularidad del método"),
-            "Pedidos": st.column_config.Column(
-                help="En cuántos pedidos aparece: una mesa que pide tres "
-                     "cuenta una vez"),
-            "% costo": st.column_config.Column(
-                help="Costo ÷ venta neta, con los colores del Resumen"),
-            "Margen/plato": st.column_config.Column(
-                help="Precio neto menos costo, por plato"),
-        })
-
-
-def control_forma():
-    """«Cuadros | Matriz | Tabla». Se dibuja en la columna que le da la fila
-    del Corte de Análisis de platos, antes de cargar los períodos: no los
-    necesita."""
-    return st.segmented_control(
-        "Forma", FORMAS, default=_FORMA_DEFAULT, required=True,
-        key="vt_ing_forma", label_visibility="collapsed", persist_state="page",
-        help="Las tres muestran la misma clasificación.") or _FORMA_DEFAULT
+    Un plato: [nombre, subgrupo, clase, unidades, % de las unidades,
+    pedidos, % de los pedidos, precio neto, costo por plato, % de costo,
+    margen por plato, margen total, al límite, clase con pedidos, clase en
+    el período anterior], en el orden de `clasificar` (lo que más deja
+    primero)."""
+    platos = [[str(r.prod), str(r.sub), r.clase, _n(r.u, 2), _n(r.mm), _n(r.pedidos, 0),
+               _n(r.mm_ped), _n(r.precio, 2), _n(r.costo_u, 2), _n(r.pct_costo),
+               _n(r.margen, 2), _n(r.margen_tot, 2), bool(r.al_limite),
+               r.clase_ped or "", antes.get(r.prod, "")]
+              for r in m.itertuples()]
+    return {
+        "platos": platos,
+        "resumen": {"n": res["n"], "umbral": res["umbral"], "acm": res["acm"], "u": res["u"],
+                    "margen": res["margen"], "piso": res["piso_limite_u"],
+                    "pedidos": res["pedidos"],
+                    "clases": {k: res["clases"][k] for k in CLASES}},
+        "fuera": [[f["plato"], f["motivo"], round(f["precio"], 2), round(f["costo_u"], 2)]
+                  for f in fuera],
+        "etq": etq_ult, "etq_ant": etq_ant or "", "dias": int(dias),
+        "nombres": dict(_NOMBRE), "singular": dict(_SING), "accion": dict(_ACCION),
+        "detalle": dict(_DETALLE), "umbrales_costo": [_COSTO_ALTO * 100, _COSTO_ROTO * 100],
+    }
 
 
 def vista_ingenieria(a_ult, etq_ult, dias, a_ant, etq_ant, *, forma, cab,
@@ -538,35 +336,7 @@ def vista_ingenieria(a_ult, etq_ult, dias, a_ant, etq_ant, *, forma, cab,
         m_ant, _f, _r = clasificar(a_ant, subs)
         if not m_ant.empty:
             antes = dict(zip(m_ant["prod"], m_ant["clase"]))
-    with cab:
-        st.markdown(_html_cab(res), unsafe_allow_html=True)
-    # Qué período se clasifica, dicho con las pastillas a la vista: es el
-    # ÚLTIMO de los elegidos arriba, y el «antes: …» sale del penúltimo.
-    # Sin el total de pedidos: sería la suma de los de cada plato, y un
-    # pedido con dos fondos contaría dos veces. Los de cada plato sí van.
-    st.caption(
-        f"Se clasifica **{etq_ult}**, el último período elegido"
-        + (f"; «antes» es {etq_ant}" if etq_ant else "") + ". "
-        f"{dias} días con venta · {res['n']} platos, "
-        f"{res['u']:,.0f} unidades, {_soles(res['margen'], 0)} de "
-        f"margen. **Popular**: {res['umbral']:.1%} o más de las unidades "
-        f"(70 % × 1/{res['n']}). **Deja mucho**: {_soles(res['acm'])} o "
-        "más por plato (el promedio ponderado). **Al límite**: a menos de "
-        "5 % de un corte, en los platos que venden "
-        f"{res['piso_limite_u']:,} unidades o más.")
-    if forma == "Matriz":
-        _matriz(m, res, antes, etq_ant)
-    elif forma == "Tabla":
-        _tabla(m, antes, etq_ant)
-    else:
-        _cuadros(m, res, antes, etq_ant)
-    pie = []
-    if fuera:
-        pie.append("**Fuera**: " + " · ".join(
-            f"{f['plato']} ({f['motivo']}"
-            + (f": {_soles(f['costo_u'])} de costo contra "
-               f"{_soles(f['precio'])}" if f["motivo"].startswith("cuesta")
-               else "") + ")" for f in fuera) + ".")
-    pie.append("Método: Kasavana y Smith (1982), con las fórmulas de AHLEI. "
-               "«Al límite» y «con pedidos» son agregados nuestros.")
-    st.caption(" ".join(pie))
+    # Las cifras por clase, la explicación de los cortes, la forma elegida
+    # y lo que quedó fuera los dibuja la pieza (regla #700).
+    _PIEZA(key="vt_ing_pieza", data=armar_menu(m, fuera, res, antes, etq_ult, etq_ant, dias),
+           width="stretch")
