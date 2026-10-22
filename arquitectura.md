@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-698 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+699 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (222)
+**CSS y estilos** (223)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -287,6 +287,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#695** — «Simular Alza de Insumos» es una pieza propia: el escenario, los indicadores, la lista y la…
 - **#697** — «Nuevo Costeo» es una pieza propia: la receta y su precio se editan en el navegador, con los…
 - **#698** — «Guardadas» es una lista con ficha, y una propuesta se vuelve a abrir en el editor
+- **#699** — El ranking de «Análisis de platos» es una pieza propia
 
 **Layout y alturas** (98)
 
@@ -779,7 +780,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 
-**Datos, R2 y DuckDB** (110)
+**Datos, R2 y DuckDB** (111)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -891,6 +892,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 - **#696** — «Costo de Carta» es una pieza propia con los CINCO CANALES del POS y su Excel
 - **#698** — «Guardadas» es una lista con ficha, y una propuesta se vuelve a abrir en el editor
+- **#699** — El ranking de «Análisis de platos» es una pieza propia
 
 **SUNAT y SIRE** (71)
 
@@ -53817,6 +53819,46 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        y su nombre. Sin errores de consola.
      Lo vigila `test_nuevo_costeo.py`. (2026-10-22.)
 
+699. **El ranking de «Análisis de platos» es una pieza propia.** A pedido
+     (2026-10-22), sobre un boceto aprobado
+     (https://claude.ai/artifact/Lzua6AASjVigJ8GJktVwM8). Hasta ese día era
+     un gráfico de Plotly, un `st.dataframe` de una columna por período y
+     una evolución debajo, con Medida, Mostrar, el Ámbito y los elegidos
+     como widgets.
+     · **Qué pasó a la pieza** (`graficos/ventas_platos.js` + `.css`,
+       `_pieza_ranking`): seis indicadores —platos con venta, el ámbito por
+       día, sube más, baja más, entran al top y «Para revisar» (platos del
+       top vendidos a más del 70 % de costo: el Ojo de Bife Argentino salía
+       al 83 % en octubre de 2026, un costo mal guardado)—; «Dentro de» (los
+       4 grupos que más venden en botones, el resto y los subgrupos en un
+       desplegable); Venta | Unidades; Top 10/15/20/Todos/Elegidos (☆ en la
+       tabla, guardados en el navegador); el gráfico de puestos en SVG al
+       ancho de su caja, que corta la línea donde un plato sale del eje en
+       vez de dejarla caer al fondo; la tabla en 7 columnas con la venta por
+       día de cada período en barritas y el puesto con su cambio en una
+       sola columna; y la ficha del plato.
+     · **Qué quedó en Python**: el interruptor Ranking | Ingeniería de
+       menú, el Corte y los períodos (cargan datos de R2), y la Ingeniería
+       de menú entera, sin cambios.
+     · **Ida y vuelta**: la pieza recibe los períodos elegidos ENTEROS
+       (`armar_ranking`) y resuelve sin corrida el ámbito, la medida, el
+       top y los elegidos. Vuelven a Python `foco` —la evolución del plato
+       en TODO el corte se carga allá, y mientras llega la ficha muestra los
+       períodos elegidos—, `hora` (el salto de siempre a «Por hora») y
+       `carta`, nuevo: «Su costo en Costo de Carta» deja el plato elegido
+       en Recetas y pide la corrida completa (`_vt_pl_ir_carta`), con el
+       código que sale de `cartacosteada.parquet` por el nombre.
+     · **Las cuentas siguen en Python** (`puestos`, `movimiento`,
+       `var_por_dia`, `pct_costo`) y el `.js` las rehace con las mismas
+       fórmulas: `test_analisis_platos.py` las busca escritas igual. Los
+       umbrales del % de costo son los del Resumen (45 / 70 %).
+     · **Medido a 1323×619 con Playwright**: la tabla mide lo que su caja
+       (519 px) —con el `#` y el «Puesto» en dos columnas no entraba—;
+       Fondos, Unidades, elegidos y el foco con su evolución de 13 meses,
+       sin errores de consola.
+     Las reglas de `estilos/_80_cards.py` para `vt_pl_cabfila` siguen: el
+     renglón del interruptor es el mismo. (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53829,7 +53871,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#698**; la próxima toma el número siguiente.
+> última regla es la **#699**; la próxima toma el número siguiente.
 
 >
 

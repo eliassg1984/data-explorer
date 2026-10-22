@@ -11979,9 +11979,9 @@ def _pruebas_ventas_platos():
     check("los controles de cada vista llevan persist_state='page'",
           sorted(sin_persistir), [])
     check("y son los que se esperan (si no, el barrido no mira nada)",
-          sorted(propias), ["vt_ing_forma", "vt_ing_subs", "vt_pl_amb",
-                            "vt_pl_elegidos", "vt_pl_medida",
-                            "vt_pl_mostrar"])
+          # Ámbito, Medida, Mostrar y los elegidos son de la pieza del
+          # ranking desde la regla #699: sólo quedan los de la Ingeniería.
+          sorted(propias), ["vt_ing_forma", "vt_ing_subs"])
     check("la Ingeniería ya no abre una tarjeta propia",
           ("ajuste_graf_card_izq_ventas_menu" in inspect.getsource(_im),
            hasattr(_im, "tarjeta_ingenieria")), (False, False))

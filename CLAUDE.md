@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -160,6 +160,13 @@ chip y cómo está en el sistema— y que lo editado en el navegador
 (`cambios`: cantidades, precios, quitadas, el precio por canal) vuelva a
 la sesión, con AppTest y la pieza reemplazada. Ver `arquitectura.md` regla
 #697.
+
+`test_analisis_platos.py` vigila el ranking de Ventas › «Análisis de
+platos» (`graficos/ventas_platos.py::armar_ranking` y `ventas_platos.js`):
+una posición por período, el grupo del período más nuevo, el código para
+saltar a Costo de Carta, y que el navegador rehaga los puestos (empates),
+el movimiento, la variación POR DÍA y el % de costo con las mismas
+fórmulas que Python. Ver `arquitectura.md` regla #699.
 
 ## El asistente IA no adivina: consulta
 

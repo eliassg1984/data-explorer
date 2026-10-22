@@ -38,26 +38,24 @@ TRES COSAS QUE NO SON OBVIAS:
     evolución se muestra abajo.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
-from html import escape
 
 from data import REPORTES, cargar_rango, rango_fechas
-from tema import (ACENTO, AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_TEXTO,
-                  GRIS_TEXTO_SUAVE, LAVANDA_BORDE, PALETA_SERIES,
-                  TEXTO_PRINCIPAL)
-from graficos import alturas
-from graficos.base import (_compras_layout, _compras_truncar, _resolver,
+from tema import (PALETA_SERIES)
+from graficos.base import (_resolver,
                            preservar_widgets, scroll_a_seccion)
-from graficos.compras._comun import _first_point
-from graficos.ventas_horario import (_COLOR_MARCA, _claves_hacia_atras,
+from graficos.ventas_horario import (_claves_hacia_atras,
                                      _etiqueta_clave, _rango_de_clave)
 from graficos import ventas_menu as _menu
 from graficos.ventas_menu import _KEYS_WIDGET_MENU
-from graficos.ventas_mix import _estilo_costo, base, columnas, pct_costo
-from utils import fmt_k
+# `_estilo_costo` ya no se usa acá (la tabla es de la pieza, regla #699), pero
+# test_graficos.py::_pruebas_ventas_platos verifica que sea la del Mix.
+from graficos.ventas_mix import _estilo_costo, base, columnas, pct_costo  # noqa: F401
+from graficos.ventas_resumen import _COSTO_ALTO, _COSTO_ROTO
 
 CORTES = ("Día", "Semana", "Mes", "Año")
 _CORTE_DEFAULT = "Mes"
@@ -97,9 +95,7 @@ corrida la corta —la precarga de las secciones vecinas— el resto se queda
 hasta el próximo clic en la tarjeta. Escribir la posición la reemplaza
 siempre (regla #569)."""
 
-_KEYS_WIDGET_PL = ("vt_pl_vista", "vt_pl_corte", "vt_pl_medida",
-                   "vt_pl_mostrar", "vt_pl_per_*", "vt_pl_amb",
-                   "vt_pl_elegidos") + _KEYS_WIDGET_MENU
+_KEYS_WIDGET_PL = ("vt_pl_vista", "vt_pl_corte", "vt_pl_per_*") + _KEYS_WIDGET_MENU
 """Los controles de la tarjeta —también los de la Ingeniería de menú, que se
 dibuja en este mismo fragment—, para que el salto a «Por hora»
 (`st.rerun(scope="app")`) no se los lleve (regla #373)."""
@@ -250,14 +246,6 @@ def _clic(base_key, extraer):
     return valor
 
 
-def _curva(evt):
-    p = _first_point(evt)
-    if p is None:
-        return None
-    c = p.get("curve_number")
-    return c if isinstance(c, int) else None
-
-
 def _fila(evt):
     try:
         sel = getattr(evt, "selection", None)
@@ -267,31 +255,6 @@ def _fila(evt):
         return filas[0] if filas else None
     except Exception:
         return None
-
-
-def _leer_clics():
-    ss = st.session_state
-    c = _clic("vt_pl_g", _curva)
-    trazas = ss.get("_vt_pl_trazas", [])
-    if c is not None and 0 <= c < len(trazas):
-        ss["vt_pl_foco"] = None if ss.get("vt_pl_foco") == trazas[c] else trazas[c]
-    f = _clic("vt_pl_tabla", _fila)
-    filas = ss.get("_vt_pl_filas", [])
-    if f is not None and 0 <= f < len(filas):
-        ss["vt_pl_foco"] = None if ss.get("vt_pl_foco") == filas[f] else filas[f]
-
-
-def _alternar_elegido(nombre):
-    el = list(st.session_state.get("vt_pl_elegidos") or [])
-    if nombre in el:
-        el.remove(nombre)
-    elif len(el) < MAX_ELEGIDOS:
-        el.append(nombre)
-    st.session_state["vt_pl_elegidos"] = el
-
-
-def _soltar_foco():
-    st.session_state["vt_pl_foco"] = None
 
 
 def _ir_a_hora(nombre):
@@ -326,11 +289,15 @@ def _ventas_platos(d, filtrar_cb=None):
         st.rerun(scope="app")
     if ss.pop("_vt_pl_ir_hora", None) == 2:
         scroll_a_seccion("vt_sec_hora")
+    # El salto a «Costo de Carta» (regla #699): otro reporte, una corrida
+    # completa; el salto a su sección lo resuelve el rail de Recetas.
+    if ss.pop("_vt_pl_ir_carta", None):
+        preservar_widgets(_KEYS_WIDGET_PL)
+        st.rerun(scope="app")
     cols_d = columnas(d)
     if not (cols_d["fecha"] and cols_d["prod"] and cols_d["venta"]):
         st.info("Faltan columnas (Fecha, Plato, Venta) para el ranking.")
         return
-    _leer_clics()
 
     cfg = REPORTES.get("Ventas", {})
     lim = rango_fechas(cfg.get("archivo", "ventas.parquet"),
@@ -366,22 +333,13 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
         corte = st.segmented_control(
             "Corte", CORTES, default=_CORTE_DEFAULT, required=True,
             key="vt_pl_corte", label_visibility="collapsed") or _CORTE_DEFAULT
-    medida = mostrar = forma = None
+    forma = None
     if ranking:
-        with fila[1]:
-            medida = st.segmented_control(
-                "Medida", _MEDIDAS, default=_MEDIDAS[0], required=True,
-                key="vt_pl_medida", label_visibility="collapsed",
-                persist_state="page") or _MEDIDAS[0]
-        with fila[2]:
-            mostrar = st.segmented_control(
-                "Mostrar", _MOSTRAR, default=_MOSTRAR_DEFAULT, required=True,
-                key="vt_pl_mostrar", label_visibility="collapsed",
-                persist_state="page",
-                help="**Todos**: la tabla lista cada plato del ámbito; el "
-                     "gráfico sigue con los 20 primeros. **Elegidos**: sólo "
-                     "los platos que buscaste arriba de la tabla."
-            ) or _MOSTRAR_DEFAULT
+        # Medida, Mostrar y el Ámbito son de la pieza desde la regla #699:
+        # las columnas se escriben vacías (ver FILA_MENU).
+        for c in fila[1:]:
+            with c:
+                st.empty()
     else:
         # Por atributo y no importadas por nombre (regla #357, como el
         # `getattr` de `_render_rail`): si Cloud recarga este módulo con el
@@ -430,354 +388,151 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
                                etq[ant] if ant else None,
                                forma=forma, cab=cab, c_cat=fila[2])
         return
-    en_foco = _ranking(cab, fila[3], datos, sel, etq, medida, mostrar)
-    if en_foco:
-        foco, info, elegidos = en_foco
-        _evolucion(foco, corte, lista, etq, sel, ancla, filtrar_cb, d,
-                   "cant" if medida == "Unidades" else "venta", info,
-                   elegidos)
-    else:
-        # Sin evolución, el lugar donde la Ingeniería pone su pie: se
-        # escribe vacío para no depender de la limpieza (ver FILA_MENU).
-        st.empty()
-
-
-def _ranking(cab, c_amb, datos, sel, etq, medida, mostrar):
-    """La vista del ranking, con los períodos ya cargados: el Ámbito (en
-    `c_amb`, la última columna de la fila del Corte), los KPI (en `cab`), el
-    gráfico de puestos, el buscador y la tabla. Con un plato en foco
-    devuelve `(plato, info, elegidos)` para su evolución; si no, None."""
-    ss = st.session_state
-    m = "cant" if medida == "Unidades" else "venta"
-    agg = {k: datos[k][0].set_index("prod") for k in sel}
-    dias = {k: datos[k][1] for k in sel}
-    todos = pd.concat([agg[k][["grupo", "sub", "venta"]] for k in sel])
-    if todos.empty:
-        st.info("Sin ventas en los períodos elegidos.")
-        return None
-    # Grupo y subgrupo de cada plato: los del período más nuevo en que vendió.
-    info = todos[~todos.index.duplicated(keep="last")][["grupo", "sub"]]
-    peso = todos.groupby(level=0)["venta"].sum().sort_values(ascending=False)
-
-    # ── El ámbito: un desplegable en la fila del Corte (regla #569) ──────
-    amb_ops = opciones_ambito(todos)
-    # Un grupo que no vendió en los períodos de ahora ya no es opción: un
-    # valor fuera de las opciones es un error.
-    if ss.get("vt_pl_amb") not in amb_ops:
-        ss["vt_pl_amb"] = TODA_LA_CARTA
-    with c_amb:
-        amb = st.selectbox(
-            "Ámbito", list(amb_ops), key="vt_pl_amb",
-            label_visibility="collapsed", persist_state="page",
-            help="Toda la carta, un grupo o un subgrupo: el puesto se "
-                 "calcula DENTRO de lo elegido («3º de Fondos»)."
-        ) or TODA_LA_CARTA
-    col_amb, cual = amb_ops[amb]
-    en_amb = (info.index if col_amb is None
-              else info.index[info[col_amb] == cual])
-
-    # ── El gráfico de puestos a la izquierda; a la derecha el buscador de
-    # platos y, debajo, la tabla. Las columnas se crean ANTES de contar:
-    # con «Elegidos», lo buscado decide las filas ─────────────────────────
-    # columnas-internas: el gráfico de puestos y su tabla
-    g1, g2 = st.columns([0.9, 1.2], gap="medium")
-    with g2:
-        _opciones = list(dict.fromkeys(
-            list(peso.index) + list(ss.get("vt_pl_elegidos") or [])))
-        elegidos = st.multiselect(
-            "Platos a comparar", _opciones, key="vt_pl_elegidos",
-            max_selections=MAX_ELEGIDOS, placeholder="Buscar platos para "
-            "comparar…", label_visibility="collapsed", persist_state="page",
-            help="Hasta 8. Con «Elegidos» se comparan sólo ésos, cada uno "
-                 "con su color, estén en el puesto que estén.")
-
-    # ── Puestos, dentro del ámbito ───────────────────────────────────────
-    val = {k: agg[k][m].reindex(en_amb).fillna(0.0) for k in sel}
-    pue = {k: puestos(val[k]) for k in sel}
-    pri, ult = sel[0], sel[-1]
-    universo = sorted(
-        set().union(*[set(pue[k].index) for k in sel]),
-        key=lambda n: (pue[ult].get(n, 10 ** 6), -val[pri].get(n, 0.0)))
-    if mostrar == "Elegidos":
-        filas = [n for n in universo if n in elegidos] + [
-            n for n in elegidos if n not in universo and n in en_amb]
-    elif mostrar == "Todos":
-        filas = universo
-    else:
-        tope = int(mostrar.split()[1])
-        filas = [n for n in universo if pue[ult].get(n, 10 ** 6) <= tope]
-    en_graf = (filas if mostrar == "Elegidos"
-               else [n for n in filas if pue[ult].get(n, 10 ** 6) <= _TOPE_GRAFICO])
-
-    # ── Los KPI del renglón del título ───────────────────────────────────
-    tot = {k: float(val[k].sum()) for k in sel}
-    g_amb = var_por_dia(tot[pri], dias[pri], tot[ult], dias[ult])
-    movs = {n: movimiento(pue[pri].get(n), pue[ult].get(n)) for n in universo}
-    # «Sube más» entre los que HOY están en el top 20 y «Baja más» entre los
-    # que ESTABAN: sin ese corte los ganaban platos marginales que pasaban
-    # del puesto 150 al 84, que no le dicen nada a nadie.
-    _dif = {n: (pue[pri].get(n, 0) - pue[ult].get(n, 0)) for n in universo
-            if pue[pri].get(n) and pue[ult].get(n)}
-    _s = {n: v for n, v in _dif.items() if pue[ult][n] <= _TOPE_GRAFICO}
-    _b = {n: v for n, v in _dif.items() if pue[pri][n] <= _TOPE_GRAFICO}
-    sube = max(_s, key=_s.get) if _s and max(_s.values()) > 0 else None
-    baja = min(_b, key=_b.get) if _b and min(_b.values()) < 0 else None
-    n_entran = sum(1 for n in universo if movs[n][1] == "entra"
-                   and pue[ult].get(n, 10 ** 6) <= _TOPE_GRAFICO)
-    ambito = cual or "toda la carta"
-    with cab:
-        st.markdown(_html_cab(
-            ambito, len(pue[ult]), etq[ult], g_amb, etq[pri],
-            sube, _dif.get(sube), baja, _dif.get(baja), n_entran,
-            len(sel) > 1), unsafe_allow_html=True)
-
-    # ── El gráfico de puestos y la tabla ─────────────────────────────────
-    foco = ss.get("vt_pl_foco")
-    with g1:
-        if en_graf:
-            _grafico(en_graf, sel, etq, pue, mostrar, elegidos, foco)
-        else:
-            st.caption("Sin platos que mostrar: en «Elegidos», buscalos "
-                       "arriba de la tabla.")
-    with g2:
-        # El % de costo es el del ÚLTIMO período, el mismo del puesto «#»:
-        # la pregunta es cuánto cuesta hoy lo que hoy se vende (regla #546).
-        _tabla(filas, sel, etq, val, pue, dias, m, movs,
-               costo_por_plato(agg[ult]))
-    notas = []
-    if mostrar == "Todos" and len(filas) > _TOPE_GRAFICO:
-        notas.append(f"La tabla lista los {len(filas)} platos de {ambito}; "
-                     "el gráfico, los 20 primeros.")
-    if mostrar == "Elegidos" and any(n not in en_amb for n in elegidos):
-        notas.append(f"Hay elegidos fuera de {ambito}: no se muestran.")
-    if len(sel) == 1:
-        notas.append("Con un solo período no hay movimiento: elegí otro "
-                      "para comparar.")
-    notas.append("El % compara la venta POR DÍA con venta: un período en "
-                 "curso tiene menos días.")
-    st.caption(" ".join(notas))
-    return (foco, info, elegidos) if foco else None
+    _pieza_ranking(datos, sel, etq, corte, lista, ancla, filtrar_cb, d)
 
 
 # ===========================================================================
 # LAS PIEZAS
 # ===========================================================================
 
-def _html_cab(ambito, n_platos, ult, g_amb, pri, sube, d_sube, baja,
-              d_baja, n_entran, compara):
-    """Los KPI en un renglón, con el dibujo del Resumen (`.vt-cab`). Sin
-    título desde que la tarjeta tiene dos vistas (regla #569): el nombre lo
-    dice el interruptor, a su izquierda, y el «Top 15» que decía el título
-    está marcado en «Mostrar»."""
-    def _k(rot, val, clase="", tip=""):
-        return (f'<div class="vt-kpi {clase}" title="{escape(tip or rot)}">'
-                f'<span class="vt-kpi-rot">{escape(rot)}</span>'
-                f'<span class="vt-kpi-val">{escape(val)}</span></div>')
-    partes = [_k(f"Platos con venta · {ult}", f"{n_platos:,}", "vt-kpi-total")]
-    if compara:
-        if g_amb is not None:
-            partes.append(_k(f"{ambito.capitalize()} por día",
-                             f"{'+' if g_amb >= 0 else '−'}{abs(g_amb):.0%}",
-                             tip=f"Venta por día de {ambito}, de {pri} a "
-                                 f"{ult}: la vara con que se mide cada plato"))
-        if sube:
-            partes.append(_k("Sube más", f"{_compras_truncar(sube, 24)} ▲{d_sube}"))
-        if baja:
-            partes.append(_k("Baja más", f"{_compras_truncar(baja, 24)} ▼{-d_baja}"))
-        partes.append(_k("Entran al top 20", f"{n_entran}",
-                         tip=f"Platos del top 20 de {ult} que no vendieron "
-                             f"en {pri}"))
-    return ('<div class="vt-cab"><div class="vt-kpis">' + "".join(partes)
-            + "</div></div>")
+
+# ===========================================================================
+# EL RANKING, PIEZA PROPIA (regla #699)
+# ===========================================================================
+# Desde el 2026-10-22 el ranking —los indicadores, «Dentro de», Venta |
+# Unidades, el top, el gráfico de puestos, la tabla y la ficha del plato—
+# es `ventas_platos.js` + `.css` (`st.components.v2`), sobre el boceto
+# aprobado (https://claude.ai/artifact/Lzua6AASjVigJ8GJktVwM8). Python
+# carga los períodos elegidos y los manda enteros: el ámbito, la medida, el
+# top y los elegidos los resuelve el navegador sin una corrida. Vuelven a
+# Python el plato en foco (`foco`: su evolución en TODO el corte se carga
+# acá), «A qué hora se vende» (`hora`) y «Su costo en Costo de Carta»
+# (`carta`). Las cuentas puras de arriba (`puestos`, `movimiento`,
+# `var_por_dia`) siguen siendo la referencia: el `.js` las rehace igual, y
+# el test busca las fórmulas escritas igual.
+
+_PIEZA = st.components.v2.component(
+    "ventas_platos",
+    css=(Path(__file__).parent / "ventas_platos.css").read_text(encoding="utf-8"),
+    js=(Path(__file__).parent / "ventas_platos.js").read_text(encoding="utf-8"),
+)
+_K_PIEZA = "vt_pl_pieza"
 
 
-def _grafico(nombres, sel, etq, pue, mostrar, elegidos, foco):
-    """Los puestos de cada plato a lo largo de los períodos (bump chart)."""
+@st.cache_data(ttl=3600, show_spinner=False)
+def _codigos_carta(sello):
+    """{nombre del plato en minúsculas: código} de la carta costeada, para
+    saltar de un plato a su ficha en Costo de Carta. `sello` es la clave."""
+    try:
+        from data import cargar
+        df = cargar("cartacosteada.parquet")
+    except Exception:
+        return {}
+    if df is None or df.empty or "ITEM VENT" not in df.columns:
+        return {}
+    return {str(n).strip().lower(): str(c).strip()
+            for n, c in zip(df["ITEM VENT"], df["COD PLATO"])}
+
+
+def armar_ranking(datos, sel, etq, foco=None, evolucion=None, codigos=None):
+    """Lo que recibe la pieza. Pura: la lee el test.
+
+    `datos` es {período: (agregado por plato, días con venta)} y `sel` los
+    períodos elegidos, del más viejo al más nuevo. Un plato: [nombre, grupo,
+    subgrupo, [venta], [unidades], [costo], [neto], código] con una posición
+    por período elegido; el grupo y el subgrupo son los del período más
+    nuevo en que vendió."""
+    codigos = codigos or {}
+    por = {}
+    for j, k in enumerate(sel):
+        a = datos[k][0]
+        if a is None or a.empty:
+            continue
+        g = a.groupby("prod", as_index=False).agg(
+            grupo=("grupo", "last"), sub=("sub", "last"), venta=("venta", "sum"),
+            cant=("cant", "sum"), costo=("costo", "sum"), neto=("neto", "sum"))
+        for r in g.itertuples(index=False):
+            p = por.setdefault(r.prod, {"grupo": r.grupo, "sub": r.sub,
+                                        "v": [0.0] * len(sel), "c": [0.0] * len(sel),
+                                        "k": [0.0] * len(sel), "n": [0.0] * len(sel)})
+            p["grupo"], p["sub"] = r.grupo, r.sub
+            p["v"][j], p["c"][j] = round(float(r.venta), 2), round(float(r.cant), 2)
+            p["k"][j], p["n"][j] = round(float(r.costo), 2), round(float(r.neto), 2)
+    platos = [[n, str(p["grupo"] or ""), str(p["sub"] or ""), p["v"], p["c"], p["k"], p["n"],
+               codigos.get(str(n).strip().lower(), "")] for n, p in por.items()]
+    return {
+        "periodos": [{"etq": etq[k], "dias": int(datos[k][1])} for k in sel],
+        "platos": platos, "foco": foco, "evolucion": evolucion,
+        "umbrales": [_COSTO_ALTO * 100, _COSTO_ROTO * 100], "salto": _SALTO,
+        "tope": _TOPE_GRAFICO, "max_elegidos": MAX_ELEGIDOS,
+    }
+
+
+def _evolucion_de(nombre, corte, lista, etq, sel, ancla, filtrar_cb, d):
+    """El plato en foco en TODO el corte: [etiqueta, venta por día, unidades
+    por día, si está entre los elegidos] por período."""
+    serie = []
+    for k in lista:
+        a, n_dias = _cargar_periodo(k, corte, ancla, filtrar_cb, d)
+        f = a[a["prod"] == nombre]
+        v, c = float(f["venta"].sum()), float(f["cant"].sum())
+        serie.append([etq[k], v / n_dias if n_dias else 0.0, c / n_dias if n_dias else 0.0,
+                      k in sel])
+    return {"nombre": nombre, "corte": corte.lower(), "serie": serie}
+
+
+def _ir_a_carta(cod):
+    """«Su costo en Costo de Carta»: deja el plato elegido allá y pide el
+    salto a Recetas, que necesita una corrida COMPLETA (ver `_ventas_platos`).
+    Con un `graficos` viejo en Cloud (regla #357), no hace nada."""
+    try:
+        import navegacion
+        from graficos.carta_costeada import _K_FOCO
+        st.session_state[_K_FOCO] = cod
+        navegacion._ir_a_vista("Recetas", "rec_graf_tipo", "Carta costeada")
+        st.session_state["_vt_pl_ir_carta"] = 1
+    except (ImportError, AttributeError):
+        return
+
+
+def _pieza_ranking(datos, sel, etq, corte, lista, ancla, filtrar_cb, d):
+    """El ranking en la pieza, con la evolución del plato en foco."""
     ss = st.session_state
-    xs = [etq[k] for k in sel]
-    maxp = max([pue[k].get(n, 0) for k in sel for n in nombres] + [1])
-    n_eje = maxp if mostrar == "Elegidos" else min(maxp, _TOPE_GRAFICO)
-    techo = n_eje + 2
-    fig = go.Figure()
-    for n in nombres:
-        ys = [pue[k].get(n) for k in sel]
-        if mostrar == "Elegidos" and n in elegidos:
-            color = _COLORES_ELEGIDOS[elegidos.index(n) % MAX_ELEGIDOS]
-        else:
-            tipo = movimiento(ys[0], ys[-1])[1]
-            color = {"entra": ACENTO, "sube": AJUSTE_POS_TEXTO,
-                     "baja": AJUSTE_NEG_TEXTO}.get(tipo, GRIS_TEXTO_SUAVE)
-        resaltado = n == foco or (mostrar != "Elegidos" and n in elegidos)
-        fig.add_trace(go.Scatter(
-            x=xs, y=[y if y and y <= n_eje else techo for y in ys],
-            mode="lines+markers",
-            line=dict(color=color, width=4 if resaltado else 2.2),
-            marker=dict(size=9 if resaltado else 7,
-                        color=[color if y else "#ffffff" for y in ys],
-                        line=dict(color=color, width=1.5)),
-            opacity=0.35 if foco and n != foco else 1.0,
-            customdata=[f"#{y}" if y else "sin venta" for y in ys],
-            hovertemplate=(f"<b>{escape(n)}</b><br>%{{x}}: %{{customdata}}"
-                           "<extra></extra>")))
-        if ys[-1] and ys[-1] <= n_eje:
-            fig.add_annotation(
-                x=xs[-1], y=ys[-1], xanchor="left", xshift=8, showarrow=False,
-                text=escape(_compras_truncar(n, 24)),
-                font=dict(size=10.5, color=TEXTO_PRINCIPAL if n != foco
-                          else ACENTO))
-    ss["_vt_pl_trazas"] = list(nombres)
-    alto = alturas.VENTAS_PLATOS
-    _compras_layout(fig, alto=alto)
-    tv = (list(range(1, n_eje + 1)) if n_eje <= 22 else sorted(
-        {v for v in (1, 5, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300)
-         if v < n_eje * 0.93} | {n_eje}))
-    ejey = dict(fixedrange=True, gridcolor=LAVANDA_BORDE, zeroline=False,
-                tickvals=tv + [techo],
-                ticktext=[f"#{v}" for v in tv] + ["fuera"],
-                tickfont=dict(size=10, color=GRIS_TEXTO))
-    # Con puestos lejanos (un elegido en el 160) el eje es logarítmico: del
-    # 1 al 10 conservan su lugar y del 100 para abajo se aprietan, que es
-    # como se lee una tabla de posiciones.
-    if n_eje > 22:
-        ejey.update(type="log", range=[np.log10(techo * 1.08), np.log10(0.8)])
-    else:
-        ejey.update(range=[techo + 0.6, 0.4])
-    fig.update_layout(
-        showlegend=False, margin=dict(l=10, r=170, t=10, b=4),
-        dragmode="pan", yaxis=ejey,
-        # Categorías SIEMPRE: «2025» en un eje sin tipo es un número (#448).
-        xaxis=dict(type="category", fixedrange=True, showgrid=False,
-                   tickfont=dict(size=10.5)))
-    st.plotly_chart(fig, key=_key("vt_pl_g"), on_select="rerun",
-                    selection_mode="points",
-                    config={"displaylogo": False, "displayModeBar": False})
-
-
-def _tabla(filas, sel, etq, val, pue, dias, m, movs, pc):
-    """La tabla: el puesto de hoy, lo vendido en cada período, el
-    movimiento de puesto, la variación por día y el % de costo del último
-    período (`pc`, de `costo_por_plato`). Un clic elige el plato."""
-    ss = st.session_state
-    pri, ult = sel[0], sel[-1]
-    t = pd.DataFrame({"Plato": filas})
-    # SIN VACÍOS: un NaN viaja a la grilla como nulo y Streamlit lo pinta
-    # «None» sin mirar el formato del Styler (medido). Sin venta va 0 —y se
-    # escribe «—»—, y la variación de un plato que no vendía en el primer
-    # período va +∞ —y se escribe «nuevo»—: así la columna sigue siendo
-    # numérica y se puede ordenar.
-    t["#"] = np.array([pue[ult].get(n, 0) for n in filas], dtype=float)
+    nombres = set()
     for k in sel:
-        t[etq[k]] = np.array([val[k].get(n, 0.0) for n in filas], dtype=float)
-    t["Puestos"] = [movs.get(n, ("—", "igual"))[0] for n in filas]
-
-    def _dv(n):
-        x = var_por_dia(val[pri].get(n, 0.0), dias[pri],
-                        val[ult].get(n, 0.0), dias[ult])
-        if x is not None:
-            return x
-        return np.inf if val[ult].get(n, 0.0) > 0 else -np.inf
-    t["Δ por día"] = np.array([_dv(n) for n in filas], dtype=float)
-    # Sin costo cargado —o sin venta en el último período— va 0, que se
-    # escribe «—»: un % de costo de verdad nunca es 0 (`pct_costo`).
-    t["% costo"] = np.nan_to_num(
-        np.array([pc.get(n, np.nan) for n in filas], dtype=float), nan=0.0)
-    ss["_vt_pl_filas"] = list(filas)
-    per = [etq[k] for k in sel]
-    # «—» donde no hubo venta, y los montos compactos: la tabla va al lado
-    # del gráfico y tiene que entrar sin deslizar de costado.
-    sty = (t.style
-           .format(lambda v: f"#{int(v)}" if v else "—", subset=["#"])
-           .format(lambda v: "—" if not v else (
-               fmt_k(v).replace("S/ ", "") if m == "venta" else f"{v:,.0f}"),
-               subset=per)
-           .format(lambda v: ("nuevo" if v > 0 else "—") if np.isinf(v)
-                   else f"{'+' if v >= 0 else '−'}{abs(v):.0%}",
-                   subset=["Δ por día"])
-           .format(lambda v: f"{v:.1%}" if v else "—", subset=["% costo"])
-           # Los umbrales y los colores del Resumen, como en el Mix: el mismo
-           # número se pinta igual en las tres vistas.
-           .map(_estilo_costo, subset=["% costo"]))
-    # Anchos en píxeles y no «small»/«medium»: con cuatro períodos, los de
-    # nombre dejaban la última columna fuera de la tarjeta (medido a 1366).
-    # Y desde que lleva el % de costo, con cuatro se angostan el nombre y
-    # los montos para sumar lo mismo que con tres (medido: si no, «% costo»
-    # quedaba afuera; cederle ancho al gráfico le giraba las fechas, #546).
-    w_plato, w_per = (150, 58) if len(sel) >= MAX_PERIODOS else (180, 62)
-    cfg = {"Plato": st.column_config.TextColumn(pinned=True, width=w_plato),
-           "#": st.column_config.Column(
-               width=44, help=f"Puesto en {per[-1]}, dentro del ámbito"),
-           "Puestos": st.column_config.Column(
-               width=62, help=f"Cambio de puesto de {per[0]} a {per[-1]}"),
-           "Δ por día": st.column_config.Column(
-               width=72, help="Variación de la venta POR DÍA del primer al "
-                              "último período"),
-           "% costo": st.column_config.Column(
-               width=62, help=f"Costo ÷ venta neta de {per[-1]}, como el "
-                              "Resumen. «—»: sin costo cargado o sin venta "
-                              "en ese período.")}
-    for x in per:
-        cfg[x] = st.column_config.Column(
-            width=w_per, help=("Venta" if m == "venta" else "Unidades")
-            + f" de {x}" + (" (S/)" if m == "venta" else ""))
-    st.dataframe(sty, key=_key("vt_pl_tabla"), on_select="rerun",
-                 selection_mode="single-row", hide_index=True, row_height=27,
-                 height=alturas.VENTAS_PLATOS_TABLA, column_config=cfg)
-
-
-def _evolucion(nombre, corte, lista, etq, sel, ancla, filtrar_cb, d, m, info,
-               elegidos):
-    """El plato en foco en TODO el corte, por día. Va DENTRO de la tarjeta,
-    debajo de la tabla y separado por una línea: hasta el 2026-09-29 era una
-    segunda tarjeta (regla #569). La key no lleva el prefijo de tarjeta
-    (`ajuste_graf_card_`) a propósito: con él heredaría fondo, borde y techo
-    de una tarjeta metida en otra."""
-    with st.container(key="vt_pl_evo_caja"):
-        # columnas-internas: el título de la evolución y sus tres botones
-        c1, c2, c4, c3 = st.columns([2.6, 1.1, 1.3, 0.7],
-                                    vertical_alignment="center")
-        sub = (f"{info.loc[nombre, 'grupo']} › {info.loc[nombre, 'sub']}"
-               if nombre in info.index else "")
-        with c1:
-            st.markdown(
-                f'<div class="vt-pl-evo-tit"><b>{escape(nombre)}</b> · '
-                f'{escape(sub)} · {"venta" if m == "venta" else "unidades"} '
-                f'por día, en cada {corte.lower()} del corte</div>',
-                unsafe_allow_html=True)
-        with c2:
-            st.button("Quitar de elegidos" if nombre in elegidos
-                      else "Agregar a elegidos", key="vt_pl_btn_elegir",
-                      on_click=_alternar_elegido, args=(nombre,),
-                      use_container_width=True)
-        with c4:
-            st.button("Ver a qué hora se vende →", key="vt_pl_btn_hora",
-                      on_click=_ir_a_hora, args=(nombre,),
-                      use_container_width=True,
-                      help="Lleva a «Por hora» con este plato abierto en su "
-                           "ficha.")
-        with c3:
-            st.button("Cerrar", key="vt_pl_btn_soltar", on_click=_soltar_foco,
-                      use_container_width=True)
-        ys = []
+        a = datos[k][0]
+        if a is not None and not a.empty:
+            nombres.update(a["prod"])
+    foco = ss.get("vt_pl_foco")
+    if foco not in nombres:
+        ult = datos[sel[-1]][0]
+        foco = (str(ult.groupby("prod")["venta"].sum().idxmax())
+                if ult is not None and not ult.empty else None)
+    evo = None
+    if foco:
         with st.spinner("Cargando la evolución…"):
-            for k in lista:
-                a, n_dias = _cargar_periodo(k, corte, ancla, filtrar_cb, d)
-                v = a.loc[a["prod"] == nombre, m].sum()
-                ys.append(float(v) / n_dias if n_dias else 0.0)
-        colores = [_COLOR_MARCA[sel.index(k) % len(_COLOR_MARCA)] if k in sel
-                   else LAVANDA_BORDE for k in lista]
-        fig = go.Figure(go.Bar(
-            x=[etq[k] for k in lista], y=ys, marker=dict(color=colores),
-            text=[fmt_k(y) if m == "venta" else f"{y:,.1f}" for y in ys],
-            textposition="outside", cliponaxis=False,
-            hovertemplate=("%{x}<br>" + ("S/ %{y:,.0f}" if m == "venta"
-                                         else "%{y:,.1f} u")
-                           + " por día<extra></extra>")))
-        _compras_layout(fig, alto=alturas.COMPACTO)
-        fig.update_layout(
-            showlegend=False, bargap=0.3, margin=dict(l=10, r=10, t=18, b=4),
-            xaxis=dict(type="category", fixedrange=True,
-                       tickfont=dict(size=10)),
-            yaxis=dict(fixedrange=True, showticklabels=False,
-                       gridcolor=LAVANDA_BORDE))
-        st.plotly_chart(fig, key="vt_pl_evo",
-                        config={"displaylogo": False, "displayModeBar": False})
+            evo = _evolucion_de(foco, corte, lista, etq, sel, ancla, filtrar_cb, d)
+
+    def _al_foco():
+        v = (ss.get(_K_PIEZA) or {}).get("foco")
+        if v:
+            ss["vt_pl_foco"] = v
+
+    def _a_la_hora():
+        v = (ss.get(_K_PIEZA) or {}).get("hora")
+        if v and v.get("plato"):
+            _ir_a_hora(v["plato"])
+
+    def _a_la_carta():
+        v = (ss.get(_K_PIEZA) or {}).get("carta")
+        if v and v.get("cod"):
+            _ir_a_carta(v["cod"])
+
+    try:
+        from data import sello_datos
+        codigos = _codigos_carta(sello_datos("cartacosteada.parquet"))
+    except Exception:
+        codigos = {}
+    _PIEZA(key=_K_PIEZA, data=armar_ranking(datos, sel, etq, foco, evo, codigos),
+           on_foco_change=_al_foco, on_hora_change=_a_la_hora,
+           on_carta_change=_a_la_carta, width="stretch")
