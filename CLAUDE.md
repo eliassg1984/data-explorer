@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -153,6 +153,13 @@ costo por canal; precio de S/ 1 o menos, no se vende por ahí—, lo vendido
 por canal (el principal sale restando los otros del total) y que el `.js`
 lea las filas en las mismas posiciones en que Python las arma. Ver
 `arquitectura.md` regla #696.
+
+`test_nuevo_costeo.py` vigila la pieza de «Nuevo Costeo»
+(`formulario_receta.py::_pieza`): lo que recibe —cada línea con su id, su
+chip y cómo está en el sistema— y que lo editado en el navegador
+(`cambios`: cantidades, precios, quitadas, el precio por canal) vuelva a
+la sesión, con AppTest y la pieza reemplazada. Ver `arquitectura.md` regla
+#697.
 
 ## El asistente IA no adivina: consulta
 
@@ -1466,6 +1473,16 @@ Consistencia). Todo lo de la lista lo resuelve el navegador; sólo elegir
 un producto (`elegir`) y «Simular» vuelven a Python, que dibuja DEBAJO la
 receta y la evolución. Lo vendido por canal sale de
 `data.venta_por_canal_dia` (sólo los canales que no son «En el Local»).
+
+**«Nuevo Costeo» también, desde el mismo día** (regla #697): la tabla de la
+receta y el precio son `graficos/nuevo_costeo.js` + `.css`; el buscador, el
+importador, guardar y enviar, y el panel de al costado (Dónde se usa, lo
+nuevo, el impacto de una receta base) siguen en `formulario_receta.py`. La
+cuenta corre en el navegador y vuelve en `cambios` con un `rev`: hasta que
+Python lo devuelve, lo que llega no pisa lo escrito. Cada línea lleva un
+`uid` estable (el código se repite: Sal Maldon ×2). Importar un plato trae
+sus precios por canal de `recetaventa.parquet`; guardar los suma a la
+propuesta (`precios_canal`).
 
 Antes de eso, **Costo Carta era «la tabla primero»** (regla #657): la
 carta a todo el ancho con sus 16 columnas, una fecha de tarjeta con ctx

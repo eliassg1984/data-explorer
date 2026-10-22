@@ -1,0 +1,127 @@
+/* Recetas › «Nuevo Costeo»: la receta y su precio (regla #697).
+   Vive en el shadow root del componente (formulario_receta.py::_pieza):
+   ninguna regla de acá sale de la pieza, y ninguna de estilos/ entra. Los
+   colores son las variables de estilos/_00_base.py, que SÍ cruzan el shadow
+   root. Ningún selector :has, por la regla #469.
+
+   La receta a la izquierda y el precio a la derecha, a la altura que queda
+   de la tarjeta: arriba de la pieza van el título, el importador y la
+   fila del buscador (Python), y abajo guardar y enviar. La tabla se
+   desliza por dentro (regla #382). */
+
+.nc { color: var(--text-primary); font-size: 13px; line-height: 1.4; min-width: 0; }
+.nc button, .nc input { font: inherit; color: inherit; }
+.nc button:focus-visible, .nc input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.sube { color: var(--danger-text); }
+.baja { color: var(--success-text); }
+.rojo { color: var(--danger-text); }
+.ambar { color: var(--warning-text); }
+.verde { color: var(--success-text); }
+
+.nc-cuerpo { display: flex; gap: 10px; align-items: stretch; min-height: 340px;
+  height: calc(var(--alto-util) - 230px); }
+.nc-receta { flex: 1 1 0; min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card);
+  display: flex; flex-direction: column; overflow: hidden; }
+.nc-zt { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.nc-tabla { flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.nc-tabla table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.nc-tabla th { position: sticky; top: 0; z-index: 1; background: var(--bg-card-tenue); text-align: left; font-size: 11px;
+  font-weight: 600; color: var(--text-secondary); padding: 6px 7px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.nc-tabla th.num, .nc-tabla td.num { text-align: right; }
+.nc-tabla td { padding: 4px 7px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; white-space: nowrap; }
+.nc-f:hover td { background: var(--bg-hover); }
+.nc-f.sel td { background: var(--accent-tint); }
+.nc-f.cero .nc-ins b { text-decoration: line-through; color: var(--text-muted); }
+.nc-ins { max-width: 320px; }
+.nc-ins div { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.nc-ins b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nc-ins > span { display: block; font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; padding-left: 2px; }
+.nc-chip { flex: none; font-size: 10.5px; padding: 1px 6px; border-radius: 9px; background: var(--line-soft); color: var(--text-secondary); cursor: help; }
+.nc-chip.lav { background: var(--accent-light); color: var(--accent-deep); }
+.nc-chip.azul { background: var(--bg-hover); color: var(--accent-deep); border: 1px solid var(--border-lavender); }
+.nc-chip.ambar { background: var(--warning-bg); color: var(--warning-text); }
+.nc-tag { flex: none; font-size: 10.5px; padding: 1px 6px; border-radius: 9px; background: var(--warning-bg); color: var(--warning-text); }
+.nc-cant, .nc-pre { white-space: nowrap; }
+.nc-cant input, .nc-pre input { width: 66px; height: 26px; border: 1px solid var(--border); border-radius: 6px; text-align: right;
+  padding: 0 4px; background: var(--bg-card); font-variant-numeric: tabular-nums; }
+.nc-cant input.cambio { border-color: var(--accent); background: var(--accent-tint); }
+.nc-cant span, .nc-pre span { font-size: 11px; color: var(--text-secondary); margin: 0 3px; }
+.nc-costo div { display: flex; align-items: center; gap: 6px; }
+.nc-costo i { display: block; height: 8px; border-radius: 2px; background: var(--focus-lavender); flex: none; }
+.nc-costo b { font-weight: 600; }
+.nc-costo span { font-size: 11px; color: var(--text-muted); }
+.nc-vs { font-size: 12px; color: var(--text-muted); }
+.nc-vs.sube { color: var(--danger-text); }
+.nc-vs.baja { color: var(--success-text); }
+.nc-x button { border: 0; background: none; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; }
+.nc-x button:hover { color: var(--danger-text); }
+.nc-vacio { margin: 14px; padding: 12px 14px; border-radius: 8px; background: var(--accent-tint); color: var(--accent-deep); font-size: 12.5px; }
+
+.nc-pie { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 7px 10px;
+  border-top: 1px solid var(--border); background: var(--bg-card-tenue); }
+.nc-pie-txt { font-size: 12px; color: var(--text-secondary); }
+.nc-pie-bot { display: flex; gap: 6px; }
+.nc-total { margin-left: auto; display: flex; align-items: baseline; gap: 8px; }
+.nc-total span { font-size: 11px; color: var(--text-secondary); }
+.nc-total b { font-size: 16px; }
+.nc-btn { height: 28px; padding: 0 10px; border-radius: 8px; cursor: pointer; font-size: 12px; border: 1px solid var(--border-lavender);
+  background: var(--bg-card); color: var(--accent-deep) !important; white-space: nowrap; }
+.nc-btn:hover { background: var(--accent-tint); }
+.nc-btn:disabled { opacity: .45; cursor: default; }
+.nc-btn.prim { background: var(--accent); border-color: var(--accent); color: var(--bg-card) !important; }
+.nc-btn.ambar { border-color: var(--warning-border); color: var(--warning-text) !important; }
+
+/* El precio, siempre a la vista. */
+.nc-precio { flex: 0 1 370px; min-width: 300px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow: auto; overscroll-behavior: contain; }
+.nc-precio > * { flex: none; }
+.nc-ptit { font-size: 13px; font-weight: 700; }
+.nc-pv { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.nc-pv > label, .nc-pv > div { display: grid; gap: 2px; }
+.nc-pv span { font-size: 11px; color: var(--text-secondary); }
+.nc-pv-in { display: flex !important; align-items: center; gap: 4px; height: 34px; border: 1px solid var(--border-lavender); border-radius: 8px;
+  padding: 0 8px; background: var(--bg-card); }
+.nc-pv-in input { width: 72px; border: 0; outline: none; font-size: 15px; font-weight: 700; background: transparent; }
+.nc-pv b { font-size: 15px; font-weight: 700; }
+.pill { display: inline-block; padding: 1px 7px; border-radius: 9px; font-weight: 600; background: var(--line-soft); font-variant-numeric: tabular-nums; }
+.pill.verde { background: var(--success-bg); color: var(--success-text); }
+.pill.ambar { background: var(--warning-bg); color: var(--warning-text); }
+.pill.rojo { background: var(--danger-bg); color: var(--danger-text); }
+.pill.grande { font-size: 15px; padding: 3px 9px; }
+.nc-nota { font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
+.nc-barra { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--line-soft); }
+.nc-barra i, .nc-ley i { display: block; height: 14px; }
+.nc-ley { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11px; color: var(--text-secondary); }
+.nc-ley span { display: flex; align-items: center; gap: 4px; }
+.nc-ley i { width: 8px; height: 8px; border-radius: 2px; }
+i.c { background: var(--accent); } i.c.ambar { background: var(--warning); } i.c.rojo { background: var(--danger); } i.c.verde { background: var(--accent); }
+i.u { background: var(--success); opacity: .55; }
+i.r { background: var(--serie-1); opacity: .6; }
+i.g { background: var(--serie-2); opacity: .55; }
+.nc-crot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-secondary); margin-bottom: 4px; }
+.nc-crot label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.nc-canales table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.nc-canales th { font-size: 10.5px; color: var(--text-secondary); font-weight: 600; text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--border); }
+.nc-canales td { padding: 3px 4px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.nc-canales .num { text-align: right; }
+.nc-canales input { width: 62px; height: 22px; border: 1px solid var(--border); border-radius: 5px; text-align: right; padding: 0 4px;
+  background: var(--bg-card); font-variant-numeric: tabular-nums; }
+.nc-objs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.nc-obj { text-align: left; border: 1px solid var(--border-lavender); border-radius: 8px; background: var(--accent-tint); padding: 5px 10px;
+  cursor: pointer; display: grid; gap: 1px; }
+.nc-obj:hover { border-color: var(--accent); }
+.nc-obj span { font-size: 11px; color: var(--accent-deep); }
+.nc-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
+.nc-cifras div { display: grid; }
+.nc-cifras span { font-size: 11px; color: var(--text-secondary); }
+.nc-cifras b { font-size: 14px; }
+.nc-aviso { font-size: 12px; padding: 7px 10px; border-radius: 8px; background: var(--warning-bg); color: var(--warning-text); line-height: 1.4; }
+.nc-pbot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+
+@media (max-width: 900px) {
+  .nc-cuerpo { flex-direction: column; height: auto; min-height: 0; }
+  .nc-receta { flex: none; max-height: 480px; }
+  .nc-precio { flex: none; min-width: 0; overflow: visible; }
+}

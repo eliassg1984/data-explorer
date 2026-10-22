@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-696 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+697 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (220)
+**CSS y estilos** (221)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -285,6 +285,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#689** — Un boceto aprobado se implementa con SU forma: si es una página con tarjetas, chips y ficha,…
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
 - **#695** — «Simular Alza de Insumos» es una pieza propia: el escenario, los indicadores, la lista y la…
+- **#697** — «Nuevo Costeo» es una pieza propia: la receta y su precio se editan en el navegador, con los…
 
 **Layout y alturas** (98)
 
@@ -1034,7 +1035,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (206)
+**Decisiones de diseño y UX** (207)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1242,6 +1243,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#694** — «Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta son notas de crédito y…
 - **#695** — «Simular Alza de Insumos» es una pieza propia: el escenario, los indicadores, la lista y la…
 - **#696** — «Costo de Carta» es una pieza propia con los CINCO CANALES del POS y su Excel
+- **#697** — «Nuevo Costeo» es una pieza propia: la receta y su precio se editan en el navegador, con los…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -53740,6 +53742,50 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      Lo vigilan `test_costo_carta.py` y `test_definicion_venta.py` (lo
      vendido por canal suma lo mismo que sin canal). (2026-10-22.)
 
+697. **«Nuevo Costeo» es una pieza propia: la receta y su precio se editan
+     en el navegador, con los cinco canales.** A pedido (2026-10-22), sobre
+     un boceto aprobado (https://claude.ai/artifact/Rb2hkVYJQVLWy7NstKqufo).
+     Hasta ese día la receta era un `st.data_editor` y el precio, una franja
+     de cifras más un panel con tabla y torta que había que abrir.
+     · **Qué pasó a la pieza** (`graficos/nuevo_costeo.js` + `.css`,
+       `formulario_receta.py::_pieza`): las líneas, con su chip ((L), (P),
+       (Rs), insumo, plato, nuevo), cantidad y precio editables —en gramos y
+       mililitros, el precio se escribe por kilo y litro, como se compra—,
+       el costo de cada una con su barra, «vs. sistema» en Modificar, quitar,
+       Vaciar y Volver al original; y al costado, SIEMPRE a la vista, el
+       precio de venta, el % de costo, la utilidad, la barra costo /
+       utilidad / recargo / IGV, los cinco canales con «mismo precio en
+       todos», y «para quedar en 30 / 35 %». En una receta base, su costo
+       por unidad contra el del sistema.
+     · **Qué quedó en Python**: el título y los modos, el importador, el
+       nombre, el área y el buscador, guardar y enviar (PDF, Excel, Gmail),
+       «Guardadas», y el panel de al costado para «Dónde se usa», lo nuevo
+       ((P)/(Rs) con su detalle) y el impacto de una receta base, que la
+       pieza abre con `accion`. Se fueron la tabla nativa, la torta y la
+       franja (`_tabla_lineas`, `_botonera_tabla`, `_franja_resultado`,
+       `_panel_precio`, `_torta`).
+     · **La cuenta corre en el navegador y vuelve en `cambios`**: una foto
+       entera de lo editable (cantidad y precio por línea, las quitadas, el
+       precio y los de los canales) medio segundo después de la última
+       tecla, con un `rev`. Python la aplica en un callback y devuelve el
+       `rev` aplicado; hasta verlo, la pieza toma las líneas que llegan (pudo
+       sumarse una con el buscador) con lo suyo encima. Si las filas son las
+       mismas, no rehace la tabla: el campo no pierde el foco.
+     · **Cada línea lleva un `uid`**: el código no identifica una línea (un
+       insumo puede ir dos veces en una receta, Sal Maldon ×2) y el `sid`
+       sólo lo tienen las importadas.
+     · **Los cinco canales**: importar un plato trae sus `P.VENTA <canal>` de
+       `recetaventa.parquet` (si alguno difiere del salón), y guardar los
+       suma a la propuesta como `precios_canal`. El PDF, el Excel y el correo
+       siguen con el precio de salón.
+     · **Medido a 1323×619 con Playwright** sobre el Lomo Saltado real:
+       S/ 28,35 y 44,3 % igual que el sistema; una cantidad y el precio
+       editados sobreviven a una corrida de Python (abrir «Dónde se usa»);
+       sumar dos insumos con el buscador mientras hay un precio escrito no
+       lo pisa; «Modificar › Receta base» da el costo por kilo contra el del
+       sistema. Sin errores de consola.
+     Lo vigila `test_nuevo_costeo.py`. (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53752,7 +53798,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#696**; la próxima toma el número siguiente.
+> última regla es la **#697**; la próxima toma el número siguiente.
 
 >
 
