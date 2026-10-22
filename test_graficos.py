@@ -2296,6 +2296,16 @@ def _pruebas_puras():
     check("lo que falta cargar dice cuánto es nota de crédito (no es compra)",
           (_fnc["soles"]["falta"], _fnc["nc"]["falta"], _fnc["nc"]["falta_s"]),
           (80.0, 1, 30.0))
+    # Comparar años (regla #694): cada año trae sus tipos con sus notas de
+    # crédito, que es de donde la pieza arma «un tipo año por año».
+    _dy = _sv.datos_cruce(_c, [("2024-25", "r1", _c, None), ("2023-24", "r2", _ncx, None)],
+                          "rango", etiqueta="2025-26")
+    check("comparar años: el actual lleva su rótulo y cada año sus tipos",
+          ([a["anio"] for a in _dy["anios"]],
+           [sorted(t["id"] for t in a["det"]) for a in _dy["anios"]][2]),
+          (["2025-26", "2024-25", "2023-24"], ["Mercadería"]))
+    check("comparar años: las notas sin cargar de un tipo en un año viejo",
+          _dy["anios"][2]["det"][0]["f"]["nc"]["falta"], 1)
     _reg = pd.DataFrame({"ruc_proveedor": ["1", "1", "2"],
                          "fecha_emision": ["2026-09-03", "2026-10-01", "2025-01-01"],
                          "total": [10.0, 5.0, 99.0]})

@@ -629,6 +629,11 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
   la tabla. Los resúmenes llevan a la tabla filtrada (`K_LLEGADA`) y el
   conversor es la ventana «Ingresar al Almacén», desde la fila «Solo
   SUNAT». La tarjeta de debajo de la tabla, con sus seis modos, ya no existe.
+  «Cruce con SUNAT» compara tres períodos (el rango y el mismo uno y dos
+  años atrás), en tres formas —por tipo, por año, tipo × año—, separa las
+  notas de crédito sin cargar y cada tramo de barra dice cuánto es; sus
+  filas de detalle son filas de la MISMA tabla, para que las barras midan
+  igual (regla #694).
 - **Y un `st.rerun` al tope de un fragment los esconde a TODOS**: aborta la
   corrida antes de que se registren, así que la escalada de fecha de una
   tarjeta le borraba lo elegido a sus propios controles — la granularidad

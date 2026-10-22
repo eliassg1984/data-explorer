@@ -182,16 +182,20 @@ def _pct(f, medida):
     return None if not b else round(f[medida]["cuadran"] / b * 100, 1)
 
 
-def datos_cruce(censo, previos=(), rango="", recientes=None):
+def datos_cruce(censo, previos=(), rango="", recientes=None, etiqueta=""):
     """Lo que dibuja «Cruce con SUNAT». Pura.
 
     `censo` es el cruce del período (rango, «Mes en SUNAT» y proveedor; el
     filtro de estado no, que elige DENTRO de este censo). `previos` es
     `[(etiqueta del año, rango, cruce o None, motivo), ...]` del más nuevo
     al más viejo: el mismo rango corrido atrás, ya clasificado por tipo.
+    `etiqueta` es el año del período actual («2025-26»), para cuando se lo
+    lista junto a los otros.
+
     Una fila por tipo con sus proveedores pendientes como detalle, y una
     por año con sus tipos como detalle: las dos formas de partir el mismo
-    total."""
+    total. Cada año trae sus tipos, así que la pieza arma sola «un tipo año
+    por año» y «tipo × año» (regla #694)."""
     b = _base(censo)
     orden = _orden_tipos(b["tipo"])
     por_tipo = _fid_por(b, ["tipo"])
@@ -225,15 +229,15 @@ def datos_cruce(censo, previos=(), rango="", recientes=None):
         ft = _fid_por(bx, ["tipo"])
         return [{"id": t, "nombre": t, "f": ft[t]} for t in _orden_tipos(bx["tipo"])]
 
-    anios = [{"id": "actual", "nombre": "Período actual", "sub": rango,
-              "f": total_f, "det": _tipos_de(b), "actual": True}]
+    anios = [{"id": "actual", "nombre": "Período actual", "anio": etiqueta or "Actual",
+              "sub": rango, "f": total_f, "det": _tipos_de(b), "actual": True}]
     avisos = []
     for etiqueta, r, df, motivo in previos:
         if df is None:
             avisos.append(f"{etiqueta} ({r}): sin datos — {motivo}.")
             continue
         bx = _base(df)
-        anios.append({"id": etiqueta, "nombre": etiqueta, "sub": r, "f": _fid(bx),
+        anios.append({"id": etiqueta, "nombre": etiqueta, "anio": etiqueta, "sub": r, "f": _fid(bx),
                       "det": _tipos_de(bx), "actual": False})
     return {
         "vista": "cruce", "rango": rango,

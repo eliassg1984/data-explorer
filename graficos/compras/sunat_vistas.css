@@ -79,7 +79,7 @@ td > b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display
 .t-det td:first-child { white-space: nowrap; }
 .fila { cursor: pointer; }
 .fila:hover, .fila.abierta { background: var(--bg-card-tenue); }
-.fila.total { cursor: default; background: var(--bg-card-tenue); }
+.fila.total { background: var(--bg-card-tenue); }
 .fila.total b { font-weight: 700; }
 td.fuerte { font-weight: 700; }
 td.flecha { color: var(--text-secondary); text-align: center; padding-left: 0; padding-right: 6px; }
@@ -158,3 +158,48 @@ tr.det > td { background: var(--bg-card-tenue); padding: 10px 12px 12px 22px; }
 small.nc-txt { display: block; font-size: 10.5px; font-weight: 400; color: var(--text-secondary); white-space: nowrap; }
 td.alerta small.nc-txt { color: var(--warning-text); opacity: .8; }
 .est b.nc { font-weight: 700; margin-right: 4px; color: var(--danger-text); }
+
+/* ── comparar años (regla #694) ───────────────────────────────────────── */
+.sv { position: relative; }
+.fuerte { font-weight: 700; }
+/* El tramo de notas de crédito sin cargar: el oscuro de «falta», rayado. */
+.ley i.n, .barra i.n {
+  background: repeating-linear-gradient(135deg, var(--c-falta) 0 2px, var(--warning-text) 2px 4px);
+}
+.barra i { cursor: help; }
+.chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chips .rot { margin-right: 2px; }
+.chip {
+  font-size: 12.5px; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px dashed var(--border); background: var(--bg-card); color: var(--text-secondary);
+}
+.chip.on { border: 1px solid var(--accent); background: var(--accent-light); color: var(--accent-deep); font-weight: 600; }
+.chip.fijo { cursor: default; border: 1px solid var(--text-primary); background: var(--text-primary); color: var(--bg-card); font-weight: 600; }
+/* Las filas de detalle son filas de la MISMA tabla: su barra cae en la
+   columna de la de arriba y mide lo mismo. Se distinguen por la sangría y
+   el fondo, no por el ancho. */
+tr.det-cab-fila > td { background: var(--bg-card-tenue); padding: 10px 12px 2px 22px; border-bottom: 0; }
+tr.sub-fila > td { background: var(--bg-card-tenue); padding-top: 5px; padding-bottom: 5px; font-size: 12.5px; border-bottom: 0; }
+tr.sub-fila > td:first-child { padding-left: 22px; white-space: nowrap; }
+tr.sub-fila:hover > td { background: var(--accent-tint); }
+tr.sub-fila.quieta:hover > td { background: var(--bg-card-tenue); }
+tr.sub-fila.anio > td:first-child small { display: inline; margin-left: 8px; }
+/* «Tipo × año» */
+.tarjetas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tarjeta { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tarjeta.ancha { grid-column: 1 / -1; background: var(--bg-card-tenue); }
+.t-anio { display: grid; grid-template-columns: 62px 84px minmax(0, 1fr) 54px 120px 56px; gap: 8px; align-items: center; font-size: 12.5px; }
+.t-anio .n { text-align: right; }
+.t-anio > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-anio small.nc-txt { overflow: hidden; text-overflow: ellipsis; }
+.t-anio .todo { grid-column: 2 / -1; }
+.t-anio small.nc-txt { text-align: right; }
+@media (max-width: 1100px) { .tarjetas { grid-template-columns: minmax(0, 1fr); } }
+/* La ficha de un tramo */
+.tip {
+  position: absolute; z-index: 5; transform: translate(-50%, -100%); pointer-events: none;
+  background: var(--text-primary); color: var(--bg-card); border-radius: 8px; padding: 7px 10px;
+  font-size: 12px; line-height: 1.4; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+}
+.tip[hidden] { display: none; }
+.tip b { display: block; font-weight: 600; margin-bottom: 2px; }

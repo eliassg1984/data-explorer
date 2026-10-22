@@ -3315,11 +3315,14 @@ def _rotulo_rango(ini, fin):
 
 
 def _cruces_previos(d, col_fecha, f_ini, f_fin, prov, tablas):
-    """El cruce del MISMO rango corrido un año atrás, ya clasificado por
-    tipo de compra, para «Cruce con SUNAT»: `[(año, rango, cruce, None) |
-    (año, rango, None, motivo)]`. Un año y no dos: cada cruce de doce meses
-    cuesta ~16 s en la laptop (medido el 2026-10-21) y la vista abre acá;
-    sumar otro es agregarlo a la tupla del bucle.
+    """El cruce del MISMO rango corrido uno y dos años atrás, ya clasificado
+    por tipo de compra, para «Cruce con SUNAT»: `[(año, rango, cruce, None) |
+    (año, rango, None, motivo)]`. Dos años desde el 2026-10-21 (regla #694,
+    a pedido: la vista abre comparando tres períodos). No tres: el registro
+    de SUNAT empieza el 1 jul 2023, y con «Últimos 12 meses» el tercero ya
+    no tendría datos. El precio: cada cruce de doce meses cuesta ~16 s la
+    primera vez en la laptop (medido el 2026-10-21), así que el segundo
+    año suma eso a la primera apertura de la sesión.
 
     Mismo cálculo que la tabla —`comprobantes_rango` del registro y
     `_parquet_agrupado_por_documento` del parquet, cruzados— con el filtro
@@ -3338,7 +3341,7 @@ def _cruces_previos(d, col_fecha, f_ini, f_fin, prov, tablas):
     if d is not None and col_fecha in getattr(d, "columns", ()):
         _min = pd.to_datetime(d[col_fecha], errors="coerce").min()
     out = []
-    for anios in (1,):
+    for anios in (1, 2):
         ini, fin = _rango_hace(f_ini, f_fin, anios)
         etiqueta, rotulo = _rotulo_anio(ini, fin), _rotulo_rango(ini, fin)
         k = (f"sunat_prev_{ini}_{fin}_{prov or ''}_{tipo_compra.VERSION}_"
@@ -4169,7 +4172,8 @@ def _vista_resumen(vista, censo, d, col_fecha, f_ini, f_fin, prov, tablas):
         previos = _cruces_previos(d, col_fecha, f_ini, f_fin, prov, tablas)
     sv.dibujar(sv.datos_cruce(censo, previos, rango,
                               {"doc": n_rec, "soles": round(s_rec, 2),
-                               "dias": _DIAS_RECIENTES}),
+                               "dias": _DIAS_RECIENTES},
+                              etiqueta=_rotulo_anio(f_ini, f_fin)),
                "sunat_pieza_cruce")
 
 

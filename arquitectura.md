@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-693 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+694 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (219)
 
@@ -386,7 +386,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
 
-**Plotly y figuras** (120)
+**Plotly y figuras** (121)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -508,6 +508,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#677** — De los tres modos de «Distribución de diferencias» sólo el Pareto se podía analizar: la vista…
 - **#685** — A 9px un «6» se lee «5»: los paneles por familia de Ajuste › Evolución parecían rotular el…
 - **#692** — Ajuste › Evolución es una pieza propia: la serie en rojo y verde con «Explicar con», el panel…
+- **#694** — «Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta son notas de crédito y…
 
 **AgGrid y tablas** (95)
 
@@ -887,7 +888,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#676** — Costos mensual usa lo contado; descuentos y cobertura documental se presentan separados de su…
 - **#682** — Hay emisores que escriben el NOMBRE del producto en el casillero del código del XML
 
-**SUNAT y SIRE** (70)
+**SUNAT y SIRE** (71)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -959,6 +960,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#686** — «¿El maestro del sistema tiene lógica?» se contesta con CONTROLES, no con un tablero: Costos…
 - **#691** — «Consistencia de datos», ajustada a pedido: el Almacén Central tiene TODOS los productos, dos…
 - **#693** — La portada del Resumen ejecutivo entra en una pantalla de laptop y no repite un número
+- **#694** — «Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta son notas de crédito y…
 
 **Fechas, rangos y cortes** (17)
 
@@ -53598,6 +53600,43 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        una buena noticia del indicador no entra.
      Lo vigila `test_resumen_ejecutivo.py`. (2026-10-21.)
 
+694. **«Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta
+     son notas de crédito y cada tramo de barra dice cuánto es.** A pedido
+     (2026-10-21), sobre un boceto aprobado («opción D»):
+     · **Tres períodos**: el rango de la tarjeta y el mismo corrido uno y
+       dos años atrás (`documentos_sunat._cruces_previos`, que hasta ese
+       día traía uno). No tres atrás: el registro del SIRE empieza el
+       1 jul 2023 y con «Últimos 12 meses» el tercero no tiene datos. Los
+       años se suman o se quitan con píldoras («Comparar con»), en el
+       navegador, sin corrida; la vista abre con todos.
+     · **«Filas» tiene tres formas**: «Por tipo» (abrir un tipo lo muestra
+       AÑO POR AÑO y, debajo, quién le baja la fidelidad), «Por año» (abrir
+       un año lo parte por tipo) y «Tipo × año» (una tarjeta por tipo con
+       una barra por año). El «vs» de cada fila es contra el año VISIBLE que
+       le sigue. Sale de lo que `datos_cruce` ya mandaba —cada año con sus
+       tipos—: la pieza arma las tres formas sola.
+     · **Las filas de detalle son filas de la MISMA tabla**, no una tabla
+       adentro de una celda: así su barra cae en la columna de la de arriba
+       y mide lo mismo. Antes la tabla de adentro arrancaba 22 px más a la
+       derecha con otro ancho, y la barra de un año viejo salía MÁS LARGA
+       que la del actual («le roba protagonismo»). Se distinguen por la
+       sangría, el fondo y una barra más fina.
+     · **Notas de crédito sin cargar**: un tramo rayado al final de «falta
+       cargar» (con un ancho mínimo: son pocas), su cantidad debajo de la
+       cifra, y «Notas de crédito sin cargar: En lo que falta | Aparte».
+       Aparte, salen del total y de lo que falta (todo el Cruce lee los
+       tramos por `v()` en `sunat_vistas.js`, nunca `f[m][k]` suelto): con
+       datos reales la fidelidad en documentos pasa de 61,9 % a 63,1 %.
+     · **Cada tramo dice cuánto es, al pasar el cursor o con un clic** (en
+       el celular no hay cursor): la ficha da las DOS medidas, cada una con
+       su %, y las notas del tramo. Es un nodo de la raíz de la pieza, no de
+       la tabla, que la recortaría con su `overflow`; un clic en una barra
+       la fija en vez de abrir la fila.
+     Ojo al probarla en local: otra sesión puede tener su servidor en el
+     puerto de `launch.json`, y el preview arrancar el tuyo en un puerto
+     que Streamlit ignora: las capturas salían del servidor viejo, con el
+     JS de antes. Se ve con `Get-NetTCPConnection -LocalPort <puerto>`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53610,7 +53649,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#693**; la próxima toma el número siguiente.
+> última regla es la **#694**; la próxima toma el número siguiente.
 
 >
 
