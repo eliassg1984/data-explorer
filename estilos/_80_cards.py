@@ -1752,6 +1752,7 @@ CSS = """    /* ================================================================
        de abajo es de la FILA, no del `<p>` del título. El de «Costo recetas
        base» (`rec_rb_cab`, regla #576) es el mismo renglón. */
     .st-key-rec_carta_cab,
+    .st-key-vt_mix_cab,
     .st-key-rec_rb_cab,
     .st-key-rec_rb_det_cab,
     .st-key-rec_alza_cab {
@@ -1762,6 +1763,7 @@ CSS = """    /* ================================================================
         overflow: visible !important;
     }
     .st-key-rec_carta_cab .chart-card-hdr,
+    .st-key-vt_mix_cab .chart-card-hdr,
     .st-key-rec_rb_cab .chart-card-hdr,
     .st-key-rec_rb_det_cab .chart-card-hdr,
     .st-key-rec_alza_cab .chart-card-hdr {
@@ -3020,7 +3022,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi [data-testid="stMarkdownContainer"],
     .st-key-ventas_comp_tot [data-testid="stMarkdownContainer"],
     .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"],
-    .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"],
     .st-key-vt_pl_cabfila [data-testid="stMarkdownContainer"],
     .st-key-vt_mes_cabfila [data-testid="stMarkdownContainer"],
     .st-key-vt_ctl_cabfila [data-testid="stMarkdownContainer"],
@@ -3033,7 +3034,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-cab,
     .st-key-ventas_comp_tot .vt-cab,
     .st-key-vt_resumen_kpi .vt-cab,
-    .st-key-vt_mix_cabfila .vt-cab,
     .st-key-vt_pl_cabfila .vt-cab,
     .st-key-vt_mes_cabfila .vt-cab,
     .st-key-vt_ctl_cabfila .vt-cab,
@@ -3048,7 +3048,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-cab-tit,
     .st-key-ventas_comp_tot .vt-cab-tit,
     .st-key-vt_resumen_kpi .vt-cab-tit,
-    .st-key-vt_mix_cabfila .vt-cab-tit,
     .st-key-vt_pl_cabfila .vt-cab-tit,
     .st-key-vt_mes_cabfila .vt-cab-tit,
     .st-key-vt_ctl_cabfila .vt-cab-tit,
@@ -3062,7 +3061,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-kpis,
     .st-key-ventas_comp_tot .vt-kpis,
     .st-key-vt_resumen_kpi .vt-kpis,
-    .st-key-vt_mix_cabfila .vt-kpis,
     .st-key-vt_pl_cabfila .vt-kpis,
     .st-key-vt_mes_cabfila .vt-kpis,
     .st-key-vt_ctl_cabfila .vt-kpis,
@@ -3075,7 +3073,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-kpi,
     .st-key-ventas_comp_tot .vt-kpi,
     .st-key-vt_resumen_kpi .vt-kpi,
-    .st-key-vt_mix_cabfila .vt-kpi,
     .st-key-vt_pl_cabfila .vt-kpi,
     .st-key-vt_mes_cabfila .vt-kpi,
     .st-key-vt_ctl_cabfila .vt-kpi,
@@ -3092,7 +3089,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-kpi:first-child,
     .st-key-ventas_comp_tot .vt-kpi:first-child,
     .st-key-vt_resumen_kpi .vt-kpi:first-child,
-    .st-key-vt_mix_cabfila .vt-kpi:first-child,
     .st-key-vt_pl_cabfila .vt-kpi:first-child,
     .st-key-vt_mes_cabfila .vt-kpi:first-child,
     .st-key-vt_ctl_cabfila .vt-kpi:first-child,
@@ -3104,7 +3100,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-kpi-rot,
     .st-key-ventas_comp_tot .vt-kpi-rot,
     .st-key-vt_resumen_kpi .vt-kpi-rot,
-    .st-key-vt_mix_cabfila .vt-kpi-rot,
     .st-key-vt_pl_cabfila .vt-kpi-rot,
     .st-key-vt_mes_cabfila .vt-kpi-rot,
     .st-key-vt_ctl_cabfila .vt-kpi-rot,
@@ -3118,7 +3113,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-ventas_comp_tot .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_resumen_kpi .vt-kpi[style] .vt-kpi-rot::before,
-    .st-key-vt_mix_cabfila .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_pl_cabfila .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_mes_cabfila .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_ctl_cabfila .vt-kpi[style] .vt-kpi-rot::before,
@@ -3134,7 +3128,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-kpi-val,
     .st-key-ventas_comp_tot .vt-kpi-val,
     .st-key-vt_resumen_kpi .vt-kpi-val,
-    .st-key-vt_mix_cabfila .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-val,
     .st-key-vt_mes_cabfila .vt-kpi-val,
     .st-key-vt_ctl_cabfila .vt-kpi-val,
@@ -3147,7 +3140,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-kpi-sub,
     .st-key-ventas_comp_tot .vt-kpi-sub,
     .st-key-vt_resumen_kpi .vt-kpi-sub,
-    .st-key-vt_mix_cabfila .vt-kpi-sub,
     .st-key-vt_pl_cabfila .vt-kpi-sub,
     .st-key-vt_mes_cabfila .vt-kpi-sub,
     .st-key-vt_ctl_cabfila .vt-kpi-sub,
@@ -3160,7 +3152,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-kpi-total .vt-kpi-val,
     .st-key-ventas_comp_tot .vt-kpi-total .vt-kpi-val,
     .st-key-vt_resumen_kpi .vt-kpi-total .vt-kpi-val,
-    .st-key-vt_mix_cabfila .vt-kpi-total .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-total .vt-kpi-val,
     .st-key-vt_mes_cabfila .vt-kpi-total .vt-kpi-val,
     .st-key-vt_ctl_cabfila .vt-kpi-total .vt-kpi-val,
@@ -3171,7 +3162,6 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_platos_kpi .vt-kpi-alerta .vt-kpi-val,
     .st-key-ventas_comp_tot .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_resumen_kpi .vt-kpi-alerta .vt-kpi-val,
-    .st-key-vt_mix_cabfila .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_mes_cabfila .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_ctl_cabfila .vt-kpi-alerta .vt-kpi-val,
@@ -3287,129 +3277,16 @@ CSS = """    /* ================================================================
         padding: 0 10px !important;
         font-size: 12px !important;
     }
-    /* VENTAS › MIX DE CARTA (2026-09-25, regla #527). La tarjeta copia la
-       del Resumen ejecutivo: el renglón del título con los KPI (las reglas
-       `.vt-cab`/`.vt-kpis` de arriba llevan también `vt_mix_cabfila`), la
-       fila de controles a 28px y la fila que elige qué se ve abajo. Lo
-       propio es la columna de la derecha del gráfico, `vt_mix_nav`: las
-       migas que suben y un botón por tramo de la barra, que hace de
-       leyenda. Todo acotado a SU key (CLAUDE.md). */
+    /* VENTAS › MIX DE CARTA (2026-09-25, regla #527). Desde el
+       2026-10-22 es una pieza propia (`graficos/ventas_mix.js` + `.css`,
+       regla #702): de acá queda sólo el aire de la tarjeta. El renglón del
+       título con el botón de fecha (`vt_mix_cab`) va con el de Costo de
+       Carta, arriba. */
     .st-key-ajuste_graf_card_izq_ventas_mix { gap: 8px !important; }
-    .st-key-vt_mix_cabfila,
     .st-key-vt_pl_cabfila,
     .st-key-vt_mes_cabfila {
         border-bottom: 1px solid var(--border);
         padding-bottom: 5px !important;
-    }
-    .st-key-vt_mix_gran [data-testid="stButtonGroup"] button,
-    .st-key-vt_mix_medida [data-testid="stButtonGroup"] button,
-    .st-key-vt_mix_escala [data-testid="stButtonGroup"] button,
-    .st-key-vt_mix_zona [data-testid="stButtonGroup"] button,
-    .st-key-vt_mix_comp [data-testid="stButtonGroup"] button,
-    .st-key-vt_mix_cambio [data-testid="stButtonGroup"] button,
-    .st-key-vt_mix_celdas [data-testid="stButtonGroup"] button {
-        min-height: 28px !important;
-        height: 28px !important;
-        padding: 0 10px !important;
-        font-size: 12px !important;
-    }
-    /* El buscador, a 28 como los toggles, en las dos formas del
-       desplegable: la de la 1.59 (baseweb) y la de la 1.64 (react-aria),
-       igual que los filtros del Resumen (regla #519). */
-    .st-key-vt_mix_buscar [data-baseweb="select"] > div,
-    .st-key-vt_mix_buscar .react-aria-ComboBox > div {
-        min-height: 28px !important;
-        height: 28px !important;
-        font-size: 12px !important;
-    }
-    .st-key-vt_mix_buscar [data-baseweb="select"] > div > div {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-    }
-    .st-key-vt_mix_buscar .react-aria-ComboBox input {
-        height: 24px !important;
-        min-height: 0 !important;
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-        font-size: 12px !important;
-    }
-    .st-key-vt_mix_pie { align-items: center !important; }
-    .st-key-vt_mix_pie [data-testid="stCaptionContainer"],
-    .st-key-vt_mix_pie [data-testid="stCaptionContainer"] p {
-        margin: 0 !important;
-        font-size: 12px !important;
-        line-height: 1.3 !important;
-    }
-    /* La columna de navegación: son una LISTA, no una botonera — a lo
-       ancho, alineados a la izquierda y a 24px. */
-    .st-key-vt_mix_nav [data-testid="stButton"] button {
-        width: 100% !important;
-        justify-content: flex-start !important;
-        min-height: 24px !important;
-        height: 24px !important;
-        padding: 0 6px !important;
-        border-radius: 6px !important;
-        color: var(--text-primary) !important;
-    }
-    .st-key-vt_mix_nav [data-testid="stButton"] button:hover:not(:disabled) {
-        background: var(--bg-hover) !important;
-        color: var(--accent-deep) !important;
-    }
-    .st-key-vt_mix_nav [data-testid="stButton"] button:disabled {
-        color: var(--text-secondary) !important;
-    }
-    .st-key-vt_mix_nav [data-testid="stButton"] button p {
-        font-size: 12.5px !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-    }
-    div[class*="st-key-vt_mix_miga_"] button {
-        color: var(--accent-deep) !important;
-    }
-    /* La muestra de color de cada tramo: el `--serie-<i>` de su posición
-       (`estilos/_00_base.py`, espejo de `ventas_mix._COLORES`), y el gris
-       del Resto, que es el `SCROLL_THUMB` de tema.py. */
-    div[class*="st-key-vt_mix_ley_"] button::before {
-        content: "";
-        flex: 0 0 auto;
-        width: 10px;
-        height: 10px;
-        margin-right: 8px;
-        border-radius: 3px;
-        background: var(--vt-mix-sw, var(--scroll-thumb));
-    }
-    .st-key-vt_mix_ley_0 { --vt-mix-sw: var(--serie-0); }
-    .st-key-vt_mix_ley_1 { --vt-mix-sw: var(--serie-1); }
-    .st-key-vt_mix_ley_2 { --vt-mix-sw: var(--serie-2); }
-    .st-key-vt_mix_ley_3 { --vt-mix-sw: var(--serie-3); }
-    .st-key-vt_mix_ley_4 { --vt-mix-sw: var(--serie-4); }
-    .st-key-vt_mix_ley_5 { --vt-mix-sw: var(--serie-5); }
-    .st-key-vt_mix_ley_6 { --vt-mix-sw: var(--serie-6); }
-    .st-key-vt_mix_nav [data-testid="stMarkdownContainer"] {
-        margin-bottom: 0 !important;
-    }
-    /* «Carta | Área» (regla #595): la raíz de las migas, a la altura de la
-       lista que tiene debajo. */
-    .st-key-vt_mix_eje { margin: 0 6px 4px !important; }
-    .st-key-vt_mix_eje [data-testid="stButtonGroup"] button {
-        min-height: 24px !important;
-        height: 24px !important;
-        padding: 0 10px !important;
-        font-size: 11.5px !important;
-    }
-    .st-key-vt_mix_nav .vt-mix-nivel {
-        font-size: 11px;
-        line-height: 1.3;
-        color: var(--text-secondary);
-        padding: 2px 6px 4px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .st-key-vt_mix_nav [data-testid="stCaptionContainer"] p {
-        font-size: 11px !important;
-        margin: 4px 6px 0 !important;
     }
     /* VENTAS › ANÁLISIS DE PLATOS (2026-09-25, regla #529). Copia la
        tarjeta del Mix: el renglón del título con los KPI (las reglas
@@ -3797,7 +3674,6 @@ CSS = """    /* ================================================================
        que hay más. Medido a 1366: los diez piden ~1.450px contra ~700
        libres al lado del título. */
     .st-key-vt_resumen_kpi .vt-cab,
-    .st-key-vt_mix_cabfila .vt-cab,
     .st-key-vt_pl_cabfila .vt-cab,
     .st-key-vt_mes_cabfila .vt-cab {
         flex-wrap: nowrap !important;
@@ -3805,7 +3681,6 @@ CSS = """    /* ================================================================
         padding-bottom: 0 !important;
     }
     .st-key-vt_resumen_kpi .vt-kpis,
-    .st-key-vt_mix_cabfila .vt-kpis,
     .st-key-vt_pl_cabfila .vt-kpis,
     .st-key-vt_mes_cabfila .vt-kpis {
         flex: 1 1 auto;
@@ -3819,7 +3694,6 @@ CSS = """    /* ================================================================
         padding-right: 24px;
     }
     .st-key-vt_resumen_kpi .vt-kpi,
-    .st-key-vt_mix_cabfila .vt-kpi,
     .st-key-vt_pl_cabfila .vt-kpi,
     .st-key-vt_mes_cabfila .vt-kpi {
         flex-direction: row !important;
@@ -3829,7 +3703,6 @@ CSS = """    /* ================================================================
         flex: 0 0 auto;
     }
     .st-key-vt_resumen_kpi .vt-kpi-rot,
-    .st-key-vt_mix_cabfila .vt-kpi-rot,
     .st-key-vt_pl_cabfila .vt-kpi-rot,
     .st-key-vt_mes_cabfila .vt-kpi-rot { overflow: visible !important; }
     /* La línea que separaba el renglón del gráfico, ahora debajo del

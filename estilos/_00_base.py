@@ -53,10 +53,11 @@ CSS = """    <style>
            Si cambia PALETA_SERIES, cambiar acá también (regla #1). */
         --serie-pax: #22b8d4;
         --serie-ticket: #e85ba8;
-        /* Espejo de PALETA_SERIES[0:7] de tema.py, en orden: la muestra de
-           color de cada tramo en la columna de navegación de Ventas › Mix
-           de carta (`ventas_mix._COLORES`), que es un botón y no sabe su
-           color. Si cambia PALETA_SERIES, cambiar acá también (regla #1). */
+        /* Espejo de PALETA_SERIES[0:7] de tema.py, en orden: el color de
+           cada tramo de la barra de Ventas › Mix de carta
+           (`ventas_mix._COLORES`), que la pieza (`ventas_mix.js`, regla
+           #702) pinta con estas variables porque cruzan su shadow root.
+           Si cambia PALETA_SERIES, cambiar acá también (regla #1). */
         --serie-0: #6c5ce7;
         --serie-1: #22b8d4;
         --serie-2: #e85ba8;

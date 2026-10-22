@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-701 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+702 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (223)
+**CSS y estilos** (224)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -288,6 +288,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#697** — «Nuevo Costeo» es una pieza propia: la receta y su precio se editan en el navegador, con los…
 - **#698** — «Guardadas» es una lista con ficha, y una propuesta se vuelve a abrir en el editor
 - **#699** — El ranking de «Análisis de platos» es una pieza propia
+- **#702** — «Mix de carta» es una pieza propia: Python manda las sumas por producto y período, y el…
 
 **Layout y alturas** (98)
 
@@ -782,7 +783,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 
-**Datos, R2 y DuckDB** (112)
+**Datos, R2 y DuckDB** (113)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -896,6 +897,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#698** — «Guardadas» es una lista con ficha, y una propuesta se vuelve a abrir en el editor
 - **#699** — El ranking de «Análisis de platos» es una pieza propia
 - **#701** — Las dos vistas de requerimientos dicen qué se pidió de más, qué se repite y qué no salió…
+- **#702** — «Mix de carta» es una pieza propia: Python manda las sumas por producto y período, y el…
 
 **SUNAT y SIRE** (71)
 
@@ -53970,6 +53972,72 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      mitad», «Casi diario», la ficha): sin excepciones ni errores de
      consola. (2026-10-22.)
 
+702. **«Mix de carta» es una pieza propia: Python manda las sumas por
+     producto y período, y el navegador arma el resto.** A pedido
+     (2026-10-22), sobre un boceto aprobado con cifras reales
+     (https://claude.ai/artifact/7V1JFc8uhBouVgd4dXkR8T). Hasta ese día eran
+     una fila de `segmented_control`, un `st.plotly_chart` con su columna de
+     botones como leyenda, y abajo un `st.dataframe` por zona, con los clics
+     leídos arriba de todo (#399) y la ruta en `session_state`.
+     · **Qué pasó a la pieza** (`graficos/ventas_mix.js` + `.css`): los
+       indicadores (con «Margen bruto», nuevo: base del % − costo), «Abrir
+       por» Carta | Área, Soles | Unidades, Monto | % del período, el
+       buscador, la barra en SVG al ancho de su caja con la leyenda al
+       costado (un clic elige, «›» baja), y la **ficha** de lo elegido,
+       nueva: venta por período, su peso en el nivel de arriba, su % de
+       costo con la línea del 45 %, el precio cobrado de un plato (con el
+       neto a precio de carta al lado) y el salto a Costo de Carta. Abajo,
+       cinco pestañas: Resumen, Qué movió, **Mapa** (nueva: un treemap
+       cuadrado del nivel con sus hijos adentro, color = % de costo),
+       **Mix y costo** (nueva, ver abajo) y Cálculo.
+     · **Qué quedó en Python**: el botón de fecha (recarga el parquet), la
+       base (`base`, con los convenios del banco) y cuatro pedidos que
+       cargan algo: `gran` (las sumas son por período), `ap` (el año pasado
+       de TODO el rango, en una carga de R2, y desde ahí para toda la
+       sesión: `vt_mix_con_ap`), `lineas` (Cálculo de un producto, venta
+       por venta, hasta 400 con el TOTAL de todas arriba) y `carta`.
+     · **`base` deja el área en `area` siempre**: así la pieza cambia de
+       árbol sin corrida. Cada producto viaja como [grupo, subgrupo,
+       nombre, área] y cada fila como [producto, período, *`METRICAS`]; el
+       `.js` lee las métricas POR POSICIÓN (`V, Q, C, B, NC, SC, IGV, REC,
+       DESC, DEV`) y el test fija los dos órdenes.
+     · **El año pasado viaja pegado al período de HOY**
+       (`ano_pasado`): cada fila lleva el `j` del período con el que se
+       compara —`rango_ano_pasado`, los mismos días; 364 en Día y Semana—,
+       y un período sin nada un año antes no es cero, no tiene nombre y la
+       pieza dice «sin año pasado».
+     · **Mix y costo** parte el cambio del % de costo entre dos períodos,
+       plato por plato: % = Σ peso × costo del plato, con peso = base del
+       plato ÷ base del período. Mezcla = Σ (peso nuevo − peso antes) ×
+       costo antes; costo = Σ peso nuevo × (costo nuevo − costo antes).
+       Suman el cambio EXACTO, sin resto; un plato que antes no se vendía
+       entra entero en la mezcla. Es la varianza de mezcla de ventas
+       (Horngren, Datar y Rajan, *Cost Accounting*) llevada al % de costo;
+       la elección de pesos es nuestra. Medido: Alimentos, 1–21 oct 2026
+       contra 1–21 oct 2025, +7,46 pp: +5,36 por la mezcla y +2,10 por el
+       costo de los platos.
+     · **Las cuentas de referencia siguen en Python** (`pct_costo`,
+       `tramos`, `calculo`) y el `.js` las rehace con las mismas fórmulas;
+       los umbrales son los del Resumen (45 / 70 %). Los tramos usan
+       `--serie-0…6`, el espejo CSS de `PALETA_SERIES`, que cruza el shadow
+       root.
+     · **El alto sale de `--alto-util`**: 196 px son el título, los
+       indicadores, los controles, las pestañas y los huecos; lo que queda
+       se reparte 55/45 entre la barra con la ficha y la pestaña. Medido a
+       1323×619: `--alto-util` 575 y la tarjeta mide 575 —con los mínimos
+       de antes medía 666 y se deslizaba por dentro—.
+     · Se fueron los widgets y su CSS (`vt_mix_cabfila`, `vt_mix_nav`,
+       `vt_mix_ley_*`, `vt_mix_pie`…, en `estilos/_80_cards.py`), los
+       clics leídos arriba (`_leer_clics`) y las zonas en Python
+       (`_zona_resumen`, `_zona_detalle`, `_zona_calculo`, `_grafico`,
+       `_navegacion`, `_html_cab`). El rail sigue diciendo «Mix de Ventas»
+       y la sección es la misma (`vt_sec_mix`).
+     Lo vigila `test_graficos.py::_pruebas_pieza_mix`. Probado en la app
+     local con R2 a 1323×619 y clics reales (Semana, Mes, Día, bajar a
+     Alimentos, la ficha, las cinco pestañas, «Año pasado», las ventas de
+     un plato una por una y el árbol por Área): sin excepciones ni errores
+     de consola. (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -53982,7 +54050,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#701**; la próxima toma el número siguiente.
+> última regla es la **#702**; la próxima toma el número siguiente.
 
 >
 

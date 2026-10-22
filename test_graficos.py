@@ -10599,6 +10599,78 @@ def _pruebas_ventas_un_item_una_vez():
     return fallos
 
 
+def _pruebas_pieza_mix(check, d, cols, _m, js):
+    """Ventas › Mix de carta como pieza propia (regla #702): lo que recibe el
+    navegador y que rehaga las cuentas de `ventas_mix.py` igual."""
+    from datetime import date
+
+    b = _m.base(d, cols)
+    b, claves, nota = _m.periodos(b, "Semana")
+    rango = (date(2026, 8, 4), date(2026, 8, 12))
+    x = _m.armar_mix(b, claves, "Semana", rango)
+    check("pieza · un período por semana, con su nombre",
+          [p["clave"] for p in x["periodos"]], ["2026-S32", "2026-S33"])
+    check("pieza · el rango corta las dos semanas: las dos son parciales",
+          [p["parcial"] for p in x["periodos"]], [True, True])
+    check("pieza · sin rango no hay parcial",
+          [p["parcial"] for p in _m.armar_mix(b, claves, "Semana", None)
+           ["periodos"]], [False, False])
+    prods = {tuple(p[:3]): i for i, p in enumerate(x["prods"])}
+    lomo = prods[("Alimentos", "Fondos", "Lomo")]
+    filas = {(f[0], f[1]): f[2:] for f in x["filas"]}
+    check("pieza · una fila por producto y período, las métricas en el "
+          "orden de METRICAS",
+          (filas[(lomo, 0)][_m.METRICAS.index("venta")],
+           filas[(lomo, 1)][_m.METRICAS.index("venta")],
+           filas[(lomo, 1)][_m.METRICAS.index("costo")]), (100.0, 60.0, 21.0))
+    check("pieza · cada producto lleva su área (el árbol por Área)",
+          x["prods"][lomo][3], "Cocina")
+    check("pieza · y el .js lee las métricas en esas posiciones",
+          "const V = 0, Q = 1, C = 2, B = 3, NC = 4, SC = 5, IGV = 6, REC = 7, "
+          "DESC = 8, DEV = 9;" in js
+          and _m.METRICAS == ("venta", "cant", "costo", "base_costo",
+                              "neto_carta", "venta_sin_costo", "igv", "rec",
+                              "desc", "devol"), True)
+    check("pieza · sin «Año pasado» pedido, no viaja", x["ap"], None)
+    # El año pasado: las filas de hace 364 días caen en SU semana de hoy.
+    ap = d.assign(**{"FEC REG DOCUMENTO": pd.to_datetime(
+        ["2025-08-04", "2025-08-05", "2025-08-12", "2025-08-13", "2025-07-01"])})
+    b_ap, nombres = _m.ano_pasado(_m.base(ap, cols), claves, "Semana", None)
+    check("pieza · el año pasado va a la semana con la que se compara, y lo "
+          "de fuera se cae", sorted(b_ap["j"].astype(int).tolist()), [0, 0, 1, 1])
+    check("pieza · cada período dice cómo se llaman sus días un año antes",
+          nombres, ["4–10 ago 2025", "11–17 ago 2025"])
+    x2 = _m.armar_mix(b, claves, "Semana", None, b_ap=b_ap, ap_nombres=nombres)
+    check("pieza · y viaja con la misma forma",
+          (len(x2["ap"]["filas"]), x2["ap"]["nombres"]), (4, nombres))
+    vacio, sin = _m.ano_pasado(_m.base(ap, cols).iloc[0:0], claves, "Semana",
+                               None)
+    check("pieza · un período sin nada un año antes no es cero: no tiene "
+          "nombre", sin, [None, None])
+    # Cálculo de un producto, venta por venta.
+    lin = _m.lineas_de(b, {"l0": "Alimentos", "sub": "Fondos", "prod": "Lomo",
+                           "eje": "Carta", "claves": ["2026-S33"], "clave": "k"})
+    check("pieza · las ventas de un producto: el TOTAL arriba y su pedido",
+          (lin["clave"], lin["n"], lin["filas"][0][0], len(lin["filas"])),
+          ("k", 1, "Total", 2))
+    check("pieza · por Área el primer nivel es el área",
+          _m.lineas_de(b, {"l0": "Cocina", "sub": "Fondos", "prod": "Lomo",
+                           "eje": "Área", "claves": []})["n"], 2)
+    check("pieza · el .js reparte en tramos como `tramos` (nunca «Resto (1)»)",
+          "if (orden.length <= max + 1) return orden.map" in js, True)
+    check("pieza · y el % de costo es el de `pct_costo`",
+          "return costo > 0 && base > NETO_MIN ? costo / base : NaN;" in js
+          and _m._NETO_MIN == 0.5 and "const NETO_MIN = 0.5;" in js, True)
+    check("pieza · los umbrales son los del Resumen",
+          x["umbrales"], [_m._COSTO_ALTO, _m._COSTO_ROTO])
+    check("pieza · la mezcla y el costo suman el cambio exacto (las dos "
+          "fórmulas)",
+          ("const mix = (wD - wA) * rA, cos = wD * (rD - rA);" in js), True)
+    check("pieza · en Día, los últimos MAX_DIAS días",
+          (_m.periodos(_m.base(d, cols), "Día")[2] == "",
+           len(_m.periodos(_m.base(d, cols), "Día")[1])), (True, 4))
+
+
 def _pruebas_ventas_mix():
     """Ventas › Mix de carta (regla #527): las cuentas de la vista.
 
@@ -10728,10 +10800,13 @@ def _pruebas_ventas_mix():
                                              "hasta": "2026-08-01"}])["devol"].sum()),
           0.0)
     _src_mix = inspect.getsource(_m)
-    check("el % costo de Mix se mide sobre la base (KPI, tabla y top)",
-          (_src_mix.count('M["base_costo"]'),
-           'prods["base_costo"]' in _src_mix,
-           "convenios_descuento.leer()" in _src_mix), (2, True, True))
+    _js_mix = (pathlib.Path(_m.__file__).with_suffix(".js")
+               ).read_text(encoding="utf-8")
+    check("el % costo de Mix se mide sobre la base (la pieza la recibe y "
+          "divide por ella)",
+          ("base_costo" in _m.METRICAS,
+           "pctCosto(en(a, i, C), en(a, i, B))" in _js_mix,
+           "convenios_descuento.leer()" in _src_mix), (True, True, True))
     # ── Lo vendido sin costo cargado no entra en el % (#666) ─────────────
     _d_sc = d.assign(**{"COSTO VENTA": [35.0, 0.0, 9.0, 1.0, 21.0]})
     _b_sc = _m.base(_d_sc, cols)
@@ -10761,8 +10836,9 @@ def _pruebas_ventas_mix():
     check("Cálculo de un producto: una fila por venta, la más nueva arriba",
           (list(_cl.columns), len(_cl), _cl.iloc[1]["Fecha"][:10]),
           (list(_m.CALCULO_LINEAS), 3, "12/08/2026"))
-    check("la zona Cálculo está entre las de abajo",
-          "_ZONA_CALCULO)" in _src_mix and "_zona_calculo(" in _src_mix, True)
+    check("las cinco pestañas de la pieza, Cálculo incluido (regla #702)",
+          all(f"['{z}', " in _js_mix for z in
+              ("Resumen", "Movio", "Mapa", "Mix", "Calculo")), True)
     check("sin el precio de carta, cero (que se escribe «—»)",
           float(_m.base(d, {k: v for k, v in cols.items() if k != "carta"})
                 ["neto_carta"].sum()), 0.0)
@@ -10779,10 +10855,10 @@ def _pruebas_ventas_mix():
           + ["700" in _m._estilo_costo(_r._COSTO_ROTO + 0.01),
              _m._estilo_costo(float("nan")) == ""],
           [False, True, True, True])
-    check("un NaN en la tendencia se salta: ni cero ni None (la línea no "
-          "tiene huecos)", _m._serie([0.4, float("nan"), 0.5]), [0.4, 0.5])
-    check("el control de las celdas sobrevive a la recarga de fecha",
-          "vt_mix_celdas" in _m._KEYS_WIDGET_MIX, True)
+    check("lo elegido en la pieza (celdas, árbol, ruta) sobrevive a la "
+          "recarga de fecha: lo guarda el navegador",
+          all(f"{k}: st.{k}" in _js_mix for k in ("celdas", "eje", "ruta")),
+          True)
 
     check("alcance de un subgrupo",
           float(_m.alcance(b, ("Alimentos", "Fondos"))["venta"].sum()), 160.0)
@@ -10809,14 +10885,17 @@ def _pruebas_ventas_mix():
     check("sin la columna del área, todo cae en «Sin área»",
           set(_m.base(d, {k: v for k, v in cols.items() if k != "area"},
                       _m._EJE_AREA)["grupo"]), {"Sin área"})
-    check("el selector sobrevive a la recarga de fecha",
-          "vt_mix_eje" in _m._KEYS_WIDGET_MIX, True)
+    check("y por Carta, el área queda igual en su columna (la pieza cambia "
+          "de árbol sin corrida)",
+          sorted(b["area"].unique()), ["Bar", "Cocina", "Pastelería", "Sin área"])
     check("un grupo que ya no está vuelve arriba",
           _m.ruta_valida(b, ("Vinos",)), ())
     check("un subgrupo de otro grupo sube uno",
           _m.ruta_valida(b, ("Alimentos", "Cocteles")), ("Alimentos",))
     check("una ruta que existe queda",
           _m.ruta_valida(b, ("Bebidas", "Cocteles")), ("Bebidas", "Cocteles"))
+
+    _pruebas_pieza_mix(check, d, cols, _m, _js_mix)
 
     orden = [f"g{i}" for i in range(10)]
     tr = _m.tramos(orden)
