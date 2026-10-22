@@ -1,4 +1,7 @@
 """graficos.recetas_revisar — «Revisar recetas», en Recetas y Costos (regla #559).
+Desde el 2026-10-22 el rail la llama «Recetas vs porcionado» y es una pieza
+propia (regla #703): lo que muestra se arregla editando una receta O
+registrando un porcionamiento. El id de la vista sigue siendo el de siempre.
 
 LA PREGUNTA. ¿Qué receta está mal configurada? Una receta que pide un corte
 que la cocina ya no hace, o que la cocina hace con otro código, no da error
@@ -54,14 +57,14 @@ porcionamiento va en la tabla, y la ventana de 90 días está a un clic.
 """
 
 import datetime as dt
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
 import consumo_recetas
 import data
-import tema
-from graficos import alturas
+import kardex
 from graficos.recetas_comun import _activo
 
 ARCHIVO_PORC = "porcionamientos.parquet"
@@ -87,8 +90,7 @@ SALIDA_EXPLICA = 0.5
 """Si las notas de salida del período cubren al menos la mitad de lo
 porcionado, el corte no va a recetas: sale por comida del personal o bajas."""
 
-# Cortos a propósito: la columna mide 185 px y un rótulo más largo se corta
-# (medido a 1366×768: las nueve columnas entran si nadie pasa de su ancho).
+# Cortos a propósito: van en una ficha de la lista (regla #703).
 QUE_SIN = "Ninguna receta lo usa"
 QUE_SIN_VIEJO = "Sin receta · ya no se porciona"
 QUE_FALTA = "Piden más de lo porcionado"
@@ -97,10 +99,6 @@ _ORDEN_QUE = {QUE_FALTA: 0, QUE_SIN: 0, QUE_SIN_VIEJO: 1, QUE_SALIDA: 2}
 
 COLUMNAS = ("grupo_cod", "grupo", "cod", "corte", "unid", "que", "porcionado",
             "pedido", "ultimo", "valor", "salio", "platos")
-
-_MESES = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
-_CORTA = {"KILOS": "kg", "LITROS": "L", "UND": "und", "UNIDAD": "und", "PORCION": "porc"}
-
 
 def _txt(serie):
     return serie.astype(str).str.strip()
@@ -269,117 +267,180 @@ def revisar(porc, n1, recetas_venta, recetas_base, carta, maestro, salidas, ini,
     return t[list(COLUMNAS)].reset_index(drop=True)
 
 
-# ─── Lo que se muestra ─────────────────────────────────────────────────────
+# ─── La pieza (regla #703) ─────────────────────────────────────────────────
+# Desde el 2026-10-22 la vista —el renglón del título, los indicadores que
+# filtran, 30 | 90 días, la lista por insumo y la ficha del corte— es
+# `recetas_revisar.js` + `.css` (`st.components.v2`), sobre el boceto
+# aprobado (https://claude.ai/artifact/RLrWanQHM37CAcJBnysFxz). Se llama
+# «Recetas vs porcionado» desde ese día (el id sigue siendo «Revisar
+# recetas»). Python hace la cuenta (`revisar`, sin cambios) para las DOS
+# ventanas de una vez y suma lo que la ficha necesita: el stock del kardex
+# al empezar y al terminar, lo porcionado y lo pedido semana a semana, los
+# platos que lo piden, los últimos porcionamientos y lo comprado. Vuelve a
+# Python sólo `carta`: el salto a la ficha de un plato en Costo de Carta.
 
-def _corta(u):
-    return _CORTA.get(str(u).upper(), str(u).lower())
+_PIEZA = st.components.v2.component(
+    "recetas_revisar",
+    css=(Path(__file__).parent / "recetas_revisar.css").read_text(encoding="utf-8"),
+    js=(Path(__file__).parent / "recetas_revisar.js").read_text(encoding="utf-8"),
+)
+_K_PIEZA = "rec_rev_pieza"
+SEMANAS = 13
+"""Las semanas de la ficha: las 13 de lunes a domingo que terminan con el
+período, la ventana de 90 días entera."""
 
-
-def _cant(q, u):
-    if not q:
-        return "—"
-    d = 0 if abs(q) >= 100 or abs(q - round(q)) < 1e-9 else (1 if abs(q) >= 10 else 2)
-    return f"{q:,.{d}f} {_corta(u)}"
-
-
-def _fecha(f, fin):
-    if f is None or pd.isna(f):
-        return "—"
-    f = pd.Timestamp(f)
-    base = f"{f.day} {_MESES[f.month - 1]}"
-    return base if f.year == pd.Timestamp(fin).year else f"{base} {f.year}"
-
-
-def resumen(t, ini, fin):
-    """La línea de arriba de la tabla: cuántos cortes y cuánto en cada señal."""
-    periodo = f"Del {_fecha(ini, fin)} al {_fecha(fin, fin)} de {pd.Timestamp(fin).year}"
-    if t.empty:
-        return f"{periodo}: nada para revisar."
-    sin = t[t["que"] == QUE_SIN]
-    viejo = t[t["que"] == QUE_SIN_VIEJO]
-    falta = t[t["que"] == QUE_FALTA]
-    salida = t[t["que"] == QUE_SALIDA]
-
-    def n_cortes(x):
-        return f"**{len(x)}** corte{'s' if len(x) != 1 else ''}"
-
-    partes = []
-    if len(sin):
-        partes.append(f"{n_cortes(sin)} se porciona{'n' if len(sin) != 1 else ''} y ninguna "
-                      f"receta {'los' if len(sin) != 1 else 'lo'} usa "
-                      f"(**S/ {sin['valor'].sum():,.0f}** porcionados)")
-    if len(falta):
-        partes.append(f"{n_cortes(falta)} {'los' if len(falta) != 1 else 'lo'} piden las "
-                      f"recetas y casi no se porciona{'n' if len(falta) != 1 else ''} "
-                      f"(faltaron **S/ {falta['valor'].sum():,.0f}**)")
-    texto = f"{periodo}: " + "; ".join(partes) + "." if partes else f"{periodo}."
-    if len(viejo):
-        texto += (f" Otros {len(viejo)} se dejaron de porcionar y ninguna receta de hoy los "
-                  "usa: suelen ser el código viejo de un cambio de receta."
-                  if len(viejo) != 1 else
-                  " Otro se dejó de porcionar y ninguna receta de hoy lo usa: suele ser el "
-                  "código viejo de un cambio de receta.")
-    if len(salida):
-        texto += (f" {len(salida)} más salen por notas de salida (comida del personal, "
-                  "bajas): no son un tema de receta." if len(salida) != 1 else
-                  " Uno más sale por notas de salida (comida del personal, bajas): no es un "
-                  "tema de receta.")
-    return texto
+CLASE_QUE = {QUE_SIN: "sin", QUE_FALTA: "falta", QUE_SIN_VIEJO: "viejo",
+             QUE_SALIDA: "salida"}
+"""Cómo llama la pieza a cada señal (su color y su indicador)."""
 
 
-def tabla(t, fin):
-    """Lo que dibuja `st.dataframe`: texto listo para leer, y el valor en número."""
-    return pd.DataFrame({
-        "Sale de": t["grupo"],
-        "Corte": t["corte"],
-        "Qué pasa": t["que"],
-        "Porcionado": [_cant(q, u) for q, u in zip(t["porcionado"], t["unid"])],
-        "Piden las ventas": [_cant(q, u) for q, u in zip(t["pedido"], t["unid"])],
-        "Valor": t["valor"].astype(float),
-        "Último porc.": [_fecha(f, fin) for f in t["ultimo"]],
-        "Recetas que lo piden": [" · ".join(x) if x else "—" for x in t["platos"]],
-        "Salió por": ["; ".join(f"{k} {_cant(v, u)}" for k, v in s.items()) if s else "—"
-                      for s, u in zip(t["salio"], t["unid"])],
-    })
+def semanas(fin, n=SEMANAS):
+    """Los lunes de las `n` semanas que terminan con la de `fin`."""
+    fin = pd.Timestamp(fin).normalize()
+    lunes = fin - pd.Timedelta(days=fin.weekday())
+    return [lunes - pd.Timedelta(weeks=k) for k in range(n - 1, -1, -1)]
 
 
-# Los anchos, medidos a 1366×768 con la columna del rail plegada: la tabla
-# tiene 1.196 px por dentro y las nueve columnas suman eso. Sin anchos, cada
-# columna medía su texto más largo y sumaban 1.585: las cifras quedaban
-# escondidas a la derecha, detrás de una barra.
-COLUMNAS_TABLA = {
-    "Sale de": st.column_config.TextColumn(
-        width=175, help="El insumo que se compra y del que sale el corte: la raíz "
-                        "de su cadena de porcionamientos"),
-    "Corte": st.column_config.TextColumn(width=230),
-    "Qué pasa": st.column_config.TextColumn(
-        width=185, help="«Ninguna receta lo usa»: se porcionó y ninguna receta activa "
-                        "lo nombra. «Piden más de lo porcionado»: las recetas de lo "
-                        "vendido piden más del doble de lo que se porcionó y se compró. "
-                        "«Sin receta · ya no se porciona»: suele ser el código viejo de "
-                        "un cambio de receta. «Sale por notas de salida»: comida del "
-                        "personal o bajas, no un tema de receta."),
-    "Porcionado": st.column_config.TextColumn(
-        width=88, help="Lo porcionado en el período, en la unidad del kardex"),
-    "Piden las ventas": st.column_config.TextColumn(
-        width=98, help="Lo que nombran las recetas de lo vendido en el período (el "
-                       "primer nivel del POS), en la unidad del kardex"),
-    "Valor": st.column_config.Column(
-        width=78, help="Lo porcionado, al costo del porcionamiento; o lo que faltó "
-                       "porcionar, al precio promedio de hoy"),
-    "Último porc.": st.column_config.TextColumn(
-        width=82, help="El último porcionamiento del corte"),
-    "Recetas que lo piden": st.column_config.TextColumn(
-        width=170, help="Los platos que más lo piden: su receta es la que hay que mirar"),
-    "Salió por": st.column_config.TextColumn(
-        width=90, help="Las notas de salida del período: comida del personal, bajas…"),
-}
+def _factor(maestro):
+    m = maestro.assign(cod=_txt(maestro["CODIGO PRODUCTO"])).drop_duplicates("cod")
+    return pd.to_numeric(m.set_index("cod")["FACTOR"], errors="coerce")
 
 
-def _color_que(v):
-    if v in (QUE_SIN, QUE_FALTA):
-        return f"color: {tema.ADVERTENCIA_TEXTO}; font-weight: 600"
-    return f"color: {tema.GRIS_TEXTO}"
+def _en_entrada(consumo, cod, factor):
+    """De la unidad de SALIDA (la del POS) a la de ENTRADA (la del kardex)."""
+    f = factor.reindex(cod).to_numpy()
+    return pd.Series(consumo.to_numpy() / f, index=consumo.index).where(f > 0, 0.0)
+
+
+def detalle(cods, porc, maestro, n1, dem_sem, compras, ini, fin, sems):
+    """Lo que la ficha muestra de cada corte de `cods`: lo porcionado y lo
+    pedido por semana (`semP`, `semD`, una posición por lunes de `sems`), los
+    platos que lo piden en el período ([plato, cantidad en unidad de entrada,
+    platos vendidos]), los últimos seis porcionamientos ([fecha, desde qué,
+    cantidad]) y lo comprado en el período. Pura: la lee el test.
+
+    `n1` es el primer nivel del período (`data.demanda_nivel1_rango`) y
+    `dem_sem` el de las semanas (`data.demanda_nivel1_semanas`), los dos en
+    unidad de salida; se pasan con el `FACTOR` del maestro."""
+    cods = set(cods)
+    factor = _factor(maestro)
+    j_de = {s: j for j, s in enumerate(sems)}
+    out = {c: {"semP": [0.0] * len(sems), "semD": [0.0] * len(sems), "platos": [],
+               "porcs": [], "comprado": 0.0} for c in cods}
+
+    p = porc.assign(cod=_txt(porc["COD PROD FINAL"]),
+                    f=pd.to_datetime(porc["FEC REGIST"], errors="coerce").dt.normalize(),
+                    q=pd.to_numeric(porc["CANT RESULT"], errors="coerce").fillna(0.0))
+    p = p[p["cod"].isin(cods) & p["f"].notna() & (p["f"] <= pd.Timestamp(fin))]
+    sp = (p.assign(sem=p["f"] - pd.to_timedelta(p["f"].dt.weekday, unit="D"))
+          .groupby(["cod", "sem"])["q"].sum())
+    for (c, s), q in sp.items():
+        if s in j_de:
+            out[c]["semP"][j_de[s]] = round(float(q), 3)
+    u = p.sort_values("f", ascending=False, kind="stable").groupby("cod").head(6)
+    for c, f, desde, q in zip(u["cod"], u["f"], u["PROD INICIAL"], u["q"]):
+        out[c]["porcs"].append([f.strftime("%Y-%m-%d"), str(desde).strip(), round(float(q), 3)])
+
+    if dem_sem is not None and not dem_sem.empty:
+        d = dem_sem.assign(cod=_txt(dem_sem["cod"]),
+                           sem=pd.to_datetime(dem_sem["semana"]).dt.normalize())
+        d = d[d["cod"].isin(cods)]
+        d = d.assign(q=_en_entrada(pd.to_numeric(d["consumo"], errors="coerce").fillna(0.0),
+                                   d["cod"], factor))
+        for c, s, q in zip(d["cod"], d["sem"], d["q"]):
+            if s in j_de:
+                out[c]["semD"][j_de[s]] = round(out[c]["semD"][j_de[s]] + float(q), 3)
+
+    if n1 is not None and not n1.empty:
+        n = n1.assign(cod=_txt(n1["cod"]))
+        n = n[n["cod"].isin(cods)]
+        vendido = n["vendido"] if "vendido" in n.columns else 0.0
+        g = (n.assign(consumo=pd.to_numeric(n["consumo"], errors="coerce").fillna(0.0),
+                      vendido=pd.to_numeric(vendido, errors="coerce"))
+             .fillna({"vendido": 0.0})
+             .groupby(["cod", "plato"], as_index=False)[["consumo", "vendido"]].sum())
+        g = g.assign(q=_en_entrada(g["consumo"], g["cod"], factor))
+        g = g[g["q"] > 0].sort_values(["cod", "q"], ascending=[True, False], kind="stable")
+        for c, plato, q, v in zip(g["cod"], g["plato"], g["q"], g["vendido"]):
+            if len(out[c]["platos"]) < 6:
+                out[c]["platos"].append([str(plato), round(float(q), 3), round(float(v), 1)])
+
+    if compras is not None and not compras.empty:
+        fc = pd.to_datetime(compras["FECHA_EMISION_DOC"], errors="coerce").dt.normalize()
+        c = compras[(fc >= pd.Timestamp(ini)) & (fc <= pd.Timestamp(fin))]
+        q = (pd.to_numeric(c["CANTIDAD_COMPRA"], errors="coerce").fillna(0.0)
+             .groupby(_txt(c["COD_PRODUCTO"])).sum())
+        for cod in cods & set(q.index):
+            out[cod]["comprado"] = round(float(q[cod]), 3)
+    return out
+
+
+def stock_por_cod(foto):
+    """{código: stock de todas las áreas} de una foto del kardex
+    (`data.stock_al`), o None si no se pudo leer."""
+    if foto is None:
+        return None
+    return (pd.to_numeric(foto["stock"], errors="coerce").fillna(0.0)
+            .groupby(_txt(foto["cod"])).sum().round(3).to_dict())
+
+
+def _iso(f):
+    return None if f is None or pd.isna(f) else pd.Timestamp(f).strftime("%Y-%m-%d")
+
+
+def armar_ventana(dias, t, ini, fin, det, st_ini, st_fin):
+    """Una ventana de la pieza: sus fechas y una fila por corte de `revisar`,
+    con lo de `detalle` y el stock al empezar (`stIni`) y al terminar
+    (`stFin`): cero si el corte no tiene kardex, None si el kardex no se
+    pudo leer. Pura: la lee el test."""
+    filas = []
+    for r in t.to_dict("records"):
+        c = r["cod"]
+        x = det.get(c, {})
+        filas.append({
+            "cod": c, "grupo_cod": str(r["grupo_cod"]), "grupo": str(r["grupo"]),
+            "corte": str(r["corte"]), "unid": str(r["unid"]), "que": r["que"],
+            "clase": CLASE_QUE.get(r["que"], "sin"),
+            "porc": round(float(r["porcionado"]), 3), "ped": round(float(r["pedido"]), 3),
+            "valor": round(float(r["valor"]), 2), "ultimo": _iso(r["ultimo"]),
+            "salio": {k: round(float(v), 3) for k, v in (r["salio"] or {}).items()},
+            "platos": x.get("platos", []), "porcs": x.get("porcs", []),
+            "comprado": x.get("comprado", 0.0),
+            "semP": x.get("semP", []), "semD": x.get("semD", []),
+            "stIni": None if st_ini is None else st_ini.get(c, 0.0),
+            "stFin": None if st_fin is None else st_fin.get(c, 0.0),
+        })
+    return {"dias": dias, "rot": next(k for k, v in VENTANAS.items() if v == dias),
+            "ini": _iso(ini), "fin": _iso(fin), "filas": filas}
+
+
+def _ir_a_carta(cod):
+    """«Ver en Costo de Carta»: deja el plato elegido allá y pide el salto a
+    su sección, con una corrida completa (la Carta es otro fragment)."""
+    try:
+        import navegacion
+        from graficos.carta_costeada import _K_FOCO
+        st.session_state[_K_FOCO] = cod
+        navegacion._ir_a_vista("Recetas", "rec_graf_tipo", "Carta costeada")
+        st.session_state["_rec_rev_ir_carta"] = 1
+    except (ImportError, AttributeError):
+        return
+
+
+def _codigos_carta():
+    """{plato en minúsculas: código} de la carta costeada (el mismo de
+    «Análisis de platos»)."""
+    try:
+        from graficos.ventas_platos import _codigos_carta as _cc
+        return _cc(data.sello_datos(ARCHIVO_CARTA))
+    except Exception:
+        return {}
+
+
+def _sin_datos(texto):
+    st.markdown('<p class="chart-card-hdr">Recetas vs porcionado</p>',
+                unsafe_allow_html=True)
+    st.info(texto)
 
 
 def render_revisar_recetas(df_rv, df_rb):
@@ -387,51 +448,49 @@ def render_revisar_recetas(df_rv, df_rb):
     `df_rb`, recetabase.parquet o None. El resto lo carga acá: la sección es
     perezosa y así sólo lo baja quien llega a la vista."""
     ss = st.session_state
+    if ss.pop("_rec_rev_ir_carta", None):
+        st.rerun(scope="app")
     with st.container(border=True, key="rec_card_revisar"):
-        st.markdown('<p class="chart-card-hdr">Revisar recetas · cortes que se porcionan y '
-                    'ninguna receta usa, y los que las recetas piden y casi no se '
-                    'porcionan</p>', unsafe_allow_html=True)
-        opciones = list(VENTANAS)
-        if ss.get("rec_rev_ventana") not in opciones:
-            ss["rec_rev_ventana"] = opciones[0]
-        ventana = st.segmented_control("Período", opciones, key="rec_rev_ventana",
-                                       label_visibility="collapsed") or opciones[0]
-
         rango = data.rango_fechas(ARCHIVO_N1, "FECHA PEDIDO")
         porc = data.cargar(ARCHIVO_PORC)
         maestro = data.cargar(ARCHIVO_MAESTRO)
         if (rango is None or porc is None or porc.empty or maestro is None
                 or maestro.empty or df_rb is None or df_rv is None):
-            st.info("Hacen falta los porcionamientos, el primer nivel de las ventas "
-                    "(paloteoinsumosnivel1), el maestro de productos y las recetas "
-                    "base: alguno no se pudo leer.")
+            _sin_datos("Hacen falta los porcionamientos, el primer nivel de las ventas "
+                       "(paloteoinsumosnivel1), el maestro de productos y las recetas "
+                       "base: alguno no se pudo leer.")
             return
         fin = pd.Timestamp(rango[1]).date()
-        ini = fin - dt.timedelta(days=VENTANAS[ventana] - 1)
-        n1 = data.demanda_nivel1_rango(ini, fin)
-        if n1 is None:
-            st.info("No se pudo leer lo que pidieron las ventas del período "
-                    "(paloteoinsumosnivel1.parquet).")
+        carta = data.cargar(ARCHIVO_CARTA)
+        salidas = data.cargar(ARCHIVO_SALIDAS)
+        compras = data.cargar(ARCHIVO_COMPRAS)
+        sems = semanas(fin)
+        dem_sem = data.demanda_nivel1_semanas(sems[0].date(), fin)
+        st_fin = stock_por_cod(data.stock_al(kardex.momento(fin, 23)))
+        ventanas = []
+        for dias in VENTANAS.values():
+            ini = fin - dt.timedelta(days=dias - 1)
+            n1 = data.demanda_nivel1_rango(ini, fin)
+            if n1 is None:
+                continue
+            t = revisar(porc, n1, df_rv, df_rb, carta, maestro, salidas, ini, fin,
+                        compras=compras)
+            det = detalle(t["cod"], porc, maestro, n1, dem_sem, compras, ini, fin, sems)
+            # El stock AL EMPEZAR: la foto del día anterior, a las 23.
+            st_ini = stock_por_cod(data.stock_al(
+                kardex.momento(ini - dt.timedelta(days=1), 23)))
+            ventanas.append(armar_ventana(dias, t, ini, fin, det, st_ini, st_fin))
+        if not ventanas:
+            _sin_datos("No se pudo leer lo que pidieron las ventas del período "
+                       "(paloteoinsumosnivel1.parquet).")
             return
-        t = revisar(porc, n1, df_rv, df_rb, data.cargar(ARCHIVO_CARTA), maestro,
-                    data.cargar(ARCHIVO_SALIDAS), ini, fin,
-                    compras=data.cargar(ARCHIVO_COMPRAS))
-        st.markdown(resumen(t, ini, fin))
-        if t.empty:
-            return
-        v = tabla(t, fin)
-        sty = (v.style.format({"Valor": lambda x: f"S/ {x:,.0f}"})
-               .map(_color_que, subset=["Qué pasa"]))
-        st.dataframe(sty, hide_index=True, row_height=27, column_config=COLUMNAS_TABLA,
-                     height=alturas.por_filas(len(v), px_fila=27, extra=38, minimo=0,
-                                              rol=alturas.REVISAR_RECETAS))
-        st.caption(
-            "Agrupada por el insumo del que sale cada corte. Un par del mismo insumo —uno "
-            "que se porciona y ninguna receta usa, otro que las recetas piden y no se "
-            "porciona— suele ser UNA receta que apunta al corte equivocado: la de «Recetas "
-            "que lo piden». Se arregla en el POS editando esa receta. «Ninguna receta lo "
-            "usa»: ni una receta de venta o receta base activas, ni un producto directo de "
-            "la carta, ni una venta del período, ni otro porcionamiento que parta de él. "
-            "«Valor»: lo porcionado, o lo que faltó porcionar al precio de hoy. Se porciona "
-            "por tandas: un corte con stock puede pedir más de lo que se porcionó en el "
-            "período sin que nada esté mal; mirá la fecha del último porcionamiento.")
+
+        def _a_la_carta():
+            v = (ss.get(_K_PIEZA) or {}).get("carta")
+            if v and v.get("cod"):
+                _ir_a_carta(v["cod"])
+
+        _PIEZA(key=_K_PIEZA, width="stretch", on_carta_change=_a_la_carta, data={
+            "ventanas": ventanas, "sems": [s.strftime("%Y-%m-%d") for s in sems],
+            "codigos": _codigos_carta(),
+        })

@@ -508,12 +508,6 @@ RB_COSTO_DETALLE = 27 * 5 + 38
 tabla (regla #576): cinco filas. Lo que no entra se desliza dentro de su
 tabla."""
 
-REVISAR_RECETAS = 27 * 13 + 3
-"""Alto de la tabla de Recetas › Revisar recetas (2026-09-28, regla #559):
-doce filas de 27 más la cabecera —la medida que tenía la Carta costeada
-hasta la regla #570—, y la tabla crece hasta ahí con las filas que tenga
-(`por_filas`)."""
-
 FICHA_HORA_MESAS = 170
 """«Mesas abiertas a la vez», el gráfico de la ficha de la hora de Ventas ›
 Por hora (2026-09-26, regla #536). Va en el panel del drill, que tiene

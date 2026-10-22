@@ -1192,6 +1192,7 @@ def _purgar_version(archivo, sello):
         # primer nivel de «Revisar recetas» (regla #559), que lee el primero.
         _consumo_recetas_cacheable.clear()
         _demanda_nivel1_cacheable.clear()
+        _demanda_semanas_cacheable.clear()
 
 
 @st.cache_data(ttl=3600, persist="disk")
@@ -1430,6 +1431,7 @@ def limpiar_cache(archivo):
     _venta_por_grupo_dia_cacheable.clear()
     _consumo_recetas_cacheable.clear()
     _demanda_nivel1_cacheable.clear()
+    _demanda_semanas_cacheable.clear()
     _stock_al_cacheable.clear()
     _kardex_fotos_cacheable.clear()
     _historia_stock_cacheable.clear()
@@ -2078,6 +2080,31 @@ def _demanda_nivel1_cacheable(archivo, sello, ini, fin):
     bucket = st.secrets["R2_BUCKET"]
     rel = f"read_parquet('s3://{bucket}/{archivo}')"
     return con.execute(consumo_recetas.sql_demanda_nivel1(rel, ini, fin)).df()
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _demanda_semanas_cacheable(archivo, sello, ini, fin):
+    """Lo que pidieron las ventas al primer nivel por insumo y SEMANA
+    (`consumo_recetas.sql_demanda_nivel1_semanas`): cod, semana, consumo (en
+    unidad de salida). Si falla, LANZA: no se cachea. `sello` es la clave.
+    Lo lee Recetas › «Recetas vs porcionado» (regla #703)."""
+    if not secrets_disponibles():
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+    return con.execute(consumo_recetas.sql_demanda_nivel1_semanas(rel, ini, fin)).df()
+
+
+def demanda_nivel1_semanas(ini, fin):
+    """Lo que pidieron las ventas entre `ini` y `fin` al primer nivel, por
+    insumo y semana (el lunes): cod, semana, consumo. `None` si no se pudo
+    leer. No cacheada (la interna sí), por lo mismo que `cargar()`."""
+    archivo = consumo_recetas.ARCHIVOS["paloteo"]
+    try:
+        return _demanda_semanas_cacheable(archivo, sello_datos(archivo), ini, fin)
+    except Exception:
+        return None
 
 
 def demanda_nivel1_rango(ini, fin):

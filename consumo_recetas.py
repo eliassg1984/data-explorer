@@ -160,6 +160,21 @@ def sql_demanda_nivel1(relacion, ini, fin):
         GROUP BY 1, 2"""
 
 
+def sql_demanda_nivel1_semanas(relacion, ini, fin):
+    """Lo mismo que `sql_demanda_nivel1`, por insumo y SEMANA (de lunes a
+    domingo, `semana` = el lunes), sin plato: lo lee Recetas › «Recetas vs
+    porcionado» (regla #703) para dibujar, semana a semana, lo que piden las
+    recetas de lo vendido contra lo porcionado. `consumo` en unidad de
+    SALIDA."""
+    return f"""
+        SELECT "COD INSUMO"                                           AS cod,
+               DATE_TRUNC('week', CAST("FECHA PEDIDO" AS DATE))       AS semana,
+               SUM("CONSUMO TOTAL")                                   AS consumo
+        FROM {relacion}
+        WHERE CAST("FECHA PEDIDO" AS DATE) BETWEEN DATE '{ini}' AND DATE '{fin}'
+        GROUP BY 1, 2"""
+
+
 def sql_demanda_anual(relacion, fin):
     """Los 12 meses que terminan en `fin`, por insumo del primer nivel, plato
     y grupo: de ahí sale QUÉ PARTE de un producto va a la venta interna y con

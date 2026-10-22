@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-702 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+703 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (224)
 
@@ -783,7 +783,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 
-**Datos, R2 y DuckDB** (113)
+**Datos, R2 y DuckDB** (114)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -898,6 +898,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#699** — El ranking de «Análisis de platos» es una pieza propia
 - **#701** — Las dos vistas de requerimientos dicen qué se pidió de más, qué se repite y qué no salió…
 - **#702** — «Mix de carta» es una pieza propia: Python manda las sumas por producto y período, y el…
+- **#703** — «Revisar recetas» es una pieza propia y se llama «Recetas vs porcionado»
 
 **SUNAT y SIRE** (71)
 
@@ -1044,7 +1045,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (208)
+**Decisiones de diseño y UX** (209)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1254,6 +1255,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#696** — «Costo de Carta» es una pieza propia con los CINCO CANALES del POS y su Excel
 - **#697** — «Nuevo Costeo» es una pieza propia: la receta y su precio se editan en el navegador, con los…
 - **#701** — Las dos vistas de requerimientos dicen qué se pidió de más, qué se repite y qué no salió…
+- **#703** — «Revisar recetas» es una pieza propia y se llama «Recetas vs porcionado»
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -54038,6 +54040,59 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      un plato una por una y el árbol por Área): sin excepciones ni errores
      de consola. (2026-10-22.)
 
+703. **«Revisar recetas» es una pieza propia y se llama «Recetas vs
+     porcionado».** A pedido (2026-10-22), sobre un boceto aprobado con
+     cifras reales (https://claude.ai/artifact/RLrWanQHM37CAcJBnysFxz).
+     Hasta ese día era un `segmented_control` de 30 | 90 días, un párrafo
+     de resumen y un `st.dataframe` de nueve columnas.
+     · **El nombre**: el usuario notó que la vista sugiere revisar tanto
+       recetas como REGISTROS (un porcionamiento que no se cargó da la
+       misma señal que una receta que apunta al corte equivocado) y propuso
+       «Cumplimiento de registros». Se eligió «Recetas vs porcionado»
+       porque nombra los dos lados que compara; la vista no mira órdenes de
+       producción (excluye los cortes con receta base activa), así que un
+       nombre de «registros» en general prometía más de lo que mide. Cambió
+       SÓLO el rótulo del rail («Recetas vs Porcionado») y el título: el id
+       («Revisar recetas»), la sección (`rec_sec_revisar`) y la tarjeta
+       (`rec_card_revisar`) siguen.
+     · **Qué pasó a la pieza** (`graficos/recetas_revisar.js` + `.css`):
+       el título con 30 | 90 días —las DOS ventanas llegan calculadas, así
+       que cambiar no pide corrida—, cinco indicadores que filtran (las
+       cuatro señales y «Kardex en negativo al final», nuevo), la lista
+       agrupada por el insumo raíz con buscador (corte, insumo o plato) y
+       orden por valor o A–Z, y la **ficha** del corte, nueva: un
+       veredicto en palabras, la cuenta del stock, 13 semanas de
+       porcionado contra pedido, las recetas que lo piden con su cantidad y
+       los platos vendidos, los últimos porcionamientos, los cortes del
+       mismo insumo, «Qué hacer» por señal y el salto al plato en Costo de
+       Carta.
+     · **La cuenta del stock**: stock al empezar (la foto del kardex del
+       día ANTERIOR a las 23, `kardex.momento`) + porcionado + comprado −
+       lo que piden las ventas = lo que debería quedar, contra el stock al
+       terminar, todas las áreas sumadas (`stock_por_cod`). Separa «faltó y
+       el kardex quedó en negativo» de «alcanzó con el stock que había»
+       (se porciona por tandas). Sin kardex, la ficha lo dice y no inventa
+       ceros. Medido 22 set – 21 oct 2026: Pota limpia 269 pedidas, 47
+       porcionadas, kardex −22; Asado de tira 169 / 49, −9; la Grasa
+       importada se acumula (34,7 kg) sin receta que la descargue.
+     · **Lo pedido por semana** sale de una consulta nueva,
+       `consumo_recetas.sql_demanda_nivel1_semanas` (por insumo y lunes),
+       cacheada con el sello del parquet en `data.demanda_nivel1_semanas`
+       y vaciada con las demás (`limpiar_cache`).
+     · **La cuenta no se movió**: `revisar()` sigue igual y la pieza
+       recibe cada corte con su señal hecha (`clase`); el test verifica que
+       el `.js` no tenga los umbrales. «Posible receta equivocada» marca un
+       insumo con una señal de cada lado EN LA MISMA UNIDAD: los pares de
+       unidades contra kilos eran retazos, no recetas mal apuntadas.
+     · Se fueron `tabla`, `resumen`, `COLUMNAS_TABLA`, `_color_que`,
+       `_cant`, `_fecha` y `alturas.REVISAR_RECETAS`.
+     Lo vigila `test_graficos.py::_pruebas_revisar_recetas`. Probado en la
+     app local con R2 a 1323×619 con clics reales (los cinco indicadores,
+     30 y 90 días, el buscador, la ficha, el salto a Costo de Carta, que
+     abrió el Langostino a la Brasa elegido): la tarjeta mide 582 px y
+     entra en la pantalla; sin excepciones ni errores de consola.
+     (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54050,7 +54105,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#702**; la próxima toma el número siguiente.
+> última regla es la **#703**; la próxima toma el número siguiente.
 
 >
 

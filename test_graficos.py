@@ -10965,6 +10965,7 @@ def _pruebas_revisar_recetas():
     con receta base activa (se produce por orden de producción) y lo que se
     compra directo. Y que las cuatro vistas que se fueron no vuelvan.
     """
+    import pathlib
     from datetime import date, timedelta
 
     from graficos import recetas as rec
@@ -11112,30 +11113,49 @@ def _pruebas_revisar_recetas():
     check("un círculo de porcionamientos (A ← B ← A) no cuelga la búsqueda: queda en B",
           g["0005001"], "0005002")
 
-    v = rr.tabla(t, fin).set_index("Corte")
-    check("una cantidad entera, sin decimales",
-          v.loc["(P) Lomo trozos saltado 170gr", "Porcionado"], "262 und")
-    check("lo que no se pide se escribe «—»",
-          v.loc["(P) Lomo trozos saltado 170gr", "Piden las ventas"], "—")
-    check("la fecha del último porcionamiento",
-          v.loc["(P) Lomo trozos saltado 180gr", "Último porc."], "31 ago")
-    check("la del último porcionamiento de la charela de 125 g",
-          v.loc["(P) Charela limpio 125gr", "Último porc."], "23 jun")
-    check("cada columna de la tabla tiene su ancho (sin anchos sumaban 1.585 px)",
-          sorted(rr.tabla(t, fin).columns), sorted(rr.COLUMNAS_TABLA))
-    check("sin vacíos que st.dataframe pinte «None» (#529)",
-          bool(rr.tabla(t, fin).isna().any().any()), False)
-    txt = rr.resumen(t, ini, fin)
-    check("el resumen cuenta cada señal",
-          ("**3** cortes se porcionan y ninguna receta los usa" in txt,
-           "**2** cortes los piden las recetas" in txt,
-           "Otro se dejó de porcionar" in txt,
-           "Uno más sale por notas de salida" in txt),
-          (True, True, True, True))
-    vacio = rr.revisar(porcionamientos.iloc[:0], n1.iloc[:0], recetaventa, recetabase,
-                       carta, maestro, salidas, ini, fin)
-    check("sin nada para revisar, lo dice",
-          rr.resumen(vacio, ini, fin).endswith("nada para revisar."), True)
+    # ── La pieza «Recetas vs porcionado» (regla #703) ─────────────────────
+    sems = rr.semanas(fin)
+    check("pieza · 13 semanas de lunes a domingo, la última con el fin",
+          (len(sems), sems[-1].weekday(), sems[-1] <= pd.Timestamp(fin) < sems[-1] + pd.Timedelta(days=7)),
+          (13, 0, True))
+    dem_sem = pd.DataFrame({"cod": ["0004159", "0004159"], "semana": [sems[-1], sems[-2]],
+                            "consumo": [300.0, 294.0]})
+    det = rr.detalle(t["cod"], porcionamientos, maestro, n1, dem_sem, compras, ini, fin, sems)
+    j3 = sems.index(dia(3) - pd.Timedelta(days=dia(3).weekday()))
+    check("pieza · lo porcionado cae en su semana",
+          (det["0004159"]["semP"][j3], sum(det["0004159"]["semP"])), (179.0, 179.0))
+    check("pieza · lo pedido por semana, en unidad de ENTRADA",
+          det["0004159"]["semD"][-2:], [294.0, 300.0])
+    check("pieza · los platos que lo piden, de más a menos, con su cantidad",
+          [p[:2] for p in det["0004159"]["platos"]],
+          [["Lomo Saltado", 400.0], ["Lomo a la Pimienta", 194.0]])
+    check("pieza · los últimos porcionamientos, el más nuevo arriba, con su origen",
+          det["0004159"]["porcs"][0][1:], ["Lomo fino entero x Kg", 179.0])
+    check("pieza · el stock de una foto del kardex suma todas las áreas",
+          rr.stock_por_cod(pd.DataFrame({"cod": ["0004159", "0004159 ", "0004160"],
+                                         "stock": [-30.0, 5.0, 229.0]})),
+          {"0004159": -25.0, "0004160": 229.0})
+    check("pieza · sin foto del kardex, None (y la ficha dice que falta)",
+          rr.stock_por_cod(None), None)
+    v = rr.armar_ventana(30, t, ini, fin, det, {"0004159": 10.0}, {"0004159": -25.0})
+    f = {x["cod"]: x for x in v["filas"]}
+    check("pieza · la ventana con sus fechas y una fila por corte, en el orden de revisar",
+          (v["rot"], v["ini"], [x["cod"] for x in v["filas"]]),
+          ("Últimos 30 días", ini.isoformat(), list(t["cod"])))
+    check("pieza · cada corte con su señal y su clase",
+          (f["0004159"]["clase"], f["0004160"]["clase"], f["0004001"]["clase"],
+           f["0000883"]["clase"]), ("falta", "sin", "viejo", "salida"))
+    check("pieza · el stock al empezar y al terminar; sin kardex, cero",
+          (f["0004159"]["stIni"], f["0004159"]["stFin"], f["0004160"]["stFin"]),
+          (10.0, -25.0, 0.0))
+    check("pieza · sin foto, None", rr.armar_ventana(30, t, ini, fin, det, None, None)
+          ["filas"][0]["stFin"], None)
+    _js_rr = (pathlib.Path(rr.__file__).with_suffix(".js")).read_text(encoding="utf-8")
+    check("pieza · el .js no reclasifica: la señal llega hecha",
+          ("f.clase === 'falta'" in _js_rr, "FALTA" not in _js_rr, "0.5 *" not in _js_rr),
+          (True, True, True))
+    check("pieza · y cuenta el stock como la ficha lo escribe",
+          "const esperado = (f.stIni ?? 0) + f.porc + f.comprado - f.ped;" in _js_rr, True)
 
     # ── En el rail y en la pila; y las cuatro que se fueron, fuera ───────
     _vistas = {v[0] for _cat, vistas in rec._RAIL_CATEGORIAS for v in vistas}
@@ -11300,10 +11320,11 @@ def _pruebas_costo_recetas_base():
     # y el 2026-10-22 pasó a llamarse «Simular Alza de Insumos» (#695);
     # «Costo Carta» pasó a «Costo de Carta» el mismo día (#696);
     # «Cambios Recetas Base», el 2026-10-19, al lado de su costo (#671).
+    # «Revisar» pasó a «Recetas vs Porcionado» el 2026-10-22 (#703).
     check("el rail, en el orden pedido",
           [v[1] for v in visibles],
           ["Costo de Carta", "Simular Alza de Insumos", "Costo Recetas Base", "Cambios Recetas Base",
-           "Revisar", "Nuevo Costeo"])
+           "Recetas vs Porcionado", "Nuevo Costeo"])
     check("la pila, en el mismo orden",
           [s for _k, s in rec._PILA if not s.startswith("Tabla")],
           [v[0] for v in visibles])

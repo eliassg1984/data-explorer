@@ -162,7 +162,10 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # porciona y ninguna receta usa, y los que las recetas piden y casi no
     # se porcionan — un par como el medallón y los trozos del lomo es UNA
     # receta que apunta al corte equivocado. Ver `graficos/recetas_revisar.py`.
-    ("Revisar", (("Revisar recetas",                    "Revisar",         ":material/fact_check:"),)),
+    # Desde el 2026-10-22 es una pieza propia y el rail la llama «Recetas vs
+    # Porcionado» (regla #703): lo que muestra se arregla tanto editando una
+    # receta como registrando un porcionamiento. El id sigue igual.
+    ("Revisar", (("Revisar recetas",                    "Recetas vs Porcionado", ":material/fact_check:"),)),
     # "Nueva receta" es una VISTA del reporte desde el 2026-09-22 — hasta ese
     # día era un reporte hermano (tool: True) que el chip Recetas/+ Nueva
     # `_chip_fuente` alternaba con éste. Se bajó a vista propia a pedido
