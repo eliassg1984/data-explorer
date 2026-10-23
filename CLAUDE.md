@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -169,6 +169,14 @@ el movimiento, la variación POR DÍA y el % de costo con las mismas
 fórmulas que Python. Ver `arquitectura.md` regla #699. Y la Ingeniería de
 menú (`ventas_menu.armar_menu` y `ventas_menu.js`, regla #700): que cada
 plato llegue con la clase de `clasificar` y que el `.js` no reclasifique.
+
+`test_historial_recetas.py` vigila la FOTO de las recetas de venta
+(`historial_recetas.py`): contra un R2 de mentira, que se nombre por el
+LastModified, que copie una sola vez por versión pidiendo su ETag y que
+un error no se tome por «no existe»; y la comparación entre dos fotos con
+cada caso (la línea quitada que renumera las de abajo, el insumo repetido,
+la receta de dos platos, el precio, el plato que cambia de receta). Ver
+`arquitectura.md` regla #705.
 
 ## El asistente IA no adivina: consulta
 

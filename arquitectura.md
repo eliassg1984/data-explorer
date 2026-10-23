@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-704 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+705 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (225)
 
@@ -785,7 +785,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 
-**Datos, R2 y DuckDB** (114)
+**Datos, R2 y DuckDB** (115)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -901,6 +901,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#701** — Las dos vistas de requerimientos dicen qué se pidió de más, qué se repite y qué no salió…
 - **#702** — «Mix de carta» es una pieza propia: Python manda las sumas por producto y período, y el…
 - **#703** — «Revisar recetas» es una pieza propia y se llama «Recetas vs porcionado»
+- **#705** — El POS no guarda el pasado de una receta de PLATO: la app le saca una foto a…
 
 **SUNAT y SIRE** (71)
 
@@ -54206,6 +54207,67 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      «Análisis de platos»): sin excepciones ni errores de consola.
      (2026-10-22.)
 
+705. **El POS no guarda el pasado de una receta de PLATO: la app le saca
+     una foto a `recetaventa.parquet` cada vez que cambia.** A pedido
+     (2026-10-22): «tengo los cambios de recetas base, pero no de recetas
+     venta ni de precios de venta». Revisado en el servidor ese día, con el
+     login de lectura:
+     · **Precios de venta: SÍ tienen pasado.** `INFSEGURIDAD.DBO.MMOVIMIENTO`,
+       pantalla (`tTabla`) «PRODUCTOS», campos «Precio Venta Canal 1» a «5»:
+       producto, fecha, usuario, antes y después, sólo cambios de verdad,
+       desde el 27/10/2021 (1.300 a 2.500 por año). No hace falta foto para
+       eso; la foto los trae igual.
+     · **Recetas de plato: NO.** `MRECETAVENTA`/`DRECETAVENTA` sólo tienen
+       el estado de hoy, con `fRegistro`/`tUsuario` del ÚLTIMO guardado
+       (`FECH MODIF`/`USUARIO REG` del parquet). No hay `_LOG` como el de
+       las recetas base (#671): ningún procedimiento lo escribe —el de las
+       recetas base lo escribe `Almacen.exe`—, el único trigger de ALMACEN
+       es `tr_Producto_Modified` (recalcula el precio de transferencia), CDC
+       y change tracking están apagados en todas las bases, y `MMOVIMIENTO`
+       no audita recetas. Y R2 no versiona: el extractor pisa el parquet
+       cada madrugada.
+     · **El pasado que sí podría recuperarse está en los respaldos.**
+       `msdb` registra un respaldo completo diario de ALMACEN desde el
+       02/12/2021 (1.789, ~931 MB, «SQL Backup Master»); si los archivos
+       siguen guardados, restaurar uno por mes en la réplica local y sacar
+       las dos tablas da el historial hacia atrás. Dónde quedan y cuántos
+       guarda lo dice el programa en el servidor (el login de lectura no
+       ve la carpeta). `ALMACENPRUEBA1` es una foto suelta de ~2026-09-03.
+     · **La foto** (`historial_recetas.py`): una COPIA de
+       `recetaventa.parquet` dentro de R2 —`copy_object`, no se baja nada—
+       en `_historial/recetaventa/<LastModified UTC>.parquet`, una por
+       versión del parquet (309 KB; ~110 MB por año). `CopySourceIfMatch`
+       con el ETag leído: si el extractor reescribe el archivo en ese
+       instante, la copia falla en vez de guardar otra versión con el nombre
+       de ésta (medido: R2 responde PreconditionFailed). R2 NO respeta
+       `IfNoneMatch` en una copia (medido), así que antes se pregunta si la
+       foto ya existe; dos procesos a la vez copian lo mismo dos veces.
+     · **Quién la saca: la app**, en `app.py`, un hilo como mucho cada media
+       hora por proceso (`revisar_en_segundo_plano`): nada que instalar en
+       el servidor del restaurante. El hueco: si nadie abre la app un día,
+       ese parquet se pisa sin foto; el cambio sale en la foto siguiente y
+       `FECH MODIF` dice cuándo se guardó la receta, pero un estado
+       intermedio —dos ediciones en días seguidos— se pierde. Si llegara a
+       importar, `herramientas/foto_recetas.py` hace lo mismo como tarea
+       programada en cualquier máquina (lee las credenciales de
+       `secrets.toml` o del entorno).
+     · **La comparación** (`cambios`): por RECETA (nueva, quitada), por
+       LÍNEA (insumo agregado o quitado, cantidad, cantidad por canal,
+       cómo se descarga) y por PLATO (nuevo, quitado, su receta, nombre,
+       activo, los cinco precios). Una línea se identifica por receta +
+       insumo + cuántas veces apareció antes ese insumo, NO por `ITEM RV`:
+       al quitar una línea las de abajo se renumeran, y por número eran
+       tres cambios donde hubo uno. Una receta la comparten varios platos
+       (57), así que sus líneas se cuentan una vez. Las cantidades por canal
+       son iguales a `CANTIDAD` en el 99,96 % de las líneas: si se movieron
+       igual, sale sólo `CANTIDAD`. Sobre la foto de verdad tarda 1,3 s
+       (con `.loc` fila por fila eran 8).
+     Lo vigila `test_historial_recetas.py`. Probado sobre R2: la primera
+     foto (la versión del 22/10/2026 03:00) salió desde la consola, la
+     segunda corrida no copió, y la llamada de `app.py` con el cliente de
+     la app lanzó el hilo una vez y no la segunda. Pendiente: una vista que
+     muestre los cambios, cuando haya fotos que comparar. (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54218,7 +54280,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#704**; la próxima toma el número siguiente.
+> última regla es la **#705**; la próxima toma el número siguiente.
 
 >
 

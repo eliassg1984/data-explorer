@@ -12,6 +12,7 @@ from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
 from data import (
     REPORTES, cargar, cargar_rango, rango_fechas, secrets_disponibles,
     hay_dato_nuevo, antiguedad_datos, HORAS_DATO_VIEJO, limpiar_cache,
+    get_s3_cliente,
 )
 from tema import ADVERTENCIA_TEXTO
 from estilos import TAM_FUENTE, inject_css
@@ -41,6 +42,7 @@ from asistente import inject_asistente
 from navegacion import inject_navegacion
 from aviso_ingreso import procesar_aviso_ingreso
 from perf import perf                                                       # ⚡ PERF
+import historial_recetas
 
 ZONA_PERU = ZoneInfo("America/Lima")  # UTC-5 fijo, sin horario de verano
 
@@ -244,6 +246,13 @@ if st.session_state.get("_reporte_anterior") != reporte:
 # AVISO DE MODO DEMO + PANEL DE DIAGNÓSTICO (?debug=1)
 # ===========================================================================
 modo_demo = not secrets_disponibles()
+# La foto de las recetas de venta (regla #705): el POS no guarda su pasado
+# y el extractor pisa `recetaventa.parquet` cada madrugada. Un hilo, como
+# mucho cada media hora por proceso: la corrida no lo espera.
+if not modo_demo:
+    _s3_fotos = get_s3_cliente()
+    if _s3_fotos is not None:
+        historial_recetas.revisar_en_segundo_plano(_s3_fotos, st.secrets["R2_BUCKET"])
 if modo_demo:
     st.caption("🧪 MODO DEMO — datos de ejemplo (no hay conexión a R2). "
                "Configura los secrets R2_* para usar datos reales.")
