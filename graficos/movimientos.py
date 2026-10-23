@@ -2,6 +2,13 @@
 graficos.movimientos — dashboard ÚNICO de Movimientos (requerimientos,
 salidas, porcionamientos y producción).
 
+DESDE EL 2026-10-23 (regla #709) la página de Movimientos son sólo
+requerimientos y salidas: porcionamientos, su merma, las órdenes de
+producción y el consumo según recetas son el reporte Producción
+(`graficos/produccion.py`), que declara su rail y su pila y dibuja con el
+cuerpo y los dibujantes de este módulo (`renderizar`). Lo de abajo cuenta
+cómo llegó cada vista, cuando todas eran de esta página.
+
 Una sola página con las NUEVE vistas del flujo de stock (la octava, desde
 el 2026-09-28, «Consumo según recetas»: lo que usaron las VENTAS en
 insumos de compra, en `graficos/movimientos_consumo.py`, regla #558; la
@@ -239,33 +246,12 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
                  ("Sin plato por cierre", "Sin plato, cierre por cierre", ":material/no_meals:"),
                  ("En qué se fue cada producto", "En qué se fue cada producto", ":material/alt_route:"),
                  ("Tabla · salidas",     "Tabla · sal.",        ":material/table_view:"))),
-    # «Porcionamientos» (2026-09-24, regla #510): tercer grupo, al final, a
-    # pedido. Una sola vista, con el nombre que se pidió; el ícono son las
-    # tijeras del corte.
-    # Las tres de MERMA (2026-10-08, regla #615): lo que el «Reporte de
-    # Mermas» del Almacén no dice — qué porcionamiento revisar, cómo rinde
-    # un producto en el tiempo y cuánto cuesta el kg útil según a quién se
-    # le compró. Viven en `graficos/movimientos_merma.py`.
-    # El ORDEN va de lo general a lo particular desde el 2026-10-12 (regla
-    # #647), a pedido: cuánto se perdió → en qué producto y desde cuándo →
-    # a quién comprarlo → los casos sueltos. «Para revisar» es la lista de
-    # trabajo y va al final; hasta ese día era la segunda.
-    ("Porcionamientos", (("Porcionamientos", "Porcionamientos", ":material/content_cut:"),
-                         ("Rendimiento por producto", "Rendimiento", ":material/monitoring:"),
-                         ("Proveedor por kg útil", "Costo por kg útil", ":material/local_shipping:"),
-                         ("Merma para revisar", "Para revisar", ":material/flag:"))),
-    # «Producción» (2026-09-30, regla #575): las órdenes de producción del
-    # Almacén, lo que las áreas preparan con sus recetas base. Va junto a
-    # Porcionamientos —las dos transformaciones que se registran en el
-    # Almacén— y antes de Consumo, que es la cuenta TEÓRICA de las ventas.
-    # El ícono es una licuadora: una preparación.
-    ("Producción", (("Producción", "Producción", ":material/blender:"),)),
-    # «Consumo según recetas» (2026-09-28, regla #558): cuarto grupo, al
-    # final. Lo que las VENTAS usaron en insumos de compra, bajando por las
-    # recetas base y los porcionamientos — el lado teórico de lo que las
-    # tres de arriba miden del almacén. El ícono es una olla.
-    ("Consumo", (("Consumo según recetas", "Consumo", ":material/soup_kitchen:"),)),
 ))
+
+# (Las seis vistas de lo que se TRANSFORMA en casa —Porcionamientos, su
+# merma, las órdenes de producción y el consumo según recetas— eran el final
+# de este rail hasta el 2026-10-23: desde la regla #709 son el reporte
+# Producción, `graficos/produccion.py`. Sus dibujantes siguen acá.)
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA tupla
 # (el porqué, en `graficos/compras/__init__.py::_PILA`).
@@ -288,12 +274,6 @@ _PILA = pila_sin_tablas((
     ("mov_sec_sinplato",    "Sin plato por cierre"),
     ("mov_sec_destino",     "En qué se fue cada producto"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
-    ("mov_sec_porc",        "Porcionamientos"),
-    ("mov_sec_merma_rend",  "Rendimiento por producto"),
-    ("mov_sec_merma_prov",  "Proveedor por kg útil"),
-    ("mov_sec_merma_rev",   "Merma para revisar"),
-    ("mov_sec_prod",        "Producción"),
-    ("mov_sec_consumo",     "Consumo según recetas"),
 ))
 
 
@@ -965,19 +945,35 @@ def _cargar_produccion(fam_sel=(), sub_sel=()):
     return d, False
 
 
-# ─── Punto de entrada público ───────────────────────────────────────────────
+# ─── Puntos de entrada públicos ─────────────────────────────────────────────
 def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                                     tabla_cb=None):
-    """Dashboard de Movimientos. `df_f` es requerimientos.parquet filtrado
-    por la fecha de la franja y `df_full`, el mismo parquet entero: desde el
-    2026-10-08 cada sección recorta el suyo a SU fecha (regla #617), así
-    que se trabaja sobre `df_full`. salidas.parquet se carga acá adentro,
-    también entero.
+    """Dashboard de Movimientos: lo que se pide y lo que se da de baja.
+    `df_f` es requerimientos.parquet filtrado por la fecha de la franja y
+    `df_full`, el mismo parquet entero: desde el 2026-10-08 cada sección
+    recorta el suyo a SU fecha (regla #617), así que se trabaja sobre
+    `df_full`. salidas.parquet se carga acá adentro, también entero.
 
     `tabla_cb`: callback que arma la Tabla de requerimientos (inyectado por
     app.py — la pivote). La de salidas va por `_tabla_salidas`, ver el
     docstring del módulo.
     """
+    # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
+    def dibujar_rail():
+        _render_rail(_RAIL_CATEGORIAS, "mov_graf_tipo",
+                     btn_prefix="mov_rail_btn_", secciones=_PILA)
+    renderizar(df_f, nombre_reporte, df_full, tabla_cb,
+               pila=_PILA, dibujar_rail=dibujar_rail)
+
+
+def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
+               dibujar_rail, con_salidas=True):
+    """El cuerpo de Movimientos y de Producción (regla #709): los chips,
+    los parquets, el rail que dibuja `dibujar_rail` y las secciones de
+    `pila`. Los dibujantes de las catorce secciones se arman igual para los
+    dos: cada página llama sólo a los de su pila. Sin `con_salidas` no se
+    carga salidas.parquet —Producción no lo usa en ninguna vista—, y sus
+    dibujantes, que no se llaman, quedan como con el parquet ausente."""
     # Esta corrida ya lee los ajustes compartidos con su valor nuevo: la
     # sección que los cambió no tiene que pedir otra (regla #644).
     st.session_state.pop(K_RECARGA, None)
@@ -1052,7 +1048,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     filtros_ia = {"Sub Almacén": sub_sel, "Familia": fam_sel}
     if fecha_req != FECHA_REGISTRO:
         filtros_ia["Fecha de los requerimientos en pantalla"] = col_fecha
-    publicar_contexto_ia("Movimientos", d, filtros_ia)
+    publicar_contexto_ia(nombre_reporte, d, filtros_ia)
 
     if d is None or d.empty:
         st.info("No hay datos para los filtros seleccionados.")
@@ -1086,8 +1082,9 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     col_fam_sal = "NOMBRE FAMILIA"
     fecha_sal = fecha_salidas()
     anios_comp = anios_comparar_salidas()
-    hist_sal, col_fecha_sal = _cargar_salidas(
-        col_fam_sal, fam_sel, sub_sel, fecha=fecha_sal)
+    hist_sal, col_fecha_sal = (_cargar_salidas(col_fam_sal, fam_sel, sub_sel,
+                                               fecha=fecha_sal)
+                               if con_salidas else (None, None))
     # Si se pidió proceso y el parquet no trae esa fecha, se usó la de
     # registro: el rótulo dice la que de verdad se usó.
     if col_fecha_sal and col_fecha_sal in _COLS_FECHA_SAL[FECHA_REGISTRO]:
@@ -1097,7 +1094,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # aparte: `datos` siguen siendo los requerimientos.
     if hist_sal is not None:
         publicar_contexto_ia(
-            "Movimientos", d, filtros_ia,
+            nombre_reporte, d, filtros_ia,
             extras={"salidas": {"df": salidas_para_ia(hist_sal),
                                 "nota": nota_salidas_ia(fecha_sal)}})
 
@@ -1137,9 +1134,10 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # devolver la excepción del jalón en `estilos/_20_compras_rail.py`, o la
     # primera tarjeta se la come (regla #38, y la #322 para esta vuelta).
 
-    # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
-    _render_rail(_RAIL_CATEGORIAS, "mov_graf_tipo",
-                 btn_prefix="mov_rail_btn_", secciones=_PILA)
+    # El rail lo dibuja cada dashboard con SUS categorías y su clave, en su
+    # módulo: `test_graficos.py` lee con `ast` que se las pase a
+    # `_render_rail` tal como las registra `graficos._RAILS` (regla #568).
+    dibujar_rail()
 
     def _sin_salidas():
         st.info("No se pudo cargar salidas.parquet: esta sección queda vacía.")
@@ -1526,7 +1524,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # El contenedor con la key va AFUERA del fragment a propósito: es el que
     # observan el scrollspy y la precarga, y tiene que sobrevivir a que el
     # fragment de adentro se re-dibuje.
-    for _i, (_clave, _vista) in enumerate(_PILA):
+    for _i, (_clave, _vista) in enumerate(pila):
         with st.container(key=_clave):
             seccion_perezosa(_clave, _vista, _y_recargar(_DIBUJANTES[_clave]),
                              activa_de_entrada=(_i == 0))

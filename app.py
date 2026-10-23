@@ -500,8 +500,10 @@ REPORTES_INICIO_TABLA = ()
 # Documentos SUNAT — una vista de Compras hasta el 2026-09-30, regla #577.
 REPORTES_FECHA_EN_TARJETA_SUNAT = ("Documentos SUNAT",)
 # Reportes cuya franja NO dibuja fecha porque cada vista trae la suya:
-# Compras (2026-09-06), Movimientos (#617) y Ajuste (#632).
-REPORTES_FECHA_POR_VISTA = ("Compras", "Movimientos", "Ajuste de Inventario")
+# Compras (2026-09-06), Movimientos (#617) y Ajuste (#632). Producción,
+# desde que salió de Movimientos con sus seis vistas (#709).
+REPORTES_FECHA_POR_VISTA = ("Compras", "Movimientos", "Producción",
+                            "Ajuste de Inventario")
 _vista_default = "Tabla" if reporte in REPORTES_INICIO_TABLA else "Gráficos"
 
 

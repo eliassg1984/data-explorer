@@ -862,7 +862,7 @@ def ultimo_porcionamiento(df_po, cod):
     """El porcionamiento más nuevo del que salió `cod`: `doc`, `fecha`,
     `cod_de` (el código de lo que se porcionó) y, si se puede medir, si el
     peso por unidad de ESTE corte quedó fuera de lo habitual — la marca
-    «Peso por unidad raro» de Movimientos › Para revisar (regla #647), con
+    «Peso por unidad raro» de Producción › Para revisar (regla #647), con
     `kgu` (su peso por unidad) y `hab` (lo habitual). Importa: el corte
     entra al Almacén al precio que le dio ese peso, y la receta lo hereda.
     None si no hay porcionamientos. Pura."""
@@ -949,7 +949,7 @@ def _reciente(df_po, fecha, dias=30):
     return bool(fecha >= tope.normalize() - pd.Timedelta(days=dias - 1))
 
 
-def _saltar_a_movimientos(destino, ult, cod):
+def _saltar_a_produccion(destino, ult, cod):
     """Deja escrito a dónde se va y pide la corrida COMPLETA que cambia de
     reporte: el botón vive en el fragment de la sección, y una corrida de
     fragment no vuelve a elegir reporte (regla #647). Con un `graficos`
@@ -963,7 +963,7 @@ def _saltar_a_movimientos(destino, ult, cod):
         else:
             mm.ir_al_corte(ult["cod_de"], cod)
             vista = mm.VISTA_REND
-        navegacion._ir_a_vista("Movimientos", mm.RAIL_MOVIMIENTOS, vista)
+        navegacion._ir_a_vista(mm.REPORTE_MERMA, mm.RAIL_PRODUCCION, vista)
     except (ImportError, AttributeError):
         return
     st.rerun(scope="app")
@@ -1164,7 +1164,7 @@ def _porcionados(nodos):
 
 def _vista_porcionados(porcs, df_po):
     """Los últimos porcionamientos de un corte del plato (regla #574), con
-    los saltos a Movimientos (regla #647). Elegido en un desplegable: en el
+    los saltos a Producción (reglas #647 y #709). Elegido en un desplegable: en el
     árbol, un corte no se clica."""
     cods = list(porcs)
     if st.session_state.get(_K_PORC) not in cods:
@@ -1181,9 +1181,9 @@ def _vista_porcionados(porcs, df_po):
             if st.button("Ver curva", key="rec_carta_base_curva",
                          help="La curva de su precio, porcionamiento por "
                               "porcionamiento, y qué la movió —el insumo, la "
-                              "merma o el gramaje—, en Movimientos › "
+                              "merma o el gramaje—, en Producción › "
                               "Rendimiento."):
-                _saltar_a_movimientos("rend", ult, cod)
+                _saltar_a_produccion("rend", ult, cod)
             if ult["raro"] and _reciente(df_po, ult["fecha"]):
                 if st.button(
                         "Revisar", key="rec_carta_base_revisar",
@@ -1191,8 +1191,8 @@ def _vista_porcionados(porcs, df_po):
                              f"asignó {ult['kgu']:,.3f} por unidad y lo "
                              f"habitual es {ult['hab']:,.3f}: su costo, y el "
                              "de esta receta, pueden estar mal. Verlo en "
-                             "Movimientos › Para revisar."):
-                    _saltar_a_movimientos("rev", ult, cod)
+                             "Producción › Para revisar."):
+                    _saltar_a_produccion("rev", ult, cod)
     n = porcs[cod]
     actual = {"costo": float(n["costo"]),
               "escala": float(n["cant"]) / float(n["factor"] or 1.0)}

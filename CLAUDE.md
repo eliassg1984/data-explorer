@@ -322,7 +322,12 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
 - **Al costado, a dónde ir.** La columna lista las ÁREAS (regla #708,
   2026-10-23): Compras = Compras + Documentos SUNAT; Inventario = Stock +
   Ajuste + Movimientos (`data.py`, clave `area`; sus reportes van
-  SEGUIDOS en `REPORTES`); los demás, un reporte por fila. El clic en un
+  SEGUIDOS en `REPORTES`); los demás, un reporte por fila — entre ellos
+  **Producción** (regla #709): porcionamientos y su merma, órdenes de
+  producción y consumo según recetas, que eran el final de Movimientos.
+  Declara su rail y su pila en `graficos/produccion.py` y dibuja con el
+  cuerpo y los dibujantes de `graficos/movimientos.py` (`renderizar`),
+  con las mismas keys `mov_sec_*`. El clic en un
   área lleva al reporte que se visitó último. **Por debajo de 901px cada
   reporte sigue con su botón**: ahí la franja no es el índice y Ajuste
   quedaría sin camino. No cambia de contenido al bajar. Tiene tres estados
@@ -1002,8 +1007,8 @@ x4,3 en el lomo fino. `graficos/movimientos_periodo.py::lineas_porcionamientos`
 toma la cabecera una vez por `COD PORC`, y la merma en soles sale de los
 cortes: Σ(`CANT RESULT` × `PREC PROM PROD FIN`) es lo que costó lo que
 entró (validado contra lo pagado en compras). Su tarjeta, «Porcionamientos»,
-es la tercera «por período» de Movimientos y la única que mide merma y no
-un valorizado. Regla #510. Y el precio de cada CORTE lo arma el Almacén
+es la tercera «por período» —en el reporte Producción desde la regla #709—
+y la única que mide merma y no un valorizado. Regla #510. Y el precio de cada CORTE lo arma el Almacén
 repartiendo por PESO: precio = costo por unidad que entró ÷ (1 − merma) ×
 peso asignado por unidad, y la merma ES lo porcionado menos los pesos —un
 peso mal tipeado mueve la merma y el precio de todos los cortes, y el corte
@@ -1471,7 +1476,8 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
 
 ## El consumo según recetas baja hasta lo que se COMPRA
 
-Movimientos › «Consumo según recetas» (2026-09-28): cada plato vendido,
+Producción › «Consumo según recetas» (2026-09-28; hasta la regla #709,
+una vista de Movimientos): cada plato vendido,
 abierto por las recetas base y los porcionamientos hasta el insumo de
 compra. La cuenta es `consumo_recetas.py` (puro, con test); la sección,
 `graficos/movimientos_consumo.py`; su página, `graficos/_consumo_html.py`.

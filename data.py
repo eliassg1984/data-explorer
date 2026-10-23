@@ -354,6 +354,32 @@ REPORTES = {
         ],
         "columnas_fijas_movil": 2,
     },
+    # PRODUCCIÓN, un reporte propio desde el 2026-10-23 (regla #709): las
+    # seis vistas de lo que se TRANSFORMA en casa —Porcionamientos, su
+    # merma en tres vistas, las órdenes de producción y el consumo según
+    # recetas— salieron de Movimientos, que se quedó con lo que se pide y lo
+    # que se da de baja. Es la etapa 2 de la navegación del boceto del rail
+    # compacto (#708).
+    #
+    # `archivo` es el de REQUERIMIENTOS, como el de Movimientos, y no es un
+    # descuido: las secciones cargan sus propios parquets, pero los chips
+    # «Sub Almacén» y «Familia», el orden de las áreas que reparte los
+    # colores (Cocina del mismo color que en Movimientos, regla #509) y los
+    # topes del botón de fecha de Consumo salen de ahí. Con otro `archivo`,
+    # cada una de esas cosas cambiaba. Sin KPI: la columna ya no los muestra
+    # (regla #596) y no hay un número único de «producción».
+    "Producción": {
+        "label_corto": "Producción",
+        "archivo": "requerimientos.parquet",
+        "archivos_extra": ("porcionamientos.parquet",
+                           "ordenesproduccion.parquet",
+                           "paloteoinsumosnivel1.parquet", "recetabase.parquet",
+                           "inventariovalorizado.parquet"),
+        "icono": ":material/skillet:",
+        "fecha": "Fecha Registro",
+        "filtros_cat": ["Sub Almacen", "Nombre Familia"],
+        "buscador": "Nombre Producto",
+    },
     # UN SOLO reporte de Recetas desde el 2026-09-04. Hasta esa fecha eran
     # DOS entradas ("Receta Base" y "Receta Venta") que un chip Base/Venta
     # alternaba, apoyadas en una medición equivocada que decía que los dos

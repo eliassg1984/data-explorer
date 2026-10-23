@@ -4361,7 +4361,10 @@ def _pruebas_fecha_por_vista():
     # a cierre (regla #645) eligen un CIERRE de inventario, no un rango.
     con_ventana = {"mov_sec_merma_rend", "mov_sec_merma_prov",
                    "mov_sec_sinplato", "mov_sec_destino"}
-    secciones = {c for c, _v in mov._PILA}
+    # Las de Producción también: son las mismas secciones, en otra pila
+    # desde la regla #709.
+    import graficos.produccion as prod
+    secciones = {c for c, _v in mov._PILA + prod._PILA}
     # La pila sin «Tabla» (MOSTRAR_VISTAS_TABLA apagado) igual las declara.
     secciones |= {"mov_sec_tabla_req", "mov_sec_tabla_sal"}
     check("toda sección (salvo las de ventana) tiene categoría",
@@ -4377,8 +4380,9 @@ def _pruebas_fecha_por_vista():
           "_rango_vigente(" in fuente, False)
     app = (raiz / "app.py").read_text(encoding="utf-8")
     _por_vista = re.search(r'REPORTES_FECHA_POR_VISTA = \(([^)]*)\)', app)
-    check("la franja de Movimientos no dibuja calendario",
-          (bool(_por_vista and '"Movimientos"' in _por_vista.group(1)),
+    check("la franja de Movimientos y la de Producción no dibujan calendario",
+          (bool(_por_vista and '"Movimientos"' in _por_vista.group(1)
+                and '"Producción"' in _por_vista.group(1)),
            "reporte not in REPORTES_FECHA_POR_VISTA" in app), (True, True))
     css = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
     check("el botón de las vistas tiene su CSS (prefijo mov_f_)",
@@ -7752,15 +7756,19 @@ def _pruebas_cortes_y_peso():
           (cc.ultimo_porcionamiento(d, "C2")["raro"],
            cc.ultimo_porcionamiento(d, "ZZ"), cc.ultimo_porcionamiento(None, "C1")),
           (False, None, None))
-    src = open("graficos/movimientos.py", encoding="utf-8").read()
+    src = open("graficos/produccion.py", encoding="utf-8").read()
     rail = re.search(r'_render_rail\(_RAIL_CATEGORIAS,\s*"([^"]+)"', src)
-    check("el rail al que salta Recetas es el de Movimientos",
-          rail.group(1) if rail else None, mm.RAIL_MOVIMIENTOS)
-    pila = dict(mov._PILA)
+    check("el rail al que salta Recetas es el de Producción (#709)",
+          rail.group(1) if rail else None, mm.RAIL_PRODUCCION)
+    import graficos as _gr
+    check("y el reporte, el que lo dibuja",
+          _gr._RAILS.get(mm.REPORTE_MERMA, (None, None))[1], mm.RAIL_PRODUCCION)
+    import graficos.produccion as prod
+    pila = dict(prod._PILA)
     check("las vistas y secciones a las que se salta existen en la pila",
           (pila.get(mm.SEC_REND), pila.get(mm.SEC_REV), pila.get(mm.SEC_PROV) is not None),
           (mm.VISTA_REND, mm.VISTA_REV, True))
-    orden = [s for s, _ in mov._PILA if s in ("mov_sec_porc", mm.SEC_REND,
+    orden = [s for s, _ in prod._PILA if s in ("mov_sec_porc", mm.SEC_REND,
                                               mm.SEC_PROV, mm.SEC_REV)]
     check("Porcionamientos, de lo general a lo particular",
           orden, ["mov_sec_porc", mm.SEC_REND, mm.SEC_PROV, mm.SEC_REV])
@@ -10019,7 +10027,7 @@ def _pruebas_requerimientos_por_area():
 
     # ── 3) El cableado ────────────────────────────────────────────────────
     arbol = ast.parse(textwrap.dedent(
-        inspect.getsource(mov.renderizar_graficos_movimientos)))
+        inspect.getsource(mov.renderizar)))
     dib = next((n for n in ast.walk(arbol) if isinstance(n, ast.FunctionDef)
                 and n.name == "_dib_cadena"), None)
     asign = [n for n in ast.walk(dib) if isinstance(n, ast.Assign)

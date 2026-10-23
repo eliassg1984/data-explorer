@@ -1214,11 +1214,14 @@ SEC_REND, SEC_PROV, SEC_REV = ("mov_sec_merma_rend", "mov_sec_merma_prov",
                                "mov_sec_merma_rev")
 VISTA_REND, VISTA_REV = "Rendimiento por producto", "Merma para revisar"
 """Los ids de las dos vistas a las que se salta desde Recetas: los de
-`graficos/movimientos.py::_PILA`."""
-RAIL_MOVIMIENTOS = "mov_graf_tipo"
-"""El `state_key` del rail de Movimientos (`movimientos.py::_render_rail`).
-Vive acá y no allá porque `movimientos.py` importa este módulo: al revés
-sería un import circular. Lo vigila `test_graficos.py::_pruebas_merma`."""
+`graficos/movimientos.py::_PILA_PRODUCCION`."""
+REPORTE_MERMA = "Producción"
+RAIL_PRODUCCION = "prod_graf_tipo"
+"""El reporte de estas secciones y el `state_key` de su rail
+(`movimientos.py::_render_rail`): Producción desde la regla #709 — hasta
+ese día eran el final de la pila de Movimientos, con `mov_graf_tipo`. Vive
+acá y no allá porque `movimientos.py` importa este módulo: al revés sería
+un import circular. Lo vigila `test_graficos.py::_pruebas_merma`."""
 K_FOCO_REV = "_mov_merma_rev_foco"
 
 

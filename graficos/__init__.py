@@ -26,6 +26,10 @@ Estructura:
                           parquets del flujo de stock (requerimientos +
                           salidas). Eran DOS reportes que un chip
                           alternaba hasta el 2026-09-05 — ver regla #322.
+                          Su cuerpo y sus dibujantes los usa también
+                          produccion.py.
+        produccion.py  → dashboard Producción (regla #709): las seis
+                          vistas que eran el final de Movimientos.
         movimientos_comun.py → las piezas que miran los DOS parquets a la
                           vez: el recorte por rango y, sin caller desde la
                           regla #411, el ranking de proporción dada de baja.
@@ -54,6 +58,7 @@ from graficos.compras import renderizar_graficos_compras              # noqa: F4
 from graficos.costos import renderizar_graficos_costos                # noqa: F401
 from graficos.inventario import renderizar_graficos_inventario        # noqa: F401
 from graficos.movimientos import renderizar_graficos_movimientos      # noqa: F401
+from graficos.produccion import renderizar_graficos_produccion        # noqa: F401
 from graficos.recetas import renderizar_graficos_recetas              # noqa: F401
 from graficos.resumen_ejecutivo import renderizar_graficos_resumen     # noqa: F401
 from graficos.sunat_reporte import renderizar_graficos_sunat          # noqa: F401
@@ -64,6 +69,7 @@ from graficos.compras import _COMPRAS_RAIL_CATEGORIAS
 from graficos.costos import _COSTOS_RAIL_CATEGORIAS
 from graficos.inventario import _INVENTARIO_RAIL_CATEGORIAS
 from graficos.movimientos import _RAIL_CATEGORIAS as _MOV_RAIL
+from graficos.produccion import _RAIL_CATEGORIAS as _PROD_RAIL
 from graficos.recetas import _RAIL_CATEGORIAS as _REC_RAIL
 from graficos.resumen_ejecutivo import _RESUMEN_RAIL_CATEGORIAS
 from graficos.sunat_reporte import _SUNAT_RAIL_CATEGORIAS
@@ -93,6 +99,9 @@ _DASHBOARDS = {
     "Inventario Valorizado": renderizar_graficos_inventario,
     "Recetas":               renderizar_graficos_recetas,
     "Movimientos":           renderizar_graficos_movimientos,
+    # Las seis vistas de lo que se transforma en casa, que eran el final de
+    # Movimientos (2026-10-23, regla #709). Sus dibujantes siguen allá.
+    "Producción":            renderizar_graficos_produccion,
     "Ventas":                renderizar_graficos_ventas,
 }
 
@@ -118,6 +127,7 @@ _RAILS = {
     "Inventario Valorizado": (_INVENTARIO_RAIL_CATEGORIAS, "inv_graf_tipo"),
     "Recetas":               (_REC_RAIL, "rec_graf_tipo"),
     "Movimientos":           (_MOV_RAIL, "mov_graf_tipo"),
+    "Producción":            (_PROD_RAIL, "prod_graf_tipo"),
     "Ventas":                (_VENTAS_RAIL_CATEGORIAS, "ventas_graf_tipo"),
 }
 

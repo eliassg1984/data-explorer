@@ -492,12 +492,12 @@ ROTULO_PESTANA = {
     ("Movimientos", "Detalle de salidas"): "Sal. área",
     ("Movimientos", "Sin plato por cierre"): "Sin plato",
     ("Movimientos", "En qué se fue cada producto"): "Destino",
-    ("Movimientos", "Porcionamientos"): "Porcionamientos",
-    ("Movimientos", "Rendimiento por producto"): "Rendimiento",
-    ("Movimientos", "Proveedor por kg útil"): "Kg útil",
-    ("Movimientos", "Merma para revisar"): "Para revisar",
-    ("Movimientos", "Producción"): "Producción",
-    ("Movimientos", "Consumo según recetas"): "Consumo",
+    ("Producción", "Porcionamientos"): "Porcionamientos",
+    ("Producción", "Rendimiento por producto"): "Rendimiento",
+    ("Producción", "Proveedor por kg útil"): "Kg útil",
+    ("Producción", "Merma para revisar"): "Para revisar",
+    ("Producción", "Producción"): "Órdenes",
+    ("Producción", "Consumo según recetas"): "Consumo",
     ("Recetas", "Carta costeada"): "Costo de Carta",
     ("Recetas", "Alza de insumo"): "Alza",
     ("Recetas", "Costo de recetas base"): "Recetas base",
@@ -1408,13 +1408,16 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # se pidió el 2026-09-21 y el 2026-09-22—, así que el botón sigue
     # llevándolo, y el corto lo pinta un `::after` desde esta variable: la
     # regla, fija en `_28_arbol.py`; el dato, acá. `json.dumps` da una cadena
-    # CSS válida (comillas dobles, escapes). Un área se nombra a sí misma.
+    # CSS válida (comillas dobles, escapes) SÓLO con `ensure_ascii=False`:
+    # si no, la «ó» sale como `\u00f3`, que en CSS no es un escape, y bajo
+    # el ícono se leía «Producciu00f3n» (regla #709, el primer rótulo con
+    # tilde). Un área se nombra a sí misma.
     _rotulos = "".join(
         f".st-key-navitem_{_slug(n)}{{--rot-corto:"
-        f"{json.dumps(i.get('label_rail') or i.get('label_corto') or n)};}}"
+        f"{json.dumps(i.get('label_rail') or i.get('label_corto') or n, ensure_ascii=False)};}}"
         for n, i in visibles.items())
     _rotulos += "".join(
-        f".st-key-navitem_area_{_slug(a)}{{--rot-corto:{json.dumps(a)};}}"
+        f".st-key-navitem_area_{_slug(a)}{{--rot-corto:{json.dumps(a, ensure_ascii=False)};}}"
         for a in _areas)
     # QUÉ FILAS SE VEN EN CADA ANCHO (regla #708). Desde 901px, el área y no
     # sus reportes; por debajo, al revés —ahí la franja no es el índice del

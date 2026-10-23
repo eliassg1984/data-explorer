@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-708 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+709 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (226)
 
@@ -1052,7 +1052,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (211)
+**Decisiones de diseño y UX** (212)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1265,6 +1265,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#703** — «Revisar recetas» es una pieza propia y se llama «Recetas vs porcionado»
 - **#707** — «Cambios en Recetas»: las recetas base, las recetas de plato y los precios de venta en una…
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
+- **#709** — Producción es un reporte propio: las seis vistas de lo que se TRANSFORMA en casa salieron de…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -54483,6 +54484,55 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      sección de arriba termina de construirse después del salto, y cambiar
      de reporte conserva el scroll del anterior. (2026-10-23.)
 
+709. **Producción es un reporte propio: las seis vistas de lo que se
+     TRANSFORMA en casa salieron de Movimientos, con su código intacto —
+     `graficos/produccion.py` declara sólo su rail y su pila, y dibuja con
+     el cuerpo y los dibujantes de `movimientos.py`—.** Etapa 2 de la
+     navegación del boceto del rail compacto (#708), a pedido el
+     2026-10-23: Porcionamientos, Rendimiento, Costo por kg útil, Para
+     revisar, «Órdenes de producción» (la vista «Producción», sólo el
+     rótulo: el id sigue igual) y Consumo según recetas. Movimientos se
+     quedó con lo que se pide y lo que se da de baja: de 12 vistas a 6, y el
+     área Inventario de 20 pestañas a 14.
+     · **El cuerpo es UNO** (`movimientos.renderizar`, con `pila`,
+       `dibujar_rail` y `con_salidas`). Los chips «Sub Almacén» y
+       «Familia», el orden de las áreas que reparte los colores (#509) y los
+       topes del botón de fecha de Consumo salen de requerimientos, así que
+       Producción tiene ese mismo `archivo`: con otro, cada una de esas tres
+       cosas cambiaba. salidas.parquet no se carga (ninguna vista suya lo
+       usa). Las secciones conservan sus keys `mov_sec_*`: de ellas cuelgan
+       el CSS de sus tarjetas, su fecha (`CATEGORIA_VISTA`, #617) y el foco
+       que comparten las de merma (`movimientos_merma.SEC_*`).
+     · **Un módulo propio y no una segunda pila en `movimientos.py`**: la
+       convención es un dashboard por módulo con SU rail y SU pila
+       declarados en él, y la leen con `ast` `_pruebas_vistas_de_cada_reporte`
+       (la llamada a `_render_rail` con las categorías y la clave de
+       `_RAILS`) y `_pruebas_vistas_tabla_ocultas` (un `*RAIL_CATEGORIAS`
+       por módulo). Probado: con las dos pilas en un módulo fallaban las dos.
+       Por eso cada dashboard dibuja su rail en una función suya
+       (`dibujar_rail`) que el cuerpo llama donde siempre.
+     · **El salto desde Costo de Carta** («Ver curva» y «Revisar» de un
+       corte porcionado, #647) va a Producción: `movimientos_merma.
+       REPORTE_MERMA` y `RAIL_PRODUCCION` (`prod_graf_tipo`), que reemplazan
+       a `RAIL_MOVIMIENTOS`, y sus ayudas dicen «Producción ›». Probado con
+       clics: Lomo Saltado › Porcionados › Ver curva llega a Rendimiento
+       con el Lomo cabeza y el corte de trozos elegidos.
+     · **Un rótulo con tilde bajo el ícono salía «Producciu00f3n».** El
+       `--rot-corto` de la columna (#568) se escribía con `json.dumps`, que
+       pasa la «ó» a `\u00f3`: en JSON es un escape, en CSS no. Ningún
+       rótulo tenía tilde hasta este. Va con `ensure_ascii=False`.
+     · **Los rangos de fecha de estas vistas empiezan de nuevo**: la clave
+       de cada uno lleva el nombre del reporte
+       (`rango_cat_<reporte>_<categoría>`). Abren en su default, como en
+       una sesión nueva. Y un enlace guardado a
+       `?reporte=Movimientos&vista=porcionamientos` cae en la primera vista
+       de Movimientos, como cualquier id que ya no existe ahí.
+     Probado en la app local con R2, a 1323×619, con Streamlit 1.59 y 1.64:
+     las seis secciones de Producción y las seis de Movimientos construidas
+     enteras sin una excepción ni un aviso, las pestañas de las dos, el
+     salto a «Órdenes» sin rerun, y el salto desde Costo de Carta. La
+     batería entera, en las dos versiones. (2026-10-23.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54495,7 +54545,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#708**; la próxima toma el número siguiente.
+> última regla es la **#709**; la próxima toma el número siguiente.
 
 >
 
