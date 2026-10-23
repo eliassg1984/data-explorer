@@ -77,6 +77,8 @@ cada receta —también adentro de otra receta base— con las órdenes de
 producción que la produjeron, y muestra cómo evolucionó su costo por unidad
 según esas órdenes. Vive en `graficos/recetas_base_costo.py`; lee además
 `ordenesproduccion.parquet` (regla #575) y el primer nivel de las ventas.
+Desde el 2026-10-22 es una pieza propia (regla #706): una tarjeta con la
+lista y la ficha de la receta elegida.
 
 DOS PARQUETS EN UNA PÁGINA. `app.py` carga UNO por reporte y lo pasa como
 `df_f`; el segundo se carga acá con `data.cargar`, el mismo patrón que usa
@@ -300,8 +302,9 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     def _dib_costo_rb():
         # Las órdenes de producción van como FUNCIÓN, como las ventas de la
         # Carta (regla #573): se leen sólo cuando la sección se construye.
-        # Lo usado por las ventas lo pide la vista misma. Regla #576.
-        render_costo_recetas_base(df_rb, partial(_cargar_reporte, ARCHIVO_ORDENES))
+        # Lo usado por las ventas lo pide la vista misma; las recetas de plato
+        # (`df_f`) dicen cómo descarga cada línea. Reglas #576 y #706.
+        render_costo_recetas_base(df_rb, partial(_cargar_reporte, ARCHIVO_ORDENES), df_rv=df_f)
 
     def _dib_cambios_rb():
         # El log lo lee la vista (en caché, el mismo que usan los ▼ de Costo

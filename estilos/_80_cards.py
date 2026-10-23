@@ -1726,13 +1726,12 @@ CSS = """    /* ================================================================
     /* =================================================================== */
     /* «Revisar recetas» (`rec_card_revisar`) lleva el mismo look desde la
        regla #574, a pedido: era la última de Recetas con el marco gris; y
-       «Costo recetas base» (`rec_card_costo_rb`) desde que nació, con la
-       tarjeta de la receta elegida debajo (`rec_card_rb_detalle`) (#576).
+       «Costo recetas base» (`rec_card_costo_rb`) desde que nació (#576);
+       desde la #706 es una pieza propia y la tarjeta de abajo ya no está.
        «¿Y si sube un insumo?» (`rec_card_alza`) desde que nació (#656). */
     .st-key-rec_card_carta,
     .st-key-rec_card_revisar,
     .st-key-rec_card_costo_rb,
-    .st-key-rec_card_rb_detalle,
     .st-key-rec_card_alza {
         background: var(--bg-card) !important;
         border: none !important;
@@ -1743,8 +1742,7 @@ CSS = """    /* ================================================================
     .st-key-rec_card_carta > div,
     .st-key-rec_card_alza > div,
     .st-key-rec_card_revisar > div,
-    .st-key-rec_card_costo_rb > div,
-    .st-key-rec_card_rb_detalle > div {
+    .st-key-rec_card_costo_rb > div {
         border: none !important;
     }
 
@@ -1752,13 +1750,10 @@ CSS = """    /* ================================================================
        renglón, los desplegables — el estilo de la cabecera de Ventas › Por
        hora (#555, #562): sin caja, con un subrayado; el nombre de cada uno
        aparece debajo al pasar el cursor, y una rayita los separa. La línea
-       de abajo es de la FILA, no del `<p>` del título. El de «Costo recetas
-       base» (`rec_rb_cab`, regla #576) es el mismo renglón. */
+       de abajo es de la FILA, no del `<p>` del título. */
     .st-key-rec_carta_cab,
     .st-key-vt_mix_cab,
     .st-key-vt_hora_cab,
-    .st-key-rec_rb_cab,
-    .st-key-rec_rb_det_cab,
     .st-key-rec_alza_cab {
         border-bottom: 1px solid var(--border);
         padding-bottom: 6px;
@@ -1769,60 +1764,30 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab .chart-card-hdr,
     .st-key-vt_mix_cab .chart-card-hdr,
     .st-key-vt_hora_cab .chart-card-hdr,
-    .st-key-rec_rb_cab .chart-card-hdr,
-    .st-key-rec_rb_det_cab .chart-card-hdr,
     .st-key-rec_alza_cab .chart-card-hdr {
         border-bottom: none;
         margin: 0 6px 0 0;
         padding: 0;
     }
-    /* El subtítulo, al pasar el cursor sobre el título: un `::after` con el
-       texto del atributo, flotando debajo — no cobra lugar en la fila. Un
-       `:hover` suelto, sin `:has()` (regla #469). */
-    .rec-carta-tit {
-        position: relative;
-        overflow: visible !important;
-        cursor: default;
-    }
-    .rec-carta-tit::after {
-        content: attr(data-ayuda);
-        position: absolute;
-        top: calc(100% + 6px);
-        left: 0;
-        z-index: 30;
-        padding: 4px 8px;
-        border-radius: 6px;
-        background: var(--bg-card);
-        box-shadow: 0 1px 4px rgba(0, 0, 0, .14);
-        font-size: 12px;
-        font-weight: 400;
-        white-space: nowrap;
-        color: var(--text-secondary);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity .12s ease;
-    }
-    .rec-carta-tit:hover::after {
-        opacity: 1;
-    }
-    .st-key-rec_carta_cab_ver, .st-key-rec_carta_cab_oferta,
-    .st-key-rec_carta_cab_grupo, .st-key-rec_carta_cab_tipo,
-    .st-key-rec_carta_cab_buscar, .st-key-rec_carta_cab_fecha,
+
+    .st-key-rec_carta_cab_ver,
+    .st-key-rec_carta_cab_oferta,
+    .st-key-rec_carta_cab_grupo,
+    .st-key-rec_carta_cab_tipo,
+    .st-key-rec_carta_cab_buscar,
+    .st-key-rec_carta_cab_fecha,
     .st-key-rec_carta_det_modo,
-    .st-key-rec_rb_det_cab_ver, .st-key-rec_rb_cab_ventana,
-    .st-key-rec_rb_cab_area, .st-key-rec_rb_cab_produccion,
-    .st-key-rec_rb_cab_buscar,
     .st-key-rec_alza_cab_fecha {
         position: relative;
         padding-left: 11px !important;
         overflow: visible !important;
     }
-    .st-key-rec_carta_cab_ver::after, .st-key-rec_carta_cab_oferta::after,
-    .st-key-rec_carta_cab_grupo::after, .st-key-rec_carta_cab_tipo::after,
-    .st-key-rec_carta_cab_buscar::after, .st-key-rec_carta_cab_fecha::after,
-    .st-key-rec_rb_det_cab_ver::after, .st-key-rec_rb_cab_ventana::after,
-    .st-key-rec_rb_cab_area::after, .st-key-rec_rb_cab_produccion::after,
-    .st-key-rec_rb_cab_buscar::after,
+    .st-key-rec_carta_cab_ver::after,
+    .st-key-rec_carta_cab_oferta::after,
+    .st-key-rec_carta_cab_grupo::after,
+    .st-key-rec_carta_cab_tipo::after,
+    .st-key-rec_carta_cab_buscar::after,
+    .st-key-rec_carta_cab_fecha::after,
     .st-key-rec_alza_cab_fecha::after {
         content: "";
         position: absolute;
@@ -1833,12 +1798,12 @@ CSS = """    /* ================================================================
         height: 18px;
         background: var(--border);
     }
-    .st-key-rec_carta_cab_ver::before, .st-key-rec_carta_cab_oferta::before,
-    .st-key-rec_carta_cab_grupo::before, .st-key-rec_carta_cab_tipo::before,
-    .st-key-rec_carta_cab_buscar::before, .st-key-rec_carta_cab_fecha::before,
-    .st-key-rec_rb_det_cab_ver::before, .st-key-rec_rb_cab_ventana::before,
-    .st-key-rec_rb_cab_area::before, .st-key-rec_rb_cab_produccion::before,
-    .st-key-rec_rb_cab_buscar::before,
+    .st-key-rec_carta_cab_ver::before,
+    .st-key-rec_carta_cab_oferta::before,
+    .st-key-rec_carta_cab_grupo::before,
+    .st-key-rec_carta_cab_tipo::before,
+    .st-key-rec_carta_cab_buscar::before,
+    .st-key-rec_carta_cab_fecha::before,
     .st-key-rec_alza_cab_fecha::before {
         position: absolute;
         top: calc(100% + 2px);
@@ -1858,12 +1823,12 @@ CSS = """    /* ================================================================
         pointer-events: none;
         transition: opacity .12s ease;
     }
-    .st-key-rec_carta_cab_ver:hover::before, .st-key-rec_carta_cab_oferta:hover::before,
-    .st-key-rec_carta_cab_grupo:hover::before, .st-key-rec_carta_cab_tipo:hover::before,
-    .st-key-rec_carta_cab_buscar:hover::before, .st-key-rec_carta_cab_fecha:hover::before,
-    .st-key-rec_rb_det_cab_ver:hover::before, .st-key-rec_rb_cab_ventana:hover::before,
-    .st-key-rec_rb_cab_area:hover::before, .st-key-rec_rb_cab_produccion:hover::before,
-    .st-key-rec_rb_cab_buscar:hover::before,
+    .st-key-rec_carta_cab_ver:hover::before,
+    .st-key-rec_carta_cab_oferta:hover::before,
+    .st-key-rec_carta_cab_grupo:hover::before,
+    .st-key-rec_carta_cab_tipo:hover::before,
+    .st-key-rec_carta_cab_buscar:hover::before,
+    .st-key-rec_carta_cab_fecha:hover::before,
     .st-key-rec_alza_cab_fecha:hover::before {
         opacity: 1;
     }
@@ -2044,85 +2009,12 @@ CSS = """    /* ================================================================
     .rec-cambios-hist .sube { color: var(--danger-text); }
     .rec-cambios-hist .baja { color: var(--success-text); }
     .st-key-rec_cambios_ficha .stMarkdown:last-child { margin-bottom: 0; }
-    .st-key-rec_rb_det_cab_ver::before { content: "Ver"; }
-    .st-key-rec_rb_cab_ventana::before { content: "Uso y producción en"; }
-    .st-key-rec_rb_cab_area::before { content: "Área de la receta"; }
-    .st-key-rec_rb_cab_produccion::before { content: "Órdenes de producción"; }
-    .st-key-rec_rb_cab_buscar::before { content: "Buscar"; }
-    /* La tarjeta de la receta elegida (#576): el nombre se corta con «…»
-       y deja lugar al desplegable; la línea de números de «Producciones»
-       en un renglón. */
-    .st-key-rec_rb_det_cab > .stElementContainer:first-child {
-        flex: 0 1 auto !important;
-        max-width: 46%;
-        min-width: 0 !important;
-    }
-    .st-key-rec_rb_det_cab > .stElementContainer:nth-child(2) {
-        flex: 1 1 0 !important;
-        min-width: 0 !important;
-    }
-    .st-key-rec_rb_det_cab [data-testid="stMarkdownContainer"] {
-        margin-bottom: 0 !important;
-    }
-    /* El «…» va en un `<span>` de adentro y no en el `<p>`: un `overflow:
-       hidden` en el `<p>` recortaría su `::after`, que es la ayuda. */
-    .rec-rb-det-nom {
-        display: block;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .rec-rb-det-info {
-        margin: 0 !important;
-        font-size: 12.5px !important;
-        color: var(--text-secondary);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .rec-rb-anid-tot {
-        font-weight: 400;
-        color: var(--text-secondary);
-    }
-    /* El total de cada receta, en un renglón fijo pegado DEBAJO de su tabla
-       (a pedido: «abajo, no en la cabecera»), con el lavanda de la fila
-       elegida. La tabla muestra una fila menos para hacerle lugar. */
-    .st-key-rec_rb_izq,
-    .st-key-rec_rb_der {
-        gap: 2px !important;
-    }
-    /* Streamlit cierra un markdown con `margin-bottom: -1rem`: sin esto el
-       renglón del total cuelga por debajo de la tarjeta (medido). */
-    .st-key-rec_rb_izq [data-testid="stMarkdownContainer"],
-    .st-key-rec_rb_der [data-testid="stMarkdownContainer"] {
-        margin-bottom: 0 !important;
-    }
-    /* 24px con su relleno: lo que deja la fila de menos de la tabla (27)
-       menos el `gap` de arriba. Con 4px de relleno la tarjeta se pasaba 3px
-       de la pantalla del usuario (medido a 1323×619). */
-    .rec-rb-total {
-        display: flex;
-        justify-content: space-between;
-        line-height: 18px;
-        padding: 3px 12px;
-        border-radius: 6px;
-        background: var(--accent-tint);
-        font-size: 13px;
-        font-weight: 700;
-        color: var(--text-primary);
-    }
-    /* La ayuda del título, cuando es un párrafo (lo que eran los pies de
-       las dos tarjetas): envuelve en varias líneas en lugar de una sola. */
-    .rec-carta-tit.rec-ayuda-larga::after {
-        white-space: normal;
-        width: min(560px, 80vw);
-        line-height: 1.45;
-    }
-    /* Las dos tarjetas entran JUNTAS en la pantalla del usuario (~620px):
-       menos relleno y menos aire entre renglones que la Carta. Después de
-       la regla compartida de la tarjeta blanca, para ganarle. */
-    .st-key-rec_card_costo_rb,
-    .st-key-rec_card_rb_detalle {
+
+    /* «Costo recetas base» (#706): menos relleno que la Carta, y la pieza
+       mide la pantalla contando con él (`recetas_base_costo.css`, la altura
+       de `.rb`). Después de la regla compartida de la tarjeta blanca, para
+       ganarle. */
+    .st-key-rec_card_costo_rb {
         padding: 10px 16px !important;
         gap: 8px !important;
     }
@@ -2134,13 +2026,7 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab [data-testid="stTextInputRootElement"],
     .st-key-rec_carta_cab [data-baseweb="input"],
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"],
-    .st-key-rec_carta_det_modo [data-baseweb="select"] > div,
-    .st-key-rec_rb_cab [data-testid="stSelectbox"] [role="group"],
-    .st-key-rec_rb_cab [data-baseweb="select"] > div,
-    .st-key-rec_rb_cab [data-testid="stTextInputRootElement"],
-    .st-key-rec_rb_cab [data-baseweb="input"],
-    .st-key-rec_rb_det_cab [data-testid="stSelectbox"] [role="group"],
-    .st-key-rec_rb_det_cab [data-baseweb="select"] > div {
+    .st-key-rec_carta_det_modo [data-baseweb="select"] > div {
         min-height: 0 !important;
         height: 28px !important;
         border: none !important;
@@ -2153,23 +2039,13 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab [data-baseweb="select"] > div:hover,
     .st-key-rec_carta_cab [data-testid="stTextInputRootElement"]:hover,
     .st-key-rec_carta_cab [data-baseweb="input"]:hover,
-    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"]:hover,
-    .st-key-rec_rb_cab [data-testid="stSelectbox"] [role="group"]:hover,
-    .st-key-rec_rb_cab [data-baseweb="select"] > div:hover,
-    .st-key-rec_rb_cab [data-testid="stTextInputRootElement"]:hover,
-    .st-key-rec_rb_cab [data-baseweb="input"]:hover,
-    .st-key-rec_rb_det_cab [data-testid="stSelectbox"] [role="group"]:hover,
-    .st-key-rec_rb_det_cab [data-baseweb="select"] > div:hover {
+    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"]:hover {
         border-bottom-color: var(--accent) !important;
     }
     .st-key-rec_carta_cab [data-testid="stSelectbox"] input,
     .st-key-rec_carta_cab [data-baseweb="select"] div[value],
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] input,
-    .st-key-rec_carta_det_modo [data-baseweb="select"] div[value],
-    .st-key-rec_rb_cab [data-testid="stSelectbox"] input,
-    .st-key-rec_rb_cab [data-baseweb="select"] div[value],
-    .st-key-rec_rb_det_cab [data-testid="stSelectbox"] input,
-    .st-key-rec_rb_det_cab [data-baseweb="select"] div[value] {
+    .st-key-rec_carta_det_modo [data-baseweb="select"] div[value] {
         height: 26px !important;
         padding: 0 0 0 2px !important;
         font-size: 13px !important;
@@ -2179,18 +2055,14 @@ CSS = """    /* ================================================================
         cursor: pointer !important;
     }
     .st-key-rec_carta_cab [data-testid="stTextInput"] input,
-    .st-key-rec_carta_cab [data-baseweb="input"] input,
-    .st-key-rec_rb_cab [data-testid="stTextInput"] input,
-    .st-key-rec_rb_cab [data-baseweb="input"] input {
+    .st-key-rec_carta_cab [data-baseweb="input"] input {
         height: 26px !important;
         padding: 0 2px !important;
         font-size: 13px !important;
         background: transparent !important;
     }
     .st-key-rec_carta_cab [data-testid="stSelectbox"] [role="group"] button,
-    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"] button,
-    .st-key-rec_rb_cab [data-testid="stSelectbox"] [role="group"] button,
-    .st-key-rec_rb_det_cab [data-testid="stSelectbox"] [role="group"] button {
+    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"] button {
         width: 22px !important;
         height: 26px !important;
     }
@@ -2311,13 +2183,11 @@ CSS = """    /* ================================================================
         margin: 0;
         padding: 0;
     }
-    .st-key-rec_carta_base_hdr,
-    .st-key-rec_rb_anidada_hdr {
+    .st-key-rec_carta_base_hdr {
         flex-wrap: nowrap !important;
     }
     .st-key-rec_carta_plato_hdr > .stElementContainer:first-child,
-    .st-key-rec_carta_base_hdr > .stElementContainer:first-child,
-    .st-key-rec_rb_anidada_hdr > .stElementContainer:first-child {
+    .st-key-rec_carta_base_hdr > .stElementContainer:first-child {
         flex: 1 1 0 !important;
         min-width: 0 !important;
     }
@@ -2327,29 +2197,17 @@ CSS = """    /* ================================================================
        arriba y se come el clic de «Simular» y de «↑ Subir» (medido con
        Playwright: «stElementToolbar … intercepts pointer events»). En
        tablas de seis filas no hace falta; la de la carta la conserva. */
-    .st-key-rec_carta_plato .stElementToolbar,
-    .st-key-rec_card_rb_detalle .stElementToolbar {
+    .st-key-rec_carta_plato .stElementToolbar {
         display: none !important;
     }
-    /* `!important` en el tamaño: `.stMarkdown p` (0,1,1) le gana a una
-       clase sola, como con `.chart-card-pie`. */
-    .rec-base-tit {
-        margin: 0;
-        font-size: 12.5px !important;
-        font-weight: 600;
-        color: var(--accent-deep);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+    
     /* En estas filas horizontales el texto no se centra contra sus
        controles: Streamlit cierra el markdown con `margin-bottom: -1rem`,
        su contenedor mide 3px y el `<p>` cuelga 16px por debajo (medido:
        «Vendidos en» 8px más abajo que sus botones). */
     .st-key-rec_carta_mas_fila [data-testid="stMarkdownContainer"],
     .st-key-rec_carta_plato_hdr [data-testid="stMarkdownContainer"],
-    .st-key-rec_carta_base_hdr [data-testid="stMarkdownContainer"],
-    .st-key-rec_rb_anidada_hdr [data-testid="stMarkdownContainer"] {
+    .st-key-rec_carta_base_hdr [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
     /* «↑ Subir» y «✕» de la receta base: chicos, del alto del título. Y
@@ -2357,18 +2215,14 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_base_subir button,
     .st-key-rec_carta_base_cerrar button,
     .st-key-rec_carta_base_curva button,
-    .st-key-rec_carta_base_revisar button,
-    .st-key-rec_rb_anidada_subir button,
-    .st-key-rec_rb_anidada_cerrar button {
+    .st-key-rec_carta_base_revisar button {
         min-height: 0 !important;
         padding: 2px 10px !important;
     }
     .st-key-rec_carta_base_subir button p,
     .st-key-rec_carta_base_cerrar button p,
     .st-key-rec_carta_base_curva button p,
-    .st-key-rec_carta_base_revisar button p,
-    .st-key-rec_rb_anidada_subir button p,
-    .st-key-rec_rb_anidada_cerrar button p {
+    .st-key-rec_carta_base_revisar button p {
         font-size: 12px !important;
         white-space: nowrap !important;
     }

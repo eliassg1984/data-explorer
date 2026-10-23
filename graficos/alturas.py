@@ -497,25 +497,6 @@ MERMA_PROV_DET = 27 * 6 + 38
 útil»: desde el 2026-10-13 (regla #655) lleva debajo el recuadro «Cómo sale»
 y el botón a sus porcionamientos, y la tarjeta no puede crecer."""
 
-RB_COSTO_TABLA = 27 * 9 + 38
-"""Tope de la tabla de Recetas › Costo recetas base (2026-09-30, regla
-#576): NUEVE filas de 27 más la cabecera y los bordes (trece en la primera
-versión). A pedido, la tabla y la tarjeta de la receta elegida entran
-JUNTAS en la pantalla del usuario (~620px de página, regla #574)."""
-
-RB_COSTO_DETALLE = 27 * 5 + 38
-"""Las tablas y el gráfico de la tarjeta de la receta elegida, debajo de la
-tabla (regla #576): cinco filas. Lo que no entra se desliza dentro de su
-tabla."""
-
-FICHA_HORA_MESAS = 170
-"""«Mesas abiertas a la vez», el gráfico de la ficha de la hora de Ventas ›
-Por hora (2026-09-26, regla #536). Va en el panel del drill, que tiene
-scroll propio, así que no le resta a la tarjeta: es el alto de una línea que
-se lee de un vistazo —cuándo se llenó el salón y cuánto duró—, con las horas
-del servicio abajo. El mockup lo midió en 178 con su eje incluido; acá
-Plotly pone el eje adentro del alto."""
-
 FIG_CON_SU_TABLA = 180
 """Piso de una figura que comparte su tarjeta con la TABLA que la describe,
 y cuyo alto sale del reparto y no de un rol.

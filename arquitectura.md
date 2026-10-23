@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-705 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+706 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (225)
+**CSS y estilos** (226)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -290,6 +290,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#699** — El ranking de «Análisis de platos» es una pieza propia
 - **#702** — «Mix de carta» es una pieza propia: Python manda las sumas por producto y período, y el…
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
+- **#706** — «Costo recetas base» es una pieza propia: la lista y la ficha de la elegida, con dónde se…
 
 **Layout y alturas** (99)
 
@@ -785,7 +786,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 
-**Datos, R2 y DuckDB** (115)
+**Datos, R2 y DuckDB** (116)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -902,6 +903,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#702** — «Mix de carta» es una pieza propia: Python manda las sumas por producto y período, y el…
 - **#703** — «Revisar recetas» es una pieza propia y se llama «Recetas vs porcionado»
 - **#705** — El POS no guarda el pasado de una receta de PLATO: la app le saca una foto a…
+- **#706** — «Costo recetas base» es una pieza propia: la lista y la ficha de la elegida, con dónde se…
 
 **SUNAT y SIRE** (71)
 
@@ -54268,6 +54270,62 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      la app lanzó el hilo una vez y no la segunda. Pendiente: una vista que
      muestre los cambios, cuando haya fotos que comparar. (2026-10-22.)
 
+706. **«Costo recetas base» es una pieza propia: la lista y la ficha de la
+     elegida, con dónde se usa, 13 semanas, cómo se descarga y las
+     ediciones.** A pedido (2026-10-22), sobre un boceto con cifras reales
+     (https://claude.ai/artifact/8Mgy71Rs9TC4TirzoE8pSo). Hasta ese día era
+     la #576 tal cual: arriba un `st.dataframe` con filtros y, debajo, la
+     tarjeta de la receta elegida (la evolución en Plotly y la receta, con
+     un desplegable).
+     · **Qué pasó a la pieza** (`graficos/recetas_base_costo.js` + `.css`):
+       el título con 30 días | 90 | 6 meses | 12 meses —las cuatro ventanas
+       llegan calculadas, así que cambiar no pide corrida—, Área, con o sin
+       órdenes y el buscador; seis indicadores que filtran (En uso, Se
+       produce de menos —producido < 50 % de lo usado—, de más —> 150 %—,
+       «DD» como producto, Costo subió ≥ 20 % en 12 meses, Receta ≠ orden
+       —el costo de hoy contra la última orden, > 25 %—); la lista,
+       ordenable, con la barra de producido ÷ usado (la rayita es el
+       100 %) y la línea de 12 meses; y la **ficha**: un veredicto en
+       palabras y cuatro pestañas — Receta (el árbol; «abrir» lleva a la
+       de adentro y «← volver» regresa), Producciones (el costo por unidad
+       con ▲ las órdenes fuera de escala y ▼ las ediciones, 13 semanas de
+       usado contra producido, las órdenes), Dónde se usa y Cambios (el
+       log de recetas base, si está en el Sheet).
+     · **Lo nuevo de Python**: `donde` (los platos de cada receta base,
+       subiendo por las aristas: sin eso salían sólo los que la NOMBRAN, y
+       la Pasta de ajo confitado la llevan 31), `uso_semanal` (de
+       `data.demanda_nivel1_semanas`, la consulta de la #703, abierta por
+       las recetas base), `descarga` (cuántas líneas de receta la nombran y
+       cuántas la descargan por INSUMO, `T DESCARG`: una DD descargada como
+       producto pide una orden que nadie hace, regla #648) y `armar`, que
+       junta todo y lo manda por POSICIÓN —`CAMPOS_TABLA`, `CAMPOS_ORDEN`,
+       `CAMPOS_ING`, `CAMPOS_DONDE`—; el `.js` los lee con constantes del
+       mismo orden y el test las compara. Cacheado con los sellos de sus
+       parquets (#367).
+     · **Las cuentas no se movieron**: `uso`, `ordenes` (atípica = 10 × la
+       mediana de sus nueve vecinas), `costo_por_mes`, `ultimos_costos`,
+       `tabla` e `ingredientes` son las de la #576.
+     · **Una guarda que se comía la cabecera**: la cabecera no se rehace
+       mientras el buscador tiene el foco (se perdería el cursor), y la
+       guarda comparaba `activeElement` con el buscador antes de que el
+       buscador existiera: `null === null`, y la pieza abría sin título ni
+       controles. Se nota sólo en la app: el boceto los dibujaba aparte.
+     · Se fueron `filtrar`, `columnas_tabla`, `COLUMNAS`, `fig_evolucion`,
+       `tabla_ingredientes`, `renglon_total`, `unidad_de`, `_filas_clic` y
+       los formatos; `alturas.RB_COSTO_TABLA` y `RB_COSTO_DETALLE` (y
+       `FICHA_HORA_MESAS`, huérfana desde la #704); y 19 reglas de
+       `estilos/_80_cards.py` (`rec_rb_*`, `rec_card_rb_detalle`).
+     Medido sobre R2 (90 días al 21 oct 2026): 300 en uso de 438 activas,
+     84 que se producen de menos, 33 de más, 24 DD como producto, 87 que
+     subieron ≥ 20 % y 34 cuyo costo de hoy no cuadra con su última orden.
+     Lo vigila `test_graficos.py::_pruebas_costo_recetas_base`. Probado en
+     la app local con R2 a 1323×619 con clics reales (los indicadores, el
+     buscador letra por letra sin perder el foco, las cuatro pestañas,
+     abrir la receta de adentro del Relleno de empanada y volver, 12 meses
+     y el orden por último costo): la tarjeta mide 575 px como las demás de
+     la pila, la lista entra sin scroll de costado y no hay errores de
+     consola. (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54280,7 +54338,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#705**; la próxima toma el número siguiente.
+> última regla es la **#706**; la próxima toma el número siguiente.
 
 >
 

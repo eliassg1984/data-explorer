@@ -10650,10 +10650,14 @@ def _pruebas_costo_recetas_base():
     ADENTRO de otra (sin bajar, decía «sin uso»); un plato que la lleva por
     dos caminos cuenta una vez; una orden GENERADA no produjo nada; una orden
     con un costo absurdo no entra en el último costo, y un cambio de régimen
-    no es absurdo; sin vacíos que `st.dataframe` pinte «None» (#529). Y el
+    no es absurdo. Y desde que es una pieza (regla #706): «Dónde se usa» con
+    lo de adentro de otras recetas, lo usado por semana, cómo descarga cada
+    línea, y que el `.js` lea lo que viaja en las mismas posiciones. Y el
     orden y los nombres del rail que se pidieron.
     """
     import math
+    import pathlib
+    import re
     from datetime import date
 
     import consumo_recetas
@@ -10707,59 +10711,38 @@ def _pruebas_costo_recetas_base():
           (int(t.loc["0000100", "ordenes"]), round(t.loc["0000100", "producido"], 6)),
           (5, 7.01))
     check("producido ÷ usado", round(t.loc["0000100", "cobertura"], 4), round(7.01 / 3.0, 4))
-    check("sin uso, producido ÷ usado queda en infinito (se escribe «—»)",
-          (math.isinf(t.loc["0000400", "cobertura"]), rbc._pct(t.loc["0000400", "cobertura"])),
-          (True, "—"))
+    check("sin uso, producido ÷ usado queda en infinito (la pieza escribe «—»)",
+          math.isinf(t.loc["0000400", "cobertura"]), True)
     check("una inactiva que se vendió está, y una activa sin nada también",
           ("0000300" in t.index, "0000400" in t.index), (True, True))
     check("usada y nunca producida por una orden: «—», no un 0 % (se hace de otra forma)",
-          rbc._pct(t.loc["0000300", "cobertura"]), "—")
-    check("filtro: con órdenes / sin órdenes",
-          (sorted(rbc.filtrar(t.reset_index(), produccion=rbc.PRODUCCION[1])["cod"]),
-           sorted(rbc.filtrar(t.reset_index(), produccion=rbc.PRODUCCION[2])["cod"])),
+          math.isinf(t.loc["0000300", "cobertura"]), True)
+    check("con órdenes / sin órdenes",
+          (sorted(t.index[t["con_ordenes"]]), sorted(t.index[~t["con_ordenes"]])),
           (["0000100", "0000200"], ["0000300", "0000400"]))
     check("una línea de 12 meses con menos de dos meses no se dibuja",
           t.loc["0000400", "linea"], [])
-    check("una suba marcada en ámbar y una baja en verde",
-          (rbc.ADVERTENCIA_TEXTO in rbc._estilo_var(0.25),
-           rbc.AJUSTE_POS_TEXTO in rbc._estilo_var(-0.25), rbc._estilo_var(0.1)),
-          (True, True, ""))
     check("el fondo: de S/ 5 a S/ 25 en la línea de 12 meses",
           round(t.loc["0000200", "var"], 6), 4.0)
-    v = rbc.columnas_tabla(t.reset_index())
-    check("las columnas de la tabla", tuple(v.columns), rbc.COLUMNAS)
-    check("sin vacíos que st.dataframe pinte «None» (#529)",
-          bool(v.drop(columns=["Costo 12 m"]).isna().any().any()), False)
-    check("la inactiva lo dice", "(Rs) Postre viejo · inactiva" in set(v["Receta base"]), True)
+    check("la inactiva lo dice", bool(t.loc["0000300", "activa"]), False)
     check("ordenada por lo vendido, a igual venta por órdenes",
           list(rbc.tabla(rb, n1, o, ini, fin)["cod"])[:2], ["0000100", "0000200"])
-    check("filtro por área", list(rbc.filtrar(t.reset_index(), "BARRA")["cod"]), ["0000400"])
-    check("buscar sin acentos ni mayúsculas",
-          list(rbc.filtrar(t.reset_index(), buscar="FONDO")["cod"]), ["0000200"])
     check("el área se escribe con su tilde", rbc.area_escrita("PRODUCCION"), "Producción")
     sin_ventas = rbc.tabla(rb, None, o, ini, fin)
     check("sin el primer nivel de las ventas, la tabla sale igual",
           (len(sin_ventas) > 0, float(sin_ventas["usado"].sum())), (True, 0.0))
-    fig = rbc.fig_evolucion(o[o["cod"] == "0000100"], rbc.costo_por_mes(o[o["cod"] == "0000100"]),
-                            20.0, "KILOS")
-    check("la orden de S/ 3.000 no estira la escala", fig.layout.yaxis.range[1] < 100, True)
-    check("los meses del eje en español (#241)",
-          any(txt.startswith("ene") for txt in fig.layout.xaxis.ticktext), True)
-    # ── La tarjeta de abajo: la receta y las de adentro ──────────────────
+    # ── La receta y las de adentro ────────────────────────────────────────
     bases = rbc.codigos_base(rb)
     ing = rbc.ingredientes(rb.assign(UNID="GRAMOS"), "0000100", 1.0, bases).set_index("Cod")
     check("los ingredientes de la salsa, en la unidad de la receta",
           (round(ing.loc["0000200", "Cantidad"], 6), ing.loc["0000200", "Unid"]), (300.0, "g"))
     check("el fondo, que es receta base, se marca; el insumo de compra no",
           (bool(ing.loc["0000200", "EsBase"]), bool(ing.loc["0000900", "EsBase"])), (True, False))
-    # La receta de adentro se abre por UNA unidad de producción SUYA (pedido
-    # el 2026-09-30: antes salía proporcionada a lo que llevaba la de afuera).
-    filas = rbc._filas_clic(rbc.ingredientes(rb, "0000100", 1.0, bases))
-    fondo = next(f for f in filas if f["cod"] == "0000200")
+    # «abrir» muestra la receta de adentro por UNA unidad de producción SUYA
+    # (pedido el 2026-09-30); en su lugar va con lo que lleva la de afuera.
     check("la receta de adentro, por 1 unidad suya (1 kg de fondo)",
-          (fondo["es_base"], rbc.unidad_de(rb, fondo["cod"]),
-           round(float(rbc.ingredientes(rb, "0000200", 1.0, bases)["Cantidad"].iloc[0]), 6)),
-          (True, "kg", 1000.0))
+          round(float(rbc.ingredientes(rb, "0000200", 1.0, bases)["Cantidad"].iloc[0]), 6),
+          1000.0)
     # Pedido el 2026-09-30: el costo de la unidad de COMPRA y el de la
     # cantidad de la receta, los dos, y el total al pie.
     rb_u = rb.assign(UNID="GRAMOS", **{"CST UNIT INS": 0.003, "CST SUBT INS": rb["CANT"] * 0.003})
@@ -10769,16 +10752,52 @@ def _pruebas_costo_recetas_base():
           (3.0, "kg"))
     check("y el costo de la cantidad de la receta (300 g = S/ 0,90)",
           round(ing_u.loc["0000200", "Costo"], 6), 0.9)
-    r_u = rbc.ingredientes(rb_u, "0000100", 1.0, bases)
-    v_ing = rbc.tabla_ingredientes(r_u)
-    check("el total va ABAJO, en un renglón fijo, no en la cabecera ni en una fila",
-          (list(v_ing.columns), "Total" in " ".join(v_ing["Insumo"]),
-           "S/ 1.05" in rbc.renglon_total(r_u)),
-          (["Insumo", "Cantidad", "Costo unit.", "Costo", "%"], False, True))
-    check("sin vacíos que st.dataframe pinte «None» (#529)",
-          bool(v_ing.isna().any().any()), False)
+    check("el total de la receta: la suma de sus líneas",
+          round(float(rbc.ingredientes(rb_u, "0000100", 1.0, bases)["Costo"].sum()), 6), 1.05)
     check("una receta sin ingredientes cargados sale vacía",
           rbc.ingredientes(rb, "9999999", 1.0, bases).empty, True)
+
+    # ── Dónde se usa, por semana, cómo descarga (regla #706) ─────────────
+    dw = rbc.donde(n1, rb).set_index(["cod", "plato"])
+    check("dónde se usa: el fondo en el plato que lo nombra y adentro de la salsa",
+          (round(dw.loc[("0000200", "Lomo a la pimienta"), "usado"], 6),
+           bool(dw.loc[("0000200", "Lomo a la pimienta"), "directo"]),
+           round(dw.loc[("0000200", "Pasta"), "usado"], 6),
+           bool(dw.loc[("0000200", "Pasta"), "directo"])),
+          (0.5 + 2.0 * 0.3, True, 0.3, False))
+    check("y lo vendido del plato una vez, aunque llegue por dos caminos",
+          dw.loc[("0000200", "Lomo a la pimienta"), "vendidos"], 10.0)
+    sem = pd.DataFrame({"cod": ["0000100", "0000100", "0000200"],
+                        "semana": pd.to_datetime(["2026-09-21", "2026-09-28", "2026-09-28"]),
+                        "consumo": [1000.0, 2000.0, 500.0]})
+    us = rbc.uso_semanal(sem, rb).set_index(["cod", "semana"])["usado"]
+    check("por semana: el fondo de la salsa baja con su semana",
+          (round(us[("0000200", pd.Timestamp("2026-09-21"))], 6),
+           round(us[("0000200", pd.Timestamp("2026-09-28"))], 6)), (0.3, 0.5 + 0.6))
+    rv = pd.DataFrame({"COD INS": ["0000200", "0000200", "0000200", "0000100"],
+                       "T DESCARG": ["INSUMO", "PRODUCTO", "INSUMO", "PRODUCTO"]})
+    ds = rbc.descarga(rv, rb.assign(**{"T DESCARG": "PRODUCTO"})).set_index("cod")
+    check("cómo la descargan: líneas que la nombran y cuántas por insumo",
+          (int(ds.loc["0000200", "lineas"]), int(ds.loc["0000200", "por_insumo"])), (4, 2))
+    x = rbc.armar(rb, o, {"30": n1, "90": n1, "182": n1, "365": n1}, fin, sem, rv, eds=None)
+    check("viajan las cuatro ventanas y cada receta en CAMPOS_TABLA",
+          (sorted(x["tablas"]), x["tablas"]["90"]["0000100"][rbc.CAMPOS_TABLA.index("usado")]),
+          (sorted(rbc.VENTANAS), 3.0))
+    check("una orden en CAMPOS_ORDEN, con la atípica marcada",
+          [ox[rbc.CAMPOS_ORDEN.index("atipico")] for ox in x["ordenes"]["0000100"]].count(1), 2)
+    check("sin el log de ediciones, la pieza lo sabe",
+          (x["hay_log"], x["ediciones"]), (False, {}))
+    js = (pathlib.Path(rbc.__file__).parent / "recetas_base_costo.js").read_text(encoding="utf-8")
+    css = (pathlib.Path(rbc.__file__).parent / "recetas_base_costo.css").read_text(encoding="utf-8")
+    for pre, campos in (("T", rbc.CAMPOS_TABLA), ("O", rbc.CAMPOS_ORDEN),
+                        ("I", rbc.CAMPOS_ING), ("W", rbc.CAMPOS_DONDE)):
+        pos = {m.group(1).lower(): int(m.group(2))
+               for m in re.finditer(rf"\b{pre}_([A-Z_]+) = (\d+)", js)}
+        check(f"el .js lee {pre}_* en las posiciones de Python",
+              [pos.get(c) for c in campos], list(range(len(campos))))
+    check("la pieza no usa :has() ni colores sueltos (reglas #469 y de los colores)",
+          (":has(" in css, re.findall(r"#[0-9a-fA-F]{3,8}\b",
+                                      re.sub(r"/\*.*?\*/", "", css, flags=re.S))), (False, []))
 
     check("el primer nivel trae lo vendido",
           "vendido" in consumo_recetas.sql_demanda_nivel1("x", date(2026, 1, 1), date(2026, 1, 2)),
@@ -12651,14 +12670,6 @@ def main():
     # Reemplazó al Ranking de recetas base de graficos/recetas_comun.py el
     # 2026-09-30 (regla #576). Una orden atípica adentro: es la que ejercita
     # la traza «fuera de escala» y el tope del eje.
-    from graficos import recetas_base_costo as _rbc
-    _o_rb = _rbc.ordenes(_ordenes_rb_demo())
-    _o_s = _o_rb[_o_rb["cod"] == "0000100"]
-    pruebas += [
-        ("recetas · costo recetas base · evolución", _rbc.fig_evolucion,
-            (_o_s, _rbc.costo_por_mes(_o_s), 20.0, "KILOS")),
-    ]
-
     # ── Vs año pasado (Compras): serie mensual y puente precio/cantidad ──
     # El waterfall entra con un efecto de cada signo a propósito: es la
     # combinación donde `increasing`/`decreasing` tienen que pintar los dos
