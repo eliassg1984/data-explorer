@@ -175,8 +175,11 @@ plato llegue con la clase de `clasificar` y que el `.js` no reclasifique.
 LastModified, que copie una sola vez por versión pidiendo su ETag y que
 un error no se tome por «no existe»; y la comparación entre dos fotos con
 cada caso (la línea quitada que renumera las de abajo, el insumo repetido,
-la receta de dos platos, el precio, el plato que cambia de receta). Ver
-`arquitectura.md` regla #705.
+la receta de dos platos, el precio, el plato que cambia de receta). Y la
+vista que los muestra, Recetas › «Cambios en Recetas»: los precios de la
+auditoría juntados, la fecha de una edición de plato, la lista para la
+pieza y que el `.js` lea lo que Python manda. Ver `arquitectura.md` reglas
+#705 y #707.
 
 ## El asistente IA no adivina: consulta
 

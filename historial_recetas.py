@@ -60,6 +60,11 @@ import time
 
 import pandas as pd
 
+VERSION = 1
+"""La versión de `ediciones_plato` y `precios_de_fotos`: «Cambios en
+recetas» guarda en disco lo que cambió entre cada par de fotos, sin
+caducar. Tocar la cuenta es subirla."""
+
 ARCHIVOS = ("recetaventa.parquet",)
 """Los parquets que se fotografían. Sumar otro es sumarlo acá."""
 
@@ -78,7 +83,7 @@ CAMPOS_LINEA = ("CANTIDAD",) + CANT_CANALES + ("DESCARG", "T DESCARG",
                                                 "SUBALM INS")
 
 _USADAS = ("COD PLATO", "NOMB PLATO", "COD RV", "NOMB RV", "COD INS", "INS RV",
-           "FECH MODIF", "USUARIO REG") + CAMPOS_PLATO + CAMPOS_LINEA
+           "FECH MODIF", "USUARIO REG", "P.UNIT COSTO", "UNID COSTO") + CAMPOS_PLATO + CAMPOS_LINEA
 
 COLUMNAS_CAMBIOS = ("NIVEL", "QUE", "COD PLATO", "NOMB PLATO", "COD RV",
                     "NOMB RV", "COD INS", "INS RV", "CAMPO", "ANTES",
@@ -299,3 +304,121 @@ def cambios(antes, despues):
                                        campo, va, vd))
 
     return pd.DataFrame(filas, columns=list(COLUMNAS_CAMBIOS))
+
+
+# ── Las ediciones de una receta de plato (para «Cambios en recetas») ──────
+
+CANALES_PRECIO = (("P.VENTA SALON", "En el Local"), ("P.VENTA DELIV", "Delivery"),
+                  ("P.VENTA LLEVAR", "Para Llevar"), ("P.VENTA RAPPI", "Rappi"),
+                  ("P.VENTA 5", "Pedidos Ya"))
+"""Las columnas de precio de la foto, con el nombre de su canal en el POS."""
+
+
+def _num(v):
+    v = _valor({"v": v}, "v")
+    try:
+        return None if v is None else float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _tabla_lineas(df):
+    """Las líneas de receta de una foto, una vez por receta (no por plato),
+    con la misma identidad que `_lineas` y los números ya numéricos."""
+    lin = (df.drop_duplicates(["COD RV", "ITEM RV"])
+             .sort_values(["COD RV", "ITEM RV"], kind="stable"))
+    lin = lin[[c for c in ("COD RV", "COD INS", "INS RV", "CANTIDAD", "P.UNIT COSTO",
+                           "UNID COSTO") if c in lin.columns]].copy()
+    for c in ("INS RV", "UNID COSTO"):
+        if c not in lin.columns:
+            lin[c] = None
+    lin["_VEZ"] = lin.groupby(["COD RV", "COD INS"]).cumcount()
+    for c in ("CANTIDAD", "P.UNIT COSTO"):
+        lin[c] = pd.to_numeric(lin[c], errors="coerce").fillna(0.0) if c in lin.columns else 0.0
+    return lin
+
+
+def ediciones_plato(antes, despues):
+    """Lo que cambió en cada RECETA DE PLATO entre dos fotos, una edición
+    por receta (`COD RV`): una lista de dicts rv, nombre, fmodif, usr,
+    nueva, quitada, lineas [(cod, insumo, antes, después, unidad, soles)]
+    (de la que más mueve el costo a la que menos), antes, despues, delta y
+    platos (los códigos que la llevan en la foto nueva; en la vieja, si se
+    quitó).
+
+    El costo va con los precios de la foto NUEVA, los dos lados (el insumo
+    que se quitó, con el suyo de la vieja): así una suba de precios entre
+    las dos fotos no se lee como un cambio de receta — lo mismo que hace
+    `simulador_receta.ediciones_base` con las recetas base, del otro lado
+    porque acá el precio de antes no se guarda. `fmodif`/`usr` son los del
+    último guardado de la receta (los de la vieja si se quitó). Con cruces
+    de tablas y no línea por línea: sobre las fotos de verdad, 0,1 s por
+    par contra 0,7."""
+    la, ld = _tabla_lineas(antes), _tabla_lineas(despues)
+    m = la.merge(ld, on=["COD RV", "COD INS", "_VEZ"], how="outer",
+                 suffixes=("_a", "_d"), indicator=True)
+    qa = m["CANTIDAD_a"].where(m["_merge"] != "right_only")
+    qd = m["CANTIDAD_d"].where(m["_merge"] != "left_only")
+    igual = (m["_merge"] == "both") & ((qa - qd).abs()
+                                       <= 1e-9 * qa.abs().clip(lower=1.0))
+    m = m.assign(_qa=qa, _qd=qd)[~igual]
+    if m.empty:
+        return []
+    precio = m["P.UNIT COSTO_d"].where(m["_merge"] != "left_only", m["P.UNIT COSTO_a"])
+    m = m.assign(_soles=(m["_qd"].fillna(0.0) - m["_qa"].fillna(0.0)) * precio.fillna(0.0),
+                 _ins=m["INS RV_d"].where(m["_merge"] != "left_only", m["INS RV_a"]),
+                 _uni=m["UNID COSTO_d"].where(m["_merge"] != "left_only", m["UNID COSTO_a"]))
+    rvs = set(m["COD RV"])
+
+    # El costo de cada receta tocada: el de después, con sus precios; el de
+    # antes, con el precio de HOY del mismo insumo si sigue en la receta.
+    hoy = ld[ld["COD RV"].isin(rvs)]
+    c_d = (hoy["CANTIDAD"] * hoy["P.UNIT COSTO"]).groupby(hoy["COD RV"]).sum()
+    p_hoy = hoy.drop_duplicates(["COD RV", "COD INS"]).set_index(["COD RV", "COD INS"])["P.UNIT COSTO"]
+    viejo = la[la["COD RV"].isin(rvs)]
+    p_v = pd.Series(list(zip(viejo["COD RV"], viejo["COD INS"]))).map(p_hoy).to_numpy()
+    p_v = pd.Series(p_v, index=viejo.index).fillna(viejo["P.UNIT COSTO"])
+    c_a = (viejo["CANTIDAD"] * p_v).groupby(viejo["COD RV"]).sum()
+
+    rec_a = _por(antes[antes["COD RV"].isin(rvs)].drop_duplicates("COD RV"), ["COD RV"])
+    rec_d = _por(despues[despues["COD RV"].isin(rvs)].drop_duplicates("COD RV"), ["COD RV"])
+    pla_a = antes[antes["COD RV"].isin(rvs)].groupby("COD RV")["COD PLATO"].unique()
+    pla_d = despues[despues["COD RV"].isin(rvs)].groupby("COD RV")["COD PLATO"].unique()
+
+    out = []
+    for rv, g in m.groupby("COD RV", sort=True):
+        quitada = rv not in rec_d
+        ref = rec_a[rv] if quitada else rec_d[rv]
+        g = g.reindex(g["_soles"].abs().sort_values(ascending=False, kind="stable").index)
+        lineas = [(cod, _valor({"v": ins}, "v"), _num(a), _num(d), _valor({"v": u}, "v"), float(sl))
+                  for cod, ins, a, d, u, sl in zip(g["COD INS"], g["_ins"], g["_qa"], g["_qd"],
+                                                   g["_uni"], g["_soles"])]
+        antes_c = float(c_a.get(rv, 0.0))
+        despues_c = 0.0 if quitada else float(c_d.get(rv, 0.0))
+        platos = (pla_a if quitada else pla_d).get(rv, [])
+        out.append({
+            "rv": rv, "nombre": _valor(ref, "NOMB RV"),
+            "fmodif": _valor(ref, "FECH MODIF"), "usr": _valor(ref, "USUARIO REG"),
+            "nueva": rv not in rec_a, "quitada": quitada, "lineas": lineas,
+            "antes": antes_c, "despues": despues_c, "delta": despues_c - antes_c,
+            "platos": sorted(str(x) for x in platos),
+        })
+    return out
+
+
+def precios_de_fotos(antes, despues):
+    """Los precios de venta que cambiaron entre dos fotos, uno por plato:
+    {cod: [(canal, antes, después)]}. Es el respaldo de «Cambios en
+    recetas» mientras la auditoría del POS no traiga los precios (la fila
+    `auditoriacostos` del Sheet sin los campos «Precio Venta Canal»): sin
+    hora ni usuario. Un plato nuevo no cuenta: su precio no cambió, nació."""
+    pla_a = _por(antes.drop_duplicates("COD PLATO"), ["COD PLATO"])
+    pla_d = _por(despues.drop_duplicates("COD PLATO"), ["COD PLATO"])
+    out = {}
+    for cod in set(pla_a) & set(pla_d):
+        cs = [(canal, _num(pla_a[cod].get(c)), _num(pla_d[cod].get(c)))
+              for c, canal in CANALES_PRECIO]
+        cs = [x for x in cs if not _igual(x[1], x[2])]
+        if cs:
+            out[str(cod)] = cs
+    return out

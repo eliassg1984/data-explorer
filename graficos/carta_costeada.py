@@ -1421,6 +1421,10 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
     inactivos y venta interna) y no pide una corrida. Sólo elegir un
     producto o «Simular» vuelven a Python, que dibuja la ficha de abajo."""
     ss = st.session_state
+    if ss.pop("_rec_cambios_ir", None):
+        # «Ver cambios» pidió el salto a otra sección: una corrida completa,
+        # porque esta vista es un fragment.
+        st.rerun(scope="app")
     with st.container(border=True, key="rec_card_carta"):
         cab = st.container(horizontal=True, gap="small",
                            vertical_alignment="center", key="rec_carta_cab")
@@ -1468,8 +1472,17 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
                 ss[_K_FOCO] = str(v)
                 _abrir_simulador(str(v))
 
+        def _al_cambios():
+            # «Ver cambios» (regla #707): adentro, por el import circular
+            # (recetas_cambios lee de acá la auditoría y el log).
+            v = (ss.get(_K_PIEZA) or {}).get("cambios")
+            if v and v.get("cod"):
+                from graficos.recetas_cambios import ir_desde_carta
+                ir_desde_carta(v["cod"])
+
         _PIEZA(key=_K_PIEZA, data=armar_pieza(carta, rango, por_canal, sel, n_sin_precio),
                on_elegir_change=_al_elegir, on_simular_change=_al_simular,
+               on_cambios_change=_al_cambios,
                width="stretch")
         f = carta[carta["Cod"] == sel]
         if not f.empty:

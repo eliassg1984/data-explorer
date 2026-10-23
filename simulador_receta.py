@@ -45,7 +45,7 @@ import math
 import numpy as np
 import pandas as pd
 
-VERSION = 3
+VERSION = 4
 
 UNIDADES = {
     "GRAMOS": "g", "GRAMO": "g", "MILILITROS": "ml", "MILILITRO": "ml",
@@ -729,6 +729,10 @@ ARCHIVO_AUDITORIA = "auditoriacostos.parquet"
 CAMPOS_ARTICULO = ("Factor", "Unidad de Salida", "Unidad de Kardex")
 CAMPO_PRECIO = "Precio de Costo"
 CAMPOS_PLATO = ("Tipo Descargo", "Enlace Descargo")
+CAMPOS_PRECIO_VENTA = tuple(f"Precio Venta Canal {i}" for i in range(1, 6))
+"""Los precios de venta de un plato, canal por canal (1 En el Local, 2
+Delivery, 3 Para Llevar, 4 Rappi, 5 Pedidos Ya). Los lee «Cambios en
+recetas» (regla #707); la ficha de Costo de Carta no."""
 PANTALLA_ARTICULO = "ARTICULOS Y PRECIOS"
 PANTALLA_PLATO = "PRODUCTOS"
 
@@ -773,7 +777,9 @@ LEFT JOIN (SELECT ALMACEN.DBO.vUnidadMedida.CODIGO,
 WHERE INFSEGURIDAD.DBO.MMOVIMIENTO.ffecha >= '20250101'
   AND INFSEGURIDAD.DBO.MMOVIMIENTO.tTabla IN ('ARTICULOS Y PRECIOS', 'PRODUCTOS')
   AND INFSEGURIDAD.DBO.MMOVIMIENTO.tCampo IN ('Factor', 'Unidad de Salida',
-      'Unidad de Kardex', 'Precio de Costo', 'Enlace Descargo', 'Tipo Descargo')"""
+      'Unidad de Kardex', 'Precio de Costo', 'Enlace Descargo', 'Tipo Descargo',
+      'Precio Venta Canal 1', 'Precio Venta Canal 2', 'Precio Venta Canal 3',
+      'Precio Venta Canal 4', 'Precio Venta Canal 5')"""
 
 
 def _numero(v):
@@ -817,7 +823,8 @@ def cambios_auditoria(df):
     for c in ("u_antes", "u_despues", "despues"):
         d.loc[_vacio(d[c]), c] = ""
     d = d[~_vacio(d["antes"]) & (d["antes"] != d["despues"])]
-    num = d["campo"].isin(("Factor", CAMPO_PRECIO))
+    # Un precio de venta también es un número: «46» y «46.0» no son un cambio.
+    num = d["campo"].isin(("Factor", CAMPO_PRECIO) + CAMPOS_PRECIO_VENTA)
     a_n, d_n = d["antes"].map(_numero), d["despues"].map(_numero)
     igual = num & ((a_n - d_n).abs() <= 1e-9 * (1 + a_n.abs()))
     razon = (d_n / a_n).where((a_n > 0) & (d_n > 0))

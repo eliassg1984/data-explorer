@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-706 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+707 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (226)
 
@@ -786,7 +786,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 
-**Datos, R2 y DuckDB** (116)
+**Datos, R2 y DuckDB** (117)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -904,6 +904,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#703** — «Revisar recetas» es una pieza propia y se llama «Recetas vs porcionado»
 - **#705** — El POS no guarda el pasado de una receta de PLATO: la app le saca una foto a…
 - **#706** — «Costo recetas base» es una pieza propia: la lista y la ficha de la elegida, con dónde se…
+- **#707** — «Cambios en Recetas»: las recetas base, las recetas de plato y los precios de venta en una…
 
 **SUNAT y SIRE** (71)
 
@@ -1050,7 +1051,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (209)
+**Decisiones de diseño y UX** (210)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1261,6 +1262,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#697** — «Nuevo Costeo» es una pieza propia: la receta y su precio se editan en el navegador, con los…
 - **#701** — Las dos vistas de requerimientos dicen qué se pidió de más, qué se repite y qué no salió…
 - **#703** — «Revisar recetas» es una pieza propia y se llama «Recetas vs porcionado»
+- **#707** — «Cambios en Recetas»: las recetas base, las recetas de plato y los precios de venta en una…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -54326,6 +54328,74 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      la pila, la lista entra sin scroll de costado y no hay errores de
      consola. (2026-10-22.)
 
+707. **«Cambios en Recetas»: las recetas base, las recetas de plato y los
+     precios de venta en una sola vista, que es una pieza propia
+     (`graficos/recetas_cambios.py` + `.js` + `.css`).** A pedido
+     (2026-10-22): «tengo uno llamado cambios en recetas base, ¿podemos
+     hacer que se incluya en esta vista? y que tenga componente propio»,
+     sobre el boceto aprobado con datos reales
+     (https://claude.ai/artifact/GUZqHk1LzTiEbX58EBogAZ). El rail la llama
+     «Cambios en Recetas»; el id sigue siendo «Cambios en recetas base».
+     · **Tres fuentes, una lista.** Recetas base: el log del Almacén
+       (`ediciones_base`, #671, sin cambios). Recetas de plato: el POS no
+       las guarda; salen foto contra foto de `recetaventa.parquet` (#705),
+       `historial_recetas.ediciones_plato`. Precios de venta: la auditoría
+       del POS, por la MISMA fila `auditoriacostos` de la ficha de Costo
+       Carta (#658) con cinco campos más («Precio Venta Canal 1..5»,
+       `simulador_receta.CAMPOS_PRECIO_VENTA`, `VERSION` 3 → 4): probado
+       en el servidor, desde enero de 2025 trae unos 3.100 cambios de
+       precio. Hasta que la fila del Sheet se actualice, los precios salen
+       de las fotos, sin hora ni usuario, y la ficha lo dice.
+     · **Un precio que nace no es un cambio** (decisión del usuario): ya lo
+       descartaba `cambios_auditoria` (ANTES vacío = artículo nuevo), y
+       `precios_de_fotos` no cuenta un plato nuevo. Lo que sí cuenta es un
+       canal que pasa de 0 a un precio (empezó a venderse por Rappi). Y
+       «46» → «46.0» no es un cambio: los precios de venta entran en la
+       comparación numérica de `cambios_auditoria`.
+     · **Los productos sin costo se esconden** (decisión del usuario):
+       Propina, vales, anticipos — costo vacío o cero en
+       `cartacosteada.parquet`, que tiene TODO producto de venta (de ahí
+       salen el nombre, el grupo y el costo por canal de un precio; las
+       recetas sólo tienen los platos con receta). Un interruptor los suma.
+     · **La receta de plato se compara con cruces de tablas, no línea por
+       línea**: medido sobre las fotos de verdad, 0,1 s por par contra 0,7
+       con diccionarios — con 30 pares en el rango eran 20 s la primera
+       vez. Cada par va a la caché de DISCO sin sello de parquet: una foto
+       no cambia nunca (su nombre es la versión que copió), así que sus dos
+       claves SON el sello (`_par_cacheable`, con `historial_recetas.VERSION`).
+       `test_datos.py` sólo mira `data.py`, por eso no lo exige.
+     · **El costo de una receta de plato, antes y después, va con los
+       precios de la foto NUEVA** (el insumo quitado, con el suyo): una suba
+       de precio entre dos fotos no es una edición. Es el espejo de las
+       recetas base, que van con los precios de ANTES porque el log los
+       guarda. **Su fecha** es el último guardado de la receta si cae entre
+       las dos fotos; si no (dos ediciones en el medio, o una receta
+       quitada), la hora de la foto, marcada «≈».
+     · **El historial de la ficha junta lo que le toca a un plato** (la
+       pregunta 3 del boceto): sus precios, su receta y las recetas base
+       que lleva DIRECTO — la receta de hoy dice cuáles (`_platos_hoy`, por
+       el código de producto de cada receta base). El de una receta base es
+       sólo el suyo: la llevan decenas de platos y sus precios no son un
+       cambio de ella.
+     · **«Ver cambios» en Costo de Carta** (la pregunta 4): la pieza de la
+       Carta manda `cambios` ({cod, n}); `ir_desde_carta` deja el plato en
+       `K_PLATO` y pide el salto con una corrida completa (la Carta es un
+       fragment: el mismo patrón que «Ver en Costo de Carta» de la #703).
+       La vista lo lee UNA vez (`pop`): la pieza montada se queda con el
+       filtro y la que se monte después abre sin él. El nombre del chip sale
+       de la carta: un directo (la Entraña) no está en las recetas.
+     · **El alto**: 255 px de cromo sobre el cuerpo (título, pestañas,
+       indicadores, filtros); medido a 1323×619, la tarjeta mide 575 px con
+       `--alto-util` en 583. Con 196 medía 634 y se pasaba de la pantalla.
+     Lo vigila `test_historial_recetas.py` (las ediciones de plato, los
+     precios juntados, la fecha, `armar` con y sin la auditoría y que el
+     `.js` lea cada campo que Python manda). Probado en la app local con R2
+     a 1323×619 con clics reales: las nueve ediciones de recetas base del
+     mes, pestañas, indicadores, buscar, el salto desde Costo de Carta, y
+     los precios y recetas de plato con datos armados por `armar` sobre la
+     auditoría de verdad (la fila del Sheet todavía no trae los precios, y
+     hay una sola foto). (2026-10-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54338,7 +54408,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#706**; la próxima toma el número siguiente.
+> última regla es la **#707**; la próxima toma el número siguiente.
 
 >
 

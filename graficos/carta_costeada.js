@@ -8,7 +8,8 @@
 // sus CINCO CANALES. Todo lo que se elige acá —canal, filtros, orden,
 // buscar, el Excel— lo resuelve el navegador. A Python vuelven sólo dos
 // cosas: `elegir` (el producto: dibuja abajo su receta y su evolución) y
-// `simular` (abre la modal del simulador).
+// `simular` (abre la modal del simulador). Y `cambios` ({cod, n}): «Ver
+// cambios» lleva a «Cambios en recetas» filtrada en el producto (#707).
 //
 // Python manda en `data`: `filas` (ver carta_costeada.armar_pieza),
 // `canales` ([nombre, unidades vendidas en el rango]), `divisor` (precio →
@@ -219,7 +220,7 @@ function htmlLista(d, st, filas) {
 function htmlFicha(d, st, f) {
   if (!f) return '<div class="cc-vacio">Elegí un producto de la lista.</div>';
   const c = st.canal, x = enCanal(d, f, c);
-  const sim = f[F.tipo] === 'Receta' ? `<button type="button" class="cc-btn prim" data-acc="simular" data-cod="${esc(f[F.cod])}">Simular</button>` : '';
+  const sim = `<div class="cc-facc"><button type="button" class="cc-btn" data-acc="cambios" data-cod="${esc(f[F.cod])}" title="Lo que cambió en su precio, su receta y las recetas base que lleva">Ver cambios</button>${f[F.tipo] === 'Receta' ? `<button type="button" class="cc-btn prim" data-acc="simular" data-cod="${esc(f[F.cod])}">Simular</button>` : ''}</div>`;
   const cifra = (r, v, cls = '') => `<div><span>${r}</span><b class="num ${cls}">${v}</b></div>`;
   let aviso;
   if (!x.seVende) aviso = ['', `No tiene precio en «${esc(d.canales[c][0])}»: no se vende por ese canal.`];
@@ -344,6 +345,7 @@ function enlazar(raiz) {
       return;
     }
     if (acc === 'simular') { raiz.__d.enviar('simular', b.dataset.cod); return; }
+    if (acc === 'cambios') { raiz.__d.enviar('cambios', { cod: b.dataset.cod, n: Date.now() }); return; }
     if (acc === 'excel') { excel(d, st, raiz.__d.filas || []); return; }
     if (acc === 'modo') { st.modo = id; st.tipo = null; st.alerta = null; }
     else if (acc === 'canal') st.canal = +id;

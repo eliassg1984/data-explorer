@@ -10810,10 +10810,11 @@ def _pruebas_costo_recetas_base():
     # y el 2026-10-22 pasó a llamarse «Simular Alza de Insumos» (#695);
     # «Costo Carta» pasó a «Costo de Carta» el mismo día (#696);
     # «Cambios Recetas Base», el 2026-10-19, al lado de su costo (#671).
-    # «Revisar» pasó a «Recetas vs Porcionado» el 2026-10-22 (#703).
+    # «Revisar» pasó a «Recetas vs Porcionado» el 2026-10-22 (#703), y
+    # «Cambios Recetas Base» a «Cambios en Recetas» el mismo día (#707).
     check("el rail, en el orden pedido",
           [v[1] for v in visibles],
-          ["Costo de Carta", "Simular Alza de Insumos", "Costo Recetas Base", "Cambios Recetas Base",
+          ["Costo de Carta", "Simular Alza de Insumos", "Costo Recetas Base", "Cambios en Recetas",
            "Recetas vs Porcionado", "Nuevo Costeo"])
     check("la pila, en el mismo orden",
           [s for _k, s in rec._PILA if not s.startswith("Tabla")],
