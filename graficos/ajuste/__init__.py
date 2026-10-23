@@ -49,7 +49,8 @@ from tema import (
     AJUSTE_SOB_FONDO, AJUSTE_SOB_BORDE,
 )
 from graficos.base import (
-    compartimento_filtros, contar_filtros, filtro_pills, sembrar_seleccion,
+    compartimento_filtros, contar_filtros, dibujar_perspectiva, filtro_pills,
+    sembrar_seleccion,
     _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
     pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
     renderizar_graficos_genericos, seccion_perezosa,
@@ -96,8 +97,18 @@ _AJUSTE_RAIL_CATEGORIAS = rail_sin_tablas((
     # «Cascada» hace rato es una tabla de familias (#441) y «Mapa de calor»
     # una tabla Familia × Área (#468). Los IDS (primer elemento) no se tocan:
     # son la URL, las keys, el CSS y `_PILA_VISUAL`. Regla #584.
-    ("Visual", (("Cascada",        "Por familia",   ":material/view_list:"),
-                     ("Mapa de calor",  "Familia × Área", ":material/grid_on:"))),
+    #
+    # Desde el 2026-10-23 (regla #712) las dos de arriba son UNA vista,
+    # «Diferencias del cierre», y las dos del tiempo otra, «Evolución»: cada
+    # una con dos perspectivas (`PERSPECTIVAS_CIERRE`, `PERSPECTIVAS_TIEMPO`)
+    # que dibujan la vista de siempre. Etapa 5 de la navegación del boceto
+    # del rail compacto (#708). Un `?vista=cascada` guardado cae en la
+    # primera vista.
+    # El id no empieza con «Diferencias»: el temporizador del rail busca los
+    # botones con `[class*=…]`, y la key de «Diferencias» sería un prefijo
+    # de ésta (lo ataja `test_graficos.py::_pruebas_pestanas_franja`).
+    ("Visual", (("Ajuste del cierre", "Diferencias del cierre",
+                 ":material/view_list:"),)),
     # «Distribución de diferencias» se fue el 2026-10-19: de sus tres modos
     # sólo el Pareto se podía analizar, y pasó al detalle de las dos de
     # arriba (regla #677).
@@ -111,9 +122,7 @@ _AJUSTE_RAIL_CATEGORIAS = rail_sin_tablas((
     # mira UNA sesión, como las de arriba.
     ("Revisar",     (("Diferencias", "Análisis de diferencias",
                       ":material/troubleshoot:"),)),
-    ("Tiempo",      (("Evolución",            "Evolución", ":material/show_chart:"),
-                     ("Detalle por producto", "Tabla dinámica",
-                      ":material/pivot_table_chart:"))),
+    ("Tiempo",      (("Evolución del ajuste", "Evolución", ":material/show_chart:"),)),
     ("Datos",       (("Tabla",          "Tabla",         ":material/table_rows:"),)),
 ))
 
@@ -127,12 +136,27 @@ _AJUSTE_RAIL_CATEGORIAS = rail_sin_tablas((
 # activa (#220). Desde que cada vista elige su fecha —una sesión las tres de
 # arriba, meses las dos de abajo— esa razón no existe y Ajuste se lee bajando
 # como los demás reportes. Las categorías del rail quedan como grupos.
+#
+# Las PERSPECTIVAS (regla #712): (perspectiva, sección, id de la vista que
+# era, su rótulo). Las secciones `aj_sec_cascada`, `aj_sec_heatmap`,
+# `aj_sec_evolucion` y `aj_sec_detalle` siguen siendo las de siempre —su
+# dibujante, sus keys—; en la pila están las que las contienen, con el
+# `_sec_persp_` que le hace ceder a su tarjeta el alto de la franja.
+K_PERSP_CIERRE, K_PERSP_TIEMPO = "_aj_persp_cierre", "_aj_persp_tiempo"
+PERSPECTIVAS_CIERRE = (
+    ("Por familia", "aj_sec_cascada", "Cascada", "Por familia"),
+    ("Familia × Área", "aj_sec_heatmap", "Mapa de calor", "Familia × Área"),
+)
+PERSPECTIVAS_TIEMPO = (
+    ("Serie", "aj_sec_evolucion", "Evolución", "Evolución"),
+    ("Tabla dinámica", "aj_sec_detalle", "Detalle por producto", "Tabla dinámica"),
+)
+EJES_CIERRE = ((K_PERSP_CIERRE, "Ver", tuple(p[0] for p in PERSPECTIVAS_CIERRE)),)
+EJES_TIEMPO = ((K_PERSP_TIEMPO, "Ver", tuple(p[0] for p in PERSPECTIVAS_TIEMPO)),)
 _PILA = pila_sin_tablas((
-    ("aj_sec_cascada",      "Cascada"),
-    ("aj_sec_heatmap",      "Mapa de calor"),
+    ("aj_sec_persp_cierre", "Ajuste del cierre"),
     ("aj_sec_diferencias",  "Diferencias"),
-    ("aj_sec_evolucion",    "Evolución"),
-    ("aj_sec_detalle",      "Detalle por producto"),
+    ("aj_sec_persp_tiempo", "Evolución del ajuste"),
     ("aj_sec_tabla",        "Tabla"),
 ))
 
@@ -336,6 +360,10 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 st.info("La tabla no está disponible en este contexto.")
 
     _DIBUJANTES = {
+        "aj_sec_persp_cierre": lambda: dibujar_perspectiva(
+            "cierre", EJES_CIERRE, PERSPECTIVAS_CIERRE, _DIBUJANTES),
+        "aj_sec_persp_tiempo": lambda: dibujar_perspectiva(
+            "tiempo", EJES_TIEMPO, PERSPECTIVAS_TIEMPO, _DIBUJANTES),
         "aj_sec_cascada":      _dib_cascada,
         "aj_sec_heatmap":      _dib_heatmap,
         "aj_sec_diferencias":  _dib_diferencias,

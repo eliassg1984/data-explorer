@@ -330,27 +330,12 @@ CSS = """    /* ================================================================
        --alto-util (calculado con 20) y se salían por abajo de la ventana.
        Ahora heredan --cab-offset-contenido como todos. Regla #513. */
 
-    /* Y aun sin franja, la primera tarjeta de Inventario arrancaba 68px
-       mas abajo que la de Compras (96 contra 28, medido en 1366x768). No
-       era la franja: el bloque vertical raiz lleva `gap: 16px` y arriba de
-       las secciones hay CINCO wrappers de altura 0 —markers, franjas fijas
-       y contenedores que dibujan en `position: fixed`— que no ocupan alto
-       pero si consumen su gap. 5 x 16 = los 80px de aire.
-
-       Se corrige subiendo la PRIMERA seccion, que arrastra a todo el flujo
-       de abajo: un solo numero, medido contra Compras, en vez de pelear
-       wrapper por wrapper con un `:not(:has())` que el proximo contenedor
-       invisible dejaria desactualizado. La key `inv_sec_area` solo existe
-       en este reporte, asi que no necesita el scope del marker.
-       (2026-09-13, a pedido: "subamos las tarjetas, sobra espacio arriba".)
-       Ver arquitectura.md regla #406. */
-    /* 2026-09-19: sólo hasta 900px. Desde 901 los seis envoltorios de
-       cromo fijo dejaron de cobrar `gap` (`_28_arbol.py`, regla #472), así
-       que no hay 80px que recuperar: con el jalón puesto, Inventario
-       arrancaba por DEBAJO de la franja. */
-    @media (min-width: 769px) and (max-width: 900px) {
-        .st-key-inv_sec_area { margin-top: -68px !important; }
-    }
+    /* (Acá vivía un jalón de −68px sobre `inv_sec_area`, de 769 a 900px,
+       para subir la PRIMERA sección de Inventario —regla #406—. Hacía rato
+       que no era la primera: la pila abría en «Stock por Producto». Y
+       desde la #712 `inv_sec_area` ya no es una sección de la pila sino una
+       perspectiva de «Stock»: la regla no matcheaba nada y se borró, por la
+       #49.) */
 
     /* ================================================================== */
     /* CHIPS DE FILTRO EN LA FRANJA BLANCA — Área / Familia / Ajuste /     */

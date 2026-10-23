@@ -160,7 +160,8 @@ from estado_rango import atajos_tarjeta
 from estilos import TAM_FUENTE
 from tablas import renderizar_aggrid_desktop
 from graficos.base import (
-    compartimento_filtros, contar_filtros, eleccion_compartida, filtro_pills,
+    compartimento_filtros, contar_filtros, dibujar_perspectiva,
+    eleccion_compartida, filtro_pills,
     _render_rail, _resolver, pila_sin_tablas, publicar_contexto_ia,
     rail_sin_tablas, rango_tarjeta, renderizar_graficos_genericos,
     seccion_perezosa, selector_fecha_tarjeta,
@@ -277,12 +278,14 @@ PERSPECTIVAS = (
     ("Salidas", "Por área", "mov_sec_detalle_sal",
      "Detalle de salidas", "Salidas por Área"),
 )
-SEC_LADOS = "mov_sec_lados"
-"""La sección de la pila que dibuja la perspectiva elegida."""
+SEC_LADOS = "mov_sec_persp_lados"
+"""La sección de la pila que dibuja la perspectiva elegida. El `_sec_persp_`
+es la marca con que su tarjeta cede el alto de la franja (#712)."""
 K_LADO, K_CORTE = "_mov_persp_lado", "_mov_persp_corte"
 """Dónde viven el lado y el corte elegidos: claves propias y no las de sus
 widgets, para que sobrevivan a que la sección no se dibuje (otro reporte,
 el esqueleto) — `base.eleccion_compartida`."""
+EJES_LADOS = ((K_LADO, "Lado", LADOS), (K_CORTE, "Corte", CORTES))
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA tupla
 # (el porqué, en `graficos/compras/__init__.py::_PILA`).
@@ -298,7 +301,7 @@ el esqueleto) — `base.eleccion_compartida`."""
 # sobre todas a la vez. Desde la regla #710 la de «Requerimientos y
 # salidas» es la de la perspectiva elegida: cada una conserva la suya.
 _PILA = pila_sin_tablas((
-    ("mov_sec_lados",       "Requerimientos y salidas"),
+    ("mov_sec_persp_lados", "Requerimientos y salidas"),
     ("mov_sec_tabla_req",   "Tabla · requerim."),
     ("mov_sec_sinplato",    "Sin plato por cierre"),
     ("mov_sec_destino",     "En qué se fue cada producto"),
@@ -1009,13 +1012,16 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
 
 
 def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
-               dibujar_rail, con_salidas=True):
+               dibujar_rail, con_salidas=True, perspectivas=None):
     """El cuerpo de Movimientos y de Producción (regla #709): los chips,
     los parquets, el rail que dibuja `dibujar_rail` y las secciones de
     `pila`. Los dibujantes de las catorce secciones se arman igual para los
     dos: cada página llama sólo a los de su pila. Sin `con_salidas` no se
     carga salidas.parquet —Producción no lo usa en ninguna vista—, y sus
-    dibujantes, que no se llaman, quedan como con el parquet ausente."""
+    dibujantes, que no se llaman, quedan como con el parquet ausente.
+    `perspectivas` es `{sección de la pila: (clave, ejes, perspectivas)}`:
+    las vistas con perspectivas que declara el dashboard (regla #712), que
+    se dibujan con `base.dibujar_perspectiva` sobre estos dibujantes."""
     # Esta corrida ya lee los ajustes compartidos con su valor nuevo: la
     # sección que los cambió no tiene que pedir otra (regla #644).
     st.session_state.pop(K_RECARGA, None)
@@ -1552,18 +1558,10 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
         # combinación, con su fecha y todo lo suyo. Cambiar una corre sólo
         # este fragment. En el renglón de la fecha de cada tarjeta no
         # entraban: en «por Área» el botón vive en el título del primer
-        # cuadro, de un tercio del ancho.
-        with st.container(key="mov_persp", horizontal=True,
-                          vertical_alignment="center", gap="small"):
-            st.markdown('<span class="mov-persp-rot">Ver</span>',
-                        unsafe_allow_html=True)
-            lado = eleccion_compartida(K_LADO, "Lado", LADOS, LADOS[0],
-                                       "mov_persp_lado")
-            corte = eleccion_compartida(K_CORTE, "Corte", CORTES, CORTES[0],
-                                        "mov_persp_corte")
-        sec = next(p[2] for p in PERSPECTIVAS
-                   if p[0] == lado and p[1] == corte)
-        _DIBUJANTES[sec]()
+        # cuadro, de un tercio del ancho. La franja la dibuja
+        # `base.dibujar_perspectiva` desde la regla #712, que la llevó a
+        # Stock, Ajuste y Producción.
+        dibujar_perspectiva("mov", EJES_LADOS, PERSPECTIVAS, _DIBUJANTES)
 
     _DIBUJANTES = {
         SEC_LADOS:             _dib_lados,
@@ -1582,6 +1580,10 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
         "mov_sec_prod":        _dib_prod,
         "mov_sec_consumo":     _dib_consumo,
     }
+
+    for _sec, (_cl, _ejes, _persp) in (perspectivas or {}).items():
+        _DIBUJANTES[_sec] = (lambda c=_cl, e=_ejes, p=_persp:
+                             dibujar_perspectiva(c, e, p, _DIBUJANTES))
 
     # El contenedor con la key va AFUERA del fragment a propósito: es el que
     # observan el scrollspy y la precarga, y tiene que sobrevivir a que el

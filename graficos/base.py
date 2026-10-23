@@ -419,6 +419,50 @@ def eleccion_compartida(clave, rotulo, opciones, defecto, wprefijo,
     return actual
 
 
+def dibujar_perspectiva(clave, ejes, perspectivas, dibujantes):
+    """UNA vista con PERSPECTIVAS (regla #710, generalizada en la #712): una
+    franja «Ver [A | B] …» arriba de la tarjeta y, debajo, la vista de
+    siempre de la combinación elegida, con su fecha y todo lo suyo.
+
+    `ejes` es `((clave_valor, rótulo, opciones), …)`: cada eje un
+    `eleccion_compartida`, con el valor en su clave propia —sobrevive a que
+    la sección no se dibuje— y el primero de sus opciones por defecto.
+    `perspectivas` es `((valor_eje_1, …, sección, id, rótulo), …)`: una por
+    combinación, con la sección de la vista que dibuja (la clave de su
+    dibujante en `dibujantes`, de su fecha y de su estado). Devuelve la
+    sección dibujada.
+
+    Las keys: la franja es `persp_<clave>` y sus controles `pspw_<clave>_*`
+    (de ahí cuelga su CSS, `estilos/_80_cards.py`); la SECCIÓN de la pila
+    que la contiene se llama `<algo>_sec_persp_<algo>`, y por esa marca le
+    cede a su tarjeta el alto de la franja. Cambiar de perspectiva corre
+    sólo el fragment de la sección."""
+    with st.container(key=f"persp_{clave}", horizontal=True,
+                      vertical_alignment="center", gap="small"):
+        st.markdown('<span class="persp-rot">Ver</span>', unsafe_allow_html=True)
+        valores = tuple(
+            eleccion_compartida(k, rotulo, opciones, opciones[0],
+                                f"pspw_{clave}_{i}")
+            for i, (k, rotulo, opciones) in enumerate(ejes))
+    n = len(ejes)
+    sec = next(p[n] for p in perspectivas if tuple(p[:n]) == valores)
+    dibujantes[sec]()
+    return sec
+
+
+def poner_perspectiva(ejes, perspectivas, vista):
+    """Deja elegida la perspectiva cuyo id es `vista` (escribe la clave de
+    cada eje), para que un salto llegue a ella. False si no es una
+    perspectiva de éstas."""
+    n = len(ejes)
+    p = next((p for p in perspectivas if p[n + 1] == vista), None)
+    if p is None:
+        return False
+    for (k, _rot, _ops), v in zip(ejes, p[:n]):
+        st.session_state[k] = v
+    return True
+
+
 def seleccion_multiple(key, opciones, conservar=False, soltar=()):
     """`(elegidos, opciones)` de un `st.multiselect` de FILTRO en la fila de
     una tarjeta, leídos ANTES de dibujarlo (regla #625).

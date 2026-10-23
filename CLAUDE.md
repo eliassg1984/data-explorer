@@ -331,7 +331,14 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   salidas por período y por área son UNA vista con **perspectivas**
   (regla #710): «Ver [Requerimientos | Salidas] [Por período | Por área]»
   en una franja sobre la tarjeta, que dibuja la vista de siempre de esa
-  combinación (`movimientos.PERSPECTIVAS`). El clic en un
+  combinación (`movimientos.PERSPECTIVAS`). Desde la regla #712 es una
+  pieza común, `graficos/base.py::dibujar_perspectiva`, que usan también
+  Stock (Por producto | Por área y familia), Ajuste (Por familia |
+  Familia × Área; Serie | Tabla dinámica) y Producción (Por período |
+  Rendimiento). Las keys son convención: la franja `persp_<clave>` y su
+  sección `<algo>_sec_persp_<algo>`, que cede a la tarjeta el alto de la
+  franja. Un salto a una vista que pasó a ser perspectiva tiene que
+  ESCRIBIR la perspectiva (`poner_perspectiva`). El clic en un
   área lleva al reporte que se visitó último. **Por debajo de 901px cada
   reporte sigue con su botón**: ahí la franja no es el índice y Ajuste
   quedaría sin camino. No cambia de contenido al bajar. Tiene tres estados

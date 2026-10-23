@@ -962,7 +962,9 @@ def _saltar_a_produccion(destino, ult, cod):
             vista = mm.VISTA_REV
         else:
             mm.ir_al_corte(ult["cod_de"], cod)
-            vista = mm.VISTA_REND
+            # Rendimiento es una perspectiva de «Porcionamientos» (#712).
+            st.session_state[mm.K_PERSP_PORC] = mm.PERSPECTIVAS_PORC[1][0]
+            vista = mm.VISTA_PORC
         navegacion._ir_a_vista(mm.REPORTE_MERMA, mm.RAIL_PRODUCCION, vista)
     except (ImportError, AttributeError):
         return

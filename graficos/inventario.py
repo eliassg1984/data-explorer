@@ -61,7 +61,7 @@ from graficos.compras._css_proveedor import CSS_RANKING_GRID
 # mismo texto escrito distinto según qué módulo lo formateara. Regla #379.
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.base import (
-    compartimento_filtros, contar_filtros, filtro_pills,
+    compartimento_filtros, contar_filtros, dibujar_perspectiva, filtro_pills,
     _render_rail, pila_sin_tablas, rail_sin_tablas, poner_seleccion,
     _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos,
     scroll_a_seccion, seccion_perezosa,
@@ -280,9 +280,13 @@ _INVENTARIO_RAIL_CATEGORIAS = rail_sin_tablas((
     # «Stock por Familia» se fue el 2026-10-11 (regla #638): es la fila
     # «Todas las áreas» de esta vista. Un `?vista=por_familia` guardado cae
     # en la primera vista, como cualquier id que ya no existe.
-    ("Vista", (("Productos",   "Stock por Producto", ":material/inventory_2:"),
-               ("Por área",    "Stock por Área y Familia",
-                ":material/space_dashboard:"),
+    #
+    # «Stock por Producto» y «Stock por Área y Familia» son UNA vista desde
+    # el 2026-10-23 (regla #712): «Stock», con dos perspectivas
+    # (`PERSPECTIVAS_STOCK`), que dibujan cada una la vista de siempre. Etapa
+    # 5 de la navegación del boceto del rail compacto (#708). Un
+    # `?vista=productos` o `?vista=por_area` guardado cae en «Stock».
+    ("Vista", (("Stock",       "Stock", ":material/inventory_2:"),
                ("Movimientos", "Movimientos por Tipo",
                 ":material/waterfall_chart:"))),
     ("Datos", (("Tabla", "Tabla", ":material/table_rows:"),)),
@@ -292,9 +296,19 @@ _INVENTARIO_RAIL_CATEGORIAS = rail_sin_tablas((
 # tupla (el porqué, largo, está en `graficos/compras/__init__.py::_PILA`).
 # Las cuatro vistas de Inventario comparten el mismo rango de fecha, así
 # que a diferencia de Ajuste acá va UNA sola pila con todo adentro.
+#
+# LAS PERSPECTIVAS DE «Stock» (regla #712): (perspectiva, sección, id de la
+# vista que era, su rótulo). Las secciones siguen siendo las de siempre —su
+# dibujante, su estado—; la de la pila es `inv_sec_persp_stock`, y el
+# `_sec_persp_` le hace ceder a su tarjeta el alto de la franja.
+K_PERSP_STOCK = "_inv_persp_stock"
+PERSPECTIVAS_STOCK = (
+    ("Por producto", "inv_sec_productos", "Productos", "Stock por Producto"),
+    ("Por área y familia", "inv_sec_area", "Por área", "Stock por Área y Familia"),
+)
+EJES_STOCK = ((K_PERSP_STOCK, "Ver", tuple(p[0] for p in PERSPECTIVAS_STOCK)),)
 _PILA = pila_sin_tablas((
-    ("inv_sec_productos", "Productos"),
-    ("inv_sec_area",    "Por área"),
+    ("inv_sec_persp_stock", "Stock"),
     # Por qué cambió el stock entre dos fechas, del kardex (regla #602).
     ("inv_sec_movimientos", "Movimientos"),
     ("inv_sec_tabla",   "Tabla"),
@@ -941,6 +955,9 @@ def _ir_a_productos(areas, familias, subfamilias, chip):
     st.session_state[_K_A_FECHA] = False
     st.session_state[_K_IR] = True
     st.session_state[_K_SALTAR] = True
+    # Las dos son perspectivas de «Stock» desde la regla #712: el salto es
+    # cambiar a la de productos (y llevar la página al tope de la vista).
+    st.session_state[K_PERSP_STOCK] = PERSPECTIVAS_STOCK[0][0]
 
 
 def _soles(v):
@@ -1152,7 +1169,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     # «Ver sus productos» y «Dónde mirar» (regla #638) dejaron Stock por
     # Producto filtrado y pidieron esta corrida completa: ahora, el salto.
     if st.session_state.pop(_K_SALTAR, False):
-        scroll_a_seccion("inv_sec_productos")
+        scroll_a_seccion("inv_sec_persp_stock")
 
     # La historia de cada fila de `d` después de cada cierre y el consumo del
     # restaurante (regla #638): las mini-líneas de los rankings y la tarjeta
@@ -1389,6 +1406,8 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                 st.info("La tabla no está disponible en este contexto.")
 
     _DIBUJANTES = {
+        "inv_sec_persp_stock": lambda: dibujar_perspectiva(
+            "stock", EJES_STOCK, PERSPECTIVAS_STOCK, _DIBUJANTES),
         "inv_sec_area":    _dib_area,
         "inv_sec_productos": _dib_productos,
         "inv_sec_movimientos": _dib_movimientos,

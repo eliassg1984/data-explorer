@@ -317,8 +317,10 @@ def _css():
        (`estilos/_28_arbol.py`), así que no hay 96px que recuperar: con el
        jalón puesto, la cascada arrancaba en y=-69, o sea fuera de la
        pantalla por arriba. */
+    /* Desde la regla #712 la primera sección es «Diferencias del cierre»,
+       que contiene a ésta como perspectiva: el jalón va sobre ella. */
     @media (max-width: 900px) {{
-        div[class*="st-key-aj_sec_cascada"] {{
+        div[class*="st-key-aj_sec_persp_cierre"] {{
             margin-top: -108px !important; }}
     }}
 

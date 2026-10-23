@@ -25,6 +25,7 @@ salidas.parquet no se carga: ninguna de estas vistas lo usa.
 
 from graficos.base import _render_rail, pila_sin_tablas, rail_sin_tablas
 from graficos import movimientos
+from graficos import movimientos_merma as mm
 
 _RAIL_CATEGORIAS = rail_sin_tablas((
     # «Porcionamientos» (2026-09-24, regla #510): el primer grupo, una sola
@@ -37,8 +38,12 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # #647), a pedido: cuánto se perdió → en qué producto y desde cuándo →
     # a quién comprarlo → los casos sueltos. «Para revisar» es la lista de
     # trabajo y va al final; hasta ese día era la segunda.
+    # «Porcionamientos» y «Rendimiento» son UNA vista desde el 2026-10-23
+    # (regla #712): «Porcionamientos», con las perspectivas «Por período» y
+    # «Rendimiento» (`movimientos_merma.PERSPECTIVAS_PORC`). El boceto las
+    # llamaba «Lista» y «Rendimiento»; la primera es la merma por período,
+    # y se nombra como sus gemelas de Movimientos.
     ("Porcionamientos", (("Porcionamientos", "Porcionamientos", ":material/content_cut:"),
-                         ("Rendimiento por producto", "Rendimiento", ":material/monitoring:"),
                          ("Proveedor por kg útil", "Costo por kg útil", ":material/local_shipping:"),
                          ("Merma para revisar", "Para revisar", ":material/flag:"))),
     # «Producción» (2026-09-30, regla #575): las órdenes de producción del
@@ -63,8 +68,7 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
 # el foco que comparten las de merma (`movimientos_merma.SEC_*`) y el estado
 # de cada sección.
 _PILA = pila_sin_tablas((
-    ("mov_sec_porc",        "Porcionamientos"),
-    ("mov_sec_merma_rend",  "Rendimiento por producto"),
+    ("mov_sec_persp_porc",  "Porcionamientos"),
     ("mov_sec_merma_prov",  "Proveedor por kg útil"),
     ("mov_sec_merma_rev",   "Merma para revisar"),
     ("mov_sec_prod",        "Producción"),
@@ -83,4 +87,6 @@ def renderizar_graficos_produccion(df_f, nombre_reporte, df_full=None,
                      btn_prefix="prod_rail_btn_", secciones=_PILA)
     movimientos.renderizar(df_f, nombre_reporte, df_full, tabla_cb,
                            pila=_PILA, dibujar_rail=dibujar_rail,
-                           con_salidas=False)
+                           con_salidas=False,
+                           perspectivas={mm.SEC_PORC: ("porc", mm.EJES_PORC,
+                                                       mm.PERSPECTIVAS_PORC)})

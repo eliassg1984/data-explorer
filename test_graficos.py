@@ -4366,8 +4366,11 @@ def _pruebas_fecha_por_vista():
     import graficos.produccion as prod
     # «Requerimientos y salidas» no tiene fecha propia: la de cada una de
     # sus perspectivas (regla #710), que cuentan como secciones.
-    secciones = ({c for c, _v in mov._PILA + prod._PILA} - {mov.SEC_LADOS}
-                 | {p[2] for p in mov.PERSPECTIVAS})
+    from graficos import movimientos_merma as _mm
+    secciones = ({c for c, _v in mov._PILA + prod._PILA}
+                 - {mov.SEC_LADOS, _mm.SEC_PORC}
+                 | {p[2] for p in mov.PERSPECTIVAS}
+                 | {p[1] for p in _mm.PERSPECTIVAS_PORC})
     # La pila sin «Tabla» (MOSTRAR_VISTAS_TABLA apagado) igual las declara.
     secciones |= {"mov_sec_tabla_req", "mov_sec_tabla_sal"}
     check("toda sección (salvo las de ventana) tiene categoría",
@@ -5223,15 +5226,73 @@ def _pruebas_perspectivas_movimientos():
           mov.vistas_con_ajuste("req_fecha"),
           ["Requerimientos por Período", "Requerimientos por Área"])
     fuente = inspect.getsource(mov.renderizar)
-    check("el dibujante elige con los dos ajustes y dibuja la vista de siempre",
-          all(t in fuente for t in ("eleccion_compartida(K_LADO",
-                                    "eleccion_compartida(K_CORTE",
-                                    "_DIBUJANTES[sec]()")), True)
+    check("el dibujante elige con los dos ejes y dibuja la vista de siempre",
+          ('dibujar_perspectiva("mov", EJES_LADOS, PERSPECTIVAS, _DIBUJANTES)'
+           in fuente, [e[0] for e in mov.EJES_LADOS]),
+          (True, [mov.K_LADO, mov.K_CORTE]))
     css = (pathlib.Path(__file__).parent / "estilos" / "_80_cards.py").read_text(
         encoding="utf-8")
     check("la tarjeta cede el alto de la franja",
           "--alto-util: calc(var(--alto-util-base) - var(--persp-alto))" in css,
           True)
+    return fallos
+
+
+def _pruebas_perspectivas_todas():
+    """Las vistas con perspectivas de Stock, Ajuste y Producción (#712).
+
+    Cada una es una sección de la pila con `_sec_persp_` en su key —es lo
+    que le hace ceder a su tarjeta el alto de la franja, por CSS— y
+    perspectivas `(valor, sección, id, rótulo)`, una por opción de su eje.
+    Lo que se rompe EN SILENCIO: una opción sin perspectiva (el `next`
+    revienta al elegirla), una sección sin dibujante (KeyError en el
+    fragment) o la marca que falta (la tarjeta se va por abajo).
+    """
+    import inspect
+    import graficos.ajuste as aj
+    import graficos.inventario as inv
+    import graficos.movimientos as mov
+    import graficos.movimientos_merma as mm
+    import graficos.produccion as prod
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    perspectivas · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA perspectivas · {nombre}: got={got!r} exp={exp!r}")
+
+    casos = (
+        ("Stock", inv, "inv_sec_persp_stock", inv.EJES_STOCK, inv.PERSPECTIVAS_STOCK,
+         inv.renderizar_graficos_inventario),
+        ("Ajuste · cierre", aj, "aj_sec_persp_cierre", aj.EJES_CIERRE,
+         aj.PERSPECTIVAS_CIERRE, aj.renderizar_graficos_ajuste),
+        ("Ajuste · tiempo", aj, "aj_sec_persp_tiempo", aj.EJES_TIEMPO,
+         aj.PERSPECTIVAS_TIEMPO, aj.renderizar_graficos_ajuste),
+        ("Producción", prod, mm.SEC_PORC, mm.EJES_PORC, mm.PERSPECTIVAS_PORC,
+         mov.renderizar),
+    )
+    for nombre, mod, sec, ejes, persp, fn in casos:
+        check(f"{nombre}: la sección está en la pila y lleva la marca",
+              (sec in [c for c, _v in mod._PILA], "_sec_persp_" in sec), (True, True))
+        check(f"{nombre}: una perspectiva por opción",
+              [p[0] for p in persp], list(ejes[0][2]))
+        fuente = inspect.getsource(fn)
+        check(f"{nombre}: cada perspectiva tiene su dibujante",
+              [p[1] for p in persp if f'"{p[1]}"' not in fuente
+               and p[1] not in (mm.SEC_REND,)], [])
+    check("Rendimiento tiene su dibujante en Movimientos",
+          "_dib_merma(tarjeta_rendimiento" in inspect.getsource(mov.renderizar), True)
+    check("el salto de «Ver sus productos» pone la perspectiva",
+          "st.session_state[K_PERSP_STOCK] = PERSPECTIVAS_STOCK[0][0]"
+          in inspect.getsource(inv), True)
+    import graficos.carta_costeada as cc
+    check("el salto de Costo de Carta a Rendimiento pone la perspectiva",
+          "st.session_state[mm.K_PERSP_PORC] = mm.PERSPECTIVAS_PORC[1][0]"
+          in inspect.getsource(cc), True)
     return fallos
 
 
@@ -6495,10 +6556,15 @@ def _pruebas_fechas_ajuste():
     # «Diferencias» se sumó el 2026-10-13 (regla #650), entre las vistas de
     # un conteo y las del tiempo. «Distribución» se fue el 2026-10-19: su
     # Pareto pasó al detalle de las dos primeras (regla #677).
-    check("una sola pila con las cinco vistas",
+    # Desde la regla #712 las cuatro de la sesión y del tiempo son dos
+    # vistas con perspectivas: la pila lleva las que las contienen, y cada
+    # perspectiva sigue siendo su sección de siempre.
+    check("una sola pila con las tres vistas",
           [c for c, _v in aj._PILA],
-          ["aj_sec_cascada", "aj_sec_heatmap",
-           "aj_sec_diferencias", "aj_sec_evolucion", "aj_sec_detalle"])
+          ["aj_sec_persp_cierre", "aj_sec_diferencias", "aj_sec_persp_tiempo"])
+    check("y las cuatro de antes como perspectivas",
+          [p[1] for p in aj.PERSPECTIVAS_CIERRE + aj.PERSPECTIVAS_TIEMPO],
+          ["aj_sec_cascada", "aj_sec_heatmap", "aj_sec_evolucion", "aj_sec_detalle"])
     check("se fue la partición del rango por categoría",
           hasattr(aj, "categoria_rango_ajuste"), False)
     fuentes = {n: (raiz / "graficos" / "ajuste" / f"{n}.py").read_text(
@@ -7829,13 +7895,17 @@ def _pruebas_cortes_y_peso():
           _gr._RAILS.get(mm.REPORTE_MERMA, (None, None))[1], mm.RAIL_PRODUCCION)
     import graficos.produccion as prod
     pila = dict(prod._PILA)
-    check("las vistas y secciones a las que se salta existen en la pila",
-          (pila.get(mm.SEC_REND), pila.get(mm.SEC_REV), pila.get(mm.SEC_PROV) is not None),
-          (mm.VISTA_REND, mm.VISTA_REV, True))
-    orden = [s for s, _ in prod._PILA if s in ("mov_sec_porc", mm.SEC_REND,
-                                              mm.SEC_PROV, mm.SEC_REV)]
+    # Rendimiento es una perspectiva de «Porcionamientos» desde la #712: el
+    # salto va a esa vista, con la perspectiva puesta.
+    persp = {p[1]: p[2] for p in mm.PERSPECTIVAS_PORC}
+    check("las vistas y secciones a las que se salta existen",
+          (pila.get(mm.SEC_PORC), persp.get(mm.SEC_REND), pila.get(mm.SEC_REV),
+           pila.get(mm.SEC_PROV) is not None),
+          (mm.VISTA_PORC, mm.VISTA_REND, mm.VISTA_REV, True))
+    orden = [s for s, _ in prod._PILA if s in (mm.SEC_PORC, mm.SEC_PROV, mm.SEC_REV)]
     check("Porcionamientos, de lo general a lo particular",
-          orden, ["mov_sec_porc", mm.SEC_REND, mm.SEC_PROV, mm.SEC_REV])
+          (orden, list(persp)), ([mm.SEC_PORC, mm.SEC_PROV, mm.SEC_REV],
+                                 ["mov_sec_porc", mm.SEC_REND]))
     check("la consulta trae el código de cada corte",
           mov._COLS_PORC.get("cod_fin"), "COD PROD FINAL")
     return fallos
@@ -13023,6 +13093,9 @@ def main():
 
     # ── Movimientos: las perspectivas de requerimientos y salidas (#710) ─
     fallos += _pruebas_perspectivas_movimientos()
+
+    # ── Las perspectivas de Stock, Ajuste y Producción (#712) ───────────
+    fallos += _pruebas_perspectivas_todas()
 
     # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
     fallos += _pruebas_jscode_barato()

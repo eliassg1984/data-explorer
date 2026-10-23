@@ -4593,44 +4593,50 @@ CSS = """    /* ================================================================
         border-color: var(--border-lavender) !important;
         color: var(--accent-deep) !important;
     }
-    /* ── LAS PERSPECTIVAS DE «Requerimientos y salidas» (regla #710) ─────
-       Movimientos: qué lado (Requerimientos | Salidas) y qué corte (Por
-       período | Por área), en una franja pegada ARRIBA de la tarjeta de la
-       perspectiva elegida (`graficos/movimientos.py::_dib_lados`). En el
-       renglón de la fecha de cada tarjeta no entraban: en «por Área» el
-       botón de fecha vive en el título del primer cuadro.
+    /* ── LAS PERSPECTIVAS: UNA VISTA, VARIAS FORMAS DE VERLA (#710, #712) ──
+       Nacieron en Movimientos (qué lado y qué corte) y desde la regla #712
+       las usan también Stock, Ajuste y Producción: una franja «Ver [A | B]»
+       pegada ARRIBA de la tarjeta de la perspectiva elegida
+       (`graficos/base.py::dibujar_perspectiva`). En el renglón de la fecha
+       de cada tarjeta no entraban: en Movimientos › «por Área» el botón de
+       fecha vive en el título del primer cuadro.
+
+       Las keys son una CONVENCIÓN y de ella cuelga esto: la franja es
+       `persp_<clave>` (sus controles, `pspw_<clave>_*`, con otro prefijo a
+       propósito: un `[class*="st-key-persp_"]` no tiene que tocarlos), y la
+       sección de la pila que la contiene, `<algo>_sec_persp_<algo>`.
 
        Y LA TARJETA CEDE ESE ALTO, para que franja y tarjeta sigan siendo una
-       pantalla: en esta sección `--alto-util` es la base menos la franja
-       con el `gap` de Streamlit que la separa de la tarjeta
-       (`--persp-alto`, medido). Sólo las tarjetas con techo lo notan: las
-       «por período» no lo tienen, miden su contenido (la lista de
+       pantalla: en esa sección `--alto-util` es la base menos la franja con
+       el `gap` de Streamlit que la separa de la tarjeta (`--persp-alto`,
+       medido: franja de 20 a 48, tarjeta desde 64). Sólo las tarjetas con
+       techo lo notan: las que no lo tienen miden su contenido (la lista de
        excepciones del techo, más arriba en este fichero). */
-    .st-key-mov_persp {
+    [class*="st-key-persp_"] {
         gap: 8px !important;
         margin: 0 !important;
         padding: 0 0 0 2px !important;
     }
-    .st-key-mov_persp [data-testid="stElementContainer"] {
+    [class*="st-key-persp_"] [data-testid="stElementContainer"] {
         width: auto !important;
         flex: 0 0 auto !important;
         margin: 0 !important;
     }
-    .mov-persp-rot {
+    .persp-rot {
         font-size: 12px;
         font-weight: 600;
         color: var(--text-muted);
     }
-    .st-key-mov_persp [data-testid="stButtonGroup"] button {
+    [class*="st-key-persp_"] [data-testid="stButtonGroup"] button {
         min-height: 28px !important;
         height: 28px !important;
         padding: 0 12px !important;
     }
-    .st-key-mov_persp [data-testid="stButtonGroup"] button p {
+    [class*="st-key-persp_"] [data-testid="stButtonGroup"] button p {
         font-size: 13px !important;
     }
     @media screen and (min-width: 769px) {
-        .st-key-mov_sec_lados {
+        [class*="st-key-"][class*="_sec_persp_"] {
             --persp-alto: 44px;
             --alto-util: calc(var(--alto-util-base) - var(--persp-alto));
         }

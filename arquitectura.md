@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-711 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+712 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (226)
+**CSS y estilos** (227)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -291,6 +291,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#702** — «Mix de carta» es una pieza propia: Python manda las sumas por producto y período, y el…
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 - **#706** — «Costo recetas base» es una pieza propia: la lista y la ficha de la elegida, con dónde se…
+- **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 
 **Layout y alturas** (100)
 
@@ -908,7 +909,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#707** — «Cambios en Recetas»: las recetas base, las recetas de plato y los precios de venta en una…
 - **#711** — Inicio › «Pendientes del período»: una fila por señal, con el salto a la vista que la…
 
-**SUNAT y SIRE** (72)
+**SUNAT y SIRE** (73)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -982,6 +983,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#693** — La portada del Resumen ejecutivo entra en una pantalla de laptop y no repite un número
 - **#694** — «Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta son notas de crédito y…
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
+- **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 
 **Fechas, rangos y cortes** (17)
 
@@ -54614,6 +54616,56 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      tras «Calcular ahora», la 13.ª al abrir Recetas vs Porcionado, y el
      salto a Consistencia abierta en «Stock en negativo». (2026-10-23.)
 
+712. **Las perspectivas son una pieza común (`base.dibujar_perspectiva`), y
+     Stock, Ajuste y Producción juntan con ellas sus vistas gemelas: el
+     área Inventario queda en las 8 pestañas del boceto.** Etapa 5 de la
+     navegación del boceto del rail compacto (#708), el 2026-10-23.
+     · **Las vistas que se juntaron**: Stock › «Stock» = Por producto | Por
+       área y familia; Ajuste › «Diferencias del cierre» = Por familia |
+       Familia × Área, y «Evolución» = Serie | Tabla dinámica; Producción ›
+       «Porcionamientos» = Por período | Rendimiento (el boceto decía
+       «Lista»: es la merma por período, como sus gemelas de Movimientos).
+       Inventario pasó de 11 pestañas a 8 y Producción de 6 a 5. Cada
+       perspectiva sigue siendo su sección de siempre —su dibujante, sus
+       keys, su fecha—: nada de lo que muestra cambió.
+     · **La pieza común**: `dibujar_perspectiva(clave, ejes, perspectivas,
+       dibujantes)` dibuja la franja «Ver […]» y llama al dibujante de la
+       combinación; `ejes` son `eleccion_compartida` con el valor en una
+       clave propia, y `perspectivas`, `(valores…, sección, id, rótulo)`.
+       Movimientos (#710) pasó a usarla. Producción declara la suya y se la
+       pasa al cuerpo de Movimientos (`renderizar(…, perspectivas=)`), que
+       es donde viven sus dibujantes.
+     · **Las keys son una CONVENCIÓN, y de ella cuelga el CSS**: la franja
+       es `persp_<clave>`, sus controles `pspw_<clave>_*` (otro prefijo a
+       propósito: el `[class*="st-key-persp_"]` de la franja no tiene que
+       tocarlos) y la sección de la pila que la contiene
+       `<algo>_sec_persp_<algo>`, que le hace ceder a su tarjeta los 44px de
+       la franja (#710). Movimientos renombró `mov_sec_lados` a
+       `mov_sec_persp_lados`.
+     · **Un salto a una vista que pasó a ser perspectiva la tiene que
+       poner**: «Ver sus productos» de Stock (antes un `scroll_a_seccion` a
+       Productos) escribe la perspectiva «Por producto»; «Ver curva» de
+       Costo de Carta (antes la vista «Rendimiento por producto») escribe
+       «Rendimiento» y va a «Porcionamientos». Y el producto que comparten
+       Rendimiento y Costo por kg útil avisa a la sección que contiene a
+       Rendimiento, y sólo si esa perspectiva está a la vista
+       (`movimientos_merma._avisar_a`). Para quien no los pase a mano,
+       `base.poner_perspectiva` escribe los ejes de una perspectiva por id.
+     · **Un id no puede ser prefijo de otro del mismo reporte**: el
+       temporizador busca los botones con `[class*=…]`, y «Diferencias del
+       cierre» como id marcaba también la pestaña de «Diferencias» (lo atajó
+       `_pruebas_pestanas_franja`). Su id es «Ajuste del cierre».
+     · **Dos jalones de tablet** colgaban de la primera sección por su key:
+       el de Ajuste (`aj_sec_cascada`, −108px hasta 900px) pasó a la
+       sección que la contiene; el de Inventario (`inv_sec_area`, −68px)
+       hacía rato que no era la primera, ya no matcheaba nada y se borró
+       (#49).
+     Lo vigila `test_graficos.py::_pruebas_perspectivas_todas`. Probado en
+     la app local con R2 a 1323×619, con Streamlit 1.59 y 1.64, con clics en
+     cada perspectiva y los dos saltos. Queda del boceto la de Documentos
+     («Del sistema» | «De SUNAT»): junta dos reportes, Compras y
+     Documentos SUNAT, y no entra en este molde. (2026-10-23.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54626,7 +54678,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#711**; la próxima toma el número siguiente.
+> última regla es la **#712**; la próxima toma el número siguiente.
 
 >
 

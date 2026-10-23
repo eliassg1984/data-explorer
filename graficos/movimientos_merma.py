@@ -1224,13 +1224,33 @@ acá y no allá porque `movimientos.py` importa este módulo: al revés sería
 un import circular. Lo vigila `test_graficos.py::_pruebas_merma`."""
 K_FOCO_REV = "_mov_merma_rev_foco"
 
+# «Porcionamientos» y «Rendimiento por producto» son UNA vista desde el
+# 2026-10-23 (regla #712): «Porcionamientos», con dos perspectivas, en la
+# sección `SEC_PORC` de la pila de Producción. Viven acá por lo mismo que
+# `RAIL_PRODUCCION`: los leen `produccion.py`, el salto de Costo de Carta
+# y `_avisar_a`.
+SEC_PORC = "mov_sec_persp_porc"
+VISTA_PORC = "Porcionamientos"
+K_PERSP_PORC = "_prod_persp_porc"
+PERSPECTIVAS_PORC = (
+    ("Por período", "mov_sec_porc", "Porcionamientos", "Porcionamientos"),
+    ("Rendimiento", SEC_REND, VISTA_REND, "Rendimiento"),
+)
+EJES_PORC = ((K_PERSP_PORC, "Ver", tuple(p[0] for p in PERSPECTIVAS_PORC)),)
+
 
 def _avisar_a(seccion):
     """El producto es UNO para dos secciones de la pila, y cada una es su
     propio fragment: si la otra ya se dibujó, una corrida completa para que
     se entere (`K_RECARGA`, el mismo camino que la valorización, regla
     #644). `_pila_visto_<clave>` lo pone `graficos/base.py::seccion_perezosa`
-    después de dibujar una sección por primera vez."""
+    después de dibujar una sección por primera vez. Rendimiento es una
+    perspectiva de «Porcionamientos» (#712): avisa a esa sección, y sólo si
+    la perspectiva a la vista es ella."""
+    if seccion == SEC_REND:
+        if st.session_state.get(K_PERSP_PORC) != PERSPECTIVAS_PORC[1][0]:
+            return
+        seccion = SEC_PORC
     if st.session_state.get(f"_pila_visto_{seccion}"):
         st.session_state[K_RECARGA] = True
 
