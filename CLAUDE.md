@@ -327,7 +327,11 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   producción y consumo según recetas, que eran el final de Movimientos.
   Declara su rail y su pila en `graficos/produccion.py` y dibuja con el
   cuerpo y los dibujantes de `graficos/movimientos.py` (`renderizar`),
-  con las mismas keys `mov_sec_*`. El clic en un
+  con las mismas keys `mov_sec_*`. Y en Movimientos, requerimientos y
+  salidas por período y por área son UNA vista con **perspectivas**
+  (regla #710): «Ver [Requerimientos | Salidas] [Por período | Por área]»
+  en una franja sobre la tarjeta, que dibuja la vista de siempre de esa
+  combinación (`movimientos.PERSPECTIVAS`). El clic en un
   área lleva al reporte que se visitó último. **Por debajo de 901px cada
   reporte sigue con su botón**: ahí la franja no es el índice y Ajuste
   quedaría sin camino. No cambia de contenido al bajar. Tiene tres estados
@@ -454,6 +458,10 @@ Gemela de la regla de los colores, y con la misma forma de dos caras:
 - `graficos/alturas.py` (Python) → el alto de las FIGURAS, con roles
   (`PROTAGONISTA`/`APOYO`/`MINI`, `por_filas()`, `apilado()`).
 - `--alto-util` en `estilos/_00_base.py` (CSS) → el MARCO de la tarjeta.
+  Una sección que pone algo ENCIMA de su tarjeta lo descuenta en su
+  contenedor con `--alto-util: calc(var(--alto-util-base) - <alto>)`
+  (las perspectivas de Movimientos, regla #710): `--alto-util` no puede
+  definirse a partir de sí misma.
 
 **Ningún `alto=430` ni `height=560` en `graficos/`**: `test_graficos.py`
 falla si reaparece uno, o si el cromo de CSS y el de Python se

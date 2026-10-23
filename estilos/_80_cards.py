@@ -4593,4 +4593,46 @@ CSS = """    /* ================================================================
         border-color: var(--border-lavender) !important;
         color: var(--accent-deep) !important;
     }
+    /* ── LAS PERSPECTIVAS DE «Requerimientos y salidas» (regla #710) ─────
+       Movimientos: qué lado (Requerimientos | Salidas) y qué corte (Por
+       período | Por área), en una franja pegada ARRIBA de la tarjeta de la
+       perspectiva elegida (`graficos/movimientos.py::_dib_lados`). En el
+       renglón de la fecha de cada tarjeta no entraban: en «por Área» el
+       botón de fecha vive en el título del primer cuadro.
+
+       Y LA TARJETA CEDE ESE ALTO, para que franja y tarjeta sigan siendo una
+       pantalla: en esta sección `--alto-util` es la base menos la franja
+       con el `gap` de Streamlit que la separa de la tarjeta
+       (`--persp-alto`, medido). Sólo las tarjetas con techo lo notan: las
+       «por período» no lo tienen, miden su contenido (la lista de
+       excepciones del techo, más arriba en este fichero). */
+    .st-key-mov_persp {
+        gap: 8px !important;
+        margin: 0 !important;
+        padding: 0 0 0 2px !important;
+    }
+    .st-key-mov_persp [data-testid="stElementContainer"] {
+        width: auto !important;
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+    }
+    .mov-persp-rot {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+    }
+    .st-key-mov_persp [data-testid="stButtonGroup"] button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 12px !important;
+    }
+    .st-key-mov_persp [data-testid="stButtonGroup"] button p {
+        font-size: 13px !important;
+    }
+    @media screen and (min-width: 769px) {
+        .st-key-mov_sec_lados {
+            --persp-alto: 44px;
+            --alto-util: calc(var(--alto-util-base) - var(--persp-alto));
+        }
+    }
 """

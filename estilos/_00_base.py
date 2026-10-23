@@ -192,9 +192,16 @@ CSS = """    <style>
            usuario quiere «casi rozando». Con 8 quedan 4px de aire y el alto
            útil gana 16 (el margen cuenta arriba Y abajo). */
         --margen-tarjeta: 8px;        /* margen de bloque de Streamlit, arriba y abajo */
-        --alto-util: calc(100dvh - var(--cab-offset-contenido)
-                                 - var(--aire-inferior)
-                                 - var(--margen-tarjeta) * 2);
+        --alto-util-base: calc(100dvh - var(--cab-offset-contenido)
+                                      - var(--aire-inferior)
+                                      - var(--margen-tarjeta) * 2);
+        /* La tarjeta usa `--alto-util`; la base existe para que una sección
+           que pone algo ENCIMA de su tarjeta —las perspectivas de Movimientos,
+           regla #710— le descuente ese alto sin repetir la cuenta:
+           `--alto-util: calc(var(--alto-util-base) - <lo de encima>)` en su
+           contenedor. Redefinir `--alto-util` a partir de sí misma no se
+           puede (es un ciclo), y una variable se resuelve donde se declara. */
+        --alto-util: var(--alto-util-base);
 
         /* ==================================================================
            BARRA DE NAVEGACIÓN ENTRE REPORTES — arriba en escritorio, abajo

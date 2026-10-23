@@ -225,13 +225,17 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # 2026-10-01, a pedido («Requerimientos por Período», «… por Área»,
     # «Salidas por …»): los ids de la izquierda NO cambian — los usan la
     # pila, las keys y los tests.
-    ("Requerimientos", (("Requerimientos por período", "Requerimientos por Período", ":material/calendar_view_week:"),
-                        ("Por sub almacén",            "Requerimientos por Área",    ":material/warehouse:"),
-                        ("Tabla · requerim.",          "Tabla · req.",               ":material/table_rows:"))),
-    # «Detalle de salidas» (2026-09-24, regla #511) ocupa el sitio de «Top
-    # productos · salidas», que se retiró ese día. Nombre sin sufijo: no
-    # tiene gemela del lado de requerimientos. El ícono es el de un tablero
-    # partido en paneles, que es lo que dibuja —cinco cuadros, 3 + 2—.
+    #
+    # LAS CUATRO SON UNA VISTA DESDE EL 2026-10-23 (regla #710): «Requerimientos
+    # y salidas», con dos PERSPECTIVAS arriba de su tarjeta —qué lado y qué
+    # corte— que dibujan cada una la vista de siempre (`PERSPECTIVAS`, más
+    # abajo). Etapa 3 de la navegación del boceto del rail compacto (#708):
+    # la pregunta es una («cuánto se movió y por dónde»), y cuatro vistas
+    # para dos ejes eran cuatro pestañas en la franja. Los ids y las
+    # secciones viejas siguen vivos como perspectivas: de ellos cuelgan la
+    # fecha de cada una (`CATEGORIA_VISTA`) y lo que dicen sus tarjetas.
+    ("Requerimientos y salidas", (("Requerimientos y salidas", "Requerimientos y salidas", ":material/sync_alt:"),
+                                  ("Tabla · requerim.",        "Tabla · req.",             ":material/table_rows:"))),
     # «Sin plato, cierre por cierre» y «En qué se fue cada producto»
     # (2026-10-12, regla #645) reemplazaron a «Destino de lo que entra»
     # (#614), que listaba sólo los productos con baja. Las dos cuentan, de
@@ -241,9 +245,7 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # ids van escritos (los lee con `ast` `test_graficos.py`) y son los de
     # `movimientos_destino.VISTA_CIERRE` y `VISTA_PRODUCTO`, que usa el salto
     # de una a otra: lo vigila `_pruebas_sin_plato`.
-    ("Salidas", (("Salidas por período", "Salidas por Período", ":material/calendar_view_week:"),
-                 ("Detalle de salidas",  "Salidas por Área",    ":material/view_quilt:"),
-                 ("Sin plato por cierre", "Sin plato, cierre por cierre", ":material/no_meals:"),
+    ("Salidas", (("Sin plato por cierre", "Sin plato, cierre por cierre", ":material/no_meals:"),
                  ("En qué se fue cada producto", "En qué se fue cada producto", ":material/alt_route:"),
                  ("Tabla · salidas",     "Tabla · sal.",        ":material/table_view:"))),
 ))
@@ -252,6 +254,35 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
 # merma, las órdenes de producción y el consumo según recetas— eran el final
 # de este rail hasta el 2026-10-23: desde la regla #709 son el reporte
 # Producción, `graficos/produccion.py`. Sus dibujantes siguen acá.)
+
+# ── LAS PERSPECTIVAS DE «Requerimientos y salidas» (regla #710) ──────────
+# (lado, corte, sección, id de la vista, rótulo). Cada una era una vista de
+# la pila hasta el 2026-10-23 y sigue siendo la MISMA: su sección (la clave
+# de su fecha en `CATEGORIA_VISTA` y de su dibujante), su id (lo nombran las
+# tarjetas vecinas: «El mismo criterio que «Salidas por Período»») y su
+# rótulo, que es el que tenía en el rail. «Detalle de salidas» ocupa el
+# sitio de «Top productos · salidas» desde el 2026-09-24 (regla #511); «Por
+# sub almacén», el de la Evolución y el ranking de Sub Almacén desde el
+# 2026-09-13; las dos «por período», el del Top de requerimientos y el de
+# «Tipo de descargo» desde el 2026-09-23.
+LADOS = ("Requerimientos", "Salidas")
+CORTES = ("Por período", "Por área")
+PERSPECTIVAS = (
+    ("Requerimientos", "Por período", "mov_sec_periodo",
+     "Requerimientos por período", "Requerimientos por Período"),
+    ("Requerimientos", "Por área", "mov_sec_cadena",
+     "Por sub almacén", "Requerimientos por Área"),
+    ("Salidas", "Por período", "mov_sec_sal_periodo",
+     "Salidas por período", "Salidas por Período"),
+    ("Salidas", "Por área", "mov_sec_detalle_sal",
+     "Detalle de salidas", "Salidas por Área"),
+)
+SEC_LADOS = "mov_sec_lados"
+"""La sección de la pila que dibuja la perspectiva elegida."""
+K_LADO, K_CORTE = "_mov_persp_lado", "_mov_persp_corte"
+"""Dónde viven el lado y el corte elegidos: claves propias y no las de sus
+widgets, para que sobrevivan a que la sección no se dibuje (otro reporte,
+el esqueleto) — `base.eleccion_compartida`."""
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA tupla
 # (el porqué, en `graficos/compras/__init__.py::_PILA`).
@@ -264,13 +295,11 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
 # vista tiene su botón de fecha y su rango (`CATEGORIA_VISTA`, más abajo), y
 # la franja de este reporte ya no dibuja calendario (`app.py`,
 # `_franja_dibuja_fecha`). Hasta ese día mandaba la píldora de la franja,
-# sobre todas a la vez.
+# sobre todas a la vez. Desde la regla #710 la de «Requerimientos y
+# salidas» es la de la perspectiva elegida: cada una conserva la suya.
 _PILA = pila_sin_tablas((
-    ("mov_sec_periodo",     "Requerimientos por período"),
-    ("mov_sec_cadena",      "Por sub almacén"),
+    ("mov_sec_lados",       "Requerimientos y salidas"),
     ("mov_sec_tabla_req",   "Tabla · requerim."),
-    ("mov_sec_sal_periodo", "Salidas por período"),
-    ("mov_sec_detalle_sal", "Detalle de salidas"),
     ("mov_sec_sinplato",    "Sin plato por cierre"),
     ("mov_sec_destino",     "En qué se fue cada producto"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
@@ -386,9 +415,22 @@ def recortar_vista(d, rng, col="_fecha"):
 
 def _rotulo_rail(vista):
     """Cómo nombra el rail a la vista `vista` (su id): «Salidas por
-    Período», con la mayúscula que se pidió el 2026-10-01."""
-    return next((v[1] for _cat, vistas in _RAIL_CATEGORIAS for v in vistas
-                 if v[0] == vista), vista)
+    Período», con la mayúscula que se pidió el 2026-10-01. Una perspectiva
+    de «Requerimientos y salidas» (regla #710) se nombra como cuando era una
+    vista del rail."""
+    return next((p[4] for p in PERSPECTIVAS if p[3] == vista),
+                next((v[1] for _cat, vistas in _RAIL_CATEGORIAS for v in vistas
+                      if v[0] == vista), vista))
+
+
+def _secciones_a_la_vista():
+    """`(sección, id)` de lo que se puede ver en la página: la pila, con
+    «Requerimientos y salidas» abierta en sus cuatro perspectivas (#710)."""
+    for sec, vista in _PILA:
+        if sec == SEC_LADOS:
+            yield from ((p[2], p[3]) for p in PERSPECTIVAS)
+        else:
+            yield sec, vista
 
 
 def _que_suman(d, lado, vecina, *, col_estado, col_prod, col_doc=None,
@@ -586,7 +628,7 @@ que entra», que comparaba sólo con un año."""
 def vistas_con_ajuste(ajuste, salvo=None):
     """Los rótulos del rail de las vistas VISIBLES que muestran `ajuste` al
     panel de fecha, sin la de categoría `salvo`: a quién más cambia."""
-    return [_rotulo_rail(v) for sec, v in _PILA
+    return [_rotulo_rail(v) for sec, v in _secciones_a_la_vista()
             if CATEGORIA_VISTA.get(sec) != salvo
             and ajuste in AJUSTES_PIE.get(CATEGORIA_VISTA.get(sec), ())]
 
@@ -1504,7 +1546,27 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
         rng, fecha = _rango_y_boton("mov_sec_consumo", fechas_reg)
         tarjeta_consumo(fam_sel, sub_sel, rango=rng, fecha=fecha)
 
+    def _dib_lados():
+        # LAS PERSPECTIVAS (regla #710): qué lado y qué corte, en una franja
+        # pegada arriba de la tarjeta, y debajo la vista de siempre de esa
+        # combinación, con su fecha y todo lo suyo. Cambiar una corre sólo
+        # este fragment. En el renglón de la fecha de cada tarjeta no
+        # entraban: en «por Área» el botón vive en el título del primer
+        # cuadro, de un tercio del ancho.
+        with st.container(key="mov_persp", horizontal=True,
+                          vertical_alignment="center", gap="small"):
+            st.markdown('<span class="mov-persp-rot">Ver</span>',
+                        unsafe_allow_html=True)
+            lado = eleccion_compartida(K_LADO, "Lado", LADOS, LADOS[0],
+                                       "mov_persp_lado")
+            corte = eleccion_compartida(K_CORTE, "Corte", CORTES, CORTES[0],
+                                        "mov_persp_corte")
+        sec = next(p[2] for p in PERSPECTIVAS
+                   if p[0] == lado and p[1] == corte)
+        _DIBUJANTES[sec]()
+
     _DIBUJANTES = {
+        SEC_LADOS:             _dib_lados,
         "mov_sec_periodo":     _dib_periodo,
         "mov_sec_cadena":      _dib_cadena,
         "mov_sec_tabla_req":   _dib_tabla_req,

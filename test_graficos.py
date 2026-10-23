@@ -4364,7 +4364,10 @@ def _pruebas_fecha_por_vista():
     # Las de Producción también: son las mismas secciones, en otra pila
     # desde la regla #709.
     import graficos.produccion as prod
-    secciones = {c for c, _v in mov._PILA + prod._PILA}
+    # «Requerimientos y salidas» no tiene fecha propia: la de cada una de
+    # sus perspectivas (regla #710), que cuentan como secciones.
+    secciones = ({c for c, _v in mov._PILA + prod._PILA} - {mov.SEC_LADOS}
+                 | {p[2] for p in mov.PERSPECTIVAS})
     # La pila sin «Tabla» (MOSTRAR_VISTAS_TABLA apagado) igual las declara.
     secciones |= {"mov_sec_tabla_req", "mov_sec_tabla_sal"}
     check("toda sección (salvo las de ventana) tiene categoría",
@@ -5168,6 +5171,67 @@ def _pruebas_vistas_de_cada_reporte():
           all(not graficos.base.es_vista_tabla(v[0])
               for r in _RAILS for v in vistas_de(r)[1])
           or graficos.base.MOSTRAR_VISTAS_TABLA)
+    return fallos
+
+
+def _pruebas_perspectivas_movimientos():
+    """Movimientos › «Requerimientos y salidas» y sus perspectivas (#710).
+
+    2026-10-23: las cuatro vistas de requerimientos y salidas por período y
+    por área son UNA, con dos selectores —lado y corte— que dibujan la
+    vista de siempre de esa combinación. Lo que se rompe EN SILENCIO:
+
+      · una combinación sin perspectiva (o dos con la misma): el `next` del
+        dibujante revienta, o una vista queda inalcanzable;
+      · una perspectiva sin fecha propia: se quedaría con el histórico;
+      · los ajustes del panel de fecha que dicen «cambia también …» y el
+        criterio de las tarjetas vecinas («El mismo criterio que «Salidas
+        por Período»»): nombraban vistas del rail que ya no están en él;
+      · la tarjeta que no cede el alto de la franja: se iría por abajo.
+    """
+    import inspect
+    import pathlib
+    import graficos.movimientos as mov
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    perspectivas · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA perspectivas · {nombre}: got={got!r} exp={exp!r}")
+
+    combos = [(p[0], p[1]) for p in mov.PERSPECTIVAS]
+    check("una perspectiva por combinación de lado y corte",
+          sorted(combos), sorted((l, c) for l in mov.LADOS for c in mov.CORTES))
+    check("cada perspectiva tiene su fecha",
+          [p[2] for p in mov.PERSPECTIVAS if p[2] not in mov.CATEGORIA_VISTA], [])
+    ids = {v[0] for _c, vs in mov._RAIL_CATEGORIAS for v in vs} | {
+        v for _s, v in mov._PILA}
+    check("las cuatro viejas ya no son vistas del rail ni de la pila",
+          sorted(ids & {p[3] for p in mov.PERSPECTIVAS}), [])
+    check("la vista que las junta, en el rail y primera en la pila",
+          (mov._PILA[0], "Requerimientos y salidas" in ids),
+          ((mov.SEC_LADOS, "Requerimientos y salidas"), True))
+    check("se nombran como cuando eran del rail",
+          [mov._rotulo_rail(p[3]) for p in mov.PERSPECTIVAS],
+          ["Requerimientos por Período", "Requerimientos por Área",
+           "Salidas por Período", "Salidas por Área"])
+    check("la fecha de los requerimientos cambia en sus dos perspectivas",
+          mov.vistas_con_ajuste("req_fecha"),
+          ["Requerimientos por Período", "Requerimientos por Área"])
+    fuente = inspect.getsource(mov.renderizar)
+    check("el dibujante elige con los dos ajustes y dibuja la vista de siempre",
+          all(t in fuente for t in ("eleccion_compartida(K_LADO",
+                                    "eleccion_compartida(K_CORTE",
+                                    "_DIBUJANTES[sec]()")), True)
+    css = (pathlib.Path(__file__).parent / "estilos" / "_80_cards.py").read_text(
+        encoding="utf-8")
+    check("la tarjeta cede el alto de la franja",
+          "--alto-util: calc(var(--alto-util-base) - var(--persp-alto))" in css,
+          True)
     return fallos
 
 
@@ -9732,9 +9796,11 @@ def _pruebas_detalle_salidas():
     # ── 4) El rail y la pila ──────────────────────────────────────────────
     ids_rail = [v[0] for _cat, vistas in mov._RAIL_CATEGORIAS for v in vistas]
     ids_pila = [v for _k, v in mov._PILA]
-    check("«Detalle de salidas» en el rail y en la pila",
-          ("Detalle de salidas" in ids_rail, "Detalle de salidas" in ids_pila),
-          (True, True))
+    # Una perspectiva de «Requerimientos y salidas» desde la regla #710.
+    check("«Detalle de salidas» es la perspectiva Salidas · Por área",
+          [(p[0], p[1], p[2]) for p in mov.PERSPECTIVAS
+           if p[3] == "Detalle de salidas"],
+          [("Salidas", "Por área", "mov_sec_detalle_sal")])
     check("«Top productos · salidas» ya no está",
           ("Top productos · salidas" in ids_rail
            or "Top productos · salidas" in ids_pila), False)
@@ -12954,6 +13020,9 @@ def main():
 
     # ── Las áreas y las pestañas de la franja (regla #708) ──────────────
     fallos += _pruebas_pestanas_franja()
+
+    # ── Movimientos: las perspectivas de requerimientos y salidas (#710) ─
+    fallos += _pruebas_perspectivas_movimientos()
 
     # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
     fallos += _pruebas_jscode_barato()

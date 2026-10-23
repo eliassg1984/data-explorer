@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-709 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+710 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (226)
 
@@ -292,7 +292,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 - **#706** — «Costo recetas base» es una pieza propia: la lista y la ficha de la elegida, con dónde se…
 
-**Layout y alturas** (99)
+**Layout y alturas** (100)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -393,6 +393,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
+- **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
 
 **Plotly y figuras** (121)
 
@@ -1052,7 +1053,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (212)
+**Decisiones de diseño y UX** (213)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1266,6 +1267,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#707** — «Cambios en Recetas»: las recetas base, las recetas de plato y los precios de venta en una…
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 - **#709** — Producción es un reporte propio: las seis vistas de lo que se TRANSFORMA en casa salieron de…
+- **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -54533,6 +54535,55 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      salto a «Órdenes» sin rerun, y el salto desde Costo de Carta. La
      batería entera, en las dos versiones. (2026-10-23.)
 
+710. **Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las
+     cuatro vistas de Movimientos por período y por área, con dos
+     selectores en una franja sobre la tarjeta que dibujan la vista de
+     siempre de esa combinación — y la tarjeta cede el alto de la franja
+     para que las dos sigan siendo una pantalla.** Etapa 3 de la
+     navegación del boceto del rail compacto (#708), a pedido el
+     2026-10-23: «Ver [Requerimientos | Salidas] [Por período | Por
+     área]». Movimientos pasó de 6 vistas a 3, y el área Inventario de 14
+     pestañas a 11.
+     · **Nada de las vistas cambia.** `movimientos.PERSPECTIVAS` guarda,
+       por combinación, la sección, el id y el rótulo que tenía cada una en
+       el rail; `_dib_lados` dibuja la franja y llama al dibujante de esa
+       sección, con SU fecha (`CATEGORIA_VISTA`: por período abre en 12
+       meses y por área en 30 días, como antes) y su panel de fecha con sus
+       ajustes. Cambiar de perspectiva corre sólo el fragment de la sección.
+       El lado y el corte viven en claves propias (`K_LADO`, `K_CORTE`) por
+       `base.eleccion_compartida`: sobreviven a que la sección no se dibuje.
+     · **No en el renglón de la fecha de cada tarjeta**, que era el lugar
+       del boceto: `selector_fecha_tarjeta` acepta un `extra` en esa fila,
+       pero en «por Área» el botón de fecha vive en el título del primer
+       cuadro, de un tercio del ancho, y en «por Período» ese renglón ya
+       está lleno. La franja va arriba de la tarjeta, como «DETALLE ·
+       ALIMENTOS» de Ajuste.
+     · **El alto: `--alto-util-base`.** La franja con el `gap` de Streamlit
+       que la separa de la tarjeta mide 44px (medido: franja de 20 a 48,
+       tarjeta desde 64). En la sección, `--alto-util: calc(var(
+       --alto-util-base) - var(--persp-alto))`: las tarjetas con techo («por
+       Área») bajan a 531px y franja más tarjeta entran en 619. Hizo falta
+       partir la cuenta en `_00_base.py` —`--alto-util-base` y
+       `--alto-util: var(--alto-util-base)`— porque una variable no se
+       puede redefinir a partir de sí misma (es un ciclo) y se resuelve
+       donde se declara: redefinir sólo un sumando en la sección no cambia
+       el `--alto-util` ya calculado en `:root`. Las «por período» no tienen
+       techo (miden su contenido) y quedan 44px más abajo: su tabla ya
+       pasaba del borde (terminaba en 677 de 619) y ahora termina en 721.
+     · **Los nombres siguen siendo los de las vistas**: `_rotulo_rail` mira
+       primero las perspectivas, así que el criterio de una tarjeta («El
+       mismo criterio que «Salidas por Período»») y lo que dice el panel de
+       fecha («Cambia también «Requerimientos por Área»», que recorre
+       `_secciones_a_la_vista` y no la pila) no cambiaron. Un enlace
+       guardado a una de las cuatro (`?vista=salidas_por_periodo`) cae en
+       la primera vista de Movimientos, que es «Requerimientos y salidas».
+     Lo vigila `test_graficos.py::_pruebas_perspectivas_movimientos` (una
+     perspectiva por combinación, todas con fecha, ninguna como vista
+     suelta, sus nombres, los ajustes compartidos y el alto cedido).
+     Probado en la app local con R2, a 1323×619, con Streamlit 1.59 y 1.64,
+     con clics reales por las cuatro combinaciones: cada una dibuja su
+     tarjeta sin una excepción y con su fecha. (2026-10-23.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54545,7 +54596,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#709**; la próxima toma el número siguiente.
+> última regla es la **#710**; la próxima toma el número siguiente.
 
 >
 
