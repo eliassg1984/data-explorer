@@ -11513,6 +11513,12 @@ def _pruebas_pieza_hora():
           "verFranjas: false, factiva: null" in js, True)
     check("sin el interruptor, arrastrar no crea una franja",
           "|| !S.verFranjas) { S.sel = " in js, True)
+    check("cada recuadro lleva el número de su franja, el de su ficha",
+          ('class="fr-num"' in js, "${numFranja(i)}${esc(f.nombre)}" in js),
+          (True, True))
+    check("la leyenda dice por qué en «Día por día» una franja se repite",
+          "una franja de días de la semana se dibuja en cada uno de esos días" in js,
+          True)
     check("la pieza no usa :has() (regla #469)", ":has(" in css, False)
     check("ni colores sueltos: las variables de estilos/",
           re.findall(r"#[0-9a-fA-F]{3,8}\b",

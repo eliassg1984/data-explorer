@@ -291,7 +291,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#702** — «Mix de carta» es una pieza propia: Python manda las sumas por producto y período, y el…
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 
-**Layout y alturas** (98)
+**Layout y alturas** (99)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -391,6 +391,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 - **#688** — La lista de «Análisis de diferencias» cede alto en una pantalla baja: la tarjeta entra en…
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
+- **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 
 **Plotly y figuras** (121)
 
@@ -1046,7 +1047,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (210)
+**Decisiones de diseño y UX** (209)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1257,7 +1258,6 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#697** — «Nuevo Costeo» es una pieza propia: la receta y su precio se editan en el navegador, con los…
 - **#701** — Las dos vistas de requerimientos dicen qué se pidió de más, qué se repite y qué no salió…
 - **#703** — «Revisar recetas» es una pieza propia y se llama «Recetas vs porcionado»
-- **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -54191,6 +54191,14 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        a `vh_hora_est_v2`: las de ejemplo quedaron guardadas con la vieja.
        Medido: con los datos de 1–21 oct 2026 salen sábado, miércoles (lo
        sube el evento «Menu Eventmovil») y viernes.
+       Y numeradas: el usuario creó una franja en «Día por día» y contó
+       ocho recuadros para cuatro franjas —ahí una franja de días de la
+       semana se dibuja una vez por cada uno de esos días—. Cada franja
+       lleva su número en la ficha, en la tarjeta de abajo, en las tablas y
+       en la esquina de cada uno de sus recuadros (corrido al lado si otro
+       ocupa el rincón), y en «Día por día» la leyenda dice por qué se
+       repite. El interruptor pasó al renglón de los controles del mapa: con
+       cuatro fichas al lado, el renglón se partía y achicaba el mapa.
      Lo vigila `test_graficos.py::_pruebas_pieza_hora`. Probado en la app
      local con R2 a 1323×619 con clics reales (arrastrar una franja,
      «Comparar ↓», las dos pestañas, platos, grupos y áreas, «Más filtros»
