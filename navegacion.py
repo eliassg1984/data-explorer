@@ -115,18 +115,19 @@ _SCRIPT_CAPAS = """<script>
   // siga ahí: una lista que se queda abierta después de elegir tapa lo que
   // se eligió.
   var cerrado = null;
-  // ── Abierto desde la FRANJA (2026-10-21, 2026-10-21) ─────────────────
-  // Un clic en la vista de la franja («› Por familia ▾») abre el panel del
-  // reporte activo DEBAJO de ella, y queda abierto hasta elegir una vista,
-  // hacer clic afuera o apretar Esc: es un desplegable, no una capa de
-  // cursor. Sólo con la columna plegada — fijada, las vistas ya están a la
-  // vista en el árbol, y la franja no ofrece el clic (`_28_arbol.py`).
-  var desdeFranja = false;
+  // (Hasta el 2026-10-23 un clic en la vista de la franja —«› Por familia
+  // ▾»— abría acá el panel del activo debajo de ella. La franja pasó a
+  // listar las vistas como pestañas, regla #708, y ese desplegable se fue.)
+  //
+  // Un ÁREA (`navitem_area_<slug>`, regla #708) abre SIEMPRE su panel
+  // `navfly_area_<slug>`, también la activa: la lista del rail sólo tiene
+  // las vistas del reporte en pantalla, no las del área.
   function panelDe(fila, plegado) {
-    if (fila.querySelector('button[kind="primary"]')) {
+    var m = /(?:^|\\s)st-key-navitem_(\\S+)/.exec(fila.className);
+    if (!(m && m[1].indexOf("area_") === 0)
+        && fila.querySelector('button[kind="primary"]')) {
       return plegado ? doc.querySelector(".st-key-nav_rail_lateral") : null;
     }
-    var m = /(?:^|\\s)st-key-navitem_(\\S+)/.exec(fila.className);
     return m ? doc.querySelector(".st-key-navfly_" + m[1]) : null;
   }
   function elegir() {
@@ -147,26 +148,8 @@ _SCRIPT_CAPAS = """<script>
     }
     return fila ? [panelDe(fila, plegado), fila] : [null, null];
   }
-  function franja(obj) {
-    var v = doc.querySelector(".barra-vista");
-    var r = v && v.getBoundingClientRect();
-    if (!r || !r.width) { desdeFranja = false; return false; }
-    // 18px a la izquierda del texto: el puente de 10 y el relleno de 8 del
-    // panel, para que sus nombres caigan bajo el de la vista.
-    var arriba = Math.round(r.bottom + 4) + "px", izq = Math.round(r.left - 18) + "px";
-    if (obj.style.getPropertyValue("--fly-top") !== arriba) obj.style.setProperty("--fly-top", arriba);
-    if (obj.style.getPropertyValue("--fly-left") !== izq) obj.style.setProperty("--fly-left", izq);
-    return true;
-  }
   function paneles() {
-    var activo = doc.querySelector(".st-key-nav_rail_lateral");
-    if (desdeFranja && !(ANCHO.matches && activo
-                         && doc.querySelector(".st-key-rail_pestillo_plegado")
-                         && franja(activo))) desdeFranja = false;
-    if (!desdeFranja && activo && activo.style.getPropertyValue("--fly-left")) {
-      activo.style.removeProperty("--fly-left");
-    }
-    var par = desdeFranja ? [activo, null] : elegir(), obj = par[0], fila = par[1];
+    var par = elegir(), obj = par[0], fila = par[1];
     if (cerrado) { if (obj === cerrado) obj = null; else cerrado = null; }
     var abiertos = doc.querySelectorAll("[data-fly]");
     for (var i = 0; i < abiertos.length; i++) {
@@ -186,21 +169,23 @@ _SCRIPT_CAPAS = """<script>
   function alClic(ev) {
     var t = ev.target;
     if (!t || !t.closest) return;
-    if (t.closest(".barra-vista")) {
-      desdeFranja = !desdeFranja;
-      cerrado = null;
-      return;
-    }
-    if (desdeFranja && (t.closest("button") || !t.closest(".st-key-nav_rail_lateral"))) {
-      desdeFranja = false;
-    }
     if (t.closest("button")) {
       var p = t.closest("[data-fly]");
       if (p) cerrado = p;
     }
   }
-  function alTeclear(ev) {
-    if (ev.key === "Escape" && desdeFranja) { desdeFranja = false; pronto(); }
+  // LA RUEDA SOBRE LAS PESTAÑAS LAS CORRE DE LADO (regla #708). Las de un
+  // área grande no entran en la franja —Inventario son 20— y la tira
+  // desborda con su barra escondida: con un mouse sin rueda lateral no
+  // habría cómo llegar a las del final. Sólo si desborda, y sólo lo que
+  // la tira puede correr: en un borde, la rueda sigue siendo de la página.
+  function alRodar(ev) {
+    var t = ev.target, tira = t && t.closest && t.closest(".st-key-nav_franja_idx");
+    if (!tira || tira.scrollWidth <= tira.clientWidth || ev.shiftKey) return;
+    var d = Math.abs(ev.deltaY) > Math.abs(ev.deltaX) ? ev.deltaY : ev.deltaX;
+    var antes = tira.scrollLeft;
+    tira.scrollLeft = antes + d;
+    if (tira.scrollLeft !== antes) ev.preventDefault();
   }
   function recalcular() {
     for (var i = 0; i < CAPAS.length; i++) {
@@ -225,12 +210,15 @@ _SCRIPT_CAPAS = """<script>
   try { if (w.__capasApagar) w.__capasApagar(); } catch (e) {}
   var EVENTOS = [["mouseover", pronto], ["mouseout", pronto],
                  ["focusin", pronto], ["focusout", pronto],
-                 ["click", alClic], ["click", despues], ["keyup", despues],
-                 ["keydown", alTeclear]];
+                 ["click", alClic], ["click", despues], ["keyup", despues]];
   EVENTOS.forEach(function (e) { doc.addEventListener(e[0], e[1], true); });
+  // `passive: false`: si no, el navegador no deja cancelar el scroll de la
+  // página cuando la rueda corrió las pestañas.
+  doc.addEventListener("wheel", alRodar, {capture: true, passive: false});
   var reloj = setInterval(recalcular, 300);
   w.__capasApagar = function () {
     EVENTOS.forEach(function (e) { doc.removeEventListener(e[0], e[1], true); });
+    doc.removeEventListener("wheel", alRodar, {capture: true});
     clearInterval(reloj);
   };
   recalcular();
@@ -349,15 +337,15 @@ def _kpis_franja(info):
     return pares or None
 
 
-def _html_barra_contexto(reporte_activo, info):
-    """El contenido de la franja superior desde 901px (2026-09-19, regla
-    #472): ícono y nombre del reporte y la vista en pantalla.
+def _html_barra_contexto(nombre, icono):
+    """El comienzo de la franja superior desde 901px (2026-09-19, regla
+    #472): ícono y nombre del ÁREA, o del reporte si no está en una.
 
-    La VISTA sale vacía a propósito: la escribe el temporizador de
-    `graficos/base.py::_render_rail` en `.barra-vista`, porque qué sección
-    está en pantalla sólo lo sabe el navegador. La flecha que la separa del
-    nombre es un `::before` que sólo existe con texto (`_28_arbol.py`), así
-    que mientras no llega no queda un «›» colgando.
+    Hasta el 2026-10-23 seguía la VISTA en pantalla («› Por familia ▾»,
+    escrita por el temporizador de `graficos/base.py::_render_rail`), que
+    con la columna plegada abría la lista de vistas debajo. Desde la regla
+    #708 la franja ES esa lista —las pestañas de `nav_franja_idx`, con la
+    vista en pantalla marcada—, así que el texto sobraba.
 
     SIN KPIs desde el 2026-10-03, a pedido («que la franja superior, que
     aparece, no tenga KPIs»; regla #596). Hasta ese día llevaba el principal
@@ -365,19 +353,13 @@ def _html_barra_contexto(reporte_activo, info):
     Vino) — `kpis_franja` sigue declarado porque lo usa la franja de KPIs de
     769 a 900px (`nav_franja_kpis`, más abajo).
 
-    Todo con `html.escape`: el nombre del reporte es texto, y este bloque va
-    por `unsafe_allow_html`."""
-    icono = (info.get("icono") or "").removeprefix(":material/").removesuffix(":")
+    Todo con `html.escape`: el nombre es texto, y este bloque va por
+    `unsafe_allow_html`."""
+    icono = (icono or "").removeprefix(":material/").removesuffix(":")
     partes = ['<div class="barra-ctx">']
     if icono:
         partes.append(f'<span class="barra-ico" aria-hidden="true">{html.escape(icono)}</span>')
-    # `label_largo` es el nombre de MOSTRAR (ancho), que puede diferir de la
-    # clave interna: hoy sólo lo declara "Inventario Valorizado" para salir
-    # como "Stock e Inventario" sin renombrar la clave (ver data.py). Sin él,
-    # cae en la clave, que es lo que muestra el resto de los reportes.
-    _nom = info.get("label_largo") or reporte_activo
-    partes.append(f'<span class="barra-nom">{html.escape(_nom)}</span>')
-    partes.append('<span class="barra-vista"></span>')
+    partes.append(f'<span class="barra-nom">{html.escape(nombre)}</span>')
     partes.append('</div>')
     return "".join(partes)
 
@@ -471,6 +453,85 @@ CLAVE_CABECERA = "_nav_cabecera"
 # la escribe `_ir_a_vista` y la consume `graficos/base.py::_render_rail`
 # del reporte al que se llega, que la traduce a su sección de la pila.
 CLAVE_SALTO_VISTA = "_rail_saltar_a"
+
+# ── LAS PESTAÑAS DE LA FRANJA: el índice de las vistas del ÁREA ─────────
+# (2026-10-23, regla #708, la «D + E» del boceto del rail compacto.) Desde
+# 901px la franja que asoma arriba lista las vistas de todos los reportes
+# del área (`data.py`, clave `area`), y el temporizador de
+# `graficos/base.py::_render_rail` marca la que está en pantalla y lleva a
+# ella sin rerun, igual que la lista de la columna.
+#
+# El rótulo es CORTO a propósito: la franja es UN renglón compartido con la
+# fecha, Filtros, la hora del dato y Actualizar, y con los nombres enteros
+# las nueve vistas de Compras medían ~1150px contra ~900 disponibles. Por
+# (reporte, id) y no por id: «Resumen ejecutivo» es una vista de dos
+# reportes. Una vista que falte acá sale con su rótulo de siempre; un id
+# que ya no exista lo ataja `test_graficos.py::_pruebas_pestanas_franja`.
+ROTULO_PESTANA = {
+    ("Resumen ejecutivo", "Resumen ejecutivo"): "Resumen",
+    ("Compras", "Compras por período"): "Período",
+    ("Compras", "Proveedor"): "Proveedor",
+    ("Compras", "Producto"): "Producto",
+    ("Compras", "Vs año pasado"): "Año pasado",
+    ("Compras", "Volatilidad"): "Volatilidad",
+    ("Compras", "Documentos por proveedor"): "Detalle docs.",
+    ("Documentos SUNAT", "Cruce con SUNAT"): "Cruce",
+    ("Documentos SUNAT", "Proveedores y fechas"): "Fechas",
+    ("Documentos SUNAT", "Documentos"): "Documentos",
+    ("Inventario Valorizado", "Productos"): "Por producto",
+    ("Inventario Valorizado", "Por área"): "Por área",
+    ("Inventario Valorizado", "Movimientos"): "Por tipo",
+    ("Ajuste de Inventario", "Cascada"): "Por familia",
+    ("Ajuste de Inventario", "Mapa de calor"): "Familia × Área",
+    ("Ajuste de Inventario", "Diferencias"): "Diferencias",
+    ("Ajuste de Inventario", "Evolución"): "Evolución",
+    ("Ajuste de Inventario", "Detalle por producto"): "Tabla dinámica",
+    ("Movimientos", "Requerimientos por período"): "Req. período",
+    ("Movimientos", "Por sub almacén"): "Req. área",
+    ("Movimientos", "Salidas por período"): "Sal. período",
+    ("Movimientos", "Detalle de salidas"): "Sal. área",
+    ("Movimientos", "Sin plato por cierre"): "Sin plato",
+    ("Movimientos", "En qué se fue cada producto"): "Destino",
+    ("Movimientos", "Porcionamientos"): "Porcionamientos",
+    ("Movimientos", "Rendimiento por producto"): "Rendimiento",
+    ("Movimientos", "Proveedor por kg útil"): "Kg útil",
+    ("Movimientos", "Merma para revisar"): "Para revisar",
+    ("Movimientos", "Producción"): "Producción",
+    ("Movimientos", "Consumo según recetas"): "Consumo",
+    ("Recetas", "Carta costeada"): "Costo de Carta",
+    ("Recetas", "Alza de insumo"): "Alza",
+    ("Recetas", "Costo de recetas base"): "Recetas base",
+    ("Recetas", "Cambios en recetas base"): "Cambios",
+    ("Recetas", "Revisar recetas"): "Vs porcionado",
+    ("Recetas", "Nueva receta"): "Nuevo Costeo",
+    ("Ventas", "Resumen ejecutivo"): "Venta",
+    ("Ventas", "Mix de carta"): "Mix",
+    ("Ventas", "Mapa por hora"): "Por hora",
+    ("Ventas", "Comparativo vs Año Pasado"): "Año pasado",
+    ("Ventas", "Análisis de platos"): "Platos",
+    ("Ventas", "Meseros"): "Meseros",
+    ("Ventas", "Control de pedidos"): "Pedidos",
+    ("Costos", "Costo de ventas"): "Costo de ventas",
+    ("Costos", "Consistencia de datos"): "Consistencia",
+}
+
+
+def claves_vista(reporte, vista):
+    """Las keys de los dos botones que llevan a `vista` de `reporte` FUERA
+    de la columna: su pestaña en la franja y su fila en el panel del área.
+    Las arma este módulo, que los dibuja; `graficos/base.py::_render_rail`
+    las pide para marcarlos y hacerlos saltar sin rerun (regla #708)."""
+    return (f"franjav_{_slug(reporte)}_{_slug(vista)}",
+            f"navflyv_{_slug(reporte)}_{_slug(vista)}")
+
+
+def _areas_de(reportes):
+    """`{área: [reportes, en el orden del dict]}` de los que declaran una."""
+    areas = {}
+    for nombre, info in reportes.items():
+        if info.get("area"):
+            areas.setdefault(info["area"], []).append(nombre)
+    return areas
 
 NAV_X0 = 64        # Ver comentario original más abajo, junto al CSS.
 NAV_MOVIL_ALTO = 60  # Debe coincidir con estilos/_00_base.py, ver ese archivo.
@@ -1068,16 +1129,29 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         "primario": _par_act[0] if _par_act else None,
         "secundario": _par_act[1] if _par_act else None,
         "negativo": bool(_par_act[2]) if _par_act else False,
+        # La CLAVE interna (2026-10-23, regla #708): con ella `_render_rail`
+        # pide a `claves_vista` las pestañas de la franja que tiene que
+        # marcar y hacer saltar.
+        "reporte": reporte_activo,
     }
 
-    # Si el reporte activo pertenece a un grupo (p.ej. Receta Base/Venta bajo
-    # "Recetas"), recordar CUÁL de sus miembros fue el último visitado: es a
-    # dónde navega el botón agrupado la próxima vez que se lo pulse desde
-    # otro reporte. Sin esto, el botón siempre volvería al primer miembro del
-    # dict, perdiendo en qué sub-reporte estaba el usuario.
-    _grupo_activo = visibles.get(reporte_activo, {}).get("grupo_nav")
-    if _grupo_activo:
-        st.session_state[f"_ultimo_{_grupo_activo}"] = reporte_activo
+    # ── LAS ÁREAS (2026-10-23, regla #708) ──────────────────────────────
+    # Desde 901px la columna lleva UN ícono por área, y el clic lleva al
+    # reporte del área que se visitó último: volver a Inventario desde
+    # Ventas te deja en Ajuste si estabas en Ajuste, no en el primero del
+    # dict. Ocupa el lugar del viejo `grupo_nav` (un botón para varios
+    # reportes en TODOS los anchos), que no tenía usos desde el 2026-09-22:
+    # por debajo de 901px el área no existe, porque ahí la franja no es el
+    # índice y sus reportes quedarían sin camino.
+    _areas = _areas_de(visibles)
+    _area_act = _info_act.get("area")
+    if _area_act:
+        st.session_state[f"_ultimo_area_{_area_act}"] = reporte_activo
+
+    def _destino_area(area):
+        _miembros = _areas[area]
+        _d = st.session_state.get(f"_ultimo_area_{area}", _miembros[0])
+        return _d if _d in _miembros else _miembros[0]
 
     # 2026-08-31: aca vivia el titulo de la franja, "Sapiens (Compras)".
     # Se retiro a pedido. No se pierde el dato: que reporte esta activo lo
@@ -1224,27 +1298,50 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # dónde estás. Los botones siguen dibujándose para el tramo de 769 a
     # 900px, donde la franja sigue siendo la de siempre. Sus KPIs se fueron
     # el 2026-10-03 (regla #596).
-    _arbol_barra = _html_barra_contexto(reporte_activo, _info_act)
+    #
+    # 2026-10-23 — Y ES EL ÍNDICE DEL ÁREA (regla #708): después del nombre
+    # del área van las vistas de todos sus reportes como pestañas
+    # (`nav_franja_idx`), con el rótulo corto de `ROTULO_PESTANA`. Las del
+    # reporte en pantalla las marca y las hace saltar el temporizador de
+    # `graficos/base.py::_render_rail`, sin rerun; si el clic llega a
+    # Streamlit igual —el temporizador todavía no las enlazó, o es un
+    # destino aparte como Documentos SUNAT—, `_ir_a_vista` hace lo mismo con
+    # una corrida. Las de otro reporte del área entran a él ya paradas en
+    # la vista. Se dibujan acá, ANTES del fragment del contenido, por lo
+    # mismo que los reportes: cambiar de reporte pide la corrida completa.
+    _miembros_act = _areas.get(_area_act) or ([reporte_activo]
+                                               if not _info_act.get("tool") else [])
+    _nombre_barra = _area_act or _info_act.get("label_largo") or reporte_activo
+    _ico_barra = (visibles[_miembros_act[0]].get("icono") if _area_act
+                  else _info_act.get("icono"))
+    _arbol_barra = _html_barra_contexto(_nombre_barra, _ico_barra)
     with st.container(key="nav_franja_rep"):
         st.markdown(_arbol_barra, unsafe_allow_html=True)
-        _grupos_franja = set()
+        _pestanas = [(m, _vistas_de(m)) for m in _miembros_act]
+        _pestanas = [(m, par) for m, par in _pestanas if par and par[1]]
+        if _pestanas:
+            with st.container(key="nav_franja_idx", horizontal=True, gap="small"):
+                for _i, (_m, (_sk, _vs)) in enumerate(_pestanas):
+                    # Con más de un reporte, cada tramo lleva su nombre
+                    # corto: «Por familia» de Ajuste y «Por área» de Stock
+                    # serían ambiguos sin él. Salvo el que se llama como
+                    # el área, que ya se lee al principio: «Compras ·
+                    # Compras» le quitaba 60px a las pestañas de Compras,
+                    # que a 1323px no entraban por poco.
+                    _rot_m = (visibles[_m].get("label_rail")
+                              or visibles[_m].get("label_corto") or _m)
+                    if len(_pestanas) > 1 and (_i or _rot_m != _nombre_barra):
+                        st.markdown(
+                            ('<span class="franja-sep"></span>' if _i else "")
+                            + f'<span class="franja-miembro">{html.escape(_rot_m)}</span>',
+                            unsafe_allow_html=True)
+                    for _oid, _rot, *_ in _vs:
+                        st.button(
+                            ROTULO_PESTANA.get((_m, _oid), _rot),
+                            key=claves_vista(_m, _oid)[0],
+                            on_click=_ir_a_vista, args=(_m, _sk, _oid),
+                        )
         for nombre, info in visibles.items():
-            grupo = info.get("grupo_nav")
-            if grupo:
-                if grupo in _grupos_franja:
-                    continue
-                _grupos_franja.add(grupo)
-                _miembros = [n for n, i in visibles.items()
-                             if i.get("grupo_nav") == grupo]
-                _destino = st.session_state.get(f"_ultimo_{grupo}", _miembros[0])
-                if _destino not in _miembros:
-                    _destino = _miembros[0]
-                st.button(
-                    grupo, key=f"franjarep_{_slug(grupo)}",
-                    type="primary" if reporte_activo in _miembros else "secondary",
-                    on_click=_on_nav_click, args=(_destino,),
-                )
-                continue
             st.button(
                 info.get("label_corto") or nombre, key=f"franjarep_{_slug(nombre)}",
                 type="primary" if nombre == reporte_activo else "secondary",
@@ -1298,13 +1395,12 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # dibujan acá, antes del fragment, y las vistas adentro, en
     # `graficos/base.py::_render_rail`—, así que el de las vistas se ubica
     # por geometría y el CSS necesita un dato que sólo Python sabe: CUÁNTAS
-    # filas de reportes hay (un grupo es una fila, y el Inspector suma una
-    # cuando se muestra). Va por variable y no por regla: el mismo criterio
-    # que el semáforo de `_render_rail`, una regla fija en estilos/ y el
-    # dato que cambia por render entra por `var(--…)`.
-    _grupos_rep = {_i["grupo_nav"] for _i in visibles.values() if _i.get("grupo_nav")}
-    _n_filas_rep = len(_grupos_rep) + sum(1 for _i in visibles.values()
-                                          if not _i.get("grupo_nav"))
+    # filas hay en la columna desde 901px (un área es una fila, y el
+    # Inspector suma una cuando se muestra). Va por variable y no por regla:
+    # el mismo criterio que el semáforo de `_render_rail`, una regla fija en
+    # estilos/ y el dato que cambia por render entra por `var(--…)`.
+    _n_filas_rep = len(_areas) + sum(1 for _i in visibles.values()
+                                     if not _i.get("area"))
     # EL NOMBRE DEBAJO DEL ÍCONO (2026-09-29, regla #568). Plegada, la
     # columna mide 80px y bajo cada ícono va una palabra: `label_rail`, que
     # es `label_corto` salvo en los tres cuyo nombre no entra («Stock e
@@ -1312,75 +1408,84 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # se pidió el 2026-09-21 y el 2026-09-22—, así que el botón sigue
     # llevándolo, y el corto lo pinta un `::after` desde esta variable: la
     # regla, fija en `_28_arbol.py`; el dato, acá. `json.dumps` da una cadena
-    # CSS válida (comillas dobles, escapes).
+    # CSS válida (comillas dobles, escapes). Un área se nombra a sí misma.
     _rotulos = "".join(
         f".st-key-navitem_{_slug(n)}{{--rot-corto:"
         f"{json.dumps(i.get('label_rail') or i.get('label_corto') or n)};}}"
-        for n, i in visibles.items() if not i.get("grupo_nav"))
-    st.markdown(f"<style>:root{{--arbol-filas:{_n_filas_rep};}}{_rotulos}</style>",
+        for n, i in visibles.items())
+    _rotulos += "".join(
+        f".st-key-navitem_area_{_slug(a)}{{--rot-corto:{json.dumps(a)};}}"
+        for a in _areas)
+    # QUÉ FILAS SE VEN EN CADA ANCHO (regla #708). Desde 901px, el área y no
+    # sus reportes; por debajo, al revés —ahí la franja no es el índice del
+    # área (769-900px son sus botones de reportes; en el celular no está) y
+    # sin su botón propio Ajuste o Documentos SUNAT quedarían sin camino—.
+    # Se esconde también el `stLayoutWrapper` que Streamlit pone alrededor
+    # de cada contenedor con key: entre 769 y 900px cada hijo directo de
+    # `graf_tipo_chips` lleva un filete abajo, y uno vacío dejaría una línea
+    # doble. Por las keys EXACTAS, que sólo Python sabe: adentro de un
+    # `:has()` va una clase sola, nunca un `[class*=…]` (regla #469).
+    def _esconder(keys):
+        return ",".join(f'[data-testid="stLayoutWrapper"]:has(> .st-key-{k}),.st-key-{k}'
+                        for k in keys) + "{display:none !important;}"
+    _en_area = [f"navitem_{_slug(m)}" for _ms in _areas.values() for m in _ms]
+    _de_area = [f"navitem_area_{_slug(a)}" for a in _areas]
+    _ancho = ((f"@media (min-width: 901px){{{_esconder(_en_area)}}}"
+               f"@media (max-width: 900px){{{_esconder(_de_area)}}}")
+              if _areas else "")
+    st.markdown(f"<style>:root{{--arbol-filas:{_n_filas_rep};}}{_rotulos}{_ancho}</style>",
                 unsafe_allow_html=True)
 
-    _grupos_dibujados = set()
+    def _fila_reporte(nombre, info):
+        etiqueta = info.get("label_corto") or nombre.split()[0][:10]
+        with st.container(key=f"navitem_{_slug(nombre)}"):
+            # SIN `help=` desde el 2026-09-19 (regla #472): en el
+            # árbol desplegado el tooltip de Streamlit salía encima de
+            # la lista repitiendo el nombre que ya se lee en la fila,
+            # y el nombre completo del activo ya está en la franja.
+            st.button(
+                etiqueta,
+                key=f"navbtn_{_slug(nombre)}",
+                icon=info.get("icono"),
+                type="primary" if nombre == reporte_activo else "secondary",
+                use_container_width=True,
+                on_click=_on_nav_click,
+                args=(nombre,),
+            )
+            # Los KPIs (los montos S/ a la derecha de cada reporte) se
+            # QUITARON del rail el 2026-09-22, a pedido, y de la franja
+            # superior de contexto el 2026-10-03 (regla #596): desde
+            # 901px el cromo no lleva montos. El `navitem_<slug>`
+            # que envuelve al botón
+            # se mantiene igual — es el ancestro que asume el hairline
+            # entre ítems (estilos/_20_compras_rail.py).
+
+    _areas_dibujadas = set()
     with st.container(key="compras_tabs_row"):
         with st.container(key="graf_tipo_chips"):
             for nombre, info in visibles.items():
-                grupo = info.get("grupo_nav")
-                if grupo:
-                    # Un solo botón por grupo — las demás entradas del grupo
-                    # se saltan (ya comparten etiqueta, no tiene sentido un
-                    # botón por cada una). Navega al último miembro
-                    # visitado, o al primero del dict la primera vez.
-                    if grupo in _grupos_dibujados:
-                        continue
-                    _grupos_dibujados.add(grupo)
-                    miembros = [n for n, i in visibles.items()
-                               if i.get("grupo_nav") == grupo]
-                    destino = st.session_state.get(f"_ultimo_{grupo}", miembros[0])
-                    if destino not in miembros:
-                        destino = miembros[0]
-                    # navitem_<slug> es el ancestro común que necesita el CSS
-                    # de los valores (position:relative + el :has() del
-                    # estado activo) — ver el docstring de _CSS_KPIS. Los
-                    # grupos no tienen KPI propio (¿de cuál de sus miembros
-                    # sería? Movimientos = Salidas + Requerimientos, no hay
-                    # una respuesta sin ambigüedad) así que este contenedor
-                    # sólo envuelve al botón, pero se mantiene por
-                    # UNIFORMIDAD: el hairline entre ítems (estilos/_20_
-                    # compras_rail.py) asume que cada reporte es exactamente
-                    # un `navitem_`, agrupado o no.
-                    with st.container(key=f"navitem_{_slug(grupo)}"):
+                area = info.get("area")
+                if area and area not in _areas_dibujadas:
+                    # La fila del ÁREA va donde iría su primer reporte, y
+                    # sus reportes la siguen con sus filas de siempre (que
+                    # desde 901px no se ven, ver `_esconder`). Su contenedor
+                    # es un `navitem_` más —`navitem_area_<slug>`—: el ícono
+                    # con su nombre debajo, la píldora del activo y el panel
+                    # al pasar el cursor salen de las mismas reglas que un
+                    # reporte. Sin KPI: ¿de cuál de sus reportes sería?
+                    _areas_dibujadas.add(area)
+                    _ms = _areas[area]
+                    with st.container(key=f"navitem_area_{_slug(area)}"):
                         st.button(
-                            grupo,
-                            key=f"navbtn_{_slug(grupo)}",
-                            icon=info.get("icono"),
-                            type="primary" if reporte_activo in miembros else "secondary",
+                            area,
+                            key=f"navbtn_area_{_slug(area)}",
+                            icon=visibles[_ms[0]].get("icono"),
+                            type="primary" if reporte_activo in _ms else "secondary",
                             use_container_width=True,
                             on_click=_on_nav_click,
-                            args=(destino,),
+                            args=(_destino_area(area),),
                         )
-                    continue
-                etiqueta = info.get("label_corto") or nombre.split()[0][:10]
-                with st.container(key=f"navitem_{_slug(nombre)}"):
-                    # SIN `help=` desde el 2026-09-19 (regla #472): en el
-                    # árbol desplegado el tooltip de Streamlit salía encima de
-                    # la lista repitiendo el nombre que ya se lee en la fila,
-                    # y el nombre completo del activo ya está en la franja.
-                    st.button(
-                        etiqueta,
-                        key=f"navbtn_{_slug(nombre)}",
-                        icon=info.get("icono"),
-                        type="primary" if nombre == reporte_activo else "secondary",
-                        use_container_width=True,
-                        on_click=_on_nav_click,
-                        args=(nombre,),
-                    )
-                    # Los KPIs (los montos S/ a la derecha de cada reporte) se
-                    # QUITARON del rail el 2026-09-22, a pedido, y de la franja
-                    # superior de contexto el 2026-10-03 (regla #596): desde
-                    # 901px el cromo no lleva montos. El `navitem_<slug>`
-                    # que envuelve al botón
-                    # se mantiene igual — es el ancestro que asume el hairline
-                    # entre ítems (estilos/_20_compras_rail.py).
+                _fila_reporte(nombre, info)
         # PIE DEL RAIL — Refrescar, la única ACCIÓN (no un reporte). Fuera de
         # graf_tipo_chips por lo mismo que el pestillo (regla #6).
         boton_refresco()
@@ -1397,6 +1502,14 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # puntos de KPI de Compras. Plegada la columna, esa lista se presenta
     # como panel; fijada, sigue siendo el árbol de debajo de los reportes.
     #
+    # EL DE UN ÁREA SÍ, aunque sea la activa (regla #708): sus vistas son
+    # las de varios reportes, y la lista del rail sólo tiene las del que
+    # está en pantalla. Va cada reporte con su nombre y sus vistas; las del
+    # que está en pantalla las marca y las hace saltar sin rerun el
+    # temporizador de `_render_rail` (sus keys salen de `claves_vista`).
+    # La lista va en su propio contenedor (`navflylista_`), que scrollea:
+    # Inventario son 20 vistas y no entran en una pantalla de 619px.
+    #
     # FUERA de `compras_tabs_row` a propósito: adentro heredaría las reglas
     # de los botones de reportes —`estilos/` las cuelga del contenedor, y
     # un descendiente nuevo las toma sin que nada lo avise (CLAUDE.md,
@@ -1404,48 +1517,74 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # a qué altura lo decide `_SCRIPT_CAPAS` (`data-fly`, `--fly-top`); el
     # aspecto, `estilos/_28_arbol.py`. Son HTML y botones nativos: el clic
     # lo resuelve Streamlit con un rerun completo, como el de un reporte.
+    def _cab_panel(nombre, icono):
+        _ico = (icono or "").removeprefix(":material/").removesuffix(":")
+        st.markdown(
+            '<div class="fly-cab">'
+            + (f'<span class="fly-ico" aria-hidden="true">{html.escape(_ico)}</span>'
+               if _ico else "")
+            + f'<span class="fly-nom">{html.escape(nombre)}</span></div>',
+            unsafe_allow_html=True)
+
+    def _vistas_panel(nombre, sk, bloques):
+        # Subtítulos y gemelas en un renglón desde las 8 vistas
+        # (2026-10-21). Sin el pie «Clic en una vista: entra al
+        # reporte justo ahí» desde el mismo día, a pedido: lo
+        # que dice ya se lee en la fila que se ilumina, y en un
+        # panel que llega al borde de una pantalla de 619px
+        # ese renglón es el de los subtítulos.
+        for _bl in bloques:
+            if _bl[0] == "grupo":
+                st.markdown(f'<div class="fly-grupo">{html.escape(_bl[1])}</div>',
+                            unsafe_allow_html=True)
+                continue
+            if _bl[0] == "sep":
+                st.markdown('<div class="fly-sep"></div>',
+                            unsafe_allow_html=True)
+                continue
+            _fila = _bl[1]
+            _ctx = (st.container(horizontal=True, gap="small",
+                                 key=f"navflypar_{_slug(nombre)}_{_slug(_fila[0][0])}")
+                    if len(_fila) > 1 else contextlib.nullcontext())
+            with _ctx:
+                for _oid, _rot, _vico in _fila:
+                    st.button(
+                        _rot, key=claves_vista(nombre, _oid)[1],
+                        icon=_vico, on_click=_ir_a_vista,
+                        args=(nombre, sk, _oid),
+                    )
+
     _paneles = []
     for nombre, info in visibles.items():
-        if nombre == reporte_activo or info.get("grupo_nav") or info.get("tool"):
+        if (nombre == reporte_activo or info.get("area")
+                or info.get("tool")):
             continue
         _rail = _bloques_de(nombre)
         if _rail and _rail[1]:
-            _paneles.append((nombre, info, _rail))
+            _paneles.append(("rep", nombre, info, [(nombre, _rail)]))
+    for area, _ms in _areas.items():
+        _rails = [(m, _bloques_de(m)) for m in _ms]
+        _rails = [(m, r) for m, r in _rails if r and r[1]]
+        if _rails:
+            _paneles.append(("area", area, visibles[_ms[0]], _rails))
     if _paneles:
         with st.container(key="nav_paneles"):
-            for nombre, info, (_sk, _bloques) in _paneles:
-                _ico = (info.get("icono") or "").removeprefix(":material/").removesuffix(":")
-                _nom = info.get("label_largo") or info.get("label_corto") or nombre
-                with st.container(key=f"navfly_{_slug(nombre)}"):
-                    st.markdown(
-                        '<div class="fly-cab">'
-                        + (f'<span class="fly-ico" aria-hidden="true">{html.escape(_ico)}</span>'
-                           if _ico else "")
-                        + f'<span class="fly-nom">{html.escape(_nom)}</span></div>',
-                        unsafe_allow_html=True)
-                    # Subtítulos y gemelas en un renglón desde las 8 vistas
-                    # (2026-10-21). Sin el pie «Clic en una vista: entra al
-                    # reporte justo ahí» desde el mismo día, a pedido: lo
-                    # que dice ya se lee en la fila que se ilumina, y en un
-                    # panel que llega al borde de una pantalla de 619px
-                    # ese renglón es el de los subtítulos.
-                    for _bl in _bloques:
-                        if _bl[0] == "grupo":
-                            st.markdown(f'<div class="fly-grupo">{html.escape(_bl[1])}</div>',
-                                        unsafe_allow_html=True)
-                            continue
-                        if _bl[0] == "sep":
-                            st.markdown('<div class="fly-sep"></div>',
-                                        unsafe_allow_html=True)
-                            continue
-                        _fila = _bl[1]
-                        _ctx = (st.container(horizontal=True, gap="small",
-                                             key=f"navflypar_{_slug(nombre)}_{_slug(_fila[0][0])}")
-                                if len(_fila) > 1 else contextlib.nullcontext())
-                        with _ctx:
-                            for _oid, _rot, _vico in _fila:
-                                st.button(
-                                    _rot, key=f"navflyv_{_slug(nombre)}_{_slug(_oid)}",
-                                    icon=_vico, on_click=_ir_a_vista,
-                                    args=(nombre, _sk, _oid),
-                                )
+            for _tipo, nombre, info, _rails in _paneles:
+                if _tipo == "rep":
+                    with st.container(key=f"navfly_{_slug(nombre)}"):
+                        _cab_panel(info.get("label_largo") or info.get("label_corto")
+                                   or nombre, info.get("icono"))
+                        (_m, (_sk, _bloques)), = _rails
+                        _vistas_panel(_m, _sk, _bloques)
+                    continue
+                with st.container(key=f"navfly_area_{_slug(nombre)}"):
+                    _cab_panel(nombre, info.get("icono"))
+                    with st.container(key=f"navflylista_area_{_slug(nombre)}"):
+                        for _m, (_sk, _bloques) in _rails:
+                            st.markdown(
+                                '<div class="fly-miembro">'
+                                + html.escape(visibles[_m].get("label_largo")
+                                              or visibles[_m].get("label_corto") or _m)
+                                + '</div>',
+                                unsafe_allow_html=True)
+                            _vistas_panel(_m, _sk, _bloques)

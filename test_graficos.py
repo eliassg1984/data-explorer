@@ -5167,6 +5167,71 @@ def _pruebas_vistas_de_cada_reporte():
     return fallos
 
 
+def _pruebas_pestanas_franja():
+    """Las áreas de la columna y las pestañas de la franja (regla #708).
+
+    2026-10-23, la «D + E» del boceto del rail compacto: desde 901px la
+    columna lleva un ícono por ÁREA (`data.py`, clave `area`) y la franja
+    que asoma lista, como pestañas, las vistas de todos sus reportes, con
+    un rótulo corto de `navegacion.ROTULO_PESTANA`. Lo que se rompe EN
+    SILENCIO:
+
+      · un id de vista que se renombra: su pestaña sale con el rótulo
+        largo y la entrada vieja del dict queda colgando;
+      · una vista nueva sin rótulo corto: la franja desborda un poco más;
+      · los reportes de un área separados en el dict: la fila del área se
+        dibuja donde va el primero, y el otro quedaría lejos de ella;
+      · dos keys donde una contiene a la otra: el temporizador busca los
+        botones con `[class*="st-key-…"]`, y marcaría el que no es.
+    """
+    import data
+    import navegacion
+    from graficos import _RAILS, vistas_de
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    pestañas · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA pestañas · {nombre}{': ' + detalle if detalle else ''}")
+
+    vistas = {(r, v[0]) for r in _RAILS for v in vistas_de(r)[1]}
+    sobran = sorted(set(navegacion.ROTULO_PESTANA) - vistas)
+    check("cada rótulo corto es de una vista que existe", not sobran,
+          f"sin vista: {sobran}")
+    faltan = sorted(vistas - set(navegacion.ROTULO_PESTANA))
+    check("cada vista tiene su rótulo corto", not faltan, f"faltan: {faltan}")
+
+    nombres = list(data.REPORTES)
+    for area, ms in navegacion._areas_de(data.REPORTES).items():
+        pos = [nombres.index(m) for m in ms]
+        check(f"{area}: sus reportes van seguidos en REPORTES",
+              pos == list(range(pos[0], pos[0] + len(pos))), f"posiciones {pos}")
+    check("las áreas de la síntesis: Compras con SUNAT, Inventario con "
+          "Stock, Ajuste y Movimientos",
+          navegacion._areas_de(data.REPORTES) == {
+              "Compras": ["Compras", "Documentos SUNAT"],
+              "Inventario": ["Inventario Valorizado", "Ajuste de Inventario",
+                             "Movimientos"]})
+
+    keys = [k for r, v in sorted(vistas) for k in navegacion.claves_vista(r, v)]
+    check("las keys de pestañas y paneles no se repiten",
+          len(keys) == len(set(keys)))
+    choques = [(a, b) for a in keys for b in keys if a != b and a in b]
+    check("ninguna key contiene a otra (`[class*=…]` del temporizador)",
+          not choques, f"{choques[:3]}")
+
+    import inspect
+    import graficos.base as gb
+    fuente = inspect.getsource(gb._render_rail)
+    check("`_render_rail` marca también las pestañas y los paneles",
+          'getattr(navegacion, "claves_vista"' in fuente and "m.btns" in fuente)
+    return fallos
+
+
 def _pruebas_vistas_tabla_ocultas():
     """Las vistas «Tabla» siguen ocultas, y siguen DECLARADAS.
 
@@ -12878,6 +12943,9 @@ def main():
 
     # ── El panel de cada reporte: el mismo rail que su dashboard ───────
     fallos += _pruebas_vistas_de_cada_reporte()
+
+    # ── Las áreas y las pestañas de la franja (regla #708) ──────────────
+    fallos += _pruebas_pestanas_franja()
 
     # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
     fallos += _pruebas_jscode_barato()

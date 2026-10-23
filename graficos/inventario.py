@@ -270,9 +270,9 @@ _FILAS_RANK = 8
 # el `id_vista` con que la aparea `_PILA`, y el deep-link `?vista=`. El
 # elemento 1 es lo único que ve el usuario. Por eso el rótulo se reescribió
 # a "Stock por …" (a pedido, 2026-09-21) SIN tocar el `oid` — cambiarlo
-# habría roto el apareo con `_PILA` y los enlaces guardados. El rótulo
-# también es lo que el temporizador de `_render_rail` escribe en la franja
-# de contexto (`.barra-vista`), así que la franja queda consistente sola.
+# habría roto el apareo con `_PILA` y los enlaces guardados. La pestaña de
+# la franja lleva otro, más corto (`navegacion.py::ROTULO_PESTANA`, regla
+# #708), también colgado del `oid`.
 #
 # La «Tabla» está OCULTA desde el 2026-09-23, con las de los demás reportes:
 # `rail_sin_tablas` acá y `pila_sin_tablas` en `_PILA`, de a par (#507).

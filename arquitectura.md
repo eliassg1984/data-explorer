@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-707 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+708 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (226)
 
@@ -906,7 +906,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#706** — «Costo recetas base» es una pieza propia: la lista y la ficha de la elegida, con dónde se…
 - **#707** — «Cambios en Recetas»: las recetas base, las recetas de plato y los precios de venta en una…
 
-**SUNAT y SIRE** (71)
+**SUNAT y SIRE** (72)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -979,6 +979,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#691** — «Consistencia de datos», ajustada a pedido: el Almacén Central tiene TODOS los productos, dos…
 - **#693** — La portada del Resumen ejecutivo entra en una pantalla de laptop y no repite un número
 - **#694** — «Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta son notas de crédito y…
+- **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 
 **Fechas, rangos y cortes** (17)
 
@@ -1051,7 +1052,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (210)
+**Decisiones de diseño y UX** (211)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1263,6 +1264,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#701** — Las dos vistas de requerimientos dicen qué se pidió de más, qué se repite y qué no salió…
 - **#703** — «Revisar recetas» es una pieza propia y se llama «Recetas vs porcionado»
 - **#707** — «Cambios en Recetas»: las recetas base, las recetas de plato y los precios de venta en una…
+- **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -54396,6 +54398,91 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      auditoría de verdad (la fila del Sheet todavía no trae los precios, y
      hay una sola foto). (2026-10-22.)
 
+708. **La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las
+     vistas del área: pestañas que marca y hace saltar el mismo
+     temporizador que la lista de la columna, y que al abrirse EMPUJAN la
+     página en vez de taparla.** Etapa 1 de la navegación «D + E» del
+     boceto del rail compacto, elegida por el usuario el 2026-10-23 sobre
+     un lienzo con datos reales (https://claude.ai/artifact/1fymSPwVmqUtpQLnjzRB9m),
+     con una condición explícita: que no se pierda ninguna función. Nada
+     de esto toca una vista: todas se siguen dibujando enteras, y lo único
+     nuevo son caminos para llegar a ellas.
+     · **Un área es una clave de `REPORTES`, no un reporte nuevo**
+       (`area`): Compras = Compras + Documentos SUNAT; Inventario = Stock +
+       Ajuste + Movimientos. Desde 901px la columna dibuja UNA fila por área
+       (`navitem_area_<slug>`, con el ícono de su primer reporte y su nombre
+       debajo) y el clic lleva al reporte que se visitó último
+       (`_ultimo_area_<área>`). Ocupa el lugar de `grupo_nav`, que hacía lo
+       mismo en TODOS los anchos y no tenía usos desde el 2026-09-22.
+     · **Por debajo de 901px el área no existe.** Entre 769 y 900px la
+       franja son los botones de los reportes, y en el celular no está: sin
+       su fila propia, Ajuste o Documentos SUNAT quedaban sin camino. Así
+       que se dibujan las DOS cosas y cada ancho esconde la que no le toca,
+       con reglas que escribe Python por las keys EXACTAS —adentro de un
+       `:has()` va una clase sola, nunca un `[class*=…]` (#469)— y que
+       esconden también el `stLayoutWrapper` de cada una: entre 769 y 900px
+       cada hijo de `graf_tipo_chips` lleva un filete abajo, y uno vacío
+       dejaba una línea doble. `--arbol-filas` cuenta un área como una fila.
+     · **Las pestañas** (`nav_franja_idx`, un contenedor horizontal dentro
+       de `nav_franja_rep`) son las vistas de cada reporte del área con un
+       rótulo CORTO (`navegacion.py::ROTULO_PESTANA`, por reporte e id:
+       «Resumen ejecutivo» es vista de dos), con el nombre corto de cada
+       reporte delante salvo el que se llama como el área. Se dibujan antes
+       del fragment, como los reportes. Las del reporte en pantalla las
+       enlaza el temporizador de `_render_rail`: sus keys las arma
+       `navegacion.claves_vista` y el temporizador las pide con `getattr`
+       (en Cloud puede convivir con un `navegacion` viejo, #357), así que
+       cada vista tiene ahora una LISTA de botones (`btns`) que se marcan y
+       saltan juntos. Si el clic llega a Streamlit igual —todavía no
+       enlazada, o Documentos SUNAT, que no tiene pila— `_ir_a_vista` hace
+       lo mismo con una corrida. Las de otro reporte del área entran a él ya
+       paradas en la vista.
+     · **Reemplazan a «› Por familia ▾»**, la vista escrita en texto que con
+       la columna plegada abría la lista debajo (`.barra-vista` y el
+       `desdeFranja` de `_SCRIPT_CAPAS`, borrados): la franja YA es esa
+       lista.
+     · **Medido a 1323×619, la tira de pestañas medía 426px en Ventas y las
+       siete pedían 464**: los botones de reportes de 769-900px estaban
+       escondidos pero no sus contenedores, y cada uno seguía midiendo 16px
+       — 144 entre los nueve. Escondidos enteros (`[class*="st-key-franjarep_"]`,
+       la key de un widget va en su contenedor), con 8px de relleno y letra
+       de 13, entran todas las áreas: Ventas 570 de 570, Compras 749 de 749,
+       Recetas 829 de 829. Inventario no (1.740 contra 765, son 20 vistas):
+       la tira se desliza de lado sin barra, la rueda la corre
+       (`_SCRIPT_CAPAS::alRodar`, sólo si desborda y sólo lo que la tira
+       puede correr) y la pestaña marcada se trae a la vista sola, a mano y
+       no con `scrollIntoView`, que movería también la página. Bajará con
+       Producción como reporte propio y con las perspectivas.
+     · **Abierta, la franja empuja: son DOS reglas y van juntas.** El
+       `margin-top` del contenedor principal corre la página 32px (la franja
+       mide 44 y en reposo reserva 12); el `scroll-padding-top` de `.stMain`
+       corre lo mismo el punto donde encaja cada vista (#533). Con el margen
+       solo, el encaje obligatorio «corregía» el scroll y la vista volvía a
+       20px de un salto; con los dos, la posición de encaje de cada vista es
+       la misma abierta y cerrada, el scroll no se mueve y lo que baja es la
+       página. Medido: Ajuste › Por familia en y=20 con la franja cerrada,
+       en 52 abierta, `scrollTop` 3 en los dos. Sin transición por lo
+       mismo, y nada del ancho cambia (#350).
+     · **El panel de un área** (`navfly_area_<slug>`) se abre también
+       cuando es la activa: la lista del rail (`nav_rail_lateral`) sólo
+       tiene las vistas del reporte en pantalla. Cada reporte con su nombre
+       y sus vistas; la lista scrollea en su propio contenedor
+       (`navflylista_`): Inventario mide 776px contra 539 de lugar.
+     Lo vigila `test_graficos.py::_pruebas_pestanas_franja` (cada vista con
+     su rótulo corto y cada rótulo con su vista, las áreas seguidas en
+     `REPORTES`, que ninguna key contenga a otra —el temporizador las busca
+     con `[class*=…]`— y que `_render_rail` marque los tres botones).
+     Probado en la app local con R2, a 1323×619, con Streamlit 1.59 y 1.64:
+     la columna en los tres anchos, las pestañas de cada área, el empuje,
+     el salto sin rerun dentro de Ajuste, el salto a otro reporte del área
+     (Ajuste → Movimientos › Sal. período, Documentos SUNAT → Compras ›
+     Proveedor), el panel del área plegada y fijada, y volver al área desde
+     Ventas, que lleva a Movimientos. Dos cosas que ya pasaban y siguen
+     igual en la versión publicada (comparadas con la misma prueba): entrar
+     a una vista de otro reporte la deja a veces 58px más abajo, porque una
+     sección de arriba termina de construirse después del salto, y cambiar
+     de reporte conserva el scroll del anterior. (2026-10-23.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54408,7 +54495,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#707**; la próxima toma el número siguiente.
+> última regla es la **#708**; la próxima toma el número siguiente.
 
 >
 

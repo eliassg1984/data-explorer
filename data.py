@@ -42,6 +42,14 @@ from cortes import sesiones_inventario
 #                                    Con la columna FIJADA (248px) se sigue
 #                                    viendo `label_corto` entero, que es lo que
 #                                    se pidió el 2026-09-21 y el 2026-09-22.
+#   area                             el ÁREA a la que pertenece (2026-10-23,
+#                                    regla #708): desde 901px la columna
+#                                    muestra UN ícono por área, y la franja de
+#                                    arriba, las vistas de todos sus reportes.
+#                                    Los reportes de un área van SEGUIDOS en
+#                                    este dict. Por debajo de 901px cada uno
+#                                    sigue con su botón: ahí la franja no es
+#                                    el índice y no habría cómo llegar.
 #   fecha                            columna de fecha; None = sin filtro
 #   carga_por_rango                  filtra en DuckDB antes de materializar
 #   filtros_cat, buscador, agrupar   filtros genericos
@@ -110,6 +118,7 @@ REPORTES = {
     },
     "Compras": {
         "label_corto": "Compras",
+        "area": "Compras",
         "archivo": "compras.parquet",
         # Shortcode Material Symbols (no Bootstrap Icons — ver el comentario
         # grande más abajo de "El mapa de iconos..."). Confirmados contra
@@ -168,6 +177,7 @@ REPORTES = {
         "label_corto": "Documentos SUNAT",
         "label_largo": "Documentos SUNAT",
         "label_rail": "SUNAT",
+        "area": "Compras",
         "archivo": "compras.parquet",
         "icono": ":material/fact_check:",
     },
@@ -186,6 +196,7 @@ REPORTES = {
         "label_corto": "Stock e Inventario",
         "label_largo": "Stock e Inventario",
         "label_rail": "Stock",
+        "area": "Inventario",
         "archivo": "inventariovalorizado.parquet",
         # El kardex por hora (2026-10-03, regla #601): el «Stock al» de
         # Stock por Producto lo lee para el stock a una fecha. Va acá para
@@ -223,6 +234,7 @@ REPORTES = {
         # `label_largo` porque la clave ya coincide con el nombre a mostrar.
         "label_corto": "Ajuste de Inventario",
         "label_rail": "Ajuste",
+        "area": "Inventario",
         "archivo": "ajusteinventario.parquet",
         # Lo que el kardex registró por cada cierre (regla #612): `cargar`
         # lo une al ajuste. Acá para que «Actualizar» pida los dos.
@@ -298,6 +310,7 @@ REPORTES = {
         # `nombre.split()[0][:10]` y recortaría "Movimientos" a "Movimiento".
         "label_corto": "Movimientos",
         "label_largo": "Movimientos",
+        "area": "Inventario",
         "archivo": "requerimientos.parquet",
         # El SEGUNDO parquet de la página. `app.py` sigue cargando uno solo
         # (`archivo`) y pasandolo como df_f; salidas.parquet lo carga

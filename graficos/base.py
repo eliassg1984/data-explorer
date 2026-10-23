@@ -1391,8 +1391,8 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
             # (2026-10-21): los MISMOS bloques que el panel de un reporte que
             # no es el activo (`navegacion.py`), para que pasar el cursor por
             # el activo no muestre otra lista. Los rótulos acortados («Por
-            # Período») son sólo de esta lista: la franja escribe la vista
-            # con `_rotulos`, el nombre entero.
+            # Período») son sólo de las listas: la pestaña de la franja
+            # lleva los suyos (`navegacion.py::ROTULO_PESTANA`, regla #708).
             for _bl in bloques_de_vistas(categorias):
                 if _bl[0] == "grupo":
                     st.markdown(f'<div class="rail-grupo">{html.escape(_bl[1])}</div>',
@@ -1540,12 +1540,24 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
         # Va en `inyectar_html` y no en `st.markdown` porque markdown NO
         # ejecuta `<script>` (regla #4); ese primitivo mete un iframe de
         # verdad y reemplaza a `components.html` (regla #204).
-        # `lbl` es el rótulo corto de la vista: el temporizador lo escribe en
-        # la franja superior cuando esa sección pasa a ser la de pantalla
-        # (`navegacion.py::_html_barra_contexto`, regla #472).
-        _rotulos = {item[0]: item[1] for _, items in categorias for item in items}
-        _mapa = [{"sec": _cl, "btn": f"{btn_prefix}lat_{_slug_url(_oid)}",
-                   "go": f"pila_go_{_cl}", "lbl": _rotulos.get(_oid, _oid)}
+        # `btns` son TODOS los botones que llevan a la vista: el de esta
+        # lista y, desde la regla #708, su pestaña en la franja y su fila en
+        # el panel del área, que dibuja `navegacion.py` fuera del fragment
+        # y cuyas keys sólo él sabe armar (`claves_vista`). Los tres se
+        # marcan y saltan igual. `getattr`: en Cloud este módulo puede
+        # convivir con un `navegacion` viejo (regla #357) — sin pestañas
+        # marcadas, no sin app. (Hasta ese día iba también `lbl`, el rótulo
+        # que se escribía en la franja; ahora la vista la dice su pestaña.)
+        _cab_r = st.session_state.get(navegacion.CLAVE_CABECERA) or {}
+        _claves_v = getattr(navegacion, "claves_vista", None)
+
+        def _botones(oid):
+            _b = [f"{btn_prefix}lat_{_slug_url(oid)}"]
+            if _claves_v and _cab_r.get("reporte"):
+                _b += list(_claves_v(_cab_r["reporte"], oid))
+            return _b
+
+        _mapa = [{"sec": _cl, "btns": _botones(_oid), "go": f"pila_go_{_cl}"}
                  for _cl, _oid in secciones]
         # ¿La vista elegida es un DESTINO APARTE? (No está en `secciones`, y
         # estando ahí la pila no se dibuja. Hoy: el reporte «Documentos
@@ -1568,8 +1580,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
             # las dos ramas, por lo mismo que el del semáforo de arriba
             # (regla #589).
             st.markdown("<style></style>", unsafe_allow_html=True)
-        _btn_act = f"{btn_prefix}lat_{_slug_url(sel)}"
-        _lbl_act = _rotulos.get(sel, sel)
+        _btns_act = _botones(sel)
         with st.container(key="rail_scroll_hook"):
             inyectar_html(
                 f"""<script>
@@ -1577,18 +1588,43 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                   var w = window.parent, doc = w.document;
                   var MAPA = {json.dumps(_mapa, ensure_ascii=False)};
                   var FUERA = {json.dumps(_fuera)};
-                  var ACT = {json.dumps(_btn_act, ensure_ascii=False)};
-                  var LBL_ACT = {json.dumps(_lbl_act, ensure_ascii=False)};
+                  var ACT = {json.dumps(_btns_act, ensure_ascii=False)};
                   var raiz = doc.querySelector('[data-testid="stMain"]');
                   if (!raiz) return;
 
-                  // La vista en pantalla, escrita en la franja superior
-                  // (`navegacion.py::_html_barra_contexto`, regla #472).
-                  // Sólo si cambió: es texto dentro de un bloque que React
-                  // no vuelve a pintar mientras el reporte no cambie.
-                  function rotular(txt) {{
-                    var v = doc.querySelector('.barra-vista');
-                    if (v && v.textContent !== txt) v.textContent = txt;
+                  function boton(k) {{
+                    return doc.querySelector('[class*="st-key-' + k + '"] button');
+                  }}
+                  // La vista en pantalla: la clase en TODOS sus botones —la
+                  // lista, la pestaña de la franja, la fila del panel del
+                  // área (regla #708)— y en ninguno más. Se escribe SOLO lo
+                  // que cambia: quitar y volver a poner la misma clase no
+                  // es gratis — con los `:has()` de estilos/, cualquier
+                  // cambio de clase recalcula los estilos de la pagina
+                  // entera, medido ~100 ms en la laptop del usuario
+                  // (regla #469).
+                  function marcar(keys) {{
+                    var bs = keys.map(boton).filter(Boolean);
+                    var previos = doc.querySelectorAll('.vista-en-pantalla');
+                    for (var i = 0; i < previos.length; i++) {{
+                      if (bs.indexOf(previos[i]) < 0) {{
+                        previos[i].classList.remove('vista-en-pantalla');
+                      }}
+                    }}
+                    bs.forEach(function (b) {{
+                      if (b.classList.contains('vista-en-pantalla')) return;
+                      b.classList.add('vista-en-pantalla');
+                      // La pestaña recién marcada, a la vista en su tira:
+                      // la de un área grande desborda (regla #708). A mano
+                      // y no con `scrollIntoView`, que movería también la
+                      // página.
+                      var tira = b.closest('.st-key-nav_franja_idx');
+                      if (!tira) return;
+                      var rb = b.getBoundingClientRect(),
+                          rt = tira.getBoundingClientRect();
+                      if (rb.left < rt.left) tira.scrollLeft -= rt.left - rb.left + 24;
+                      else if (rb.right > rt.right) tira.scrollLeft += rb.right - rt.right + 24;
+                    }});
                   }}
 
                   // UN SOLO TEMPORIZADOR POR GEOMETRIA, no observers.
@@ -1624,17 +1660,8 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     // vuelta a la pila. Ahora la columna pasa a Vistas —con
                     // la elegida marcada— igual que al bajar. Regla #419.
                     if (FUERA) {{
-                      rotular(LBL_ACT);
                       doc.documentElement.classList.add('rails-scrolled');
-                      var act = doc.querySelector(
-                        '[class*="st-key-' + ACT + '"] button');
-                      if (act && !act.classList.contains('vista-en-pantalla')) {{
-                        var prev0 = doc.querySelectorAll('.vista-en-pantalla');
-                        for (var k = 0; k < prev0.length; k++) {{
-                          prev0[k].classList.remove('vista-en-pantalla');
-                        }}
-                        act.classList.add('vista-en-pantalla');
-                      }}
+                      marcar(ACT);
                       return;
                     }}
 
@@ -1649,7 +1676,6 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                       if (vis > mejorPx) {{ mejorPx = vis; mejor = m; }}
                     }});
                     if (mejor) {{
-                      rotular(mejor.lbl);
                       // El rail de la columna cambia de Reportes a Vistas en
                       // cuanto dejas la primera seccion.
                       //
@@ -1670,23 +1696,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                       doc.documentElement.classList.toggle(
                         'rails-scrolled',
                         !!primera && mejor.sec !== MAPA[0].sec);
-                      // Se escribe SOLO lo que cambia. Quitar y volver a poner
-                      // la misma clase no es gratis: con los `:has()` de
-                      // estilos/, cualquier cambio de clase recalcula los
-                      // estilos de la pagina entera — medido, ~100 ms en la
-                      // laptop del usuario, o sea un cuarto de nucleo
-                      // quemado para siempre a 400 ms por vuelta. Regla #469.
-                      var b = doc.querySelector(
-                        '[class*="st-key-' + mejor.btn + '"] button');
-                      var previos = doc.querySelectorAll('.vista-en-pantalla');
-                      for (var i = 0; i < previos.length; i++) {{
-                        if (previos[i] !== b) {{
-                          previos[i].classList.remove('vista-en-pantalla');
-                        }}
-                      }}
-                      if (b && !b.classList.contains('vista-en-pantalla')) {{
-                        b.classList.add('vista-en-pantalla');
-                      }}
+                      marcar(mejor.btns);
                     }}
 
                     // ── 2. Activar la proxima, de a una ─────────────────
@@ -1772,7 +1782,8 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                   w.__railFuera = FUERA;
                   function enlazar() {{
                     MAPA.forEach(function (m) {{
-                      var b = doc.querySelector('[class*="st-key-' + m.btn + '"] button');
+                     m.btns.forEach(function (k) {{
+                      var b = boton(k);
                       if (!b || b.__railClic) return;
                       if (!doc.querySelector('[class*="st-key-' + m.sec + '"]')) return;
                       b.__railClic = true;
@@ -1800,6 +1811,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                         w.__railSalto = Date.now() + 1400;
                         raiz.scrollTo({{ top: Math.max(0, y), behavior: 'smooth' }});
                       }}, true);
+                     }});
                     }});
 
                     // EL PUNTO TAMBIEN LLEVA A SU VISTA (2026-09-21, #482).

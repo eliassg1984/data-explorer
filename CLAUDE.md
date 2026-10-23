@@ -319,8 +319,14 @@ regla #366.
 Desde el 2026-09-19 (regla #472), en escritorio el cromo se reparte como en
 cualquier app con barra lateral, cada pieza con UN trabajo:
 
-- **Al costado, a dónde ir.** La columna lista los reportes. No cambia de
-  contenido al bajar. Tiene tres estados (regla #568):
+- **Al costado, a dónde ir.** La columna lista las ÁREAS (regla #708,
+  2026-10-23): Compras = Compras + Documentos SUNAT; Inventario = Stock +
+  Ajuste + Movimientos (`data.py`, clave `area`; sus reportes van
+  SEGUIDOS en `REPORTES`); los demás, un reporte por fila. El clic en un
+  área lleva al reporte que se visitó último. **Por debajo de 901px cada
+  reporte sigue con su botón**: ahí la franja no es el índice y Ajuste
+  quedaría sin camino. No cambia de contenido al bajar. Tiene tres estados
+  (regla #568):
   - **Plegada** (el default): 80px, un ícono de 24px por reporte con su
     nombre DEBAJO (un `::after` con `--rot-corto`, de
     `data.py::label_rail`). El cursor sobre un reporte abre al costado su
@@ -337,14 +343,18 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
 
   Hasta el 2026-09-29 la columna plegada era una tira de 68px sin nombres
   que se desplegaba ENTERA con el cursor; ese asomado se fue.
-- **Arriba, dónde estás.** La franja (`nav_franja_rep`, 44px) lleva el
-  reporte y la vista en pantalla a la izquierda —sin KPIs desde el
-  2026-10-03, a pedido (regla #596)—, y la fecha,
-  Filtros, la hora del dato y Actualizar a la derecha, cada uno a la
-  izquierda del anterior (`--barra-f`, `--barra-fecha`, `--barra-sello`).
-  **No está en reposo**: deja una tira de 12px contra el borde de arriba y
-  aparece —con sus controles— cuando el cursor la toca. Por eso el
-  contenido arranca en 20px y no en 52 (regla #473).
+- **Arriba, dónde estás y a qué vista ir.** La franja (`nav_franja_rep`,
+  44px) lleva el área y, como PESTAÑAS, las vistas de todos sus reportes
+  (`nav_franja_idx`, regla #708: el índice de la pila, con la vista en
+  pantalla subrayada) —sin KPIs desde el 2026-10-03, a pedido (regla
+  #596)—, y la fecha, Filtros, la hora del dato y Actualizar a la
+  derecha, cada uno a la izquierda del anterior (`--barra-f`,
+  `--barra-fecha`, `--barra-sello`). **No está en reposo**: deja una tira
+  de 12px contra el borde de arriba y aparece —con sus controles— cuando
+  el cursor la toca. Por eso el contenido arranca en 20px y no en 52
+  (regla #473). **Abierta, EMPUJA la página 32px** en vez de taparla:
+  margen del contenido y `scroll-padding-top` de `.stMain` cambian
+  JUNTOS, o el encaje de la pila la devuelve arriba de un salto (#708).
 
 Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
 
@@ -377,11 +387,18 @@ Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
 - **Asomar no cambia el ancho del contenido; fijar sí.** Por eso asomar va
   encima: un cambio de ancho obliga a Plotly y AgGrid a re-medirse (#350).
   Verificado que al fijar siguen a su contenedor.
-- **La vista de la franja la escribe el temporizador de `_render_rail`**
-  (`.barra-vista`, con el rótulo corto de la vista). Toda vista nueva lleva
-  ícono (tercer elemento de su tupla): lo muestran la columna entre 769 y
-  900px y, desde 901, el panel de su reporte; en el árbol fijado no se
-  dibuja (reglas #495, #535 y #568).
+- **Las pestañas de la franja las marca y las hace saltar el temporizador
+  de `_render_rail`**, igual que la lista de la columna: `navegacion.py`
+  las dibuja fuera del fragment y le da sus keys con `claves_vista`
+  (también las filas del panel del área). **Toda vista nueva lleva un
+  rótulo corto en `navegacion.py::ROTULO_PESTANA`** —lo exige
+  `test_graficos.py::_pruebas_pestanas_franja`; a 1323px entran todas las
+  áreas salvo Inventario, que se desliza de lado— y un ícono (tercer
+  elemento de su tupla): lo muestran la columna entre 769 y 900px y,
+  desde 901, el panel de su reporte; en el árbol fijado no se dibuja
+  (reglas #495, #535 y #568). Un área abre SIEMPRE su panel
+  (`navfly_area_<slug>`), también la activa: la lista del rail sólo tiene
+  las vistas del reporte en pantalla.
 - **Ningún jalón negativo arriba de la primera tarjeta.** Los contenedores
   de cromo fijo van en `display: contents` y no cobran `gap`, así que la
   tarjeta abre donde dice `--cab-offset-contenido` (los de la regla #568

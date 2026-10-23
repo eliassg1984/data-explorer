@@ -124,7 +124,9 @@ CSS = """
         .st-key-nav_paneles {
             display: none !important;
         }
-        .st-key-nav_franja_rep [data-testid="stElementContainer"]:has(.barra-ctx) {
+        .st-key-nav_franja_rep [data-testid="stElementContainer"]:has(.barra-ctx),
+        [data-testid="stLayoutWrapper"]:has(> .st-key-nav_franja_idx),
+        .st-key-nav_franja_idx {
             display: none !important;
         }
     }
@@ -988,6 +990,40 @@ CSS = """
         margin: 5px 8px !important;
         border-top: 1px solid var(--border) !important;
     }
+    /* EL PANEL DE UN ÁREA (2026-10-23, regla #708): las vistas de cada uno
+       de sus reportes debajo de su nombre, que pesa más que un subtítulo de
+       grupo (Movimientos trae los suyos adentro). La lista scrollea sola:
+       Inventario son 20 vistas y en 619px no entran. Va en su propio
+       contenedor y no en el panel, para que la superficie blanca —el
+       `::before` del panel— mida lo que se ve y el encabezado quede fijo. */
+    .fly-miembro {
+        margin: 8px 0 2px 0 !important;
+        padding: 4px 10px 2px 10px !important;
+        font-size: 12.5px !important;
+        font-weight: 700 !important;
+        line-height: 18px !important;
+        color: var(--text-secondary) !important;
+        white-space: nowrap !important;
+    }
+    .st-key-nav_paneles [class*="st-key-navflylista_"] {
+        max-height: calc(100vh - 80px) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        scrollbar-width: thin;
+    }
+    .st-key-nav_paneles [class*="st-key-navflylista_"] > [data-testid="stElementContainer"]:first-child .fly-miembro {
+        margin-top: 0 !important;
+    }
+    /* La vista en pantalla, en el panel de su área: la misma píldora que en
+       el panel del activo. */
+    .st-key-nav_paneles [data-testid="stButton"] button.vista-en-pantalla {
+        background: var(--accent-light) !important;
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
+    .st-key-nav_paneles [data-testid="stButton"] button.vista-en-pantalla [data-testid="stIconMaterial"] {
+        color: var(--accent) !important;
+    }
     .st-key-nav_paneles [class*="st-key-navflypar_"],
     :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [class*="st-key-raillatpar_"] {
         display: flex !important;
@@ -1117,6 +1153,33 @@ CSS = """
         transition: opacity 160ms linear,
                     clip-path 0s linear 0s;
     }
+    /* ── ABIERTA, EMPUJA LA PÁGINA EN VEZ DE TAPARLA (regla #708) ───────
+       2026-10-23, la «D + E» del boceto: con la franja de índice abierta,
+       la tarjeta baja lo que la franja mide de más sobre su tira (32px) y
+       no se pierde su renglón de arriba —el título y sus controles— debajo
+       de las pestañas.
+
+       SON DOS REGLAS Y VAN JUNTAS. El margen corre el contenido dentro de
+       `.stMain`, que es el que scrollea; el `scroll-padding-top` corre lo
+       mismo el punto donde encaja cada vista (`_27_pila.py`, regla #533).
+       Con el margen solo, el encaje obligatorio «corregiría» el scroll y la
+       vista volvería a subir a 20px de un salto; con los dos, la posición
+       de encaje de cada vista es la misma abierta y cerrada, así que el
+       scroll no se mueve y lo que baja es la página. Sin transición por lo
+       mismo: un margen que crece de a poco contra un encaje que cambia de
+       golpe es una página que tiembla.
+
+       Corre sólo lo que está en el flujo: lo fijo (la columna, la propia
+       franja) se ubica contra la ventana. Y no cambia el ANCHO de nada, que
+       es lo que obliga a Plotly y AgGrid a re-medirse (#350). */
+    :root[data-capa-cab] .stMainBlockContainer,
+    :root[data-capa-cab] [data-testid="stMainBlockContainer"] {
+        margin-top: calc(var(--franja-rep-alto) - var(--franja-rep-reserva)) !important;
+    }
+    :root[data-capa-cab] .stMain {
+        scroll-padding-top: calc(var(--cab-offset-contenido) + var(--franja-rep-alto)
+                                 - var(--franja-rep-reserva));
+    }
     /* Y LOS CONTROLES CON ELLA. Son fijos y viven fuera de la franja (cada
        uno lo dibuja un sitio distinto), así que no heredan su opacidad: se
        apagan y encienden con la misma marca. El pill de fecha va acotado a
@@ -1145,8 +1208,14 @@ CSS = """
     .st-key-nav_franja_rep [data-testid="stButton"] {
         display: none !important;
     }
+    /* Y su caja también: escondido sólo el botón, cada contenedor seguía
+       midiendo 16px, y los nueve le quitaban 144 a las pestañas (medido
+       en Ventas, regla #708). Las keys de widget van en ese contenedor. */
+    .st-key-nav_franja_rep [class*="st-key-franjarep_"] {
+        display: none !important;
+    }
     .st-key-nav_franja_rep [data-testid="stElementContainer"]:has(.barra-ctx) {
-        flex: 1 1 auto !important;
+        flex: 0 0 auto !important;
         min-width: 0 !important;
         width: auto !important;
         height: 100% !important;
@@ -1183,48 +1252,111 @@ CSS = """
         color: var(--text-primary);
         flex: 0 0 auto;
     }
-    /* La vista la escribe el temporizador; la flecha sólo existe con texto. */
-    .barra-vista {
-        font-size: 14px;
-        color: var(--text-secondary);
-        max-width: 240px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        flex: 0 0 auto;
+    /* ── LAS PESTAÑAS: EL ÍNDICE DEL ÁREA (2026-10-23, regla #708) ──────
+       Después del nombre del área, sus vistas — las de todos sus reportes,
+       con un nombre corto y una línea entre reporte y reporte
+       (`navegacion.py`, `nav_franja_idx`). Reemplazan a la vista escrita
+       en texto («› Por familia ▾», que con la columna plegada abría la
+       lista debajo): la vista en pantalla es la pestaña subrayada, y la
+       marca el temporizador de `graficos/base.py::_render_rail` con la
+       misma `vista-en-pantalla` que la lista de la columna.
+
+       La tira ocupa lo que queda hasta los controles de la derecha y, si
+       no entra, se desliza de lado sin barra: la rueda la corre
+       (`_SCRIPT_CAPAS`) y la pestaña marcada se trae a la vista sola.
+       Inventario son 20 vistas hasta que sus perspectivas las junten. */
+    .st-key-nav_franja_idx {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        width: auto !important;
+        height: 100% !important;
+        margin: 0 0 0 16px !important;
+        padding: 0 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 2px !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: none !important;
     }
-    .barra-vista:not(:empty)::before {
-        content: "›";
-        margin-right: 8px;
+    .st-key-nav_franja_idx::-webkit-scrollbar { height: 0 !important; }
+    /* El que ocupa su lugar en la fila de la franja es el envoltorio que
+       Streamlit le pone a un contenedor con key: sin caja, la tira es el
+       ítem del flex y su `flex: 1` manda. */
+    [data-testid="stLayoutWrapper"]:has(> .st-key-nav_franja_idx) {
+        display: contents !important;
+    }
+    /* La regla de arriba esconde los botones de la franja (los reportes de
+       769-900px); éstos no. */
+    .st-key-nav_franja_rep .st-key-nav_franja_idx [data-testid="stButton"] {
+        display: block !important;
+    }
+    .st-key-nav_franja_idx [data-testid="stElementContainer"],
+    .st-key-nav_franja_idx [data-testid="stButton"],
+    .st-key-nav_franja_idx [data-testid="stMarkdown"],
+    .st-key-nav_franja_idx [data-testid="stMarkdownContainer"] {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+    }
+    .st-key-nav_franja_idx [data-testid="stMarkdownContainer"] > div,
+    .st-key-nav_franja_idx [data-testid="stMarkdownContainer"] p {
+        display: flex !important;
+        align-items: center !important;
+        margin: 0 !important;
+    }
+    .st-key-nav_franja_idx [data-testid="stButton"] button {
+        height: 30px !important;
+        min-height: 0 !important;
+        padding: 0 8px !important;
+        border: none !important;
+        border-radius: 7px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        white-space: nowrap !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-nav_franja_idx [data-testid="stButton"] button p {
+        font-size: 13px !important;
+        font-weight: 400 !important;
+        line-height: 1.35 !important;
+        color: inherit !important;
+    }
+    .st-key-nav_franja_idx [data-testid="stButton"] button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    /* La vista en pantalla: subrayada, como la pestaña de una pila que se
+       baja con la rueda — una píldora se leería como «elegida», y acá
+       ninguna se elige: todas están en la página. Un `box-shadow` y no un
+       `::after`, que en los botones ya tiene dueño (el punto del semáforo
+       de `_20_compras_rail.py`). */
+    .st-key-nav_franja_idx [data-testid="stButton"] button.vista-en-pantalla {
+        color: var(--accent-deep) !important;
+        box-shadow: inset 0 -2px 0 var(--accent) !important;
+        border-radius: 7px 7px 0 0 !important;
+    }
+    .st-key-nav_franja_idx [data-testid="stButton"] button.vista-en-pantalla p {
+        font-weight: 600 !important;
+    }
+    /* El nombre corto de cada reporte del área, y la línea entre uno y
+       otro. Se leen, no se cliquean. */
+    .franja-miembro {
+        padding: 0 4px 0 2px;
+        font-size: 11.5px;
+        font-weight: 600;
         color: var(--text-muted);
+        white-space: nowrap;
     }
-    /* CON LA COLUMNA PLEGADA, LA VISTA ABRE SU PANEL (2026-10-21, regla
-       2026-10-21): un clic la despliega debajo, como el selector de vista de una
-       app con barra lateral. Lo abre `navegacion.py::_SCRIPT_CAPAS`. Fijada
-       no: las vistas ya están en el árbol de la izquierda, y un ▾ que abre
-       lo que ya se ve sería un control de más. El texto va en una píldora
-       que se ilumina como las filas del panel, para que se lea como botón. */
-    :root:has(.st-key-rail_pestillo_plegado) .barra-vista:not(:empty) {
-        display: inline-flex;
-        align-items: center;
-        max-width: 280px;
-        margin-left: -2px;
-        padding: 3px 4px 3px 8px;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: background-color 120ms linear;
-    }
-    :root:has(.st-key-rail_pestillo_plegado) .barra-vista:not(:empty):hover {
-        background: var(--accent-tint);
-        color: var(--accent-deep);
-    }
-    :root:has(.st-key-rail_pestillo_plegado) .barra-vista:not(:empty)::after {
-        content: "expand_more";
-        font-family: "Material Symbols Rounded";
-        font-feature-settings: "liga";
-        font-size: 18px;
-        line-height: 1;
-        margin-left: 2px;
-        color: var(--text-muted);
+    .franja-sep {
+        display: inline-block;
+        width: 1px;
+        height: 18px;
+        margin: 0 10px 0 8px;
+        background: var(--border);
     }
     /* Acá vivían los KPIs de la franja (`.barra-kpis`, `.barra-kpi`,
        `.barra-par`), del 2026-09-19 al 2026-10-03: se quitaron a pedido,
