@@ -273,6 +273,12 @@ export default function (component) {
   }
   if (!data || !data.controles) return;
   const st = raiz.__d.st;
+  // Llegó desde Inicio › Pendientes del período (regla #711): ese control,
+  // con todos los grupos a la vista. Python lo manda una sola corrida.
+  if (data.abrir && data.controles.some((c) => c.id === data.abrir)) {
+    st.dom = 'todo'; st.sel = data.abrir; st.q = '';
+    guardar('cd_dom', st.dom); guardar('cd_sel', st.sel);
+  }
   if (st.dom !== 'todo' && !data.dominios.some(([id]) => id === st.dom)) st.dom = 'todo';
   raiz.__d.data = data;
   elegirEn(data, st);

@@ -469,6 +469,7 @@ CLAVE_SALTO_VISTA = "_rail_saltar_a"
 # que ya no exista lo ataja `test_graficos.py::_pruebas_pestanas_franja`.
 ROTULO_PESTANA = {
     ("Resumen ejecutivo", "Resumen ejecutivo"): "Resumen",
+    ("Resumen ejecutivo", "Pendientes del período"): "Pendientes",
     ("Compras", "Compras por período"): "Período",
     ("Compras", "Proveedor"): "Proveedor",
     ("Compras", "Producto"): "Producto",

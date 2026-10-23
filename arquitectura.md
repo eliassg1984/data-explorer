@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-710 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+711 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (226)
 
@@ -787,7 +787,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 
-**Datos, R2 y DuckDB** (117)
+**Datos, R2 y DuckDB** (118)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -906,6 +906,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#705** — El POS no guarda el pasado de una receta de PLATO: la app le saca una foto a…
 - **#706** — «Costo recetas base» es una pieza propia: la lista y la ficha de la elegida, con dónde se…
 - **#707** — «Cambios en Recetas»: las recetas base, las recetas de plato y los precios de venta en una…
+- **#711** — Inicio › «Pendientes del período»: una fila por señal, con el salto a la vista que la…
 
 **SUNAT y SIRE** (72)
 
@@ -1053,7 +1054,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (213)
+**Decisiones de diseño y UX** (214)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1268,6 +1269,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 - **#709** — Producción es un reporte propio: las seis vistas de lo que se TRANSFORMA en casa salieron de…
 - **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
+- **#711** — Inicio › «Pendientes del período»: una fila por señal, con el salto a la vista que la…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -54584,6 +54586,34 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      con clics reales por las cuatro combinaciones: cada una dibuja su
      tarjeta sin una excepción y con su fecha. (2026-10-23.)
 
+711. **Inicio › «Pendientes del período»: una fila por señal, con el salto
+     a la vista que la resuelve, y NINGUNA cuenta propia — lo pesado se lee
+     de lo que ya se calculó, y si no, dice «sin calcular», nunca 0.** Etapa
+     4 de la navegación del boceto del rail compacto (#708), sobre el boceto
+     aprobado. Inicio (el reporte «Resumen ejecutivo», rotulado «Inicio»)
+     pasó a ser una pila: la portada y, debajo, los Pendientes.
+     · **Las fuentes** (`pendientes.py`, puro): siete controles de
+       Consistencia de datos con su nombre y su color; el faltante sin pista
+       y lo vendido sin descontar del Análisis de diferencias del último
+       cierre; el peso por unidad raro de los porcionamientos (la cuenta de
+       Para revisar, cacheada por su sello); los cortes que las recetas no
+       siguen (Recetas vs Porcionado); lo sin explicar del último mes con la
+       regla del ⚠ de Costo de ventas, y la hora de cada parquet.
+     · **Lo que tarda no se calcula en la portada.** `st.cache_data` no deja
+       preguntar si algo está calculado, así que quien calcula lo RECUERDA
+       con sus sellos (`data.recordar` / `recordado`, en el proceso):
+       Consistencia, Diferencias (por sesión) y Recetas vs Porcionado.
+       «Calcular ahora» pide las dos primeras a las mismas funciones que sus
+       vistas (38 s en frío, medido) y les deja la caché hecha. Lo vigila
+       `test_pendientes.py::test_nada_pesado_sin_pedirlo`.
+     · **Un clic** entra al reporte en su vista (`_ir_a_vista` + la corrida
+       completa); Consistencia abre además en el control de la fila
+       (`_cd_abrir`, una vez).
+     Probado en la app local con R2 a 1323×619, con Streamlit 1.59 y 1.64:
+     la portada igual, los Pendientes con 3 señales al entrar, 12 de 13
+     tras «Calcular ahora», la 13.ª al abrir Recetas vs Porcionado, y el
+     salto a Consistencia abierta en «Stock en negativo». (2026-10-23.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54596,7 +54626,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#710**; la próxima toma el número siguiente.
+> última regla es la **#711**; la próxima toma el número siguiente.
 
 >
 

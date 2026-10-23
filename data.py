@@ -106,10 +106,14 @@ REPORTES = {
     # Orden del dict == orden del rail de navegación (navegacion.py::
     # inject_navegacion itera `reportes.items()` tal cual). Reordenar acá
     # reordena los iconos de arriba a abajo.
+    # «Inicio» desde el 2026-10-23 (regla #711): la portada del mes y los
+    # Pendientes del período, el área Inicio del boceto del rail compacto.
+    # La CLAVE sigue siendo «Resumen ejecutivo» (dispatcher, enlaces,
+    # `?reporte=`): sólo cambia lo que se lee.
     "Resumen ejecutivo": {
-        "label_corto": "Resumen ejecutivo",
-        "label_largo": "Resumen ejecutivo",
-        "label_rail": "Resumen",
+        "label_corto": "Inicio",
+        "label_largo": "Inicio",
+        "label_rail": "Inicio",
         "archivo": "ajusteinventario.parquet",
         "archivos_extra": ("compras.parquet", "salidas.parquet"),
         "icono": ":material/dashboard:",
@@ -2391,18 +2395,58 @@ def _consistencia_cacheable(archivo, sello, sellos=(), version=None):
                                   for k, v in res.items()}}
 
 
-def consistencia_maestro():
-    """Lo de `_consistencia_cacheable`, o None si no se pudo —sin secrets,
-    R2 caído—: quien lo pide avisa. La primera vez de cada versión de los
-    parquets tarda ~1 min. No cacheada (la interna sí)."""
+# ── LO QUE YA SE CALCULÓ EN ESTE PROCESO (2026-10-23, regla #711) ───────
+# Los Pendientes del período (Inicio) muestran señales que calculan otras
+# vistas —Consistencia de datos, Análisis de diferencias, Recetas vs
+# Porcionado— y la regla del boceto aprobado es que NO las calculen ellos:
+# «cada señal sale de la vista que la calcula hoy, de lo que esa vista ya
+# dejó en caché; si todavía no se calculó, dice "sin calcular" y no 0».
+# Algunas tardan un minuto la primera vez, y la portada no puede.
+#
+# `st.cache_data` no deja preguntar si algo está sin calcularlo, así que
+# quien calcula lo RECUERDA acá, con los sellos de sus datos: un recuerdo
+# con otros sellos es de datos viejos y no cuenta. Vive en el proceso —lo
+# comparten las sesiones— y se pierde al reiniciar; ahí la caché de disco
+# sigue, y «Calcular ahora» de los Pendientes la encuentra al instante.
+_RECIENTES = {}
+
+
+def recordar(nombre, sellos, resultado):
+    """Guarda `resultado` de la cuenta `nombre` hecha con `sellos`. Un None
+    no se recuerda: no se pudo calcular."""
+    if resultado is not None:
+        _RECIENTES[nombre] = (sellos, resultado)
+
+
+def recordado(nombre, sellos):
+    """Lo que la cuenta `nombre` dejó con estos mismos `sellos`, o None."""
+    r = _RECIENTES.get(nombre)
+    return r[1] if r is not None and r[0] == sellos else None
+
+
+def _clave_consistencia():
     import consistencia_maestro as cm
     import tipo_compra
+    return (sello_datos("inventariovalorizado.parquet"),
+            tuple((a, sello_datos(a)) for a in _ARCHIVOS_CONSISTENCIA),
+            (cm.VERSION, _version_preparar("ventas.parquet"), tipo_compra.VERSION))
+
+
+def consistencia_maestro(solo_si_calculado=False):
+    """Lo de `_consistencia_cacheable`, o None si no se pudo —sin secrets,
+    R2 caído—: quien lo pide avisa. La primera vez de cada versión de los
+    parquets tarda ~1 min. No cacheada (la interna sí). Con
+    `solo_si_calculado`, lo que ya se calculó en este proceso con los datos
+    de hoy, sin calcular nada (regla #711)."""
     try:
-        return _consistencia_cacheable(
-            "inventariovalorizado.parquet", sello_datos("inventariovalorizado.parquet"),
-            sellos=tuple((a, sello_datos(a)) for a in _ARCHIVOS_CONSISTENCIA),
-            version=(cm.VERSION, _version_preparar("ventas.parquet"),
-                     tipo_compra.VERSION))
+        sello, sellos, version = _clave_consistencia()
+        if solo_si_calculado:
+            return recordado("consistencia", (sello, sellos, version))
+        r = _consistencia_cacheable("inventariovalorizado.parquet",
+                                    sello_datos("inventariovalorizado.parquet"),
+                                    sellos=sellos, version=version)
+        recordar("consistencia", (sello, sellos, version), r)
+        return r
     except Exception:
         return None
 
@@ -2577,17 +2621,24 @@ def sunat_sin_ingresar(desde, hasta):
         return None
 
 
-def diferencias_ajuste_sesion(clave):
+def diferencias_ajuste_sesion(clave, solo_si_calculado=False):
     """`{"lineas", "fichas", "resumen"}` de `diferencias_ajuste.calcular` para
     la sesión `clave` (`cortes.sesiones_inventario`). `None` si no se pudo
     calcular —sin secrets, R2 caído, la sesión sin diferencias—: quien lo
-    pide avisa. No cacheada (la interna sí)."""
+    pide avisa. No cacheada (la interna sí). Con `solo_si_calculado`, lo que
+    ya se calculó en este proceso con los datos de hoy (regla #711)."""
     try:
-        return _diferencias_cacheable(
-            kardex.ARCHIVO, sello_datos(kardex.ARCHIVO), clave,
-            sellos=tuple((a, sello_datos(a)) for a in _ARCHIVOS_DIFERENCIAS),
-            version=(diferencias_ajuste.VERSION, kardex.VERSION,
-                     _version_preparar("ventas.parquet")))
+        sello = sello_datos(kardex.ARCHIVO)
+        sellos = tuple((a, sello_datos(a)) for a in _ARCHIVOS_DIFERENCIAS)
+        version = (diferencias_ajuste.VERSION, kardex.VERSION,
+                   _version_preparar("ventas.parquet"))
+        llave = (clave, sello, sellos, version)
+        if solo_si_calculado:
+            return recordado(f"diferencias_{clave}", llave)
+        r = _diferencias_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO), clave,
+                                   sellos=sellos, version=version)
+        recordar(f"diferencias_{clave}", llave, r)
+        return r
     except Exception:
         return None
 

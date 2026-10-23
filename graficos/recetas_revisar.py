@@ -443,6 +443,25 @@ def _sin_datos(texto):
     st.info(texto)
 
 
+def sellos_pendiente():
+    """Los sellos de lo que lee esta vista: con ellos recuerda su resumen
+    para los Pendientes del período (`data.recordar`, regla #711)."""
+    return tuple((a, data.sello_datos(a)) for a in (
+        ARCHIVO_PORC, ARCHIVO_N1, ARCHIVO_MAESTRO, ARCHIVO_CARTA,
+        ARCHIVO_SALIDAS, "recetaventa.parquet", "recetabase.parquet"))
+
+
+def resumen_pendiente(t, fin):
+    """Lo que los Pendientes del período dicen de esta vista: los cortes de
+    `t` (lo de `revisar` en 30 días) que las recetas no siguen —ninguna los
+    usa, o piden más de lo porcionado— y lo que hay en juego. Pura."""
+    m = t["que"].isin((QUE_SIN, QUE_FALTA)) if "que" in t.columns else pd.Series(False, index=t.index)
+    return {"n": int(m.sum()),
+            "valor": float(pd.to_numeric(t.loc[m, "valor"], errors="coerce").fillna(0).sum())
+            if "valor" in t.columns else 0.0,
+            "fin": pd.Timestamp(fin).date().isoformat()}
+
+
 def render_revisar_recetas(df_rv, df_rb):
     """La tarjeta. `df_rv` es recetaventa.parquet (el `df_f` del reporte);
     `df_rb`, recetabase.parquet o None. El resto lo carga acá: la sección es
@@ -475,6 +494,9 @@ def render_revisar_recetas(df_rv, df_rb):
                 continue
             t = revisar(porc, n1, df_rv, df_rb, carta, maestro, salidas, ini, fin,
                         compras=compras)
+            if dias == VENTANAS["Últimos 30 días"]:
+                data.recordar("revisar_recetas", sellos_pendiente(),
+                              resumen_pendiente(t, fin))
             det = detalle(t["cod"], porc, maestro, n1, dem_sem, compras, ini, fin, sems)
             # El stock AL EMPEZAR: la foto del día anterior, a las 23.
             st_ini = stock_por_cod(data.stock_al(

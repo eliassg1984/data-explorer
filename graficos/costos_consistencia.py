@@ -93,5 +93,11 @@ def renderizar():
             st.warning("No se pudieron revisar los datos (¿R2 caído?). "
                        "Reintentá en unos segundos.")
             return
-        _PIEZA(key="costos_consistencia", data=armar(r["casos"], r["hoy"]),
-               width="stretch")
+        armado = armar(r["casos"], r["hoy"])
+        # Se llegó desde una fila de Inicio › Pendientes del período (regla
+        # #711): abre en ese control. Una vez: la próxima corrida abre en el
+        # que el usuario dejó elegido.
+        abrir = st.session_state.pop("_cd_abrir", None)
+        if abrir:
+            armado["abrir"] = abrir
+        _PIEZA(key="costos_consistencia", data=armado, width="stretch")

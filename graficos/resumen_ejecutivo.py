@@ -16,12 +16,22 @@ import resumen_ejecutivo as resumen
 from cortes import MESES_ABR_ES, MESES_LARGOS_ES
 from graficos.base import (
     _render_rail, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
+    seccion_perezosa,
 )
 
+# INICIO: la portada del mes y, debajo, los Pendientes del período
+# (2026-10-23, regla #711). Hasta ese día la portada era la única vista y
+# la página no tenía pila (`_PILA` vacía, un destino aparte); con dos vistas
+# se lee bajando, como los demás reportes, y la portada sigue siendo la
+# primera: lo que se ve al entrar no cambió.
 _RESUMEN_RAIL_CATEGORIAS = rail_sin_tablas((
-    ("Resumen", (("Resumen ejecutivo", "Resumen ejecutivo", ":material/dashboard:"),)),
+    ("Resumen", (("Resumen ejecutivo", "Resumen ejecutivo", ":material/dashboard:"),
+                 ("Pendientes del período", "Pendientes del período", ":material/flag:"))),
 ))
-_PILA = pila_sin_tablas(())
+_PILA = pila_sin_tablas((
+    ("res_sec_resumen",    "Resumen ejecutivo"),
+    ("res_sec_pendientes", "Pendientes del período"),
+))
 _ARCHIVOS = ("ajusteinventario.parquet", "compras.parquet", "salidas.parquet",
              "ventas.parquet", "notascreditocompras.parquet")
 _AQUI = Path(__file__).parent
@@ -57,8 +67,43 @@ def _corto(mes):
     return f"{MESES_ABR_ES[p.month - 1].lower()} {p.year}"
 
 
+def _costos(ajuste, grupos):
+    """Los meses de costo de la portada (`_meses_costos`), con la clave que
+    los identifica. La piden la portada y los Pendientes, que así leen la
+    MISMA caché. LANZA si no se pudo."""
+    return _meses_costos(
+        ajuste, grupos, tuple(data.sello_datos(a) for a in _ARCHIVOS),
+        (resumen.VERSION, costo_ventas.VERSION, dv.VERSION,
+         data._version_preparar("compras.parquet")),
+        convenios_descuento.leer())
+
+
 def renderizar_graficos_resumen(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     _render_rail(_RESUMEN_RAIL_CATEGORIAS, "resumen_graf_tipo", secciones=_PILA)
+    ajuste = df_full if df_full is not None else df_f
+
+    def _dib_pendientes():
+        from graficos import pendientes
+        grupos = data.venta_por_grupo_dia()
+        try:
+            costos = _costos(ajuste, grupos) if grupos is not None else None
+        except Exception:
+            costos = None
+        pendientes.renderizar(ajuste, costos, _rotulo)
+
+    _dibujantes = {
+        "res_sec_resumen": lambda: _portada(df_f, nombre_reporte, ajuste),
+        "res_sec_pendientes": _dib_pendientes,
+    }
+    for _i, (_clave, _vista) in enumerate(_PILA):
+        with st.container(key=_clave):
+            seccion_perezosa(_clave, _vista, _dibujantes[_clave],
+                             activa_de_entrada=(_i == 0))
+
+
+def _portada(df_f, nombre_reporte, ajuste):
+    """La portada del mes, tal como era la página entera hasta la regla
+    #711."""
     hoy = dt.datetime.now(ZoneInfo("America/Lima")).date()
     with st.spinner("Preparando el resumen de ventas y consumo…"):
         grupos = data.venta_por_grupo_dia()
@@ -78,12 +123,7 @@ def renderizar_graficos_resumen(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     costos, error_costos = None, None
     try:
         with st.spinner("Calculando el consumo mensual…"):
-            ajuste = df_full if df_full is not None else df_f
-            costos = _meses_costos(
-                ajuste, grupos, tuple(data.sello_datos(a) for a in _ARCHIVOS),
-                (resumen.VERSION, costo_ventas.VERSION, dv.VERSION,
-                 data._version_preparar("compras.parquet")),
-                convenios_descuento.leer())
+            costos = _costos(ajuste, grupos)
     except Exception:
         _LOG.exception("No se pudo calcular el costo del resumen")
         error_costos = "No se pudieron leer las fuentes del costo. Reintentá en unos segundos."
