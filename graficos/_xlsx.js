@@ -55,11 +55,12 @@ function letra(i) {
 const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 // Una hoja: la cabecera congelada y el ancho de cada columna según su texto.
-function hoja(cabeza, filas) {
+function hoja(cabeza, filas, decimales = 2) {
+  const factor = 10 ** decimales;
   const ancho = cabeza.map((h, i) => Math.min(60, Math.max(8, String(h).length + 2,
     ...filas.slice(0, 400).map((f) => (f[i] == null ? 0 : String(f[i]).length + 2)))));
   const celda = (v, ref) => {
-    if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}"><v>${Math.round(v * 100) / 100}</v></c>`;
+    if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}"><v>${Math.round(v * factor) / factor}</v></c>`;
     if (v == null || v === '') return '';
     return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xml(v)}</t></is></c>`;
   };
@@ -94,7 +95,7 @@ function libro(hojas) {
       + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
       + hojas.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${NS_R}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')
       + '</Relationships>'],
-    ...hojas.map((h, i) => [`xl/worksheets/sheet${i + 1}.xml`, hoja(h.cabeza, h.filas)]),
+    ...hojas.map((h, i) => [`xl/worksheets/sheet${i + 1}.xml`, hoja(h.cabeza, h.filas, h.decimales ?? 2)]),
   ];
   return zip(archivos);
 }

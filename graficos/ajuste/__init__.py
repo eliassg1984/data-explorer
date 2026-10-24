@@ -35,6 +35,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 import kardex
+from ._cierre import vista_cierre
 
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, GRIS_BORDE, GRIS_FONDO,
@@ -360,8 +361,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 st.info("La tabla no está disponible en este contexto.")
 
     _DIBUJANTES = {
-        "aj_sec_persp_cierre": lambda: dibujar_perspectiva(
-            "cierre", EJES_CIERRE, PERSPECTIVAS_CIERRE, _DIBUJANTES),
+        "aj_sec_persp_cierre": lambda: vista_cierre(df_full),
         "aj_sec_persp_tiempo": lambda: dibujar_perspectiva(
             "tiempo", EJES_TIEMPO, PERSPECTIVAS_TIEMPO, _DIBUJANTES),
         "aj_sec_cascada":      _dib_cascada,

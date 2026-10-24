@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-719 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+720 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (232)
 
@@ -798,7 +798,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 
-**Datos, R2 y DuckDB** (120)
+**Datos, R2 y DuckDB** (121)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -920,6 +920,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#711** — Inicio › «Pendientes del período»: una fila por señal, con el salto a la vista que la…
 - **#715** — Compras › Proveedor es una PIEZA PROPIA (proveedor.js + .css), montada DOS veces —el ranking…
 - **#716** — Compras › «Compras por período» es una PIEZA PROPIA (semanal.js + .css): sólo la fecha vuelve…
+- **#720** — Ajuste > Diferencias del cierre es una PIEZA PROPIA con comparación entre sesiones
 
 **SUNAT y SIRE** (73)
 
@@ -1068,7 +1069,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (215)
+**Decisiones de diseño y UX** (216)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1285,6 +1286,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
 - **#711** — Inicio › «Pendientes del período»: una fila por señal, con el salto a la vista que la…
 - **#719** — Ventas > Meseros es una PIEZA PROPIA con la ficha al lado de la lista y una planilla navegable
+- **#720** — Ajuste > Diferencias del cierre es una PIEZA PROPIA con comparación entre sesiones
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -55119,6 +55121,75 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        descuento y el tercio de céntimo; los seis Excel con sus hojas y
        fórmulas; UI con celdas, mapa, filtros, pedido, exportación, móvil
        y remontaje. `_KEYS_WIDGET_MES` queda vacía. (2026-10-24.)
+
+720. **Ajuste > Diferencias del cierre es una PIEZA PROPIA con comparación
+     entre sesiones** (`graficos/ajuste/_cierre.py`, `_cierre_datos.py`,
+     `cierre.js` y `.css`). A pedido de continuar convirtiendo y enriqueciendo
+     las vistas lentas. Por familia y Familia × Área se dibujan en el
+     navegador, con estado independiente de corte, familias, áreas, foco y
+     detalle. Cambiar perspectiva, corte, medida, pestaña, buscar, ordenar,
+     abrir áreas, comparar y descargar Excel no pide Python.
+     · **Una sesión sigue siendo la de `cortes.sesiones_inventario`** (#632):
+       el cierre reúne los conteos del 1 al 7 aunque no sean consecutivos;
+       los demás son parciales. Abre en el último CIERRE, aunque haya un
+       parcial posterior. Las áreas del filtro son las que movieron ajuste
+       en el corte actual, normalizadas (#424), y se ofrecen todas las
+       familias, sembrando las cinco habituales. Los chips de Tiempo no
+       recortan esta vista (#425).
+     · **Se conserva el grano de línea**: cada registro viaja sin agrupar y
+       sin redondear importes. Faltó suma las líneas negativas y Sobró las
+       positivas; el absoluto no compensa áreas ni conteos. Exactitud cuenta
+       registros con stock sistema o físico distintos de cero, con la misma
+       tolerancia de las cuentas anteriores. El 80 % del resumen usa el
+       absoluto de cada línea por nombre; el Pareto del detalle usa el NETO
+       por nombre y su lado, como antes (#677). La suma agrupada del Pareto
+       usa compensación numérica, como `groupby.sum` de pandas.
+     · **Se conserva el detalle**: Tabla o Listas, áreas juntas o separadas,
+       producto con sus áreas desplegables, Por área, todos los cortes del
+       año seleccionado con cobertura, y Pareto Faltantes/Sobrantes (clic para sus áreas). El mapa
+       distingue una celda sin registros de una celda con cero; permite ajuste
+       o stock valorizado. Top productos del stock muestra cantidad contada.
+       Las cantidades con varias unidades quedan sin total incompatible.
+     · **Comparar cierres** usa código (nombre sólo si no hay código), área
+       y unidad. Un cambio de nombre con el mismo código se reconoce; dos
+       códigos con el mismo nombre y un cambio de unidad no se cruzan.
+       Nueva, Recurrente y Resuelta requieren registros con stock y datos
+       completos en AMBOS cortes. Una ausencia, dato incompleto o cero/cero
+       queda Sin base, nunca «resuelta» ni una base cero. La diferencia puede
+       ser de cantidad aunque su valorizado sea cero. Varios conteos dentro
+       de un cierre conservan ambos signos, aunque su neto sea cero.
+     · **La comparación informa su población comparable** y el cambio de
+       diferencia absoluta sólo de ella, junto al total actual completo.
+       La recurrencia es cortes con diferencia / cortes con stock y datos
+       completos hasta el corte elegido, por producto × área × unidad. No
+       cuenta el futuro ni toma ausencia por exactitud. Un clic abre el
+       historial del producto y área; cambiar de signo se informa sin
+       atribuir causas.
+     · **El Excel sigue los filtros y el detalle** y añade Contexto con
+       cortes, días registrados, búsqueda, estado, unidad y alcance. La
+       descarga incluye todas las filas, aunque la pantalla las dibuje de
+       a 150 (#716). `_xlsx.js` acepta `decimales` por hoja: seis numéricos
+       para el inventario, dos por defecto para sus consumidores anteriores.
+     · **Medido en la app local con R2 y Streamlit 1.64**: 251 mil líneas,
+       59 sesiones; los resúmenes de todos los cortes coinciden con Python.
+       Los clics medidos pasan de 2,16–3,54 s a 0,03–0,46 s, sin corridas
+       de la vista. La comparación se guarda por cortes y filtros: cambiar
+       de estado o abrir el historial no vuelve a agrupar el histórico.
+       La carga inicial envía el histórico una vez; se convierte el texto
+       Arrow a object antes de crear los diccionarios (#714).
+     · **Dos tarjetas con alto de pantalla**, scroll sólo en tablas y
+       overscroll contenido, formateadores reutilizados y estado en
+       `window.__ajCierre`. El mismo sello conserva el estado al remontar;
+       un cambio de datos lo reinicia. El sello depende del contenido, no
+       del reloj; la caché Python verifica una huella del DataFrame entero.
+       Los manejadores de documento se cancelan al sustituir el montaje.
+     · **Lo comprueba `test_cierre_pieza.py`**, sin red: resúmenes, exactitud,
+       productos, matriz y Pareto contra las funciones originales; sesiones
+       con varios conteos, códigos y nombres, unidades, NaN, cero/cero,
+       diferencias diminutas y sólo de cantidad, estados y recurrencias,
+       filtros independientes, búsqueda, exportación, móvil y remontaje.
+       Las firmas y reexportaciones antiguas siguen disponibles (#357).
+       (2026-10-24.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
