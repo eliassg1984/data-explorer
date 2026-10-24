@@ -1,0 +1,80 @@
+/* Comparativo (regla #717). Shadow root: colores y alto de la app, sin :has(). */
+.vcc {color:var(--text-primary);font:12px/1.4 'DM Sans','Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-variant-numeric:tabular-nums;min-width:0;display:flex;flex-direction:column;gap:16px;}
+.vcc * {box-sizing:border-box;}
+.vcc button,.vcc input {font:inherit;color:inherit;}
+.vcc button {cursor:pointer;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:4px 9px;white-space:nowrap;}
+.vcc button:hover {background:var(--accent-tint);}
+.vcc button.on {color:var(--accent-deep);background:var(--accent-tint);border-color:var(--accent);}
+.vcc button:focus-visible,.vcc input:focus-visible,.vcc [tabindex]:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+.vcc h3 {font-size:14px;font-weight:650;margin:0;color:var(--accent-deep);}
+.vcc p {margin:6px 0;}
+.vcc .vcc-card {border:1px solid var(--border);border-radius:12px;padding:12px 16px;background:var(--bg-card);display:flex;flex-direction:column;gap:8px;min-width:0;position:relative;scroll-snap-align:start;}
+.vcc .vcc-main,.vcc .vcc-detail {height:var(--alto-util);min-height:0;}
+.vcc .vcc-head,.vcc .vcc-controls,.vcc .vcc-context,.vcc .vcc-bottom,.vcc .vcc-extra,.vcc .vcc-search {display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;}
+.vcc .vcc-head {border-bottom:1px solid var(--border);padding-bottom:7px;flex-shrink:0;}
+.vcc .vcc-head>span,.vcc .vcc-muted {color:var(--text-secondary);font-size:11px;}
+.vcc .vcc-push {flex:1;min-width:0;}
+.vcc .vcc-seg {display:inline-flex;flex-shrink:0;}
+.vcc .vcc-seg button {border-radius:0;border-right:0;padding:5px 9px;}
+.vcc .vcc-seg button:first-child {border-radius:6px 0 0 6px;}
+.vcc .vcc-seg button:last-child {border-right:1px solid var(--border);border-radius:0 6px 6px 0;}
+.vcc .vcc-context {color:var(--text-secondary);font-size:10.5px;}
+.vcc label {display:inline-flex;align-items:center;gap:4px;cursor:pointer;}
+.vcc input[type=checkbox] {accent-color:var(--accent);margin:0;width:13px;height:13px;}
+.vcc .vcc-key {white-space:nowrap;display:inline-flex;align-items:center;gap:5px;}
+.vcc .vcc-key::before {content:'';height:8px;width:8px;border-radius:2px;background:var(--accent);}
+.vcc .vcc-key.vcc-ap::before {background:var(--border-lavender);}
+.vcc .vcc-key.vcc-pax::before {background:var(--serie-2);}
+.vcc .vcc-key.vcc-ticket::before {background:var(--serie-5);}
+.vcc .vcc-kpis {display:flex;align-items:flex-start;gap:0;flex-shrink:0;flex-wrap:wrap;row-gap:6px;}
+.vcc .vcc-kpi {display:flex;flex:1;min-width:120px;flex-direction:column;padding:0 14px;border-left:1px solid var(--border);}
+.vcc .vcc-kpi:first-child {padding-left:0;border-left:0;}
+.vcc .vcc-kpi>span {font-size:10.5px;color:var(--text-secondary);}
+.vcc .vcc-kpi strong {font-size:21px;line-height:1.2;white-space:nowrap;font-weight:650;}
+.vcc .vcc-kpi small {font-size:10px;color:var(--text-secondary);}
+.vcc .vcc-reading {display:flex;gap:4px 12px;flex-wrap:wrap;font-size:10.5px;color:var(--text-secondary);flex-shrink:0;}
+.vcc .vcc-reading span+span {border-left:1px solid var(--border);padding-left:10px;}
+.vcc .vcc-plot {flex:1;min-height:150px;position:relative;}
+.vcc svg {display:block;overflow:visible;}
+.vcc .vcc-grid {stroke:var(--border);stroke-width:1;}
+.vcc .vcc-zero {stroke:var(--text-secondary);stroke-opacity:.5;}
+.vcc .vcc-axis {font-size:9px;fill:var(--text-secondary);}
+.vcc .vcc-value {font-size:10px;fill:var(--text-primary);}
+.vcc .vcc-warning {font-size:9px;fill:var(--warning-text);}
+.vcc .vcc-hit {fill:transparent;cursor:pointer;touch-action:pan-y;}
+.vcc .vcc-hit:hover,.vcc .vcc-hit.chosen {fill:var(--accent);fill-opacity:.075;}
+.vcc .vcc-tip {position:absolute;z-index:8;top:8px;width:280px;max-width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);box-shadow:var(--shadow-md);font-size:11px;pointer-events:none;}
+.vcc .vcc-tip div {margin-top:4px;}
+.vcc .vcc-tip strong {display:block;}
+.vcc .vcc-last {position:absolute;right:0;top:0;z-index:4;font-size:10.5px;}
+.vcc .vcc-last>button {min-width:230px;text-align:left;}
+.vcc .vcc-last-panel {background:var(--bg-card);border:1px solid var(--border);border-radius:7px;padding:5px 8px;box-shadow:var(--shadow-md);}
+.vcc .vcc-last-panel label {display:grid;grid-template-columns:14px 1fr auto auto;gap:6px;padding:4px 0;}
+.vcc .vcc-bottom,.vcc .vcc-extra {font-size:10.5px;flex-shrink:0;}
+.vcc .vcc-extra {border-top:1px solid var(--border);padding-top:6px;gap:16px;color:var(--text-secondary);}
+.vcc .vcc-notice {font-size:10.5px;color:var(--warning-text);}
+.vcc .vcc-help {position:absolute;z-index:10;right:16px;top:49px;width:440px;max-width:calc(100% - 32px);border:1px solid var(--border-lavender);border-radius:8px;box-shadow:var(--shadow-md);padding:12px;background:var(--bg-card);font-size:11.5px;}
+.vcc .vcc-detail-context {font-size:11px;color:var(--text-secondary);}
+.vcc .vcc-analysis {display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:16px;flex-shrink:0;min-width:0;}
+.vcc .vcc-analysis>div {min-width:0;}
+.vcc .vcc-analysis b {font-size:11px;}
+.vcc .vcc-break {display:flex;flex-direction:column;gap:3px;}
+.vcc .vcc-break>button {display:flex;justify-content:space-between;gap:8px;font-size:10.5px;border:0;padding:3px 5px;min-width:0;background:transparent;}
+.vcc .vcc-break>button span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.vcc .vcc-break>button strong {font-size:10px;font-weight:600;}
+.vcc .vcc-break>button.on {background:var(--accent-tint);}
+.vcc .vcc-search {flex-shrink:0;}
+.vcc .vcc-search>input {border:1px solid var(--border);border-radius:7px;padding:5px 9px;width:285px;max-width:100%;background:var(--bg-card);min-width:0;}
+.vcc .vcc-table-scroll {overflow:auto;overscroll-behavior:contain;min-height:0;flex:1;border:1px solid var(--border);border-radius:7px;}
+.vcc table {border-collapse:separate;border-spacing:0;width:100%;font-size:10.5px;white-space:nowrap;}
+.vcc thead {position:sticky;top:0;z-index:2;background:var(--accent-tint);}
+.vcc th {text-align:left;border-bottom:1px solid var(--border-lavender);}
+.vcc th button {background:transparent;border:0;font-weight:600;font-size:10px;padding:6px 8px;}
+.vcc td {padding:4px 8px;border-bottom:1px solid var(--border);}
+.vcc td:nth-child(2) {min-width:180px;white-space:normal;}
+.vcc tr:hover td {background:var(--accent-tint);}
+.vcc .vcc-num {text-align:right;}
+.vcc .vcc-rest {color:var(--text-secondary);font-style:italic;}
+.vcc .vcc-rest button {font-size:10.5px;background:transparent;border:0;padding:0;color:var(--accent-deep);text-decoration:underline;}
+.vcc .vcc-table-foot {font-size:10px;color:var(--text-secondary);display:flex;justify-content:space-between;gap:12px;flex-shrink:0;}
+@media(max-width:900px){.vcc .vcc-main,.vcc .vcc-detail {height:auto;}.vcc .vcc-plot {height:var(--vcc-fig,276px);flex:none;}.vcc .vcc-analysis {grid-template-columns:1fr 1fr;}.vcc .vcc-bridge {grid-column:1/-1;}.vcc .vcc-table-scroll {max-height:var(--alto-util);min-height:180px;}.vcc .vcc-kpi {min-width:100px;}.vcc .vcc-kpi strong {font-size:17px;}.vcc .vcc-controls {gap:5px;}.vcc .vcc-seg button {padding:5px 7px;}.vcc .vcc-card {padding:12px;}.vcc .vcc-reading {font-size:10px;}.vcc .vcc-table-foot {flex-wrap:wrap;}}

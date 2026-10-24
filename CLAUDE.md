@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -214,6 +214,12 @@ Precio, familias, el Detalle con las notas, el plan de etiquetas) en cada
 grano, con Documento, Montos y los filtros. Ver `arquitectura.md` regla
 #716.
 
+`test_ventas_comparativo.py` vigila Ventas › Comparativo como pieza propia
+(`ventas_comparativo_datos.py` y `.js`): todas las ventanas contra las
+cuentas anteriores de Python, neto y exclusión, clientes por pedido con
+canje y cuenta dividida, calendario, bisiesto y grupo actual del plato. En
+Chromium recorre las cinco mejoras y abre las hojas del Excel. Regla #717.
+
 ## El asistente IA no adivina: consulta
 
 `asistente.py` (prompt + bucle de tool calling + UI del popover) y
@@ -278,8 +284,8 @@ un rerun inserta cientos.
 - Un estado que el CSS sólo puede preguntar con una pseudo-clase (`:hover`
   lejos del elemento, `:checked`) lo sube un script a un `data-*`, que es
   barato de cambiar (una CLASE en `<html>` no lo es). Así funcionan las
-  capas con cursor (`navegacion.py::_SCRIPT_CAPAS`) y los switches de
-  Ventas (`ventas_comparativo.py::_JS_ESPEJO_SWITCH`).
+  capas con cursor (`navegacion.py::_SCRIPT_CAPAS`). Los switches del
+  Comparativo, desde la regla #717, viven en el shadow root de su pieza.
 
 **No es aditivo**, y por eso no se ve revisando de a una: una regla que sola
 cuesta 3 ms puede ser la que dispara el recálculo que pagan las otras. Lo
@@ -674,7 +680,7 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
   gráfico tiene que DIBUJARSE con la key nueva antes del próximo clic**: si
   no, ese clic cae en una key que ya nadie lee — se perdía uno de cada dos
   en Semanal. Dos recetas que cumplen: foco en la key + `st.rerun()` tras
-  procesar (`ventas_comparativo.py`), o leer el clic de
+  procesar (como hacía Comparativo antes de ser pieza propia, #717), o leer el clic de
   `st.session_state[key]` ANTES de dibujar, con un contador en la key
   (`compras_vol_nclic`, `compras_sem_nclic`). Foco en la key sin rerun es
   el bug. Ver `arquitectura.md` #399.

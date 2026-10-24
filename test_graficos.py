@@ -3441,7 +3441,7 @@ def _pruebas_widgets_de_fragment_escalado():
         return []
 
     raiz = pathlib.Path(__file__).parent
-    sin_preservar, exentos_usados, n_funcs = [], set(), 0
+    sin_preservar, exentos_usados, n_fuentes = [], set(), 0
     for py, texto in _fuentes_py(raiz):
         if py.name.startswith("test_"):
             continue
@@ -3449,6 +3449,7 @@ def _pruebas_widgets_de_fragment_escalado():
             arbol = ast.parse(texto)
         except SyntaxError:                      # que lo cante otra guarda
             continue
+        n_fuentes += 1
         for fn in ast.walk(arbol):
             if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
@@ -3489,8 +3490,6 @@ def _pruebas_widgets_de_fragment_escalado():
                     if k and not k.endswith("*"):
                         expuestas += [(n.lineno, f"{k}_q"),
                                       (n.lineno, f"{k}_cb::*")]
-            if expuestas:
-                n_funcs += 1
             for lineno, key in expuestas:
                 if any(_cubre(d, key) for d in declaradas):
                     continue
@@ -3501,8 +3500,9 @@ def _pruebas_widgets_de_fragment_escalado():
 
     check("todo widget dibujado tras un rerun está preservado o exento",
           sorted(set(sin_preservar)), [])
-    # Un glob que no matchea nada pasa en verde sin haber leído nada.
-    check("el barrido encontró las funciones que escalan", n_funcs >= 6, True)
+    # Detectar un glob vacío por las fuentes LEÍDAS, no por un mínimo de
+    # funciones con widgets: las piezas propias (#717) las van sustituyendo.
+    check("el barrido leyó y analizó fuentes de la app", n_fuentes > 0, True)
     # Y al revés: una exención que ya no aplica es una mentira que envejece.
     check("no quedan exenciones muertas",
           sorted(set(_EXENTOS) - exentos_usados), [])

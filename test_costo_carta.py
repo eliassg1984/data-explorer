@@ -3,6 +3,7 @@ POS, lo vendido por canal y lo que recibe el navegador. Sin secrets ni red."""
 import datetime as dt
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -51,6 +52,9 @@ def otros_canales():
 
 class CanalesDeLaCarta(unittest.TestCase):
     def setUp(self):
+        divisor = patch.object(cc, "divisor_neto", return_value=1.235)
+        divisor.start()
+        self.addCleanup(divisor.stop)
         self.t, _ = cc.preparar(carta(), incluir_inactivos=True)
         self.t = self.t.set_index("Cod")
 
@@ -73,6 +77,11 @@ class CanalesDeLaCarta(unittest.TestCase):
 
 class LoQueRecibeLaPieza(unittest.TestCase):
     def setUp(self):
+        # El contrato lleva un divisor de entrada fijo; su cálculo se
+        # verifica en test_graficos. No leer otro parquet desde este fixture.
+        divisor = patch.object(cc, "divisor_neto", return_value=1.235)
+        divisor.start()
+        self.addCleanup(divisor.stop)
         t, n = cc.preparar(carta(), incluir_inactivos=True)
         self.rango = (dt.date(2026, 10, 1), dt.date(2026, 10, 31))
         self.t, _ = cc.con_ventas(t, vendido(), rango=self.rango)

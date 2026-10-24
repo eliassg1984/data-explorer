@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-716 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+717 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (230)
+**CSS y estilos** (231)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -295,6 +295,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#713** — Compras › Producto es una PIEZA PROPIA (producto.js + .css), montada DOS veces —una en cada…
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 - **#715** — Compras › Proveedor es una PIEZA PROPIA (proveedor.js + .css), montada DOS veces —el ranking…
+- **#717** — Ventas › Comparativo es una PIEZA PROPIA, con las cinco mejoras acordadas
 
 **Layout y alturas** (100)
 
@@ -399,7 +400,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 - **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
 
-**Plotly y figuras** (122)
+**Plotly y figuras** (123)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -523,6 +524,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#692** — Ajuste › Evolución es una pieza propia: la serie en rojo y verde con «Explicar con», el panel…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 - **#716** — Compras › «Compras por período» es una PIEZA PROPIA (semanal.js + .css): sólo la fecha vuelve…
+- **#717** — Ventas › Comparativo es una PIEZA PROPIA, con las cinco mejoras acordadas
 
 **AgGrid y tablas** (95)
 
@@ -54944,6 +54946,63 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        una corrida, el Excel baja y la fecha recalcula conservando lo
        elegido. (2026-10-24.)
 
+717. **Ventas › Comparativo es una PIEZA PROPIA, con las cinco mejoras
+     acordadas** (`ventas_comparativo.js` + `.css`, datos en
+     `ventas_comparativo_datos.py`). A pedido del usuario, tras medir las
+     vistas pendientes: Día/Semana/Mes, las ventanas, la alineación, Venta
+     o Neto, Montos o Descomposición, sus series y el panel del último
+     período, los clics y el detalle se resuelven en el navegador.
+     · **Las cinco mejoras**: elegir un tramo arrastrando sobre las barras
+       (los indicadores lo siguen); cascada Año pasado → Clientes → Ticket
+       → Canales sin clientes → Actual; buscar platos, acotar su tabla al
+       tocar un grupo o canal y abrir «Resto»; excluir Eventos y Venta
+       interna de toda la comparación con un interruptor; Excel de lo que
+       se ve, con las fechas y filtros en su hoja Contexto.
+     · **Una carga cubre las ventanas y el acumulado**: las fechas de los
+       doce planes las calculan los ayudantes ORIGINALES de Python. El
+       límite incluye enero del año pasado para «Año a la fecha», aunque
+       quede fuera de los doce meses del gráfico. El ancla sigue siendo la
+       última fecha del `d` del dispatcher, con sus mismos chips. Mover la
+       fecha o los filtros globales vuelve a Python; la pieza no emite
+       triggers. La firma de `_ventas_comparativo` se conserva (#357).
+     · **Viajan dos granos**: día × pedido × comprobante × canal × grupo,
+       con sus importes y los dos signos del pax, y día × producto × grupo
+       × subgrupo × canal, con cantidad y frecuencia de líneas. Los
+       identificadores son índices: sus nombres de pedido y comprobante
+       no hacen falta en el navegador. Dinero y cantidades con 6 decimales.
+     · **Clientes no se suma por día**: se cuentan los comprobantes
+       positivos y las notas por pedido, como `definicion_venta.pax_por`.
+       Un canje entero y una cuenta dividida son UNA mesa; el total usa la
+       UNIÓN de días y no la suma de las barras. Es también lo que impide
+       contar dos veces el 28-feb del año anterior al comparar 28 y 29-feb.
+       El ticket conserva `con_clientes`: Rappi no infla su numerador.
+     · **La semana sigue siendo 364 días antes** (#659), el período en
+       curso compara los mismos días y el histórico ausente queda fuera de
+       AMBOS totales (#660). Feriados y efecto calendario se conservan;
+       calendario se explica aparte y no se resta otra vez de la cascada.
+       Presupuesto no se muestra al excluir grupos: sería comparar una
+       parte de la venta con el presupuesto entero.
+     · **El grupo de un plato es su moda ACTUAL**, o la del año pasado si
+       desapareció. El filtro del detalle se aplica DESPUÉS de resolver esa
+       jerarquía: cambiar de grupo no puede borrar su venta anterior.
+       Buscar, ordenar y abrir «Resto» conserva la suma de las filas.
+     · **Estado en `window.__vtComparativo`**: sobrevive al remontaje; otro
+       sello limpia tramo y filtros del detalle. La tabla larga se dibuja
+       de a 150 filas, con `Intl.NumberFormat` reutilizados (#716). Las
+       tablas se deslizan por dentro; los controles, cálculos y búsqueda
+       siguen siendo locales. Los listeners de ventana y el ResizeObserver
+       se desconectan al sustituir la raíz.
+     · **Lo vigila `test_ventas_comparativo.py`**: en Chromium, todas las
+       ventanas, neto y exclusión contra `_series_por_rangos`, `_por_que`,
+       `_efecto_calendario` y `_ranking_platos`; canje, cuenta dividida,
+       devolución, Rappi, cambio de grupo, semanas de 2027 y bisiesto. El
+       recorrido de UI comprueba el arrastre, filtros, búsqueda, exclusión,
+       remontaje y las hojas del Excel. Las funciones de cuenta anteriores
+       siguen en `ventas_comparativo.py` como referencia de los tests.
+       Se fueron Plotly, el dataframe del detalle y el espejo temporizado
+       de los switches; el CSS antiguo de `ventas_comp_*` quedó sin uso.
+       (2026-10-24.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54956,7 +55015,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#716**; la próxima toma el número siguiente.
+> última regla es la **#717**; la próxima toma el número siguiente.
 
 >
 
