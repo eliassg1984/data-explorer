@@ -1,0 +1,204 @@
+/* Compras › Producto (regla #713).
+   Vive en el shadow root del componente (graficos/compras/producto.py):
+   ninguna regla de acá sale de la pieza, y ninguna de estilos/ entra. Los
+   colores son las variables de estilos/_00_base.py, que SÍ cruzan el shadow
+   root. Ningún selector :has, por la regla #469.
+
+   Dos raíces, una por tarjeta: `.cpr` (el ranking) y `.cpf` (la ficha).
+   Cada una mide lo que deja una pantalla (`--alto-util`) menos el padding
+   de su tarjeta (16 + 16) y, en el ranking, la fila del título y la fecha
+   que dibuja Streamlit arriba de la pieza con su gap (`--cpr-arriba`). Así
+   las dos tarjetas miden lo mismo y sólo las TABLAS se deslizan por
+   dentro (regla #382: «las tarjetas no deben deslizarse internamente, solo
+   la tabla»). */
+
+.cpr, .cpf { --cpr-arriba: 46px; color: var(--text-primary); font-size: 12px; line-height: 1.4; min-width: 0; box-sizing: border-box; }
+.cpr *, .cpf * { box-sizing: border-box; }
+.cpr button, .cpf button, .cpr input { font: inherit; color: inherit; }
+.cpr button:focus-visible, .cpf button:focus-visible, .cpr input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.r { text-align: right; }
+.b { font-weight: 600; }
+.gr { color: var(--text-secondary); }
+.sube { color: var(--danger-text); }
+.baja { color: var(--success-text); }
+.igual { color: var(--text-muted); }
+.nuevo { color: var(--accent-deep); }
+.vuelve { color: var(--warning-text); }
+.w { color: var(--warning-text); font-style: normal; }
+.esp { flex: 1; }
+.nota-v { padding: 8px 4px; color: var(--text-secondary); font-size: 11.5px; }
+
+/* ── El ranking ─────────────────────────────────────────────────────── */
+.cpr { display: flex; flex-direction: column; gap: 8px; height: calc(var(--alto-util, 600px) - 32px - var(--cpr-arriba)); min-height: 360px; }
+.cpr .ctl { display: flex; gap: 8px; align-items: center; }
+.cpr .lb { flex: 1; min-width: 0; display: flex; }
+.cpr .lb span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.cpr .busca { flex: 1; min-width: 0; height: 28px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-primary);
+  padding: 0 10px; font-size: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; flex: 0 0 auto; }
+.seg button { border: 0; border-left: 1px solid var(--border); background: var(--bg-card); padding: 4px 10px; font-size: 12px; cursor: pointer;
+  white-space: nowrap; color: var(--text-secondary); }
+.seg button:first-child { border-left: 0; }
+.seg button.on { background: var(--accent-tint); color: var(--accent-deep); font-weight: 600; }
+.cpr .rev { display: flex; align-items: center; gap: 6px; }
+.excel { height: 24px; padding: 0 10px; border: 1px solid var(--border-lavender); border-radius: 7px; background: var(--bg-card);
+  color: var(--accent-deep) !important; font-size: 11.5px; cursor: pointer; white-space: nowrap; }
+.excel:hover { background: var(--accent-tint); }
+.cpr .fams, .cpr .subs { display: flex; flex-wrap: wrap; gap: 4px 5px; }
+.cpr .fams:empty, .cpr .subs:empty { display: none; }
+.cpr .subs { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior: contain; padding-bottom: 2px; }
+.pill { border: 1px solid var(--border); border-radius: 14px; padding: 2px 8px; font-size: 11.5px; cursor: pointer; white-space: nowrap;
+  background: var(--bg-card); color: var(--text-secondary); }
+.pill:hover { background: var(--accent-tint); }
+.pill.on { border-color: var(--border-lavender); background: var(--accent-tint); color: var(--accent-deep); font-weight: 600; }
+.pill .w { margin-right: 2px; }
+
+.cpr .tabla { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 3px solid var(--border); }
+.rk-f { display: grid; grid-template-columns: var(--cpr-cols); gap: 6px; align-items: center; height: 24px; padding: 0 8px;
+  border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.rk-f > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rk-h { height: 28px; border-bottom: 1px solid var(--border); flex: 0 0 auto; }
+.rk-h button { border: 0; background: transparent; padding: 0; font-weight: 600; font-size: 12px; color: var(--text-secondary); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.rk-h button.r { text-align: right; }
+.rk-h button:hover { color: var(--accent-deep); }
+.rk-h .c { text-align: center; font-size: 10.5px; color: var(--text-secondary); font-weight: 600; }
+.rk-l { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.rk-l .rk-f { cursor: pointer; }
+.rk-l .rk-f:hover { background: var(--bg-hover); }
+.rk-l .rk-f.sel { background: var(--accent-tint); }
+.rk-l .rk-f.sel .nm { color: var(--accent-deep); font-weight: 700; }
+.rk-f .val { height: 20px; display: flex; align-items: center; justify-content: flex-end; padding-right: 4px;
+  background: linear-gradient(90deg, var(--border-lavender) 0 calc(var(--b) * 0.62), transparent calc(var(--b) * 0.62) 100%); }
+.rk-f.sel .val { background: linear-gradient(90deg, var(--accent) 0 calc(var(--b) * 0.62), transparent calc(var(--b) * 0.62) 100%); }
+.rk-t { flex: 0 0 auto; height: 26px; background: var(--accent-light); color: var(--accent-deep); font-weight: 700;
+  border-top: 1px solid var(--border-lavender); border-bottom: 3px solid var(--border); }
+.rk-t .nm { overflow: visible; text-overflow: clip; }
+.rk-l .vacio { padding: 10px 8px; color: var(--text-secondary); }
+.sp { width: 40px; height: 16px; display: block; }
+.sp polyline { fill: none; stroke: var(--accent); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.cpr .pie { margin: 0; font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
+
+/* ── La ficha ───────────────────────────────────────────────────────── */
+.cpf { position: relative; display: flex; flex-direction: column; gap: 6px; height: calc(var(--alto-util, 600px) - 32px); min-height: 460px; }
+.cpf .cab { display: flex; align-items: center; gap: 12px; }
+.cpf h3 { margin: 0; flex: 1; min-width: 0; font-size: 17px; font-weight: 700; color: var(--accent-deep); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.cpf .ven { position: relative; }
+.cpf .ven-b { height: 28px; border: 0; background: transparent; font-size: 12.5px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.cpf .ven-b i { color: var(--accent); font-style: normal; }
+.cpf .ven-l { position: absolute; right: 0; top: 30px; width: 170px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: var(--shadow-md); padding: 4px; z-index: 4; display: flex; flex-direction: column; }
+.cpf .ven-l button { border: 0; border-radius: 6px; text-align: left; padding: 6px 8px; font-size: 12px; cursor: pointer; background: var(--bg-card); }
+.cpf .ven-l button:hover { background: var(--bg-hover); }
+.cpf .ven-l button.on { background: var(--accent-tint); color: var(--accent-deep); font-weight: 600; }
+.cpf .sub { margin: -2px 0 0; font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cpf .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.cpf .kpi { background: var(--bg-primary); border-radius: 9px; padding: 6px 10px; min-width: 0; }
+.cpf .kpi span { display: block; font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cpf .kpi p { margin: 2px 0 0; display: flex; align-items: baseline; gap: 5px; white-space: nowrap; overflow: hidden; }
+.cpf .kpi b { font-size: 15px; font-weight: 700; }
+.cpf .kpi small { font-size: 10.5px; color: var(--text-secondary); }
+.chip { font-style: normal; font-size: 10.5px; border-radius: 5px; padding: 1px 6px; font-weight: 600; }
+.chip.nuevo { color: var(--accent-deep); background: var(--accent-light); }
+.chip.vuelve, .chip.revisar { color: var(--warning-text); background: var(--warning-bg); }
+.chip.barato { color: var(--success-text); background: var(--success-bg); }
+.cpf .kpi .chip { font-size: 12px; }
+
+.cpf .curva { position: relative; flex: 0 0 auto; }
+.cpf .curva svg { display: block; overflow: visible; }
+.curva .gr { stroke: var(--line-soft); stroke-width: 1; }
+.curva .ty { font-size: 10px; fill: var(--text-secondary); }
+.curva .t2 { font-size: 10px; fill: var(--accent-deep); }
+.curva .tx { font-size: 11px; fill: var(--text-secondary); }
+.curva rect.b { fill: var(--border-lavender); }
+.curva rect.b.off { fill: var(--accent-light); }
+.curva rect.b.on { fill: var(--accent); }
+.curva .rb { fill: transparent; }
+.curva .rl { stroke: var(--border); stroke-width: 2.4; }
+.curva .hab { fill: none; stroke: var(--text-secondary); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.curva polyline.pr { fill: none; stroke: var(--accent-deep); stroke-width: 2.4; }
+.curva circle.pr { fill: var(--accent-deep); }
+.curva .prp { fill: none; stroke: var(--accent-deep); stroke-width: 2; stroke-dasharray: 2 3; }
+.curva .pra { fill: var(--bg-card); stroke: var(--accent-deep); stroke-width: 2; }
+.curva .ref { stroke: var(--text-primary); stroke-width: 2; opacity: 0.75; }
+.curva .fl { fill: var(--warning); stroke: var(--bg-card); stroke-width: 1; }
+.curva .hit { fill: transparent; cursor: pointer; pointer-events: all; }
+.curva .hit:hover { fill: var(--accent); fill-opacity: 0.06; }
+.curva .tip { position: absolute; top: 4px; width: 280px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: var(--shadow-md); padding: 6px 8px; font-size: 11px; line-height: 1.45; pointer-events: none; z-index: 2; }
+.curva .tip .tw { color: var(--warning-text); }
+.curva .tip .tc { margin-top: 4px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--accent); }
+.curva .tip .tl { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.curva .tip .tm { font-size: 10.5px; color: var(--text-secondary); }
+.cpf .sin-curva { height: 150px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); }
+.cpf .ley { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 11px; color: var(--text-secondary); }
+.cpf .ley span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.ley .m { display: inline-block; font-style: normal; }
+.ley .m.bar { width: 10px; height: 10px; border-radius: 2px; background: var(--border-lavender); }
+.ley .m.lin { width: 14px; height: 2px; background: var(--accent-deep); }
+.ley .m.hab { width: 14px; border-top: 2px dashed var(--text-secondary); }
+.ley .m.fl { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
+.ley .m.raya { width: 12px; border-top: 2px solid var(--text-primary); opacity: 0.75; }
+
+.cpf .tabs { display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); min-height: 30px; flex: 0 0 auto; }
+.cpf .tab { border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 4px 2px; font-size: 12.5px; cursor: pointer;
+  color: var(--text-secondary); white-space: nowrap; }
+.cpf .tab.on { border-bottom-color: var(--accent); color: var(--accent-deep); font-weight: 600; }
+.cpf .tabs .nota { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cpf .pw { border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 2px 4px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.cpf .pw.on { border-bottom-color: var(--accent); color: var(--accent-deep); }
+.cpf .soltar { border: 0; background: transparent; font-size: 11.5px; color: var(--accent-deep) !important; cursor: pointer; white-space: nowrap; }
+
+.cpf .cuerpo { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ft { display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; }
+.ft-f { display: grid; gap: 6px; align-items: center; height: 24px; padding: 0 4px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; font-size: 11.5px; }
+.ft-f > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ft.pv .ft-f { grid-template-columns: minmax(0, 1fr) 70px 72px 92px 82px 38px 50px; }
+.ft.cp .ft-f { grid-template-columns: 48px minmax(0, 1fr) 110px 56px 70px 62px 78px 56px; }
+.ft.pe .ft-f { grid-template-columns: minmax(0, 1fr) 70px 82px 62px 80px 38px 40px 64px; }
+.ft-h { color: var(--text-secondary); font-size: 11px; border-bottom: 1px solid var(--border); flex: 0 0 auto; }
+.ft-l { overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 0 1 auto; }
+.ft-l .ft-f[data-acc] { cursor: pointer; }
+.ft-l .ft-f[data-acc]:hover { background: var(--bg-hover); }
+.ft-l .ft-f.sel { background: var(--accent-tint); }
+.ft-t { background: var(--accent-light); color: var(--accent-deep); font-weight: 700; border-radius: 4px; height: 26px; flex: 0 0 auto; }
+.ft-t .tot3 { grid-column: 1 / span 3; }
+.ft .parc { font-style: italic; }
+.ft .chip { justify-self: end; }
+
+/* El comprobante: encima de la ficha, cerrado con ✕ o Escape. */
+.doc { position: absolute; right: 0; top: 0; width: min(520px, 100%); max-height: 100%; background: var(--bg-card);
+  border: 1px solid var(--border-lavender); border-radius: 12px; box-shadow: var(--shadow-md); padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px; z-index: 5; }
+.doc-c { display: flex; align-items: center; gap: 8px; }
+.doc-c b { font-size: 14px; color: var(--accent-deep); }
+.doc-c button { border: 0; background: transparent; font-size: 15px; cursor: pointer; color: var(--text-secondary) !important; }
+.doc-s, .doc-n { margin: 0; font-size: 11px; color: var(--text-secondary); }
+.doc-f { display: grid; grid-template-columns: minmax(0, 1fr) 76px 80px 84px; gap: 6px; padding: 3px 4px; font-size: 11.5px;
+  border-bottom: 1px solid var(--line-soft); align-items: center; }
+.doc-f > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-h { font-size: 11px; color: var(--text-secondary); border-bottom-color: var(--border); }
+.doc-l { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.doc-f.sel { background: var(--accent-tint); font-weight: 600; }
+.doc-t { background: var(--accent-light); color: var(--accent-deep); font-weight: 700; border-radius: 6px; border: 0; }
+
+/* Angosto (columnas apiladas): la pieza mide su contenido. */
+@media (max-width: 768px) {
+  .cpr, .cpf { height: auto; min-height: 0; }
+  .cpr .tabla .rk-l { max-height: 360px; }
+  .cpf .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ft-l { max-height: 300px; }
+  /* La cabecera y las pestañas se parten en renglones; las tablas de la
+     ficha se deslizan de lado con su ancho de escritorio (si no, la
+     columna del nombre queda en cero). */
+  .cpf .cab, .cpf .tabs, .cpr .ctl { flex-wrap: wrap; }
+  .cpr .lb { min-width: 160px; }
+  .cpf h3 { flex-basis: 100%; }
+  .cpf .tabs { gap: 2px 12px; padding-bottom: 2px; }
+  .cpf .cuerpo { overflow-x: auto; overscroll-behavior: contain; }
+  .ft { min-width: 600px; }
+  .cpr .tabla { overflow-x: auto; overscroll-behavior: contain; }
+  .cpr .rk-f { min-width: 420px; }
+  .doc { position: fixed; inset: auto 8px 72px 8px; width: auto; max-height: 70vh; }
+}

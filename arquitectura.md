@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-712 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+713 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (227)
+**CSS y estilos** (228)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -292,6 +292,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 - **#706** — «Costo recetas base» es una pieza propia: la lista y la ficha de la elegida, con dónde se…
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
+- **#713** — Compras › Producto es una PIEZA PROPIA (producto.js + .css), montada DOS veces —una en cada…
 
 **Layout y alturas** (100)
 
@@ -618,7 +619,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 
-**Streamlit** (167)
+**Streamlit** (168)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -787,6 +788,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#678** — «Nueva receta» es UNA tarjeta a todo el ancho: lo que se mira al armar va en una franja, y el…
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
+- **#713** — Compras › Producto es una PIEZA PROPIA (producto.js + .css), montada DOS veces —una en cada…
 
 **Datos, R2 y DuckDB** (118)
 
@@ -54666,6 +54668,68 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      («Del sistema» | «De SUNAT»): junta dos reportes, Compras y
      Documentos SUNAT, y no entra en este molde. (2026-10-23.)
 
+713. **Compras › Producto es una PIEZA PROPIA (`producto.js` + `.css`),
+     montada DOS veces —una en cada tarjeta— con un solo cerebro en el
+     navegador, y con las cinco mejoras del boceto aprobado.** El
+     2026-10-23, a pedido («Implementa Compras › Producto como pieza propia
+     con las cinco mejoras»), sobre el boceto de la página «Compras ›
+     Producto: pieza propia» del lienzo
+     https://claude.ai/artifact/1fymSPwVmqUtpQLnjzRB9m. Medido antes: cada
+     clic de la vista era una corrida de 2,5 a 4,4 s en la laptop con R2
+     (la más lenta de Compras); ahora ninguno lo es, salvo la fecha.
+     · **Lo que hace es lo de la #653, entero**: buscar, «Ver por»
+       Producto | Subfamilia | Familia, las familias y subfamilias, el orden
+       por columna (antes de AgGrid), el clic que elige o baja a sus
+       productos, el total con su Δ y «vs. hab.», el pie; en la ficha los
+       cinco indicadores con su ayuda, la curva (barras de cantidad, precio
+       ponderado, habitual punteado, el período en curso rayado con la raya
+       de referencia, los puntos naranjas), la ventana y el grano, y las
+       tres pestañas con sus clics (proveedor → sus compras, período → sus
+       compras, la barra que acota). Verificado clic por clic en la app
+       local con R2, con Streamlit 1.59 y 1.64: ninguno pide una corrida.
+     · **Las cinco mejoras**: «Sólo las que tienen algo para revisar»
+       (filtra la lista a los productos con una compra marcada); la
+       mini-curva del precio ponderado de los últimos 12 meses en cada
+       fila; al pasar el cursor por una barra, sus compras (cinco y «y N
+       más»); el clic en una compra abre el COMPROBANTE entero —todas sus
+       líneas, de todos los productos de los filtros—; y el Excel de la
+       lista tal como se ve (`_xlsx.js`, el de Costo de Carta).
+     · **Dos montajes, un estado** (como «Análisis por hora», #704): la
+       tarjeta del ranking manda `parte: "rank"` y la de la ficha `parte:
+       "ficha"`; el navegador guarda las dos en `window.__cpProd` y dibuja
+       cuando tiene las dos con la MISMA `sello` (la del historial,
+       `producto.sello_historial`). El estado de lo elegido vive ahí y no
+       en la raíz de la pieza: sobrevive a que Streamlit la vuelva a montar,
+       como antes `session_state`.
+     · **Los datos van partidos para que la fecha no mande el historial**:
+       la ficha lleva cada línea del historial con su habitual y su marca
+       (`historial_pieza`: 45 mil líneas, 1,6 MB con las cinco familias de
+       entrada), que no depende de la fecha, así que Streamlit no vuelve a
+       mandar ese mensaje mientras no cambie (el navegador lo tiene
+       guardado); el ranking, el resumen del rango (`armar_ranking`, 39 KB).
+       `_con_referencia` sobre el historial entero son 0,5 s: se guarda en
+       `session_state` con su sello (`_K_HIST`). El habitual de cada línea
+       sale del historial entero y no del rango con sus 90 días antes: es la
+       mediana de los 90 días ANTERIORES a cada compra, así que da lo mismo.
+     · **Las cuentas siguen en Python** (`_resumen`, `_serie`, `_precios`)
+       y el navegador las rehace con las mismas fórmulas. Lo vigila
+       `test_producto_pieza.py`: el contrato de posiciones y, en Chromium,
+       `serie` del `.js` contra `_serie` período por período en 144
+       combinaciones de producto, grano, ventana y último día (Playwright es
+       de requirements-dev; sin él, esa parte se salta).
+     · **Cada tarjeta mide una pantalla desde la pieza** (`--alto-util`
+       menos el padding y, en el ranking, la fila del título y la fecha que
+       dibuja Streamlit: `--cpr-arriba`, 46 px medidos), y sólo se deslizan
+       las TABLAS (#382). Las zonas con scroll propio llevan
+       `overscroll-behavior: contain` (lo exige `test_graficos.py`).
+     · **Se fue**: los dos AgGrid (el ranking y los grupos, 1,28 MB y 1-2 s
+       de navegador cada uno, #540), la figura de Plotly con su contador de
+       clics (#399), el relevo por `text_input` oculto de las tablas (#217)
+       y el CSS clonado de la ficha de Proveedor. `_KEYS_WIDGET` quedó
+       vacía: lo que se elige ya no son widgets. El asistente IA sigue
+       viendo lo de siempre: lo publica el dispatcher de Compras, no esta
+       vista. (2026-10-23.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54678,7 +54742,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#712**; la próxima toma el número siguiente.
+> última regla es la **#713**; la próxima toma el número siguiente.
 
 >
 

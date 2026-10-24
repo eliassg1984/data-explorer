@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -180,6 +180,14 @@ vista que los muestra, Recetas › «Cambios en Recetas»: los precios de la
 auditoría juntados, la fecha de una edición de plato, la lista para la
 pieza y que el `.js` lea lo que Python manda. Ver `arquitectura.md` reglas
 #705 y #707.
+
+`test_producto_pieza.py` vigila Compras › Producto como pieza propia
+(`graficos/compras/producto.py` y `producto.js`): lo que recibe cada
+tarjeta —el historial con su marca y su habitual, el resumen del rango,
+la misma `sello`— y, en Chromium con Playwright, que la curva del
+navegador dé período por período lo mismo que `_serie`, en cada grano y
+cada ventana. Sin Playwright esa parte se salta. Ver `arquitectura.md`
+regla #713.
 
 ## El asistente IA no adivina: consulta
 
@@ -508,10 +516,20 @@ cantidad), y **las compras marcadas «revisar» no entran en ningún precio**
 —sí en la cantidad y el valor— (`producto.py::marcar_revisar`, regla
 propia: S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o decimales
 en UND). Antes la barra promediaba facturas sin pesar y la tabla de abajo
-ponderaba: dos precios para el mismo mes. Y un clic en la LISTA que pide un
-rerun después de dibujar sus controles preserva sólo los que faltan
-dibujar (`_KEYS_FICHA`): reescribir uno ya dibujado es un
-StreamlitAPIException. Regla #653.
+ponderaba: dos precios para el mismo mes. Regla #653.
+
+**Y desde el 2026-10-23 Producto es una PIEZA PROPIA** (regla #713):
+`graficos/compras/producto.js` + `.css`, montada una vez en cada tarjeta
+—`parte: "rank"` y `parte: "ficha"`— con el estado de las dos en
+`window.__cpProd`, como «Análisis por hora». Nada vuelve a Python salvo la
+fecha del ranking: buscar, Ver por, familias, el orden, la curva, las
+pestañas, el comprobante de una compra y el Excel los resuelve el
+navegador. El historial viaja en la tarjeta de la ficha
+(`historial_pieza`, con su `sello`) y el resumen del rango en la del
+ranking (`armar_ranking`): cambiar la fecha no vuelve a mandar el
+historial. Las cuentas siguen en `producto.py` (`_resumen`, `_serie`,
+`_precios`) y el `.js` las rehace igual: si se toca una, se toca la otra
+— `test_producto_pieza.py` compara la curva en Chromium.
 
 **El período en curso no se compara con uno entero**: al 11 de octubre,
 «octubre contra septiembre» da ▼75 % en verde en casi todo, y es el
