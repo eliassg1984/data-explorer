@@ -1,150 +1,67 @@
 """
-graficos.ventas_resumen — vista "Resumen ejecutivo" del dashboard de Ventas:
-venta total por día (barras partidas por canal de venta, con el total y la
-variación día-a-día encima) + volumen de Pax y ticket promedio. (El top de
-platos se quitó el 2026-09-25: regla #528.)
+graficos.ventas_resumen — Ventas › «Venta por Periodo» (id «Resumen
+ejecutivo»): la venta por período partida por canal, sus indicadores, el
+Resumen en nueve grupos de columnas y el Detalle de pedidos y platos.
 
-Nació como un candlestick (mockup tipo "panel bursátil" para restaurantes)
-con apertura/cierre = primera/última línea de venta del día — se reemplazó
-por barras el 2026-08-11 porque esa apertura/cierre comparaba dos ventas
-básicamente al azar (sin relación real entre sí, a diferencia de un precio
-de acción) y el color resultante no tenía señal. Ver arquitectura.md
-regla #85 para el detalle de por qué se dio de baja.
+DESDE EL 2026-10-23 ES UNA PIEZA PROPIA (regla #714): `ventas_periodo.js` +
+`ventas_periodo.css`, sobre el boceto aprobado con sus cinco mejoras
+(https://claude.ai/artifact/Pb748JiyYM8Wapb49KReMi). Hasta ese día cada clic
+—el grano, un filtro, una barra, una subvista, una fila— era una corrida de
+2,0 a 4,6 s (medido en la laptop con R2); ahora sólo la fecha vuelve a
+Python. La historia de la vista de antes —Plotly, tres AgGrid, la pastilla
+«Detalle» con interruptores— está en las reglas #515 a #525, #590 a #592 y
+#667/#668: la pieza hace lo mismo, con las mismas cuentas.
 
-2026-09-22 — TRES AGREGADOS a pedido (mirando la vista publicada):
-  1. Un SELECTOR DE FECHA propio, el mismo trigger-con-rango-escrito de
-     Compras (`base.selector_fecha_tarjeta`). No es un filtro paralelo: con
-     `categoria=None` escribe la MISMA clave canónica que la píldora de la
-     franja, o sea que mover la fecha acá RECARGA el parquet del rango
-     nuevo desde R2 (Ventas usa `carga_por_rango`, ver `app.py`). Es la
-     segunda puerta al mismo dato — cómoda porque cae en la vista y no
-     arriba de todo. De ahí el `st.rerun(scope="app")` del arranque: sin la
-     corrida completa el `d` que recibe esta función seguiría siendo el del
-     rango viejo.
-  2. Dos filtros LOCALES de la vista, Grupo y Servicio, que recortan el `d`
-     de esta tarjeta (los de la franja siguen existiendo y se COMPONEN con
-     estos — el usuario pidió tenerlos a mano en la vista).
-  3. Las barras de "Tendencia diaria" son CLICKEABLES, con un toggle
-     Resumen/Detalle debajo — el mismo par que la vista «Compras por
-     período» (arquitectura.md regla #476): «Resumen» es el gráfico escrito
-     como tabla (una fila por día + total), «Detalle» es el desglose del
-     día que se toca (sus platos). El clic sigue el patrón de foco-en-la-key
-     de `ventas_comparativo.py` (regla #399): la selección de
-     `st.plotly_chart(on_select=...)` persiste entre reruns, así que la key
-     lleva el foco y cada clic procesado dispara un rerun de fragment.
+LO QUE MANDA PYTHON (`armar_periodo`) y por qué en esa forma. Las cuentas
+del gráfico, los indicadores, las nueve subvistas y las tablas de pedidos,
+meseros, servicios y comprobantes salen de la venta sumada por COMPROBANTE
+Y GRUPO (`unidades`): los filtros de Grupo, Servicio, Canal y Documento se
+aplican ahí, y los clientes se cuentan por comprobante con la regla de
+`definicion_venta.pax_por`. Sólo la tabla de PLATOS necesita las líneas, y
+de ellas viajan las de todo el rango si cabe en `_DIAS_LINEAS` y, si no,
+las de los últimos `_DIAS_RECIENTES`: doce meses de líneas son 6,5 MB; sumado
+por comprobante, el mensaje entero es ~3,4 MB. Un período más viejo pide sus líneas con el
+trigger `lineas` y las recibe en un segundo montaje chico
+(`parte: "lineas"`), para que el mensaje grande no se vuelva a mandar.
 
-2026-09-24 — LA VISTA SE VOLVIÓ LA DE «COMPRAS POR PERÍODO» (reglas #515 y
-#516): la barra partida por canal, granularidad Día/Semana/Mes/Año, filtros
-de Canal y Tipo de documento, y la zona de abajo (Resumen | Detalle de
-pedidos y platos) DENTRO de la tarjeta, con la figura que se acorta cuando
-aparece la tabla. Y un ítem se cuenta una vez: el parquet lo repite por
-forma de pago.
-
-El detalle por producto vive en otras vistas —el % de costo por período en
-«Mix de carta», el ranking de platos de toda la carta con su costo en
-«Análisis de platos»—: este panel es la foto rápida de un vistazo, no su
-reemplazo.
+Lo que sigue en este módulo además de eso son las cuentas puras que la pieza
+rehace en el navegador —el IGV, lo vendido sin costo, las formas de pago,
+las subvistas, los indicadores, los comprobantes, los grupos del Detalle—:
+son la referencia contra la que `test_ventas_periodo.py` compara el `.js`.
+Si se toca una, se toca la otra.
 """
 
 import re
-import unicodedata
-from html import escape
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 import cortes
 import definicion_venta as dv
-from tema import (ADVERTENCIA, ADVERTENCIA_TEXTO, ERROR, EXITO,
-                  GRIS_BORDE, GRIS_TEXTO, LAVANDA_BORDE, PALETA_SERIES,
-                  SERIE_PRINCIPAL, TEXTO_PRINCIPAL)
-from graficos.base import (
-    _card, _compras_layout, _resolver, preservar_widgets,
-    scope_rerun, selector_fecha_tarjeta,
-)
-from graficos.compras._comun import (
-    GAP_DRILL, _UNIDAD_GRAN, _clave_grilla, _first_point, _limites_periodo,
-    _periodo_serie, _variaciones,
-)
-# LA BARRA PARTIDA POR CANAL ES LA DE «COMPRAS POR PERÍODO» (2026-09-24, a
-# pedido: «similar estilo y tamaño»). No se copian las cuentas, se importan:
-# el alto de la figura, dónde va la leyenda y el plan de las etiquetas de
-# encima de la barra son UNA cuenta (`semanal._alto_area_trazo`), y dos
-# copias se desincronizan a la primera que se toque. Regla #515.
-from graficos.compras.semanal import (
-    _ALTO_FIG_SOLO, _ETQ_FUENTE, _ETQ_SEP, _LIENZO_PX,
-    _del_al, _etiqueta_en_la_punta, _plan_etiquetas, _rotulo_periodo,
-)
+from tema import ERROR, EXITO, GRIS_TEXTO
+from graficos.base import _resolver, preservar_widgets, selector_fecha_tarjeta
+from graficos.compras._comun import _periodo_serie
 from graficos import alturas
 from graficos.recetas_comun import TASA_RECARGO
-from tablas.movimientos_periodo import renderizar_lineas_mov
-from tablas.ventas_resumen import (
-    renderizar_dias_venta, renderizar_grupos_venta, renderizar_pedidos_venta,
-)
 from utils import fmt_k
 
-MAX_DIAS = 30    # tope de barras legibles. Mismo espíritu que MAX_SEMANAS de
-                 # compras/volatilidad.py (arquitectura.md regla #74): el
-                 # filtro de fecha de la franja es un TECHO, no la ventana en
-                 # sí — con un rango de "todo el año" cargado, esta vista
-                 # sigue mostrando solo los últimos 30 días CON datos.
+MAX_DIAS = 30    # tope de barras legibles en Día. Mismo espíritu que
+                 # MAX_SEMANAS de compras/volatilidad.py (regla #74): con un
+                 # rango de «todo el año» cargado, el grano Día muestra sólo
+                 # los últimos 30 días CON datos. Lo usan también Mix y Control.
 
-# Los controles propios de la vista, para que la recarga de fecha
-# (`st.rerun(scope="app")`) no se los lleve. Es el mismo mecanismo que
-# `_KEYS_WIDGET` de `compras/semanal.py` (arquitectura.md regla #373): ese
-# rerun aborta la corrida antes de que estos widgets se registren, y
-# Streamlit recolecta el estado de todo widget del fragment que no se
-# dibujó. `preservar_widgets` los re-escribe sobre sí mismos antes de
-# escalar.
-_MARGEN_ARRIBA = 14
-"""Margen de arriba de la figura del Resumen. Era 28 para la pastilla
-«Detalle» (#520); desde que la pastilla vive en el renglón del título
-(#522) sólo lleva el rótulo «feriado», que va sobre el borde del área."""
-
-_PIE_EJE = 26
-"""Lo que ocupa, debajo del área de trazo, el renglón de rótulos del eje X
-más el margen de abajo (4). Medido: rótulos 22px a 10px de cuerpo."""
-
-_SERIES_APAGABLES = ("desc", "pax", "ticket")
-"""Las series que la pastilla «Detalle» deja apagar (regla #520). Los canales
-no: son la barra misma."""
-
-_KEYS_WIDGET_RESUMEN = ("vt_resumen_gran", "vt_resumen_grupo",
-                        "vt_resumen_ver_desc", "vt_resumen_ver_pax",
-                        "vt_resumen_ver_ticket",
-                        "vt_resumen_serv", "vt_resumen_canal",
-                        "vt_resumen_tdoc", "vt_resumen_modo",
-                        "vt_resumen_sub", "vt_resumen_ver")
-
-# Las granularidades de «Compras por período», sin «Documento»: en Ventas
-# una barra por comprobante son ~60 por día y no se lee ninguna. Abre en
-# Día, que es lo que la vista mostraba antes de tener granularidad
-# («Tendencia diaria»): quien vuelve la encuentra igual.
-_GRAN_OPCIONES = ("Día", "Semana", "Mes", "Año")
-_GRAN_DEFAULT = "Día"
+_KEYS_WIDGET_RESUMEN = ()
+"""Los controles de la vista que la recarga de fecha (`st.rerun(scope=
+"app")`) tendría que preservar (regla #373). Ninguno desde la pieza: lo que
+se elige vive en el navegador (`window.__vtPeriodo`). La guarda de
+`test_graficos.py` lee esta tupla con `ast.literal_eval`."""
 
 _SUBVISTAS = ("Venta", "Clientes", "Canales", "Propinas", "Pagos",
               "Descuentos", "Cortesías", "Costo", "Cuadre")
 """Los grupos de columnas del Resumen (regla #519). Una subvista que el
-parquet no permite (sin propina, un solo canal) no se ofrece de más: la
-tabla cae a «Venta» — ver `_subvistas`."""
-
-_MODO_DETALLE = "Detalle"
-_MODO_RESUMEN = "Resumen"
-_MODO_OPCIONES = (_MODO_RESUMEN, _MODO_DETALLE)
-_MODO_DEFAULT = _MODO_RESUMEN   # "Resumen" no necesita un día en foco: la
-                                # tabla del día completo se ve al abrir, y el
-                                # clic queda para pasar a "Detalle".
-
-_AYUDA_MODO = (
-    "Qué se ve debajo del gráfico. **Resumen**: una fila por barra —su "
-    "venta, su peso, lo de cada canal, clientes, ticket y la variación "
-    "contra la barra anterior— más el total. **Detalle**: los pedidos de la "
-    "barra que toques —o sus meseros, servicios o comprobantes— y, al "
-    "costado, los platos del que elijas."
-)
+parquet no permite (sin propina, un solo canal) no se ofrece de más."""
 
 # «Ver por» del Detalle (regla #667): de qué es cada fila de la tabla de la
 # izquierda. La de al lado son siempre los platos de la fila elegida.
@@ -154,15 +71,6 @@ _VER_COLUMNA = {_VER_MESERO: "mesero", _VER_SERVICIO: "serv"}
 """La columna de `tabla` que agrupa cada «Ver por» de grupos. Pedido y
 Comprobante no agrupan: una fila es un pedido o un documento."""
 
-_AYUDA_VER = (
-    "De qué es cada fila de la tabla. **Pedido**: una mesa o ticket. "
-    "**Mesero** y **Servicio**: sus pedidos, clientes, venta, ticket "
-    "y, por mesero, la propina. **Comprobante**: cada factura, boleta o "
-    "nota de crédito, para cuadrar contra el POS: un pedido puede tener "
-    "varios (cuenta dividida, canje de boleta por factura). Un clic en una "
-    "fila deja al costado sólo sus platos."
-)
-
 
 def _ver_disponibles(tabla):
     """Los «Ver por» que el parquet permite: sin la columna, no se ofrece."""
@@ -171,33 +79,22 @@ def _ver_disponibles(tabla):
         (_VER_MESERO, "mesero" in hay), (_VER_SERVICIO, "serv" in hay),
         (_VER_COMPROBANTE, bool({"ldoc", "doc"} & hay))) if ok]
 
+
 # Abreviaturas en español para el eje/tabla — Plotly y pandas rotulan en
 # inglés si no se les dice otra cosa (misma trampa que arquitectura.md #241).
 _DIAS_ABR_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-
-# Opacidad de las barras SIN foco cuando hay un día clickeado. Misma que
-# `compras/semanal.py::_ATENUADO` y por el mismo motivo (regla #476).
-_ATENUADO = 0.2
-
-# ── Los colores de los canales ─────────────────────────────────────────────
-# Son CATEGORÍAS (local, Rappi, Pedidos Ya…), no tramos ordenados, así que
-# van con hues distintos de `PALETA_SERIES` y no con la rampa `SERIE_TRAMOS`.
-# Se saltan el naranja y el verde: el naranja ya es la línea del Ticket, y
-# el verde dice «subió» en la etiqueta de la barra. El primero —el canal
-# que más vende, abajo de la pila— es el morado de la marca.
-_COLORES_CANAL = [PALETA_SERIES[_i] for _i in (0, 1, 2, 5, 6, 7)]
 
 _SIN_CANAL = "Sin canal"
 _SIN_SERVICIO = "Sin servicio"
 _SIN_MESERO = "Sin mesero"   # el de `ventas_meseros.SIN_MESERO`, que importa
                              # de acá: traerlo sería un import circular
 
-_KPI_CANALES = 4
-"""Canales con tarjeta propia en la fila de KPI; el resto va sumado. Medido
-el 2026-09-24 en `ventas.parquet`: son cuatro en todo el histórico (En el
-Local 97 %, Rappi 3 %, Pedidos Ya y Para Llevar casi nada), así que hoy el
-«N más» no aparece — está para el día que se sume un quinto."""
+_DIAS_LINEAS = 92
+"""Con un rango de hasta tantos días viajan todas sus líneas."""
 
+_DIAS_RECIENTES = 35
+"""Con uno más largo, las de los últimos tantos días con ventas (el grano Día
+muestra 30): para un período más viejo, la pieza pide las suyas."""
 
 def _con_alpha(_hex, _a):
     """`#rrggbb` → `rgba(r,g,b,a)`. El foco se atenúa por COLOR y no con
@@ -300,52 +197,6 @@ def _nota_var_venta(var, nombre_ant):
     if estado == "sin_base":
         return f"Sin variación: {nombre_ant} no vendió"
     return "Primera barra: sin anterior para comparar"
-
-
-def _html_kpi_canales(total, n_dias, canales, extras=()):
-    """La fila de KPI de la tarjeta: el total de la vista y lo de cada canal.
-
-    Mismo dibujo que tenía la de «Compras por período» (quitada el
-    2026-10-01), con canales en vez de familias. `canales`
-    es `[(nombre, valor), …]` de mayor a menor. Con un solo canal no se
-    desglosa nada: el total ya es ese canal.
-
-    `extras` son las tarjetas que siguen a los canales (regla #518):
-    `(rótulo, valor, sub, clase, tooltip)` ya escritos."""
-    def _tarjeta(rotulo, valor, sub, clase="", tip=""):
-        return (f'<div class="vt-kpi {clase}" title="{escape(tip or rotulo)}">'
-                f'<span class="vt-kpi-rot">{escape(rotulo)}</span>'
-                f'<span class="vt-kpi-val">{escape(valor)}'
-                f'<span class="vt-kpi-sub">{escape(sub)}</span></span></div>')
-
-    _n = f"{n_dias:,} día" + ("" if n_dias == 1 else "s")
-    partes = [_tarjeta("Venta de la vista", fmt_k(total), _n, "vt-kpi-total",
-                       f"Venta de la vista: S/ {total:,.2f} · {_n}")]
-    if len(canales) > 1:
-        for (nom, v), color in zip(canales[:_KPI_CANALES],
-                                   _colores_de(len(canales))):
-            p = v / total if total else 0.0
-            partes.append(
-                f'<div class="vt-kpi" style="--vt-kpi-color:{color}" '
-                f'title="{escape(nom)}: S/ {v:,.2f} · {p:.1%}">'
-                f'<span class="vt-kpi-rot">{escape(nom)}</span>'
-                f'<span class="vt-kpi-val">{escape(fmt_k(v))}'
-                f'<span class="vt-kpi-sub">{p:.0%}</span></span></div>')
-        resto = canales[_KPI_CANALES:]
-        if resto:
-            _v = sum(v for _, v in resto)
-            _p = _v / total if total else 0.0
-            partes.append(_tarjeta(
-                f"{len(resto)} más", fmt_k(_v), f"{_p:.0%}", "",
-                f"{len(resto)} canales más: S/ {_v:,.2f} · {_p:.1%}"))
-    for rot, val, sub, clase, tip in extras:
-        partes.append(_tarjeta(rot, val, sub, clase, tip))
-    return '<div class="vt-kpis">' + "".join(partes) + "</div>"
-
-
-def _colores_de(n):
-    """Un color por canal, en el orden de la pila (el que más vende primero)."""
-    return [_COLORES_CANAL[_i % len(_COLORES_CANAL)] for _i in range(n)]
 
 
 # ── El IGV mueve el % de costo sin que cambie ningún costo (regla #590) ─────
@@ -551,1478 +402,6 @@ def formas_de_pago(d_pagos, col_fecha, gran, claves_ok,
     return out
 
 
-def _contexto_periodo(d, subvista, filtros):
-    """Explica la base efectiva del dato sin cambiar su fecha ni sus cuentas."""
-    turno = dv.columna(d, dv.FECHA_EMISION) is not None
-    base = "Día del turno del comprobante" if turno else "Emisión del comprobante"
-    nombres = {
-        "Venta": "Venta documentada",
-        "Costo": "Costo histórico de lo vendido",
-        "Pagos": "Pagos registrados de comprobantes",
-        "Cuadre": "Conciliación de venta documentada",
-        "Cortesías": "Cortesías y su costo histórico",
-        "Descuentos": "Descuentos sobre precio de carta",
-        "Propinas": "Propinas de los comprobantes seleccionados",
-    }
-    valores = ("Importes de pagos en soles" if subvista == "Pagos" else
-               "Neto sin IGV ni recargo" if subvista == "Costo" else
-               "Venta con impuestos · neto sin IGV ni recargo")
-    seleccion = [f"{rotulo}: {', '.join(map(str, elegidos))}"
-                 for rotulo, elegidos in filtros if elegidos]
-    ambito = " · ".join(seleccion) if seleccion else "Todos los grupos y canales"
-    with st.container(horizontal=True, gap="small", key="vt_resumen_contexto"):
-        st.caption(f"{nombres.get(subvista, 'Venta documentada')} · {base} · "
-                   f"{valores} · {ambito}")
-        with st.popover("Cómo se calcula", icon=":material/info:"):
-            st.markdown(
-                "**Fecha y alcance**\n\n"
-                f"Base temporal: **{base.lower()}**. {ambito}. "
-                "Los filtros de esta vista se combinan con los de Ventas.\n\n"
-                "**Venta documentada**\n\n"
-                "Comprobantes pagados y por cobrar, menos notas de crédito. "
-                "Cortesías y anulados se muestran aparte. «Venta» incluye "
-                "impuestos y recargo; «Neto» los excluye. Cada ítem se cuenta "
-                "una vez aunque tenga varias formas de pago.\n\n"
-                "**Costo histórico de lo vendido**\n\n"
-                "Costo guardado en el pedido, incluidos componentes de combos "
-                "y propiedades, por la cantidad vendida. Las notas de crédito "
-                "revierten el costo correspondiente. **% costo = costo histórico "
-                "÷ venta neta**. Es la valorización registrada al vender, "
-                "distinta del costo actual de la carta.\n\n"
-                "**Pagos registrados**\n\n"
-                "Cada pago se suma una vez, en soles y con la propina aparte. "
-                "Aquí se agrupan los pagos asociados a los comprobantes del "
-                "período por la fecha del comprobante. «Por cobrar» refleja "
-                "el estado de esos documentos en la última actualización. "
-                "Las notas de crédito y canjes se concilian con la venta "
-                "documentada en «Cuadre».\n\n"
-                "**Referencias en Inforest**\n\n"
-                "**Registro de Ventas:** comprobantes y notas de crédito; "
-                "para comparar por emisión, elegir «Emisión · SUNAT» en los "
-                "filtros de Ventas.\n\n"
-                "**Paloteo de Producción → Comparativo → Ventas en el rango:** "
-                "referencia para el costo histórico. Sin Día Contable exige "
-                "que pedido y comprobante estén dentro del rango.\n\n"
-                "**Liquidación de Cajero:** referencia para pagos y cuentas "
-                "por cobrar; sus bloques pueden seleccionarse por fecha "
-                "propia del pago o por turno. La comparación requiere "
-                "coincidir en fechas, filtros, estados y tratamiento de notas."
-            )
-
-
-@st.fragment
-def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
-                    col_cant, col_fam=None, col_serv=None, col_canal=None,
-                    col_mesero=None, d_pagos=None):
-    """"Resumen ejecutivo": selector de fecha + granularidad + filtros de
-    Grupo/Servicio/Canal/Tipo de documento + la venta por período partida
-    por canal, con su Resumen/Detalle debajo, todas las piezas
-    sobre el MISMO recorte para que cuenten la misma historia.
-    """
-    # ── 0) La fecha cambió: recargar el parquet del rango nuevo ───────────
-    # El selector escribe la clave canónica del rango (`categoria=None`), que
-    # es la que lee `carga_por_rango` en `app.py`. Como el `d` de esta
-    # función ya está materializado con el rango VIEJO, hay que escalar a una
-    # corrida completa para que se vuelva a bajar. Va PRIMERO —antes de
-    # dibujar nada— porque el rerun aborta lo que venga después, y
-    # `preservar_widgets` salva los controles de la vista de la recolección.
-    if st.session_state.pop("vt_resumen_fecha_flag", False):
-        preservar_widgets(_KEYS_WIDGET_RESUMEN)
-        st.rerun(scope="app")
-
-    if not (col_venta and col_fecha):
-        st.info("Faltan columnas (Venta, Fecha) para el resumen ejecutivo.")
-        return
-    col_tdoc = _resolver(d, ["Tipo Doc", "Tipo Documento", "Nomb Tipo Doc"])
-    col_doc = _resolver(d, ["Numero Documento", "Nro Documento"])
-    # Las columnas de la tabla ampliada (regla #518). Todas opcionales: sin
-    # ellas (el demo, un parquet viejo) la columna no se dibuja.
-    col_carta = _resolver(d, ["Precio Oficial Item Ddocumento"])
-    col_neto = _resolver(d, ["Neto Total Item Ddocumento"])
-    col_desc = _resolver(d, ["Descuento Item Ddocumento"])
-    col_pcosto = _resolver(d, ["Precio Costo"])
-    col_ldoc = _resolver(d, ["Llave Local Documento"])
-    # El IGV de la línea: de él sale la tasa, que marca el período en que
-    # cambió (regla #590). Opcional, como las de arriba.
-    col_igv = _resolver(d, ["Igv Item Ddocumento"])
-
-    # UN ÍTEM SE CUENTA UNA VEZ (reglas #516 y #517). `ventas.py` ya manda
-    # `d` deduplicado (`unico_por_item`); esto queda por si otro llamador no
-    # lo hace, y no cuesta nada cuando ya viene limpio.
-    col_item = _resolver(d, ["Llave Local Documento Item"])
-    if col_item:
-        d = d[~(d[col_item].duplicated() & d[col_item].notna())]
-
-    # ── 1) Fila de controles: granularidad · filtros · … · fecha ──────────
-    # La granularidad es la de «Compras por período» (2026-09-24, a pedido:
-    # «al gráfico de barras le falta granularidad»), sin «Documento»: en
-    # Ventas una barra por comprobante son cientos por día. Los cuatro
-    # filtros son LOCALES de esta vista y se componen con los chips de la
-    # franja; Canal y Tipo de documento se sumaron el mismo día, a pedido.
-    # La fecha es el trigger de Compras: al aplicar un atajo recarga (ver 0).
-    # DOS TARJETAS Y NO UNA (2026-09-24, regla #521, a pedido: «que esta
-    # vista sea una tarjeta propia, separada del gráfico de abajo, Top
-    # platos vendidos»). Hasta ese día `ventas.py` envolvía la sección
-    # entera en UNA `ajuste_graf_card_` y el CSS vuelve transparentes las
-    # tarjetas de adentro, así que el gráfico y el Top platos se leían como
-    # una sola caja. Ahora la sección no trae tarjeta y la función arma la
-    # suya (filtros, gráfico, tablas). La del Top platos se quitó el
-    # 2026-09-25 (regla #528); la tarjeta propia se queda.
-    _tarjeta = st.container(border=True,
-                            key="ajuste_graf_card_izq_ventas_resumen")
-    with _tarjeta:
-        _ctrl = st.columns([2.2, 1.25, 1.25, 1.25, 1.25, 2.1],
-                           vertical_alignment="center")
-    with _ctrl[0]:
-        gran = st.segmented_control(
-            "Agrupar por", _GRAN_OPCIONES, default=_GRAN_DEFAULT,
-            required=True, key="vt_resumen_gran",
-            label_visibility="collapsed") or _GRAN_DEFAULT
-
-    def _filtro(slot, col, key, rotulo):
-        """Un multiselect de la fila, si el parquet trae la columna."""
-        if not (col and col in d.columns):
-            return []
-        with _ctrl[slot]:
-            if col == col_canal:
-                _ops = sorted(_canal_legible(d[col]).unique().tolist())
-            else:
-                _ops = sorted(d[col].dropna().astype(str).str.strip()
-                              .unique().tolist())
-            return st.multiselect(rotulo, _ops, key=key,
-                                  placeholder=f"{rotulo}: todos",
-                                  label_visibility="collapsed")
-
-    grupo_sel = _filtro(1, col_fam, "vt_resumen_grupo", "Grupo")
-    serv_sel = _filtro(2, col_serv, "vt_resumen_serv", "Servicio")
-    canal_sel = _filtro(3, col_canal, "vt_resumen_canal", "Canal")
-    tdoc_sel = _filtro(4, col_tdoc, "vt_resumen_tdoc", "Documento")
-    with _ctrl[5]:
-        selector_fecha_tarjeta("vt_resumen", "vt_resumen_fecha_flag",
-                               categoria=None)
-
-    def _recorte(df):
-        """Los cuatro filtros de la fila, a cualquier df de ventas: al de un
-        ítem por fila y al de filas por pago (la propina)."""
-        if df is None:
-            return None
-        if grupo_sel and col_fam in df.columns:
-            df = df[df[col_fam].astype(str).str.strip().isin(grupo_sel)]
-        if serv_sel and col_serv in df.columns:
-            df = df[df[col_serv].astype(str).str.strip().isin(serv_sel)]
-        if canal_sel and col_canal in df.columns:
-            df = df[_canal_legible(df[col_canal]).isin(canal_sel)]
-        if tdoc_sel and col_tdoc in df.columns:
-            df = df[df[col_tdoc].astype(str).str.strip().isin(tdoc_sel)]
-        return df
-
-    d = _recorte(d)
-    d_pagos = _recorte(d_pagos)
-    if d is None or d.empty:
-        _tarjeta.info("No hay ventas para los filtros elegidos.")
-        return
-
-    def _num(col):
-        return pd.to_numeric(d[col], errors="coerce").fillna(0.0)
-
-    fecha = pd.to_datetime(d[col_fecha], errors="coerce")
-    cols = {"dia": fecha.dt.normalize(), "fecha": fecha,
-            "venta": pd.to_numeric(d[col_venta], errors="coerce")}
-    if col_prod:
-        cols["prod"] = d[col_prod].astype(str)
-    if col_cant:
-        cols["cant"] = _num(col_cant)
-    _cant = cols.get("cant", pd.Series(1.0, index=d.index))
-    if col_pax:
-        cols["pax"] = pd.to_numeric(d[col_pax], errors="coerce")
-        # Los niños, si la consulta del Sheet los trae (regla #591): no
-        # suman a «Clientes», dan el ticket «c/ niños».
-        _c_ninos = dv.columna(d, dv.NINOS)
-        if _c_ninos:
-            cols["ninos"] = pd.to_numeric(d[_c_ninos], errors="coerce")
-    if col_pedido:
-        cols["ped"] = d[col_pedido].astype(str)
-    if col_canal and col_canal in d.columns:
-        cols["canal"] = _canal_legible(d[col_canal])
-    if col_mesero and col_mesero in d.columns:
-        # Con mayúscula inicial, como «Análisis de Meseros»: el POS escribe
-        # «Luis Arroyo» y «DAVID GARCIA», y por mesero serían dos estilos
-        # en la misma columna.
-        cols["mesero"] = _nombre_mesero(d[col_mesero])
-    if col_doc:
-        cols["doc"] = d[col_doc].fillna("").astype(str)
-    # El servicio y el tipo de documento, para el «Ver por» del Detalle
-    # (regla #667). Los dos también son filtros de la fila de arriba.
-    if col_serv and col_serv in d.columns:
-        _sv = _texto_limpio(d[col_serv]).str.capitalize()
-        cols["serv"] = _sv.where(_sv != "", _SIN_SERVICIO)
-    if col_tdoc and col_tdoc in d.columns:
-        cols["tdoc"] = _texto_limpio(d[col_tdoc])
-    # El número del pedido y cuándo se ABRIÓ, para la vista por pedido del
-    # Detalle (regla #668). La apertura es la hora real: el día del turno
-    # (#593) sólo mueve la fecha del documento.
-    _c_pcod = _resolver(d, ["Codigo Pedido Ddocumento"])
-    if _c_pcod:
-        cols["pcod"] = _texto_limpio(d[_c_pcod])
-    _c_ini = _resolver(d, ["Fecha Registro Pedido"])
-    if _c_ini:
-        cols["inicio"] = pd.to_datetime(d[_c_ini], errors="coerce")
-    _c_est = dv.columna(d, dv.ESTADO)
-    if _c_est:
-        cols["estado"] = d[_c_est].astype(str).str.strip().str.upper()
-    # Con la venta por día del turno (regla #593), `fecha` dice el TURNO —el
-    # cobro de las 00:25 queda a las 23:59 del día anterior— y la hora real
-    # de emisión viaja aparte: es la que se lee en el Detalle.
-    _c_em = dv.columna(d, dv.FECHA_EMISION)
-    if _c_em:
-        cols["emision"] = pd.to_datetime(d[_c_em], errors="coerce")
-    # Los cuatro precios (regla #518): carta y costo vienen POR UNIDAD y se
-    # multiplican por la cantidad; neto y descuento ya son de la línea
-    # (medido: «Sudado a la leña» ×2, precio carta 59, descuento de línea
-    # 11,77 = 2 × 5,88).
-    if col_carta:
-        cols["po"] = _num(col_carta)
-        cols["carta"] = cols["po"] * _cant
-    if col_neto:
-        cols["neto"] = _num(col_neto)
-    if col_desc:
-        cols["desc"] = _num(col_desc)
-    if col_pcosto:
-        cols["pc"] = _num(col_pcosto)
-        cols["costo"] = cols["pc"] * _cant
-    if col_ldoc:
-        cols["ldoc"] = d[col_ldoc].astype(str)
-    if col_igv:
-        cols["igv"] = _num(col_igv)
-    # QUÉ ES VENTA LO DICE `definicion_venta` (regla #524), no esta vista:
-    # `d` llega con `CLASE VENTA` y con las notas de crédito como ítems en
-    # negativo. Las cortesías (a precio carta) y los anulados no son venta
-    # —ni en el gráfico, ni en los KPIs, ni en la tabla— y cada uno tiene su
-    # bloque; hasta el 2026-09-24 esta vista los detectaba por su cuenta y
-    # las otras nueve no los sacaban. Sin la columna (un df que no pasó por
-    # `data.cargar_rango`), todo es venta.
-    _c_clase = dv.columna(d, dv.CLASE)
-    cols["clase"] = (d[_c_clase].astype(object) if _c_clase else dv.VENTA)
-    todo = pd.DataFrame(cols).dropna(subset=["dia", "venta"])
-    tabla = todo[todo["clase"].isin(dv.CLASES_VENTA)]
-    cortesias = todo[todo["clase"] == dv.CORTESIA]
-    anulados = todo[todo["clase"] == dv.ANULADO]
-    if tabla.empty:
-        _tarjeta.info("Sin ventas en el rango cargado (sólo cortesías o "
-                      "anulados).")
-        return
-
-    # En Día, los últimos `MAX_DIAS` días con ventas: más barras que eso no
-    # se leen. En las otras granularidades manda el rango de la fecha.
-    _nota_recorte = ""
-    if gran == "Día":
-        dias_disp = sorted(tabla["dia"].unique())
-        if len(dias_disp) > MAX_DIAS:
-            _desde = dias_disp[-MAX_DIAS]
-            tabla = tabla[tabla["dia"] >= _desde]
-            cortesias = cortesias[cortesias["dia"] >= _desde]
-            anulados = anulados[anulados["dia"] >= _desde]
-            _nota_recorte = (f" Recortado a los últimos {MAX_DIAS} días con "
-                             "ventas: para ver más, agrupá por semana o mes.")
-    tabla = tabla.sort_values("fecha").copy()
-    tabla["clave"] = _periodo_serie(tabla["fecha"], gran)
-    # LO QUE ENTRA EN EL TICKET (regla #591): la venta de los canales que
-    # registran clientes. Sobre lo que quedó después de los filtros: con
-    # Canal = Rappi no hay ticket, no un ticket de Rappi.
-    if "pax" in tabla.columns:
-        tabla["cli"] = dv.con_clientes(
-            tabla, "canal" if "canal" in tabla.columns else None, "pax")
-    cortesias = cortesias.assign(
-        clave=_periodo_serie(cortesias["fecha"], gran))
-    anulados = anulados.assign(clave=_periodo_serie(anulados["fecha"], gran))
-    _claves_ok = set(tabla["clave"])
-    cortesias = cortesias[cortesias["clave"].isin(_claves_ok)]
-    anulados = anulados[anulados["clave"].isin(_claves_ok)]
-
-    # ── Total por período, y lo que cuelga de él ──────────────────────────
-    _sumas = {"total": ("venta", "sum")}
-    for _c in ("carta", "neto", "desc", "costo"):
-        if _c in tabla.columns:
-            _sumas[_c] = (_c, "sum")
-    g = (tabla.groupby("clave", as_index=False).agg(**_sumas)
-         .sort_values("clave").reset_index(drop=True))
-
-    def _pegar(df):
-        """Suma `df` (indexado por clave) a `g`, en cero donde falte."""
-        nonlocal g
-        g = g.merge(df, left_on="clave", right_index=True, how="left")
-        for _c in df.columns:
-            g[_c] = g[_c].fillna(0)
-
-    # EL CUADRE (regla #524): facturas y boletas − notas de crédito =
-    # venta. «Facturas y boletas» es lo que registra el POS —cuadrado al
-    # céntimo—, y las notas restan en SU fecha. Lo lee la subvista «Cuadre».
-    _ven = tabla["clase"] == dv.VENTA
-    _pegar(pd.DataFrame({
-        "docs_v": tabla[_ven].groupby("clave")["venta"].sum(),
-        "nc_v": tabla[~_ven].groupby("clave")["venta"].sum()}))
-    if "ldoc" in tabla.columns:
-        # Los comprobantes de una nota de crédito RESTAN: el canje de una
-        # boleta por factura es una venta, no tres comprobantes.
-        _pegar(dv.documentos_por(tabla, "ldoc", "clase", por="clave")
-               .rename("n_docs").to_frame())
-        _pegar(tabla[~_ven].groupby("clave")["ldoc"].nunique()
-               .rename("n_nc").to_frame())
-        if "desc" in tabla.columns:
-            _pegar(dv.documentos_por(tabla[tabla["desc"] != 0], "ldoc",
-                                     "clase", por="clave")
-                   .rename("n_desc").to_frame())
-    if _c_clase:
-        # ANULADOS: ni venta ni cortesía, pero se muestran (regla #524): un
-        # anulado que nadie ve es justo el que conviene mirar.
-        _ag = anulados.groupby("clave")
-        _a = _ag["venta"].sum().rename("anul_s").to_frame()
-        if "ldoc" in anulados.columns:
-            _a["n_anul"] = _ag["ldoc"].nunique()
-        _pegar(_a)
-    if "carta" in cortesias.columns:
-        _cg = cortesias.groupby("clave")
-        _c = _cg["carta"].sum().rename("cort_s").to_frame()
-        if "ldoc" in cortesias.columns:
-            _c["n_cort"] = _cg["ldoc"].nunique()
-        if "costo" in cortesias.columns:
-            _c["costo_cort"] = _cg["costo"].sum()
-        _pegar(_c)
-    if "pc" in tabla.columns:
-        # Lo que se vendió SIN costo cargado: 1.191 de 8.706 líneas en el
-        # rango medido. El % de costo sale más bajo de lo real y el bloque
-        # del costo dice cuánto de la venta está en esa situación.
-        _pegar(tabla[tabla["pc"] <= 0].groupby("clave")["venta"].sum()
-               .rename("venta_sin_costo").to_frame())
-    # Y QUÉ se vendió sin costo, por período y en el rango (regla #590).
-    sin_costo_prods, sin_costo_rango = productos_sin_costo(tabla)
-
-    # El período en que cambió la tasa de IGV (regla #590): el día del
-    # cambio sale de las líneas, y se marca el período que lo contiene.
-    igv_cambios = {}
-    if {"igv", "neto"} <= set(tabla.columns):
-        _dia_clave = dict(zip(tabla["dia"], tabla["clave"]))
-        for _d, _a, _b in cambios_de_igv(tabla["dia"], tabla["igv"],
-                                         tabla["neto"]):
-            _k = _dia_clave.get(_d)
-            if _k is not None:
-                igv_cambios[_k] = (_d, _a, _b)
-
-    # PROPINA: una por PAGO, no por plato (regla #517). Sale de las filas por
-    # pago (`d_pagos`), tomando cada pago una vez; los anulados no cuentan.
-    _col_prop = _resolver(d_pagos, ["Monto Propina", "Propina"]) \
-        if d_pagos is not None else None
-    _col_pago = _resolver(d_pagos, ["Llave Local Documento Correlativo Pago"]) \
-        if d_pagos is not None else None
-    # La de cada mesero, para el Detalle «Ver por» Mesero (regla #667).
-    _prop_mesero = None
-    if _col_prop and _col_pago and not d_pagos.empty:
-        _pg = pd.DataFrame({
-            "pago": d_pagos[_col_pago].astype(str),
-            "fecha": pd.to_datetime(d_pagos[col_fecha], errors="coerce"),
-            "prop": pd.to_numeric(d_pagos[_col_prop],
-                                  errors="coerce").fillna(0.0),
-            "anul": ((d_pagos[dv.CLASE] == dv.ANULADO)
-                     if dv.CLASE in d_pagos.columns else False),
-            **({"mesero": _nombre_mesero(d_pagos[col_mesero])}
-               if col_mesero and col_mesero in d_pagos.columns else {}),
-        }).dropna(subset=["fecha"]).drop_duplicates("pago")
-        _pg = _pg[~_pg["anul"]]
-        _pg["clave"] = _periodo_serie(_pg["fecha"], gran)
-        _pg = _pg[_pg["clave"].isin(_claves_ok)]
-        if "mesero" in _pg.columns:
-            _prop_mesero = _pg[["clave", "mesero", "prop"]]
-        _pgg = _pg.groupby("clave")["prop"]
-        _pegar(pd.DataFrame({"propina": _pgg.sum(),
-                             "n_prop": _pgg.apply(lambda s: int((s > 0).sum()))}))
-
-    # FORMAS DE PAGO (regla #592): lo cobrado, por efectivo, cada marca de
-    # tarjeta, cheque, vale o nota de crédito. Un pago una vez, como la
-    # propina, y sólo de lo que es venta (ni anulados ni cortesías). Lo que
-    # queda POR COBRAR no tiene pago: va aparte, para que forma por forma
-    # más lo por cobrar den los comprobantes del período, como el cuadre
-    # de la Liquidación de Cajero.
-    por_forma = formas_de_pago(d_pagos, col_fecha, gran, _claves_ok)
-    if "estado" in tabla.columns:
-        _pc = tabla[(tabla["clase"] == dv.VENTA)
-                    & (tabla["estado"] == _POR_COBRAR)]
-        _pegar(_pc.groupby("clave")["venta"].sum().rename("por_cobrar")
-               .to_frame())
-
-    # El plato que dispara el costo: el de mayor exceso de costo sobre su
-    # precio de carta en el período. Sale en el bloque del costo cuando el
-    # período queda marcado «revisar» (medido: «Menu Sapiens SAT 2026» con
-    # costo S/ 765,31 contra precio S/ 175 llevó el 12/09 al 117 %).
-    culpables = {}
-    if {"pc", "po", "prod"} <= set(tabla.columns):
-        _ex = tabla[(tabla["po"] > 0) & (tabla["pc"] > tabla["po"])]
-        if not _ex.empty:
-            _ex = _ex.assign(exceso=(_ex["pc"] - _ex["po"]) * _cant.loc[_ex.index])
-            for _k, _grp in _ex.groupby("clave"):
-                _top = _grp.sort_values("exceso", ascending=False).iloc[0]
-                culpables[_k] = (_top["prod"], float(_top["pc"]),
-                                 float(_top["po"]))
-
-    # ── Volumen: Pax por período (dedup por pedido, `definicion_venta.
-    # pax_por`) o, sin Pax, pedidos distintos ───────────────────────────────
-    vol_label = None
-    if col_pax:
-        if col_pedido:
-            # Un valor por pedido, y el de una nota de crédito resta: el
-            # canje de boleta por factura cuenta a la mesa una vez (#524).
-            vol = (dv.pax_por(tabla, "ped", "pax",
-                              doc="ldoc" if "ldoc" in tabla.columns else None,
-                              por="clave")
-                   .rename("pax").reset_index())
-        else:
-            vol = tabla.groupby("clave", as_index=False)["pax"].sum()
-        g = g.merge(vol, on="clave", how="left")
-        g["pax"] = g["pax"].fillna(0)
-        vol_label = "Clientes"
-    elif col_pedido:
-        vol = (tabla.groupby("clave", as_index=False)["ped"].nunique()
-               .rename(columns={"ped": "pax"}))
-        g = g.merge(vol, on="clave", how="left")
-        g["pax"] = g["pax"].fillna(0)
-        vol_label = "Pedidos"
-    if vol_label:
-        # EL TICKET (regla #591): la venta de los canales que registran
-        # clientes ÷ clientes. Rappi vende sin pax, y con la venta entera
-        # arriba el de septiembre de 2026 daba S/ 150,32 en vez de 147,43.
-        # El NETO es el «Ticket Pro.» de la Liquidación de Cajero del POS
-        # (neto ÷ adultos), que todavía cuenta los adultos de las mesas
-        # sólo-cortesía: S/ 118,86 contra 119,77 acá.
-        _base = tabla[tabla["cli"]] if "cli" in tabla.columns else tabla
-        _bt = {"venta_cli": _base.groupby("clave")["venta"].sum()}
-        if "neto" in tabla.columns:
-            _bt["neto_cli"] = _base.groupby("clave")["neto"].sum()
-        _pegar(pd.DataFrame(_bt))
-        _div = g["pax"].replace(0, np.nan)
-        g["ticket"] = g["venta_cli"] / _div
-        if "neto_cli" in g.columns:
-            g["ticket_neto"] = g["neto_cli"] / _div
-        # Y POR PERSONA, con los niños (regla #591), si vienen: se cuentan
-        # como los adultos, un valor por pedido.
-        if "ninos" in tabla.columns and "ped" in tabla.columns:
-            _n = (dv.pax_por(tabla, "ped", "ninos",
-                             doc="ldoc" if "ldoc" in tabla.columns else None,
-                             por="clave")
-                  .rename("ninos").to_frame())
-            _pegar(_n)
-            g["personas"] = g["pax"] + g["ninos"]
-            _divp = g["personas"].replace(0, np.nan)
-            g["ticket_p"] = g["venta_cli"] / _divp
-            if "neto_cli" in g.columns:
-                g["ticket_neto_p"] = g["neto_cli"] / _divp
-    if "costo" in g.columns and "neto" in g.columns:
-        g["pcosto"] = g["costo"] / g["neto"].replace(0, np.nan)
-
-    claves = g["clave"].tolist()
-    n_per = len(claves)
-    # Los días que cubren los datos: deciden qué período quedó cortado, para
-    # su nombre y para su variación.
-    _rng_datos = (tabla["fecha"].min().date(), tabla["fecha"].max().date())
-    # Cómo se nombra cada período: corto en el eje, largo en el hover y el
-    # caption, y de fila en la tabla. Los de Semana y Mes son los de Compras.
-    if gran == "Día":
-        _dias = [pd.Timestamp(c) for c in claves]
-        eje = [f"{_x:%d/%m}" for _x in _dias]
-        largo = [f"{_fmt_dia(_x)}/{_x.year}" for _x in _dias]
-        fila = [_fmt_dia(_x) for _x in _dias]
-    else:
-        # Con el rango de los datos: una semana cortada se nombra por sus
-        # días (regla #619).
-        _rot = [_rotulo_periodo(c, gran, _rng_datos) for c in claves]
-        eje = [_r[0] for _r in _rot]
-        largo = [_r[1] for _r in _rot]
-        fila = ([f"{_e} {_limites_periodo(c, gran)[1].year}"
-                 for _e, c in zip(eje, claves)] if gran == "Semana"
-                else largo)
-
-    # La variación contra la barra anterior, con la regla de Compras (#470):
-    # un período que el rango de datos corta dice «parcial» y no un
-    # porcentaje — un mes en curso contra uno entero daría «−40 %» sin que
-    # nada haya cambiado.
-    _rng = _rng_datos
-    _vars = _variaciones(claves, g["total"].tolist(), gran, _rng)
-    _var_hov = [_hover_var_venta(_v, largo[_v[2]] if _v[2] is not None
-                                 else "") for _v in _vars]
-
-    # Venta por período × canal, ALINEADA a `claves` y con las columnas por
-    # NOMBRE, no por posición (regla #481). Los canales en orden de venta:
-    # el que más vende abajo de la pila.
-    if "canal" in tabla.columns:
-        por_canal = (tabla.pivot_table(index="clave", columns="canal",
-                                       values="venta", aggfunc="sum")
-                     .reindex(claves).fillna(0.0))
-        # La carta por canal: con un canal apagado en la pastilla, la tapa
-        # del descuento es la de los canales que quedan (regla #525).
-        por_canal_carta = (
-            tabla.pivot_table(index="clave", columns="canal", values="carta",
-                              aggfunc="sum").reindex(claves).fillna(0.0)
-            if "carta" in tabla.columns else None)
-        _tot_canal = por_canal.sum().sort_values(ascending=False)
-        canales = [c for c in _tot_canal.index if _tot_canal[c] != 0]
-    else:
-        por_canal = pd.DataFrame({"Venta": g["total"].to_numpy()},
-                                 index=claves)
-        por_canal_carta = None
-        _tot_canal = por_canal.sum()
-        canales = ["Venta"]
-    _partida = len(canales) > 1
-    _colores = _colores_de(len(canales)) if _partida else [SERIE_PRINCIPAL]
-
-    # El reparto del período, al final del hover de CADA tramo: el hover de
-    # un tramo dice su canal, pero la pregunta es «¿y los otros?».
-    if _partida:
-        _reparto = []
-        for _j, _t in enumerate(g["total"]):
-            _ls = [f"{c}: S/ {por_canal[c].iloc[_j]:,.0f}"
-                   + (f" · {por_canal[c].iloc[_j] / _t:.0%}" if _t else "")
-                   for c in canales if por_canal[c].iloc[_j]]
-            _reparto.append(f"<br><span style='color:{GRIS_TEXTO}'>"
-                            "Por canal</span><br>" + "<br>".join(_ls))
-    else:
-        _reparto = [""] * n_per
-
-    # ── Foco, modo y clic: se resuelven ANTES de dibujar (#398, #399) ─────
-    # Todo como en «Compras por período» (regla #516): la figura CEDE su
-    # sitio a la tabla de abajo, así que su alto depende del modo y del
-    # foco, y los dos tienen que estar resueltos antes de armarla. El foco
-    # es la CLAVE del período, no su posición: una posición sobrevive a un
-    # cambio de rango apuntando a otro período. Cambiar la granularidad o un
-    # filtro lo suelta — una clave de «Semana» no existe en «Mes».
-    _ctx = (gran, tuple(grupo_sel), tuple(serv_sel), tuple(canal_sel),
-            tuple(tdoc_sel), claves[0], claves[-1])
-    if st.session_state.get("vt_resumen_ctx_prev") != _ctx:
-        st.session_state["vt_resumen_ctx_prev"] = _ctx
-        st.session_state["vt_resumen_foco"] = None
-        st.session_state["vt_resumen_ped"] = None
-    # Un clic en una FILA del Resumen pidió abrir su Detalle en la corrida
-    # anterior: la grilla se dibuja DEBAJO del toggle de modo, y la key de
-    # un widget ya dibujado no se puede escribir — el pedido viaja hasta
-    # acá, que es antes del toggle. Mismo arreglo que Movimientos.
-    _ir = st.session_state.pop("_vt_resumen_ir_detalle", None)
-    if _ir is not None:
-        st.session_state["vt_resumen_foco"] = _ir
-        st.session_state["vt_resumen_ped"] = None
-        st.session_state["vt_resumen_modo"] = _MODO_DETALLE
-    # EL MODO SE LEE DE `session_state` Y NO DEL WIDGET: el toggle se
-    # dibuja debajo de la figura y el alto de la figura depende de él.
-    _modo = st.session_state.get("vt_resumen_modo")
-    if _modo not in _MODO_OPCIONES:
-        _modo = _MODO_DEFAULT
-    _foco_antes = st.session_state.get("vt_resumen_foco")
-    # LA KEY DEL GRÁFICO ES UN CONTADOR (regla #399): el clic se lee de la
-    # key que se DIBUJÓ la corrida anterior, y el contador sube en la misma
-    # corrida en que se lee, así que el gráfico ya se dibuja con la key
-    # donde se va a buscar el próximo clic.
-    _nclic = st.session_state.get("vt_resumen_nclic", 0)
-    _key_base = f"ventas_g_resumen_{gran}"
-    _pt = _first_point(st.session_state.get(f"{_key_base}_{_nclic}"))
-    if _pt is not None:
-        _nclic += 1
-        st.session_state["vt_resumen_nclic"] = _nclic
-        # Todas las trazas (los tramos, Clientes y Ticket) comparten el eje
-        # de períodos, así que el índice del punto ES el período.
-        _pi = _pt.get("point_index", _pt.get("point_number"))
-        _clic = (claves[_pi] if isinstance(_pi, int) and 0 <= _pi < len(claves)
-                 else None)
-        if _clic is None:
-            pass
-        elif _modo == _MODO_RESUMEN:
-            # Desde Resumen el clic ABRE el Detalle de esa barra (el gesto es
-            # «mostrame ésta»), como en Compras (regla #476).
-            st.session_state["vt_resumen_ped"] = None
-            st.session_state["vt_resumen_foco"] = _clic
-            st.session_state["vt_resumen_modo"] = _MODO_DETALLE
-            _modo = _MODO_DETALLE
-        elif st.session_state.get("vt_resumen_ped"):
-            # Con un pedido elegido, la barra SUBE un nivel (vuelve al
-            # período entero) en vez de apagarlo todo.
-            st.session_state["vt_resumen_ped"] = None
-            st.session_state["vt_resumen_foco"] = _clic
-        else:
-            st.session_state["vt_resumen_foco"] = (
-                None if _foco_antes == _clic else _clic)
-    foco = st.session_state.get("vt_resumen_foco")
-    _foco_ok = foco in set(claves)
-    _con_tabla = _modo == _MODO_RESUMEN or _foco_ok
-    # Resumen no atenúa: su tabla son TODAS las barras (regla #476).
-    _foco_ix = (claves.index(foco)
-                if _foco_ok and _modo == _MODO_DETALLE else None)
-
-    _titulo = {"Día": "Tendencia diaria de venta",
-               "Semana": "Venta por semana", "Mes": "Venta por mes",
-               "Año": "Venta por año"}[gran]
-    with _tarjeta, _card("ventas_resumen_dia"):
-        # EL TÍTULO Y LOS KPI EN UN RENGLÓN (2026-09-24, a pedido: «poner
-        # los kpis en la misma fila que el título, para que mi gráfico suba
-        # un poco más»). Eran dos: el título de `_card(titulo_arriba=True)`
-        # con su línea abajo, y la fila de KPI debajo. Ahora el título es el
-        # primer ítem del mismo flex y la línea va debajo de los dos; si no
-        # entran en el ancho, los KPI bajan solos (flex-wrap). Regla #519.
-        #
-        # Y LA PASTILLA «DETALLE» EN ESE MISMO RENGLÓN, a la derecha (regla
-        # #522, a pedido: «subir un poco más el gráfico y lo de abajo»). Ocupaba
-        # una franja propia de 28px arriba del gráfico; acá comparte el alto
-        # del renglón y, abierta, su panel baja ENCIMA del gráfico. Los KPI
-        # van en UNA línea que se desliza de costado (`.vt-kpis`).
-        _hay_ticket = vol_label and "ticket" in g.columns
-        _ix_ley = (_foco_ix if _foco_ix is not None
-                   else (claves.index(foco) if _foco_ok else n_per - 1))
-        with st.container(horizontal=True, gap="small",
-                          vertical_alignment="center",
-                          key="vt_resumen_cabfila"):
-            with st.container(key="vt_resumen_kpi"):
-                st.markdown(
-                    f'<div class="vt-cab"><span class="vt-cab-tit">'
-                    f'{escape(_titulo)}</span>'
-                    + _html_kpi_canales(
-                        float(g["total"].sum()), int(tabla["dia"].nunique()),
-                        [(c, float(_tot_canal[c])) for c in canales]
-                        if _partida else [], _kpis_extra(g))
-                    + "</div>", unsafe_allow_html=True)
-            with st.container(key="vt_resumen_ley_ancla"):
-                _leyenda_flotante(
-                    fila[_ix_ley], _ix_ley, canales if _partida else [],
-                    _colores, por_canal, g, vol_label,
-                    hay_tapa=("carta" in g.columns
-                              and float(g["carta"].sum()) > 0),
-                    hay_ticket=bool(_hay_ticket))
-
-        # UNA sola figura (no make_subplots): la selección por clic de
-        # `st.plotly_chart(on_select=...)` NO llega a las trazas de un
-        # subplot —medido el 2026-09-22, `evt.selection.points` volvía
-        # SIEMPRE vacío al clickear una barra de un `make_subplots`, y con
-        # eso el drill no abría nunca—. Todas las vistas clickeables del
-        # repo son figuras únicas (semanal, comparativo, volatilidad); acá
-        # el volumen baja de subplot propio a una línea punteada sobre un
-        # eje Y secundario, que es como dibujaba Pax la vista «Por día»
-        # (retirada el 2026-09-25). Ver arquitectura.md regla #488.
-        # LA FIGURA SE ACORTA CUANDO HAY TABLA (regla #516): los mismos dos
-        # altos que «Compras por período» — el suyo entero sin tabla y
-        # COMPACTO con ella, que le deja a la grilla `_ALTO_TABLA_VR`.
-        _alto_fig = (alturas.VENTAS_RESUMEN_FIG if _con_tabla
-                     else _ALTO_FIG_SOLO)
-        # Lo que la pastilla «Detalle» tiene apagado (regla #520). Se lee
-        # del ECO y no de los interruptores: esos se dibujan sólo con la
-        # pastilla abierta, y un widget que no se dibuja pierde su estado.
-        _ver = {k: st.session_state.get(f"_vt_resumen_ver_{k}", True)
-                for k in _SERIES_APAGABLES}
-        # LOS CANALES TAMBIÉN SE APAGAN (regla #525, a pedido: antes un clic
-        # en «Rappi» en la leyenda de Plotly lo ocultaba, y la pastilla sólo
-        # tenía Descuento, Clientes y Ticket). Apagar un canal es MIRAR sin
-        # él: la barra, su etiqueta y su variación pasan a ser los de los
-        # canales que quedan. Los KPI y la tabla no cambian — para sacarlo
-        # de todo está el filtro «Canal» de arriba.
-        _vis = [(c, _col) for c, _col in zip(canales, _colores)
-                if not _partida or st.session_state.get(
-                    f"_vt_resumen_ver_canal_{_slug_canal(c)}", True)]
-        _oculto = len(_vis) < len(canales)
-        if _oculto:
-            _tot_vis = (por_canal[[c for c, _ in _vis]].sum(axis=1).to_numpy()
-                        if _vis else np.zeros(n_per))
-            _vars_etq = _variaciones(claves, [float(x) for x in _tot_vis],
-                                     gran, _rng)
-        else:
-            _tot_vis, _vars_etq = g["total"].to_numpy(), _vars
-
-        # ── La etiqueta de encima: total + variación (plan de Compras) ──
-        # `_plan_etiquetas` decide la forma (derecha / girada / unida) y
-        # cuántos renglones entran, contra los píxeles de cada barra; lo que
-        # no entra sigue en el hover.
-        _reng = [_renglones_barra(t, v) for t, v in zip(_tot_vis, _vars_etq)]
-        _plan_etq, _k_etq, _alto_etq = _plan_etiquetas(
-            len(g), [[_p for _p, _ in _r] for _r in _reng], _alto_fig)
-        _textos = [None] * len(g)
-        if _plan_etq:
-            _sep = _ETQ_SEP if _plan_etq == "unida" else "<br>"
-            _textos = [(_sep.join(_h for _, _h in _r[:_k_etq]) or None)
-                       for _r in _reng]
-        # LA TAPA DEL DESCUENTO (regla #518): encima de la venta, lo que
-        # faltó para llegar a precio carta. La barra entera mide la carta y
-        # la parte llena, lo cobrado. La etiqueta sube a la punta de la tapa
-        # (`_etiqueta_en_la_punta` la pone en el tramo más alto con valor).
-        _hay_tapa = ("carta" in g.columns and float(g["carta"].sum()) > 0
-                     and _ver["desc"])
-        if _hay_tapa and _oculto and por_canal_carta is not None:
-            _tapa = sum(((por_canal_carta[c] - por_canal[c]).to_numpy()
-                         for c, _ in _vis), np.zeros(n_per)).clip(min=0)
-        elif _hay_tapa and not _oculto:
-            _tapa = (g["carta"] - g["total"]).clip(lower=0).to_numpy()
-        else:
-            _hay_tapa, _tapa = False, None
-        _tramos = [pd.DataFrame({"valor": por_canal[c].to_numpy()})
-                   for c, _ in _vis]
-        if _hay_tapa:
-            _tramos.append(pd.DataFrame({"valor": _tapa}))
-        _textos_tr = (_etiqueta_en_la_punta(_tramos, _textos) if _plan_etq
-                      else [None] * len(_tramos))
-        # `constraintext="none"`: sin él Plotly ENCOGE la etiqueta que no
-        # entra en la barra en vez de dejarla afuera a su tamaño.
-        _estilo_etq = dict(
-            textposition="outside", cliponaxis=False, constraintext="none",
-            textangle=-90 if _plan_etq in ("girada", "unida") else 0,
-            textfont=dict(size=_ETQ_FUENTE, color=TEXTO_PRINCIPAL))
-
-        fig = go.Figure()
-        # El eje es LINEAL por índice, como el de Compras (su comentario
-        # «EL EJE ES LINEAL, Y NO POR GUSTO»): una clave como «2025» en un
-        # eje de categorías Plotly la lee como número (#448), y las
-        # punteadas de los lunes caen en `i − 0.5`.
-        _xs = list(range(n_per))
-        _rot_total = {"Día": "Total del día", "Semana": "Total de la semana",
-                      "Mes": "Total del mes", "Año": "Total del año"}[gran]
-        _cd = list(zip(largo, g["total"], _var_hov, _reparto))
-        for _i, (c, _col) in enumerate(_vis):
-            # AL HACER CLIC, ESE PERÍODO SE ILUMINA Y EL RESTO SE ATENÚA — el
-            # mismo gesto que «Compras por período» (regla #476): por COLOR
-            # (alfa `_ATENUADO`), nunca con `marker.opacity` por punto, que
-            # sobre barras con texto encima crashea Plotly. Cada canal
-            # conserva su tono; lo que se marca es el PERÍODO entero.
-            _color = ([_col if _j == _foco_ix else _con_alpha(_col, _ATENUADO)
-                       for _j in range(n_per)] if _foco_ix is not None
-                      else _col)
-            fig.add_trace(go.Bar(
-                x=_xs, y=por_canal[c].to_numpy(), name=c, yaxis="y",
-                marker=dict(color=_color), customdata=_cd,
-                hovertemplate=(
-                    "%{customdata[0]}"
-                    + (f"<br><b>{escape(c)}</b>: S/ %{{y:,.0f}}"
-                       if _partida else "")
-                    + f"<br>{_rot_total}: S/ %{{customdata[1]:,.0f}}"
-                    "%{customdata[2]}%{customdata[3]}<extra></extra>"),
-            ))
-            if _plan_etq:
-                fig.data[-1].update(text=_textos_tr[_i], **_estilo_etq)
-        if _hay_tapa:
-            _pdesc = [(t / c if c else 0.0)
-                      for t, c in zip(_tapa, g["carta"])]
-            fig.add_trace(go.Bar(
-                x=_xs, y=_tapa, name="Descuento", yaxis="y",
-                marker=dict(color=(
-                    [LAVANDA_BORDE if _j == _foco_ix
-                     else _con_alpha(LAVANDA_BORDE, _ATENUADO)
-                     for _j in range(n_per)] if _foco_ix is not None
-                    else LAVANDA_BORDE)),
-                customdata=list(zip(largo, g["carta"], _pdesc)),
-                hovertemplate=("%{customdata[0]}<br><b>Descuentos</b>: "
-                               "S/ %{y:,.0f} · %{customdata[2]:.1%} de la "
-                               "carta<br>A precio carta: "
-                               "S/ %{customdata[1]:,.0f}<extra></extra>"),
-            ))
-            if _plan_etq:
-                fig.data[-1].update(text=_textos_tr[-1], **_estilo_etq)
-        fig.update_layout(barmode="stack")
-        if vol_label and _ver["pax"]:
-            fig.add_trace(go.Scatter(
-                x=_xs, y=g["pax"], name=vol_label, mode="lines",
-                line=dict(color=GRIS_TEXTO, width=1.5, dash="dot"),
-                yaxis="y2", customdata=largo,
-                hovertemplate=("%{customdata}<br>" + vol_label
-                               + ": %{y:,.0f}<extra></extra>"),
-            ))
-        # Ticket promedio como línea + puntos sobre un TERCER eje (soles,
-        # pero otra escala que la venta: ~S/ 180 contra ~S/ 25.000). Va en su
-        # propio eje a la derecha —igual que hacía la vista «Por día» con
-        # Pax/Venta— para que las escalas no se aplasten. Antes era una
-        # tarjeta aparte; se subió acá a pedido el 2026-09-22.
-        if _hay_ticket and _ver["ticket"]:
-            # El neto (el ticket del POS, regla #591) viaja en el hover.
-            _neto_tk = ([("—" if pd.isna(_t) else f"S/ {_t:,.2f}")
-                         for _t in g["ticket_neto"]]
-                        if "ticket_neto" in g.columns else [""] * n_per)
-            fig.add_trace(go.Scatter(
-                x=_xs, y=g["ticket"], name="Ticket", mode="lines+markers",
-                line=dict(color=ADVERTENCIA, width=2), marker=dict(size=5),
-                yaxis="y3", customdata=list(zip(largo, _neto_tk)),
-                hovertemplate=("%{customdata[0]}<br>Ticket: S/ %{y:,.2f}"
-                               + ("<br>Neto: %{customdata[1]}"
-                                  if "ticket_neto" in g.columns else "")
-                               + "<extra></extra>"),
-            ))
-            _ult = g["ticket"].iloc[-1]
-            if not pd.isna(_ult):
-                fig.add_annotation(
-                    x=n_per - 1, y=float(_ult), xref="x", yref="y3",
-                    text=f"Ticket S/ {float(_ult):,.0f}", showarrow=False,
-                    xanchor="right", yanchor="bottom", yshift=6,
-                    font=dict(size=10, color=ADVERTENCIA))
-
-        # FIN DE SEMANA Y FERIADO (regla #518): la banda de «Comparativo vs
-        # año pasado» (`ventas_comparativo.py`), mismos colores y mismo
-        # rótulo. En Día se sombrea el día; en Semana/Mes/Año no hay día que
-        # sombrear y se cuenta cuántos feriados trae el período.
-        _feriados = _feriados_de(claves, gran)
-        if gran == "Día":
-            for _i, _x in enumerate(_dias):
-                _fer = _x.date() in _feriados
-                if not (_fer or _x.weekday() >= 5):
-                    continue
-                fig.add_vrect(
-                    x0=_i - 0.5, x1=_i + 0.5, layer="below", line_width=0,
-                    fillcolor=ADVERTENCIA_TEXTO if _fer else GRIS_TEXTO,
-                    opacity=0.10 if _fer else 0.07)
-                if _fer:
-                    fig.add_annotation(
-                        x=_i, y=1.0, yref="paper", yanchor="bottom",
-                        showarrow=False, text="feriado",
-                        font=dict(size=10, color=ADVERTENCIA_TEXTO))
-        else:
-            for _i, c in enumerate(claves):
-                _n = sum(1 for _f in _feriados
-                         if _limites_periodo(c, gran)[0] <= _f
-                         <= _limites_periodo(c, gran)[1])
-                if _n:
-                    fig.add_annotation(
-                        x=_i, y=1.0, yref="paper", yanchor="bottom",
-                        showarrow=False,
-                        text=f"{_n} feriado" + ("" if _n == 1 else "s"),
-                        font=dict(size=10, color=ADVERTENCIA_TEXTO))
-
-        # División sutil entre semanas, sólo en Día (un lunes = arranca
-        # semana nueva): línea punteada gris clara que cruza la figura, entre
-        # la barra del lunes y la anterior. No en el primer día mostrado:
-        # una línea pegada al borde izquierdo no divide nada.
-        if gran == "Día":
-            for _i, _x in enumerate(_dias):
-                if _i and _x.weekday() == 0:
-                    fig.add_shape(
-                        type="line", xref="x", yref="paper",
-                        x0=_i - 0.5, x1=_i - 0.5, y0=0, y1=1,
-                        line=dict(color=GRIS_BORDE, width=1, dash="dot"),
-                        opacity=0.8, layer="below",
-                    )
-
-        # El alto es el de la figura de «Compras por período» (pedido:
-        # «similar tamaño»), y la leyenda va DEBAJO como allá: el techo de
-        # las etiquetas se calcula con esa leyenda en ese lugar
-        # (`semanal._LEYENDA_Y`). `_xright` recorta el dominio del eje X
-        # para hacerle lugar al tercer eje (el del ticket) a la derecha,
-        # como hacía la vista «Por día».
-        # UN SOLO EJE A LA DERECHA, el de Clientes (regla #521, a pedido:
-        # «este segundo eje que dice Ticket descuadra la simetría de la
-        # vista»). La línea del Ticket sigue en su propia escala —S/ 180
-        # contra 100 clientes no comparten ninguna—, pero SIN eje: su
-        # último punto lleva el valor escrito, y los demás están en el
-        # hover, en la pastilla «Detalle» y en la tabla. Con eso las barras
-        # recuperan el 12 % del ancho que les comía el tercer eje.
-        _xright = 1.0
-        _compras_layout(fig, alto=_alto_fig)
-        # EL TECHO, CON EL ÁREA REAL (regla #521, a pedido: «el gráfico
-        # tiene mucho espacio arriba»). `semanal._techo_etiquetas` deduce el
-        # alto del área de trazo suponiendo la leyenda al PIE, y acá ya no
-        # hay leyenda: calculaba 139px sobre 156 reales y reservaba de más.
-        # Medido: la barra más alta empezaba 53px debajo del borde, con 37
-        # de etiqueta y 16 de aire que no era de nadie. La línea del Ticket
-        # no tenía nada que ver — va en su propia escala.
-        _rng_y = None
-        if _plan_etq:
-            _area = _alto_fig - _MARGEN_ARRIBA - _PIE_EJE
-            # × 0,8: `_plan_etiquetas` mide a 5,4px por carácter (la cuenta
-            # de Compras, para etiquetas derechas) y la etiqueta GIRADA de
-            # acá mide menos — medido, 37px donde estimaba 47.
-            _etq = min(_alto_etq * 0.8, _area * 0.45)
-            _alto_barra = _tot_vis + (_tapa if _hay_tapa else 0.0)
-            _hi = float(np.nanmax(_alto_barra)) if n_per else 0.0
-            if _hi > 0 and _area > _etq:
-                _rng_y = [0.0, _hi * _area / (_area - _etq)]
-        fig.update_layout(
-            # SIN LEYENDA DE PLOTLY (regla #520): la hace la pastilla
-            # «Detalle» que flota arriba a la izquierda, como en Comparativo
-            # › Descomposición. Al pie se comía 38px de la figura.
-            showlegend=False,
-            # 28 arriba: la pastilla cerrada mide 26 y flota a 1px del
-            # borde, sobre el margen y no sobre las barras. 4 abajo: debajo
-            # de los rótulos del eje no va nada (regla #520, 2da pasada).
-            margin=dict(l=10, r=(50 if vol_label else 10), t=_MARGEN_ARRIBA,
-                        b=4),
-            yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE,
-                       **({"range": _rng_y} if _rng_y else {})),
-            yaxis2=dict(overlaying="y", side="right", showgrid=False,
-                        title=vol_label or "", tickformat=",.0f",
-                        visible=bool(vol_label) and _ver["pax"]),
-            yaxis3=dict(overlaying="y", side="right", anchor="free",
-                        position=1.0, showgrid=False, tickprefix="S/ ",
-                        tickformat=",.0f", title="Ticket",
-                        visible=False),
-        )
-        # Un rótulo por período sólo mientras entren HORIZONTALES: girados
-        # a −45° se metían en la leyenda de abajo con la figura en COMPACTO.
-        # Cuántos entran sale del rótulo más largo, con la cuenta del eje de
-        # Compras (6.3px por carácter a 12px + 12 de aire, `semanal.py`)
-        # contra el lienzo que deja el eje del ticket.
-        _lienzo = _LIENZO_PX * _xright
-        _caben = max(1, int(_lienzo // (max(map(len, eje)) * 6.3 + 12)))
-        _paso = max(1, -(-n_per // _caben))
-        _tv = list(range(0, n_per, _paso))
-        fig.update_xaxes(
-            domain=[0.0, _xright], type="linear", tickmode="array",
-            tickvals=_tv, ticktext=[eje[_i] for _i in _tv],
-            range=[-0.5, n_per - 0.5], tickangle=0, tickfont=dict(size=10),
-        )
-        # MODO CLIC, no "select": al poner `on_select`, Streamlit deja el
-        # dragmode en "select" (caja), y con eso un clic SUELTO no selecciona
-        # nada (arquitectura.md regla #388). En "pan" Streamlit pone
-        # clickmode="event+select" y el clic vuelve a abrir el detalle; los
-        # ejes fijos dejan quieto el arrastre. Medido el 2026-09-22: sin esto
-        # `evt.selection.points` volvía siempre vacío al clickear una barra.
-        fig.update_layout(dragmode="pan")
-        fig.update_xaxes(fixedrange=True)
-        fig.update_yaxes(fixedrange=True)
-        with st.container(key="vt_resumen_chart_slot"):
-            # Lo que devuelve se IGNORA: el clic ya se leyó arriba, antes de
-            # armar la figura (ver «Foco, modo y clic»).
-            st.plotly_chart(
-                fig, use_container_width=True, key=f"{_key_base}_{_nclic}",
-                on_select="rerun", selection_mode="points",
-                config={"displaylogo": False, "displayModeBar": False})
-
-        # ── LA FILA QUE ELIGE QUÉ SE VE ABAJO, DENTRO de la tarjeta ──────
-        # El toggle y, al lado, el caption que nombra el ámbito: la fila
-        # `cp_sem_pie` de Compras. Hasta el 2026-09-24 el toggle vivía
-        # afuera de la tarjeta y la explicación de colores era un caption
-        # propio; los colores los dice ahora la etiqueta de cada barra.
-        with st.container(horizontal=True, gap="small", key="vt_resumen_pie"):
-            st.segmented_control(
-                "Qué se ve abajo", _MODO_OPCIONES, default=_MODO_DEFAULT,
-                required=True, key="vt_resumen_modo",
-                label_visibility="collapsed", help=_AYUDA_MODO)
-            # LAS SUBVISTAS DEL RESUMEN (regla #519): qué grupo de columnas
-            # muestra la tabla. Sólo en Resumen, y por eso con ECO: un widget
-            # que deja de dibujarse pierde su estado (CLAUDE.md), y al volver
-            # de Detalle abriría otra vez en «Venta». El eco guarda la
-            # elección y vuelve por `default=`.
-            if _modo == _MODO_RESUMEN:
-                _hay = set(g.columns)
-                _ops = [x for x, ok in zip(_SUBVISTAS, (
-                    True, vol_label == "Clientes" and "ticket" in _hay,
-                    _partida, "propina" in _hay,
-                    por_forma is not None and not por_forma.empty,
-                    {"desc", "carta"} <= _hay, "cort_s" in _hay,
-                    "pcosto" in _hay, "docs_v" in _hay)) if ok]
-                _eco = st.session_state.get("_vt_resumen_sub_eco", "Venta")
-                if _eco not in _ops:
-                    _eco = "Venta"
-                if st.session_state.get("vt_resumen_sub") not in (None, *_ops):
-                    st.session_state["vt_resumen_sub"] = _eco
-                _sub = st.segmented_control(
-                    "Columnas del Resumen", _ops, default=_eco,
-                    required=True, key="vt_resumen_sub",
-                    label_visibility="collapsed",
-                    help="Qué grupo de columnas muestra la tabla. Todas las "
-                         "filas quedan a la vista, para comparar un período "
-                         "con los demás. Un clic en una fila la despliega "
-                         "entera; «Ver pedidos» abre su Detalle.")
-                st.session_state["_vt_resumen_sub_eco"] = _sub or _eco
-            # «VER POR» DEL DETALLE (regla #667): de qué es cada fila de la
-            # tabla de la izquierda. Con eco por lo mismo que las subvistas:
-            # en Resumen no se dibuja, y al volver abriría otra vez en
-            # «Pedido».
-            _ver_por = _VER_PEDIDO
-            if _modo == _MODO_DETALLE:
-                _ops_ver = _ver_disponibles(tabla)
-                _eco_v = st.session_state.get("_vt_resumen_ver_eco",
-                                              _VER_PEDIDO)
-                if _eco_v not in _ops_ver:
-                    _eco_v = _VER_PEDIDO
-                if st.session_state.get("vt_resumen_ver") not in (None,
-                                                                  *_ops_ver):
-                    st.session_state["vt_resumen_ver"] = _eco_v
-                _ver_por = st.segmented_control(
-                    "Ver por", _ops_ver, default=_eco_v, required=True,
-                    key="vt_resumen_ver", label_visibility="collapsed",
-                    help=_AYUDA_VER) or _eco_v
-                st.session_state["_vt_resumen_ver_eco"] = _ver_por
-            # La leyenda con KEY propia: el CSS le da el resto del renglón
-            # por su CLASE, no con un `:has([data-testid=…])` (#469).
-            with st.container(key="vt_resumen_leyenda"):
-                _pie = st.empty()
-
-        _contexto_periodo(d, _sub if _modo == _MODO_RESUMEN else "Detalle", (
-            ("Grupos", grupo_sel or st.session_state.get("ventas_graf_filtro_fam", [])),
-            ("Subgrupos", st.session_state.get("ventas_graf_filtro_sub", [])),
-            ("Canales", canal_sel or st.session_state.get("ventas_graf_filtro_canal", [])),
-            ("Servicios", serv_sel or st.session_state.get("ventas_graf_filtro_serv", [])),
-            ("Documentos", tdoc_sel),
-        ))
-
-        if _modo == _MODO_RESUMEN:
-            _zona_resumen(g, claves, fila, _vars, foco if _foco_ok else None,
-                          vol_label, por_canal, canales if _partida else [],
-                          gran, _ctx, _pie, _rng, _nota_recorte,
-                          feriados=_feriados, culpables=culpables,
-                          sin_costo_prods=sin_costo_prods,
-                          sin_costo_rango=sin_costo_rango,
-                          igv_cambios=igv_cambios, por_forma=por_forma)
-        elif not _foco_ok:
-            # El `st.empty()` sólo en esta rama, como en Compras (regla
-            # #471): borra las grillas al soltar el foco sin re-montarlas en
-            # cada corrida mientras hay detalle.
-            st.empty()
-            _pie.caption("Tocá una barra —o una fila del Resumen— para ver "
-                         "sus pedidos.")
-        else:
-            _zona_detalle(tabla, foco, largo[claves.index(foco)], gran,
-                          _partida, _ctx, _nclic, _pie, ver=_ver_por,
-                          propinas=_prop_mesero)
-
-    # (La tarjeta «Ticket promedio diario» que vivía acá se quitó el
-    # 2026-09-22: el ticket es ahora la línea naranja del gráfico de arriba.)
-
-    # (La tarjeta «Top platos vendidos» que vivía acá se quitó el
-    # 2026-09-25, a pedido. El ranking de platos sigue en «Mix de carta»
-    # —nivel Producto, y «Lo más vendido» en su Detalle— y en «Ranking &
-    # FoodCost». Regla #528.)
-
-# ===========================================================================
-# LA ZONA DE ABAJO: Resumen y Detalle (2026-09-24, regla #516)
-# ===========================================================================
-# Las de «Compras por período», adentro de la tarjeta y a `_ALTO_TABLA_VR`:
-# la figura baja a COMPACTO cuando están, así que la tarjeta mide lo mismo
-# en Resumen y en Detalle. Las grillas viven en `tablas/ventas_resumen.py`.
-
-def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
-                  canales, gran, ctx, pie, rango, nota_recorte,
-                  feriados=frozenset(), culpables=None, sin_costo_prods=None,
-                  sin_costo_rango=None, igv_cambios=None, por_forma=None):
-    """El gráfico escrito como tabla, en la forma «B» del mockup (regla
-    #518): nueve columnas y, al hacer clic en una fila, una franja con los
-    canales, las propinas, los descuentos, las cortesías y el detalle del
-    costo. «Ver pedidos» en la franja abre el Detalle de ese período.
-
-    `sin_costo_prods` / `sin_costo_rango`: lo vendido sin costo, por período
-    y en el rango (`productos_sin_costo`); `igv_cambios`: `{clave: (día,
-    antes, después)}` del período en que cambió la tasa de IGV (#590);
-    `por_forma`: lo cobrado por forma de pago (`formas_de_pago`, #592)."""
-    culpables = culpables or {}
-    sin_costo_prods = sin_costo_prods or {}
-    igv_cambios = igv_cambios or {}
-    n = len(claves)
-    tot = g["total"].astype(float).tolist()
-    tot_vista = float(sum(tot))
-    hay = set(g.columns)
-    formas = (list(por_forma.columns)
-              if por_forma is not None and not por_forma.empty else [])
-    otras = por_forma.attrs.get("otras", []) if formas else []
-    if formas:
-        por_forma = por_forma.reindex(claves).fillna(0.0)
-        _cobrado = por_forma.sum(axis=1).tolist()
-
-    def _col(nombre):
-        return (g[nombre].astype(float).tolist() if nombre in hay
-                else [None] * n)
-
-    carta, neto, costo = _col("carta"), _col("neto"), _col("costo")
-    pcosto, pax = _col("pcosto"), _col("pax")
-    # Los cuatro tickets (regla #591): por adulto y por persona, con
-    # impuestos y neto. Sólo los que el parquet permite.
-    tickets = {k: _col(k) for k in ("ticket", "ticket_neto", "ticket_p",
-                                    "ticket_neto_p") if k in hay}
-    ninos, personas = _col("ninos"), _col("personas")
-    venta_cli = _col("venta_cli")
-    por_cobrar = _col("por_cobrar")
-    desc, n_desc, n_docs = _col("desc"), _col("n_desc"), _col("n_docs")
-    cort, n_cort, costo_cort = _col("cort_s"), _col("n_cort"), _col("costo_cort")
-    prop, n_prop = _col("propina"), _col("n_prop")
-    sin_costo = _col("venta_sin_costo")
-    docs_v, nc_v, anul = _col("docs_v"), _col("nc_v"), _col("anul_s")
-    n_nc, n_anul = _col("n_nc"), _col("n_anul")
-
-    def _ratio(a, b):
-        return [(x / y if (x is not None and y) else None)
-                for x, y in zip(a, b)]
-
-    pdesc, pcort, pprop = _ratio(desc, carta), _ratio(cort, carta), _ratio(prop, tot)
-
-    def _pp(serie, i):
-        """El cambio de un % contra la barra anterior, en puntos."""
-        if not i or serie[i] is None or serie[i - 1] is None:
-            return None
-        return (serie[i] - serie[i - 1]) * 100
-
-    def _var(serie, i):
-        """La variación de un MONTO contra la barra anterior; sólo cuando la
-        de la venta es comparable (un período cortado no se compara)."""
-        v = variaciones[i]
-        if v[0] != "ok" or serie[i] is None or not serie[v[2]]:
-            return None
-        return (serie[i] - serie[v[2]]) / serie[v[2]] * 100
-
-    def _txt_pp(p, malo_si_sube=True, neutro=False):
-        """`(texto, clase)` de un cambio en pp. `neutro`: sin color (el peso
-        de un canal no es bueno ni malo por subir)."""
-        if p is None:
-            return "", ""
-        if abs(p) < 0.05:
-            return "±0 pp", "vr-neutro"
-        malo = p > 0 if malo_si_sube else p < 0
-        return (f"{'+' if p > 0 else '−'}{abs(p):.1f} pp",
-                "vr-neutro" if neutro else ("vr-baja" if malo else "vr-sube"))
-
-    def _txt_var(v, malo_si_sube=False, neutro=False):
-        """`(texto, clase)` de una variación de monto. Subir es verde salvo
-        en lo que resta (descuentos, cortesías: `malo_si_sube`)."""
-        if v is None:
-            return "", ""
-        if abs(v) < 0.5:
-            return "0%", "vr-neutro"
-        malo = v > 0 if malo_si_sube else v < 0
-        return (f"{'+' if v > 0 else '−'}{abs(v):.0f}%",
-                "vr-neutro" if neutro else ("vr-baja" if malo else "vr-sube"))
-
-    def _span(txt, clase):
-        return f'<span class="vr-nota {clase}">{escape(txt)}</span>' if txt else ""
-
-    def _bloque(titulo, grande, fino, aviso=False):
-        # El número va en el renglón del título: un renglón menos por
-        # bloque, y la franja entra en la grilla de `_ALTO_TABLA_VR`.
-        return (f'<div class="vr-b{" vr-aviso" if aviso else ""}">'
-                f'<span class="vr-cab"><span class="vr-h">{escape(titulo)}'
-                f'</span><span class="vr-g">{grande}</span></span>'
-                f'<span class="vr-f">{fino}</span></div>')
-
-    def _franja(i):
-        partes = []
-        if canales:
-            _ls = []
-            for c, color in zip(canales, _colores_de(len(canales))):
-                v = float(por_canal[c].iloc[i])
-                sh = v / tot[i] if tot[i] else 0.0
-                sh_ant = (float(por_canal[c].iloc[i - 1]) / tot[i - 1]
-                          if i and tot[i - 1] else None)
-                _p = _txt_pp((sh - sh_ant) * 100 if sh_ant is not None
-                             else None, malo_si_sube=False)
-                _v = _txt_var(_var(por_canal[c].astype(float).tolist(), i))
-                _ls.append(
-                    f'<span class="vr-canal"><i style="background:{color}">'
-                    f'</i><b>{escape(c)}</b>S/ {v:,.0f} · {sh:.0%}'
-                    f'{_span(*_p)}{_span(*_v)}</span>')
-            partes.append(
-                '<div class="vr-b vr-ancho" title="Monto · % de la venta del '
-                'período · cambio de ese % en pp · variación del monto contra '
-                'la barra anterior"><span class="vr-h">Venta por canal</span>'
-                + "".join(_ls) + "</div>")
-        if prop[i] is not None:
-            _v = _txt_var(_var(prop, i))
-            _pc = f"S/ {prop[i] / pax[i]:,.2f}/cliente · " if pax[i] else ""
-            partes.append(_bloque(
-                "Propinas", f"S/ {prop[i]:,.0f}{_span(*_v)}",
-                f"{pprop[i]:.1%} de la venta{_span(*_txt_pp(_pp(pprop, i), False))}"
-                f" · {_pc}{int(n_prop[i] or 0)} pagos"))
-        if pdesc[i] is not None:
-            _cuantos = (f" · {int(n_desc[i] or 0)} de {int(n_docs[i] or 0)} "
-                        "comprobantes" if n_docs[i] else "")
-            partes.append(_bloque(
-                "Descuentos", f"{pdesc[i]:.1%}{_span(*_txt_pp(_pp(pdesc, i)))}",
-                f"S/ {desc[i]:,.0f} bajo la carta{_cuantos}"))
-        if pcort[i] is not None:
-            _cc = (f" · costaron S/ {costo_cort[i]:,.0f}"
-                   if costo_cort[i] else "")
-            partes.append(_bloque(
-                "Cortesías", f"{pcort[i]:.1%}{_span(*_txt_pp(_pp(pcort, i)))}",
-                f"{int(n_cort[i] or 0)} comp. · S/ {cort[i]:,.0f} a "
-                f"carta{_cc}"))
-        if pcosto[i] is not None:
-            _fino = f"S/ {costo[i]:,.0f} sobre S/ {neto[i]:,.0f} de neto"
-            if sin_costo[i]:
-                _fino += (f" · {sin_costo[i] / tot[i]:.0%} de la venta sin "
-                          "costo cargado")
-            if claves[i] in igv_cambios:
-                _fino += " · " + marca_igv(*igv_cambios[claves[i]][1:])
-            partes.append(_bloque(
-                "Costo", f"{pcosto[i]:.1%}{_span(*_txt_pp(_pp(pcosto, i)))}",
-                _fino, aviso=pcosto[i] > _COSTO_ROTO))
-        # El plato que dispara el costo va en el renglón del botón y no en su
-        # bloque: adentro alargaba la franja a 156px (medido en el 12/09) en
-        # una grilla de 191. El renglón del botón existe igual — y por lo
-        # mismo van ahí lo vendido sin costo y el cambio de IGV (#590).
-        _cul = culpables.get(claves[i])
-        _aviso = ""
-        if pcosto[i] is not None and pcosto[i] > _COSTO_ROTO and _cul:
-            _aviso = (f'<span class="vr-revisar">Revisar «{escape(_cul[0])}»: '
-                      f'costo S/ {_cul[1]:,.2f} por unidad contra precio '
-                      f'S/ {_cul[2]:,.2f}</span>')
-        _sp = sin_costo_prods.get(claves[i])
-        if _sp:
-            _aviso += (f'<span class="vr-sincosto">Sin costo: '
-                       f'{escape(detalle_sin_costo(_sp, 3))}</span>')
-        _ic = igv_cambios.get(claves[i])
-        if _ic:
-            _aviso += (f'<span class="vr-igv">'
-                       f'{escape(nota_igv(*_ic, pcosto=_pc_antes(i)))}</span>')
-        partes.append(f'<div class="vr-pie">{_aviso}<button class="vr-ver" '
-                      f'type="button">Ver pedidos de {escape(fila[i])} →'
-                      '</button></div>')
-        return "".join(partes)
-
-    def _pc_antes(i):
-        """El % de costo del que parte un cambio de IGV: el del período de
-        antes (el marcado ya trae días con la tasa nueva)."""
-        if i and pcosto[i - 1] is not None:
-            return pcosto[i - 1]
-        return pcosto[i]
-
-    def _max(serie):
-        vals = [x for x in serie if x is not None and not pd.isna(x)]
-        return max(vals) if vals else 0.0
-
-    def _barra(r, campo, valor, tope, tono=""):
-        """La barrita de comparación de una celda (regla #519)."""
-        if valor is not None and tope:
-            r[f"__w_{campo}"] = max(valor, 0.0) / tope
-            if tono:
-                r[f"__wc_{campo}"] = tono
-
-    def _celda(r, campo, valor, texto, nota=("", "")):
-        r[campo] = valor
-        r[f"__t_{campo}"] = texto
-        if nota[0]:
-            r[f"__v_{campo}"], r[f"__vc_{campo}"] = nota
-
-    psin = _ratio(sin_costo, tot)
-    ptrx = _ratio(n_desc, n_docs)
-    prop_cli = _ratio(prop, pax) if vol_label == "Clientes" else [None] * n
-    _serie_canal = {c: por_canal[c].astype(float).tolist() for c in canales}
-    _share = {c: [(v / t if t else 0.0) for v, t in zip(_serie_canal[c], tot)]
-              for c in canales}
-
-    filas = []
-    for i, c in enumerate(claves):
-        v = variaciones[i]
-        r = {"periodo": fila[i], "__tip": fila[i]}
-        if gran == "Día" and pd.Timestamp(c).date() in feriados:
-            r["__v_periodo"], r["__vc_periodo"] = "feriado", "vr-alto"
-        _ic = igv_cambios.get(c)
-        if _ic:
-            # La marca va en el PERÍODO y no en el % de costo: la celda del %
-            # ya lleva su cambio en pp y la bandera «revisar» (#590).
-            _m = marca_igv(_ic[1], _ic[2])
-            _prev = r.get("__v_periodo")
-            r["__v_periodo"] = f"{_prev} · {_m}" if _prev else _m
-            r["__vc_periodo"] = "vr-alto"
-            r["__tip"] = (f"{fila[i]} · "
-                          + nota_igv(*_ic, pcosto=_pc_antes(i)))
-        for k, serie in (("carta", carta), ("neto", neto), ("costo", costo)):
-            if serie[i] is not None:
-                r[k] = round(serie[i], 2)
-        _celda(r, "valor", round(tot[i], 2), f"S/ {tot[i]:,.0f}")
-        _barra(r, "valor", tot[i], _max(tot))
-        if pcosto[i] is not None:
-            _celda(r, "pcosto", round(pcosto[i], 4), f"{pcosto[i]:.1%}",
-                   _txt_pp(_pp(pcosto, i)))
-            r["__c_pcosto"] = ("vr-roto" if pcosto[i] > _COSTO_ROTO
-                               else "vr-alto" if pcosto[i] > _COSTO_ALTO else "")
-            _barra(r, "pcosto", min(pcosto[i], 1.0), 1.0,
-                   "vr-bar-roja" if pcosto[i] > _COSTO_ROTO
-                   else "vr-bar-ambar" if pcosto[i] > _COSTO_ALTO else "")
-            if pcosto[i] > _COSTO_ROTO:
-                r["__b_pcosto"] = "revisar"
-            _celda(r, "costo_v", round(costo[i], 2), f"S/ {costo[i]:,.0f}",
-                   _txt_var(_var(costo, i), neutro=True))
-            _cul = culpables.get(c)
-            r["revisar"] = (_cul[0] if (_cul and pcosto[i] > _COSTO_ROTO)
-                            else "")
-        if sin_costo[i] is not None:
-            r["sin_costo"] = round(sin_costo[i], 2)
-            _celda(r, "psin", round(psin[i], 4), f"{psin[i]:.0%}")
-            _barra(r, "psin", psin[i], _max(psin),
-                   "vr-bar-ambar" if psin[i] > 0.3 else "")
-            # QUÉ se vendió sin costo (#590): dos nombres en la celda y el
-            # detalle con montos al pasar el cursor.
-            _sp = sin_costo_prods.get(c, [])
-            r["sin_que"] = texto_sin_costo(_sp)
-            r["__tip_sin_que"] = detalle_sin_costo(_sp)
-        if vol_label:
-            r["pax"] = pax[i]
-            for k, serie in tickets.items():
-                _tk = None if serie[i] is None or pd.isna(serie[i]) \
-                    else round(serie[i], 2)
-                _vt = (None if (v[0] != "ok" or _tk is None
-                                or not serie[v[2]] or pd.isna(serie[v[2]]))
-                       else (serie[i] - serie[v[2]]) / serie[v[2]] * 100)
-                _celda(r, k, _tk, "—" if _tk is None else f"S/ {_tk:,.2f}",
-                       _txt_var(_vt))
-            if ninos[i] is not None:
-                r["ninos"], r["personas"] = ninos[i], personas[i]
-            if venta_cli[i] is not None:
-                # Lo que queda FUERA del ticket: la venta de los canales
-                # que no registran clientes (Rappi). Cero es «—».
-                _x = round(tot[i] - venta_cli[i], 2)
-                _celda(r, "sin_cli", _x, f"S/ {_x:,.0f}" if _x else "—")
-        # Canales: monto (con su variación) y % del período (con su cambio).
-        for k, cn in enumerate(canales):
-            _m = _serie_canal[cn]
-            _celda(r, f"c{k}_v", round(_m[i], 2), f"S/ {_m[i]:,.0f}",
-                   _txt_var(_var(_m, i)))
-            _sh = _share[cn]
-            _celda(r, f"c{k}_p", round(_sh[i], 4), f"{_sh[i]:.1%}",
-                   _txt_pp(_pp(_sh, i), neutro=True))
-            _barra(r, f"c{k}_p", _sh[i], _max(_sh),
-                   "" if k == 0 else "vr-bar-cian")
-        if prop[i] is not None:
-            _celda(r, "propina", round(prop[i], 2), f"S/ {prop[i]:,.0f}",
-                   _txt_var(_var(prop, i)))
-            _celda(r, "pprop", round(pprop[i], 4), f"{pprop[i]:.1%}",
-                   _txt_pp(_pp(pprop, i), malo_si_sube=False))
-            _barra(r, "pprop", pprop[i], _max(pprop))
-            r["n_prop"] = int(n_prop[i] or 0)
-            if prop_cli[i] is not None:
-                r["prop_cli"] = round(prop_cli[i], 2)
-        # Formas de pago (regla #592): el monto y, abajo, su parte de lo
-        # cobrado en el período. Cero es «—»: casi todo es Visa.
-        for k, fm in enumerate(formas):
-            _m = float(por_forma[fm].iloc[i])
-            _p = _m / _cobrado[i] if _cobrado[i] else 0.0
-            _celda(r, f"f{k}_v", round(_m, 2), f"S/ {_m:,.0f}" if _m else "—",
-                   (f"{_p:.0%}", "vr-neutro") if _m else ("", ""))
-        if formas:
-            _x = round(por_cobrar[i] or 0.0, 2)
-            _celda(r, "por_cobrar", _x, f"S/ {_x:,.0f}" if _x else "—")
-            _celda(r, "cobrado", round(_cobrado[i], 2),
-                   f"S/ {_cobrado[i]:,.0f}")
-        if pdesc[i] is not None:
-            _celda(r, "desc", round(desc[i], 2), f"S/ {desc[i]:,.0f}",
-                   _txt_var(_var(desc, i), malo_si_sube=True))
-            _celda(r, "pdesc", round(pdesc[i], 4), f"{pdesc[i]:.1%}",
-                   _txt_pp(_pp(pdesc, i)))
-            _barra(r, "pdesc", pdesc[i], _max(pdesc))
-            if n_docs[i]:
-                _celda(r, "n_desc", int(n_desc[i] or 0),
-                       f"{int(n_desc[i] or 0)} / {int(n_docs[i])}")
-                _celda(r, "ptrx", round(ptrx[i], 4), f"{ptrx[i]:.0%}",
-                       _txt_pp(_pp(ptrx, i)))
-        if pcort[i] is not None:
-            _celda(r, "cort", round(cort[i], 2), f"S/ {cort[i]:,.0f}",
-                   _txt_var(_var(cort, i), malo_si_sube=True))
-            _celda(r, "pcort", round(pcort[i], 4), f"{pcort[i]:.1%}",
-                   _txt_pp(_pp(pcort, i)))
-            _barra(r, "pcort", pcort[i], _max(pcort))
-            r["n_cort"] = int(n_cort[i] or 0)
-            if costo_cort[i] is not None:
-                r["costo_cort"] = round(costo_cort[i], 2)
-        # El cuadre (regla #524): cero es «—», no «S/ 0» — en una columna
-        # donde casi todo es cero, lo que se tiene que ver es lo que no.
-        for k, serie, cuantos in (("docs_v", docs_v, None),
-                                  ("nc_v", nc_v, n_nc),
-                                  ("cort_c", cort, n_cort),
-                                  ("anul", anul, n_anul)):
-            if serie[i] is None:
-                continue
-            _x = round(serie[i], 2)
-            _txt = f"S/ {_x:,.0f}".replace("S/ -", "−S/ ") if _x else "—"
-            _n = int(cuantos[i] or 0) if cuantos else 0
-            _celda(r, k, _x, _txt, (f"{_n} comp.", "vr-neutro") if _n
-                   else ("", ""))
-        r["__nota"] = _nota_var_venta(v, fila[v[2]] if v[2] is not None else "")
-        r["__html"] = _franja(i)
-        r["__id"] = r["__clave"] = c
-        r["__sel"] = c == foco
-        filas.append(r)
-    tp = pd.DataFrame(filas)
-
-    # ── La fila TOTAL, con lo de todas las subvistas ──────────────────────
-    def _s(nombre):
-        return float(g[nombre].sum()) if nombre in hay else 0.0
-
-    uni = _UNIDAD_GRAN[gran][0 if n == 1 else 1]
-    total = {"__id": "__total", "periodo": f"Total · {n:,} {uni}",
-             "valor": f"S/ {tot_vista:,.0f}", "variacion": ""}
-    for k in ("carta", "neto", "costo"):
-        if k in hay:
-            total[k] = f"S/ {_s(k):,.0f}"
-    if "pcosto" in hay and _s("neto"):
-        total["pcosto"] = f"{_s('costo') / _s('neto'):.1%}"
-        total["costo_v"] = f"S/ {_s('costo'):,.0f}"
-    if "venta_sin_costo" in hay:
-        total["sin_costo"] = f"S/ {_s('venta_sin_costo'):,.0f}"
-        total["psin"] = f"{_s('venta_sin_costo') / tot_vista:.0%}" if tot_vista else ""
-        if sin_costo_rango:
-            total["sin_que"] = texto_sin_costo(sin_costo_rango, 3)
-    if vol_label:
-        _tp = _s("pax")
-        total["pax"] = f"{_tp:,.0f}"
-        # El ticket del total, con las sumas y no con el promedio de las
-        # filas (regla #591): venta de los canales con clientes ÷ clientes.
-        _vc = _s("venta_cli") if "venta_cli" in hay else tot_vista
-        _pers = _s("personas")
-        for k, num, den in (("ticket", _vc, _tp),
-                            ("ticket_neto", _s("neto_cli"), _tp),
-                            ("ticket_p", _vc, _pers),
-                            ("ticket_neto_p", _s("neto_cli"), _pers)):
-            if k in hay:
-                total[k] = f"S/ {num / den:,.2f}" if den else "—"
-        if "ninos" in hay:
-            total["ninos"] = f"{_s('ninos'):,.0f}"
-            total["personas"] = f"{_pers:,.0f}"
-        if "venta_cli" in hay:
-            _x = tot_vista - _vc
-            total["sin_cli"] = f"S/ {_x:,.0f}" if round(_x, 2) else "—"
-    for k, cn in enumerate(canales):
-        _m = float(por_canal[cn].sum())
-        total[f"c{k}_v"] = f"S/ {_m:,.0f}"
-        total[f"c{k}_p"] = f"{_m / tot_vista:.1%}" if tot_vista else ""
-    if "propina" in hay:
-        total["propina"] = f"S/ {_s('propina'):,.0f}"
-        total["pprop"] = f"{_s('propina') / tot_vista:.1%}" if tot_vista else ""
-        total["n_prop"] = f"{_s('n_prop'):,.0f}"
-        if vol_label == "Clientes" and _s("pax"):
-            total["prop_cli"] = f"S/ {_s('propina') / _s('pax'):,.2f}"
-    if formas:
-        # Sólo el monto: «S/ 273,210 · 71%» no entra en 112 px y la fila
-        # Total no lleva la segunda línea de las celdas (medido, #592).
-        _tc = float(sum(_cobrado))
-        for k, fm in enumerate(formas):
-            total[f"f{k}_v"] = f"S/ {float(por_forma[fm].sum()):,.0f}"
-        total["cobrado"] = f"S/ {_tc:,.0f}"
-        _x = _s("por_cobrar")
-        total["por_cobrar"] = f"S/ {_x:,.0f}" if round(_x, 2) else "—"
-    if "desc" in hay and _s("carta"):
-        total["desc"] = f"S/ {_s('desc'):,.0f}"
-        total["pdesc"] = f"{_s('desc') / _s('carta'):.1%}"
-        if _s("n_docs"):
-            total["n_desc"] = f"{_s('n_desc'):,.0f} / {_s('n_docs'):,.0f}"
-            total["ptrx"] = f"{_s('n_desc') / _s('n_docs'):.0%}"
-    for k, campo in (("docs_v", "docs_v"), ("nc_v", "nc_v"),
-                     ("cort_c", "cort_s"), ("anul", "anul_s")):
-        if campo in hay:
-            _x = _s(campo)
-            total[k] = (f"S/ {_x:,.0f}".replace("S/ -", "−S/ ") if _x
-                        else "—")
-    if "cort_s" in hay and _s("carta"):
-        total["cort"] = f"S/ {_s('cort_s'):,.0f}"
-        total["pcort"] = f"{_s('cort_s') / _s('carta'):.1%}"
-        total["n_cort"] = f"{_s('n_cort'):,.0f}"
-        total["costo_cort"] = f"S/ {_s('costo_cort'):,.0f}"
-
-    # ── Las subvistas: qué grupo de columnas se ve (regla #519) ───────────
-    subs = _subvistas(vol_label, canales, set(tp.columns), formas, otras)
-    sub = st.session_state.get("vt_resumen_sub")
-    if sub not in subs:
-        sub = next(iter(subs))
-    columnas, ayuda = subs[sub]
-
-    n_res = st.session_state.get("vt_resumen_nres", 0)
-    with st.container(key="vt_resumen_resumen"):
-        clic_fila = renderizar_dias_venta(
-            tp, altura=_ALTO_TABLA_VR, columnas=columnas,
-            # La subvista va en la key: cambiar de grupo de columnas estrena
-            # la grilla (las `columnDefs` nuevas no se aplican sobre una viva).
-            key="vt_resumen_res_grid_" + _clave_grilla(ctx, n_res, sub),
-            rotulo_periodo=gran, total=total)
-    # Una línea corta: va en el renglón de los toggles y se corta con «…»
-    # si no entra (regla #519). «Clic en una fila…» pasó al `help` del
-    # selector de subvistas.
-    pie.caption(
-        f"**{_del_al(pd.Series(pd.to_datetime(list(rango))))}** · {ayuda}"
-        + nota_recorte)
-    if clic_fila in set(claves):
-        st.session_state["_vt_resumen_ir_detalle"] = clic_fila
-        st.session_state["vt_resumen_nres"] = n_res + 1
-        st.rerun(scope=scope_rerun())
-
-
 def _subvistas(vol_label, canales, hay, formas=(), otras=()):
     """`{nombre: (columnas, ayuda)}` de las subvistas del Resumen (regla #519),
     sólo las que el parquet permite. Cada columna es `(campo, rótulo, tipo,
@@ -2222,109 +601,6 @@ un día caro, es un costo mal cargado (medido: el 12/09 llegó al 117 % por
 un menú con costo S/ 765,31 y precio S/ 175)."""
 
 
-def _leyenda_flotante(nombre, i, canales, colores, por_canal, g, vol_label,
-                      hay_tapa, hay_ticket):
-    """La pastilla «Detalle · <período>» que flota arriba a la izquierda del
-    gráfico: ES la leyenda (regla #520), a pedido, «similar a la de
-    Comparativo vs año pasado en Descomposición».
-
-    Cerrada es una barra de una línea. Abierta, una fila por serie con su
-    color y su valor en el período `i` (el enfocado, o el último): los
-    canales, el descuento, los clientes y el ticket. Descuento, Clientes y
-    Ticket traen un interruptor que los prende y apaga en el gráfico; su
-    estado vive en `_vt_resumen_ver_<serie>` (un ECO) porque el interruptor
-    sólo se dibuja con la pastilla abierta.
-
-    El patrón y sus trampas —el botón con `on_click` para que el chevron no
-    llegue un clic tarde, y un solo contenedor para el título y las filas
-    para que no se vea como dos piezas— son los de
-    `ventas_comparativo.py` (panel «Detalle»)."""
-    def _alternar():
-        st.session_state["vt_resumen_ley_abierta"] = not st.session_state.get(
-            "vt_resumen_ley_abierta", False)
-
-    def _copiar(k):
-        st.session_state[f"_vt_resumen_ver_{k}"] = st.session_state.get(
-            f"vt_resumen_ver_{k}", True)
-
-    abierta = st.session_state.get("vt_resumen_ley_abierta", False)
-    with st.container(key="vt_resumen_ley_float"):
-        st.button(f"Detalle · {nombre}", key="vt_resumen_ley_toggle",
-                  icon=(":material/keyboard_arrow_up:" if abierta
-                        else ":material/keyboard_arrow_down:"),
-                  on_click=_alternar)
-        if not abierta:
-            return
-        filas = []   # (color, rótulo, valor, serie apagable o None)
-        for c, color in zip(canales, colores):
-            filas.append((color, c, f"S/ {float(por_canal[c].iloc[i]):,.0f}",
-                          f"canal_{_slug_canal(c)}"))
-        if not canales:
-            filas.append((SERIE_PRINCIPAL, "Venta",
-                          f"S/ {float(g['total'].iloc[i]):,.0f}", None))
-        if hay_tapa:
-            _d = float(g["carta"].iloc[i] - g["total"].iloc[i])
-            filas.append((LAVANDA_BORDE, "Descuento", f"S/ {max(_d, 0):,.0f}",
-                          "desc"))
-        if vol_label:
-            filas.append((GRIS_TEXTO, vol_label,
-                          f"{float(g['pax'].iloc[i]):,.0f}", "pax"))
-        if hay_ticket:
-            _t = g["ticket"].iloc[i]
-            filas.append((ADVERTENCIA, "Ticket",
-                          "—" if pd.isna(_t) else f"S/ {float(_t):,.2f}",
-                          "ticket"))
-        with st.container(key="vt_resumen_ley_panel", gap=None):
-            for color, rot, val, serie in filas:
-                # columnas-internas: una fila de la pastilla, [interruptor |
-                # color | nombre | valor], como el panel de Comparativo.
-                _c = st.columns([0.9, 0.3, 3, 2], vertical_alignment="center")
-                with _c[0]:
-                    if serie:
-                        st.toggle(rot, key=f"vt_resumen_ver_{serie}",
-                                  value=st.session_state.get(
-                                      f"_vt_resumen_ver_{serie}", True),
-                                  on_change=_copiar, args=(serie,),
-                                  label_visibility="collapsed")
-                with _c[1]:
-                    st.markdown(f'<span class="vt-ley-sw" style="background:'
-                                f'{color}"></span>', unsafe_allow_html=True)
-                with _c[2]:
-                    st.markdown(f'<span class="vt-ley-rot">{escape(rot)}'
-                                '</span>', unsafe_allow_html=True)
-                with _c[3]:
-                    st.markdown(f'<span class="vt-ley-val">{escape(val)}'
-                                '</span>', unsafe_allow_html=True)
-
-
-def _soles2(v):
-    """«S/ 1,234.50», y «−S/ 385.00» en negativo: la fila Total escrita
-    igual que las celdas de arriba, que formatea la grilla (una nota de
-    crédito es la única fila que resta)."""
-    return ("−" if v < 0 else "") + f"S/ {abs(v):,.2f}"
-
-
-def _slug_canal(nombre):
-    """El canal como pedazo de KEY: sin tildes, espacios ni signos. La key
-    de un widget sale como clase CSS (`st-key-…`), y «En el Local» no es
-    una clase válida."""
-    plano = (unicodedata.normalize("NFKD", str(nombre))
-             .encode("ascii", "ignore").decode().lower())
-    return re.sub(r"[^0-9a-z]+", "_", plano).strip("_") or "canal"
-
-
-def _feriados_de(claves, gran):
-    """Los feriados nacionales que caen entre la primera y la última barra."""
-    if not claves:
-        return frozenset()
-    ini = _limites_periodo(claves[0], gran)[0]
-    fin = _limites_periodo(claves[-1], gran)[1]
-    fer = set()
-    for a in range(ini.year, fin.year + 1):
-        fer |= cortes.feriados_peru(a)
-    return frozenset(f for f in fer if ini <= f <= fin)
-
-
 def _kpis_extra(g):
     """Las tarjetas de KPI que siguen a los canales: propinas, descuentos,
     cortesías y costo sobre neto. Sólo las que el parquet permite."""
@@ -2509,250 +785,318 @@ def _grupos_detalle(amb, col, propinas, foco, vacio):
     return g.sort_values(["venta", "nombre"], ascending=[False, True])
 
 
-def _zona_detalle(tabla, foco, nombre, gran, partida, ctx, nclic, pie,
-                  ver=_VER_PEDIDO, propinas=None):
-    """Lo del período en foco a la izquierda —sus PEDIDOS, o, con «Ver por»
-    (regla #667), sus meseros, servicios o comprobantes— y, al costado, los
-    platos: los del período ENTERO mientras no se elija una fila, y los de
-    la elegida después — la pareja documentos | líneas de Compras.
+# ===========================================================================
+# LO QUE RECIBE LA PIEZA (regla #714)
+# ===========================================================================
 
-    `propinas`: las filas por pago del rango con `clave`, `mesero` y `prop`
-    (una propina por pago), para la columna Propina de «Ver por» Mesero."""
-    amb = tabla[tabla["clave"] == foco]
-    if "ped" not in amb.columns:
-        # Sin pedido en el parquet, cada comprobante —o cada línea— es su
-        # propio pedido: la tabla sigue diciendo algo.
-        amb = amb.assign(ped=(amb["doc"] if "doc" in amb.columns
-                              else amb.index.astype(str)))
-    if ver not in _ver_disponibles(amb):
-        ver = _VER_PEDIDO
-    # Los grupos cuentan sobre el pedido TAL CUAL: `pax_por` ya resta el
-    # pax de una nota de crédito por su comprobante.
-    amb_grupos = amb
-    if "clase" in amb.columns:
-        # Una nota de crédito es SU fila, con el pedido que anula: en un
-        # canje de boleta por factura se ven la factura (+) y la nota (−),
-        # en vez de un pedido de S/ 0 con el doble de platos (regla #524).
-        _nc = amb["clase"] == dv.NOTA_CREDITO
-        if _nc.any():
-            amb = amb.assign(ped=amb["ped"].where(~_nc, amb["ped"] + " · NC"))
+_CLASES = (dv.VENTA, dv.NOTA_CREDITO, dv.CORTESIA, dv.ANULADO)
+"""La clase de un comprobante como número para la pieza (su posición)."""
 
-    # QUÉ fila mueve la tabla de al lado: la columna de `amb` que la
-    # identifica. Pedido y Comprobante son filas sueltas; Mesero y Servicio,
-    # grupos.
-    k_fila = {_VER_PEDIDO: "ped",
-              _VER_COMPROBANTE: "ldoc" if "ldoc" in amb.columns else "doc",
-              **_VER_COLUMNA}[ver]
-    es_grupo = ver in _VER_COLUMNA
-    if es_grupo:
-        amb = amb.assign(**{k_fila: amb[k_fila].replace(
-            "", _SIN_MESERO if ver == _VER_MESERO else _SIN_SERVICIO)})
+_TEXTOS = ("ldoc", "ped", "prod", "grupo", "canal", "serv", "mesero", "tdoc", "num", "pcod")
+"""Las columnas de texto de `lineas_normalizadas`."""
 
-    # La elección es de UN «Ver por»: un pedido elegido no es un mesero, y
-    # cambiar de «Ver por» la suelta. Si quedara puesta, un clic en una
-    # barra «subiría un nivel» en vez de mover el foco.
-    if st.session_state.get("vt_resumen_ped_ver", _VER_PEDIDO) != ver:
-        st.session_state["vt_resumen_ped"] = None
-        st.session_state["vt_resumen_ped_ver"] = ver
-    sel = st.session_state.get("vt_resumen_ped")
 
-    if es_grupo:
-        grp = _grupos_detalle(amb_grupos, k_fila, propinas, foco,
-                              _SIN_MESERO if ver == _VER_MESERO
-                              else _SIN_SERVICIO)
-        if grp.empty:
-            st.empty()
-            pie.caption(f"**{nombre}** — sin ventas.")
-            return
-        if sel not in set(grp["nombre"]):
-            sel = None
-        tp_izq = pd.DataFrame({
-            "nombre": grp["nombre"],
-            "pedidos": grp["pedidos"].astype(int),
-            "pax": grp["pax"].round(0),
-            "venta": grp["venta"].astype(float).round(2),
-            "pct": grp["pct"],
-            "ticket": grp["ticket"].astype(float).round(2),
-            **({"propina": grp["propina"].astype(float).round(2)}
-               if "propina" in grp.columns else {}),
-            "__clave": grp["nombre"],
-            "__sel": grp["nombre"] == sel,
-        })
-        _n = len(grp)
-        _pax_t = float(grp["pax"].sum()) if grp["pax"].notna().any() else None
-        _vc_t = (float(amb_grupos.loc[amb_grupos["cli"], "venta"].sum())
-                 if "cli" in amb_grupos.columns else float(grp["venta"].sum()))
-        _nom = "mesero" if ver == _VER_MESERO else "servicio"
-        tot_izq = {
-            "nombre": f"Total · {_n} {_nom}" + ("" if _n == 1 else "s"),
-            "pedidos": f"{int(grp['pedidos'].sum()):,}",
-            "pax": f"{_pax_t:,.0f}" if _pax_t is not None else "",
-            # En soles enteros, como las filas (`renderizar_grupos_venta`).
-            "venta": f"S/ {float(grp['venta'].sum()):,.0f}",
-            "pct": "100.0%",
-            "ticket": (f"S/ {_vc_t / _pax_t:,.0f}" if _pax_t else ""),
-        }
-        if "propina" in grp.columns:
-            tot_izq["propina"] = f"S/ {float(grp['propina'].sum()):,.0f}"
-    else:
-        _f_em = "emision" if "emision" in amb.columns else "fecha"
-        # `cierre`: el ÚLTIMO comprobante del pedido (una cuenta dividida
-        # se cobra en dos). `inicio`: cuándo se abrió.
-        agg = {"fecha": (_f_em, "min"), "cierre": (_f_em, "max"),
-               "platos": ("venta", "size"), "valor": ("venta", "sum")}
-        for _c in ("doc", "mesero", "canal", "tdoc", "clase", "estado",
-                   "pcod"):
-            if _c in amb.columns and _c != k_fila:
-                agg[_c] = (_c, "first")
-        if "inicio" in amb.columns:
-            agg["inicio"] = ("inicio", "min")
-        if "pax" in amb.columns:
-            agg["pax"] = ("pax", "max")
-        peds = (amb.groupby(k_fila, as_index=False).agg(**agg)
-                   .sort_values(["valor", k_fila], ascending=[False, True])
-                   .reset_index(drop=True))
-        if peds.empty:
-            st.empty()
-            pie.caption(f"**{nombre}** — sin pedidos.")
-            return
-        if sel not in set(peds[k_fila]):
-            sel = None
-        # La hora viaja en ISO, que ordenado como texto ES el orden del
-        # tiempo; la grilla la escribe «14:16» en Día (todas las filas son
-        # del mismo día) y «03/09 14:16» en los períodos largos.
-        _doc = (peds["doc"] if "doc" in peds
-                else peds[k_fila] if k_fila == "doc" else "")
-        tp_izq = pd.DataFrame({
-            "hora": peds["fecha"].dt.strftime("%Y-%m-%d %H:%M"),
-            "mesero": (peds["mesero"].replace("", "—") if "mesero" in peds
-                       else "—"),
-            "canal": peds["canal"] if "canal" in peds else "",
-            "pax": (peds["pax"].fillna(0).astype(int) if "pax" in peds else 0),
-            "platos": peds["platos"].astype(int),
-            "valor": peds["valor"].astype(float).round(2),
-            "__doc": _doc,
-            "__ped": peds[k_fila],
-            "__sel": peds[k_fila] == sel,
-        })
-        n_p = len(peds)
-        if ver == _VER_COMPROBANTE:
-            # El tipo y el número a la vista, y «por cobrar» al lado: es lo
-            # que se busca al cuadrar contra el POS.
-            _comp = _etiqueta_comprobante(
-                peds["tdoc"] if "tdoc" in peds
-                else pd.Series("", index=peds.index),
-                peds["clase"] if "clase" in peds
-                else pd.Series(dv.VENTA, index=peds.index),
-                pd.Series(_doc, index=peds.index).astype(str)
-                .map(_numero_sunat))
-            if "estado" in peds:
-                _comp = _comp.where(peds["estado"] != _POR_COBRAR,
-                                    _comp + " · por cobrar")
-            tp_izq.insert(1, "comp", _comp)
-            _n_nc = (int((peds["clase"] == dv.NOTA_CREDITO).sum())
-                     if "clase" in peds else 0)
-            _txt_n = (f"{n_p - _n_nc:,} comprobante"
-                      + ("" if n_p - _n_nc == 1 else "s")
-                      + (f" · {_n_nc} NC" if _n_nc else ""))
-        else:
-            _txt_n = f"{n_p:,} pedido" + ("" if n_p == 1 else "s")
-        tot_izq = {
-            "hora": "Total", "mesero": _txt_n,
-            "canal": "", "pax": f"{int(tp_izq['pax'].sum()):,}",
-            "platos": f"{int(peds['platos'].sum()):,}",
-            "valor": _soles2(float(peds["valor"].sum())),
-        }
-        if ver == _VER_COMPROBANTE:
-            # La columna Mesero sigue, pero el conteo va en la del documento.
-            tot_izq.update(comp=_txt_n, mesero="")
-        elif "inicio" in peds and peds["inicio"].notna().any():
-            tp_izq, tot_izq = _pedidos_con_horario(peds, k_fila, sel, _txt_n)
+def lineas_normalizadas(d, cols):
+    """Las ventas con nombres FIJOS, una fila por ítem: lo que la pieza
+    cuenta. `cols` son las columnas ya resueltas por `ventas.py`. Las
+    opcionales que falten (el demo, un parquet viejo) quedan en cero o
+    vacías. Pura."""
+    idx = d.index
 
-    # QUÉ muestra la tabla de al lado: los platos de la fila elegida con un
-    # clic o, sin elección, los del PERÍODO ENTERO (regla #525, a pedido: se
-    # había perdido la tabla que respondía «qué platos se vendieron el
-    # martes»). Un pedido o un comprobante se listan línea por línea; un
-    # mesero o un servicio, sumados por plato, como el período.
-    lin = amb if sel is None else amb[amb[k_fila] == sel]
-    _cant = (pd.to_numeric(lin["cant"], errors="coerce").fillna(0.0)
-             if "cant" in lin else pd.Series(1.0, index=lin.index))
-    lin = lin.assign(_cant=_cant,
-                     prod=(lin["prod"] if "prod" in lin else "—"))
-    if sel is None or es_grupo:
-        # Un renglón por PLATO, sumado sobre el período; lo que una nota de
-        # crédito devolvió entero (cantidad y venta en cero) no se lista.
-        lin = (lin.groupby("prod", as_index=False)
-               .agg(_cant=("_cant", "sum"), venta=("venta", "sum")))
-        lin = lin[(lin["_cant"].round(3) != 0) | (lin["venta"].round(2) != 0)]
-    lin = lin.sort_values("venta", ascending=False)
-    tp_lin = pd.DataFrame({
-        "prod": lin["prod"],
-        "cant": lin["_cant"].round(3),
-        "punit": (lin["venta"] / lin["_cant"].where(lin["_cant"] != 0)).round(2),
-        "valor": lin["venta"].astype(float).round(2),
+    def col(*nombres):
+        return _resolver(d, list(nombres))
+
+    def num(c):
+        return (pd.to_numeric(d[c], errors="coerce").fillna(0.0) if c and c in d.columns
+                else pd.Series(0.0, index=idx))
+
+    def txt(c):
+        return _texto_limpio(d[c]) if c and c in d.columns else pd.Series("", index=idx)
+
+    fecha = pd.to_datetime(d[cols["fecha"]], errors="coerce")
+    c_doc = col("Numero Documento", "Nro Documento")
+    c_ldoc = col("Llave Local Documento")
+    num_doc = txt(c_doc)
+    ldoc = txt(c_ldoc) if c_ldoc else num_doc.where(num_doc != "", pd.Series(idx.astype(str), index=idx))
+    ped = txt(cols.get("pedido"))
+    c_clase = dv.columna(d, dv.CLASE)
+    c_est = dv.columna(d, dv.ESTADO)
+    c_em = dv.columna(d, dv.FECHA_EMISION)
+    c_ini = col("Fecha Registro Pedido")
+    c_ninos = dv.columna(d, dv.NINOS)
+    serv = (_texto_limpio(d[cols["serv"]]).str.capitalize() if cols.get("serv") in d.columns
+            else pd.Series("", index=idx))
+    t = pd.DataFrame({
+        "ldoc": ldoc, "ped": ped.where(ped != "", ldoc),
+        "prod": txt(cols.get("prod")).where(lambda s: s != "", "—"),
+        "grupo": txt(cols.get("fam")),
+        "cant": num(cols.get("cant")) if cols.get("cant") else pd.Series(1.0, index=idx),
+        "venta": num(cols["venta"]),
+        "po": num(col("Precio Oficial Item Ddocumento")),
+        "neto": num(col("Neto Total Item Ddocumento")),
+        "desc": num(col("Descuento Item Ddocumento")),
+        "pc": num(col("Precio Costo")),
+        "igv": num(col("Igv Item Ddocumento")),
+        "fecha": fecha,
+        "emision": pd.to_datetime(d[c_em], errors="coerce") if c_em else fecha,
+        "clase": (d[c_clase].astype(object) if c_clase else dv.VENTA),
+        "porcobrar": (d[c_est].astype(str).str.strip().str.upper().eq(_POR_COBRAR) if c_est
+                      else False),
+        "canal": (_canal_legible(d[cols["canal"]]) if cols.get("canal") in d.columns
+                  else pd.Series(_SIN_CANAL, index=idx)),
+        "serv": serv.where(serv != "", _SIN_SERVICIO),
+        "mesero": (_nombre_mesero(d[cols["mesero"]]) if cols.get("mesero") in d.columns
+                   else pd.Series("", index=idx)),
+        "tdoc": txt(col("Tipo Doc", "Tipo Documento", "Nomb Tipo Doc")),
+        "num": num_doc,
+        "pax": num(cols.get("pax")), "ninos": num(c_ninos),
+        "pcod": txt(col("Codigo Pedido Ddocumento")),
+        "inicio": pd.to_datetime(d[c_ini], errors="coerce") if c_ini else pd.NaT,
     })
-    n_l = len(tp_lin)
-    tot_lin = {"prod": f"Total · {n_l} plato" + ("" if n_l == 1 else "s"),
-               "cant": (f"{float(lin['_cant'].sum()):,.0f}"
-                        if sel is None or es_grupo else ""),
-               "punit": "",
-               "valor": _soles2(float(lin["venta"].sum()))}
+    return t[t["fecha"].notna()].reset_index(drop=True)
 
-    with st.container(key="vt_resumen_detalle"):
-        # columnas-internas: las dos tablas del detalle, DENTRO de la
-        # tarjeta, con el reparto de «Compras por período» (la de pedidos
-        # lleva seis columnas contra cuatro).
-        c_peds, c_lin = st.columns([1.15, 1], gap=GAP_DRILL)
-        # La key lleva lo que cambia las FILAS —el «Ver por» incluido: cada
-        # uno trae sus columnas— y el contador de clics del gráfico, no la
-        # fila elegida: el orden que eligió el usuario sobrevive al clic
-        # (regla #471).
-        k_tablas = _clave_grilla(ctx, foco, nclic, ver)
-        with c_peds:
-            if es_grupo:
-                clic = renderizar_grupos_venta(
-                    tp_izq, altura=_ALTO_TABLA_VR,
-                    key=f"vt_resumen_grp_grid_{k_tablas}", rotulo=ver,
-                    total=tot_izq)
-            else:
-                clic = renderizar_pedidos_venta(
-                    tp_izq, altura=_ALTO_TABLA_VR,
-                    key=f"vt_resumen_ped_grid_{k_tablas}",
-                    # El canal, sólo si EL PERÍODO EN FOCO tiene más de
-                    # uno (#239): con Rappi en otro día del rango, la
-                    # columna decía «En el Local» en cada fila y le quitaba
-                    # el ancho al mesero (regla #668).
-                    ver_canal=partida and "canal" in amb
-                    and amb["canal"].nunique() > 1,
-                    ver_mesero="mesero" in amb,
-                    solo_hora=gran == "Día", total=tot_izq,
-                    ver_pax=ver == _VER_PEDIDO)
-        with c_lin:
-            renderizar_lineas_mov(tp_lin, altura=_ALTO_TABLA_VR,
-                                  key=f"vt_resumen_lin_grid_{k_tablas}",
-                                  total=tot_lin)
-    _uno = {_VER_PEDIDO: "un pedido", _VER_MESERO: "un mesero",
-            _VER_SERVICIO: "un servicio",
-            _VER_COMPROBANTE: "un comprobante"}[ver]
-    _elegido = {_VER_PEDIDO: "del pedido elegido",
-                _VER_MESERO: f"que vendió {sel}",
-                _VER_SERVICIO: f"de {str(sel).lower()}",
-                _VER_COMPROBANTE: "del comprobante elegido"}[ver]
-    pie.caption(
-        f"**{nombre}** — " + (
-            f"al costado, todos los platos del período. Clic en {_uno} "
-            "para ver sólo los suyos." if sel is None else
-            f"al costado, los platos {_elegido}. Otro clic en la fila "
-            "vuelve a todos los del período."))
 
-    # La selección VIGENTE de la grilla: se actúa sólo si difiere de lo que
-    # ya se muestra, y el rerun redibuja la marca y los platos. `None` con
-    # una fila elegida es que la SOLTARON: la grilla se estrena (key nueva)
-    # sólo cuando `vt_resumen_ped` ya volvió a None, así que no hay otra
-    # forma de que llegue vacía con una fila puesta.
-    _validas = set(tp_izq["__clave" if es_grupo else "__ped"])
-    if clic == sel or (clic is not None and clic not in _validas):
+def sello_periodo(t):
+    """La identidad de lo que recibe la pieza: cambia con otro rango, otros
+    chips de la franja u otro parquet."""
+    if t.empty:
+        return "0"
+    h = pd.util.hash_pandas_object(t[["ldoc", "prod", "venta", "fecha"]], index=False)
+    return f"{len(t)}-{int(h.sum()) & 0xFFFFFFFFFFFF:x}"
+
+
+def _minutos(s, base):
+    m = (pd.to_datetime(s, errors="coerce") - base).dt.total_seconds() // 60
+    return [None if pd.isna(x) else int(x) for x in m]
+
+
+def armar_periodo(t, sello, alto_fig, alto_fig_solo, alto_tabla):
+    """Lo que recibe la pieza, de las ventas normalizadas
+    (`lineas_normalizadas`). Pura: la lee el test.
+
+    · `docs` — un comprobante por fila: [número, tipo, clase (índice de
+      `_CLASES`), por cobrar, fecha del turno y de emisión (minutos desde
+      `base`), pedido, canal, servicio, mesero, adultos, niños]. El pax de
+      una nota de crédito viene en negativo (`definicion_venta.preparar`).
+    · `unidades` — lo de cada comprobante por grupo de la carta: [doc,
+      grupo, venta, venta a precio carta, neto, descuento, costo, venta sin
+      costo cargado, líneas, alguna con descuento]. De acá salen todas las
+      cuentas menos la tabla de platos.
+    · `lineas` — [doc, plato, grupo, cantidad, venta], de los días desde
+      `lineas_desde` (todo el rango si cabe en `_DIAS_LINEAS`).
+    · `sinc` — lo vendido sin costo: [doc, plato, grupo, venta]; `culp` —
+      lo vendido a un costo mayor que su precio: [doc, plato, grupo, costo
+      unitario, precio carta, cantidad]; `igv` — los cambios de tasa
+      (`cambios_de_igv`): [día, antes, después].
+    · `pagos` — uno por pago: [doc, monto en soles, propina, forma]."""
+    # Las columnas de texto como objetos de Python, UNA vez: con pandas 3
+    # vienen respaldadas por Arrow y recorrerlas valor por valor convierte
+    # cada uno (medido: 19 s para doce meses; así, menos de 1).
+    t = t.astype({c: object for c in _TEXTOS})
+    base = t["fecha"].min().normalize()
+    dia = (t["fecha"].dt.normalize() - base).dt.days
+
+    def dic(serie):
+        vals = sorted(pd.unique(serie.to_numpy()))
+        return vals, {v: i for i, v in enumerate(vals)}
+
+    prods, ip = dic(t["prod"])
+    grupos, ig = dic(t["grupo"])
+    canales, ic = dic(t["canal"])
+    servs, isv = dic(t["serv"])
+    meseros, im = dic(t["mesero"])
+    tdocs, it = dic(t["tdoc"])
+    clase = t["clase"].map({c: i for i, c in enumerate(_CLASES)}).fillna(0).astype(int)
+    docs = t.assign(_cl=clase).drop_duplicates("ldoc").reset_index(drop=True)
+    idoc = {k: i for i, k in enumerate(docs["ldoc"])}
+    peds, iped = dic(docs["ped"])
+    pedidos = docs.drop_duplicates("ped").set_index("ped").reindex(peds)
+    d_i = t["ldoc"].map(idoc)
+
+    # Lo de cada comprobante por grupo.
+    u = t.assign(_d=d_i, _g=t["grupo"].map(ig), carta=t["po"] * t["cant"],
+                 costo=t["pc"] * t["cant"], sin=t["venta"].where(t["pc"] <= 0, 0.0),
+                 tdesc=(t["desc"] != 0).astype(int))
+    ug = (u.groupby(["_d", "_g"], as_index=False, sort=True)
+          .agg(venta=("venta", "sum"), carta=("carta", "sum"), neto=("neto", "sum"),
+               desc=("desc", "sum"), costo=("costo", "sum"), sin=("sin", "sum"),
+               n=("venta", "size"), tdesc=("tdesc", "max")))
+    # Con cuatro decimales: redondeadas a céntimos, 2.000 sumas parciales
+    # corrían el total del mes en un par de soles.
+    unidades = [[int(a), int(b), round(v, 4), round(c, 4), round(ne, 4), round(de, 4), round(co, 4),
+                 round(si, 4), int(n), int(td)]
+                for a, b, v, c, ne, de, co, si, n, td in zip(
+                    ug["_d"], ug["_g"], ug["venta"], ug["carta"], ug["neto"], ug["desc"],
+                    ug["costo"], ug["sin"], ug["n"], ug["tdesc"])]
+
+    # Las líneas: todo el rango si es corto; si no, los últimos días.
+    es_venta = t["clase"].isin(dv.CLASES_VENTA)
+    dias_rango = int(dia.max()) + 1 if len(t) else 0
+    desde = 0 if dias_rango <= _DIAS_LINEAS else max(0, int(dia[es_venta].max()) - _DIAS_RECIENTES + 1)
+    ventana = t[(dia >= desde)]
+    lineas = lineas_de(ventana, idoc, ip, ig)
+
+    sc = t[es_venta & (t["pc"] <= 0)]
+    cu = t[es_venta & (t["po"] > 0) & (t["pc"] > t["po"])]
+    cambios = cambios_de_igv(t.loc[es_venta, "fecha"], t.loc[es_venta, "igv"],
+                             t.loc[es_venta, "neto"])
+    return {
+        "parte": "periodo", "sello": sello, "base": f"{base:%Y-%m-%d}",
+        "lineas_desde": int(desde), "max_dias": MAX_DIAS,
+        "alto": {"fig": int(alto_fig), "fig_solo": int(alto_fig_solo), "tabla": int(alto_tabla)},
+        "prods": prods, "grupos": grupos, "canales": canales, "servs": servs,
+        "meseros": meseros, "tdocs": tdocs,
+        "pedidos": [[p, a] for p, a in zip(pedidos["pcod"], _minutos(pedidos["inicio"], base))],
+        "docs": [[n, it[td], int(cl), int(bool(pc)), f, e if e is not None else f, iped[pe],
+                  ic[ca], isv[sv], im[me], float(px), float(ni)]
+                 for n, td, cl, pc, f, e, pe, ca, sv, me, px, ni in zip(
+                     docs["num"], docs["tdoc"], docs["_cl"], docs["porcobrar"],
+                     _minutos(docs["fecha"], base), _minutos(docs["emision"], base),
+                     docs["ped"], docs["canal"], docs["serv"], docs["mesero"],
+                     docs["pax"], docs["ninos"])],
+        "unidades": unidades, "lineas": lineas,
+        "sinc": [[idoc[a], ip[b], ig[g], round(v, 2)]
+                 for a, b, g, v in zip(sc["ldoc"], sc["prod"], sc["grupo"], sc["venta"])],
+        "culp": [[idoc[a], ip[b], ig[g], round(p, 4), round(o, 2), round(q, 3)]
+                 for a, b, g, p, o, q in zip(cu["ldoc"], cu["prod"], cu["grupo"], cu["pc"],
+                                             cu["po"], cu["cant"])],
+        "igv": [[int((pd.Timestamp(f) - base).days), round(a, 4), round(b, 4)]
+                for f, a, b in cambios],
+        "feriados": sorted(f"{x:%Y-%m-%d}" for a in range(base.year, int(t["fecha"].max().year) + 1)
+                           for x in cortes.feriados_peru(a)),
+    }
+
+
+def lineas_de(t, idoc, ip, ig):
+    """[doc, plato, grupo, cantidad, venta] de las líneas de `t`."""
+    return [[idoc[a], ip[b], ig[g], round(q, 3), round(v, 2)]
+            for a, b, g, q, v in zip(t["ldoc"].tolist(), t["prod"].tolist(), t["grupo"].tolist(),
+                                     t["cant"].tolist(), t["venta"].tolist())]
+
+
+def pagos_periodo(d_pagos, col_fecha, idoc):
+    """[doc, monto en soles, propina, forma] de cada pago, una vez (regla
+    #517: el parquet repite cada pago en cada ítem). Y las formas."""
+    if d_pagos is None or d_pagos.empty:
+        return [], []
+    c = lambda *n: _resolver(d_pagos, list(n))  # noqa: E731
+    c_pago, c_ldoc = c("Llave Local Documento Correlativo Pago"), c("Llave Local Documento")
+    c_monto, c_tipo = c("Monto Tipo Pago Doc"), c("Nombre Tipo Pago")
+    if not (c_pago and c_ldoc and c_tipo):
+        return [], []
+    p = d_pagos[d_pagos[c_pago].notna()].drop_duplicates(c_pago)
+    forma = forma_de_pago(p[c_tipo], p[c("Nombre Tarjeta Pago")] if c("Nombre Tarjeta Pago") else None,
+                          p[c("Nombre Otro Tipo Pago Doc")] if c("Nombre Otro Tipo Pago Doc") else None)
+    formas = sorted(set(forma))
+    ifo = {f: i for i, f in enumerate(formas)}
+    c_prop = c("Monto Propina", "Propina")
+    monto = pd.to_numeric(p[c_monto], errors="coerce").fillna(0.0) if c_monto else 0.0
+    prop = (pd.to_numeric(p[c_prop], errors="coerce").fillna(0.0) if c_prop
+            else pd.Series(0.0, index=p.index))
+    out = [[idoc[str(ld)], round(float(m), 2), round(float(pr), 2), ifo[f]]
+           for ld, m, pr, f in zip(_texto_limpio(p[c_ldoc]), monto, prop, forma)
+           if str(ld) in idoc]
+    return out, formas
+
+
+# ── La pieza ──────────────────────────────────────────────────────────────
+_AQUI = Path(__file__).parent
+_PIEZA = st.components.v2.component(
+    "ventas_periodo",
+    css=(_AQUI / "ventas_periodo.css").read_text(encoding="utf-8"),
+    # El Excel (`libro`, `bajar`, `archivo`) vive en `_xlsx.js`, compartido
+    # con Costo de Carta, Consistencia y Producto: se antepone.
+    js=(_AQUI / "_xlsx.js").read_text(encoding="utf-8")
+    + (_AQUI / "ventas_periodo.js").read_text(encoding="utf-8"),
+)
+_K_PIEZA = "vt_periodo_pieza"
+_K_LINEAS = "vt_periodo_lineas"
+_K_CACHE = "_vt_periodo_cache"
+"""(sello, ventas normalizadas, índices, lo que recibe la pieza, firma del `d`)
+de la última corrida: armarlo para doce meses son ~2 s, y sólo cambia con el
+rango, los chips de la franja o el parquet. La firma reconoce el MISMO `d`
+cuando el fragment se vuelve a correr con sus argumentos (al pedir líneas)."""
+_K_PEDIDO = "_vt_periodo_pedido"
+
+
+def _al_pedir_lineas():
+    """Un período sin sus líneas en la pieza las pide (`lineas`: {desde,
+    hasta} en días desde `base`). Se guarda y la corrida del fragment las
+    manda en el montaje chico."""
+    v = (st.session_state.get(_K_PIEZA) or {}).get("lineas")
+    if v:
+        st.session_state[_K_PEDIDO] = v
+
+
+@st.fragment
+def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
+                    col_cant, col_fam=None, col_serv=None, col_canal=None,
+                    col_mesero=None, d_pagos=None):
+    """«Venta por Periodo»: la fecha (Python) y la pieza. Ver el docstring
+    del módulo y `arquitectura.md` regla #714.
+
+    La firma es la de antes: en Cloud un commit que le cambia la firma a algo
+    ya importado deja el `app.py` nuevo hablando con el paquete viejo (regla
+    #357)."""
+    # La fecha escribe la clave canónica del rango, que es la que lee
+    # `carga_por_rango` en `app.py`: el `d` de acá ya está materializado con
+    # el rango VIEJO, así que hay que escalar a una corrida completa.
+    if st.session_state.pop("vt_resumen_fecha_flag", False):
+        preservar_widgets(_KEYS_WIDGET_RESUMEN)
+        st.rerun(scope="app")
+    if not (col_venta and col_fecha):
+        st.info("Faltan columnas (Venta, Fecha) para el resumen ejecutivo.")
         return
-    st.session_state["vt_resumen_ped"] = clic
-    st.session_state["vt_resumen_ped_ver"] = ver
-    st.rerun(scope=scope_rerun())
+    with st.container(border=True, key="ajuste_graf_card_izq_ventas_resumen"):
+        with st.container(key="vt_periodo_fecha"):
+            selector_fecha_tarjeta("vt_resumen", "vt_resumen_fecha_flag", categoria=None)
+        if d is None or d.empty:
+            st.info("Sin ventas en el rango cargado.")
+            return
+        cols = {"venta": col_venta, "fecha": col_fecha, "pax": col_pax, "pedido": col_pedido,
+                "prod": col_prod, "cant": col_cant, "fam": col_fam, "serv": col_serv,
+                "canal": col_canal, "mesero": col_mesero}
+        # El MISMO `d` de la corrida anterior (el fragment se vuelve a correr
+        # con sus argumentos, p. ej. al pedir líneas): no se vuelve a
+        # normalizar ni a sellar —con doce meses es ~1 s—.
+        cache = st.session_state.get(_K_CACHE)
+        firma_d = (id(d), d.shape, id(d_pagos))
+        if cache is not None and cache[4] == firma_d:
+            sello, t = cache[0], cache[1]
+        else:
+            t = lineas_normalizadas(d, cols)
+            if t.empty:
+                st.info("Sin ventas en el rango cargado.")
+                return
+            sello = sello_periodo(t)
+        if cache is None or cache[0] != sello:
+            from graficos.compras.semanal import _ALTO_FIG_SOLO
+            datos = armar_periodo(t, sello, alturas.VENTAS_RESUMEN_FIG, _ALTO_FIG_SOLO,
+                                  _ALTO_TABLA_VR)
+            idoc = {k: i for i, k in enumerate(t.drop_duplicates("ldoc")["ldoc"])}
+            datos["pagos"], datos["formas"] = pagos_periodo(d_pagos, col_fecha, idoc)
+            cache = (sello, t, idoc, datos, firma_d)
+            st.session_state[_K_CACHE] = cache
+            st.session_state.pop(_K_PEDIDO, None)
+        elif cache[4] != firma_d:
+            cache = (*cache[:4], firma_d)
+            st.session_state[_K_CACHE] = cache
+        datos = dict(cache[3])
+        # Lo que dice la línea de contexto: los filtros de la franja.
+        ss = st.session_state
+        datos["turno"] = dv.columna(d, dv.FECHA_EMISION) is not None
+        datos["franja"] = [[r, list(ss.get(k) or [])] for r, k in (
+            ("Grupos", "ventas_graf_filtro_fam"), ("Subgrupos", "ventas_graf_filtro_sub"),
+            ("Canales", "ventas_graf_filtro_canal"), ("Servicios", "ventas_graf_filtro_serv"))]
+        _PIEZA(key=_K_PIEZA, data=datos, on_lineas_change=_al_pedir_lineas, width="stretch")
+        pedido = st.session_state.get(_K_PEDIDO)
+        if pedido and pedido.get("sello") == sello:
+            _s, t, idoc, datos0, _firma = cache
+            base = pd.Timestamp(datos0["base"])
+            dia = (t["fecha"].dt.normalize() - base).dt.days
+            v = t[(dia >= int(pedido["desde"])) & (dia <= int(pedido["hasta"]))]
+            ip = {p: i for i, p in enumerate(datos0["prods"])}
+            ig = {g: i for i, g in enumerate(datos0["grupos"])}
+            _PIEZA(key=_K_LINEAS, data={"parte": "lineas", "sello": sello,
+                                        "desde": int(pedido["desde"]), "hasta": int(pedido["hasta"]),
+                                        "lineas": lineas_de(v, idoc, ip, ig)}, width="stretch")

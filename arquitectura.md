@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-713 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+714 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (228)
+**CSS y estilos** (229)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -293,6 +293,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#706** — «Costo recetas base» es una pieza propia: la lista y la ficha de la elegida, con dónde se…
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 - **#713** — Compras › Producto es una PIEZA PROPIA (producto.js + .css), montada DOS veces —una en cada…
+- **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 
 **Layout y alturas** (100)
 
@@ -619,7 +620,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 
-**Streamlit** (168)
+**Streamlit** (169)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -789,6 +790,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#681** — «Se usa en» de Nuevo Costeo mira también porcionamientos y notas de salida, y lo dice un pop…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 - **#713** — Compras › Producto es una PIEZA PROPIA (producto.js + .css), montada DOS veces —una en cada…
+- **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 
 **Datos, R2 y DuckDB** (118)
 
@@ -54730,6 +54732,75 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        viendo lo de siempre: lo publica el dispatcher de Compras, no esta
        vista. (2026-10-23.)
 
+714. **Ventas › «Venta por Periodo» es una PIEZA PROPIA
+     (`ventas_periodo.js` + `.css`), con las cinco mejoras del boceto
+     aprobado.** El 2026-10-23, a pedido («Implementa Venta por Periodo
+     como pieza propia con las cinco mejoras»), sobre el boceto
+     https://claude.ai/artifact/Pb748JiyYM8Wapb49KReMi. Medido antes: cada
+     clic —el grano, un filtro, una barra, una subvista, una fila— era una
+     corrida de 2,0 a 4,6 s en la laptop con R2; ahora sólo la fecha vuelve
+     a Python.
+     · **Lo que hace es lo de antes, con las mismas cuentas**: la venta por
+       período partida por canal, los indicadores, el Resumen en sus nueve
+       subvistas (Venta, Costo, Pagos, Cuadre, Cortesías, Descuentos,
+       Propinas…), el Detalle de pedidos, meseros, servicios o comprobantes
+       con los platos al costado, los filtros de Grupo, Servicio, Canal y
+       Documento, el IGV (#667/#668) y lo vendido sin costo. Clientes,
+       comprobantes y ticket se cuentan como `definicion_venta` (`pax_por`,
+       `documentos_por`, `con_clientes`; #524, #591).
+     · **Las cinco mejoras**: los indicadores se parten en renglones en vez
+       de cortarse; siguen al período —o al tramo— elegido en el Detalle; un
+       TRAMO se elige arrastrando sobre las barras; el Detalle tiene buscador
+       (pedido, mesero, comprobante o plato: un pedido entra si alguno de
+       sus platos coincide); y el Excel baja la tabla que se ve
+       (`_xlsx.js`, el de Costo de Carta).
+     · **Lo que manda Python va SUMADO POR COMPROBANTE Y GRUPO**
+       (`armar_periodo`: `docs` y `unidades`), y no por línea: doce meses
+       de líneas son 6,5 MB; así, el mensaje entero es ~3,4 MB (22 días,
+       316 KB). Todo sale de ahí menos la tabla de PLATOS, que necesita las
+       líneas: viajan las del rango entero si cabe en `_DIAS_LINEAS` (92) y,
+       si no, las de los últimos `_DIAS_RECIENTES` (35). Un período más
+       viejo las pide con el trigger `lineas` y las recibe en un SEGUNDO
+       montaje chico (`parte: "lineas"`), para que el grande no se vuelva a
+       mandar (Streamlit lo da por guardado en el navegador). En la laptop,
+       los platos de un mes de hace un año tardan 4-5 s; la tabla de
+       pedidos sale al instante y la de platos dice «Trayendo…».
+     · **Las unidades van con 4 decimales**: redondear a céntimos por
+       comprobante y grupo corría el neto del mes S/ 2 (el boceto decía
+       223.262 donde la suma por línea da 223.259,73).
+     · **Normalizar es caro en pandas 3**: iterar una columna de texto
+       Arrow tardaba 19 s con doce meses; se pasa a `object` una vez
+       (`lineas_normalizadas`) y armar el mensaje son ~3 s. El fragment se
+       vuelve a correr al pedir líneas con el MISMO `d`: `_K_CACHE` guarda
+       el sello, lo normalizado y el mensaje con una firma del `d`, así que
+       esa corrida no vuelve a normalizar. Y la pieza grande, llamada otra
+       vez con la misma `sello`, no se redibuja (eran ~0,6 s por nada).
+     · **Dos montajes, un estado** (como #704 y #713): `window.__vtPeriodo`
+       guarda lo elegido, que sobrevive a que Streamlit vuelva a montar la
+       pieza; cambiar la fecha (otra `sello`) lo limpia.
+     · **La fecha es el botón de siempre, de Python**
+       (`selector_fecha_tarjeta`, en `vt_periodo_fecha`), puesto ENCIMA de
+       la pieza con `position: absolute` (`estilos/_80_cards.py`); la pieza
+       mide su ancho y le deja ese hueco en su fila de controles
+       (`--vp-fecha`), porque cambia con el atajo elegido.
+     · **Lo vigila `test_ventas_periodo.py`**: el contrato de posiciones
+       (lo que arma Python y lo que lee el `.js`), el rango largo y, en
+       Chromium, `calcular` del `.js` contra `definicion_venta` y los
+       ayudantes de `ventas_resumen.py` (ventas, clientes, comprobantes,
+       ticket, formas de pago, lo vendido sin costo) por día y por semana,
+       con el canje, la cuenta dividida, Rappi, la cortesía, el anulado y
+       el descuento. Probado en la app local con R2 a 1323×619 con
+       Streamlit 1.59 y 1.64: ningún clic pide una corrida, el Excel baja, y
+       con doce meses también.
+     · **Se fue**: la figura de Plotly con su `on_select` (#399), los tres
+       AgGrid y la pastilla «Detalle» con interruptores. Quedan sin uso
+       `renderizar_pedidos_venta` y `renderizar_grupos_venta` de
+       `tablas/ventas_resumen.py` (el módulo sigue: Control usa
+       `renderizar_dias_venta`), y las reglas `vt_resumen_*` de
+       `estilos/_80_cards.py`, que comparten grupos de selectores con
+       Meseros, Control y Platos. `_KEYS_WIDGET_RESUMEN` quedó vacía.
+       (2026-10-23.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54742,7 +54813,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#713**; la próxima toma el número siguiente.
+> última regla es la **#714**; la próxima toma el número siguiente.
 
 >
 

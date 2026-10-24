@@ -3428,6 +3428,21 @@ CSS = """    /* ================================================================
         padding-bottom: 5px !important;
     }
     .st-key-vt_resumen_chart_slot { gap: 0 !important; }
+    /* DESDE LA PIEZA PROPIA (2026-10-23, regla #714) la vista es una pieza
+       (`ventas_periodo.js`) y la fecha sigue siendo el botón de Python
+       (`selector_fecha_tarjeta`): va arriba a la derecha de la tarjeta, en
+       el renglón de los controles de la pieza, que le deja su lugar
+       (`--vp-fecha` en `ventas_periodo.css`). Las reglas `vt_resumen_*`
+       de los widgets de antes quedaron sin a quién estilar: comparten
+       grupos de selectores con Meseros, Control y Platos y se dejaron. */
+    .st-key-ajuste_graf_card_izq_ventas_resumen { position: relative; }
+    .st-key-vt_periodo_fecha {
+        position: absolute !important;
+        top: var(--vp-fecha-arriba, 25px);
+        right: var(--vp-fecha-derecha, 18px);
+        z-index: 3;
+        width: auto !important;
+    }
     /* LA TARJETA, MÁS APRETADA (2026-09-24, a pedido: «subir estos dos
        cuadrantes —el título con los KPI y el gráfico— y subir algo las
        tablas»). Medido a 1366: 16px de relleno arriba y 16 de gap entre

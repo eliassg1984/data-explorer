@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -188,6 +188,14 @@ la misma `sello`— y, en Chromium con Playwright, que la curva del
 navegador dé período por período lo mismo que `_serie`, en cada grano y
 cada ventana. Sin Playwright esa parte se salta. Ver `arquitectura.md`
 regla #713.
+
+`test_ventas_periodo.py` vigila Ventas › «Venta por Periodo» como pieza
+propia (`graficos/ventas_resumen.py::armar_periodo` y `ventas_periodo.js`):
+lo que recibe —la venta sumada por comprobante y grupo, las líneas del rango
+o de sus últimos días— y, en Chromium, que `calcular` del navegador dé las
+ventas, los clientes, los comprobantes, el ticket y las formas de pago de
+`definicion_venta` y de Python, con el canje, la cuenta dividida, Rappi, la
+cortesía y el anulado. Ver `arquitectura.md` regla #714.
 
 ## El asistente IA no adivina: consulta
 
@@ -1168,6 +1176,27 @@ corrida. Lo que muerde:
   una), y **el mapa abre sin sus bordes**: el interruptor «Franjas» los
   muestra con las fichas para elegir, redibujar y quitar. Apagado, un
   arrastre no crea nada — así nacían franjas sin querer.
+
+## «Venta por Periodo»: una pieza, y los platos se piden
+
+Desde el 2026-10-23 (regla #714) Ventas › «Venta por Periodo» es una pieza
+propia (`graficos/ventas_resumen.py` + `ventas_periodo.js` + `.css`): el
+grano, los filtros, las barras, el tramo arrastrado, el Resumen, el Detalle,
+el buscador y el Excel los resuelve el navegador; sólo la fecha —el botón de
+Python, puesto encima de la pieza— pide una corrida. Lo que muerde:
+
+- **Python manda la venta SUMADA POR COMPROBANTE Y GRUPO** (`armar_periodo`),
+  con 4 decimales: redondeada a céntimos corría el neto del mes. Las líneas
+  sólo las necesita la tabla de platos: viajan las del rango si es corto y,
+  si no, las de los últimos días; un período viejo las pide (trigger
+  `lineas`) y llegan en un segundo montaje chico, para que el mensaje
+  grande no se vuelva a mandar.
+- **Las cuentas están dos veces**: en el `.js` y en Python
+  (`definicion_venta` y los ayudantes de `ventas_resumen.py`). Si se toca
+  una, se toca la otra: `test_ventas_periodo.py` las compara en Chromium.
+- **Lo elegido vive en `window.__vtPeriodo`** (dos montajes, un estado, como
+  «Análisis por hora»), y la pieza llamada con la misma `sello` no se
+  redibuja.
 
 ## La compra resta las notas de crédito: `definicion_compra.py`
 
