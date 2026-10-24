@@ -3463,6 +3463,20 @@ CSS = """    /* ================================================================
         z-index: 3;
         width: auto !important;
     }
+    /* Meseros como pieza propia (#719): la fecha comparte cabecera. */
+    .st-key-vt_mes_pieza_wrap { position: relative; }
+    .st-key-vt_mes_fecha {
+        position: absolute !important;
+        top: 28px; right: 16px;
+        z-index: 3;
+        width: 110px !important;
+    }
+    .st-key-vt_mes_fecha button[data-testid="stPopoverButton"] {
+        width: 110px !important; min-width: 0 !important;
+        height: 28px !important; min-height: 28px !important;
+        padding: 2px 8px !important; border-radius: 6px !important;
+        font-size: 11px !important;
+    }
     /* LA TARJETA, MÁS APRETADA (2026-09-24, a pedido: «subir estos dos
        cuadrantes —el título con los KPI y el gráfico— y subir algo las
        tablas»). Medido a 1366: 16px de relleno arriba y 16 de gap entre

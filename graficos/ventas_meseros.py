@@ -1,6 +1,9 @@
 """
 graficos.ventas_meseros — vista «Meseros» del dashboard de Ventas: las
 PROPINAS por mesero, con lo que dan los reportes del POS y lo que no dan.
+Desde la regla #719 la UI vive en `ventas_meseros.js` y `.css`: lista y
+ficha en la primera tarjeta, planilla y mapa en la segunda. Sólo la fecha
+pide una corrida; el Excel para pagar sigue saliendo de `excel`.
 
 Nació el 2026-09-27 (regla #553), a pedido: «en primer fin obtener
 información de propinas, que si bien el sistema nativo las muestra, es sólo
@@ -52,20 +55,14 @@ from html import escape
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 import definicion_venta as dv
 import franja_fecha
-from cortes import MESES_ABR_ES
 from data import REPORTES, cargar_rango, sello_datos
-from tema import (ACENTO, AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_TEXTO,
-                  LAVANDA_BORDE, TEXTO_PRINCIPAL)
-from graficos import alturas
-from graficos.base import (_compras_layout, _resolver, preservar_widgets,
+from tema import AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_TEXTO
+from graficos.base import (_resolver, preservar_widgets,
                            selector_fecha_tarjeta, una_vez_por_corrida)
-from graficos.ventas_platos import _clic, _fila, _key
-from graficos.ventas_resumen import _con_alpha
 
 SIN_MESERO = "Sin mesero"
 SIN_TURNO = "Sin turno"
@@ -85,9 +82,8 @@ _GRUPO_PLATOS = "Alimentos"
 _N_PLATOS, _N_BEBIDAS = 8, 5
 _MESES_EVOLUCION = 12
 
-_KEYS_WIDGET_MES = ("vt_mes_turno", "vt_mes_reparto")
-"""Los controles de la vista, para que la recarga de fecha
-(`st.rerun(scope="app")`) no se los lleve (regla #373)."""
+_KEYS_WIDGET_MES = ()
+"""Sin widgets nativos de control: el estado vive en window.__vtMes (#719)."""
 
 _COLS_RESUMEN = ["dias", "mesas", "personas", "venta", "items", "propina",
                  "tarjeta", "sin_propina", "solo_efectivo"]
@@ -457,7 +453,7 @@ def hasta_la_misma_hora(P0, fin0, hora):
     return P0[P0["cobro"] <= pd.Timestamp(fin0) + hora]
 
 
-def excel(periodo, turno, modo, R, rep, soles, mesas, z, pagos):
+def excel(periodo, turno, modo, R, rep, soles, mesas, z, pagos, contexto=None):
     """El .xlsx para pagar las propinas: el Resumen de la tabla, la
     Planilla como está en pantalla, el detalle Por turno (propina propia y
     pozo de cada turno) y los Pagos con propina, como el reporte del POS."""
@@ -593,6 +589,15 @@ def excel(periodo, turno, modo, R, rep, soles, mesas, z, pagos):
     ws.autofilter(2, 0, 2 + len(pagos), 4)
     ws.freeze_panes(3, 0)
 
+    if contexto:
+        ws = wb.add_worksheet("Contexto")
+        _cabecera(ws, 0, ["Dato", "Valor"])
+        for i, (k, v) in enumerate(contexto.items(), start=1):
+            ws.write(i, 0, k)
+            ws.write(i, 1, v)
+        ws.set_column(0, 0, 23)
+        ws.set_column(1, 1, 85)
+        ws.freeze_panes(1, 0)
     wb.close()
     return buf.getvalue()
 
@@ -641,13 +646,6 @@ def _pedidos_tramo(ini, fin, filtrar_cb, firma):
 # LA VISTA
 # ===========================================================================
 
-def _leer_clic():
-    """El clic en la tabla elige el mesero del detalle (regla #399: se lee
-    ARRIBA, con un contador en la key)."""
-    f = _clic("vt_mes_tabla", _fila)
-    filas = st.session_state.get("_vt_mes_filas", [])
-    if f is not None and 0 <= f < len(filas):
-        st.session_state["vt_mes_foco"] = filas[f]
 
 
 def _rango(P):
@@ -732,447 +730,48 @@ def _html_cab(t, t0, anterior):
 # ANIDADO: la sección que lo llama (`seccion_perezosa`) es otro fragment,
 # y CLAUDE.md pide la envoltura para que dos clics juntados en una corrida no
 # lo corran dos veces (regla #456; el bug es de Streamlit < 1.62).
+from pathlib import Path
+
+_PIEZA = st.components.v2.component(
+    "ventas_meseros",
+    css=(Path(__file__).parent / "ventas_meseros.css").read_text(encoding="utf-8"),
+    js=(Path(__file__).parent / "_xlsx.js").read_text(encoding="utf-8")
+    + (Path(__file__).parent / "ventas_meseros.js").read_text(encoding="utf-8"),
+)
+_K_PIEZA_CACHE = "_vt_mes_pieza_cache"
+
+
 @una_vez_por_corrida
 @st.fragment
 def _ventas_meseros(d_pagos, filtrar_cb=None, firma=None):
-    """«Meseros»: las propinas por mesero, su planilla por día y el detalle
-    del mesero elegido. `d_pagos` son las filas POR PAGO con los chips de la
-    franja; `filtrar_cb` es lo que se le aplica a lo que la vista trae aparte
-    de R2 (el mes anterior, los 12 meses), y `firma` identifica esos filtros
-    para guardar lo traído en la sesión."""
-    ss = st.session_state
-    # ── 0) La fecha cambió: recargar el parquet del rango nuevo ──────────
-    # Igual que el Resumen y el Mix: el selector escribe la clave CANÓNICA
-    # del rango (`categoria=None`), y el `d_pagos` que llegó es del viejo.
-    if ss.pop("vt_mes_fecha_flag", False):
+    """Firma de la vista conservada (#357). Sólo la fecha pide Python (#719)."""
+    from graficos import ventas_meseros_datos as datos
+
+    if st.session_state.pop("vt_mes_fecha_flag", False):
         preservar_widgets(_KEYS_WIDGET_MES)
         st.rerun(scope="app")
-    _leer_clic()
-
-    # Lo preparado del rango se guarda en la sesión: un clic en la tabla o
-    # un cambio de turno re-corren la vista con el MISMO `d_pagos`.
-    ini, fin = _rango(None)
-    archivo = REPORTES.get("Ventas", {}).get("archivo", "ventas.parquet")
-    clave = (sello_datos(archivo), firma, ini, fin,
-             0 if d_pagos is None else len(d_pagos))
-    memo = ss.setdefault("_vt_mes_actual", {})
-    if clave not in memo:
-        memo.clear()
-        memo[clave] = preparar(d_pagos)
-    P_todo, items_todo = memo[clave]
-    ini, fin = _rango(P_todo)
-    ini0, fin0 = periodo_anterior(ini, fin)
-    periodo = franja_fecha.fmt_rango_es(ini, fin)
-    anterior = franja_fecha.fmt_rango_es(ini0, fin0)
-
-    with st.container(border=True, key="ajuste_graf_card_izq_ventas_meseros"):
-        cab = st.container(key="vt_mes_cabfila")
-        # columnas-internas: el turno, la comparación y la fecha
-        c1, c2, c3 = st.columns([1.3, 2.4, 1.1], vertical_alignment="center")
-        with c1:
-            turno = st.segmented_control(
-                "Turno", TURNOS, default=TURNOS[0], required=True,
-                key="vt_mes_turno", label_visibility="collapsed") or TURNOS[0]
-        with c3:
-            # «vt_mesf» y no «vt_mes»: el selector arma SUS keys con ese
-            # prefijo (`_escala`, `_fila`…), y no pueden chocar con las de la
-            # vista (CLAUDE.md, regla #527).
-            selector_fecha_tarjeta("vt_mesf", "vt_mes_fecha_flag",
-                                   categoria=None)
-        if P_todo is None or P_todo.empty:
-            with cab:
-                st.markdown('<div class="vt-cab"><span class="vt-cab-tit">'
-                            'Propinas por mesero</span></div>',
-                            unsafe_allow_html=True)
-            st.info("No hay ventas con mesero en este rango (o al parquet le "
-                    "faltan las columnas de pedido, fecha y venta).")
-            return
-
-        P = del_turno(P_todo, turno)
-        items = del_turno(items_todo, turno)
-        with st.spinner("Trayendo el mes anterior…"):
-            P0 = _pedidos_tramo(ini0, fin0, filtrar_cb, firma)
-        hora = hora_de_corte(P_todo, fin)
-        P0 = hasta_la_misma_hora(del_turno(P0, turno), fin0, hora)
-        R, R0 = resumen(P), resumen(P0)
-        t, t0 = _totales(R), _totales(R0)
-        with c2:
-            # Se canta sólo si el corte muerde: un día cerrado a las 23:50
-            # no cambia nada y el aviso sería ruido.
-            _h = (f", hasta las {int(hora.total_seconds() // 3600):02d}:"
-                  f"{int(hora.total_seconds() % 3600 // 60):02d} del último "
-                  "día" if hora is not None and hora < pd.Timedelta(hours=20)
-                  else "")
-            st.caption(f"contra {anterior}{_h}")
-        with cab:
-            st.markdown(_html_cab(t, t0, anterior), unsafe_allow_html=True)
-
-        M = R.drop(index=SIN_MESERO, errors="ignore")
-        M = M[M["mesas"] > 0].sort_values("propina", ascending=False)
-        if M.empty:
-            st.info("En este turno no hay mesas atendidas por meseros.")
-            return
-        rep = reparto(P)
-        _tabla(M, R0, t["propina"], rep, anterior)
-        foco = ss.get("vt_mes_foco")
-        if foco not in M.index:
-            foco = M.index[0]
-        st.caption(_nota_tabla(R, R0, M, anterior))
-
-    _tarjeta_planilla(P, d_pagos, turno, periodo, R, rep)
-    _tarjeta_foco(foco, P, items, M, t, turno, periodo, fin, filtrar_cb,
-                  firma)
-
-
-def _tabla(M, R0, total_prop, rep, anterior):
-    """La tabla del reporte del POS, con la comparación y el pozo. Un clic
-    elige el mesero del detalle."""
-    ss = st.session_state
-    mes_ant = anterior.split()[-2] if len(anterior.split()) > 2 else "antes"
-    t = pd.DataFrame({"Mesero": list(M.index)})
-    t["Días"] = M["dias"].to_numpy(dtype=float)
-    t["Mesas"] = M["mesas"].to_numpy(dtype=float)
-    t["Personas"] = M["personas"].to_numpy(dtype=float)
-    t["Venta"] = M["venta"].to_numpy(dtype=float)
-    t["Productos"] = M["items"].to_numpy(dtype=float)
-    t["Propina"] = M["propina"].to_numpy(dtype=float)
-    t["Parte"] = ((M["propina"] / total_prop).to_numpy(dtype=float)
-                  if total_prop else np.zeros(len(M)))
-
-    def _div(a, b):
-        return (a / b.where(b > 0)).fillna(0.0).to_numpy(dtype=float)
-    t["% de la venta"] = _div(M["propina"], M["venta"])
-    t["Por mesa"] = _div(M["propina"], M["mesas"])
-    t["Por persona"] = _div(M["propina"], M["personas"])
-    # SIN VACÍOS (regla #529): un NaN se pinta «None». Sin mesas con
-    # tarjeta va −1 («—»); un mesero sin propina el mes anterior va +∞
-    # («nuevo»), como la variación de Análisis de platos.
-    t["Sin propina"] = np.where(M["tarjeta"] > 0,
-                                M["sin_propina"] / M["tarjeta"].where(
-                                    M["tarjeta"] > 0, 1), -1.0)
-    ant = R0["propina"] if not R0.empty else pd.Series(dtype=float)
-    t[f"vs {mes_ant}"] = [
-        (p / ant[m] - 1) if ant.get(m, 0) > 0 else np.inf
-        for m, p in zip(M.index, M["propina"])]
-    t["Pozo común"] = [float(rep.loc[m, "pozo"]) if m in rep.index else 0.0
-                       for m in M.index]
-    ss["_vt_mes_filas"] = list(M.index)
-    col_var = f"vs {mes_ant}"
-
-    def _color_var(v):
-        if not np.isfinite(v):
-            return f"color:{GRIS_TEXTO}"
-        return f"color:{AJUSTE_POS_TEXTO if v >= 0 else AJUSTE_NEG_TEXTO}"
-
-    sty = (t.style
-           .format("{:,.0f}", subset=["Días", "Mesas", "Personas",
-                                      "Productos"])
-           .format("S/ {:,.0f}", subset=["Venta", "Propina", "Pozo común"])
-           .format("{:.0%}", subset=["Parte"])
-           .format("{:.1%}", subset=["% de la venta"])
-           .format("S/ {:,.2f}", subset=["Por mesa", "Por persona"])
-           .format(lambda v: "—" if v < 0 else f"{v:.0%}",
-                   subset=["Sin propina"])
-           .format(lambda v: "nuevo" if not np.isfinite(v)
-                   else f"{'+' if v >= 0 else '−'}{abs(v):.0%}",
-                   subset=[col_var])
-           .map(_color_var, subset=[col_var]))
-    cfg = {
-        "Mesero": st.column_config.TextColumn(pinned=True, width=130),
-        "Días": st.column_config.Column(width=48,
-                                        help="Días con al menos una mesa"),
-        "Mesas": st.column_config.Column(
-            width=56, help="Pedidos con venta, como el Analítico por mozo "
-                           "del POS"),
-        "Personas": st.column_config.Column(width=68, help="Adultos"),
-        "Productos": st.column_config.Column(
-            width=74, help="Unidades vendidas, bebidas incluidas, como la "
-                           "«Cantidad» del Analítico por mozo"),
-        "Parte": st.column_config.Column(
-            width=52, help="Parte de la propina del período"),
-        "Sin propina": st.column_config.Column(
-            width=80, help="Mesas pagadas con tarjeta que no dejaron "
-                           "propina"),
-        col_var: st.column_config.Column(
-            width=70, help=f"Propina contra {anterior}"),
-        "Pozo común": st.column_config.Column(
-            width=90, help="Lo que le tocaría si la propina de cada turno "
-                           "se repartiera en partes iguales entre los "
-                           "meseros de ese turno"),
-    }
-    st.dataframe(sty, key=_key("vt_mes_tabla"), on_select="rerun",
-                 selection_mode="single-row", hide_index=True, row_height=27,
-                 height=alturas.por_filas(len(t) + 1, px_fila=27, extra=3,
-                                          minimo=0, rol=alturas.VENTAS_PLATOS),
-                 column_config=cfg)
-
-
-def _nota_tabla(R, R0, M, anterior):
-    notas = ["Clic en un mesero para ver su detalle abajo."]
-    s = R.loc[SIN_MESERO] if SIN_MESERO in R.index else None
-    if s is not None and s["mesas"] > 0:
-        notas.append(f"Sin mesero (Rappi y para llevar): {int(s['mesas']):,} "
-                     f"pedidos, S/ {s['venta']:,.0f}, sin propina.")
-    if not R0.empty:
-        idos = [m for m in R0.index if m != SIN_MESERO and m not in M.index
-                and R0.loc[m, "propina"] > 0]
-        if idos:
-            partes = [f"{m} (S/ {R0.loc[m, 'propina']:,.0f})" for m in idos]
-            lista = (", ".join(partes[:-1]) + " y " + partes[-1]
-                     if len(partes) > 1 else partes[0])
-            notas.append(f"En {anterior} también atendieron {lista}: en este "
-                         "período no tienen mesas.")
-    notas.append("La propina sólo se registra en pagos con tarjeta.")
-    return " ".join(notas)
-
-
-def _tarjeta_planilla(P, d_pagos, turno, periodo, R, rep):
-    """La planilla mesero × día, propia o como pozo común, y el Excel."""
-    with st.container(border=True,
-                      key="ajuste_graf_card_izq_ventas_meseros_planilla"):
-        # columnas-internas: el título, el reparto y la descarga
-        c1, c2, c3 = st.columns([2.4, 1.3, 0.9], vertical_alignment="center")
-        with c2:
-            modo = st.segmented_control(
-                "Reparto", REPARTOS, default=REPARTOS[0], required=True,
-                key="vt_mes_reparto", label_visibility="collapsed",
-                help="**Pozo común**: la propina de cada turno repartida en "
-                     "partes iguales entre los meseros que atendieron mesas "
-                     "en ese turno.") or REPARTOS[0]
-        with c1:
-            st.markdown(
-                f'<div class="vt-mes-tit">Planilla de propinas · '
-                f'{escape(turno.lower())} · {escape(modo.lower())}</div>',
-                unsafe_allow_html=True)
-        soles, mesas = planilla(P, modo)
-        if soles.empty:
-            st.info("Sin propinas de meseros en el rango.")
-            return
-        z = pozo(P)
-        with c3:
-            st.download_button(
-                "Descargar Excel",
-                data=excel(periodo, turno, modo, R, rep, soles,
-                           mesas, z, del_turno(pagos_con_propina(d_pagos),
-                                               turno)),
-                file_name=f"propinas_{periodo.replace(' ', '_')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument."
-                     "spreadsheetml.sheet",
-                key="vt_mes_excel", width="stretch")
-
-        # «·» donde no atendió ese día: −1, que el Styler escribe así (un
-        # NaN se pintaría «None», regla #529).
-        dias = [pd.Timestamp(d) for d in soles.columns]
-        # «lun 1» dentro de un mes; con más de uno se repetiría (dos «lun 1»
-        # serían dos columnas con el mismo nombre), y va la fecha.
-        etq = [f"{_DIAS_ES[d.dayofweek]} {d.day}" for d in dias]
-        if len(set(etq)) < len(etq):
-            etq = [f"{d.day}/{d.month:02d}" for d in dias]
-        if len(set(etq)) < len(etq):
-            etq = [f"{d:%d/%m/%y}" for d in dias]
-        v = soles.where(mesas > 0, other=np.where(soles > 0, soles, -1.0))
-        tabla = pd.DataFrame(v.to_numpy(dtype=float), columns=etq)
-        tabla.insert(0, "Mesero", list(soles.index))
-        tabla["Total"] = soles.sum(axis=1).to_numpy(dtype=float)
-        if modo == REPARTOS[1]:
-            propia = z.groupby("mesero")["propia"].sum()
-            tabla["Diferencia"] = (tabla["Total"]
-                                   - propia.reindex(soles.index).fillna(0.0)
-                                   .to_numpy(dtype=float))
-        tot = {"Mesero": "Total del día"}
-        for e, d in zip(etq, soles.columns):
-            tot[e] = float(soles[d].sum())
-        tot["Total"] = float(soles.to_numpy().sum())
-        if "Diferencia" in tabla:
-            tot["Diferencia"] = 0.0
-        tabla = pd.concat([tabla, pd.DataFrame([tot])], ignore_index=True)
-        tope = float(soles.to_numpy().max()) or 1.0
-        n = len(soles.index)
-
-        def _calor(col):
-            if col.name not in etq:
-                return [""] * len(col)
-            return [f"background-color:{_con_alpha(ACENTO, 0.06 + 0.42 * x / tope)}"
-                    if (i < n and x > 0) else "" for i, x in enumerate(col)]
-
-        sty = (tabla.style
-               .format(lambda x: "·" if x < 0 else f"{x:,.0f}", subset=etq)
-               .format("S/ {:,.0f}", subset=["Total"])
-               .apply(_calor, axis=0))
-        if "Diferencia" in tabla:
-            sty = (sty.format(lambda x: f"{'+' if x >= 0 else '−'}"
-                                        f"S/ {abs(x):,.0f}",
-                              subset=["Diferencia"])
-                   .map(lambda x: f"color:{AJUSTE_POS_TEXTO if x > 0.5 else AJUSTE_NEG_TEXTO if x < -0.5 else GRIS_TEXTO}",
-                        subset=["Diferencia"]))
-        cfg = {"Mesero": st.column_config.TextColumn(pinned=True, width=130),
-               "Total": st.column_config.Column(width=78)}
-        for e in etq:
-            cfg[e] = st.column_config.Column(width=52)
-        st.dataframe(sty, key="vt_mes_planilla", hide_index=True,
-                     row_height=27, column_config=cfg,
-                     # + la barra de deslizar de costado, que tapaba la
-                     # fila «Total del día» (medido a 1366).
-                     height=alturas.por_filas(len(tabla) + 1, px_fila=27,
-                                              extra=3 + _BARRA_H, minimo=0,
-                                              rol=alturas.VENTAS_PLATOS))
-        st.caption(
-            ("Pozo común: la propina de cada turno se reparte en partes "
-             "iguales entre los meseros que atendieron al menos una mesa en "
-             "ese turno; «Diferencia» es lo que gana o pierde cada uno contra "
-             "su propina. Es una regla supuesta: si el restaurante reparte de "
-             "otra forma, se cambia. ")
-            if modo == REPARTOS[1] else
-            ("El día es el del comprobante, como el reporte de Propinas del "
-             "POS. «·»: no atendió mesas ese día. ")
-            + "El Excel trae además el detalle por turno y cada pago con "
-              "propina.")
-
-
-
-def _tarjeta_foco(foco, P, items, M, t, turno, periodo, fin, filtrar_cb,
-                  firma):
-    """El detalle del mesero elegido: cómo dejan propina sus mesas, sus
-    últimos 12 meses y lo que vendió."""
-    r = M.loc[foco]
-    with st.container(border=True,
-                      key="ajuste_graf_card_izq_ventas_meseros_foco"):
-        parte = r["propina"] / t["propina"] if t["propina"] else 0.0
-        pct = r["propina"] / r["venta"] if r["venta"] > 0 else 0.0
-        st.markdown(
-            f'<div class="vt-mes-tit"><b>{escape(foco)}</b> · '
-            f'{escape(periodo)}{" · " + escape(turno.lower()) if turno != TURNOS[0] else ""}'
-            f'</div><div class="vt-mes-sub">{int(r["mesas"]):,} mesas en '
-            f'{int(r["dias"])} {"día" if r["dias"] == 1 else "días"} y '
-            f'{r["personas"]:,.0f} personas. Dejaron S/ {r["propina"]:,.0f} de '
-            f'propina: el {parte:.0%} del total y el {pct:.1%} de su venta.'
-            f'</div>', unsafe_allow_html=True)
-        # columnas-internas: los dos gráficos y lo que vendió
-        g1, g2, g3 = st.columns([1.05, 1.15, 1.0], gap="medium")
-        with g1:
-            st.markdown('<div class="vt-mes-h3">Cómo dejan propina sus mesas'
-                        '</div>', unsafe_allow_html=True)
-            _grafico_tramos(foco, distribucion(P))
-        with g2:
-            st.markdown('<div class="vt-mes-h3">Propina por mes · últimos '
-                        '12 meses</div>', unsafe_allow_html=True)
-            ini12 = (pd.Timestamp(fin).to_period("M")
-                     - (_MESES_EVOLUCION - 1)).start_time.date()
-            with st.spinner("Trayendo los 12 meses…"):
+    with st.container(key="vt_mes_pieza_wrap"):
+        with st.container(key="vt_mes_fecha"):
+            selector_fecha_tarjeta("vt_mesf", "vt_mes_fecha_flag", categoria=None,
+                                   label="Elegir fechas")
+        ini, fin = _rango(None)
+        archivo = REPORTES.get("Ventas", {}).get("archivo", "ventas.parquet")
+        clave = (sello_datos(archivo), firma, ini, fin, id(d_pagos),
+                 None if d_pagos is None else d_pagos.shape)
+        cache = st.session_state.get(_K_PIEZA_CACHE)
+        if cache is None or cache[0] != clave:
+            with st.spinner("Preparando propinas, comparación y planillas…"):
+                P, items = preparar(d_pagos)
+                if P is None or P.empty:
+                    st.info("Sin ventas en este rango o sin las columnas necesarias. Elegí otras fechas.")
+                    return
+                ini, fin = _rango(P)
+                ini0, fin0 = periodo_anterior(ini, fin)
+                P0 = _pedidos_tramo(ini0, fin0, filtrar_cb, firma)
+                ini12 = (pd.Timestamp(fin).to_period("M") - 11).start_time.date()
                 P12 = _pedidos_tramo(ini12, fin, filtrar_cb, firma)
-            _grafico_meses(foco, del_turno(P12, turno), fin)
-        with g3:
-            st.markdown('<div class="vt-mes-h3">Lo que vendió</div>',
-                        unsafe_allow_html=True)
-            _vendido(foco, items)
-
-
-def _grafico_tramos(foco, D):
-    """Barras del mesero y una marca con el equipo, por tramo de %."""
-    if foco not in D.index or D.loc[foco].sum() == 0:
-        st.caption("Sin mesas pagadas con tarjeta en el rango.")
-        return
-    n = D.loc[foco]
-    eq = D.sum()
-    sh = n / n.sum()
-    she = eq / eq.sum() if eq.sum() else eq * 0.0
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        y=list(TRAMOS), x=sh.to_numpy() * 100, orientation="h", name=foco,
-        marker=dict(color=ACENTO), width=0.5,
-        text=[f"{v:.0%}" for v in sh], textposition="outside",
-        cliponaxis=False,
-        customdata=np.column_stack([n.to_numpy(), she.to_numpy() * 100]),
-        hovertemplate=("%{y}: %{x:.1f}% de sus mesas con tarjeta "
-                       "(%{customdata[0]:.0f})<br>Equipo: %{customdata[1]:.1f}%"
-                       "<extra></extra>")))
-    fig.add_trace(go.Scatter(
-        y=list(TRAMOS), x=she.to_numpy() * 100, mode="markers", name="Equipo",
-        marker=dict(symbol="line-ns", size=16,
-                    line=dict(width=2.5, color=TEXTO_PRINCIPAL)),
-        hovertemplate="Equipo: %{x:.1f}%<extra></extra>"))
-    _compras_layout(fig, alto=alturas.VENTAS_MESEROS_FIG)
-    tope = max(float(sh.max()), float(she.max())) * 100
-    fig.update_layout(
-        margin=dict(l=10, r=10, t=26, b=4), bargap=0.35,
-        legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0,
-                    font=dict(size=11)),
-        xaxis=dict(visible=False, range=[0, tope * 1.3], fixedrange=True),
-        # Categorías SIEMPRE: «0 %» y «10 %» parecen números y Plotly los
-        # ponía en un eje lineal, con dos barras en 0 y en 10 (#325).
-        yaxis=dict(type="category", autorange="reversed",
-                   showticklabels=True, showgrid=False, fixedrange=True,
-                   tickfont=dict(size=11, color=GRIS_TEXTO)))
-    st.plotly_chart(fig, key="vt_mes_tramos",
-                    config={"displaylogo": False, "displayModeBar": False})
-    st.caption(f"Sobre {int(n.sum()):,} mesas pagadas con tarjeta. La marca "
-               "negra es el equipo.")
-
-
-def _grafico_meses(foco, P12, fin):
-    """Columnas: la propina del mesero abajo, la del resto encima."""
-    prop, venta = mensual(P12)
-    if prop.empty:
-        st.caption("Sin datos de los meses anteriores.")
-        return
-    total = prop.sum(axis=1)
-    fo = prop[foco] if foco in prop.columns else total * 0.0
-    resto = total - fo
-    etq = [f"{MESES_ABR_ES[int(m[5:7]) - 1]}"
-           + ("*" if m == pd.Timestamp(fin).strftime("%Y-%m") else "")
-           for m in prop.index]
-    pct = [f"{(t / v):.1%}" if v else "—" for t, v in zip(total, venta)]
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=etq, y=fo.to_numpy(), name=foco, marker=dict(color=ACENTO),
-        # Una lista de pares y no `np.column_stack`: con el % como texto,
-        # numpy pasaría el total a texto y `:,.0f` no lo formatearía.
-        customdata=[[float(a), b] for a, b in zip(total, pct)],
-        hovertemplate=(f"{escape(foco)}: S/ %{{y:,.0f}}<br>Total del mes: "
-                       "S/ %{customdata[0]:,.0f} · %{customdata[1]} de la "
-                       "venta<extra></extra>")))
-    fig.add_trace(go.Bar(
-        x=etq, y=resto.to_numpy(), name="Resto del equipo",
-        marker=dict(color=LAVANDA_BORDE),
-        hovertemplate="Resto del equipo: S/ %{y:,.0f}<extra></extra>"))
-    _compras_layout(fig, alto=alturas.VENTAS_MESEROS_FIG)
-    fig.update_layout(
-        barmode="stack", bargap=0.35, margin=dict(l=10, r=10, t=26, b=4),
-        legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0,
-                    font=dict(size=11)),
-        # Categorías SIEMPRE: el eje de fecha rotula en inglés (#241) y un
-        # rótulo que parece número cambia el tipo del eje (#448).
-        xaxis=dict(type="category", fixedrange=True, tickfont=dict(size=10.5)),
-        yaxis=dict(fixedrange=True, showticklabels=True, tickformat="~s",
-                   tickfont=dict(size=10, color=GRIS_TEXTO)))
-    st.plotly_chart(fig, key="vt_mes_meses",
-                    config={"displaylogo": False, "displayModeBar": False})
-    st.caption("El asterisco marca el mes en curso, que va hasta hoy.")
-
-
-def _vendido(foco, items):
-    """Las unidades por grupo y dos tablas: platos y bebidas."""
-    platos, bebidas, grupos = vendido(items, foco)
-    if grupos.empty:
-        st.caption("Sin ventas en el rango.")
-        return
-    st.markdown(
-        '<div class="vt-mes-chips">' + "".join(
-            f'<span>{escape(g or "—")} · {u:,.0f} u</span>'
-            for g, u in grupos.items()) + "</div>", unsafe_allow_html=True)
-    for tabla, titulo, key in ((platos, "Platos", "vt_mes_platos"),
-                               (bebidas, "Bebidas", "vt_mes_bebidas")):
-        if tabla.empty:
-            continue
-        t = pd.DataFrame({titulo: tabla["prod"].to_numpy(),
-                          "Unid.": tabla["u"].to_numpy(dtype=float),
-                          "Venta": tabla["venta"].to_numpy(dtype=float)})
-        st.dataframe(
-            t.style.format("{:,.0f}", subset=["Unid."])
-             .format("S/ {:,.0f}", subset=["Venta"]),
-            key=key, hide_index=True, row_height=27,
-            height=alturas.por_filas(len(t) + 1, px_fila=27, extra=3,
-                                     minimo=0, rol=alturas.VENTAS_PLATOS),
-            column_config={titulo: st.column_config.TextColumn(width=170),
-                           "Unid.": st.column_config.Column(width=52),
-                           "Venta": st.column_config.Column(width=76)})
+                mensaje = datos.armar(d_pagos, P, items, P0, P12, (ini, fin), firma)
+                st.session_state[_K_PIEZA_CACHE] = (clave, mensaje)
+        else:
+            mensaje = cache[1]
+        _PIEZA(key="vt_mes_pieza", data=mensaje, width="stretch")

@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -225,6 +225,12 @@ las cinco ventanas contra las cuentas anteriores, cierres y compras del
 mismo día, dispersión, sobrecosto, moneda y unidades, precio ponderado y
 puente precio/cantidad. Chromium recorre el tramo, proveedores, prioridad,
 Excel, móvil y remontaje. Ver `arquitectura.md` regla #718.
+
+`test_meseros_pieza.py` vigila Ventas > Meseros como pieza propia: los tres
+turnos y los dos repartos contra resumen, pozo, planilla, tramos, mensual
+y vendido de Python; los seis Excel canónicos, con fórmulas y decimales;
+filtros que conservan el equipo del pozo, celdas, mapa, pedidos, móvil y
+remontaje en Chromium. Ver `arquitectura.md` regla #719.
 
 ## El asistente IA no adivina: consulta
 

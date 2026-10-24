@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-718 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+719 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (232)
 
@@ -1068,7 +1068,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (214)
+**Decisiones de diseño y UX** (215)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1284,6 +1284,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#709** — Producción es un reporte propio: las seis vistas de lo que se TRANSFORMA en casa salieron de…
 - **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
 - **#711** — Inicio › «Pendientes del período»: una fila por señal, con el salto a la vista que la…
+- **#719** — Ventas > Meseros es una PIEZA PROPIA con la ficha al lado de la lista y una planilla navegable
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -55064,6 +55065,61 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        Las funciones puras y de figuras anteriores siguen para sus tests;
        los AgGrid y sus contadores de clics dejaron de usarse. (2026-10-24.)
 
+719. **Ventas > Meseros es una PIEZA PROPIA con la ficha al lado de la
+     lista y una planilla navegable** (`ventas_meseros.js` y `.css`,
+     `ventas_meseros_datos.py`). A pedido de seguir enriqueciendo las
+     vistas lentas. Sólo la fecha compartida vuelve a Python; cambiar
+     turno, mesero, reparto, ordenar, buscar y abrir mesas es local. Se
+     conserva la firma de `_ventas_meseros` y su envoltura de fragment (#357,
+     #456). Las cuentas de la #553 siguen escritas en el módulo original.
+     · **Dos granos, sin alterar el pago**: `preparar` sigue contando un
+       ítem una vez y una propina por pago (#517). Personas, devoluciones,
+       canje, cuenta dividida y Sin mesero conservan las reglas anteriores.
+       Cada pedido lleva además documentos y descuento; este último sale
+       de los ítems deduplicados, nunca de sus repeticiones por pago.
+     · **El pozo usa siempre el equipo completo del rango y turno**:
+       partes iguales por día/turno entre quienes atendieron mesas, tal
+       como estaba. La búsqueda, el mesero en foco y los filtros de mesas
+       son análisis y NO recalculan ese reparto sobre un subconjunto.
+       No se redondea cada parte antes de sumarla: un tercio de céntimo
+       sigue siendo un tercio de céntimo en la cuenta y en el Excel.
+     · **El Excel para pagar conserva el generador de Python**, con sus
+       formatos numéricos, fórmulas, Resumen, Planilla, Por turno y Pagos con
+       propina. Se preparan las seis combinaciones de tres turnos por dos
+       repartos y viajan como archivos: descargarlos es local. Se agrega
+       Contexto con rango, turno, reparto, filtros y regla del pozo. El
+       Excel de mesas es aparte, con los criterios de la ficha. El reloj
+       de creación del XLSX no forma parte del sello de los datos.
+     · **Las mejoras**: comparación Almuerzo/Cena bajo cada mesero; lista
+       ordenable y buscable, con datos adicionales; botón del indicador de
+       tarjetas sin propina que abre esas mesas; ficha con sus pedidos,
+       comprobantes e ítems, propinas por tramos y comparación con/sin
+       descuento (venta pagada y antes del descuento), doce meses y lo que
+       vendió. La muestra de cada tramo se informa en número de mesas.
+     · **Planilla y mapa abren la ficha**: un clic en una celda muestra
+       esas mesas del día, mesero y turno; las bandas del equipo muestran
+       sus importes por turno. Día de semana x turno alterna propina por
+       mesa, % de venta e importe total, y abre los pedidos de ese corte.
+       La planilla queda completa y sus sumas se conservan al explorar.
+     · **Se mantienen la comparación y la hora de corte**: los mismos
+       días del mes anterior (o el tramo anterior si abarca varios meses),
+       hasta la hora del último día. Sin datos cargados del anterior se
+       informa la falta de base. Los doce meses se agrupan por columnas
+       nombradas, para pandas 2.2 y 3 (#481); importes e ítems a seis
+       decimales (#716). Otro sello limpia la selección de día/pedido y
+       conserva turno, reparto y mesero por su nombre.
+     · **Dos tarjetas de una pantalla**, con tablas que se deslizan por
+       dentro y overscroll contenido. La fecha conserva los 16 px del
+       layout nativo (#716), los estilos viven en el shadow root y los
+       números usan formateadores reutilizados. Las mesas largas se
+       dibujan en tandas de 150; ResizeObserver se desconecta al remontar.
+     · **Lo comprueba `test_meseros_pieza.py`**, sin red: resumen, pozo y
+       planilla contra Python en cada turno y reparto, distribución,
+       mensual y vendido; corte de madrugada, varios pagos, devoluciones,
+       descuento y el tercio de céntimo; los seis Excel con sus hojas y
+       fórmulas; UI con celdas, mapa, filtros, pedido, exportación, móvil
+       y remontaje. `_KEYS_WIDGET_MES` queda vacía. (2026-10-24.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -55076,7 +55132,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#718**; la próxima toma el número siguiente.
+> última regla es la **#719**; la próxima toma el número siguiente.
 
 >
 
