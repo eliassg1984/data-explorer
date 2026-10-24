@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-715 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+716 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (230)
 
@@ -399,7 +399,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 - **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
 
-**Plotly y figuras** (121)
+**Plotly y figuras** (122)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -522,6 +522,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#685** — A 9px un «6» se lee «5»: los paneles por familia de Ajuste › Evolución parecían rotular el…
 - **#692** — Ajuste › Evolución es una pieza propia: la serie en rojo y verde con «Explicar con», el panel…
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
+- **#716** — Compras › «Compras por período» es una PIEZA PROPIA (semanal.js + .css): sólo la fecha vuelve…
 
 **AgGrid y tablas** (95)
 
@@ -793,7 +794,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#713** — Compras › Producto es una PIEZA PROPIA (producto.js + .css), montada DOS veces —una en cada…
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 
-**Datos, R2 y DuckDB** (119)
+**Datos, R2 y DuckDB** (120)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -914,6 +915,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#707** — «Cambios en Recetas»: las recetas base, las recetas de plato y los precios de venta en una…
 - **#711** — Inicio › «Pendientes del período»: una fila por señal, con el salto a la vista que la…
 - **#715** — Compras › Proveedor es una PIEZA PROPIA (proveedor.js + .css), montada DOS veces —el ranking…
+- **#716** — Compras › «Compras por período» es una PIEZA PROPIA (semanal.js + .css): sólo la fecha vuelve…
 
 **SUNAT y SIRE** (73)
 
@@ -54865,6 +54867,83 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        un bloque de 2.870 líneas que comparten otras tarjetas.
        (2026-10-24.)
 
+716. **Compras › «Compras por período» es una PIEZA PROPIA (`semanal.js` +
+     `.css`): sólo la fecha vuelve a Python.** El 2026-10-24, a pedido
+     («Sigue con Compras por período como pieza propia, de frente, sin
+     boceto»). Medido antes: cada clic era una corrida de 1,3 a 2,5 s en la
+     laptop con R2; ahora, con 30 días, de 35 a 110 ms, y con 12 meses de
+     160 a 300 ms («Documento» son 2.455 barras).
+     · **Lo que hace es lo de antes, entero** (#440, #454, #470, #476,
+       #580, #620, #621, #623, #624, #628, #629): el grano, los cuatro
+       filtros de lista (Familia y Subfamilia del histórico, Proveedor y
+       Producto del rango por valor, con los «Top N»), Documento y Montos,
+       «Partir por» Subfamilia | Proveedor | Precio con lo resaltado, las
+       etiquetas de las barras con sus documentos y su variación (y
+       «parcial»), el calendario de los días con fines de semana y
+       feriados, el hover, y abajo «Resumen Total» (con sus columnas por
+       familia y la de notas de crédito), «Resumen del Período» y
+       «Detalle» con los documentos —la factura como se facturó y la nota
+       como un documento más— y las líneas del elegido. Pasaron también al
+       navegador los cuatro filtros y Documento/Montos, que eran widgets
+       de Python: cambiarlos también era una corrida.
+     · **Las cuentas siguen escritas en `semanal.py`** —las usan las
+       tarjetas «por período» de Movimientos y `test_graficos.py`— y el
+       `.js` las rehace con las mismas fórmulas. Lo vigila
+       `test_compras_periodo.py`: en Chromium, `calcular` contra
+       `_variaciones`, `_rotulo_periodo`, `partes_por_columna`,
+       `partes_por_precio` con `_precio_habitual_de`, `_familias_de`,
+       `detalle_con_notas` y `_plan_etiquetas`, en los cinco granos, con
+       Documento, Montos y los filtros.
+     · **Python manda las líneas del rango de TODOS los documentos**
+       (`armar_pieza`): «Documento» lo aplica el navegador. Por eso cada
+       línea lleva DOS precios habituales (`referencias`): el del
+       histórico entero y el de su mismo tipo, que es el que la vista de
+       antes usaba con «Facturas» o «Guías» porque filtraba el histórico
+       antes de calcularlo.
+     · **Neto, IGV y habitual con 6 decimales**: el neto es el total ÷ 1,18
+       y trae los decimales de la división. Con 2 por línea la semana del
+       5 al 11 oct sumaba S/ 38,077.09; con 4, 38,077.03; con 6, los
+       38,077.02 del parquet (38,077.0248).
+     · **El color de cada parte de «Partir por» sale del orden histórico
+       de todos los documentos y sin IGV**: antes cambiaba con «Documento»
+       y «Montos», que no son la entidad (#620: el color sigue a la
+       subfamilia o al proveedor).
+     · **La tarjeta entra en una pantalla**: medía 663 px a 1323×619 (la
+       fila de filtros se partía en dos y la tabla quedaba cortada); ahora
+       575, con las tablas que se deslizan por dentro (#382). La fecha es
+       el botón de siempre, `selector_fecha_tarjeta`, puesto encima de la
+       pieza (`cp_sem_fecha`, `estilos/_80_cards.py`); su contenedor flota
+       pero sigue en el flujo y cobra los 16 px del gap de la tarjeta, que
+       la pieza descuenta.
+     · **Una tabla larga se dibuja de a 150 filas** y suma las siguientes
+       al acercarse al final: «Documento» con doce meses son 2.500 filas y
+       dibujarlas todas era 1 s por clic. Y los números con un
+       `Intl.NumberFormat` por cantidad de decimales: `toLocaleString`
+       arma uno en cada llamada (0,8 s en esa misma tabla).
+     · **Un clic fuera del menú de un filtro, o Escape, lo cierra desde
+       cualquier parte de la página**: al marcar una casilla la pieza se
+       redibuja y el foco ya no está adentro. Un control de la pieza lo
+       cierra en su propio clic; si lo cerrara el `pointerdown`, el
+       redibujo borraría el botón antes de que el clic llegue.
+     · **Dos clases no pueden llamarse igual en la misma raíz** (otra vez,
+       como `.cab` en la #715): `.gr` era el texto gris y el contenedor del
+       gráfico; el contenedor es `.graf`.
+     · **Mejoras chicas**: un clic en una fila de «Resumen Total» abre su
+       Detalle, como el clic en la barra; el Excel baja la tabla que se ve
+       (las dos del Detalle en dos hojas); en «Documento» el rótulo de un
+       día que caería encima del anterior se saltea (pasaba igual en la
+       vista de antes), y en «Día» con muchos días el eje dice «24 jul» y
+       no «2026-07-24».
+     · **Se fueron** la figura de Plotly con su contador de clics (#399),
+       los AgGrid de la zona de abajo y el relevo de clics por
+       `session_state` (#580). Quedan sin uso `renderizar_documentos_semanal`
+       y `renderizar_proveedores_periodo` de `tablas/compras_semanal.py`
+       (el módulo sigue: lo usa Movimientos) y las reglas `cp_sem_*` de
+       `_css_proveedor.py`. `_KEYS_WIDGET` quedó vacía. Probado en la app
+       local con R2 a 1323×619 con Streamlit 1.59 y 1.64: ningún clic pide
+       una corrida, el Excel baja y la fecha recalcula conservando lo
+       elegido. (2026-10-24.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54877,7 +54956,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#715**; la próxima toma el número siguiente.
+> última regla es la **#716**; la próxima toma el número siguiente.
 
 >
 

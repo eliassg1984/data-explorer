@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -204,6 +204,15 @@ Chromium, que el navegador haga las cuentas de la vista de antes, escritas
 en pandas: el ranking con «nuevo», «vuelve» y «Otros», las cifras del
 proveedor, la curva en cada grano, ventana y medida, el Desglose y la
 historia de los documentos. Ver `arquitectura.md` regla #715.
+
+`test_compras_periodo.py` vigila Compras › «Compras por período» como pieza
+propia (`graficos/compras/semanal.py` y `semanal.js`): lo que recibe —las
+líneas del rango de todos los documentos, con sus dos precios habituales, y
+las notas de crédito— y, en Chromium, que `calcular` dé lo mismo que las
+cuentas que siguen en `semanal.py` (variación, rótulos, «Partir por» con
+Precio, familias, el Detalle con las notas, el plan de etiquetas) en cada
+grano, con Documento, Montos y los filtros. Ver `arquitectura.md` regla
+#716.
 
 ## El asistente IA no adivina: consulta
 
@@ -586,8 +595,10 @@ elegido es «todos», unión dentro de un filtro, intersección entre filtros,
 el «Todas las…» va de `placeholder`. Qué queda elegido cuando la lista
 cambia (y un multiselect revienta con un valor fuera de `options`) lo
 decide `graficos/base.py::seleccion_multiple`, antes de dibujar el widget —
-no se reescribe a mano. Lo usan «Compras por período» y las cuatro
-tarjetas «por período» de Movimientos. El CSS del multiselect tiene DOS
+no se reescribe a mano. Lo usan las cuatro tarjetas «por período» de
+Movimientos; «Compras por período», desde que es una pieza propia (regla
+#716), aplica la MISMA regla en el navegador (`semanal.js`, `conservar`),
+con sus filtros como menús de casillas. El CSS del multiselect tiene DOS
 formas (baseweb en la 1.59 local, `react-aria` + `stMultiSelectTagsContainer`
 en la 1.64 de Cloud): van las dos. `segmented_control` para elegir UNA
 forma de ver, `toggle` para sí/no. Reglas #623 y #625.

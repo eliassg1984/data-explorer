@@ -3443,6 +3443,17 @@ CSS = """    /* ================================================================
         z-index: 3;
         width: auto !important;
     }
+    /* Lo mismo en Compras › «Compras por período» desde que es una pieza
+       propia (2026-10-24, regla #716): la fecha va arriba a la derecha, en
+       el renglón del grano y los filtros (`--cp-fecha` en `semanal.css`). */
+    .st-key-ajuste_graf_card_izq_sem { position: relative; }
+    .st-key-cp_sem_fecha {
+        position: absolute !important;
+        top: var(--cp-fecha-arriba, 17px);
+        right: var(--cp-fecha-derecha, 18px);
+        z-index: 3;
+        width: auto !important;
+    }
     /* LA TARJETA, MÁS APRETADA (2026-09-24, a pedido: «subir estos dos
        cuadrantes —el título con los KPI y el gráfico— y subir algo las
        tablas»). Medido a 1366: 16px de relleno arriba y 16 de gap entre

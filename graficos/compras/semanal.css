@@ -1,0 +1,134 @@
+/* Compras › «Compras por período» (regla #716).
+   Vive en el shadow root del componente (graficos/compras/semanal.py):
+   ninguna regla de acá sale de la pieza, y ninguna de estilos/ entra. Los
+   colores son las variables de estilos/_00_base.py, que SÍ cruzan el shadow
+   root. Ningún selector :has, por la regla #469.
+
+   La pieza mide una pantalla (`--alto-util`) menos el padding de su
+   tarjeta (16 + 16) y el gap que cobra el contenedor de la fecha, que
+   flota pero sigue en el flujo (16, medido): la tarjeta entera entra en la pantalla y sólo las TABLAS se
+   deslizan por dentro (regla #382). El botón de la fecha es de Python y
+   va encima, arriba a la derecha (`estilos/_80_cards.py`); la cabecera le
+   deja su ancho (`--cp-fecha`, que mide el JS). */
+
+.cpp { --cp-fecha: 210px; position: relative; display: flex; flex-direction: column; gap: 6px;
+  height: calc(var(--alto-util, 600px) - 48px); min-height: 480px; color: var(--text-primary); font-size: 12px; line-height: 1.4;
+  min-width: 0; box-sizing: border-box; }
+.cpp * { box-sizing: border-box; }
+.cpp button, .cpp input { font: inherit; color: inherit; }
+.cpp button:focus-visible, .cpp input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.r { text-align: right; }
+.b { font-weight: 700; }
+.gr { color: var(--text-secondary); fill: var(--text-secondary); }
+.it { font-style: italic; }
+.sube { color: var(--danger); fill: var(--danger); }
+.baja { color: var(--success); fill: var(--success); }
+.cero { color: var(--text-secondary); fill: var(--text-secondary); }
+.tramo { color: var(--accent-hover); fill: var(--accent-hover); }
+.aviso { color: var(--warning-text); }
+.vacio { padding: 10px 4px; color: var(--text-secondary); }
+.vacio.grande { padding: 40px 8px; text-align: center; }
+
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; flex: 0 0 auto; }
+.seg button { border: 0; border-left: 1px solid var(--border); background: var(--bg-card); padding: 4px 11px; font-size: 12.5px; cursor: pointer;
+  white-space: nowrap; color: var(--text-secondary); }
+.seg button:first-child { border-left: 0; }
+.seg button.on { background: var(--accent-tint); color: var(--accent-deep); font-weight: 600; }
+.seg.chico button { padding: 2px 9px; font-size: 12px; }
+.seg.off { opacity: 0.45; }
+.seg button:disabled { cursor: default; }
+
+/* ── La cabecera: grano, filtros y el hueco de la fecha ─────────────── */
+.cab { display: flex; align-items: center; gap: 8px; min-height: 32px; padding-right: var(--cp-fecha); flex: 0 0 auto; }
+.lugar-fecha { display: none; }
+.fils { display: flex; gap: 6px; flex: 1; min-width: 0; }
+.ms { position: relative; flex: 1 1 0; min-width: 0; max-width: 220px; }
+.ms-b { width: 100%; height: 30px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); font-size: 12px; cursor: pointer;
+  color: var(--text-secondary) !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-b.on { color: var(--accent-deep) !important; border-color: var(--border-lavender); background: var(--accent-tint); font-weight: 600; }
+.ms-b i { font-style: normal; color: var(--text-muted); }
+.ms-l { position: absolute; left: 0; top: 34px; width: 300px; max-width: 80vw; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: var(--shadow-md); padding: 6px; z-index: 6; display: flex; flex-direction: column; gap: 4px; }
+.ms-q { height: 28px; border: 1px solid var(--border); border-radius: 7px; padding: 0 8px; font-size: 12px; background: var(--bg-primary); }
+.ms-o { max-height: 260px; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
+.ms-o label { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+.ms-o label:hover { background: var(--bg-hover); }
+.ms-o .mas { margin: 4px; color: var(--text-secondary); font-size: 11px; }
+.ms-x { border: 0; background: transparent; color: var(--accent-deep) !important; font-size: 11.5px; cursor: pointer; text-align: left; padding: 4px; }
+
+.docrow { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; min-height: 26px; }
+.docrow .rot { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); font-weight: 600; }
+.docrow .rot.dos { margin-left: 12px; }
+.docrow .nota { margin-left: 10px; font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* ── El renglón del título y el gráfico ─────────────────────────────── */
+.tit { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; min-height: 28px; }
+.tit .t { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tit .t small { margin-left: 6px; font-size: 11px; font-weight: 400; color: var(--text-secondary); }
+.res { display: flex; gap: 5px; min-width: 0; overflow-x: auto; overscroll-behavior: contain; }
+.pill { border: 1px solid var(--border); border-radius: 14px; padding: 2px 10px; font-size: 12px; cursor: pointer; white-space: nowrap;
+  background: var(--bg-card); color: var(--text-secondary); }
+.pill:hover { background: var(--accent-tint); }
+.pill.on { border-color: var(--c, var(--accent)); background: var(--c, var(--accent)); color: var(--bg-card) !important; font-weight: 600; }
+
+.graf { position: relative; flex: 0 0 auto; }
+.graf svg { display: block; overflow: visible; }
+.graf .gl { stroke: var(--line-soft); stroke-width: 1; }
+.graf .ty { font-size: 11px; fill: var(--text-secondary); }
+.graf .tx { font-size: 11.5px; fill: var(--text-secondary); }
+.graf .tx.sub { font-size: 10.5px; }
+.graf .bar.lisa { fill: var(--accent); }
+.graf .bar.mas { fill: var(--danger); }
+.graf .bar.res { fill: var(--accent-hover); }
+.graf .bar.resto { fill: var(--border-lavender); }
+.graf .bar.dim { fill-opacity: 0.2; }
+.graf .etq { font-size: 10px; fill: var(--text-primary); }
+.graf .b-finde { fill: var(--text-secondary); fill-opacity: 0.07; }
+.graf .b-fer { fill: var(--warning-text); fill-opacity: 0.1; }
+.graf .t-fer { font-size: 10px; fill: var(--warning-text); }
+.graf .sep { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+.graf .hit { fill: transparent; cursor: pointer; pointer-events: all; }
+.graf .hit:hover { fill: var(--accent); fill-opacity: 0.06; }
+.graf .tip { position: absolute; top: 4px; width: 300px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: var(--shadow-md); padding: 6px 9px; font-size: 11.5px; line-height: 1.5; pointer-events: none; z-index: 3; }
+.aviso1 { margin: 0; font-size: 11px; color: var(--text-secondary); }
+
+/* ── La fila del modo y la zona de abajo ────────────────────────────── */
+.pie { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; min-height: 30px; }
+.pie .cap { flex: 1; min-width: 0; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pie .cap b { color: var(--text-primary); }
+.excel { height: 26px; padding: 0 10px; border: 1px solid var(--border-lavender); border-radius: 7px; background: var(--bg-card);
+  color: var(--accent-deep) !important; font-size: 11.5px; cursor: pointer; white-space: nowrap; }
+.excel:hover { background: var(--accent-tint); }
+.zona { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.det { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; min-height: 0; flex: 1; }
+.tb { display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; max-height: 100%; }
+.tf { display: grid; grid-template-columns: var(--cols); gap: 8px; align-items: center; min-height: 26px; padding: 0 8px;
+  border-bottom: 1px solid var(--line-soft); white-space: nowrap; font-size: 12.5px; }
+.tf > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.th { flex: 0 0 auto; background: var(--bg-primary); border-radius: 6px 6px 0 0; border-bottom: 1px solid var(--border); min-height: 30px; }
+.th button { border: 0; background: transparent; padding: 0; font-size: 12px; font-weight: 500; color: var(--accent-deep); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.th button.r { text-align: right; }
+.tl { overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 0 1 auto; }
+.tl .tf.cl { cursor: pointer; }
+.tl .tf.cl:hover { background: var(--bg-hover); }
+.tl .tf.sel { background: var(--accent-tint); }
+.tl .tf.sel .nm { color: var(--accent-deep); font-weight: 600; }
+.tt { flex: 0 0 auto; background: var(--accent-light); color: var(--accent-deep); font-weight: 700; border-radius: 0 0 6px 6px; min-height: 28px; }
+.tf .nc { color: var(--danger-text); }
+
+/* Angosto (columnas apiladas): la pieza mide su contenido y las tablas se
+   deslizan de lado con su ancho de escritorio. */
+@media (max-width: 768px) {
+  .cpp { height: auto; min-height: 0; }
+  .cab { flex-wrap: wrap; padding-right: 0; padding-top: 38px; }
+  .fils { flex-wrap: wrap; flex-basis: 100%; }
+  .ms { max-width: none; flex-basis: 45%; }
+  .docrow, .tit, .pie { flex-wrap: wrap; }
+  .zona { overflow-x: auto; overscroll-behavior: contain; }
+  .tb { min-width: 640px; }
+  .tl { max-height: 320px; }
+  .det { grid-template-columns: 1fr; }
+}
