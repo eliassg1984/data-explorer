@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-720 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+721 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (232)
+**CSS y estilos** (233)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -297,6 +297,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#715** — Compras › Proveedor es una PIEZA PROPIA (proveedor.js + .css), montada DOS veces —el ranking…
 - **#717** — Ventas › Comparativo es una PIEZA PROPIA, con las cinco mejoras acordadas
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
+- **#721** — Stock por Producto es una PIEZA PROPIA con ficha de producto y escenario de cobertura
 
 **Layout y alturas** (100)
 
@@ -798,7 +799,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 
-**Datos, R2 y DuckDB** (121)
+**Datos, R2 y DuckDB** (122)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -921,6 +922,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#715** — Compras › Proveedor es una PIEZA PROPIA (proveedor.js + .css), montada DOS veces —el ranking…
 - **#716** — Compras › «Compras por período» es una PIEZA PROPIA (semanal.js + .css): sólo la fecha vuelve…
 - **#720** — Ajuste > Diferencias del cierre es una PIEZA PROPIA con comparación entre sesiones
+- **#721** — Stock por Producto es una PIEZA PROPIA con ficha de producto y escenario de cobertura
 
 **SUNAT y SIRE** (73)
 
@@ -55190,6 +55192,97 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        filtros independientes, búsqueda, exportación, móvil y remontaje.
        Las firmas y reexportaciones antiguas siguen disponibles (#357).
        (2026-10-24.)
+
+721. **Stock por Producto es una PIEZA PROPIA con ficha de producto y
+     escenario de cobertura** (`graficos/inventario_productos.js` y `.css`,
+     `inventario_productos_datos.py` y `inventario_productos_pieza.py`). A
+     pedido de continuar convirtiendo las vistas pendientes, con mejoras.
+     La firma de `seccion_productos` se conserva (#357); las cuentas puras y
+     la grilla anterior siguen en `inventario_productos.py` como referencia.
+     La perspectiva Por área y familia conserva su implementación.
+     · **El inventario sigue siendo sólo el ACTIVO** (#598): el dispatcher
+       separa áreas/productos inactivos, no compartidos y servicios ANTES de
+       entregar los datos. El mensaje conserva cada fila producto × área,
+       sus códigos con ceros, cantidades, precio y valores sin redondearlos,
+       el historial del kardex y el consumo. Arrow se convierte a object
+       antes de crear diccionarios (#714); la caché y su sello dependen del
+       contenido del DataFrame, historia, consumo y límites de fechas.
+     · **Mismos filtros y mismas cuentas** (#466/#600/#636/#637): Área,
+       Familia y Subfamilia múltiples, las seis áreas habituales al abrir,
+       subfamilias dentro de las familias, búsqueda sin tildes por todas sus
+       palabras en código/nombre, sin stock, unidad de salida, chips de
+       estado y orden jerárquico inicial familia/subfamilia/producto. Las
+       áreas siguen debajo de su producto al ordenar y buscar. El orden de
+       las cuentas reproduce Python; los controles de cabecera aplican el
+       comparador de la grilla anterior, con Shift para varios campos.
+     · **ABC antes de buscar**: sólo valor positivo del recorte; cortes del
+       acumulado ANTERIOR de cada producto, 80/95. Los negativos no tienen
+       clase. El consumo sigue siendo DEL RESTAURANTE ENTERO en 90 días, sin
+       transferencias, requerimientos ni ajustes. Filtrar Almacén Central no
+       transforma ese consumo en las entregas del Almacén. La prioridad del
+       estado sigue siendo negativo, sin consumo, más de 60 días. Sin
+       consumo cargado no se muestran ABC ni cobertura; tampoco se conserva
+       un chip oculto que deje vacío el listado.
+     · **La curva conserva los que se vaciaron**: sin búsqueda ni chip,
+       suma el recorte completo, también los productos hoy en cero. Con
+       búsqueda/chip, sólo los visibles. Cada foto vale stock × precio del
+       área del kardex; el stock actual de la tabla usa el maestro, como
+       antes. Los precios entre áreas distintos conservan el ponderado
+       valor/cantidad; con uno solo se toma el primero no nulo, también en
+       cero. Nunca se suman cantidades de distintos productos en un TOTAL.
+     · **Unidad de salida como Python** (#598): entero en unidad kardex y
+       resto por factor, con acarreo al llegar a una unidad completa. El
+       redondeo usa la fracción IEEE exacta y empate al par; Math.round no
+       basta para la paridad en los medios. La columna sigue ordenando por
+       cantidad numérica. Un código con unidades incompatibles se señala y
+       queda sin cobertura ni suma de cantidades para exportar.
+     · **Una nueva fecha/hora es la única consulta de la pieza** (#601).
+       El disparador `foto` pide `data.stock_al`; Python cruza con la función
+       original `stock_a_la_fecha` y devuelve una instancia pequeña, oculta
+       y sin alto. El mensaje grande se reutiliza. Se trae también la foto
+       más reciente del kardex: Comparar con hoy es local y usa la misma
+       regla de precio. El navegador guarda las últimas doce consultas.
+       Las otras interacciones siguen en el navegador.
+     · **Un fallo no es stock cero**: mientras llega la foto no se presenta
+       el stock actual como histórico ni se permite exportar ese resultado.
+       Si falla se informa y se ofrece reintentar. Si sólo falta Hoy, se
+       conserva la foto histórica y se desactiva la comparación. Una fila
+       ausente DENTRO de una foto disponible mantiene la regla anterior:
+       no tuvo movimientos hasta ese momento y vale cero. Las respuestas de
+       otro sello se descartan; cambiar los datos obliga a pedir su foto.
+     · **Mejoras**: filtro Áreas negativas (incluye productos cuyo total
+       positivo esconde un área negativa, separado del chip Negativos del
+       total); ficha con distribución del stock por área y sus diferencias
+       de cantidad/valor entre fechas; evolución completa por producto o
+       área; escenario de cobertura en días al consumo promedio observado,
+       con su equivalente en cantidad y valor de la diferencia. Es un
+       cálculo propio, con áreas elegidas y consumo del restaurante; no
+       incorpora plazos ni cambios de demanda. No se calcula sin consumo
+       positivo, con stock negativo o con unidades incompatibles.
+     · **Excel del listado y de la ficha**, con productos y áreas en hojas
+       separadas, historia, escenario cuando corresponde y Contexto con
+       filtros, fecha/hora, fuente de Hoy, unidad y alcance. Todas las filas,
+       aunque la pantalla se dibuje en tandas de 150 (#716). Cantidades y
+       valores numéricos con seis decimales (#720); sin inventar ceros donde
+       falta un dato. Se conservan los filtros y la ficha al remontar.
+     · **El salto desde la otra perspectiva sigue funcionando** (#638):
+       `_ir_a_productos` mantiene las claves y agrega un contador de salto;
+       la pieza recibe esa semilla y aplica el recorte/chip aunque el dato
+       sea el mismo. Un remontaje ajeno no sobreescribe el estado local.
+       Los manejadores de documento se cancelan al sustituir el montaje.
+     · **Dos tarjetas**, una para listado y otra para ficha; la primera
+       descuenta la franja nativa de perspectivas. Sólo las tablas tienen
+       scroll, con overscroll contenido. Formateadores reutilizados y mini
+       curvas sin círculos invisibles, para evitar miles de nodos por clic.
+       CSS en el shadow root, sin colores fijos; en móvil los filtros se
+       abren en un panel al pie y las tablas se deslizan por dentro.
+     · **Lo vigila `test_stock_producto_pieza.py`**, sin red: cuentas contra
+       `armar_listado`, `por_estado` y `analisis_stock`, todos los filtros y
+       chips; serie completa/visible, consumo global, precios por área,
+       metadatos nulos, ceros y negativos, unidades y redondeo; fotos, fallo
+       de consulta y sello, UI, escenario, Excel, salto, remontaje y móvil.
+       Probado en la app local con R2 y Streamlit 1.64: las cuentas coinciden
+       con Python y la foto por fecha/hora llega a la pieza. (2026-10-24.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

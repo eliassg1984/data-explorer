@@ -3,6 +3,12 @@ graficos.inventario_productos — la sección «Productos» de Inventario
 Valorizado: el listado ENTERO de productos como tabla, con las áreas de cada
 uno desplegables en su fila.
 
+Desde la regla #721 la UI vive en inventario_productos.js y .css, montada
+por inventario_productos_pieza.py. Sus filtros y análisis son locales; sólo
+una nueva foto del kardex pide Python. Las cuentas puras y la implementación
+anterior se conservan como referencia de los tests. Lo que sigue describe
+aquella grilla, hoy usada también como modelo por las tablas de Ajuste.
+
 Reemplaza a «Buscar producto» (2026-09-17, a pedido). Aquélla pedía elegir
 UN producto o UN grupo antes de mostrar nada, y contestaba con una barra por
 producto. El pedido fue una tabla con el listado entero, las columnas en el
@@ -1350,7 +1356,7 @@ def filtro_en_panel(col, nombre, etiqueta, dibujar, prefijo="inv_prod"):
 _filtro = filtro_en_panel
 
 
-def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
+def _seccion_productos_legacy(d, *, col_cod, col_prod, col_fam, col_subfam,
                       col_area, col_unidad, col_punit, col_cant, col_val,
                       col_factor=None, col_usal=None, col_cod_area=None):
     """La tarjeta entera: filtros en una fila, título y tabla debajo.
@@ -1625,3 +1631,14 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
                                   if (al and comparar) else None),
                        analisis=analisis, meses=meses,
                        n_filas=FILAS_LISTADO_BANDA if analisis else FILAS_LISTADO)
+
+
+def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
+                      col_area, col_unidad, col_punit, col_cant, col_val,
+                      col_factor=None, col_usal=None, col_cod_area=None):
+    """Firma conservada (#357). UI local y foto del kardex a demanda (#721)."""
+    from .inventario_productos_pieza import renderizar
+    renderizar(d, dict(cod=col_cod, prod=col_prod, fam=col_fam, subfam=col_subfam,
+                      area=col_area, unidad=col_unidad, punit=col_punit,
+                      cant=col_cant, val=col_val, factor=col_factor,
+                      usal=col_usal, cod_area=col_cod_area))

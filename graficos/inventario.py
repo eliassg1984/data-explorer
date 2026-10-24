@@ -955,6 +955,7 @@ def _ir_a_productos(areas, familias, subfamilias, chip):
     st.session_state[_K_A_FECHA] = False
     st.session_state[_K_IR] = True
     st.session_state[_K_SALTAR] = True
+    st.session_state["_inv_stock_salto"] = st.session_state.get("_inv_stock_salto", 0) + 1
     # Las dos son perspectivas de «Stock» desde la regla #712: el salto es
     # cambiar a la de productos (y llevar la página al tope de la vista).
     st.session_state[K_PERSP_STOCK] = PERSPECTIVAS_STOCK[0][0]
@@ -1380,15 +1381,13 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
         # el nombre del producto no entraba. El panel de "productos
         # relacionados" no tiene reemplazo a propósito: con el listado
         # entero y el filtro de subfamilia, los relacionados son la tabla.
-        with st.container(border=True,
-                          key="ajuste_graf_card_izq_inv_productos"):
-            seccion_productos(
-                d, col_cod=col_cod, col_prod=col_prod, col_fam=col_fam,
-                col_subfam=col_subfam, col_area=col_area,
-                col_unidad=col_unidad, col_punit=col_punit,
-                col_cant=col_cant, col_val=col_val,
-                col_factor=col_factor, col_usal=col_usal,
-                col_cod_area=col_cod_area)
+        seccion_productos(
+            d, col_cod=col_cod, col_prod=col_prod, col_fam=col_fam,
+            col_subfam=col_subfam, col_area=col_area,
+            col_unidad=col_unidad, col_punit=col_punit,
+            col_cant=col_cant, col_val=col_val,
+            col_factor=col_factor, col_usal=col_usal,
+            col_cod_area=col_cod_area)
 
     def _dib_movimientos():
         with st.container(border=True,
