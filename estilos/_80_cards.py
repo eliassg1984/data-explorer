@@ -3454,6 +3454,15 @@ CSS = """    /* ================================================================
         z-index: 3;
         width: auto !important;
     }
+    /* Volatilidad como pieza propia (#718): fecha compartida sobre su
+       cabecera; se mantiene el hueco de 16 px del layout de Streamlit. */
+    .st-key-cp_vol_pieza_wrap { position: relative; }
+    .st-key-cp_vol_fecha {
+        position: absolute !important;
+        top: 28px; right: 16px;
+        z-index: 3;
+        width: auto !important;
+    }
     /* LA TARJETA, MÁS APRETADA (2026-09-24, a pedido: «subir estos dos
        cuadrantes —el título con los KPI y el gráfico— y subir algo las
        tablas»). Medido a 1366: 16px de relleno arriba y 16 de gap entre

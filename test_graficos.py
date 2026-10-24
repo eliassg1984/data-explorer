@@ -3397,10 +3397,6 @@ def _pruebas_widgets_de_fragment_escalado():
             "un rerun completo aquéllos ya se dibujaron, y eso es "
             "StreamlitAPIException",
         ("_documentos_proveedor.py", "cp_prov_cb::*"): "ídem",
-        ("volatilidad.py", "compras_vol_periodo_*"):
-            "la escalada manda la ventana a HEREDA A PROPÓSITO (elegir un "
-            "rango a mano es pedir que mande ese rango); su dueño es "
-            "`_K_VENTANA`, que no es clave de widget",
     }
 
     def _key_de(nodo):

@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-717 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+718 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (231)
+**CSS y estilos** (232)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -296,6 +296,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 - **#715** — Compras › Proveedor es una PIEZA PROPIA (proveedor.js + .css), montada DOS veces —el ranking…
 - **#717** — Ventas › Comparativo es una PIEZA PROPIA, con las cinco mejoras acordadas
+- **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 
 **Layout y alturas** (100)
 
@@ -624,7 +625,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 
-**Streamlit** (169)
+**Streamlit** (170)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -795,6 +796,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 - **#713** — Compras › Producto es una PIEZA PROPIA (producto.js + .css), montada DOS veces —una en cada…
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
+- **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 
 **Datos, R2 y DuckDB** (120)
 
@@ -55003,6 +55005,65 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        de los switches; el CSS antiguo de `ventas_comp_*` quedó sin uso.
        (2026-10-24.)
 
+718. **Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo**
+     (`volatilidad.js` y `.css`, contrato en `volatilidad_datos.py`). A
+     pedido, tras medir 4,88 s por clic local. Después, con R2 y Streamlit
+     1.64, las métricas tardan 0,25-0,31 s y el grano o el detalle
+     0,03-0,06 s, sin corridas de Python. Sólo el selector de fecha
+     compartido vuelve a Python; ventanas, búsqueda, métricas, ranking,
+     historia, Semana/Compra y todos los detalles viven en el navegador.
+     La firma de `_compras_volatilidad_drill` se conserva (#357).
+     · **Se mantienen las cuentas anteriores**: cinco semanas con compras,
+       cuatro variaciones, mínimo S/ 400 y cobertura del 75%; cierres con
+       orden estable dentro del día y arrastre del último precio; la
+       dispersión muestral necesita cinco precios válidos. Buscar incluye
+       insumos fuera del ranking con el motivo de su exclusión. El histórico
+       completo sigue deslizándose sin alterar lo que mide el puntaje.
+       Una dispersión cero es un dato válido y se ordena antes de la ausente.
+     · **Las cinco mejoras**: selección de días/semanas arrastrando (en
+       Compra incluye todas las operaciones de los días elegidos), tabla de
+       proveedores con precio ponderado y tamaño de muestra, prioridad por
+       impacto del precio en soles, puente del cambio del gasto por precio
+       y cantidad, y Excel de las tablas del análisis con hoja Contexto.
+       Un clic de proveedor filtra compras y puente; la lista de proveedores
+       conserva a los demás para cambiar o quitar ese filtro.
+     · **Una unidad a la vez y sólo soles**: no se suman kg y unidades ni
+       se convierte moneda. Con varias unidades del insumo, la serie del
+       ranking identifica su unidad modal reciente; el detalle permite
+       elegir otra. El ponderado es suma(precio unitario x cantidad) /
+       cantidad, sólo con precio y cantidad positivos. Se informa cuántas
+       compras quedaron fuera; las líneas siguen consultables en Tramo.
+     · **El puente cierra exactamente**: (q1-q0) x p0 + (p1-p0) x q1 =
+       p1 x q1 - p0 x q0. Compara contra los mismos días inmediatamente
+       anteriores (igual duración), con la misma unidad y proveedor. Sin
+       cobertura histórica completa o sin cantidades positivas en ambos
+       lados, no inventa una base cero. Es el VALORIZADO a precio unitario;
+       el importe registrado se informa aparte, porque no siempre coincide.
+       El sobrecosto conserva su referencia al mínimo observado: un techo
+       teórico, nunca un ahorro garantizado.
+     · **El contrato conserva todas las líneas, fecha y hora**, incluso
+       varias compras del mismo día. Precio, cantidad e importe llevan
+       seis decimales (#716). El histórico anterior al rango permite el
+       primer cierre y el puente; las ventanas se planean con `periodo.py`.
+       Otro rango nativo vuelve a Rango, y el sello incluye los datos y
+       contexto. Sobrevive al remontaje la selección del mismo sello.
+     · **Tres tarjetas en el shadow root**: ranking de ancho completo,
+       evolución y análisis del tramo al pie. `--alto-util` limita cada
+       tarjeta en escritorio; sólo las tablas se deslizan por dentro.
+       La fecha reserva su sitio y el hueco de 16 px de Streamlit (#716).
+       Tablas largas por tandas de 150, formateadores reutilizados,
+       listeners y ResizeObserver desconectados al remontar. Cambiar el
+       insumo, grano, tramo, pestaña o proveedor conserva el DOM del ranking:
+       sustituir también sus miles de celdas cobraba 0,3-0,5 s por clic.
+     · **Lo prueba `test_volatilidad_pieza.py`**, en Chromium contra los
+       ayudantes originales: las cinco ventanas, cierre, OHLC, volatilidad,
+       dispersión y sobrecosto; moneda, unidades, cantidades inválidas,
+       histórico insuficiente, puente y UI con arrastre, proveedores,
+       prioridad, Excel, móvil y remontaje. `_KEYS_WIDGET` queda vacía y
+       se retira la exención del selector nativo que dejó de existir.
+       Las funciones puras y de figuras anteriores siguen para sus tests;
+       los AgGrid y sus contadores de clics dejaron de usarse. (2026-10-24.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -55015,7 +55076,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#717**; la próxima toma el número siguiente.
+> última regla es la **#718**; la próxima toma el número siguiente.
 
 >
 
