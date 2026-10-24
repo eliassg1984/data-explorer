@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-714 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+715 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (229)
+**CSS y estilos** (230)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -294,6 +294,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 - **#713** — Compras › Producto es una PIEZA PROPIA (producto.js + .css), montada DOS veces —una en cada…
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
+- **#715** — Compras › Proveedor es una PIEZA PROPIA (proveedor.js + .css), montada DOS veces —el ranking…
 
 **Layout y alturas** (100)
 
@@ -792,7 +793,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#713** — Compras › Producto es una PIEZA PROPIA (producto.js + .css), montada DOS veces —una en cada…
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 
-**Datos, R2 y DuckDB** (118)
+**Datos, R2 y DuckDB** (119)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -912,6 +913,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#706** — «Costo recetas base» es una pieza propia: la lista y la ficha de la elegida, con dónde se…
 - **#707** — «Cambios en Recetas»: las recetas base, las recetas de plato y los precios de venta en una…
 - **#711** — Inicio › «Pendientes del período»: una fila por señal, con el salto a la vista que la…
+- **#715** — Compras › Proveedor es una PIEZA PROPIA (proveedor.js + .css), montada DOS veces —el ranking…
 
 **SUNAT y SIRE** (73)
 
@@ -54801,6 +54803,68 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        Meseros, Control y Platos. `_KEYS_WIDGET_RESUMEN` quedó vacía.
        (2026-10-23.)
 
+715. **Compras › Proveedor es una PIEZA PROPIA (`proveedor.js` +
+     `.css`), montada DOS veces —el ranking y la ficha— con un solo
+     cerebro en el navegador, como Producto (#713).** El 2026-10-24, a
+     pedido («seguimos con compras, dale de frente»: sin boceto, la misma
+     vista). Medido antes: cada clic era una corrida de 1,3 a 3,2 s en la
+     laptop con R2; ahora ninguno lo es, salvo la fecha y el filtro de
+     proveedores.
+     · **Lo que hace es lo de la #646 (y la #663), entero**: el ranking
+       con su Δ contra el período anterior de igual largo, «nuevo» y
+       «vuelve», «Otros», la fila TOTAL y el 80 %; la ficha con sus cinco
+       cifras del rango; la curva con su ventana (el rango del ranking con
+       su tamaño y sus flechas, 3, 12 y 24 meses, todo el histórico), su
+       grano (con «Documento»), su medida y el período en curso rayado
+       contra los mismos días del anterior; «Total del rango» con los
+       proveedores de cada producto en 90 días y en todo el histórico; el
+       Desglose de los últimos seis puntos con su tendencia de trece; los
+       documentos con los días desde la compra anterior y lo que subió de
+       precio, o agrupados por período. Suma tres cosas chicas: el orden por
+       columna del ranking, su Excel, y el clic en un punto de la curva,
+       que abre los documentos de ese período.
+     · **El ranking lo arma el navegador** con las líneas de la ficha: el
+       `d` del drill es `d_full` recortado al rango de la tarjeta, así que
+       da lo mismo. La tarjeta del ranking recibe sólo el rango y la
+       selección del filtro (`armar_rank`); la de la ficha, el historial
+       entero por proveedor con su precio habitual (`historial_pieza`: 45
+       mil líneas, 1,7 MB con las cinco familias de entrada, guardado en
+       `session_state` con su sello). Cambiar la fecha no vuelve a mandar
+       el historial.
+     · **El filtro de proveedores sigue siendo de Python**
+       (`filtro_proveedores`, en la fila del título): «Detalle de
+       documentos por proveedor» lee su selección. Esa tarjeta leía también
+       el grano de la curva (`compras_prov_gran`), que ahora vive en el
+       navegador: desde este cambio abre siempre en «Mes».
+     · **UN SOLO PRECIO, el ponderado** (#653), también en el «último
+       precio» del histórico de un producto, que antes salía de la columna
+       de precio unitario del parquet. El precio habitual viaja con 4
+       decimales: el «vs. precio habitual» difiere en milésimas de sol.
+     · **Las dos tarjetas miden lo mismo**: la ficha medía 64 px menos que
+       el ranking. Cada pieza mide una pantalla (`--alto-util`) menos el
+       padding y, en el ranking, los dos renglones de arriba —el título, y
+       debajo el filtro y la fecha— (`--cpv-arriba`, 72 px medidos). Las
+       zonas con scroll propio llevan `overscroll-behavior: contain`.
+     · **Una clase de la pieza no puede repetir otra de la misma raíz**:
+       la cabecera de los documentos desplegados se llamaba `.cab`, como la
+       de la ficha, y heredaba su `display: flex` — las columnas no se
+       alineaban. Va `.enc`.
+     · **Lo vigila `test_proveedor_pieza.py`**: el contrato de posiciones
+       y, en Chromium, `calcular` del `.js` contra las cuentas de la vista
+       de antes escritas en pandas —el ranking con tres filtros, las cifras
+       de cuatro proveedores, 60 curvas (cinco granos, cuatro ventanas,
+       tres medidas), el Desglose y la historia de los documentos—. Probado
+       en la app local con R2 a 1323×619, con Streamlit 1.59 y 1.64: ningún
+       clic pide una corrida, el Excel baja, la fecha recalcula y el filtro
+       (Top 3) deja al elegido en la ficha.
+     · **Se fue**: el AgGrid del ranking, la figura de Plotly, el relevo
+       por `text_input` oculto del clic en un producto (#217) y el
+       remontaje por contenido de los `<details>` (#377): lo desplegado se
+       recuerda en el estado de la pieza. El CSS de `_css_proveedor.py`
+       para `cp_evo_ctrl` y `cp_ficha_*` quedó sin uso y no se borró: es
+       un bloque de 2.870 líneas que comparten otras tarjetas.
+       (2026-10-24.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -54813,7 +54877,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#714**; la próxima toma el número siguiente.
+> última regla es la **#715**; la próxima toma el número siguiente.
 
 >
 

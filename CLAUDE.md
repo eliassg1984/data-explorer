@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -196,6 +196,14 @@ o de sus últimos días— y, en Chromium, que `calcular` del navegador dé las
 ventas, los clientes, los comprobantes, el ticket y las formas de pago de
 `definicion_venta` y de Python, con el canje, la cuenta dividida, Rappi, la
 cortesía y el anulado. Ver `arquitectura.md` regla #714.
+
+`test_proveedor_pieza.py` vigila Compras › Proveedor como pieza propia
+(`graficos/compras/proveedor.py` y `proveedor.js`): lo que recibe —el
+historial por proveedor con su habitual, el rango y el filtro— y, en
+Chromium, que el navegador haga las cuentas de la vista de antes, escritas
+en pandas: el ranking con «nuevo», «vuelve» y «Otros», las cifras del
+proveedor, la curva en cada grano, ventana y medida, el Desglose y la
+historia de los documentos. Ver `arquitectura.md` regla #715.
 
 ## El asistente IA no adivina: consulta
 
@@ -538,6 +546,14 @@ ranking (`armar_ranking`): cambiar la fecha no vuelve a mandar el
 historial. Las cuentas siguen en `producto.py` (`_resumen`, `_serie`,
 `_precios`) y el `.js` las rehace igual: si se toca una, se toca la otra
 — `test_producto_pieza.py` compara la curva en Chromium.
+
+**Proveedor, igual desde el 2026-10-24** (regla #715):
+`graficos/compras/proveedor.js` + `.css`, con `window.__cpProv`. El ranking
+lo arma el navegador con el historial de la ficha (el `d` del drill es
+`d_full` recortado al rango); a Python vuelven sólo la fecha y el FILTRO de
+proveedores, que sigue siendo de Python porque «Detalle docs.» lee su
+selección. Las cuentas de la vista de antes están escritas en pandas en
+`test_proveedor_pieza.py`, que las compara con el `.js` en Chromium.
 
 **El período en curso no se compara con uno entero**: al 11 de octubre,
 «octubre contra septiembre» da ▼75 % en verde en casi todo, y es el
