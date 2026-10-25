@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-725 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+726 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (236)
+**CSS y estilos** (237)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -301,8 +301,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#723** — Ventas › Control de pedidos es una PIEZA PROPIA con investigación por pedido y foto de…
 - **#724** — Stock › Por área y familia es una PIEZA PROPIA con matriz y comparación entre áreas
 - **#725** — Compras › Vs año pasado es una PIEZA PROPIA con selección de varios meses y cobertura de…
+- **#726** — Compras › Detalle docs. es una PIEZA PROPIA con tabla dinámica configurable y ficha completa
 
-**Layout y alturas** (100)
+**Layout y alturas** (101)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -404,6 +405,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#690** — «Consistencia de datos» entra en UNA pantalla de la laptop (1323×619): arriba tres renglones…
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 - **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
+- **#726** — Compras › Detalle docs. es una PIEZA PROPIA con tabla dinámica configurable y ficha completa
 
 **Plotly y figuras** (124)
 
@@ -55592,6 +55594,85 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        ponderado, meses múltiples, Excel, remontaje y móvil en Chromium.
        Se suma a la batería obligatoria. Probado además con datos reales.
        (2026-10-24.)
+
+726. **Compras › Detalle docs. es una PIEZA PROPIA con tabla dinámica
+     configurable y ficha completa** (`compras/documentos.js` y `.css`,
+     `documentos_datos.py` y `documentos_pieza.py`). Sigue #713–#716 y
+     #725. `render_seccion` conserva sus nueve argumentos (#357); el
+     render anterior queda como `_render_seccion_legacy`, y
+     `tabla_documentos` conserva su firma y AgGrid como referencia.
+     · **La unidad de lectura sigue compartida con Proveedores**:
+       `base_normalizada` conserva las cifras. `leer_seleccion` lee las
+       claves canónicas de `cp_prov` con el mismo default y fallback de
+       `filtro_proveedores`, sin inicializar widgets ajenos; lo prueba
+       contra el helper original. Los controles propios viven en JavaScript
+       y no hay widgets propios que preservar al escalar. La fecha mantiene
+       `CATEGORIA_SEC['compras_sec_documentos']`, la misma categoría del
+       ranking; el selector y su escalada a corrida completa son los de
+       siempre. El filtro LOCAL de proveedores sólo acota ese universo.
+       El montaje del ranking emite `compras-proveedores-cambio` cuando
+       recibe la selección canónica. Si Detalle docs. ya está dibujado y
+       comparte sello histórico y rango, su evento `ranking` pide releer
+       sólo SU fragment. Python vuelve a leer `cp_prov`; no aplica valores
+       enviados por el cliente. Esto evita que un rerun aislado del ranking
+       deje documentos con la selección anterior. Mensajes duplicados,
+       de otro rango o de otro historial se ignoran. Los controles propios
+       de documentos no envían eventos a Python.
+     · **Cuatro calendarios de la función original**: Día, Semana, Mes
+       y Año se preparan con `agregar_periodo`. Se usan las claves de
+       `_per_sort`, no los rótulos, para evitar unir días/semanas de años
+       distintos. Los rótulos de varios años incluyen el año. Las líneas
+       sin fecha quedan en Sin fecha en todos los granos, sin desaparecer
+       al cambiarlo. Un neto cero conserva las líneas positivas y negativas.
+     · **Tres vistas locales**: Documentos, Líneas y Tabla dinámica. La
+       tabla abre con la jerarquía Proveedor → Fecha → Documento → Producto
+       y columnas por Mes, como la anterior. Configurar permite arrastrar,
+       añadir, quitar y ordenar campos en Filas y Columnas, incluidos campos
+       numéricos; se añade Unidad. Valores ofrece suma, media, mínimo,
+       máximo o conteo según la magnitud. La jerarquía se despliega por
+       nivel, se ordena por columna y conserva su total con el signo.
+     · **Precios y cantidades explícitos**: Precio informado conserva
+       la media simple de la columna de precio unitario de las líneas,
+       como el pivote anterior. Precio medio es una opción distinta:
+       suma de valor / suma de cantidad positiva. Ambos precios agregados
+       requieren un solo producto y unidad conocida; Cantidad sólo suma
+       unidades iguales y conocidas. Conteo cuenta líneas/valores, no suma
+       cantidades. Las líneas individuales mantienen sus cantidades y
+       precio informado. Las celdas vacías no se convierten en cero.
+     · **Identidad del documento**: proveedor crudo + fecha normalizada
+       + número original. No se mezclan el mismo número de dos proveedores
+       ni sus repeticiones en otro día. SHA estable para la selección al
+       actualizar datos. Sin número no se inventa una factura: cada línea
+       queda separada y se informa su conteo. El resumen cuenta sólo los
+       documentos con número, además de importe, proveedores y productos.
+     · **Buscar no mutila la ficha**: la búsqueda por proveedor,
+       documento o producto y el filtro Positivos/Negativos/Cero recortan
+       el listado y su Importe visible. Documento completo conserva todas
+       las líneas disponibles de ese documento dentro de fecha, familias y
+       proveedores de la página; ambas cifras se distinguen en el listado.
+       No se vuelve a descontar una nota de crédito: Compras ya la aplicó.
+       El filtro local Ninguno deja cero filas y conserva Todos para salir.
+     · **Excel de la selección**: Documentos, Líneas filtradas, Tabla
+       dinámica, Contexto y, si está abierta, Ficha completa. Incluye
+       TODOS los grupos de columnas del pivote y su último nivel, más el
+       total, sin duplicar subtotales intermedios. El contexto declara
+       filtros, rango compartido, filas, columnas y fórmulas. Valores
+       numéricos con seis decimales; las líneas no se redondean al sumar.
+     · **Montaje y rendimiento**: SHA del contenido ordenado, caché de
+       sesión por líneas, rango, selección y contexto; el navegador reutiliza
+       líneas, búsqueda y árbol agregado al desplegar/ordenar. Las tablas
+       muestran tandas de 150 filas; columnas del pivote de a 12 grupos.
+       Pantalla completa, teclado, estado al remontar, AbortController y
+       desconexión de ResizeObserver. La configuración flota dentro de la
+       tarjeta; el alto principal usa `--alto-util`, la ficha el alto base,
+       y las tablas contienen su scroll. Sólo variables del tema; móvil
+       sin fuga horizontal. El contenedor de fecha no añade un hueco de 16 px.
+     · **Lo vigila `test_compras_documentos_pieza.py`**, sin red:
+       contratos y precisión, paridad del pivote contra pandas en los cuatro
+       granos y varios ejes, años distintos, neto cero, documentos repetidos
+       o sin número, unidades y precios, búsqueda y ficha, arrastre, orden,
+       estado, Excel, tandas largas y móvil. Se suma a la batería obligatoria.
+       Probado además con datos reales en la app local. (2026-10-24.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

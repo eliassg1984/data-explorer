@@ -34,8 +34,9 @@ historial:
 
 El FILTRO de proveedores sigue siendo de Python (`filtro_proveedores`, en la
 fila del título): «Detalle de documentos por proveedor» lee su selección.
-Ese detalle leía también el grano de la curva (`compras_prov_gran`), que
-ahora vive en el navegador: desde este cambio abre en «Mes».
+Ese detalle tiene su propio grano desde la regla #726. El montaje del
+ranking le avisa si cambia la selección para que relea el filtro canónico,
+incluso cuando la sección de documentos ya estaba dibujada.
 
 UN SOLO PRECIO, el PONDERADO (valor ÷ cantidad), también en el «último
 precio» del histórico de un producto, que antes salía de la columna de
@@ -170,6 +171,8 @@ def armar_rank(rango, seleccion, sello):
 
 # ── La pieza propia (regla #715) ───────────────────────────────────────
 _AQUI = Path(__file__).parent
+# El montaje del ranking avisa a Detalle docs. si cambia el filtro nativo
+# de proveedores; esa pieza pide actualizar sólo su propio fragment (#726).
 _PIEZA = st.components.v2.component(
     "compras_proveedor",
     css=(_AQUI / "proveedor.css").read_text(encoding="utf-8"),

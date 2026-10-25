@@ -1,5 +1,9 @@
 """graficos.compras._documentos_proveedor - tabla pivotable de documentos.
 
+Desde #726 `render_seccion` monta la pieza propia de `documentos_pieza.py`.
+El dibujante anterior y sus firmas quedan como referencia; el texto que
+sigue describe esa implementación histórica.
+
 Una AgGrid en modo pivote donde cada fila es una linea de detalle
 (documento x producto) y el usuario puede arrastrar campos a
 Filas/Columnas/Valores desde el panel derecho.
@@ -69,6 +73,13 @@ llamador), y escribir las del otro sería tocar widgets ajenos."""
 
 def render_seccion(d, col_prov, col_prod, col_cant, col_valor, col_punit,
                    col_um, col_fecha, col_docu):
+    """Firma conservada; fecha compartida y controles propios (#726)."""
+    from .documentos_pieza import renderizar
+    return renderizar(d,(col_prov,col_prod,col_cant,col_valor,col_punit,col_um,col_fecha,col_docu))
+
+
+def _render_seccion_legacy(d, col_prov, col_prod, col_cant, col_valor, col_punit,
+                          col_um, col_fecha, col_docu):
     """La seccion «Detalle de documentos por proveedor» de la pila.
 
     Arma los seis valores que `tabla_documentos` necesita y la dibuja. Hasta

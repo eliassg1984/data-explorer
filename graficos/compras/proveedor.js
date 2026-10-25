@@ -945,7 +945,13 @@ export default function (component) {
       enlazar(raiz);
     }
     G.raices.rank = raiz;
-    if (G.rankData !== data) { G.rankData = data; G.R = leerRank(data); }
+    if (G.rankData !== data) {
+      G.rankData = data; G.R = leerRank(data);
+      // Detalle docs. comparte esta selección; su fragment puede estar ya dibujado.
+      window.dispatchEvent(new CustomEvent('compras-proveedores-cambio', {
+        detail: { sel: data.sel || [], rango: data.rango, sello: data.sello }
+      }));
+    }
   }
   pintar();
 }
