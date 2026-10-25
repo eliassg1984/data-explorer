@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-732 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+733 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (239)
+**CSS y estilos** (240)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -304,6 +304,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#726** — Compras › Detalle docs. es una PIEZA PROPIA con tabla dinámica configurable y ficha completa
 - **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
 - **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
+- **#733** — Consumo según recetas pasa del iframe a una pieza nativa y las tablas largas dejan de perder…
 
 **Layout y alturas** (105)
 
@@ -1088,7 +1089,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (219)
+**Decisiones de diseño y UX** (220)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1309,6 +1310,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#722** — Requerimientos y Salidas por período son PIEZAS PROPIAS con selección de tramos, búsqueda y…
 - **#723** — Ventas › Control de pedidos es una PIEZA PROPIA con investigación por pedido y foto de…
 - **#729** — Costo por unidad útil como pieza propia: atribución intacta, comparación explicable
+- **#733** — Consumo según recetas pasa del iframe a una pieza nativa y las tablas largas dejan de perder…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -56056,6 +56058,67 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        caché y carga condicional, saltos, estado, teclado, fecha inválida,
        tablas largas y Excel. Se incorpora a la batería y se contrasta con
        datos reales, sin cambios en las firmas existentes. (2026-10-25.)
+
+
+733. **Consumo según recetas pasa del iframe a una pieza nativa y las
+     tablas largas dejan de perder filas.** `movimientos_consumo`
+     conserva la firma de cuatro argumentos de `tarjeta_consumo`, el
+     adaptador `datos_de_la_vista` y el dibujo anterior como referencia.
+     La vista delega en `consumo_pieza.py`; HTML, CSS y JavaScript propios
+     se montan con `st.components.v2`, sin fuentes externas ni iframe.
+     · **La cuenta se conserva**: el árbol insumo → preparación → plato,
+       los caminos y rendimientos, las ventas internas, los promedios por
+       día y hora y el cruce con compras son los del script previo. Sigue
+       mandando `consumo_recetas.py` (#558 y #605). El rango de la página
+       acaba en fin EXCLUIDO; `rango_de_la_vista` lo convierte al último
+       día INCLUIDO de este cálculo y del contexto de Excel.
+     · **Una sola base de datos**: se reutiliza el adaptador original,
+       incluida su cuantización a seis decimales. No se reescriben las
+       recetas ni se redondean de nuevo antes de agrupar. La huella de la
+       caché incluye la distribución completa, compras, recetas editadas
+       y familias: cambiar días sin cambiar el total sí la invalida.
+       Datos ausentes conservan sus mensajes, sin inventar una fuente.
+     · **Tres tablas por tandas**: tabla dinámica, Resumen y Contra
+       compras dibujan 150 filas y añaden las siguientes al desplazarse o
+       con Mostrar más. Desaparecen los topes silenciosos de 400 y 500
+       filas. Sólo se dibuja la pestaña activa. Elegir un producto cambia
+       su ficha, conservando la tanda y la posición de la lista. Expandir
+       con teclado conserva el foco, incluso después de la primera tanda.
+     · **Estado de la pestaña**: conserva la clave histórica
+       `consumo_recetas_ui` y recuerda búsquedas, familias, columnas,
+       medida, modo, venta interna, ficha y desplegables. Se guarda en
+       `window.sessionStorage`, ahora del documento principal. Un plegado
+       intencional no vuelve a abrir el primer producto al remontar. Se
+       normalizan opciones y familias que ya no están disponibles. La
+       búsqueda se prueba con escritura continua dentro de shadow root.
+     · **Ficha explícita**: si una búsqueda oculta el producto elegido,
+       el aviso identifica la ficha que sigue abierta; el Excel conserva
+       su código. No sustituye en silencio el producto al escribir.
+     · **Ocho hojas completas**: dinámica con los tres niveles aunque
+       estén plegados, insumos del Resumen, compras filtradas, ficha,
+       flujos completos de recetas, rastro de porcionamientos, horas y
+       contexto. Cada pestaña conserva sus filtros al exportar. Flujos y
+       horas identifican que son fuentes del conjunto, sin filtros locales.
+       Números con seis decimales, códigos como texto, sin fórmulas.
+       Cantidades siempre en su unidad; sólo hay total monetario entre
+       insumos. Los totales de un padre incluyen sus hijos y no se suman
+       niveles, indicado en contexto. Una búsqueda de hijo conserva el
+       total del padre, igual que en pantalla.
+     · **Límites y fechas honestos**: el rastro conserva hasta 60
+       documentos por par insumo/corte, como el adaptador original (#609),
+       y lo dice en contexto; el rendimiento usa la referencia completa.
+       Se distinguen ambos conteos del rastro, desde/hasta y respaldo.
+       Recetas y precios son actuales; una edición desde el inicio del
+       rango puede ser posterior a su fin histórico. Compras conserva la
+       fecha del documento y el valor sin IGV (#560), incluida la compra
+       de productos sin consumo. Sub Almacén sigue sin aplicarse y se avisa.
+     · **Pruebas**: `test_consumo_pieza.py` compara los vectores con el
+       JavaScript anterior, con y sin venta interna y en los seis granos;
+       vigila fechas, caché, ausencia de datos, unidades, filtros por
+       pestaña, selección, plegado, escritura, 620 productos, exportación
+       numérica, rastro y móvil. La batería obligatoria incorpora este
+       script. Fecha y familias de la página siguen siendo nativas; los
+       controles internos siguen locales. (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

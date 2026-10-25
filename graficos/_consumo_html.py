@@ -1,4 +1,10 @@
-"""graficos._consumo_html — la página de «Consumo según recetas» (regla #558).
+"""Referencia histórica del iframe de Consumo (#558).
+
+La vista publicada usa consumo_pieza.py y consumo.js desde la regla #733.
+Este documento y pagina() conservan el contrato anterior y las cuentas
+que sirven de referencia para probar la pieza nativa.
+
+Implementación original:
 
 La sección entera —el resumen de arriba, la TABLA DINÁMICA (insumo ›
 preparación › plato, por semana, día, mes, día de la semana o turno), el

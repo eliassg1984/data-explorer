@@ -1,0 +1,90 @@
+<div class="app">
+  <section class="resumen" aria-label="Resumen del período">
+    <div>
+      <div class="eyebrow">Consumo estimado · precios promedio actuales</div>
+      <div class="grande num" id="k-costo"></div>
+      <div class="sub num" id="k-sub"></div>
+    </div>
+    <div>
+      <div class="eyebrow">Cómo llegan al plato</div>
+      <div class="barra" id="k-barra"></div>
+      <div class="leyenda num" id="k-leyenda"></div>
+    </div>
+    <div>
+      <div class="eyebrow">Cuándo se consume · costo por día</div>
+      <div class="dias-res" id="k-dias"></div>
+      <div class="cuando-txt num" id="k-cuando"></div>
+    </div>
+  </section>
+
+  <div class="barra-vistas">
+    <nav class="vistas" id="vistas" role="tablist" aria-label="Vista">
+      <button type="button" role="tab" data-v="tabla">Tabla dinámica</button>
+      <button type="button" role="tab" data-v="resumen">Resumen</button>
+      <button type="button" role="tab" data-v="compras">Contra compras</button>
+    </nav>
+    <div class="der">
+      <label class="interruptor num" id="vi-lbl"><input type="checkbox" id="vi" checked><span class="riel" aria-hidden="true"></span><span>Venta interna <small id="vi-cuenta"></small></span></label>
+    </div>
+  </div>
+
+  <section id="dinamica" aria-label="Tabla dinámica">
+    <div class="card-h" style="margin-bottom:10px">
+      <div class="tit">
+        <h2>Insumos de compra</h2>
+        <span class="sub">Clic en un insumo: por qué preparaciones llega. Clic en una preparación: en qué platos.</span>
+      </div>
+      <div class="ctrls">
+        <div class="ver"><span class="eyebrow">Columnas</span><div class="seg" role="group" aria-label="Columnas" id="td-cols"></div></div>
+        <div class="ver"><span class="eyebrow">Valores</span><div class="seg" role="group" aria-label="Valores" id="td-val">
+          <button type="button" data-x="cant">Cantidad</button><button type="button" data-x="soles">Soles</button>
+        </div></div>
+      </div>
+    </div>
+    <div class="filtros" style="margin-bottom:10px">
+      <input class="buscar" id="td-buscar" type="search" placeholder="Buscar insumo, preparación o plato…" aria-label="Buscar insumo, preparación o plato">
+      <div id="td-fams" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      <button class="chipf" type="button" id="td-plegar">Plegar todo</button>
+    </div>
+    <div class="td-wrap"><table class="td"><thead id="td-cab"></thead><tbody id="td-filas"></tbody></table></div>
+    <div class="pie num" id="td-pie" style="margin-top:8px"></div>
+  </section>
+
+  <section id="vista-resumen" class="cuerpo" hidden>
+    <div class="caja">
+      <div class="card-h">
+        <div class="tit"><h2>Insumos de compra</h2><span class="sub">Ordenados por costo · clic en una fila para ver su detalle</span></div>
+        <div class="ver"><span class="eyebrow">Ver por</span><div class="seg" role="group" aria-label="Ver el consumo por" id="modos">
+          <button type="button" data-m="semanas">Semana</button><button type="button" data-m="dias">Día</button><button type="button" data-m="horas">Hora</button>
+        </div></div>
+      </div>
+      <div class="filtros">
+        <input class="buscar" id="buscar" type="search" placeholder="Buscar insumo…" aria-label="Buscar insumo" style="width:220px">
+        <div id="familias" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div class="tabla-wrap"><table><thead id="cabeza"></thead><tbody id="filas"></tbody></table></div>
+      <div class="pie num" id="pie" style="padding:8px 14px"></div>
+    </div>
+    <aside class="caja" id="detalle" aria-live="polite"></aside>
+  </section>
+
+  <section id="vista-compras" hidden>
+    <div class="caja">
+      <div class="card-h">
+        <div class="tit"><h2>Lo comprado contra lo que explican las ventas</h2><span class="sub" id="cc-sub"></span></div>
+      </div>
+      <p class="cc-res num" id="cc-resumen"></p>
+      <div class="filtros">
+        <input class="buscar" id="cc-buscar" type="search" placeholder="Buscar insumo…" aria-label="Buscar insumo" style="width:220px">
+        <div id="cc-filtro" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div class="tabla-wrap"><table><thead id="cc-cabeza"></thead><tbody id="cc-filas"></tbody></table></div>
+      <div class="pie num" id="cc-pie" style="padding:8px 14px"></div>
+    </div>
+  </section>
+
+  <details class="metodo" id="metodo">
+    <summary>Cómo se calcula</summary>
+    <p id="metodo-txt"></p>
+  </details>
+</div>

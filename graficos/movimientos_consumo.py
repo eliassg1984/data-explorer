@@ -308,6 +308,12 @@ def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
 
 
 def tarjeta_consumo(fam_sel=(), sub_sel=(), rango=None, fecha=None):
+    """Consumo nativo; firma histórica conservada para sesiones vivas (#733)."""
+    from .consumo_pieza import renderizar
+    return renderizar(fam_sel, sub_sel, rango, fecha)
+
+
+def _tarjeta_consumo_legacy(fam_sel=(), sub_sel=(), rango=None, fecha=None):
     """La sección entera: la tarjeta con la página adentro.
 
     `fam_sel` y `sub_sel` son los chips de la franja: la familia recorta los
