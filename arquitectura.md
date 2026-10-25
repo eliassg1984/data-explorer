@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-721 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+722 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (233)
 
@@ -402,7 +402,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 - **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
 
-**Plotly y figuras** (123)
+**Plotly y figuras** (124)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -527,6 +527,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#700** — La Ingeniería de menú también es una pieza propia; la cuenta se quedó en Python
 - **#716** — Compras › «Compras por período» es una PIEZA PROPIA (semanal.js + .css): sólo la fecha vuelve…
 - **#717** — Ventas › Comparativo es una PIEZA PROPIA, con las cinco mejoras acordadas
+- **#722** — Requerimientos y Salidas por período son PIEZAS PROPIAS con selección de tramos, búsqueda y…
 
 **AgGrid y tablas** (95)
 
@@ -1071,7 +1072,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (216)
+**Decisiones de diseño y UX** (217)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1289,6 +1290,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#711** — Inicio › «Pendientes del período»: una fila por señal, con el salto a la vista que la…
 - **#719** — Ventas > Meseros es una PIEZA PROPIA con la ficha al lado de la lista y una planilla navegable
 - **#720** — Ajuste > Diferencias del cierre es una PIEZA PROPIA con comparación entre sesiones
+- **#722** — Requerimientos y Salidas por período son PIEZAS PROPIAS con selección de tramos, búsqueda y…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -55283,6 +55285,89 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        de consulta y sello, UI, escenario, Excel, salto, remontaje y móvil.
        Probado en la app local con R2 y Streamlit 1.64: las cuentas coinciden
        con Python y la foto por fecha/hora llega a la pieza. (2026-10-24.)
+
+722. **Requerimientos y Salidas por período son PIEZAS PROPIAS con
+     selección de tramos, búsqueda y exportación** (`st.components.v2`,
+     `movimientos_periodo_pieza.py`, `movimientos_periodo_datos.py`,
+     `movimientos_periodo.js` y `.css`). Continúa la migración de vistas
+     lentas (#713–#721). El dispatcher y las cuatro firmas públicas de
+     `movimientos_periodo.py` se conservan (#357): `_tarjeta` deriva estas
+     dos a la pieza y Producción/Porcionamientos al dibujante anterior.
+     Las funciones puras anteriores siguen como referencia comprobable.
+     · **La misma base**: `lineas_documentos` normaliza registro/proceso,
+       códigos, estado, área, tipo, familia, producto, unidad, cantidad,
+       precio y valor. Las líneas vacías VIAJAN: los documentos anulados,
+       generados sin ítems y sin ítems siguen en el Detalle y no suman.
+       Los GENERADOS con ítems sí suman en estas dos vistas (#508/#509).
+       No se redondean importes del mensaje ni totales (#713). Las marcas
+       de requerimientos se unen por su índice y siguen calculándose por
+       REGISTRO, aunque el eje use proceso (#701). Las unidades de sus
+       productos se toman del maestro, como ya hacía la vista por área.
+     · **Calendario calculado una vez en Python**: el mensaje lleva la
+       clave de cada día para Día/Semana/Mes/Año, rótulos y semanas ISO,
+       límites, feriados y cobertura. Las semanas cortadas nombran los
+       días que entran (#619); sólo se dibujan períodos con líneas válidas.
+       Variación frente a la barra anterior EXISTENTE, sin porcentaje si
+       cualquiera de las dos es parcial o la base no es positiva. Año no
+       lleva variación entre barras. No inventar barras cero entre datos.
+     · **Filtros locales en cascada**: Área → Tipo de descargo (Salidas)
+       → Familia → Producto, múltiples, por valor. Vacío significa todos.
+       Lo elegido que desaparece con otra fecha SE CONSERVA (#625); Top
+       5/10/20 sólo se conserva mientras siga ofreciéndose. Los tipos
+       mantienen sus partes válidas (#670): sin tipo, por tipo; Bajas sola,
+       por causa; otro tipo solo, por producto; área siempre disponible.
+       El resaltado sólo cambia la parte destacada, nunca filtra las cifras.
+       Repetido y Fuera de lo habitual pueden COINCIDIR: se presentan como
+       resaltados independientes; Exceso conserva su significado propio.
+     · **Comparación de Salidas**: las líneas históricas se filtran con
+       las mismas opciones. Día y Semana usan 364 días por año; Mes y Año,
+       desplazamiento de calendario (#614). Python entrega los mapas de
+       fechas desplazadas, también en bisiestos. Cada barra compara en SU
+       clave; el total de la leyenda incluye TODO el rango desplazado,
+       incluso períodos sin barra actual. En un tramo elegido se suman
+       sólo sus barras. Sin referencia positiva no se calcula porcentaje.
+       Los avisos de poco registro usan la función original sobre historia
+       sin los filtros locales, con los mismos umbrales y meses cerrados.
+     · **Bajas / faltante del cierre requiere ámbito comparable**: sólo
+       en Mes, sin Área/Familia/Producto locales, sin chips globales de
+       área o familia, y sin tipo o con Bajas sola. Tampoco en un mes
+       parcial: el numerador y el cierre son del MES COMPLETO. Un filtro
+       global no puede dividir bajas de un área por faltante del restaurante.
+     · **Mejoras**: clic en una barra abre sus documentos; arrastrar elige
+       un tramo y acota KPI, documentos, productos y comparaciones, con
+       ámbito explícito y botón Todo el rango. Búsqueda por código,
+       producto, área/tipo/causa; filtro de documentos por marca. La lista
+       muestra documentos con alguna línea marcada, conserva todas sus
+       líneas del ámbito y no cambia el total del gráfico. Documento
+       completo amplía sus líneas dentro de las fechas y chips globales,
+       ignorando filtros locales/tramo; el texto lo aclara. Productos
+       agrupa por producto Y unidad: no suma kilos con unidades. La nueva
+       tabla Comparación muestra ambos años cuando están habilitados.
+     · **Excel de esta vista**, local y numérico con seis decimales (#720):
+       Resumen, Documentos, Productos, Líneas del documento, Comparación
+       cuando corresponde y Contexto con fechas incluidas/excluidas, fecha
+       usada, filtros globales/locales, tramo, búsqueda y alcance de líneas.
+       En Detalle agrega las líneas de los documentos visibles. Exporta
+       todas las filas, aunque la pantalla dibuje tandas de 150 (#716).
+     · **Montaje y espacio**: sello SHA del contenido con JSON ordenado,
+       caché por contenido/columnas/rango/ajustes, sin sellos por reloj.
+       Estado independiente por lado en `window`, conservado al remontar;
+       otro sello limpia el tramo/documento. AbortController cancela los
+       listeners de documento y ResizeObserver se desconecta. Gráfico SVG
+       con coordenadas del ancho/alto real y formateadores reutilizados.
+       El navegador reutiliza la serie y el ámbito al buscar, ordenar o
+       cambiar de modo; filtros y granularidad invalidan la serie, y otro
+       tramo invalida su ámbito. Evita recalcular el histórico por tecla.
+       Cabecera reserva el ancho del botón nativo de fecha; wrapper sin
+       gap fantasma (#716). Principal paga la franja de perspectivas, y
+       detalle usa el alto base. Scroll sólo en tablas/opciones, contenido;
+       responsive y estilos en shadow root con variables del tema.
+     · **Lo vigila `test_movimientos_periodo_pieza.py`**, sin red: paridad
+       con resumen, variaciones, trazas, marcas, documentos y comparación
+       originales; estados, vacíos, precisión, feriados, ISO/bisiestos,
+       guardas de registro, tramos, búsqueda, persistencia, documento
+       completo, Excel numérico, tablas largas, teclado y móvil. Se añade
+       a la batería obligatoria de `CLAUDE.md`. (2026-10-24.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

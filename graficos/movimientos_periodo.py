@@ -2239,6 +2239,20 @@ def tarjeta_produccion_periodo(d, *, cols, orden=(), rango=None, fecha=None):
 def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
              precios=None, rango_ts=None, fecha=None, control=None,
              faltante=None, marcas=None):
+    if lado.k in (REQUERIMIENTOS.k, SALIDAS.k):
+        from .movimientos_periodo_pieza import renderizar
+        return renderizar(d, lado, cols, hist=hist, anios=anios,
+                          rot_fecha=rot_fecha,
+                          rango=rango_ts if rango_ts is not None else _rango_vigente(),
+                          fecha=fecha,
+                          faltante=faltante, marcas=marcas)
+    return _tarjeta_legacy(d, lado, cols, orden, hist, anios, rot_fecha,
+                           precios, rango_ts, fecha, control, faltante, marcas)
+
+
+def _tarjeta_legacy(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
+                    precios=None, rango_ts=None, fecha=None, control=None,
+                    faltante=None, marcas=None):
     k, c = lado.k, lado.c
     with st.container(border=True, key=lado.card):
         st.markdown(_css(lado), unsafe_allow_html=True)

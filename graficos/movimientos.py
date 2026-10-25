@@ -1281,6 +1281,13 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
         # botón lo dibuja la tarjeta.
         rng, fecha = _rango_y_boton("mov_sec_periodo", fechas_req)
         _d_rng = _req_de(rng)
+        # La cantidad del detalle lleva su unidad del maestro, como Salidas.
+        # Es una copia: las marcas conservan el índice del requerimiento.
+        _col_um = None
+        if col_cod_req:
+            _col_um = "__mp_unidad"
+            _d_rng = _d_rng.assign(**{_col_um: _d_rng[col_cod_req].astype(str)
+                                      .map(unidades_kardex()).fillna("")})
         tarjeta_requerimientos_periodo(
             _d_rng, orden=orden, rango=rng, fecha=fecha,
             rot_fecha=_ROT_FECHA[fecha_req],
@@ -1291,7 +1298,8 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
                              valor=col_val, estado=col_estado),
             cols=dict(fecha=col_fecha, doc=col_req, area=col_sub,
                       estado=col_estado, fam=col_fam, prod=col_prod,
-                      cant=col_cant, punit=col_punit, val=col_val))
+                      cant=col_cant, punit=col_punit, val=col_val,
+                      unid=_col_um))
 
     def _dib_sal_periodo():
         # La MISMA tarjeta sobre salidas (2026-09-23, en lugar de la dona de

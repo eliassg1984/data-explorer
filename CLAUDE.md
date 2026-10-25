@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -247,6 +247,16 @@ ABC previo al buscador, cobertura y series contra las funciones anteriores;
 redondeo de unidades como Python, fotos y fallo de consulta, negativos por
 área, escenario, Excel con seis decimales, salto desde la otra perspectiva,
 estado, búsqueda, orden y móvil en Chromium. Ver regla #721.
+
+`test_movimientos_periodo_pieza.py` vigila Requerimientos y Salidas por
+período como piezas propias (`movimientos_periodo.js` y `.css`,
+`movimientos_periodo_datos.py` y `movimientos_periodo_pieza.py`): cifras
+contra las funciones originales en los cuatro granos, filtros, marcas
+superpuestas, estados, comparaciones y calendario; selección de tramos,
+búsqueda, productos por unidad, documento completo, Excel, tablas largas,
+remontaje y móvil en Chromium sin red. Las firmas de las cuatro tarjetas
+se conservan; Producción y Porcionamientos siguen en el dibujante anterior.
+La fecha y sus ajustes permanecen nativos. Ver regla #722.
 
 ## El asistente IA no adivina: consulta
 
