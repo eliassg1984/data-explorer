@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -318,6 +318,15 @@ búsqueda por corte, ficha, Excel y tablas largas. El cambio de valorización
 conserva período y documento y sigue compartido con Rendimiento/Para revisar.
 Fecha y esa elección son nativas; los demás controles son locales.
 Ver regla #728.
+
+`test_merma_proveedores_pieza.py` vigila Producción › Costo por kg útil
+como pieza propia (`merma_proveedores_datos.py`, `_pieza.py`, `.js` y
+`.css`): ventanas, atribución de compras, ponderación y pagado de más contra
+las funciones anteriores, por producto y unidad; comparación con reparto
+simétrico de precio/rendimiento, rastro completo, búsqueda, Excel numérico,
+listas largas, estado, teclado y móvil. El foco sigue compartido con
+Rendimiento mediante un evento validado por sello/código; el resto de los
+controles es local. Firma y referencia legacy conservadas. Regla #729.
 
 ## El asistente IA no adivina: consulta
 

@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-728 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+729 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (239)
 
@@ -305,7 +305,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
 - **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
 
-**Layout y alturas** (103)
+**Layout y alturas** (104)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -410,6 +410,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#726** — Compras › Detalle docs. es una PIEZA PROPIA con tabla dinámica configurable y ficha completa
 - **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
 - **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
+- **#729** — Costo por unidad útil como pieza propia: atribución intacta, comparación explicable
 
 **Plotly y figuras** (124)
 
@@ -1083,7 +1084,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (218)
+**Decisiones de diseño y UX** (219)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1303,6 +1304,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#720** — Ajuste > Diferencias del cierre es una PIEZA PROPIA con comparación entre sesiones
 - **#722** — Requerimientos y Salidas por período son PIEZAS PROPIAS con selección de tramos, búsqueda y…
 - **#723** — Ventas › Control de pedidos es una PIEZA PROPIA con investigación por pedido y foto de…
+- **#729** — Costo por unidad útil como pieza propia: atribución intacta, comparación explicable
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -55806,6 +55808,75 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        búsqueda por corte, ficha, estado, Excel y cortes largos. Regresión
        de Requerimientos, Salidas y Producción intacta; se suma a la batería
        obligatoria. Probado además con datos reales. (2026-10-25.)
+
+
+729. **Costo por unidad útil como pieza propia: atribución intacta,
+     comparación explicable.** `movimientos_merma.tarjeta_proveedores`
+     conserva su firma y delega en `merma_proveedores_pieza.py`; el dibujo
+     anterior queda en `_tarjeta_proveedores_legacy`. Sus cuentas puras
+     siguen siendo la referencia (#615, #647 y #655).
+     · **Una cabecera por porcionamiento**: `porcionamientos` conserva la
+       exclusión de cantidades no positivas; los cortes se usan para su
+       costo del día sin multiplicar la cabecera. Se prepara una vez el
+       máximo de 18 meses y se reutiliza para las ventanas de 6/12/18.
+       `fin_de_ventana` sigue poniendo el límite a las 00:00 del día
+       siguiente al último registro, o en el fin explícito del rango.
+       Cada inicio se calcula con DateOffset; inicio incluido y fin
+       excluido, sin perder las horas del día ni inventar meses de 30 días.
+     · **El proveedor sigue siendo ATRIBUIDO**: se llaman `con_proveedor`
+       y `rastro_proveedor` con las compras originales, sin reconstruir un
+       lote. Última compra hasta 45 días antes, y proveedor único con la
+       regla original de los 21 días. Se conservan precio, día de compra,
+       días transcurridos, otro proveedor cercano y la marca de costo del
+       día que difiere de lo pagado; el costo siempre es el del día.
+       Si no se pudo obtener Compras, se informa sin atribuir a nadie.
+     · **Agrupar por producto Y unidad**: evita comparar cantidades de
+       unidades incompatibles del mismo código. Por proveedor sólo se
+       incluyen cabeceras con costo del día positivo y atribución válida,
+       y, con el filtro activado, proveedor único. `pct` = suma de merma /
+       suma de entrada; precio de entrada = suma de costo / suma de
+       entrada; costo útil = suma de costo / (suma de entrada − merma),
+       sólo con cantidad útil positiva. Días es la mediana, como pandas.
+       Nunca se promedian porcentajes ni precios de los documentos.
+     · **Los pocos registros no compiten**: mejor, más caro y pagado de
+       más requieren al menos cinco porcionamientos por proveedor y dos
+       proveedores con base útil positiva. Los demás siguen visibles con
+       su muestra. Pagado de más = Σ (costo útil − mínimo comparable) ×
+       cantidad útil. Cobertura y ambigüedad muestran también el universo
+       de cabeceras de la ventana; la ficha explica los excluidos por
+       atribución y por costo. Incluir sin comparación permite explorar
+       productos que no alcanzan ese mínimo, sin inventar un benchmark.
+     · **Comparar dos proveedores** explica B − A por unidad útil:
+       con precios de entrada p y rendimientos físicos y, el efecto precio
+       es (pB − pA) × (1/yA + 1/yB) / 2, y el efecto rendimiento es
+       (pA + pB) × (1/yB − 1/yA) / 2. Cierran exactamente contra la
+       diferencia de costo útil y cambian de signo al invertir A/B. Se
+       necesitan entradas y cantidades útiles positivas. La muestra queda
+       a la vista; la diferencia observada no demuestra el lote de origen
+       ni un ahorro realizable. No altera el ranking ni la cuenta anterior.
+     · **Producto compartido con Rendimiento** (#647): la selección se
+       dibuja primero en el navegador y sólo el código se comunica a
+       Python, validado contra el sello vigente y los productos de la
+       fuente. Escribe la misma clave canónica y avisa con `_avisar_a`.
+       Los cambios externos de foco se reconcilian al montar; la caché
+       no depende del foco. Ventana, atribución única, proveedor, búsqueda,
+       orden, comparación y rastro son locales y conservan su estado.
+     · **El rastro no mutila sus totales**: la búsqueda de documentos
+       muestra cuántas filas deja visibles; el resumen sigue explicando
+       todos los porcionamientos del proveedor. Excel separa productos
+       visibles, proveedores, rastro visible, todas las cabeceras de la
+       ventana con su motivo de inclusión, partes de pagado de más,
+       comparación y contexto. Cantidades, importes y factores numéricos
+       con seis decimales; código y fecha conservados, sin fórmulas. Las
+       tablas se dibujan de a 150 filas y se exportan completas.
+     · **Lo vigila `test_merma_proveedores_pieza.py`**: las seis
+       combinaciones de ventana/atribución contra `por_proveedor`,
+       `resumen_proveedores` y `rastro_proveedor`; límites de 45 días,
+       códigos con ceros, unidades, muestra insuficiente, ponderación,
+       factores, foco compartido validado, caché, estado, búsqueda,
+       Excel, datos ausentes, teclado, móvil y listas largas. Se incorpora
+       a la batería obligatoria y se verifica con datos reales.
+       (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

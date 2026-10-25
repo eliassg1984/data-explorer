@@ -1880,6 +1880,11 @@ def _tabla_rastro(rs, u, s):
 
 
 def tarjeta_proveedores(d_hist, cols, rango):
+    from .merma_proveedores_pieza import renderizar
+    return renderizar(d_hist, cols, rango)
+
+
+def _tarjeta_proveedores_legacy(d_hist, cols, rango):
     """La sección «Proveedor por kg útil». Siempre al costo del día.
 
     Desde el 2026-10-13 (regla #655) cada número se puede rastrear: la
