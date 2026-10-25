@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-731 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+732 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (239)
 
@@ -305,7 +305,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
 - **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
 
-**Layout y alturas** (104)
+**Layout y alturas** (105)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -411,6 +411,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
 - **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
 - **#729** — Costo por unidad útil como pieza propia: atribución intacta, comparación explicable
+- **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
 
 **Plotly y figuras** (124)
 
@@ -1014,7 +1015,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 
-**Fechas, rangos y cortes** (18)
+**Fechas, rangos y cortes** (19)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -1034,6 +1035,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#635** — Los modos Corte / Varios de la píldora de la franja se borraron enteros: sin su único…
 - **#647** — El precio de un corte lo arma el PESO que el Almacén le asigna: el precio de los cortes en…
 - **#730** — Rendimiento como pieza propia: curvas, cortes y el porqué del precio
+- **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
 
 **Asistente IA** (5)
 
@@ -55973,6 +55975,87 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        casos en un shadow root real y añade escritura tecla a tecla en
        ambos campos, comprobando valor completo, foco y ausencia de eventos
        a Python. Verificado también en la app real. (2026-10-25.)
+
+
+732. **Para revisar como pieza propia: cada caso cuenta una vez y cada
+     peso mira sólo hacia atrás.** `movimientos_merma.tarjeta_revisar`
+     conserva argumentos y callback de fecha, y delega en
+     `merma_revision_pieza.py`. El dibujo previo queda como referencia en
+     `_tarjeta_revisar_legacy`. Las cuentas de las reglas #615 y #647 siguen
+     siendo la fuente; los controles de casos se resuelven en el navegador.
+     · **Mismas cabeceras y fechas**: `porcionamientos` conserva una
+       cabecera por documento y excluye cantidad no positiva. El rango
+       nativo sigue usando su categoría y fin excluido. El historial de
+       referencia son 540 días ANTES del fin; se muestra su inicio. Cambiar
+       datos posteriores a ese fin no cambia pesos ni referencias de este
+       rango. El sello de origen usa el historial y compras pertinentes,
+       conservando selección al cambiar sólo la valorización actual.
+     · **Producto y unidades**: referencias por producto × unidad
+       inicial; peso habitual también separado por unidad final del corte.
+       `pesos_por_unidad` y `marcar` conservan la mediana de hasta diez
+       observaciones ANTERIORES, con al menos cinco; nunca el peso actual
+       ni los siguientes. La unión al corte conserva código, nombre,
+       cantidad, peso y unidad para evitar cruces entre nombres iguales.
+       El peso raro sólo es válido si su merma corregida cae entre cero
+       incluido y uno excluido, igual que la función anterior.
+     · **Siete reglas intactas**: alta, sin peso, peso raro, cero, baja,
+       costo y fecha; las seis iniciales siguen excluyendo Fecha. Se
+       conservan los flags de `marcar` y el proveedor de `con_proveedor`.
+       La explicación de fecha muestra el prefijo literal del documento:
+       un número con mes inválido no puede romper la ficha al indexar los
+       nombres de meses. Todos los registros permite consultar también
+       los que no activan una de esas reglas, sin cambiar su clasificación.
+     · **No sumar alertas superpuestas**: `impacto` conserva el valor de
+       mayor magnitud entre las marcas elegidas de CADA cabecera. Respeta
+       el orden de desempate del helper (alta, baja, cero, sin peso, peso).
+       Costo y fecha no tienen importe propio. Los resúmenes muestran por
+       separado positivos, negativos y casos sin importe; no se compensa
+       un signo con otro para ocultar casos ni se suman las siete cuentas.
+       Ambas valorizaciones se calculan sin volver a agrupar al elegirlas.
+     · **La base monetaria sigue compartida**: mismo
+       `control_valorizacion`, claves y recarga que Porcionamientos y
+       Rendimiento. Precio de hoy conserva el cero del código sin precio
+       en un mapa disponible, identificado en ficha y Excel. Sin ningún
+       mapa se informa costo del día como base efectiva. No se mezclan
+       bases fila por fila. Fecha y precio permanecen nativos en una fila
+       que paga la altura de la tarjeta y se adapta en móvil.
+     · **Ficha y escenario completos**: muestra TODAS las marcas del
+       caso, no sólo las que lo dejaron visible, y sus cortes sin recortar
+       por la búsqueda. Cantidad final y peso de origen llevan unidades
+       distintas. Peso por unidad, habitual, precio y valor del día se
+       conservan. La referencia con peso habitual usa
+       `precio_con_peso_habitual`; no modifica cantidades ni el registro.
+     · **El rastro en carta conserva los umbrales**: precio actual a
+       no más del 2 % del día, y diferencia contra la referencia de al
+       menos el 10 %, con valores positivos y finitos. Sólo si hay un
+       candidato se carga receta de venta. `platos_con_insumo` conserva
+       platos activos y suma las líneas del corte antes de cambiar el
+       costo; se muestran todos los platos directos, no sólo tres. Fuente
+       ausente se distingue de una receta válida sin platos directos.
+       El escenario usa el costo actual de la carta, sin atribuir un lote.
+     · **Búsqueda y navegación local**: área, usuario, producto/unidad,
+       marcas, búsqueda por cabecera/corte y signo de impacto. Búsqueda y
+       signo filtran la lista, mientras el resumen conserva el conjunto
+       de marcas y filtros de dimensiones. Elegir una fila actualiza sólo
+       la ficha: no pierde la tanda cargada, scroll ni foco de la lista.
+       Motivos cerrados y selección sobreviven a revalorizar. El salto
+       `ir_a_revisar` conserva firma y añade secuencia para repetir el
+       mismo destino; si lo ocultan filtros, Mostrar el solicitado permite
+       enfocarlo. Una elección posterior del usuario consume esa solicitud.
+     · **Excel y volumen**: casos visibles y del conjunto, cabeceras
+       completas del rango, matriz de marcas, todos los cortes, rastro en
+       carta, comparación de bases y contexto. Números con seis decimales,
+       códigos como texto, sin redondear antes de calcular ni fórmulas.
+       Casos, cortes y tablas internas se dibujan en tandas de 150 filas,
+       pero se exportan completos. Teclado y búsqueda se prueban en un
+       shadow root real, con escritura continua (#731).
+     · **Lo vigila `test_merma_revision_pieza.py`**: las 128 selecciones
+       de siete marcas en ambas bases, reglas y pesos contra los helpers,
+       superposición con signos opuestos, exclusión de futuro, unidades,
+       ausencia de precio/receta, carta con líneas repetidas e inactivos,
+       caché y carga condicional, saltos, estado, teclado, fecha inválida,
+       tablas largas y Excel. Se incorpora a la batería y se contrasta con
+       datos reales, sin cambios en las firmas existentes. (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

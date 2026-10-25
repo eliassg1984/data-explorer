@@ -1029,6 +1029,11 @@ def _arrastre(f, lineas, precios):
 
 
 def tarjeta_revisar(d_rango, d_hist, cols, rango, fecha=None):
+    from .merma_revision_pieza import renderizar
+    return renderizar(d_rango, d_hist, cols, rango, fecha=fecha)
+
+
+def _tarjeta_revisar_legacy(d_rango, d_hist, cols, rango, fecha=None):
     """La sección «Para revisar». `d_rango` son las filas del parquet en el
     rango de la sección; `d_hist`, las de todo el parquet (con el chip
     «Sub Almacén» aplicado a las dos), de donde sale lo normal. `fecha`
@@ -1274,6 +1279,7 @@ def ir_a_revisar(doc):
     """Lo que deja escrito un salto a «Para revisar» parado en el
     porcionamiento `doc` (si está en su rango)."""
     st.session_state[K_FOCO_REV] = str(doc)
+    st.session_state['_merma_revision_salto'] = st.session_state.get('_merma_revision_salto', 0) + 1
 
 
 def _fig_merma(xs, norm, mes, ini, fin, u):
