@@ -1435,6 +1435,27 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
                          f"({aviso[0]}): una caída puede ser que no se "
                          "registró, no menos merma.", aviso[1])
         hay_causa = COL_CAUSA in validas.columns
+        _cod_area_sal = _col_sal("COD PRODUCTO", "Cod Producto")
+        if _cod_area_sal:
+            from graficos.salidas_area_pieza import renderizar as sal_area
+            vent = ventana(rng[1] if rng else pd.Timestamp.today().normalize())
+            _h = hist_sal[(hist_sal["_fecha"] >= vent[0]) & (hist_sal["_fecha"] < vent[1])]
+            _h, _ = salidas_que_suman(_h, **_kw_suman)
+            sal_area(validas, _h,
+                dict(fecha="_fecha", doc=_kw_suman["col_doc"], cod=_cod_area_sal,
+                     prod=col_prod_sal, cant=_col_sal("Cant Salida", "CANT SALIDA"),
+                     valor=col_val_sal, unid=_col_sal(COL_UNIDAD_SAL),
+                     causa=_col_sal(COL_CAUSA_DET), area=_col_sal(*_COLS_AREA_SALIDAS),
+                     tipo=col_tipo, motivo=_col_sal(*_COLS_MOTIVO_SAL)),
+                dict(tipo=col_tipo, causa=COL_CAUSA if hay_causa else None,
+                     area=_col_sal(*_COLS_AREA_SALIDAS),
+                     fam=_col_sal("Nombre Familia", "NOMBRE FAMILIA"),
+                     subfam=_col_sal("Nombre Subfamilia", "NOMBRE SUBFAMILIA")),vent,
+                d_ant=d_ant,rango=rng,fecha=fecha,nota=nota,titulo=titulo,
+                rotulo_ant=rot_ant,sin_comparar=sin_comparar,aviso=aviso,
+                contexto={"Familias de la página":list(fam_sel),
+                          "Áreas de la página":list(sub_sel),"Fecha de la vista":fecha_sal})
+            return
         ruta = drill_tablas.seccion_cuadros(
             validas, pref="mov", slug="detsal",
             niveles=((col_tipo, "tipo de baja"),

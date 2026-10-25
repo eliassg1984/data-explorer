@@ -1,0 +1,2 @@
+.saa .rqa-cadena{grid-template-columns:1.2fr 1fr 1fr}.saa .rqa-cadena>.rqa-card:nth-child(5){grid-column:span 2}.saa-causa{font-size:15px!important}.saa-alza{color:var(--saa-alza)}.saa-baja{color:var(--saa-baja)}.saa-aviso{font-size:12px;color:var(--text-secondary)}.saa [data-tabla=notas] td:last-child{white-space:normal;min-width:220px;text-align:left}
+@container(max-width:800px){.saa .rqa-cadena{grid-template-columns:minmax(0,1fr)}.saa .rqa-cadena>.rqa-card:nth-child(5){grid-column:auto}}

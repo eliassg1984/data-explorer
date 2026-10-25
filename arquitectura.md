@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-734 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+735 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (240)
 
@@ -1334,10 +1334,11 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#654** — «Análisis de diferencias» reconoce lo descontado desde un ÁREA a la que la receta ya no apunta
 - **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 
-**Sin tema asignado** (2)
+**Sin tema asignado** (3)
 
 - **#300** — Un riel que PINTA casilleros enteros dice de más cuando el rango es más fino que su escala:…
 - **#547** — Un plato de cortesía cobrado a S/ 0 no tiene neto cero: tiene un RESIDUO, y dividir por él da…
+- **#735** — Salidas por Área es una pieza propia de extremo a extremo, con cinco cuadros y la nota completa
 
 <!-- INDICE:FIN -->
 
@@ -56192,6 +56193,83 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        los colores de `tema.py`; en móvil, las columnas de la ficha tienen
        mínimo cero para contener el ancho mínimo de la curva dentro de su
        desplazamiento horizontal. (2026-10-25.)
+
+
+735. **Salidas por Área es una pieza propia de extremo a extremo, con
+     cinco cuadros y la nota completa.** El dibujante de `movimientos.py`
+     conserva fechas, filtros y firmas, y delega en `salidas_area_pieza`
+     cuando hay código de producto. La cadena anterior queda como respaldo
+     sin código; `movimientos_bajas.py` conserva sus helpers y referencias
+     (#670). Fecha de registro/proceso, año comparado y perspectivas siguen
+     siendo los nativos compartidos.
+     · **Misma fuente**: `salidas_que_suman` filtra anuladas y líneas
+       vacías. `lineas_salidas` conserva código, cantidades, valores y
+       unidad. Las rutas usan `drill_tablas.claves`, incluidos espacios y
+       «sin dato». Se completa el nulo residual de pandas 3 con el mismo
+       `SIN_DATO`, para que no viaje NaN al componente ni al sello. La
+       causa del CUADRO es la clasificada (`_causa`); la causa del PRODUCTO
+       es la detallada, con el tipo como respaldo. No se intercambian.
+     · **52 semanas, no doce meses calendario**: `ventana` conserva
+       364 días hasta el fin excluido. Frecuencia, nota mayor y tasa de
+       entradas usan esa ventana completa. La curva conserva los doce
+       meses de `meses_de_ventana`; el parcial inicial anterior, cuando
+       existe, permanece en las cifras, notas y fuentes de las 52 semanas,
+       y se explica junto a la curva y en el contexto del Excel.
+     · **Clasificación conservada**: `productos_bajas` sigue siendo
+       la referencia: cantidad/valor/participación del rango; cantidad,
+       semanas con nota, mayor nota y causa principal de la ventana. La
+       nota mayor SUMA sus líneas por documento. Crónico manda desde diez
+       semanas, aunque una nota concentre más de la mitad; después Puntual
+       desde la mitad y Ocasional en los demás. Los empates de causa mayor
+       conservan el orden de agrupación por su nombre.
+     · **Entradas del restaurante entero**: `entradas()` conserva las
+       reglas de compras, producción y porcionamientos. El denominador no
+       se recorta al área ni a los filtros locales de las salidas. Se dice
+       en ficha y contexto. Tasa sólo con entradas positivas; cantidades
+       negativas y tasas mayores al 100 % se conservan. Ausencia de fuente,
+       falta de registros y un registro de cantidad cero son distintos.
+       En la ficha, el valor cero sigue siendo cero: la guarda al dividir
+       porcentajes no lo convierte en un sol.
+     · **Comparación de los cinco cuadros**: el mismo rango un año
+       atrás, con la misma ruta aplicada por nivel. Se omite comparar
+       causas antes de su cobertura, como el dibujante previo. Filas de
+       menos de medio sol se omiten en los cuadros; Productos y fuentes
+       conservan las líneas, y se avisa de ese alcance. El porcentaje usa
+       el total NETO visible y la barra la mayor magnitud. El total previo
+       incluye también sus categorías sin fila actual. Δ divide por el
+       absoluto del previo; sin previo, nuevo. El aviso de poco registro
+       conserva la caída en gris, sin presentarla como menos merma.
+     · **Mejoras locales**: búsqueda por código/producto y orden de
+       columnas; filtros de frecuencia, tasa alta, más que las entradas o
+       sin registros de entrada; mes de la curva o semana para revisar sus
+       notas, búsqueda de nota/área/motivo y quitar tramo. Elegir producto
+       sólo actualiza ficha y notas, manteniendo la tanda de la lista.
+       Los cinco cuadros se pueden plegar y el estado se recuerda sin
+       perder el recorte. Búsqueda y teclado funcionan dentro de shadow
+       root; cambiar un nivel suelta los siguientes como la cadena previa.
+     · **Nota completa y volumen**: elegir una nota muestra todos sus
+       productos disponibles en las fuentes de la página, sin filtros del
+       navegador. Se identifica ese alcance. Productos, notas y modal se
+       dibujan en tandas de 150, con consulta y descarga completas. Foco,
+       Escape y ancho móvil forman parte de las pruebas. La pieza usa los
+       colores de `tema.py` y el estilo compartido de Requerimientos, en
+       raíces y estados independientes.
+     · **Diez hojas de Excel**: productos visibles en su orden y del
+       recorte, meses del producto, notas filtradas, fuentes del rango y
+       ventana, entradas de referencia, comparación de cuadros, fuente del
+       año anterior y contexto. Números con seis decimales y códigos como
+       texto; no se redondea antes de agrupar ni se suman cantidades entre
+       productos/unidades. Los campos de comparación no permitida quedan
+       vacíos, con su explicación. Las fuentes completas se distinguen de
+       las tablas filtradas.
+     · **Lo vigila `test_salidas_area_pieza.py`**: las combinaciones
+       de las cinco dimensiones contra el helper, nota de varias líneas,
+       prioridad de Crónico, ventana por semanas, entradas
+       globales, cero/negativos/ausencias, comparación, aviso, rutas vacías,
+       caché, fechas, teclado, estado, notas completas, plegado, más de 600
+       productos, Excel numérico y móvil. Se añade a la batería obligatoria
+       y se comprueba en la app con las mismas fuentes de la referencia.
+       (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
