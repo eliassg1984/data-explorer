@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-724 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+725 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (235)
+**CSS y estilos** (236)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -300,6 +300,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#721** — Stock por Producto es una PIEZA PROPIA con ficha de producto y escenario de cobertura
 - **#723** — Ventas › Control de pedidos es una PIEZA PROPIA con investigación por pedido y foto de…
 - **#724** — Stock › Por área y familia es una PIEZA PROPIA con matriz y comparación entre áreas
+- **#725** — Compras › Vs año pasado es una PIEZA PROPIA con selección de varios meses y cobertura de…
 
 **Layout y alturas** (100)
 
@@ -803,7 +804,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 
-**Datos, R2 y DuckDB** (122)
+**Datos, R2 y DuckDB** (123)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -927,6 +928,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#716** — Compras › «Compras por período» es una PIEZA PROPIA (semanal.js + .css): sólo la fecha vuelve…
 - **#720** — Ajuste > Diferencias del cierre es una PIEZA PROPIA con comparación entre sesiones
 - **#721** — Stock por Producto es una PIEZA PROPIA con ficha de producto y escenario de cobertura
+- **#725** — Compras › Vs año pasado es una PIEZA PROPIA con selección de varios meses y cobertura de…
 
 **SUNAT y SIRE** (73)
 
@@ -55521,6 +55523,74 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        cambios, cobertura, negativos, matriz, unidades, comparación,
        excluidos, fuentes ausentes, callback, caché, Excel y móvil. Se suma
        a la batería obligatoria. Probado con datos reales y salto a Productos.
+       (2026-10-24.)
+
+725. **Compras › Vs año pasado es una PIEZA PROPIA con selección de
+     varios meses y cobertura de registros** (`compras/vs_ano.js` y
+     `.css`, `vs_ano_datos.py` y `vs_ano_pieza.py`). Continúa #713–#716,
+     #718 y #724. La función pública conserva su firma y decoración
+     fragment (#357); el dibujante anterior queda como legacy y las
+     funciones puras de `vs_ano_pasado.py` siguen siendo la referencia.
+     · **Python conserva el emparejamiento**: usa `_mensual`,
+       `_mes_parcial` y `_con_ano_pasado` sobre la fuente histórica
+       recibida, ya filtrada por los chips globales. Producto se empareja
+       por nombre, como antes; NO se leen las columnas repetidas de año
+       anterior del parquet. La mensualización conserva valores y
+       cantidades completos, y el espejo se desplaza exactamente 12 meses.
+       Si el último mes está incompleto, sólo su espejo se recorta al mismo
+       día; cada familia conserva su propio último mes y corte.
+     · **Ventanas originales**: 3, 12 y 24 meses, Todo y Rango de la página
+       usan `periodo.ventana`. Rango hereda los meses extremos de `d`; si
+       está vacío también queda vacío, sin convertirlo en Todo. Las otras
+       ventanas usan `d_full`. Python prepara los planes de Todas y cada
+       familia; sus mapas de Familia/Subfamilia y unidades modales siguen
+       las reglas anteriores. Un cambio local no vuelve al servidor.
+     · **Las cuentas se hacen POR PRODUCTO antes de sumar familias**:
+       si ambas cantidades son positivas, efecto precio = valor actual −
+       precio medio anterior × cantidad actual; efecto cantidad es el resto
+       de la variación. Sin cantidades positivas se conserva efecto precio
+       cero y todo en cantidad. Ahora se explicita como Cantidad / sin base,
+       se muestra su monto y se puede localizar en el detalle. Los porcentajes
+       sólo se muestran con base monetaria positiva. Cantidad y Precio usan
+       UN producto de referencia, elegible dentro del foco; precio = suma
+       de valor / suma de cantidad. No hay total de kilos con unidades ni
+       promedio simple de precios de productos diferentes.
+     · **Foco y cortes conservados**: inicialmente se elige la mayor
+       variación absoluta; una elección explícita o Todas las compras se
+       respeta. Por qué, Quién y Cuándo aparecen sólo cuando aplican;
+       Precio ofrece el detalle mensual. Las cascadas conservan los tres
+       mayores aportes absolutos más el resto; Cuándo ordena esos tres
+       cronológicamente. Anterior y Actual cierran la cuenta con su signo.
+     · **Meses múltiples**: clic elige/suelta un mes y Mayús + clic toma
+       el tramo entre dos meses disponibles. La serie conserva toda la
+       ventana; se atenúan los meses ajenos. Sólo se recorta la explicación.
+       El detalle inferior sigue completo salvo Aplicar meses elegidos al
+       detalle. Tabla mensual conserva la serie entera, como antes (#484).
+       Los rótulos identifican ambos períodos y el mes parcial.
+     · **Detalle con búsqueda, orden y cobertura**: Todos, En ambos,
+       Sólo actual, Sólo anterior y Sin precio comparable. La presencia se
+       transmite desde los agregados originales, no se deduce de un importe
+       distinto de cero. Sólo actual/anterior describe REGISTROS disponibles,
+       nunca altas/bajas de productos. Buscar no altera la serie ni el foco.
+       Las tablas se dibujan en tandas de 150; teclado y móvil incluidos.
+     · **Excel de esta vista**: Detalle, Serie mensual, Descomposición y
+       Contexto; filtros, períodos de ambos años, selección de meses, foco,
+       referencia, unidad, corte parcial y reglas de atribución explícitos.
+       Cantidades y precios medios de la serie sólo se exportan con un único
+       producto en la SERIE ENTERA, aunque los meses explicados contengan uno
+       solo. Importes numéricos sin redondear y formato de seis decimales.
+     · **Montaje y caché**: SHA estable del contenido ordenado, caché de
+       sesión con los datos y contexto, planes decodificados reutilizados
+       en el navegador. Estado al remontar y validación de familia disponible;
+       AbortController y desconexión de ResizeObserver. Cuatro tarjetas
+       propias con variables del tema; SVG con medidas reales y tablas con
+       scroll contenido, sin fuga horizontal en móvil. Sin historia se
+       informa y se desactiva el Excel.
+     · **Lo vigila `test_compras_ano_pieza.py`**, sin red: paridad de cada
+       familia, ventana y agrupación contra pandas y las funciones originales;
+       parciales, negativos, presencia, cantidades cero, efectos, precio
+       ponderado, meses múltiples, Excel, remontaje y móvil en Chromium.
+       Se suma a la batería obligatoria. Probado además con datos reales.
        (2026-10-24.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->

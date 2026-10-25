@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -277,6 +277,16 @@ de Stock comparten los cálculos de `inventario_base.js`; se antepone al JS
 de cada pieza en Python. `test_stock_producto_pieza.py` comprueba también
 esa composición. La única acción propia que pide Python es el salto a
 Por producto, con sello y selección validados. Ver regla #724.
+
+`test_compras_ano_pieza.py` vigila Compras › Vs año pasado como pieza propia
+(`compras/vs_ano.js` y `.css`, `vs_ano_datos.py` y `vs_ano_pieza.py`):
+meses espejo y parciales, ventanas y agrupaciones contra las funciones
+anteriores; efectos calculados por producto, registros sólo de un período,
+cantidades sin base positiva, precio ponderado de un producto, selección
+de varios meses, filtros del detalle, Excel numérico, estado y móvil.
+`vs_ano_pasado.py` conserva su firma y las cuentas de referencia. Los
+controles propios son locales; los chips y la fecha de la página siguen
+aplicándose en Python. Ver regla #725.
 
 ## El asistente IA no adivina: consulta
 

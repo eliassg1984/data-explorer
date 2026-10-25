@@ -2106,6 +2106,15 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
 def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                                  col_fam=None, col_subfam=None, col_um=None,
                                  d_full=None):
+    """Firma conservada; cálculos base originales e interfaz propia (#725)."""
+    from .vs_ano_pieza import renderizar
+    return renderizar(d,dict(prod=col_prod,cant=col_cant,fecha=col_fecha,
+                            valor=col_valor,fam=col_fam,sub=col_subfam,um=col_um),d_full)
+
+
+def _compras_vs_ano_pasado_legacy(d, col_prod, col_cant, col_fecha, col_valor,
+                                col_fam=None, col_subfam=None, col_um=None,
+                                d_full=None):
     """Serie mensual + puente precio/cantidad + tabla de detalle.
 
     Esta firma perdió dos columnas que la versión anterior sí recibía, y no
