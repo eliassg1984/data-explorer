@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -267,7 +267,19 @@ ficha origen/destino, P90, Excel numérico, tablas largas, estado y móvil.
 La firma y los cálculos puros de `ventas_control.py` se conservan; la fecha
 sigue nativa y las demás interacciones son locales. Ver regla #723.
 
+`test_stock_areas_pieza.py` vigila Stock por Área y Familia como pieza propia
+(`inventario_areas.js` y `.css`, `inventario_areas_datos.py` y
+`inventario_areas_pieza.py`): rankings, porcentajes, estados y cobertura,
+historia y cambios contra las funciones anteriores; matriz con negativos
+por celda, comparación por producto/unidad, excluidos separados, Excel,
+estado, caché, referencia histórica, teclado y móvil. Ambas perspectivas
+de Stock comparten los cálculos de `inventario_base.js`; se antepone al JS
+de cada pieza en Python. `test_stock_producto_pieza.py` comprueba también
+esa composición. La única acción propia que pide Python es el salto a
+Por producto, con sello y selección validados. Ver regla #724.
+
 ## El asistente IA no adivina: consulta
+
 
 `asistente.py` (prompt + bucle de tool calling + UI del popover) y
 `asistente_datos.py` (esquema, SQL con DuckDB sobre el df en memoria,

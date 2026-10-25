@@ -1370,10 +1370,11 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
             st.rerun(scope="app")
 
     def _dib_area():
-        _seccion_grupo("area",
-                       ((col_area, "área"), (col_fam, "familia"),
-                        (col_subfam, "subfamilia")),
-                       abre_en=ABRE_EN_AREA, excluidos=d_excl)
+        from .inventario_areas_pieza import renderizar
+        renderizar(d,d_excl,dict(area=col_area,fam=col_fam,subfam=col_subfam,
+                   cod=col_cod,prod=col_prod,unidad=col_unidad,punit=col_punit,
+                   cant=col_cant,val=col_val,cod_area=col_cod_area,
+                   factor=col_factor,usal=col_usal,motivo=COL_MOTIVO),_h,consumo)
 
     def _dib_productos():
         # UNA tarjeta a lo ancho y no el par ficha + panel de apoyo de
@@ -1388,6 +1389,8 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
             col_cant=col_cant, col_val=col_val,
             col_factor=col_factor, col_usal=col_usal,
             col_cod_area=col_cod_area)
+        if st.session_state.pop(_K_IR,False):
+            st.rerun(scope="app")
 
     def _dib_movimientos():
         with st.container(border=True,

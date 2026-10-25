@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-723 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+724 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (234)
+**CSS y estilos** (235)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -299,6 +299,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#721** — Stock por Producto es una PIEZA PROPIA con ficha de producto y escenario de cobertura
 - **#723** — Ventas › Control de pedidos es una PIEZA PROPIA con investigación por pedido y foto de…
+- **#724** — Stock › Por área y familia es una PIEZA PROPIA con matriz y comparación entre áreas
 
 **Layout y alturas** (100)
 
@@ -530,7 +531,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#717** — Ventas › Comparativo es una PIEZA PROPIA, con las cinco mejoras acordadas
 - **#722** — Requerimientos y Salidas por período son PIEZAS PROPIAS con selección de tramos, búsqueda y…
 
-**AgGrid y tablas** (95)
+**AgGrid y tablas** (96)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -627,6 +628,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#637** — Stock por Producto dice qué mirar: chips de estado, la evolución de lo filtrado y cinco…
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
+- **#724** — Stock › Por área y familia es una PIEZA PROPIA con matriz y comparación entre áreas
 
 **Streamlit** (170)
 
@@ -55451,6 +55453,75 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        nulos, P90, canal sin pedido, fuentes parciales, filtros, búsqueda,
        ficha, exportación numérica, caché, remontaje, teclado y móvil.
        Se añade a la batería obligatoria de `CLAUDE.md`. (2026-10-24.)
+
+724. **Stock › Por área y familia es una PIEZA PROPIA con matriz y
+     comparación entre áreas** (`inventario_areas.js` y `.css`,
+     `inventario_areas_datos.py` y `inventario_areas_pieza.py`). Continúa
+     la migración de vistas pendientes (#721/#722/#723). La firma del
+     dispatcher se conserva (#357); las funciones anteriores siguen en
+     `inventario.py` como referencia.
+     · **Un solo cálculo de Stock en JavaScript**: los cálculos puros de
+       `inventario_productos.js` pasan a `inventario_base.js`. Se antepone
+       al JS de ambas piezas en Python; la interfaz de Productos y sus
+       contratos siguen iguales. `test_stock_producto_pieza.py` lee la
+       composición y conserva sus pruebas. No copiar las reglas de ABC,
+       precio ponderado, unidades incompatibles, cobertura ni estados.
+     · **Activo y excluido separados** (#598): ambos mensajes usan el
+       serializador de Productos (#721), con sus filas producto × área,
+       códigos de texto, cantidades y valores completos. El excluido lleva
+       su motivo y se lista sólo si tiene cantidad o valor; no entra en
+       la matriz, la comparación, la historia ni las alertas de stock.
+       Los chips globales de Área/Familia siguen aplicándose antes.
+     · **Explorar conserva la cadena Área → Familia → Subfamilia**, las
+       mini-líneas y los totales. Abre en ALMACEN CENTRAL cuando existe,
+       ofrece Todas las áreas y deja familia/subfamilia sin fijar. Los
+       porcentajes se calculan contra categorías con valor POSITIVO del
+       nivel; un grupo negativo no tiene participación. La raíz y los
+       cambios de familia limpian sólo los niveles dependientes.
+     · **Matriz Familia × Área**: conserva todos los filtros de la página.
+       Valor muestra el neto con signo; Negativos cuenta códigos distintos
+       con cantidad negativa en cada celda, aunque el neto de esa familia
+       sea positivo. El tooltip mantiene el valor de esas filas. Tocar una
+       celda sólo acota el análisis inferior; no desaparece el resto del mapa.
+     · **Comparación entre dos áreas**: mismo recorte de familia/subfamilia
+       y columnas A, B y B − A, por familia o producto. Los productos se
+       emparejan por código Y unidad; no se suman kilos con unidades. Sólo
+       se listan productos con existencias o valor en alguna de las áreas,
+       y los conteos dicen Con stock. Un área ausente no se convierte en
+       una comparación contra sí misma. B − A describe existencias, no una
+       recomendación automática de traslado.
+     · **Análisis anterior conservado** (#638): historia del kardex por
+       producto, incluidos los que se vaciaron; siete mayores cambios
+       absolutos de al menos S/ 1, total y resto. Los valores actuales son
+       del maestro; los cambios son entre fotos del kardex. Ahora se puede
+       elegir cualquier cierre disponible. La selección persiste por el
+       rótulo del mes al actualizar datos, sin apuntar a otro mes por usar
+       su posición. Sin historia se informa, sin afirmar un cambio cero.
+       Días y estados comparten las funciones de Productos: el consumo es
+       el del RESTAURANTE ENTERO en 90 días, no el consumo de cada área.
+     · **Todo local salvo Ver sus productos / alertas**: el evento `ir`
+       lleva el sello y áreas/familias/subfamilias/chip. Python valida
+       valores contra el mensaje activo y llama al mismo `_ir_a_productos`
+       que antes. Se conserva la escalada a corrida completa y la semilla
+       de Productos (#721); la rama de Productos también recoge el flag
+       cuando ya cambió la perspectiva. Un mensaje de otro sello se ignora.
+     · **Excel de la vista**: rankings, matriz o comparación, productos,
+       historia, cambios y Contexto con filtros, áreas, fuente y referencia.
+       Excluidos exporta su propia lista y contexto. Valores numéricos con
+       seis decimales; no hay total de cantidades entre unidades distintas.
+       Tablas largas en tandas de 150; la descarga incluye todas las filas.
+     · **Cachés y presentación**: sello SHA del contenido ordenado; caché
+       de sesión por contenido, historia, fechas de fotos y consumo. El
+       navegador reutiliza cálculos al buscar y ordenar. Estado conservado
+       al remontar, AbortController para listeners y variables del tema.
+       Principal paga la franja de perspectivas, análisis usa el alto base;
+       scroll contenido en tablas y tarjetas adaptadas a móvil.
+     · **Lo vigila `test_stock_areas_pieza.py`**, sin red: paridad contra
+       pandas, `armar_listado` y `analisis_stock`; rankings, porcentajes,
+       cambios, cobertura, negativos, matriz, unidades, comparación,
+       excluidos, fuentes ausentes, callback, caché, Excel y móvil. Se suma
+       a la batería obligatoria. Probado con datos reales y salto a Productos.
+       (2026-10-24.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

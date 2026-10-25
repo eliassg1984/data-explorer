@@ -17,7 +17,7 @@ from graficos import inventario_productos_datos as datos
 from graficos.inventario import separar_activos
 
 ROOT=Path(__file__).parent
-JS=(ROOT/'graficos/inventario_productos.js').read_text(encoding='utf-8')
+JS=(ROOT/'graficos/inventario_base.js').read_text(encoding='utf-8')+(ROOT/'graficos/inventario_productos.js').read_text(encoding='utf-8')
 CSS=(ROOT/'graficos/inventario_productos.css').read_text(encoding='utf-8')
 COLS=dict(cod='COD',prod='PROD',fam='FAM',subfam='SUB',area='AREA',unidad='UM',
           punit='PRECIO',cant='Q',val='V',factor='FACTOR',usal='USAL',cod_area='ACOD')
