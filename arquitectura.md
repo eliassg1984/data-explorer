@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-738 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+739 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (240)
+**CSS y estilos** (241)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -305,6 +305,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
 - **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
 - **#733** — Consumo según recetas pasa del iframe a una pieza nativa y las tablas largas dejan de perder…
+- **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
 
 **Layout y alturas** (106)
 
@@ -818,7 +819,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 
-**Datos, R2 y DuckDB** (123)
+**Datos, R2 y DuckDB** (124)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -943,6 +944,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#720** — Ajuste > Diferencias del cierre es una PIEZA PROPIA con comparación entre sesiones
 - **#721** — Stock por Producto es una PIEZA PROPIA con ficha de producto y escenario de cobertura
 - **#725** — Compras › Vs año pasado es una PIEZA PROPIA con selección de varios meses y cobertura de…
+- **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
 
 **SUNAT y SIRE** (73)
 
@@ -56439,6 +56441,76 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        deduplicación, contribuciones, drilles, estado, volumen, descarga y
        móvil; forma parte de la batería obligatoria. (2026-10-25.)
 
+739. **Análisis de diferencias completa su conversión a pieza propia: la
+     ficha, sus pestañas y los filtros también son locales.** Conserva
+     `vista_diferencias` y sus seis argumentos; delega al nuevo
+     `_diferencias_pieza.py`. El cuerpo anterior queda como
+     `_vista_diferencias_legacy`, con la lista de #680, las figuras y todos
+     sus helpers. No se altera la cuenta de diferencias_ajuste ni su carga.
+     · **La sesión conserva su selector y su carga diferida**: sólo la
+       sesión elegida pide diferencias_ajuste_sesion, con los mismos sellos,
+       caché y fuentes de antes. No se anticipan otras sesiones ni se vuelven
+       a cargar los dieciocho parquets al tocar una fila. El catálogo del
+       selector muestra todas las familias y declara ese alcance; familias
+       y áreas de la lista se recortan después, dentro de la pieza. Se
+       conservan los estados y las firmas públicas para la transición de
+       módulos de #357. Una fuente ausente conserva el mensaje anterior.
+     · **El adaptador transporta el análisis**: `_diferencias_datos.py`
+       conserva todas las líneas y fichas de la sesión, fechas ISO, ceros,
+       negativos y nulos JSON. Prepara una vez los textos originales de
+       cabecera, cuenta, procedencia, requerimientos, perfil, usos e historial
+       mediante los helpers existentes. El HTML no vuelve a hacer cuentas
+       ni interpreta el texto de una pista para fabricar datos. La huella
+       incluye el resultado entero y el contexto de la sesión.
+     · **Áreas juntas conserva las reglas**: agrupación por código,
+       compensación completa con abs(v) <= EPS y abs(q) <= 1e-6, base por
+       magnitud de valor y cantidad, pistas del lado de la suma, exclusión
+       de líneas que pesan menos del diez por ciento y de la otra área ya
+       incluida. Une la misma pista una vez, con sus áreas, y conserva
+       orden, fuerza, referencias y desempates. Sin precio, pesa la cantidad.
+       La cobertura usa soles y el lado usa cantidad, como los helpers.
+       Buscar y filtrar pistas recorta la lista; los totales siguen siendo
+       los del recorte de familias y áreas anterior a esos controles.
+     · **Filtros y detalle locales**: familia, área, faltante/sobrante,
+       juntas/por área, origen y búsqueda literal de producto/código/área.
+       Las áreas incluyen líneas con diferencia física y valor cero. Se
+       reutiliza la agrupación mientras no cambien familias y áreas; buscar
+       no recalcula sus pistas. Lista por tandas de 150, sin repintarla al
+       abrir o cambiar una ficha. La ficha aparece sólo al elegir una fila
+       y se puede cerrar, manteniendo la preferencia de #680.
+     · **Las cuatro pestañas permanecen**: origen, cuenta/por área,
+       procedencia y usos. Sólo se dibuja la activa. La curva conserva el
+       recorrido escalonado del sistema y el conteo final, con cero visible
+       y valores originales. El contexto de procedencia/usos en un producto
+       agrupado identifica la línea de mayor magnitud de la que se toma la
+       ventana. No se suman cantidades entre productos o unidades distintas.
+       Los textos de cantidades pequeñas y el redondeo conservan la
+       referencia Python, incluidos los empates del float binario; las
+       descargas llevan números con seis decimales.
+     · **Mejoras de recorrido y compensaciones**: las pistas abren su
+       rastro con el dato y los pasos, conservando foco y Escape en shadow
+       root. Su panel se recuerda en un rerun sin cambio de fuente. Desde
+       el grupo se abre cada línea y se puede volver al mismo recorte; las
+       referencias a otra línea liberan los filtros que la escondan. El
+       callback _ir mantiene su firma y añade un contador para poder pedir
+       otra vez la misma ficha después de cerrarla localmente. El eco de
+       estado distingue una nueva orden externa de un rerun sin novedad.
+       Un panel permite revisar los productos compensados entre áreas y
+       los que tienen cantidad neta compensada con valor pendiente, que
+       antes no aparecían en las listas por signo de cantidad. No cambia los
+       totales ni la clasificación de las pistas.
+     · **Diez hojas de Excel**: lista visible, líneas del recorte, fuente
+       completa de la sesión, productos agrupados, pistas, áreas del
+       producto, camino e historial de la línea de contexto, usos disponibles
+       y contexto. Códigos como texto, fechas y unidades por fila; incluye
+       también lo compensado. Los usos conservan lo disponible en la ficha
+       canónica y su total informado, para distinguir una muestra de su
+       universo. No promete fuentes de entrada que el resultado no contiene.
+       `test_ajuste_diferencias_pieza.py` prueba contra los helpers, textos,
+       precisión, cobertura, umbrales, ceros, estado, saltos, pestañas,
+       volumen, modal, descarga y móvil, en la batería obligatoria.
+       (2026-10-25.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -56451,7 +56523,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#719**; la próxima toma el número siguiente.
+> última regla es la **#739**; la próxima toma el número siguiente.
 
 >
 

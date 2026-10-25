@@ -293,6 +293,8 @@ def _ir(clave, lado, soltar_area=True):
     escondan. La ficha se abre en ella."""
     ss = st.session_state
     ss[_K_FOCO] = clave
+    # El mismo destino puede solicitarse otra vez después de cerrar su ficha local.
+    ss['_ajdif_salto'] = ss.get('_ajdif_salto',0) + 1
     ss[K_LADO] = lado
     ss[K_PISTA] = "todas"
     ss[K_BUSCAR] = ""
@@ -719,6 +721,13 @@ def _kpi_sin_descontar(lin, lote):
 
 def vista_diferencias(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
                       col_producto):
+    """Lista, filtros y ficha locales; conserva la firma y los helpers (#739)."""
+    from ._diferencias_pieza import renderizar
+    return renderizar(df_full,col_fecha,col_familia,col_area,col_ajuste_val,col_producto)
+
+
+def _vista_diferencias_legacy(df_full, col_fecha, col_familia, col_area, col_ajuste_val,
+                             col_producto):
     """La vista «Análisis de diferencias» (regla #650)."""
     ss = st.session_state
     titulo = "Análisis de diferencias"
