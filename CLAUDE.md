@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -2432,3 +2432,11 @@ cantidades sin precio, redondeo y cantidades pequeñas, ficha y pestañas
 locales, saltos y regreso, compensaciones, tandas, estado, Excel y móvil.
 La sesión conserva su selector y la carga diferida original; las cuentas,
 firmas y helpers de `_diferencias.py` permanecen. Regla #739.
+
+`test_ajuste_pivote_pieza.py` vigila Evolución › Tabla dinámica como pieza
+propia: períodos y árbol contra `_armar_tabla_pivote_ajuste`, rachas por
+área, mes operativo, clasificación incompleta, cantidades opcionales y
+unidades distintas, ceros y ausencia de registros, búsqueda por código,
+estado, tandas en árbol y detalle, comparación, Excel y móvil. La firma y
+las cuentas de `_pivote.py` permanecen; sólo la fecha vuelve a Python.
+Regla #740.

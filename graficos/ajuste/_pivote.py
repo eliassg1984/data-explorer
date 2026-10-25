@@ -118,6 +118,14 @@ _K_AREA_DETALLE = "ajuste_det_filtro_area"
 
 def vista_detalle_ajuste(d, col_fecha, col_familia, col_area, col_ajuste_val,
                          col_producto, col_cantidad):
+    """Tabla propia, con la misma firma y el calendario de siempre (#740)."""
+    from ._pivote_pieza import renderizar
+    return renderizar(d,col_fecha,col_familia,col_area,col_ajuste_val,
+                      col_producto,col_cantidad)
+
+
+def _vista_detalle_ajuste_legacy(d, col_fecha, col_familia, col_area, col_ajuste_val,
+                                col_producto, col_cantidad):
     """«Detalle por producto»: la tabla pivote en su propia tarjeta, con su
     área y su selector Corte / Mes en la cabecera (sin Semana desde el
     2026-10-02, regla #585). Elige SUS meses, independientes de los de

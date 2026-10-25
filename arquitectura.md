@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-739 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+740 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (241)
 
@@ -546,7 +546,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#737** — En qué se fue cada producto es una pieza propia, con tabla y ficha locales y la cuenta del…
 - **#738** — Movimientos por Tipo de Stock es una pieza propia, con filtros y contribuciones locales sin…
 
-**AgGrid y tablas** (96)
+**AgGrid y tablas** (97)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -644,6 +644,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 - **#724** — Stock › Por área y familia es una PIEZA PROPIA con matriz y comparación entre áreas
+- **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
 
 **Streamlit** (171)
 
@@ -1022,7 +1023,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 
-**Fechas, rangos y cortes** (21)
+**Fechas, rangos y cortes** (22)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -1045,6 +1046,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
 - **#734** — Requerimientos por Área es una pieza propia completa: la cadena, los productos y su ficha…
 - **#738** — Movimientos por Tipo de Stock es una pieza propia, con filtros y contribuciones locales sin…
+- **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
 
 **Asistente IA** (5)
 
@@ -56511,6 +56513,56 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        volumen, modal, descarga y móvil, en la batería obligatoria.
        (2026-10-25.)
 
+740. **La tabla dinámica de Ajuste es otra perspectiva visible, aunque
+     comparta la pestaña Evolución** (`graficos/ajuste/_pivote.py`): auditar
+     sólo las pestañas del rail dejaba esta grilla AgGrid fuera de la
+     conversión. La ruta del dibujante y sus perspectivas, no una búsqueda
+     de Plotly, es el inventario de vistas pendientes. Los helpers y grids
+     antiguos que ya no llama ninguna ruta visible son referencias, no
+     pendientes nuevos; las Tablas ocultas de #507 siguen ocultas.
+     · **Contrato y fechas**: `vista_detalle_ajuste` conserva sus siete
+       argumentos y delega en `_pivote_pieza.py`; el cuerpo anterior queda
+       como `_vista_detalle_ajuste_legacy`. No cambia la cuenta pura del
+       pivote ni `periodos_ajuste`. El calendario y el modo operativo usan
+       `ctx_meses`, `selector_meses`, `recortar_meses` y sus claves de
+       siempre. La familia de la página sigue recortando antes de la pieza.
+     · **Transporte explícito**: `_pivote_datos.py` conserva fecha real,
+       mes calculado por `fechas_del_mes`, área normalizada, familia,
+       subfamilia, producto, código, unidad, cantidad y valor originales.
+       No redondea; nulos y no finitos se convierten en null JSON. Una
+       bandera identifica las filas sin las claves que requiere el árbol:
+       quedan en la fuente exportable, pero no entran en sus totales.
+       La huella de la caché incluye datos, columnas, modo y contexto.
+     · **Interacciones locales**: Mes/Corte, área, familia local, búsqueda
+       literal por nombre/código, orden por columna, apertura del árbol y
+       ficha no solicitan Python. El navegador rellena los meses entre las
+       dos puntas y forma los cortes con el salto de `cortes.py`, transportado
+       como dato. Rehace las rachas después de filtrar áreas: formar los
+       cortes antes del filtro puede unir conteos que esa área no tuvo.
+       Los períodos se determinan antes de quitar las filas sin clasificar,
+       igual que el modelo. El árbol agrupa Familia/Subfamilia/Producto y
+       cada celda y total monetario conserva el pivote canónico.
+     · **Lectura enriquecida**: cabeceras por año, nombre y total fijos,
+       tres modos de lectura y comparación entre dos períodos. La columna
+       delta es segundo menos primero y dice «sin base» si falta un conteo.
+       Un registro con ajuste cero se distingue de la ausencia de registros.
+       Las cantidades sólo se suman al compartir unidad; una agrupación
+       mixta dice «varias unidades». Si no existe columna de cantidad no se
+       inventan ceros. La ficha conserva códigos y unidades, muestra la
+       curva sin unir períodos ausentes, recurrencia, cambios de signo y
+       registros de origen. El árbol y el detalle se dibujan de a 150 filas;
+       abrir la ficha no reconstruye la tabla. Estado con eco para conservar
+       filtros locales y admitir una nueva selección externa.
+     · **Excel con siete hojas**: matriz de productos del recorte, registros
+       filtrados, fuente entera del rango, cobertura por período, detalle
+       elegido, comparación y contexto. Códigos como texto y números con
+       seis decimales; cobertura distingue cero numérico de falta de
+       registros. No suma cantidades de unidades diferentes en la comparación.
+       `test_ajuste_pivote_pieza.py` contrasta ambas granularidades y áreas
+       contra el pivote original, además de unidades, precisión, búsqueda,
+       caché, estado, tandas, exportación y ancho móvil. En la batería
+       obligatoria. (2026-10-25.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -56523,7 +56575,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#739**; la próxima toma el número siguiente.
+> última regla es la **#740**; la próxima toma el número siguiente.
 
 >
 

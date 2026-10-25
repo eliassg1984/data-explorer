@@ -126,7 +126,7 @@ class Navegador(unittest.TestCase):
             self.assertEqual(len([n for n in z.namelist() if n.startswith('xl/worksheets/')]),10);self.assertIn('0000002',z.read('xl/worksheets/sheet5.xml').decode());self.assertIn('<v>100.123457</v>',z.read('xl/worksheets/sheet6.xml').decode());self.assertNotIn('9999999',z.read('xl/worksheets/sheet6.xml').decode())
 
     def test_movil_popovers_y_eventos_no_duplicados(self):
-        root=self.mount();self.mount();self.pg.set_viewport_size({'width':390,'height':844});self.assertLessEqual(root.evaluate('e=>e.getBoundingClientRect().right'),390);self.pg.wait_for_function('document.querySelector("#host").shadowRoot.querySelector(".imv-chart svg").viewBox.baseVal.width<=400');root.locator('details[data-filter=familias] summary').click();self.assertLessEqual(root.locator('details[data-filter=familias] .imv-pop').evaluate('e=>e.getBoundingClientRect().right'),390);root.locator('[data-k=productos]>summary').click();self.assertTrue(self.pg.evaluate('__stockMov.s.productos'))
+        root=self.mount();self.mount();self.pg.set_viewport_size({'width':390,'height':844});self.assertLessEqual(root.evaluate('e=>e.getBoundingClientRect().right'),390);self.pg.wait_for_function('document.querySelector("#host").shadowRoot.querySelector(".imv-chart svg").viewBox.baseVal.width<=400');root.locator('details[data-filter=familias] summary').click();self.assertLessEqual(root.locator('details[data-filter=familias] .imv-pop').evaluate('e=>e.getBoundingClientRect().right'),390);root.locator('[data-k=productos]>summary').click();self.pg.wait_for_function('__stockMov.s.productos===true');self.assertTrue(self.pg.evaluate('__stockMov.s.productos'))
 
 
 if __name__=='__main__':unittest.main(verbosity=2)
