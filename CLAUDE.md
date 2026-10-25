@@ -327,6 +327,8 @@ simétrico de precio/rendimiento, rastro completo, búsqueda, Excel numérico,
 listas largas, estado, teclado y móvil. El foco sigue compartido con
 Rendimiento mediante un evento validado por sello/código; el resto de los
 controles es local. Firma y referencia legacy conservadas. Regla #729.
+La búsqueda se prueba con escritura continua y cursor dentro de un shadow
+root real; un `fill` de una sola vez no detecta la pérdida de foco (#731).
 
 `test_merma_rendimiento_pieza.py` vigila Producción › Porcionamientos ›
 Rendimiento como pieza propia (`merma_rendimiento_datos.py`, `_pieza.py`,

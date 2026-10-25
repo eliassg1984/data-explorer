@@ -95,9 +95,9 @@ class Navegador(unittest.TestCase):
         try:cls.b=cls.pw.chromium.launch()
         except Exception as e:cls.pw.stop();raise unittest.SkipTest(str(e))
         cls.pg=cls.b.new_page(viewport={'width':1323,'height':619},accept_downloads=True);cls.pg.set_default_timeout(7000)
-        cls.pg.set_content('<div id="montar"></div>')
+        cls.pg.set_content('<div id="host"></div>')
         cls.pg.add_style_tag(content=':root{--alto-util:531px;--text-primary:rgb(40,40,50);--text-secondary:rgb(100,100,110);--accent:rgb(108,92,231);--accent-deep:rgb(80,65,180);--accent-tint:rgb(245,243,255);--bg-card:white;--border:rgb(220,220,230);--danger:crimson;}body{margin:0}')
-        cls.pg.add_style_tag(content=(ROOT/'graficos/merma_proveedores.css').read_text(encoding='utf-8'))
+        cls.pg.evaluate('css=>{const h=document.querySelector("#host"),sr=h.attachShadow({mode:"open"}),style=document.createElement("style");style.textContent=css;sr.append(style);window.__pvMount=document.createElement("div");sr.append(__pvMount);}',(ROOT/'graficos/merma_proveedores.css').read_text(encoding='utf-8'))
         js=(ROOT/'graficos/_xlsx.js').read_text(encoding='utf-8')+(ROOT/'graficos/merma_proveedores.js').read_text(encoding='utf-8').replace('export default function(component)','window.__montarPVU=function(component)')
         cls.pg.add_script_tag(content=js)
 
@@ -107,7 +107,7 @@ class Navegador(unittest.TestCase):
     def calc(self,P,s):return self.pg.evaluate('([P,s])=>__provUtilDatos.calcular(P,__provUtilDatos.estado(s))',[P,s])
 
     def mount(self,P=None):
-        self.pg.evaluate('P=>{window.__provUtil?.abort.abort();window.__provUtil=null;window.__requests=[];__montarPVU({data:P,parentElement:document.querySelector("#montar"),setTriggerValue:(...a)=>__requests.push(a)})}',P or payload())
+        self.pg.evaluate('P=>{window.__provUtil?.abort.abort();window.__provUtil=null;window.__requests=[];__montarPVU({data:P,parentElement:__pvMount,setTriggerValue:(...a)=>__requests.push(a)})}',P or payload())
         return self.pg.locator('.pvu')
 
     def test_seis_ventanas_y_atribuciones_contra_pandas(self):
@@ -165,6 +165,12 @@ class Navegador(unittest.TestCase):
                 for w in ['Costo del día','Cantidad útil','Última compra','10.123457']:self.assertIn(w,text)
                 self.assertNotIn('<f>',text)
 
+    def test_escritura_continua_en_shadow_conserva_cursor_y_foco(self):
+        root=self.mount();q=root.locator('[data-k=q]');q.click();q.press_sequentially('0001');self.assertEqual(q.input_value(),'0001')
+        self.assertEqual(self.pg.evaluate('__pvMount.getRootNode().activeElement.dataset.k'),'q')
+        root.locator('[data-a=modo][data-v=Porcionamientos]').click();q=root.locator('[data-k=dq]');q.click();q.press_sequentially('sin coincidencia');self.assertEqual(q.input_value(),'sin coincidencia')
+        self.assertEqual(self.pg.evaluate('__pvMount.getRootNode().activeElement.dataset.k'),'dq');self.assertEqual(self.pg.evaluate('__requests'),[])
+
     def test_vacio_sin_compras_y_movil(self):
         raw,_=muestra();self.mount(payload(raw.iloc[:0]));self.assertEqual(self.pg.evaluate('__provUtil.D.rows.length'),0)
         self.mount(payload(c=None));self.assertIn('No se pudo leer Compras',self.pg.locator('.pvu').inner_text())
@@ -174,7 +180,7 @@ class Navegador(unittest.TestCase):
 
     def test_estado_y_cambio_externo_de_producto(self):
         P=payload();root=self.mount(P);root.locator('[data-a=ventana][data-v="6 meses"]').click();root.locator('[data-a=modo][data-v=Comparar]').click()
-        P['comun']='0002';self.pg.evaluate('P=>__montarPVU({data:P,parentElement:document.querySelector("#montar"),setTriggerValue:(...a)=>__requests.push(a)})',P)
+        P['comun']='0002';self.pg.evaluate('P=>__montarPVU({data:P,parentElement:__pvMount,setTriggerValue:(...a)=>__requests.push(a)})',P)
         self.assertEqual(self.pg.evaluate('__provUtil.P.productos[__provUtil.s.prod].cod'),'0002');self.assertEqual(self.pg.evaluate('__provUtil.s.ventana'),'6 meses');self.assertEqual(self.pg.evaluate('__provUtil.s.modo'),'Comparar');self.assertEqual(self.pg.evaluate('__requests'),[])
 
     def test_listas_largas_por_tandas_y_excel_completo(self):

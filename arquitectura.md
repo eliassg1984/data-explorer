@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-730 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+731 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (239)
 
@@ -638,7 +638,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 - **#724** — Stock › Por área y familia es una PIEZA PROPIA con matriz y comparación entre áreas
 
-**Streamlit** (170)
+**Streamlit** (171)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -810,6 +810,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#713** — Compras › Producto es una PIEZA PROPIA (producto.js + .css), montada DOS veces —una en cada…
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
+- **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 
 **Datos, R2 y DuckDB** (123)
 
@@ -55953,6 +55954,25 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        selección compartida, saltos repetidos, caché, teclado/búsqueda en
        shadow root, fichas, Excel, móvil y listas largas. Se suma a la
        batería y se comprueba además con datos reales. (2026-10-25.)
+
+
+731. **Un buscador que se redibuja debe leer el foco de SU shadow root.**
+     En Costo por unidad útil, teclear una palabra dejaba sólo la primera
+     letra: `document.activeElement` era el host de Streamlit y no el input.
+     Al cambiar el filtro se reemplazaba ese input y no se restauraba su
+     foco. `dibujar` lee ahora `raiz.getRootNode().activeElement`, con
+     respaldo en `document.activeElement` para un montaje sin shadow DOM,
+     y conserva clave de input, cursor y selección al volver a dibujar.
+     · Afectaba tanto la búsqueda de productos/proveedores como la de
+       porcionamientos. No cambia filtros, cifras, Excel ni el foco
+       compartido de producto. Se renueva el registro del componente para
+       cargar el JS actualizado conservando su key y su contrato.
+     · **Un `fill` NO simula escribir varias letras**: dispara un solo
+       input y terminaba verde aunque un usuario sólo pudiera escribir
+       una letra. `test_merma_proveedores_pieza.py` monta ahora TODOS sus
+       casos en un shadow root real y añade escritura tecla a tecla en
+       ambos campos, comprobando valor completo, foco y ausencia de eventos
+       a Python. Verificado también en la app real. (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
