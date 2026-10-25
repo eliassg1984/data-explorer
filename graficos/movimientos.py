@@ -1228,6 +1228,26 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
         # Sin código de producto (el demo) queda la tabla de hojas de
         # siempre: la tarjeta de productos (regla #701) cruza por código.
         con_tarjeta = bool(col_cod_req and col_req)
+        if con_tarjeta:
+            # La cadena, productos y ficha viajan juntos: seleccionar un área
+            # ya no vuelve a Python. Las marcas siguen mirando el registro.
+            from graficos.requerimientos_area_pieza import renderizar as req_area
+            vent = ventana_meses(rng[1] if rng else pd.Timestamp.today().normalize())
+            _vent, _ = requerimientos_que_suman(
+                _req_de(vent[:2]), col_estado=col_estado, col_prod=col_prod,
+                col_doc=col_req, col_val=col_metrica)
+            req_area(validas, _vent,
+                dict(fecha=col_fecha, doc=col_req, sub=col_sub, cod=col_cod_req,
+                     prod=col_prod, cant=col_cant, valor=col_metrica,
+                     fam=col_fam, subfam=col_subfam),
+                dict(fecha=col_fecha_reg, doc=col_req, sub=col_sub,
+                     cod=col_cod_req, cant=col_cant, valor=col_metrica,
+                     estado=col_estado), vent,
+                unidades=unidades_kardex(), rango=rng, fecha=fecha, nota=nota,
+                titulo=("Procesado" if fecha_req == FECHA_PROCESO else "Requerido") + " por sub almacén",
+                contexto={"Familias de la página": list(fam_sel),
+                          "Áreas de la página": list(sub_sel), "Fecha de la vista": fecha_req})
+            return
         ruta = drill_tablas.seccion_cadena(
             validas, pref="mov", slug="subalm", nota=nota,
             niveles=((col_sub, "sub almacén"), (col_fam, "familia"),

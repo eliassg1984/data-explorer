@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-733 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+734 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (240)
 
@@ -1016,7 +1016,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 
-**Fechas, rangos y cortes** (19)
+**Fechas, rangos y cortes** (20)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -1037,6 +1037,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#647** — El precio de un corte lo arma el PESO que el Almacén le asigna: el precio de los cortes en…
 - **#730** — Rendimiento como pieza propia: curvas, cortes y el porqué del precio
 - **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
+- **#734** — Requerimientos por Área es una pieza propia completa: la cadena, los productos y su ficha…
 
 **Asistente IA** (5)
 
@@ -1089,7 +1090,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (220)
+**Decisiones de diseño y UX** (221)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1311,6 +1312,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#723** — Ventas › Control de pedidos es una PIEZA PROPIA con investigación por pedido y foto de…
 - **#729** — Costo por unidad útil como pieza propia: atribución intacta, comparación explicable
 - **#733** — Consumo según recetas pasa del iframe a una pieza nativa y las tablas largas dejan de perder…
+- **#734** — Requerimientos por Área es una pieza propia completa: la cadena, los productos y su ficha…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -56119,6 +56121,77 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        numérica, rastro y móvil. La batería obligatoria incorpora este
        script. Fecha y familias de la página siguen siendo nativas; los
        controles internos siguen locales. (2026-10-25.)
+
+
+734. **Requerimientos por Área es una pieza propia completa: la cadena,
+     los productos y su ficha comparten selección local.** El dibujante
+     existente de `movimientos.py` delega en `requerimientos_area_pieza`
+     cuando hay código y documento. Conserva firmas y referencias de
+     `movimientos_requerimientos.py` (#701), y la cadena anterior para el
+     contexto de demostración sin código. Los controles de fecha, lado,
+     corte y registro/proceso siguen siendo los nativos compartidos.
+     · **Fuente y ventana conservadas**: rango válido sin anulados ni
+       líneas vacías (#641), y doce meses CALENDARIO de `ventana_meses`:
+       termina al acabar el mes del último día del rango, con fin excluido.
+       Puede incluir días posteriores al fin del rango. Se informa en el
+       pie y el Excel. El adaptador usa `lineas_req`, unidad actual del
+       maestro y `marcas_de`; éstas siempre se calculan por REGISTRO y sus
+       90 días anteriores, aunque la vista esté por proceso. Cantidades e
+       importes viajan sin redondeo previo; la caché firma las fuentes
+       completas y su distribución, aliases, unidades, kardex y contexto.
+     · **La cuenta de productos es la de `productos_requeridos`**: una
+       fila por código, participación y precio del rango; en la ventana,
+       valor, días distintos, mediana de cantidad POR LÍNEA, fuera de lo
+       habitual y su exceso, primeras veces y repeticiones. No se suma el
+       documento antes de hallar la mediana. Los grupos conservan los
+       umbrales de 150, 53 y 13 días. Las marcas se transportan desde el
+       helper, sin volver a definir lo habitual en el navegador.
+     · **Cobertura y ausencia son distintas**: `salida_por_area` sigue
+       calculando la cobertura por área/producto, con ventas, producción,
+       notas y transferencia positiva, tope superior de uno y sin inventar
+       tope inferior. Un área descarga si tiene ventas, producción o notas;
+       una transferencia sola no la convierte en un área que descarga.
+       El navegador pondera por valor pedido, con las mismas exclusiones
+       de faltantes y áreas sin descarga. Conserva el denominador del
+       resumen original, los nulos y los valores negativos. No descarga,
+       falta de cobertura y fuente kardex ausente se muestran distintos.
+     · **No confundir dos transferencias**: la cobertura toma la parte
+       positiva del total por área en doce meses. La curva de la ficha
+       toma la parte positiva de cada MES, después de sumar las áreas del
+       producto elegido. No son intercambiables. La ficha conserva pedido
+       mensual, salida registrada, ajuste, sus vías y las 53 casillas de
+       siete días desde el inicio de la ventana. Ajuste positivo se muestra
+       como faltante y negativo como sobrante; no se suma a la salida.
+     · **Mejoras locales**: búsqueda por código o producto, orden por
+       columnas, filtros de frecuencia, poca salida y marcas; selección
+       de mes en la curva o semana en los casilleros para acotar los pedidos,
+       búsqueda de documento/área y botón para quitar el tramo. La búsqueda
+       mantiene foco dentro de shadow root; cambiar el área suelta familia
+       y subfamilia, como la cadena original. Elegir producto actualiza
+       sólo la ficha y sus pedidos, conservando tanda y posición de lista.
+       El agregado del recorte se guarda por área/familia/subfamilia: buscar,
+       ordenar o filtrar marcas no vuelve a recorrer la ventana completa.
+     · **El requerimiento entero**: elegir uno de los pedidos abre una
+       modal con todas sus líneas disponibles en las fuentes de la página,
+       sin recorte por producto ni filtros del navegador. Se identifica
+       ese alcance; no se inventan líneas fuera de las fuentes cargadas.
+       Teclado, cierre con Escape y tamaño móvil forman parte de las pruebas.
+     · **Volumen y Excel**: productos, pedidos y documento se dibujan
+       en tandas de 150, sin límite para consultar o exportar. Ocho hojas:
+       productos visibles en su orden, productos del recorte, meses del
+       producto, pedidos filtrados, fuentes completas del rango y ventana,
+       kardex de referencia y contexto. Códigos como texto y valores
+       numéricos con seis decimales. Unidades por producto; no sumar sus
+       cantidades. Fuente ausente conserva celdas vacías y su aviso.
+     · **Pruebas**: `test_requerimientos_area_pieza.py` compara todas
+       las combinaciones de área/familia/subfamilia de su muestra contra
+       los helpers, con y sin kardex, transferencias de ambos signos,
+       cantidades negativas, cobertura nula, días repetidos y pedidos de
+       varias líneas. Vigila caché, fechas, las mejoras, persistencia,
+       tablas de más de 600 productos, Excel y móvil. El componente usa
+       los colores de `tema.py`; en móvil, las columnas de la ficha tienen
+       mínimo cero para contener el ancho mínimo de la curva dentro de su
+       desplazamiento horizontal. (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
