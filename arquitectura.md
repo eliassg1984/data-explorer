@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-722 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+723 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (233)
+**CSS y estilos** (234)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -298,6 +298,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#717** — Ventas › Comparativo es una PIEZA PROPIA, con las cinco mejoras acordadas
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#721** — Stock por Producto es una PIEZA PROPIA con ficha de producto y escenario de cobertura
+- **#723** — Ventas › Control de pedidos es una PIEZA PROPIA con investigación por pedido y foto de…
 
 **Layout y alturas** (100)
 
@@ -1072,7 +1073,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (217)
+**Decisiones de diseño y UX** (218)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1291,6 +1292,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#719** — Ventas > Meseros es una PIEZA PROPIA con la ficha al lado de la lista y una planilla navegable
 - **#720** — Ajuste > Diferencias del cierre es una PIEZA PROPIA con comparación entre sesiones
 - **#722** — Requerimientos y Salidas por período son PIEZAS PROPIAS con selección de tramos, búsqueda y…
+- **#723** — Ventas › Control de pedidos es una PIEZA PROPIA con investigación por pedido y foto de…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -55368,6 +55370,87 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        guardas de registro, tramos, búsqueda, persistencia, documento
        completo, Excel numérico, tablas largas, teclado y móvil. Se añade
        a la batería obligatoria de `CLAUDE.md`. (2026-10-24.)
+
+723. **Ventas › Control de pedidos es una PIEZA PROPIA con investigación
+     por pedido y foto de ocupación** (`st.components.v2`,
+     `ventas_control_pieza.py`, `ventas_control_datos.py`,
+     `ventas_control.js` y `.css`). Continúa la migración de vistas lentas
+     (#713–#722). `_ventas_control(cortesias, canales)` conserva firma,
+     decoradores y símbolo (#357); deriva al nuevo montaje. Las cuentas
+     puras de `ventas_control.py` y el dibujante anterior siguen disponibles.
+     · **Las reglas del POS permanecen en Python** (#594): `pedidos`,
+       `transacciones`, `motivo_categoria`, `clase_plato_anulado`,
+       `tipo_transferencia`, `tiempos` y `grupo_de`. El navegador recibe
+       clases y tramos ya calculados, fechas completas, códigos como texto,
+       cantidades e importes sin redondear. No clasifica un comprobante por
+       su estado: el ANULADO del pedido conserva su excepción con nombre
+       a la definición de venta (#524). Corrección al digitar, enviado a
+       cocina y transferido a cortesía mantienen sus prioridades y umbrales.
+     · **La apertura desconocida no es un número**: mapear destinos Arrow
+       contra una Series datetime VACÍA fuerza float en pandas 3. Sin
+       pedidos, `tipo_transferencia` crea una Series NaT alineada al índice.
+       Sin apertura se conserva la clasificación anterior, salvo cortesía
+       conocida. No inventar la fecha de un destino fuera del rango.
+     · **Día del turno o fecha real** (#593): el mismo selector de Ventas,
+       con la fecha de apertura para pedidos y la de transacción para sus
+       movimientos. Los mapas Día/Semana/Mes y sus rótulos vienen de las
+       funciones compartidas; semanas cortadas conservan los días del rango.
+       El resumen incluye también un período que sólo tiene transacciones:
+       que el pedido no esté cargado no puede borrar ese movimiento.
+     · **Canal se aplica por el pedido de ORIGEN**, como antes. Sin pedidos
+       disponibles no se puede atribuir canal a una transacción: con canal
+       elegido no se presentan movimientos sin ese cruce. Sin canal se
+       conservan para investigar. Un resultado vacío o una fuente ausente
+       se informa como falta de registros disponibles, sin asegurar cuál de
+       las dos cosas ocurrió. No se transforma en ocupación cero confirmada.
+     · **Mismos cuatro apartados**: Anulaciones, Transferencias, Tiempos y
+       Ocupación. Los KPI y el resumen son del rango con sus filtros; un
+       período sólo acota el detalle. Mesa y Mesero locales filtran pedidos
+       y transacciones por su origen. Lo elegido se conserva si desaparece
+       con otra fecha. Búsqueda y Tipo/motivo acotan sólo la lista. «Claves
+       del ámbito» conserva motivos, clases, responsables, platos, servicios,
+       precuentas y duración máxima que antes vivían en las filas desplegadas.
+     · **Medianas de registros originales**, no promedios de medianas. Los
+       tramos negativos o sin fecha quedan sin dato; no se rellenan con cero.
+       Mesas reabiertas más de 120 minutos antes del primer plato se miden
+       desde éste (#594). P90 usa interpolación lineal de duraciones totales
+       válidas y muestra el tamaño de la muestra. «Desde P90» abre pedidos
+       desde ese percentil e incluye empates: describe la cola observada,
+       no impone un objetivo de servicio. Grupos y mesas abren sus pedidos.
+     · **Ocupación con fecha entera**: Python entrega los slots de cada
+       pedido, por techo de inicio y piso de comprobante, con extremos
+       incluidos, desde 12:00 hasta 01:30 del día siguiente. El mapa mantiene
+       la cuenta de pedidos de `ocupacion` y muestra las mesas distintas
+       observadas como referencia, sin llamarla aforo ni contar asientos.
+       Tocar una celda lista exactamente los pedidos de esa foto; nunca se
+       aproxima por «mismo día» o por solaparse con toda la media hora.
+     · **Ficha del pedido**: datos, cronología apertura/primer/último plato/
+       precuenta/comprobante/anulación, tramos y transacciones relacionadas
+       como origen o destino. Una transferencia enlaza ambos pedidos. Si uno
+       no está entre las fechas/canales cargados se explica y se conservan
+       sus movimientos disponibles. Salir de un filtro local para seguir un
+       enlace se indica. Consumo e importes anulados no se llaman venta neta
+       ni pérdida confirmada; los datos no prueban esas dos cosas.
+     · **Excel de la vista y del pedido**: tablas del ámbito y del detalle,
+       foto/mapa cuando corresponde, ficha y transacciones relacionadas;
+       Contexto con fechas incluidas, base temporal, canal, filtros, grupo,
+       búsqueda, tipo, período, foto, P90 y fuentes. Minutos e importes son
+       numéricos con seis decimales (#720), no duraciones hechas texto.
+       Todas las filas, también las aún no dibujadas: tablas en tandas de
+       150 y mapa en tandas de 45 días. Scroll contenido en cada tabla.
+     · **Estado y caché**: sello SHA del contenido con JSON ordenado; caché
+       de sesión por versiones de ambos parquets, fechas, turno, canales y
+       cortesías. No se pega una respuesta sin fuente en esa caché. El
+       navegador reutiliza su base filtrada y resúmenes por grano al buscar,
+       ordenar y cambiar de apartado. Otro sello limpia foto/pedido/período.
+       AbortController elimina listeners al remontar. Dos tarjetas con alto
+       útil, CSS del shadow root y variables del tema; botón de fecha nativo
+       con ancho reservado y wrapper sin el gap de 16 px (#716).
+     · **Lo vigila `test_control_pieza.py`**, sin red: cuentas originales,
+       calendario, cortesías, reaperturas, medianoche y extremos de foto,
+       nulos, P90, canal sin pedido, fuentes parciales, filtros, búsqueda,
+       ficha, exportación numérica, caché, remontaje, teclado y móvil.
+       Se añade a la batería obligatoria de `CLAUDE.md`. (2026-10-24.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

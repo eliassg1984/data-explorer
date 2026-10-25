@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -257,6 +257,15 @@ búsqueda, productos por unidad, documento completo, Excel, tablas largas,
 remontaje y móvil en Chromium sin red. Las firmas de las cuatro tarjetas
 se conservan; Producción y Porcionamientos siguen en el dibujante anterior.
 La fecha y sus ajustes permanecen nativos. Ver regla #722.
+
+`test_control_pieza.py` vigila Ventas › Control de pedidos como pieza propia
+(`ventas_control.js` y `.css`, `ventas_control_datos.py` y
+`ventas_control_pieza.py`): resúmenes, clases del POS, medianas, grupos,
+mesas y ocupación contra las funciones originales; calendario, medianoche,
+reaperturas, fuentes parciales y canal desconocido, filtros, búsqueda,
+ficha origen/destino, P90, Excel numérico, tablas largas, estado y móvil.
+La firma y los cálculos puros de `ventas_control.py` se conservan; la fecha
+sigue nativa y las demás interacciones son locales. Ver regla #723.
 
 ## El asistente IA no adivina: consulta
 

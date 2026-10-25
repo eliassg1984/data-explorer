@@ -228,9 +228,11 @@ def tipo_transferencia(t, p, cortesias=frozenset()):
     """Qué fue cada transferencia: «A cortesía» si el pedido de destino se
     facturó como cortesía, «Cuenta dividida» si el destino se abrió hasta
     `_NUEVA_MIN` minutos antes, y si no «Entre mesas». Pura."""
-    ap = t["destino"].map(p.set_index("ped")["apertura"]
-                          if p is not None and not p.empty
-                          else pd.Series(dtype="datetime64[ns]"))
+    # Mapear contra una Series datetime vacía fuerza float en pandas 3
+    # (destino Arrow). Sin pedidos, la apertura es desconocida para todos.
+    ap = (t["destino"].map(p.set_index("ped")["apertura"])
+          if p is not None and not p.empty else
+          pd.Series(pd.NaT,index=t.index,dtype="datetime64[ns]"))
     nueva = ap.notna() & (ap >= t["f_trx"] - pd.Timedelta(minutes=_NUEVA_MIN))
     cort = t["destino"].isin(set(cortesias))
     return pd.Series(np.where(cort, "A cortesía",
@@ -353,10 +355,14 @@ def _cargar(ini, fin, turno, canales):
                                    "DIA CONTABLE" if turno
                                    else "FECHA TRANSACCION",
                                    ini, fin, turno=False), turno)
-    if canales and p is not None:
-        p = p[p["canal"].isin(canales)]
-        if t is not None:
-            t = t[t["ped"].isin(set(p["ped"]))]
+    if canales:
+        if p is None:
+            # Sin el pedido de origen no se conoce el canal de la transacción.
+            t = None
+        else:
+            p = p[p["canal"].isin(canales)]
+            if t is not None:
+                t = t[t["ped"].isin(set(p["ped"]))]
     for x in (p, t):
         if x is not None:
             x.drop(x[(x["dia"] < pd.Timestamp(ini))
@@ -748,6 +754,12 @@ def _fig_ocupacion(z, dias, n_mesas):
 @una_vez_por_corrida
 @st.fragment
 def _ventas_control(cortesias=frozenset(), canales=()):
+    """Firma conservada; la fecha es nativa y el análisis es local (#723)."""
+    from .ventas_control_pieza import renderizar
+    return renderizar(cortesias,canales)
+
+
+def _ventas_control_legacy(cortesias=frozenset(), canales=()):
     """«Control de pedidos». `cortesias`: los pedidos que se facturaron como
     cortesía en el rango (de `ventas.parquet`), para reconocer lo que se
     pasó a una cuenta de cortesía; `canales`, el filtro de Ventas."""
