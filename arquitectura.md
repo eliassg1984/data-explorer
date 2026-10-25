@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-735 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+736 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (240)
 
@@ -306,7 +306,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
 - **#733** — Consumo según recetas pasa del iframe a una pieza nativa y las tablas largas dejan de perder…
 
-**Layout y alturas** (105)
+**Layout y alturas** (106)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -413,8 +413,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
 - **#729** — Costo por unidad útil como pieza propia: atribución intacta, comparación explicable
 - **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
+- **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 
-**Plotly y figuras** (124)
+**Plotly y figuras** (125)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -540,6 +541,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#716** — Compras › «Compras por período» es una PIEZA PROPIA (semanal.js + .css): sólo la fecha vuelve…
 - **#717** — Ventas › Comparativo es una PIEZA PROPIA, con las cinco mejoras acordadas
 - **#722** — Requerimientos y Salidas por período son PIEZAS PROPIAS con selección de tramos, búsqueda y…
+- **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 
 **AgGrid y tablas** (96)
 
@@ -56270,6 +56272,53 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        productos, Excel numérico y móvil. Se añade a la batería obligatoria
        y se comprueba en la app con las mismas fuentes de la referencia.
        (2026-10-25.)
+
+736. **Sin plato por cierre es una pieza propia: lista completa, cierres
+     locales y comparación con días reales.** `tarjeta_sin_plato(fam_sel=())`
+     conserva su firma; delega a `sin_plato_cierre_pieza.py`. El cuerpo previo
+     queda en `_tarjeta_sin_plato_legacy`, con sus helpers y figuras. No se
+     retocan las cuentas de `sin_plato.py` ni la carga canónica `_cargar`.
+     · **Una fuente para todas las selecciones**: `destino_datos.py`
+       transporta las filas de todos los cierres, metadatos sin mezclar
+       códigos/unidades/descripciones y totales completos. No redondea
+       previamente, conserva cero y negativos y convierte no finitos en
+       nulos JSON. La huella incluye distribución y contexto. Los seis
+       indicadores y la ecuación usan los helpers originales para cada
+       cierre: sus bases no se vuelven a sumar en JavaScript. Familia
+       recorta desde Python; el ámbito sigue siendo el restaurante entero.
+     · **Cierres reales**: selector, flechas y barras funcionan localmente.
+       Las fechas son ambos extremos incluidos, del día posterior al
+       conteo previo al último conteo actual, no meses calendario. El
+       gráfico conserva las doce columnas de referencia, valores firmados
+       y sobrante invertido; apila positivos y negativos por separado.
+       El cierre local se recuerda por clave estable, sin que un rerun sin
+       cambio externo lo vuelva al inicial; una clave desaparecida se suelta.
+     · **Dónde se concentra sin head(40)**: alimentos con sinplato_v > 0.5,
+       como la referencia, ahora todos consultables en tandas de 150.
+       Búsqueda literal por código/producto/familia, mínimos de importe,
+       orden por valor, producto o cambio, y revisión aparte de sobrantes.
+       Estos no compensan las pérdidas. El dominante conserva incluso el
+       desempate por nombre del helper original. Cambio por código y unidad
+       frente al cierre previo: ausente es sin referencia, cero es cero.
+     · **Comparación útil**: desglose en soles y por día natural frente al
+       cierre anterior, indicando fechas y duración de ambos. Sin plato
+       contiene sus tres partes, que no se suman por segunda vez. Los
+       totales completos incluyen las clases que incluía la cuenta original;
+       no se sustituyen por la suma del ranking de alimentos visible.
+     · **Ocho hojas de Excel**: visibles en su orden, ranking del cierre,
+       fuente completa del cierre elegido (todas las clases), totales de
+       todos los cierres, comparación, series del gráfico, catálogo de
+       cierres y contexto. Cantidades en su unidad por fila, números a seis
+       decimales y códigos como texto. La fuente del cierre elegido se
+       distingue de la historia agregada y de los filtros del navegador.
+     · **El salto conserva su contrato**: el callback valida sello, cierre,
+       código y presencia elegible en la fuente; llama a `_ir_al_producto`
+       y limpia su evento temporal. Mantiene cierre, foco, grupo, filtro,
+       nonce y destino del rail; el rerun de aplicación se pide después de
+       dibujar, como antes. Los controles dentro de la pieza no lo piden.
+       `test_sin_plato_cierre_pieza.py` cubre cuenta y gráfico de referencia,
+       volumen, negativos, ausencias, estado, teclado en shadow root, salto,
+       Excel, caché y móvil; forma parte de la batería. (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

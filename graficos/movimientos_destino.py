@@ -416,6 +416,12 @@ def _dominante(r):
 
 
 def tarjeta_sin_plato(fam_sel=()):
+    """La vista nativa conserva la firma y el salto al producto (#736)."""
+    from .sin_plato_cierre_pieza import renderizar
+    return renderizar(fam_sel)
+
+
+def _tarjeta_sin_plato_legacy(fam_sel=()):
     """La vista «Sin plato, cierre por cierre»."""
     titulo = "Sin plato, cierre por cierre"
     datos = _cargar(fam_sel)
