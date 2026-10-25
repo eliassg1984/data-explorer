@@ -14,7 +14,7 @@ const MOV = (() => {
   const normal = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const sumar = (rs, k = 'valor') => rs.reduce((a, r) => a + (r[k] || 0), 0);
   const unico = (rs, k) => new Set(rs.map(r => r[k])).size;
-  const valido = r => !!r.prod && r.estado !== 'ANULADO';
+  const valido = r => !!r.prod && r.estado !== 'ANULADO' && r.aporta !== false;
   const ordenTexto = (a, b) => a < b ? -1 : a > b ? 1 : 0;
   const fecha = ms => new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
   const dia = ms => Math.floor(ms / DIA);
@@ -28,21 +28,22 @@ const MOV = (() => {
       const r = {fecha:a[0], cant:a[9], punit:a[10], valor:a[11], habitual:a[12] ?? null,
         veces:a[13] || 0, exceso:a[14] || 0, nuevo:!!a[15], repite:a[16] ?? null, marca:a[17] || ''};
       CAMPOS.forEach((k, i) => { r[k] = P.dic[k][a[i + 1]]; });
+      r.aporta=P.suma_sin_procesar!==false||r.estado!=='GENERADO';
       return r;
     });
   }
   function estado(inicial = {}) {
     return {gran:'Semana', area:[], tipo:[], fam:[], prod:[], partir:null, resaltados:{},
       modo:'Resumen', q:'', marca:'Todas', foco:null, tramo:null, doc:null, completo:false,
-      orden:null, menu:null, mq:'', ...inicial};
+      orden:null, menu:null, mq:'', estadoDoc:'Todas', ...inicial};
   }
   function filtros(rs, s, productos) {
     return rs.filter(r => ['area', 'tipo', 'fam'].every(k => !s[k]?.length || s[k].includes(r[k]))
       && (!s.prod?.length || productos.includes(r.prod)));
   }
-  function opciones(rs, s, conTipo) {
-    let restantes = rs.filter(valido);
-    const ops = {}, rank = (xs, k) => [...por(xs, k)].map(([n, g]) => [n, sumar(g)])
+  function opciones(rs, s, conTipo, produccion=false) {
+    let restantes = produccion?rs.filter(r=>r.estado!=='ANULADO'):rs.filter(valido);
+    const ops = {}, rank = (xs, k) => [...por(xs, k)].map(([n, g]) => [n, sumar(produccion?g.filter(valido):g)])
       .filter(([n]) => n).sort((a,b) => b[1]-a[1] || ordenTexto(a[0],b[0])).map(x => x[0]);
     for (const k of ['area', ...(conTipo ? ['tipo'] : []), 'fam', 'prod']) {
       let oferta = rank(restantes, k);
@@ -66,10 +67,11 @@ const MOV = (() => {
     return [...por(rs, 'doc')].map(([doc, g]) => {
       const primero = g[0], lineas = g.filter(r => r.prod).length;
       const anulado = primero.estado === 'ANULADO', generado = primero.estado === 'GENERADO';
-      return {doc, fecha:Math.min(...g.map(r => r.fecha)), area:primero.area, tipo:primero.tipo,
+      const suma=g.some(valido);
+      return {doc, fecha:Math.min(...g.map(r => r.fecha)), area:primero.area, tipo:primero.tipo, estadoCodigo:primero.estado,
         causa:primero.causa, estado:anulado ? fem ? 'Anulada' : 'Anulado' : generado ? 'Sin procesar' : !lineas ? 'Sin ítems' : '',
-        lineas, valor:sumar(g), suma:!anulado && !!lineas,
-        rotulo:anulado ? fem ? 'Anulada' : 'Anulado' : !lineas ? generado ? 'Sin procesar' : 'Sin ítems' : '',
+        lineas, valor:sumar(g), registrado:sumar(g), suma:!anulado && !!lineas && suma,
+        rotulo:anulado ? fem ? 'Anulada' : 'Anulado' : generado&&!suma?'Sin procesar':!lineas ? 'Sin ítems' : '',
         rep:g.filter(r => r.repite != null).length,
         fuera:g.filter(r => r.veces > 0 || r.nuevo).length,
         busqueda:normal([doc, primero.area, primero.tipo, primero.causa, ...g.map(r => r.prod)].join(' '))};
@@ -77,7 +79,7 @@ const MOV = (() => {
   }
   function productos(rs) {
     return [...por(rs.filter(valido), r => JSON.stringify([r.prod, r.unid]))].map(([,g]) => ({
-      prod:g[0].prod, unid:g[0].unid, cant:sumar(g, 'cant'), valor:sumar(g), docs:unico(g, 'doc'),
+      prod:g[0].prod, unid:g[0].unid, cant:sumar(g, 'cant'), valor:sumar(g), medio:sumar(g,'cant')>0?sumar(g)/sumar(g,'cant'):null, docs:unico(g, 'doc'),
       lineas:g.length, areas:unico(g, 'area'), rep:g.filter(r => r.repite != null).length,
       fuera:g.filter(r => r.veces > 0 || r.nuevo).length,
     })).sort((a,b) => b.valor-a.valor || ordenTexto(a.prod,b.prod));
@@ -88,7 +90,7 @@ const MOV = (() => {
   function calcular(P, st, base = decodificar(P), hist = decodificar(P, true), cache = null) {
     const s = estado(st), plan = P.planes[s.gran] || P.planes.Semana;
     if(cache?.firma===firma(s))return detalle(P,s,cache.core,cache);
-    const ops = opciones(base, s, P.tipo);s.prod = ops.prodSel;
+    const ops = opciones(base, s, P.tipo, P.produccion);s.prod = ops.prodSel;
     const bl = filtros(base, s, ops.productos), validas = bl.filter(valido);
     const grupos = por(validas, r => plan.mapa[dia(r.fecha)]);
     const claves = [...grupos.keys()].sort();
@@ -158,7 +160,9 @@ const MOV = (() => {
     }
     const {amb,ds}=scope, q = normal(s.q);
     const docs = ds.filter(r => (!q || r.busqueda.includes(q)) && (s.marca === 'Todas'
-      || (s.marca === REP ? r.rep > 0 : r.fuera > 0)));
+      || (s.marca === REP ? r.rep > 0 : r.fuera > 0))&&(!P.produccion||s.estadoDoc==='Todas'
+      ||s.estadoDoc==='Que suman'&&r.suma||s.estadoDoc==='Sin procesar'&&r.estadoCodigo==='GENERADO'
+      ||s.estadoDoc==='Anuladas'&&r.estadoCodigo==='ANULADO'||s.estadoDoc==='Sin ítems'&&!r.lineas&&!['GENERADO','ANULADO'].includes(r.estadoCodigo)));
     const elegido = docs.some(r => r.doc === s.doc) ? s.doc : docs.find(r => r.suma)?.doc ?? docs[0]?.doc ?? null;
     const lineas = (s.completo ? base : amb).filter(r => r.doc === elegido && r.prod).sort((a,b) => b.valor-a.valor);
     const indices = claves.map((k,i) => seleccion.includes(k) ? i : -1).filter(i => i >= 0);
@@ -172,6 +176,8 @@ const MOV = (() => {
       total:scope.total, nDocs:scope.nDocs, rep:scope.rep,fuera:scope.fuera,
       exceso:scope.exceso, unidades:units,
       registro:registroVisible ? Object.fromEntries(series.filter(r => !r.parcial && P.registro[r.clave]).map(r => [r.clave,P.registro[r.clave]])) : {},
+      pendientes:ds.filter(r=>r.estadoCodigo==='GENERADO'),anuladas:ds.filter(r=>r.estadoCodigo==='ANULADO'),
+      vacias:ds.filter(r=>!r.lineas&&!['GENERADO','ANULADO'].includes(r.estadoCodigo)),
       noSuman:ds.filter(r => !r.suma).length, acotado};
   }
 
@@ -191,14 +197,14 @@ const MOV = (() => {
         r.sin_procesar ? `${r.sin_procesar} sin procesar` : '',r.poco ? 'Poco registro' : ''].filter(Boolean).join(' · '),
       registro:D.registro[r.clave] ? `${fmt.format(D.registro[r.clave][1])} %` : '—'}));
     const docs = [columna('fecha','Fecha','fecha'), columna('doc','Código'), columna('area','Área'),
-      ...(P.tipo ? [columna('tipo','Tipo'),columna('causa','Causa')] : []), columna('lineas','Líneas','n'),
-      columna('valor','Valorizado','docValor'), columna('estado','Estado'),
+      ...(P.tipo ? [columna('tipo',P.rotulo_tipo||'Tipo'),...(P.causa?[columna('causa','Causa')]:[])] : []), columna('lineas','Líneas','n'),
+      columna('valor',P.produccion?'Producido':'Valorizado','docValor'),...(P.produccion?[columna('registrado','Valor registrado','dinero')]:[]), columna('estado','Estado'),
       ...(P.marcas ? [columna('rep','Repetidas','n'),columna('fuera','Fuera de habitual','n')] : [])];
     const lineas = [columna('prod','Producto'), columna('unid','Unidad'), columna('cant','Cantidad','cant'),
       columna('punit','Precio unit.','precio'), columna('valor','Valorizado','dinero'),columna('area','Área'),
       columna('fam','Familia'), ...(P.marcas ? [columna('marca','Marca')] : [])];
     const prods = [columna('prod','Producto'),columna('unid','Unidad'),columna('cant','Cantidad','cant'),
-      columna('valor','Valorizado','dinero'),columna('docs','Documentos','n'),columna('areas','Áreas','n'),columna('lineas','Líneas','n')];
+      columna('valor','Valorizado','dinero'),...(P.produccion?[columna('medio','Valor / cantidad','precio')]:[]),columna('docs','Documentos','n'),columna('areas','Áreas','n'),columna('lineas','Líneas','n')];
     const comparacion = [columna('fila','Período'),columna('valor','Actual','dinero')];
     D.comps.forEach(c => { comparacion.push(columna(`a${c.n}`,c.rot,'dinero'),columna(`v${c.n}`,`Variación vs ${c.rot}`,'pct')); });
     const compFilas = filas.map(r => {
@@ -237,8 +243,8 @@ const MOV = (() => {
     return ({parcial:'El rango corta este período: no se calcula variación.', ant_parcial:'El período anterior está cortado por el rango.',
       sin_base:'El período anterior no tiene un valor positivo para comparar.',primera:'Primera barra del rango.',anual:'Sin variación entre barras anuales.'})[r.varEstado] || '';
   }
-  function segmento(valores, actual, accion) {
-    return `<div class="mv-seg">${valores.map(v => `<button data-a="${accion}" data-v="${esc(v)}" aria-pressed="${v === actual}" class="${v === actual ? 'on' : ''}">${esc(v)}</button>`).join('')}</div>`;
+  function segmento(valores, actual, accion, etiquetas={}) {
+    return `<div class="mv-seg">${valores.map(v => `<button data-a="${accion}" data-v="${esc(v)}" aria-pressed="${v === actual}" class="${v === actual ? 'on' : ''}">${esc(etiquetas[v]||v)}</button>`).join('')}</div>`;
   }
   function ambito(G) {
     if (!G.D.acotado) return 'Todo el rango';
@@ -260,12 +266,13 @@ const MOV = (() => {
     const enfocado = raiz.querySelector('input:focus');
     const foco = enfocado ? [enfocado.dataset.input,enfocado.selectionStart,enfocado.selectionEnd] : null;
     const scrolls = [...raiz.querySelectorAll('[data-tabla]')].map(e => [e.dataset.tabla,e.scrollTop,e.scrollLeft]);
-    const filtrosHTML = [['area','Área'],...(P.tipo ? [['tipo','Tipo de descargo']] : []),['fam','Familia'],['prod','Producto']].map(([k,n]) =>
+    const filtrosHTML = [['area','Área'],...(P.tipo ? [['tipo',P.rotulo_tipo||'Tipo de descargo']] : []),['fam','Familia'],['prod','Producto']].map(([k,n]) =>
       `<button class="mv-filtro ${s[k].length ? 'activo' : ''}" data-a="menu" data-v="${k}" aria-expanded="${s.menu === k}" title="${esc(s[k].join(', ') || `Todas las opciones de ${n}`)}">${n}<strong>${s[k].length ? esc(s[k].length === 1 ? s[k][0] : `${s[k].length} elegidos`) : 'Todos'}</strong><span>⌄</span></button>`).join('');
     const kpi = (titulo, valor, nota, accion='', v='', title='') => `<${accion ? 'button' : 'div'} class="mv-kpi ${accion && D.resaltado === v ? 'on' : ''}" ${accion ? `data-a="${accion}" data-v="${esc(v)}"` : ''} title="${esc(title || nota)}"><span>${esc(titulo)}</span><b>${esc(valor)}</b><small>${esc(nota)}</small></${accion ? 'button' : 'div'}>`;
     const highlights = D.resaltables.filter(x => x !== REP && x !== FUERA).slice(0,3);
     let kpis = kpi(D.acotado ? 'Valorizado del tramo' : P.titulo,dinero(D.total),`${entero.format(D.nDocs)} ${P.lado}${D.noSuman ? ` · ${D.noSuman} no suman` : ''}`);
-    if (P.marcas) {
+    if(P.produccion){kpis+=kpi('Sin procesar',entero.format(D.pendientes.length),`${dinero(sumar(D.pendientes))} registrados; no producidos`,'estadoDoc','Sin procesar');kpis+=kpi('Anuladas',entero.format(D.anuladas.length),'Fuera del producido','estadoDoc','Anuladas');kpis+=kpi('Sin ítems',entero.format(D.vacias.length),'Órdenes sin producto','estadoDoc','Sin ítems');}
+    else if (P.marcas) {
       kpis += kpi(REP,dinero(D.rep),'Líneas ya pedidas en el día','resaltar',REP,'Puede coincidir con «Fuera de lo habitual». No se suman ambas marcas.');
       kpis += kpi(FUERA,dinero(D.fuera),`Exceso: ${dinero(D.exceso)}`,'resaltar',FUERA,'Valor de las líneas sobre lo habitual o nuevas. El exceso es sólo la diferencia sobre la referencia.');
     } else {
@@ -277,7 +284,7 @@ const MOV = (() => {
     const context = Object.entries(P.contexto).filter(([,v]) => v.length).map(([k,v]) => `${k}: ${v.join(', ')}`).join(' · ');
     const fechaRango = `${P.rango[0].slice(0,10)} al ${new Date(new Date(P.rango[1].replace(' ','T')).getTime()-DIA).toISOString().slice(0,10)}`;
     let html = `<section class="mv-card mv-main"><header><div><h3>${esc(P.titulo)}</h3><p>${esc(fechaRango)} · ${esc(P.rot_fecha || 'fecha del documento')}</p></div></header>`
-      + `<div class="mv-controles">${segmento(GRANOS,s.gran,'gran')}${P.tipo ? segmento(D.partirOps,D.partir,'partir') : ''}</div>`
+      + `<div class="mv-controles">${segmento(GRANOS,s.gran,'gran')}${P.tipo ? segmento(D.partirOps,D.partir,'partir',P.produccion?{'Por tipo':'Por usuario'}:{}) : ''}</div>`
       + `<div class="mv-filtros">${filtrosHTML}${Object.values(s).some(v => Array.isArray(v) && v.length) && ['area','tipo','fam','prod'].some(k => s[k].length) ? '<button data-a="todos" class="mv-quitar">Quitar filtros</button>' : ''}</div>`
       + `<div class="mv-kpis">${kpis}</div><div class="mv-leyenda"><span>${D.resaltado ? `Resaltado: ${esc(D.resaltado)}` : 'Valorizado total'}${D.resaltado ? ' · ' : ''}</span>${D.resaltado ? '<button data-a="sinresaltar">Ver total</button>' : ''}`
       + `<select data-select="resaltar" aria-label="Resaltar parte"><option value="">Elegir parte…</option>${D.resaltables.map(v => `<option ${v === D.resaltado ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`
@@ -288,13 +295,14 @@ const MOV = (() => {
       + `${menu(G)}</section><section class="mv-card mv-detalle"><div class="mv-cab-det"><h3>${esc(ambito(G))}</h3><button data-a="excel" title="Descargar los datos y el contexto de esta vista">Excel de esta vista ↓</button></div>`
       + `<div class="mv-barra">${segmento(['Resumen','Detalle','Productos',...(D.comps.length ? ['Comparación'] : [])],s.modo,'modo')}<span class="mv-total">${dinero(D.total)} · ${D.nDocs} ${esc(P.corto)}</span></div>`;
     if (s.modo === 'Detalle') {
-      html += `<div class="mv-buscar"><input data-input="q" type="search" aria-label="Buscar documentos o productos" placeholder="Buscar código, producto, área…" value="${esc(s.q)}">${P.marcas ? `<select data-select="marca" aria-label="Filtrar documentos por marca">${['Todas',REP,FUERA].map(v => `<option ${s.marca === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>` : ''}<span>${D.docs.length} documentos${s.marca !== 'Todas' ? ' · con líneas marcadas' : ''}</span></div>`
+      html += `<div class="mv-buscar"><input data-input="q" type="search" aria-label="Buscar documentos o productos" placeholder="Buscar código, producto, área…" value="${esc(s.q)}">${P.marcas ? `<select data-select="marca" aria-label="Filtrar documentos por marca">${['Todas',REP,FUERA].map(v => `<option ${s.marca === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>` : ''}${P.produccion?`<select data-select="estadoDoc" aria-label="Estado de las órdenes">${['Todas','Que suman','Sin procesar','Anuladas','Sin ítems'].map(v=>`<option ${s.estadoDoc===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:''}<span>${D.docs.length} documentos${s.marca !== 'Todas' ? ' · con líneas marcadas' : ''}</span></div>`
         + `<div class="mv-documentos">${tabla(G,G.T.docs,'docs')}</div><div class="mv-doc-cab"><b>${esc(P.sing)} ${esc(D.elegido || '—')}</b><label><input type="checkbox" data-completo ${s.completo ? 'checked' : ''}> Documento completo</label><span>${s.completo ? 'Líneas disponibles con las fechas y filtros de la página' : 'Líneas dentro de los filtros y el tramo'}</span></div>`
         + `<div class="mv-lineas">${tabla(G,G.T.lineas,'lineas')}</div>`;
     } else if (s.modo === 'Productos') html += tabla(G,G.T.productos,'productos') + '<p class="mv-pie">Cantidades separadas por producto y unidad; no se suman unidades distintas.</p>';
     else if (s.modo === 'Comparación') {
       html += tabla(G,G.T.comp,'comp') + `<p class="mv-pie">Día y semana: 364 días por año, comparando el mismo día de la semana. Mes y año: calendario. «Sin base» indica una referencia sin valor positivo. Las fechas pueden cortar períodos.${D.acotado ? ' Totales de las barras del tramo elegido.' : ' El total histórico de la leyenda incluye todo el rango desplazado, incluso períodos sin barra actual.'}</p>`;
     } else html += tabla(G,G.T.resumen,'resumen') + `<p class="mv-pie">Variación frente a la barra anterior. Los períodos parciales no muestran porcentaje.${Object.keys(D.registro).length ? ' Bajas / faltante: bajas registradas del mes completo divididas por el faltante de su cierre.' : ''}${P.marcas ? ' Las marcas pueden coincidir: sus importes no se suman entre sí.' : ''}</p>`;
+    if(P.produccion)html+='<p class="mv-pie">Lo generado, anulado o sin producto no entra en el valorizado producido. Las líneas describen la orden registrada; los pendientes no han producido todavía.</p>';
     html += '</section>';
     raiz.innerHTML=html;
     const fb=document.querySelector(`.st-key-${P.k}_nativa_fecha`);
@@ -352,12 +360,12 @@ const MOV = (() => {
       ['Fecha usada',P.rot_fecha],['Agrupación',s.gran],['Detalle elegido',ambito(G)],['Modo',s.modo],
       ...Object.entries(P.contexto).map(([k,v])=>[k,v.join(', ')||'Todas']),
       ...['area','tipo','fam','prod'].map(k=>[`Filtro ${k}`,s[k].join(', ')||'Todos']),
-      ['Búsqueda en documentos',s.q],['Marca en documentos',s.marca],['Documento elegido',D.elegido||''],
+      ['Búsqueda en documentos',s.q],['Marca en documentos',s.marca],['Estado en documentos',s.estadoDoc],['Documento elegido',D.elegido||''],
       ['Líneas del documento',s.completo?'Completo con fechas y filtros de la página':'Dentro de los filtros y tramo'],
       ['Marcas','Pueden coincidir. No sumar sus importes entre sí.'],
       ['Comparación','Día y semana: 364 días por año; mes y año: calendario. Sin base si referencia <= 0.'],
       ['Decimales','Valores numéricos con seis decimales; totales calculados sin redondear.'],
-      ['Valorizado del ámbito',D.total],['Documentos válidos del ámbito',D.nDocs]];
+      ...(P.produccion?[["Órdenes sin procesar",D.pendientes.length],["Importe registrado sin procesar (no producido)",sumar(D.pendientes)],["Regla de producción","Órdenes generadas, anuladas o sin producto quedan fuera del producido. Las cantidades se separan por producto y unidad."]]:[]),['Valorizado del ámbito',D.total],['Documentos válidos del ámbito',D.nDocs]];
     D.compSel.forEach(c=>contexto.push([`Total comparable ${c.rot}`,c.valor]));
     const docsVisibles=new Set(D.docs.map(r=>r.doc));
     const hojas=[hoja('Resumen',T.resumen),hoja('Documentos',T.docs),hoja('Productos',T.productos),
@@ -375,6 +383,7 @@ const MOV = (() => {
       const {a,v,id}=b.dataset;
       if(a==='gran'){s.gran=v;s.foco=null;s.tramo=null;s.doc=null;}
       else if(a==='modo'){s.modo=v;s.orden=null;}
+      else if(a==='estadoDoc'){s.estadoDoc=v;s.modo='Detalle';s.doc=null;}
       else if(a==='partir')s.partir=v;
       else if(a==='menu'){s.menu=s.menu===v?null:v;s.mq='';}
       else if(a==='cerrar')s.menu=null;
@@ -395,6 +404,7 @@ const MOV = (() => {
       if(k){s[k]=e.target.checked?[...s[k],e.target.value]:s[k].filter(v=>v!==e.target.value);s.foco=null;s.tramo=null;}
       else if(e.target.dataset.select==='resaltar')s.resaltados[s.partir]=e.target.value||null;
       else if(e.target.dataset.select==='marca')s.marca=e.target.value;
+      else if(e.target.dataset.select==='estadoDoc')s.estadoDoc=e.target.value;
       else if(e.target.hasAttribute('data-completo'))s.completo=e.target.checked;
       else return;
       dibujar(G);

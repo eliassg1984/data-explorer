@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-726 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+727 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (237)
+**CSS y estilos** (238)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -302,8 +302,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#724** — Stock › Por área y familia es una PIEZA PROPIA con matriz y comparación entre áreas
 - **#725** — Compras › Vs año pasado es una PIEZA PROPIA con selección de varios meses y cobertura de…
 - **#726** — Compras › Detalle docs. es una PIEZA PROPIA con tabla dinámica configurable y ficha completa
+- **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
 
-**Layout y alturas** (101)
+**Layout y alturas** (102)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -406,6 +407,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#704** — «Análisis por hora» es una pieza propia en dos tarjetas: Python manda los pedidos y sus…
 - **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
 - **#726** — Compras › Detalle docs. es una PIEZA PROPIA con tabla dinámica configurable y ficha completa
+- **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
 
 **Plotly y figuras** (124)
 
@@ -55673,6 +55675,57 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        o sin número, unidades y precios, búsqueda y ficha, arrastre, orden,
        estado, Excel, tandas largas y móvil. Se suma a la batería obligatoria.
        Probado además con datos reales en la app local. (2026-10-24.)
+
+727. **Producción › Órdenes de producción es una PIEZA PROPIA con cola
+     de pendientes y su importe registrado separado del producido**. Usa
+     `movimientos_periodo.js`, `.css`, `_datos.py` y `_pieza.py` como
+     instancia `mov_pprod`, con su propio estado; no duplica el componente
+     de Requerimientos y Salidas (#722). La firma de
+     `tarjeta_produccion_periodo` se conserva (#357); Porcionamientos aún
+     sigue en `_tarjeta_legacy`, y las funciones puras siguen como referencia.
+     · **La misma regla de producción** (#575): el mensaje transmite
+       `suma_sin_procesar=False`. El navegador excluye ANULADO y GENERADO,
+       además de líneas sin producto, en barras, totales, productos y
+       conteos de órdenes producidas. Requerimientos y Salidas conservan
+       `True`: allí un generado con líneas sí suma. No aplicar la regla de
+       producción a los otros lados por compartir el dibujante.
+     · **Tres estados que no suman**: Sin procesar, Anuladas y Sin ítems
+       tienen sus KPI, contados como documentos sin duplicar líneas. Clic
+       abre el Detalle con ese estado. La búsqueda y el filtro de estados
+       sólo recortan la lista; no cambian el total producido ni el gráfico.
+       Un período con sólo pendientes no inventa una barra de producción,
+       pero sus órdenes siguen accesibles desde el rango completo.
+     · **Registrado no equivale a producido**: el KPI pendiente muestra
+       su importe REGISTRADO y aclara que no fue producido. El listado
+       separa Producido (Sin procesar/Anulada/Sin ítems cuando no suma) de
+       Valor registrado numérico. Sus líneas siguen describiendo la orden
+       aunque todavía no haya movido el kardex. No se suman los importes
+       de pendientes al producido ni se presentan como faltante.
+     · **Filtros y vocabulario propios**: Área, Usuario, Familia y
+       Producto; Partir por muestra Por usuario con la clave interna
+       existente. Las áreas y usuarios con sólo pendientes se ofrecen para
+       poder encontrarlos; su orden/Top se basa en el producido, no en
+       importes de órdenes sin procesar. El resto de las cuentas y el
+       calendario siguen `lineas_documentos`, `_periodo_serie` y
+       `resumen_por_periodo`: cuatro granos, parciales, semanas ISO y
+       selección de tramos. La fecha conserva su control nativo y categoría.
+     · **Productos por unidad**: sólo líneas que suman, separadas por
+       producto × unidad. Valor / cantidad es el cociente de los totales
+       con cantidad positiva; sin base no se inventa un precio. No se
+       mezclan kilos con unidades ni se promedian precios de líneas.
+     · **Excel y estado**: el Excel incluye valor registrado, estado de
+       la lista, número e importe de pendientes y regla de exclusión en
+       Contexto; valores numéricos con seis decimales. Mantiene documento
+       completo dentro de fecha/chips, búsqueda, orden, tandas de 150,
+       teclado, estado al remontar y adaptación móvil de la pieza común.
+     · **Lo vigila `test_produccion_periodo_pieza.py`**, sin red: compara
+       cada grano y filtros contra pandas y las funciones anteriores, casos
+       con valor registrado grande sin procesar, anulados y cabeceras con
+       valor pero sin producto; áreas sólo pendientes, negativos, unidades,
+       cociente ponderado, estados, tramos, documento completo, Excel y móvil.
+       `test_movimientos_periodo_pieza.py` actualiza sólo el contrato del
+       dispatcher y conserva las pruebas de Requerimientos/Salidas. Se suma
+       a la batería obligatoria. Probado con datos reales. (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

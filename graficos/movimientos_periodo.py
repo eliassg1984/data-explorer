@@ -2239,7 +2239,7 @@ def tarjeta_produccion_periodo(d, *, cols, orden=(), rango=None, fecha=None):
 def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
              precios=None, rango_ts=None, fecha=None, control=None,
              faltante=None, marcas=None):
-    if lado.k in (REQUERIMIENTOS.k, SALIDAS.k):
+    if lado.k in (REQUERIMIENTOS.k, SALIDAS.k, PRODUCCION.k):
         from .movimientos_periodo_pieza import renderizar
         return renderizar(d, lado, cols, hist=hist, anios=anios,
                           rot_fecha=rot_fecha,

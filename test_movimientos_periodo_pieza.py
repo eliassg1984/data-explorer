@@ -78,14 +78,16 @@ class Contrato(unittest.TestCase):
         self.assertEqual(p['dic']['area'],['Sin área']);self.assertIsNone(p['filas'][0][9])
         json.dumps(p,allow_nan=False)
 
-    def test_firma_publica_y_produccion_siguen_compatibles(self):
+    def test_firma_publica_y_despacho_de_lados(self):
         self.assertEqual(list(inspect.signature(mp.tarjeta_requerimientos_periodo).parameters),['d','cols','orden','rango','fecha','rot_fecha','marcas'])
         with patch.object(mp,'_tarjeta_legacy') as vieja:
-            mp.tarjeta_produccion_periodo(pd.DataFrame(),cols={})
-            self.assertEqual(vieja.call_args.args[1],mp.PRODUCCION)
+            mp.tarjeta_porcionamientos_periodo(pd.DataFrame(),cols={})
+            self.assertEqual(vieja.call_args.args[1],mp.PORCIONAMIENTOS)
         with patch('graficos.movimientos_periodo_pieza.renderizar') as pieza:
             mp.tarjeta_salidas_periodo(pd.DataFrame(),cols={},anios=2,rango=RANGO)
             self.assertEqual(pieza.call_args.kwargs['anios'],2)
+            mp.tarjeta_produccion_periodo(pd.DataFrame(),cols={},rango=RANGO)
+            self.assertEqual(pieza.call_args.args[1],mp.PRODUCCION)
 
 
 try:

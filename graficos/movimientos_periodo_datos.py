@@ -1,4 +1,4 @@
-"""Contrato de las piezas de Requerimientos y Salidas por período (#722).
+"""Contrato de Requerimientos, Salidas y Órdenes de producción (#722/#727).
 
 Se reutilizan la normalización y el calendario de la vista original. Los
 importes viajan sin redondear; los documentos vacíos también viajan.
@@ -105,6 +105,9 @@ def armar(d, lado, cols, *, hist=None, anios=0, rango=None, rot_fecha="",
                    hist=filas(bh), planes=planes, rango=[str(ini), str(fin)],
                    rot_fecha=rot_fecha, marcas=marcas is not None,
                    tipo=bool(cols.get("tipo") and lado.rotulo_tipo),
+                   rotulo_tipo=lado.rotulo_tipo,
+                   produccion=lado.k==mp.PRODUCCION.k,
+                   suma_sin_procesar=lado.suma_sin_procesar,
                    causa=bool(cols.get("causa")), registro=registro,
                    poco=[dict(mes=str(p), docs=int(n), referencia=float(ref)) for p, n, ref in poco],
                    contexto=contexto or {})

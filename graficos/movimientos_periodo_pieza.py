@@ -1,4 +1,4 @@
-"""Montaje de Movimientos por período: sólo la fecha vuelve a Python (#722)."""
+"""Requerimientos, Salidas y Producción: sólo la fecha vuelve a Python (#722/#727)."""
 import datetime as dt
 import hashlib
 from pathlib import Path
@@ -29,7 +29,7 @@ def renderizar(d, lado, cols, *, hist=None, anios=0, rot_fecha="",
     ss = st.session_state
     contexto = {"Áreas de la página": ss.get("mov_graf_filtro_sub") or [],
                 "Familias de la página": ss.get("mov_graf_filtro_fam") or []}
-    firma = (_huella(d), tuple(d.columns), tuple(cols.items()), _huella(hist),
+    firma = (727, _huella(d), tuple(d.columns), tuple(cols.items()), _huella(hist),
              _huella(marcas), anios, str(rango), rot_fecha, str(faltante),
              str(contexto), str(dt.date.today()))
     kc = f"_{lado.k}_pieza_cache"
@@ -40,6 +40,10 @@ def renderizar(d, lado, cols, *, hist=None, anios=0, rot_fecha="",
                  marcas=marcas, contexto=contexto))
         ss[kc] = cache
     p = dict(cache[1])
+    # También al reutilizar un mensaje de una versión anterior: la orden
+    # generada no puede heredar la regla de Requerimientos (#575/#727).
+    p.update(suma_sin_procesar=lado.suma_sin_procesar,
+             produccion=not lado.suma_sin_procesar,rotulo_tipo=lado.rotulo_tipo)
     p["inicial"] = {"gran": ss.get(f"{lado.k}_gran", "Semana"),
                     "area": ss.get(f"{lado.k}_areas") or [],
                     "tipo": ss.get(f"{lado.k}_tipos") or [],
