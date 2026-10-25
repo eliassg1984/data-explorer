@@ -1267,6 +1267,7 @@ def ir_al_corte(cod_prod, clave):
     ss = st.session_state
     ss[_K_PROD], ss[K_CORTE] = str(cod_prod), str(clave)
     ss[K_MODO], ss[K_LISTA] = MODO_CORTE, LISTA_CORTES
+    ss['_merma_rend_salto'] = ss.get('_merma_rend_salto', 0) + 1
 
 
 def ir_a_revisar(doc):
@@ -1514,6 +1515,11 @@ def _nombres_de_cortes(pc):
 
 
 def tarjeta_rendimiento(d_hist, cols, rango):
+    from .merma_rendimiento_pieza import renderizar
+    return renderizar(d_hist, cols, rango)
+
+
+def _tarjeta_rendimiento_legacy(d_hist, cols, rango):
     """La sección «Rendimiento por producto». `d_hist` es el parquet entero
     con el chip «Sub Almacén»; la ventana la elige la tarjeta y termina
     donde termina `rango` o, sin él, en el último día con datos (regla

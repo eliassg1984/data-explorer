@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-729 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+730 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (239)
 
@@ -1013,7 +1013,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 
-**Fechas, rangos y cortes** (17)
+**Fechas, rangos y cortes** (18)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -1032,6 +1032,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#632** — Ajuste de Inventario no tiene fecha en la franja: cada vista elige la suya —una SESIÓN de…
 - **#635** — Los modos Corte / Varios de la píldora de la franja se borraron enteros: sin su único…
 - **#647** — El precio de un corte lo arma el PESO que el Almacén le asigna: el precio de los cortes en…
+- **#730** — Rendimiento como pieza propia: curvas, cortes y el porqué del precio
 
 **Asistente IA** (5)
 
@@ -55877,6 +55878,81 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        Excel, datos ausentes, teclado, móvil y listas largas. Se incorpora
        a la batería obligatoria y se verifica con datos reales.
        (2026-10-25.)
+
+
+730. **Rendimiento como pieza propia: curvas, cortes y el porqué del
+     precio.** `movimientos_merma.tarjeta_rendimiento` conserva sus tres
+     argumentos y delega en `merma_rendimiento_pieza.py`; el dibujo previo
+     vive en `_tarjeta_rendimiento_legacy`. Los helpers de las reglas #615
+     y #647 siguen como referencia. La fecha de ventana, el producto, el
+     corte, la lista, el tipo de precio y el historial se resuelven localmente.
+     · **El historial sigue siendo el de antes**: `fin_de_ventana` y
+       DIAS_NORMAL (540 días) recortan la fuente y fijan la referencia
+       histórica; sobre ella actúan las ventanas de 6/12/18 meses con
+       DateOffset y fin excluido. Por ello 18 meses no rellena los días
+       anteriores a ese historial. El inicio de la referencia se muestra
+       y se exporta. `porcionamientos` conserva una cabecera por documento
+       y excluye cantidades no positivas. Los cortes se mantienen aparte.
+     · **Producto Y unidad**: se calculan las referencias por cada par
+       sin sumar unidades incompatibles. La valorización y la atribución
+       usan primero el código original; sólo para `normales` y `marcar`
+       se usa la identidad interna del par. Se conservan las marcas y el
+       proveedor atribuido de los helpers, sin reconstruir lotes.
+     · **Ponderación exacta**: mensual y KPI usan suma de cantidades,
+       merma y costo; los cambios conservan 90 días contra el resto y al
+       menos cinco registros por lado. Impacto = puntos de merma × costo
+       reciente en la valorización elegida. Curvas de precio y factores
+       siguen SIEMPRE al costo del día; el selector compartido sólo cambia
+       la merma monetaria y ese impacto, como antes.
+     · **La cantidad útil requiere datos de la MISMA fila**: el KPI de
+       costo útil conserva Σ costo del día / Σ (cantidad − merma), con la
+       resta por fila y omitiendo sus diferencias ausentes. NO equivale a
+       Σ cantidad − Σ merma cuando falta una merma. Se informa cuántos
+       registros tienen ambos datos; la ficha no inventa cantidad útil ni
+       rendimiento para una merma ausente. Se identifica Merma sin dato
+       en la lista y en Excel, conservando las cifras originales.
+     · **Precio por corte**: el precio es Σ valor / Σ cantidad final.
+       Para K y merma del lado se cuenta cada cabecera una vez, aunque
+       haya dos líneas del mismo corte. Se conserva `clave_corte` y se
+       separa también la unidad final. Las curvas mensuales incluyen las
+       líneas del corte como la función original; su comparación de lados
+       usa sólo cantidades finales positivas. La línea con merma normal
+       necesita al menos ocho referencias y una mediana menor a uno.
+     · **LMDI sin resto**: `desglose_precio` del navegador replica la
+       media logarítmica y sus cuatro factores (insumo, merma, gramaje,
+       otros). Requiere ambos lados y factores positivos, y conserva el
+       límite de precios iguales. Suman el cambio total del precio; no
+       se fuerza una explicación cuando falta base. El factor dominante
+       se elige por magnitud; las comparaciones numéricas toleran el ruido
+       de coma flotante en empates sin variación material.
+     · **Ficha e historial completos**: clic en un punto o documento
+       abre su entrada, cantidad útil, ambas valorizaciones, atribución,
+       observaciones y TODOS sus cortes con ambas unidades. La búsqueda
+       incluye códigos/nombres de cortes, usuario y proveedor sin mutilar
+       la cabecera. Mes seleccionado y Sólo observaciones filtran la lista,
+       no los indicadores ni el análisis de ventana. Tablas de a 150 filas,
+       teclado y foco dentro del shadow root; Escape cierra la ficha.
+     · **Estado compartido sin rehacer pandas**: la valorización conserva
+       el mismo `control_valorizacion` y sus claves canónicas. Se mantiene
+       nativa en 36 px que paga la altura de la pieza. El producto avisa a
+       Proveedores mediante un evento validado por sello, código y unidad;
+       la caché no depende de ese foco ni de la base elegida. El sello de
+       origen permite preservar ficha y selección al revalorizar. El salto
+       `ir_al_corte` conserva firma y añade una secuencia: volver a pedir el
+       MISMO corte desde Carta costeada tiene efecto aunque el navegador
+       haya elegido otro mientras tanto. Un eco del producto propio no
+       pisa el corte ni el tipo de precio local.
+     · **Excel**: cortes, cambios, historial visible y completo, todos
+       los cortes del producto, series mensuales, factores y contexto.
+       Códigos como texto, números con seis decimales, referencias y
+       filtros explícitos, sin redondear antes de sumar ni fórmulas.
+     · **Lo vigila `test_merma_rendimiento_pieza.py`**: KPI, cambios,
+       mensual, lados, factores y precio normal contra las funciones
+       originales en ambas bases y las tres ventanas; unidades, cabeceras
+       repetidas, merma ausente/excesiva, falta de precios, límites LMDI,
+       selección compartida, saltos repetidos, caché, teclado/búsqueda en
+       shadow root, fichas, Excel, móvil y listas largas. Se suma a la
+       batería y se comprueba además con datos reales. (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
