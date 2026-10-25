@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-727 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+728 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (238)
+**CSS y estilos** (239)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -303,8 +303,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#725** — Compras › Vs año pasado es una PIEZA PROPIA con selección de varios meses y cobertura de…
 - **#726** — Compras › Detalle docs. es una PIEZA PROPIA con tabla dinámica configurable y ficha completa
 - **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
+- **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
 
-**Layout y alturas** (102)
+**Layout y alturas** (103)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -408,6 +409,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#710** — Una vista con PERSPECTIVAS: «Requerimientos y salidas» junta las cuatro vistas de Movimientos…
 - **#726** — Compras › Detalle docs. es una PIEZA PROPIA con tabla dinámica configurable y ficha completa
 - **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
+- **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
 
 **Plotly y figuras** (124)
 
@@ -55726,6 +55728,84 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        `test_movimientos_periodo_pieza.py` actualiza sólo el contrato del
        dispatcher y conserva las pruebas de Requerimientos/Salidas. Se suma
        a la batería obligatoria. Probado con datos reales. (2026-10-25.)
+
+728. **Producción › Porcionamientos › Por período es una PIEZA PROPIA
+     con ficha de rendimiento, dos valorizaciones y observaciones de datos**
+     (`porcionamientos_pieza.py` y `porcionamientos_datos.py`). Reutiliza
+     el navegador de `movimientos_periodo.js`/`.css` (#722/#727), registrado
+     en un componente nuevo para no depender de un montaje anterior ya
+     cacheado. `tarjeta_porcionamientos_periodo` conserva firma y argumentos
+     (#357); el dibujante legacy y las funciones puras siguen como referencia.
+     Las cuatro tarjetas por período ya tienen montaje propio.
+     · **No multiplicar la cabecera por sus cortes** (#510):
+       `lineas_porcionamientos` sigue creando una fila por código de
+       porcionamiento, y la tabla de cortes aparte. Costo del día = suma
+       de cantidad final × precio promedio de los cortes; merma monetaria
+       = costo × merma física / cantidad inicial si ésta es positiva,
+       cero en otro caso, como la función original. No se cambian ni
+       corrigen los valores de origen en el navegador.
+     · **Precio de hoy conserva la regla del Almacén** (#615):
+       `a_precio_de_hoy` aplica precio promedio actual por código inicial
+       a la cantidad y merma físicas. Código sin precio vale cero, sin
+       sustituir SU fila por costo del día: no mezclar bases. Se identifica
+       Sin precio actual y se omite la diferencia conocida. Si no se pudo
+       obtener NINGÚN mapa de precios, la vista declara el costo del día
+       como base efectiva, sin llamarlo precio de hoy.
+     · **La valorización permanece COMPARTIDA** (#644): se dibuja el
+       mismo callback `control_valorizacion`, con su clave canónica y
+       `K_RECARGA`, para sincronizar Rendimiento y Para revisar. Se conserva
+       nativa en una franja de 36 px; la pieza paga ese alto y la fecha se
+       desplaza con él. La fecha usa la categoría y el botón originales.
+       Los demás controles son locales. Cambiar valorización no pierde el
+       documento, tramo ni ficha: `sello_origen` depende de las líneas,
+       fechas y contexto, y no del modo; el sello completo sí incluye
+       ambas valorizaciones y el modo efectivo.
+       La caché conserva ambas bases calculadas: `valorar` cambia modo,
+       precio y merma de las filas sin volver a agrupar ni recorrer pandas.
+       Equivale al mensaje construido directamente en cada modo; lo vigilan
+       la identidad del sello y la prueba de una sola construcción.
+     · **La familia no recorta esta fuente**: como el caller anterior,
+       aplica el Sub Almacén global. No se muestra un filtro de Familia
+       que no existe; se ignora una selección local vieja de esa dimensión.
+       Área, Usuario y Producto conservan los filtros en cascada y Top N,
+       más Día/Semana/Mes/Año y selección de períodos/tramos. Una cabecera
+       sin nombre de producto aún cuenta: la fuente fija `vacio=False`.
+     · **Porcentajes distintos, con sus bases**: Resumen muestra
+       merma en soles / valor porcionado en soles con totales ponderados,
+       nunca la media de porcentajes físicos. El documento muestra merma
+       física / cantidad inicial positiva. Productos separa producto ×
+       unidad y calcula el cociente de sus cantidades conocidas; sin base
+       o datos completos no inventa porcentaje. No se mezclan unidades.
+     · **Ficha del elegido**: entrada → cantidad útil (entrada − merma),
+       rendimiento y merma físicos; costo y merma del día y a precio de
+       hoy, y diferencia sólo si existe precio actual. Cambiar base no es
+       una merma nueva. Los cortes conservan SIEMPRE su costo del día,
+       incluida la merma asignada; peso en unidad del producto inicial,
+       cantidades finales en la unidad de cada corte. Ambas se muestran
+       por separado. La ficha se despliega sobre las tablas sin deformar
+       su tarjeta y conserva el estado al recalcular.
+     · **Observaciones comprobables**: cantidad no positiva o ausente,
+       merma ausente o fuera de 0–100 %, sin cortes, sin precio actual o
+       sin nombre inicial. Se pueden localizar desde los KPI y el selector;
+       filtran la lista, no el total de merma. La búsqueda incluye nombres
+       y códigos de cortes y mantiene la cabecera y todos sus cortes.
+       Los valores anómalos permanecen sin truncar ni recalcular.
+     · **Excel**: Resumen, Documentos, Productos, Cortes del elegido,
+       cortes de todos los documentos visibles en Detalle, Dos
+       valorizaciones y Contexto. Cabeceras y cortes en hojas separadas;
+       incluye código, unidades inicial/final, precio disponible, fórmula,
+       modo solicitado/efectivo, filtros y observaciones. Numéricos con
+       seis decimales, sin redondear antes de sumar. Tandas de 150 filas,
+       teclado, scroll contenido y móvil; el SVG limita el ancho mientras
+       ResizeObserver recalcula su geometría al cambiar de tamaño.
+     · **Lo vigila `test_porcionamientos_pieza.py`**: paridad contra
+       `lineas_porcionamientos`, `a_precio_de_hoy` y `resumen_por_periodo`
+       en ambos modos, cuatro granos y filtros; códigos con cero inicial,
+       cabeceras repetidas, cantidades cero/ausentes, merma negativa o mayor
+       que la entrada, producto sin nombre, precios ausentes, ponderación,
+       búsqueda por corte, ficha, estado, Excel y cortes largos. Regresión
+       de Requerimientos, Salidas y Producción intacta; se suma a la batería
+       obligatoria. Probado además con datos reales. (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

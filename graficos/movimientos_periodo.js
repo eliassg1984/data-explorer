@@ -10,11 +10,12 @@ const MOV = (() => {
   const precio = new Intl.NumberFormat('es-PE', {maximumFractionDigits: 4});
   const dinero = v => v == null ? '—' : `S/ ${fmt.format(v)}`;
   const pct = v => v == null ? 'Sin base' : `${v > 0 ? '+' : ''}${fmt.format(v)} %`;
+  const porcentaje = v => v == null ? 'Sin base' : `${fmt.format(v)} %`;
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const normal = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const sumar = (rs, k = 'valor') => rs.reduce((a, r) => a + (r[k] || 0), 0);
   const unico = (rs, k) => new Set(rs.map(r => r[k])).size;
-  const valido = r => !!r.prod && r.estado !== 'ANULADO' && r.aporta !== false;
+  const valido = r => (r.esMerma || !!r.prod) && r.estado !== 'ANULADO' && r.aporta !== false;
   const ordenTexto = (a, b) => a < b ? -1 : a > b ? 1 : 0;
   const fecha = ms => new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
   const dia = ms => Math.floor(ms / DIA);
@@ -24,18 +25,20 @@ const MOV = (() => {
     return m;
   };
   function decodificar(P, historial = false) {
+    const buscarCortes={};if(P.merma)for(const c of P.cortes){const doc=P.dic.doc[c[0]];buscarCortes[doc]=(buscarCortes[doc]||'')+' '+P.cortes_dic.fin[c[1]]+' '+P.cortes_dic.cod_fin[c[7]];}
     return (historial ? P.hist : P.filas).map(a => {
       const r = {fecha:a[0], cant:a[9], punit:a[10], valor:a[11], habitual:a[12] ?? null,
         veces:a[13] || 0, exceso:a[14] || 0, nuevo:!!a[15], repite:a[16] ?? null, marca:a[17] || ''};
       CAMPOS.forEach((k, i) => { r[k] = P.dic[k][a[i + 1]]; });
       r.aporta=P.suma_sin_procesar!==false||r.estado!=='GENERADO';
+      if(P.merma){Object.assign(r,P.porciones[r.doc]);r.esMerma=true;r.buscarCortes=buscarCortes[r.doc]||'';}
       return r;
     });
   }
   function estado(inicial = {}) {
     return {gran:'Semana', area:[], tipo:[], fam:[], prod:[], partir:null, resaltados:{},
       modo:'Resumen', q:'', marca:'Todas', foco:null, tramo:null, doc:null, completo:false,
-      orden:null, menu:null, mq:'', estadoDoc:'Todas', ...inicial};
+      orden:null, menu:null, mq:'', estadoDoc:'Todas', porcFlag:'Todas', mermaFicha:false, ...inicial};
   }
   function filtros(rs, s, productos) {
     return rs.filter(r => ['area', 'tipo', 'fam'].every(k => !s[k]?.length || s[k].includes(r[k]))
@@ -65,7 +68,7 @@ const MOV = (() => {
   }
   function documentos(rs, fem = false) {
     return [...por(rs, 'doc')].map(([doc, g]) => {
-      const primero = g[0], lineas = g.filter(r => r.prod).length;
+      const primero = g[0], lineas = g.filter(r => r.esMerma||r.prod).length;
       const anulado = primero.estado === 'ANULADO', generado = primero.estado === 'GENERADO';
       const suma=g.some(valido);
       return {doc, fecha:Math.min(...g.map(r => r.fecha)), area:primero.area, tipo:primero.tipo, estadoCodigo:primero.estado,
@@ -74,7 +77,11 @@ const MOV = (() => {
         rotulo:anulado ? fem ? 'Anulada' : 'Anulado' : generado&&!suma?'Sin procesar':!lineas ? 'Sin ítems' : '',
         rep:g.filter(r => r.repite != null).length,
         fuera:g.filter(r => r.veces > 0 || r.nuevo).length,
-        busqueda:normal([doc, primero.area, primero.tipo, primero.causa, ...g.map(r => r.prod)].join(' '))};
+        ...(primero.esMerma?{prod:primero.prod,unid:primero.unid,cant:primero.cant,costo:primero.costo,
+          mermaCant:primero.mermaCant,cortes:primero.cortes,pctFisico:primero.pctFisico,pctMonetario:primero.pctMonetario,
+          costoDia:primero.costoDia,valorDia:primero.valorDia,costoHoy:primero.costoHoy,valorHoy:primero.valorHoy,
+          precioDisponible:primero.precioDisponible,flags:primero.flags,observaciones:primero.flags.join(' · ')}:{}),
+        busqueda:normal([doc, primero.area, primero.tipo, primero.causa, primero.buscarCortes||'',...g.map(r => r.prod)].join(' '))};
     }).sort((a,b) => b.valor-a.valor || ordenTexto(a.doc,b.doc));
   }
   function productos(rs) {
@@ -82,13 +89,16 @@ const MOV = (() => {
       prod:g[0].prod, unid:g[0].unid, cant:sumar(g, 'cant'), valor:sumar(g), medio:sumar(g,'cant')>0?sumar(g)/sumar(g,'cant'):null, docs:unico(g, 'doc'),
       lineas:g.length, areas:unico(g, 'area'), rep:g.filter(r => r.repite != null).length,
       fuera:g.filter(r => r.veces > 0 || r.nuevo).length,
+      ...(g[0].esMerma?{costo:sumar(g,'costo'),mermaCant:sumar(g,'mermaCant'),cortes:sumar(g,'cortes'),
+        pctFisico:g.every(r=>r.cant!=null&&r.mermaCant!=null)&&sumar(g,'cant')>0?sumar(g,'mermaCant')/sumar(g,'cant')*100:null,
+        conFlags:g.filter(r=>r.flags.length).length}:{}),
     })).sort((a,b) => b.valor-a.valor || ordenTexto(a.prod,b.prod));
   }
   function firma(s) {
     return JSON.stringify([s.gran,s.area,s.tipo,s.fam,s.prod,s.partir,s.resaltados]);
   }
   function calcular(P, st, base = decodificar(P), hist = decodificar(P, true), cache = null) {
-    const s = estado(st), plan = P.planes[s.gran] || P.planes.Semana;
+    const s = estado(st), plan = P.planes[s.gran] || P.planes.Semana;if(P.familia===false)s.fam=[];
     if(cache?.firma===firma(s))return detalle(P,s,cache.core,cache);
     const ops = opciones(base, s, P.tipo, P.produccion);s.prod = ops.prodSel;
     const bl = filtros(base, s, ops.productos), validas = bl.filter(valido);
@@ -107,6 +117,7 @@ const MOV = (() => {
       else if (antes <= 0) varEstado = 'sin_base';
       else { varEstado = 'ok';variacion = (v-antes)/antes*100; }
       return {clave:k, ...meta, valor:v, docs:unico(g,'doc'), areas:unico(g,'area'), lineas:g.length,
+        ...(P.merma?{costo:sumar(g,'costo'),cortes:sumar(g,'cortes')}:{}),
         cant:sumar(g,'cant'), anulados:unico(amb.filter(r => r.estado === 'ANULADO'),'doc'),
         sin_procesar:unico(amb.filter(r => r.estado === 'GENERADO'),'doc'),
         variacion, varEstado, anterior:i ? plan.metas[claves[i-1]].fila : '',
@@ -155,35 +166,54 @@ const MOV = (() => {
       const amb=acotado ? bl.filter(r => seleccion.includes(plan.mapa[dia(r.fecha)])) : bl;
       const vs=amb.filter(valido);
       scope={amb,ds:documentos(amb,P.fem),productos:productos(amb),total:sumar(vs),nDocs:unico(vs,'doc'),
+        costo:sumar(vs,'costo'),conFlags:vs.filter(r=>r.flags?.length).length,sinCortes:vs.filter(r=>r.esMerma&&!r.cortes).length,
         rep:sumar(vs.filter(r=>r.repite!=null)),fuera:sumar(vs.filter(r=>r.veces>0||r.nuevo)),exceso:sumar(vs,'exceso')};
       if(cache){cache.ambito=ambito;cache.scope=scope;}
     }
     const {amb,ds}=scope, q = normal(s.q);
-    const docs = ds.filter(r => (!q || r.busqueda.includes(q)) && (s.marca === 'Todas'
+    const docs = ds.filter(r => (!q || r.busqueda.includes(q))&&(!P.merma||s.porcFlag==='Todas'||s.porcFlag==='Con observaciones'&&r.flags.length||r.flags.includes(s.porcFlag)) && (s.marca === 'Todas'
       || (s.marca === REP ? r.rep > 0 : r.fuera > 0))&&(!P.produccion||s.estadoDoc==='Todas'
       ||s.estadoDoc==='Que suman'&&r.suma||s.estadoDoc==='Sin procesar'&&r.estadoCodigo==='GENERADO'
       ||s.estadoDoc==='Anuladas'&&r.estadoCodigo==='ANULADO'||s.estadoDoc==='Sin ítems'&&!r.lineas&&!['GENERADO','ANULADO'].includes(r.estadoCodigo)));
     const elegido = docs.some(r => r.doc === s.doc) ? s.doc : docs.find(r => r.suma)?.doc ?? docs[0]?.doc ?? null;
-    const lineas = (s.completo ? base : amb).filter(r => r.doc === elegido && r.prod).sort((a,b) => b.valor-a.valor);
+    const lineas = P.merma?cortesDe(P,elegido,cache):(s.completo ? base : amb).filter(r => r.doc === elegido && r.prod).sort((a,b) => b.valor-a.valor);
     const indices = claves.map((k,i) => seleccion.includes(k) ? i : -1).filter(i => i >= 0);
     const compSel = comps.map(c => ({...c, valor:acotado ? indices.reduce((a,i) => a+c.valores[i],0) : c.total}));
-    const registroVisible = s.gran === 'Mes' && !s.area.length && !s.fam.length && !s.prod.length
+    const registroVisible = !P.merma&&s.gran === 'Mes' && !s.area.length && !s.fam.length && !s.prod.length
       && (!s.tipo.length || (s.tipo.length === 1 && s.tipo[0] === 'Bajas'))
       && !Object.values(P.contexto).some(v => v.length);
     const units = [...new Set(validas.map(r => r.unid))];
     return {ops, partir, partirOps, resaltables, resaltado, bl, validas, series, claves, trazas, comps,
       seleccion, amb, docs, todosDocs:ds, elegido, lineas, productos:scope.productos, compSel,
       total:scope.total, nDocs:scope.nDocs, rep:scope.rep,fuera:scope.fuera,
+      costo:scope.costo,conFlags:scope.conFlags,sinCortes:scope.sinCortes,porcion: P.merma?base.find(r=>r.doc===elegido)||null:null,
       exceso:scope.exceso, unidades:units,
       registro:registroVisible ? Object.fromEntries(series.filter(r => !r.parcial && P.registro[r.clave]).map(r => [r.clave,P.registro[r.clave]])) : {},
       pendientes:ds.filter(r=>r.estadoCodigo==='GENERADO'),anuladas:ds.filter(r=>r.estadoCodigo==='ANULADO'),
       vacias:ds.filter(r=>!r.lineas&&!['GENERADO','ANULADO'].includes(r.estadoCodigo)),
       noSuman:ds.filter(r => !r.suma).length, acotado};
   }
+  function cortesDe(P,doc,cache){let mapa=cache?.cortes;
+    if(!mapa){mapa=new Map();for(const c of P.cortes){const d=P.dic.doc[c[0]],r={doc:d,fin:P.cortes_dic.fin[c[1]],unid:P.cortes_dic.unid[c[2]],cant:c[3],pprom:c[4],peso:c[5],valor:c[6],cod:P.cortes_dic.cod_fin[c[7]],unidOrigen:P.dic.unid[c[8]]};if(!mapa.has(d))mapa.set(d,[]);mapa.get(d).push(r);}if(cache)cache.cortes=mapa;}
+    return(mapa.get(doc)||[]).slice().sort((a,b)=>b.valor-a.valor||ordenTexto(a.fin,b.fin));
+  }
 
   function columna(k, nombre, tipo = '') { return {k, nombre, tipo}; }
+  function tablasMerma(G){const {P,D,s}=G,c=columna;
+    const resumen=[c('fila','Período'),c('docs','Porcionamientos','n'),c('cortes','Cortes','n'),c('areas','Áreas','n'),c('costo','Lo porcionado','dinero'),c('valor','Merma S/','dinero'),c('pm','Merma / valor porcionado','porcentaje'),c('parte','Parte de merma total','porcentaje'),c('variacion','Variación','pct')];
+    const filas=D.series.filter(r=>D.seleccion.includes(r.clave)).map(r=>({...r,pm:r.costo?r.valor/r.costo*100:null,parte:D.total?r.valor/D.total*100:null}));
+    const docs=[c('fecha','Fecha','fecha'),c('doc','Código'),c('prod','Producto inicial'),c('area','Área'),c('tipo','Usuario'),c('cant','Cantidad inicial','cant'),c('unid','Unidad'),c('pctFisico','Merma física','porcentaje'),c('valor','Merma S/','dinero'),c('cortes','Cortes','n'),c('observaciones','Observaciones')];
+    const lineas=[c('fin','Producto final'),c('cant','Cantidad final','cant'),c('unid','Unidad final'),c('peso','Peso asignado','cant'),c('unidOrigen','Unidad de origen'),c('pprom','Precio unit. del día','precio'),c('valor','Valor al costo del día','dinero'),c('cod','Código final')];
+    const prods=[c('prod','Producto inicial'),c('unid','Unidad'),c('cant','Cantidad inicial','cant'),c('mermaCant','Merma física','cant'),c('pctFisico','Merma / cantidad inicial','porcentaje'),c('costo','Lo porcionado','dinero'),c('valor','Merma S/','dinero'),c('docs','Porcionamientos','n'),c('cortes','Cortes','n'),c('conFlags','Con observaciones','n')];
+    return{resumen:{cols:resumen,filas,tipo:'periodo'},docs:{cols:docs,filas:D.docs,tipo:'doc'},lineas:{cols:lineas,filas:D.lineas},productos:{cols:prods,filas:D.productos},comp:{cols:[],filas:[]},modo:s.modo};
+  }
+  function fichaMerma(G){const r=G.D.porcion;if(!r)return'<p class="mv-pie">Elegí un porcionamiento para ver sus cortes.</p>';
+    const fis=v=>v==null?'Sin base':`${cantidad.format(v)} ${esc(r.unid||'(sin unidad)')}`,util=r.cant>0&&r.mermaCant!=null?r.cant-r.mermaCant:null,rend=r.cant>0&&util!=null?util/r.cant*100:null;
+    return`<details class="mv-ficha-porc" ${G.s.mermaFicha?'open':''}><summary>${esc(r.prod||'Sin producto de origen')}: ${fis(r.cant)} → ${fis(util)} útiles · rendimiento ${porcentaje(rend)} · Ver costos ▾</summary><div class="mv-ficha-cuerpo"><b>Un porcionamiento, dos valorizaciones</b><p>Merma física: ${fis(r.mermaCant)} · ${porcentaje(r.pctFisico)}. La cantidad útil es entrada menos merma.</p><div><span>Costo del día</span><b>${dinero(r.valorDia)} de merma</b><span>${dinero(r.costoDia)} porcionados</span></div><div><span>Precio de hoy</span><b>${r.precioDisponible?dinero(r.valorHoy)+' de merma':'Sin precio actual'}</b><span>${r.precioDisponible?dinero(r.costoHoy)+' porcionados':'No se conoce la comparación'}</span></div><p>${r.precioDisponible?'Diferencia hoy − día: '+dinero(r.valorHoy-r.valorDia)+'. Cambia la base de valorización; no es una merma nueva.':'El Reporte de Mermas asigna cero al código sin precio; no permite concluir que no haya merma física.'}</p><p>Los cortes conservan el costo del día, incluida la asignación de merma. Peso asignado en la unidad del producto inicial; cantidad final en la de cada corte.</p>${r.flags.length?`<p class="mv-aviso">${esc(r.flags.join(' · '))}</p>`:''}</div></details>`;
+  }
   function tablas(G) {
     const {P, D, s} = G;
+    if(P.merma)return tablasMerma(G);
     let resumen = [columna('fila','Período'), columna('valor','Valorizado','dinero'), columna('docs',P.lado,'n'),
       columna('areas','Áreas','n'), columna('lineas','Líneas','n'), columna('variacion','Variación','pct'),
       columna('estado','Estado')];
@@ -221,6 +251,7 @@ const MOV = (() => {
     if (c.tipo === 'dinero') return dinero(v);
     if (c.tipo === 'fecha') return fecha(v);
     if (c.tipo === 'pct') return pct(v);
+    if (c.tipo === 'porcentaje') return porcentaje(v);
     if (c.tipo === 'cant') return v == null ? '—' : cantidad.format(v);
     if (c.tipo === 'precio') return v == null ? '—' : precio.format(v);
     if (c.tipo === 'n') return entero.format(v || 0);
@@ -266,12 +297,13 @@ const MOV = (() => {
     const enfocado = raiz.querySelector('input:focus');
     const foco = enfocado ? [enfocado.dataset.input,enfocado.selectionStart,enfocado.selectionEnd] : null;
     const scrolls = [...raiz.querySelectorAll('[data-tabla]')].map(e => [e.dataset.tabla,e.scrollTop,e.scrollLeft]);
-    const filtrosHTML = [['area','Área'],...(P.tipo ? [['tipo',P.rotulo_tipo||'Tipo de descargo']] : []),['fam','Familia'],['prod','Producto']].map(([k,n]) =>
+    const filtrosHTML = [['area','Área'],...(P.tipo ? [['tipo',P.rotulo_tipo||'Tipo de descargo']] : []),...(P.familia===false?[]:[['fam','Familia']]),['prod','Producto']].map(([k,n]) =>
       `<button class="mv-filtro ${s[k].length ? 'activo' : ''}" data-a="menu" data-v="${k}" aria-expanded="${s.menu === k}" title="${esc(s[k].join(', ') || `Todas las opciones de ${n}`)}">${n}<strong>${s[k].length ? esc(s[k].length === 1 ? s[k][0] : `${s[k].length} elegidos`) : 'Todos'}</strong><span>⌄</span></button>`).join('');
     const kpi = (titulo, valor, nota, accion='', v='', title='') => `<${accion ? 'button' : 'div'} class="mv-kpi ${accion && D.resaltado === v ? 'on' : ''}" ${accion ? `data-a="${accion}" data-v="${esc(v)}"` : ''} title="${esc(title || nota)}"><span>${esc(titulo)}</span><b>${esc(valor)}</b><small>${esc(nota)}</small></${accion ? 'button' : 'div'}>`;
     const highlights = D.resaltables.filter(x => x !== REP && x !== FUERA).slice(0,3);
     let kpis = kpi(D.acotado ? 'Valorizado del tramo' : P.titulo,dinero(D.total),`${entero.format(D.nDocs)} ${P.lado}${D.noSuman ? ` · ${D.noSuman} no suman` : ''}`);
-    if(P.produccion){kpis+=kpi('Sin procesar',entero.format(D.pendientes.length),`${dinero(sumar(D.pendientes))} registrados; no producidos`,'estadoDoc','Sin procesar');kpis+=kpi('Anuladas',entero.format(D.anuladas.length),'Fuera del producido','estadoDoc','Anuladas');kpis+=kpi('Sin ítems',entero.format(D.vacias.length),'Órdenes sin producto','estadoDoc','Sin ítems');}
+    if(P.merma){kpis+=kpi('Lo porcionado',dinero(D.costo),D.costo?`${porcentaje(D.total/D.costo*100)} de merma en soles`:'Sin base para porcentaje');kpis+=kpi('Con observaciones',entero.format(D.conFlags),'Datos sin base o para revisar','porcFlag','Con observaciones');kpis+=kpi('Sin cortes',entero.format(D.sinCortes),'Cabeceras sin producto final','porcFlag','Sin cortes');}
+    else if(P.produccion){kpis+=kpi('Sin procesar',entero.format(D.pendientes.length),`${dinero(sumar(D.pendientes))} registrados; no producidos`,'estadoDoc','Sin procesar');kpis+=kpi('Anuladas',entero.format(D.anuladas.length),'Fuera del producido','estadoDoc','Anuladas');kpis+=kpi('Sin ítems',entero.format(D.vacias.length),'Órdenes sin producto','estadoDoc','Sin ítems');}
     else if (P.marcas) {
       kpis += kpi(REP,dinero(D.rep),'Líneas ya pedidas en el día','resaltar',REP,'Puede coincidir con «Fuera de lo habitual». No se suman ambas marcas.');
       kpis += kpi(FUERA,dinero(D.fuera),`Exceso: ${dinero(D.exceso)}`,'resaltar',FUERA,'Valor de las líneas sobre lo habitual o nuevas. El exceso es sólo la diferencia sobre la referencia.');
@@ -283,8 +315,8 @@ const MOV = (() => {
     }
     const context = Object.entries(P.contexto).filter(([,v]) => v.length).map(([k,v]) => `${k}: ${v.join(', ')}`).join(' · ');
     const fechaRango = `${P.rango[0].slice(0,10)} al ${new Date(new Date(P.rango[1].replace(' ','T')).getTime()-DIA).toISOString().slice(0,10)}`;
-    let html = `<section class="mv-card mv-main"><header><div><h3>${esc(P.titulo)}</h3><p>${esc(fechaRango)} · ${esc(P.rot_fecha || 'fecha del documento')}</p></div></header>`
-      + `<div class="mv-controles">${segmento(GRANOS,s.gran,'gran')}${P.tipo ? segmento(D.partirOps,D.partir,'partir',P.produccion?{'Por tipo':'Por usuario'}:{}) : ''}</div>`
+    let html = `<section class="mv-card mv-main"><header><div><h3>${esc(P.titulo)}</h3><p>${esc(fechaRango)} · ${esc(P.rot_fecha || 'fecha del documento')}${P.merma?' · '+(P.valoracion==='hoy'?'Precio de hoy':'Costo del día')+(P.valoracion_solicitada==='hoy'&&P.valoracion!=='hoy'?' (precio actual no disponible)':''):''}</p></div></header>`
+      + `<div class="mv-controles">${segmento(GRANOS,s.gran,'gran')}${P.tipo ? segmento(D.partirOps,D.partir,'partir',P.produccion||P.merma?{'Por tipo':'Por usuario'}:{}) : ''}</div>`
       + `<div class="mv-filtros">${filtrosHTML}${Object.values(s).some(v => Array.isArray(v) && v.length) && ['area','tipo','fam','prod'].some(k => s[k].length) ? '<button data-a="todos" class="mv-quitar">Quitar filtros</button>' : ''}</div>`
       + `<div class="mv-kpis">${kpis}</div><div class="mv-leyenda"><span>${D.resaltado ? `Resaltado: ${esc(D.resaltado)}` : 'Valorizado total'}${D.resaltado ? ' · ' : ''}</span>${D.resaltado ? '<button data-a="sinresaltar">Ver total</button>' : ''}`
       + `<select data-select="resaltar" aria-label="Resaltar parte"><option value="">Elegir parte…</option>${D.resaltables.map(v => `<option ${v === D.resaltado ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`
@@ -295,13 +327,14 @@ const MOV = (() => {
       + `${menu(G)}</section><section class="mv-card mv-detalle"><div class="mv-cab-det"><h3>${esc(ambito(G))}</h3><button data-a="excel" title="Descargar los datos y el contexto de esta vista">Excel de esta vista ↓</button></div>`
       + `<div class="mv-barra">${segmento(['Resumen','Detalle','Productos',...(D.comps.length ? ['Comparación'] : [])],s.modo,'modo')}<span class="mv-total">${dinero(D.total)} · ${D.nDocs} ${esc(P.corto)}</span></div>`;
     if (s.modo === 'Detalle') {
-      html += `<div class="mv-buscar"><input data-input="q" type="search" aria-label="Buscar documentos o productos" placeholder="Buscar código, producto, área…" value="${esc(s.q)}">${P.marcas ? `<select data-select="marca" aria-label="Filtrar documentos por marca">${['Todas',REP,FUERA].map(v => `<option ${s.marca === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>` : ''}${P.produccion?`<select data-select="estadoDoc" aria-label="Estado de las órdenes">${['Todas','Que suman','Sin procesar','Anuladas','Sin ítems'].map(v=>`<option ${s.estadoDoc===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:''}<span>${D.docs.length} documentos${s.marca !== 'Todas' ? ' · con líneas marcadas' : ''}</span></div>`
-        + `<div class="mv-documentos">${tabla(G,G.T.docs,'docs')}</div><div class="mv-doc-cab"><b>${esc(P.sing)} ${esc(D.elegido || '—')}</b><label><input type="checkbox" data-completo ${s.completo ? 'checked' : ''}> Documento completo</label><span>${s.completo ? 'Líneas disponibles con las fechas y filtros de la página' : 'Líneas dentro de los filtros y el tramo'}</span></div>`
-        + `<div class="mv-lineas">${tabla(G,G.T.lineas,'lineas')}</div>`;
+      html += `<div class="mv-buscar"><input data-input="q" type="search" aria-label="Buscar documentos o productos" placeholder="${P.merma?'Buscar código, origen o corte…':'Buscar código, producto, área…'}" value="${esc(s.q)}">${P.marcas ? `<select data-select="marca" aria-label="Filtrar documentos por marca">${['Todas',REP,FUERA].map(v => `<option ${s.marca === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>` : ''}${P.produccion?`<select data-select="estadoDoc" aria-label="Estado de las órdenes">${['Todas','Que suman','Sin procesar','Anuladas','Sin ítems'].map(v=>`<option ${s.estadoDoc===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:''}${P.merma?`<label>Observaciones <select data-select="porcFlag" aria-label="Observaciones del porcionamiento">${['Todas','Con observaciones','Cantidad sin base','Merma sin dato','Merma fuera de rango','Sin cortes','Sin precio actual','Sin producto de origen'].map(v=>`<option ${s.porcFlag===v?'selected':''}>${esc(v)}</option>`).join('')}</select></label>`:''}<span>${D.docs.length} documentos${s.marca !== 'Todas' ? ' · con líneas marcadas' : ''}</span></div>`
+        + `<div class="mv-documentos">${tabla(G,G.T.docs,'docs')}</div><div class="mv-doc-cab"><b>${esc(P.sing)} ${esc(D.elegido || '—')}</b>${P.merma?'':`<label><input type="checkbox" data-completo ${s.completo ? 'checked' : ''}> Documento completo</label>`}<span>${P.merma?'Cortes completos del elegido, al costo del día':s.completo ? 'Líneas disponibles con las fechas y filtros de la página' : 'Líneas dentro de los filtros y el tramo'}</span></div>`
+        + (P.merma?fichaMerma(G):'')+`<div class="mv-lineas">${tabla(G,G.T.lineas,'lineas')}</div>`;
     } else if (s.modo === 'Productos') html += tabla(G,G.T.productos,'productos') + '<p class="mv-pie">Cantidades separadas por producto y unidad; no se suman unidades distintas.</p>';
     else if (s.modo === 'Comparación') {
       html += tabla(G,G.T.comp,'comp') + `<p class="mv-pie">Día y semana: 364 días por año, comparando el mismo día de la semana. Mes y año: calendario. «Sin base» indica una referencia sin valor positivo. Las fechas pueden cortar períodos.${D.acotado ? ' Totales de las barras del tramo elegido.' : ' El total histórico de la leyenda incluye todo el rango desplazado, incluso períodos sin barra actual.'}</p>`;
-    } else html += tabla(G,G.T.resumen,'resumen') + `<p class="mv-pie">Variación frente a la barra anterior. Los períodos parciales no muestran porcentaje.${Object.keys(D.registro).length ? ' Bajas / faltante: bajas registradas del mes completo divididas por el faltante de su cierre.' : ''}${P.marcas ? ' Las marcas pueden coincidir: sus importes no se suman entre sí.' : ''}</p>`;
+    } else html += tabla(G,G.T.resumen,'resumen') + `<p class="mv-pie">${P.merma?'Merma / valor porcionado usa totales en soles, no la media de porcentajes físicos. ':''}Variación frente a la barra anterior. Los períodos parciales no muestran porcentaje.${Object.keys(D.registro).length ? ' Bajas / faltante: bajas registradas del mes completo divididas por el faltante de su cierre.' : ''}${P.marcas ? ' Las marcas pueden coincidir: sus importes no se suman entre sí.' : ''}</p>`;
+    if(P.merma)html+='<p class="mv-pie">Cada cabecera se cuenta una vez. La valorización es compartida con Rendimiento y Para revisar. Las familias de la página no recortan esta fuente; las cantidades se separan por producto y unidad.</p>';
     if(P.produccion)html+='<p class="mv-pie">Lo generado, anulado o sin producto no entra en el valorizado producido. Las líneas describen la orden registrada; los pendientes no han producido todavía.</p>';
     html += '</section>';
     raiz.innerHTML=html;
@@ -361,7 +394,7 @@ const MOV = (() => {
       ...Object.entries(P.contexto).map(([k,v])=>[k,v.join(', ')||'Todas']),
       ...['area','tipo','fam','prod'].map(k=>[`Filtro ${k}`,s[k].join(', ')||'Todos']),
       ['Búsqueda en documentos',s.q],['Marca en documentos',s.marca],['Estado en documentos',s.estadoDoc],['Documento elegido',D.elegido||''],
-      ['Líneas del documento',s.completo?'Completo con fechas y filtros de la página':'Dentro de los filtros y tramo'],
+      ['Líneas del documento',P.merma?'Cortes completos del elegido, siempre al costo del día':s.completo?'Completo con fechas y filtros de la página':'Dentro de los filtros y tramo'],
       ['Marcas','Pueden coincidir. No sumar sus importes entre sí.'],
       ['Comparación','Día y semana: 364 días por año; mes y año: calendario. Sin base si referencia <= 0.'],
       ['Decimales','Valores numéricos con seis decimales; totales calculados sin redondear.'],
@@ -369,9 +402,14 @@ const MOV = (() => {
     D.compSel.forEach(c=>contexto.push([`Total comparable ${c.rot}`,c.valor]));
     const docsVisibles=new Set(D.docs.map(r=>r.doc));
     const hojas=[hoja('Resumen',T.resumen),hoja('Documentos',T.docs),hoja('Productos',T.productos),
-      hoja('Líneas del documento',T.lineas)];
-    if(s.modo==='Detalle')hojas.push(hoja('Líneas de documentos visibles',{...T.lineas,filas:D.amb.filter(r=>r.prod&&docsVisibles.has(r.doc))}));
+      hoja(P.merma?'Cortes del elegido':'Líneas del documento',T.lineas)];
+    if(s.modo==='Detalle'){if(P.merma)hojas.push(hoja('Cortes de documentos visibles',{...T.lineas,cols:[columna('doc','Porcionamiento'),...T.lineas.cols],filas:[...docsVisibles].flatMap(doc=>cortesDe(P,doc,G.cache))}));else hojas.push(hoja('Líneas de documentos visibles',{...T.lineas,filas:D.amb.filter(r=>r.prod&&docsVisibles.has(r.doc))}));}
     if(D.comps.length)hojas.push(hoja('Comparación',T.comp));
+    if(P.merma){
+      const c=columna,cols=[c('doc','Porcionamiento'),c('prod','Producto inicial'),c('unid','Unidad de origen'),c('cant','Cantidad inicial'),c('mermaCant','Merma física'),c('costoDia','Costo del día'),c('valorDia','Merma al costo del día'),c('costoHoy','Costo a precio de hoy'),c('valorHoy','Merma a precio de hoy'),c('precioDisponible','Precio actual disponible'),c('delta','Diferencia conocida hoy - día'),c('observaciones','Observaciones')];
+      hojas.push(hoja('Dos valorizaciones',{cols,filas:D.docs.map(r=>({...r,delta:r.precioDisponible?r.valorHoy-r.valorDia:null}))}));
+      contexto.push(['Valorización efectiva',P.valoracion==='hoy'?'Precio de hoy':'Costo del día'],['Valorización solicitada',P.valoracion_solicitada==='hoy'?'Precio de hoy':'Costo del día'],['Valorización compartida','Con Rendimiento y Para revisar. El selector nativo actualiza todas esas vistas.'],['Familia','No aplica: la fuente de porcionamientos no trae esta dimensión.'],['Observaciones',s.porcFlag],['Lo porcionado en la base elegida',D.costo],['Merma / valor porcionado (%)',D.costo?D.total/D.costo*100:null],['Cabeceras','Cada porcionamiento se cuenta una vez; sus cortes no multiplican la cantidad ni la merma de la cabecera.'],['Costo del día','Suma de cantidad final por precio promedio de los cortes. Incluye la merma asignada a los cortes.'],['Precio de hoy','Cantidad/merma física por precio promedio actual del producto inicial. Un código sin precio vale cero como el Almacén; la diferencia no se calcula si falta ese precio.'],['Porcentajes','Merma monetaria usa totales en soles; merma física usa una cabecera o un producto/unidad. No se promedian porcentajes de porcionamientos.'],['Cortes','Siempre al costo del día. Cantidades en unidad final; pesos asignados en unidad del producto inicial.'],['Observaciones de datos','Cantidad no positiva o sin dato, merma ausente o fuera de 0-100 %, sin cortes, sin precio actual o sin producto de origen. No alteran los valores fuente.']);
+    }
     hojas.push({nombre:'Contexto',cabeza:['Dato','Selección'],decimales:6,filas:contexto});
     return {hojas,indices};
   }
@@ -384,6 +422,7 @@ const MOV = (() => {
       if(a==='gran'){s.gran=v;s.foco=null;s.tramo=null;s.doc=null;}
       else if(a==='modo'){s.modo=v;s.orden=null;}
       else if(a==='estadoDoc'){s.estadoDoc=v;s.modo='Detalle';s.doc=null;}
+      else if(a==='porcFlag'){s.porcFlag=v;s.modo='Detalle';s.doc=null;}
       else if(a==='partir')s.partir=v;
       else if(a==='menu'){s.menu=s.menu===v?null:v;s.mq='';}
       else if(a==='cerrar')s.menu=null;
@@ -405,10 +444,12 @@ const MOV = (() => {
       else if(e.target.dataset.select==='resaltar')s.resaltados[s.partir]=e.target.value||null;
       else if(e.target.dataset.select==='marca')s.marca=e.target.value;
       else if(e.target.dataset.select==='estadoDoc')s.estadoDoc=e.target.value;
+      else if(e.target.dataset.select==='porcFlag')s.porcFlag=e.target.value;
       else if(e.target.hasAttribute('data-completo'))s.completo=e.target.checked;
       else return;
       dibujar(G);
     });
+    raiz.addEventListener('toggle',e=>{if(e.target.matches('.mv-ficha-porc')&&e.target.isConnected)s.mermaFicha=e.target.open;},{signal,capture:true});
     on('keydown',e=>{
       if(e.key==='Escape'){s.menu=null;tip(G,null);dibujar(G);}
       const b=e.target.closest('[data-bar]');
@@ -457,8 +498,8 @@ const MOV = (() => {
     const prev=window.__movPeriodoEstados[P.k];
     prev?.abort.abort();prev?.ro?.disconnect();
     const s=prev?.s||estado(P.inicial);
-    if(prev&&prev.P.sello!==P.sello){s.foco=null;s.tramo=null;s.doc=null;s.menu=null;}
-    if(!GRANOS.includes(s.gran))s.gran='Semana';
+    if(prev&&prev.P.sello!==P.sello&&!(P.merma&&prev.P.sello_origen===P.sello_origen)){s.foco=null;s.tramo=null;s.doc=null;s.menu=null;}
+    if(!GRANOS.includes(s.gran))s.gran='Semana';if(P.familia===false)s.fam=[];
     let raiz=parentElement.querySelector('.mv');if(!raiz){raiz=document.createElement('div');raiz.className='mv';parentElement.appendChild(raiz);}
     const G={P,s,raiz,base:decodificar(P),hist:decodificar(P,true),abort:new AbortController(),tablas:{},cache:{}};
     window.__movPeriodoEstados[P.k]=G;window.__movPeriodo=G;
