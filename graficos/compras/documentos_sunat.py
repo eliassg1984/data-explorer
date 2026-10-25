@@ -793,12 +793,14 @@ def poner_proveedor(clave):
     que al dibujarse se re-siembra desde él (ver `_filtro_proveedor`)."""
     st.session_state["sunat_prov__eco"] = clave or None
     st.session_state.pop("sunat_prov", None)
+    st.session_state["_sunat_docs_salto"] = st.session_state.get("_sunat_docs_salto", 0) + 1
 
 
 def poner_estado(estado):
     """Lo mismo para el filtro «Está vs Sistema»."""
     st.session_state["sunat_estado__eco"] = estado or None
     st.session_state.pop("sunat_estado", None)
+    st.session_state["_sunat_docs_salto"] = st.session_state.get("_sunat_docs_salto", 0) + 1
 
 
 _TODOS_ESTADOS = "Todos los estados"
@@ -4273,6 +4275,9 @@ def renderizar_documentos_sunat(d, col_fecha, vista=None):
     from graficos.compras import _sunat_vistas as sv
     vista = vista or sv.VISTA_DOCS
     es_docs = vista == sv.VISTA_DOCS
+    if es_docs:
+        from .sunat_documentos_pieza import renderizar
+        return renderizar(d, col_fecha)
     f_ini, f_fin = _rango_vigente()
 
     # Lo que `_cuerpo` deja para las tarjetas de abajo. Se inicializa acá

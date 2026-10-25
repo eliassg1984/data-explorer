@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-740 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+741 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (241)
 
@@ -947,7 +947,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#725** — Compras › Vs año pasado es una PIEZA PROPIA con selección de varios meses y cobertura de…
 - **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
 
-**SUNAT y SIRE** (73)
+**SUNAT y SIRE** (74)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1022,6 +1022,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#694** — «Cruce con SUNAT» compara TRES períodos, dice cuánto de lo que falta son notas de crédito y…
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
+- **#741** — Documentos SUNAT también necesita una pieza para su tabla, además de las dos vistas de resumen
 
 **Fechas, rangos y cortes** (22)
 
@@ -56563,6 +56564,65 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        caché, estado, tandas, exportación y ancho móvil. En la batería
        obligatoria. (2026-10-25.)
 
+741. **Documentos SUNAT también necesita una pieza para su tabla, además
+     de las dos vistas de resumen** (`graficos/compras/documentos_sunat.py`):
+     «Cruce con SUNAT» y «Proveedores y fechas» ya eran piezas, pero el
+     tercer destino del rail todavía reconstruía AgGrid y el Excel con
+     cada selección u orden. La ruta «Documentos» conserva la firma pública
+     y delega en `sunat_documentos_pieza.py`; las otras dos siguen su ruta.
+     `_tabla_documentos` y los renderers antiguos quedan como referencia.
+     · **Celdas y cuenta de siempre**: `sunat_documentos_datos.py` reproduce
+       el transporte de la tabla canónica —fecha, documento, proveedor,
+       tipo y motivo, base/IGV/total, segundas líneas del sistema, moneda
+       del papel, detracción, XML, estado e ingreso— sin consultas propias.
+       El cruce, las notas de crédito y la clasificación siguen en sus
+       helpers; no recalcula el tipo ni convierte de nuevo a soles. El
+       listado de XML y las llegadas de la sesión entran como dato. Mantiene
+       fuente, RUC y CAR como texto, valores completos y null JSON seguros.
+       Las huellas incluyen ambas fuentes y contexto; cambios de fuente,
+       reglas o XML invalidan la caché correspondiente.
+     · **Controles compartidos y locales**: fecha, estado del mes SUNAT y
+       proveedor conservan sus claves y helpers, porque son compartidos con
+       los resúmenes y cambian lo que se carga. Dentro de la pieza, elegir,
+       ordenar, buscar literalmente por documento/proveedor/RUC, filtrar
+       estado, tipo, XML o brecha de importe no pide Python. El censo de
+       estados se cuenta después de los demás filtros y antes del propio
+       estado. Las cuatro opciones permanecen aunque tengan cero casos.
+       Las tablas largas se dibujan por tandas de 150 y conservan el scroll.
+     · **Comparación sin inventar contrapartes**: la suma SUNAT y la del
+       sistema se muestran separadas. La brecha es sistema menos SUNAT sólo
+       donde ambos existen; sin contraparte hay raya. El filtro de brechas
+       mira base, IGV y total, incluso si dos cambios dejan igual el total.
+       La columna identifica expresamente la brecha del total. Seleccionar
+       una fila muestra sus segundas líneas como antes; «Ver comparación»
+       abre un diálogo local con los tres importes, documentos y RUC. No
+       interpreta una moneda extranjera como soles; identifica por separado
+       el importe del papel. El número sigue abriendo la ficha original.
+     · **La acción cruza un límite validado**: ficha e ingreso mandan sólo
+       identidad, sello y nonce; el lote manda los IDs del recorte entero,
+       no sólo la primera tanda. El servidor rechaza sellos viejos, IDs
+       ajenos, fichas sin CAR e ingresos que no sean «Solo SUNAT». Recupera
+       el documento del SIRE por CAR; serie y número no bastan. La identidad
+       local permanece al ordenar las fuentes. El nonce evita repetir una
+       acción al rerunear; `poner_estado` y `poner_proveedor` mantienen sus
+       firmas y añaden un contador para repetir una llegada externa igual.
+     · **El lote conserva su confirmación**: abrirlo fija sus documentos y
+       lo dice antes del panel nativo. Sólo el botón original «Pedir XML»
+       puede enviar solicitudes; abrir o cancelar no lo hace. Cambiar un
+       filtro local con la confirmación abierta no altera silenciosamente
+       el lote preparado. La ficha, la espera del original, los pedidos y
+       el conversor siguen usando sus helpers y sus reglas de siempre.
+     · **Excel local con seis hojas**: documentos del recorte, comparación
+       de importes, cruce de la página, registro SUNAT de la página,
+       documento elegido y contexto. Conserva fuentes completas del ámbito,
+       RUC como texto, fechas y seis decimales; nunca suma los totales de
+       ambas fuentes entre sí. La búsqueda no recorta las hojas de fuente.
+       `test_sunat_documentos_pieza.py` compara todas las celdas con el
+       renderer anterior, además de moneda, identidad, estados, umbrales,
+       fuentes ausentes, caché, acciones acotadas, lote sin envío, eco,
+       tandas, scroll, exportación y móvil. En la batería obligatoria.
+       (2026-10-25.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -56575,7 +56635,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#740**; la próxima toma el número siguiente.
+> última regla es la **#741**; la próxima toma el número siguiente.
 
 >
 
