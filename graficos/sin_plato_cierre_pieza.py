@@ -11,7 +11,7 @@ from . import movimientos_destino as md
 _DIR=Path(__file__).parent
 _CSS=md._CSS.replace('<style>','').replace('</style>','')+(_DIR/'destino.css').read_text(encoding='utf-8')
 _PIEZA=st.components.v2.component('sin_plato_cierre_736',css=_CSS,
-    js=(_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'destino.js').read_text(encoding='utf-8'))
+    js=(_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'destino_base.js').read_text(encoding='utf-8')+(_DIR/'destino.js').read_text(encoding='utf-8'))
 
 
 def _abrir():

@@ -90,7 +90,7 @@ class Navegador(unittest.TestCase):
         cls.pg=cls.br.new_page(viewport={'width':1323,'height':619},accept_downloads=True);cls.pg.set_default_timeout(7000)
         cls.pg.route('https://destino.example.test/**',lambda r:r.fulfill(body='<div id="host"></div>',content_type='text/html'));cls.pg.goto('https://destino.example.test/')
         cls.pg.evaluate('css=>{const sr=document.querySelector("#host").attachShadow({mode:"open"}),st=document.createElement("style");st.textContent=css;sr.append(st);window.mount=document.createElement("div");sr.append(mount)}',pieza._CSS)
-        cls.pg.add_script_tag(content=(ROOT/'graficos/_xlsx.js').read_text(encoding='utf-8')+(ROOT/'graficos/destino.js').read_text(encoding='utf-8').replace('export default function(component)','window.montarDestino=function(component)'),type='module');cls.pg.wait_for_function('typeof montarDestino==="function"')
+        cls.pg.add_script_tag(content=(ROOT/'graficos/_xlsx.js').read_text(encoding='utf-8')+(ROOT/'graficos/destino_base.js').read_text(encoding='utf-8')+(ROOT/'graficos/destino.js').read_text(encoding='utf-8').replace('export default function(component)','window.montarDestino=function(component)'),type='module');cls.pg.wait_for_function('typeof montarDestino==="function"')
 
     @classmethod
     def tearDownClass(cls):cls.br.close();cls.pw.stop()

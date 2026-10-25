@@ -752,6 +752,12 @@ def _fig_producto(fila, filas, per, k):
 
 
 def tarjeta_por_producto(fam_sel=()):
+    """Tabla, ficha y cierres locales, conservando la firma y el foco (#737)."""
+    from .destino_producto_pieza import renderizar
+    return renderizar(fam_sel)
+
+
+def _tarjeta_por_producto_legacy(fam_sel=()):
     """La vista «En qué se fue cada producto»."""
     titulo = "En qué se fue cada producto"
     datos = _cargar(fam_sel)

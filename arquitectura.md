@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-736 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+737 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (240)
 
@@ -415,7 +415,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 
-**Plotly y figuras** (125)
+**Plotly y figuras** (126)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -542,6 +542,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#717** — Ventas › Comparativo es una PIEZA PROPIA, con las cinco mejoras acordadas
 - **#722** — Requerimientos y Salidas por período son PIEZAS PROPIAS con selección de tramos, búsqueda y…
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
+- **#737** — En qué se fue cada producto es una pieza propia, con tabla y ficha locales y la cuenta del…
 
 **AgGrid y tablas** (96)
 
@@ -56319,6 +56320,57 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        `test_sin_plato_cierre_pieza.py` cubre cuenta y gráfico de referencia,
        volumen, negativos, ausencias, estado, teclado en shadow root, salto,
        Excel, caché y móvil; forma parte de la batería. (2026-10-25.)
+
+737. **En qué se fue cada producto es una pieza propia, con tabla y ficha
+     locales y la cuenta del kardex a la vista.** La firma pública
+     `tarjeta_por_producto(fam_sel=())` delega al nuevo
+     `destino_producto_pieza.py`. El cuerpo anterior y los helpers quedan
+     como referencia; no se cambian la carga ni las cuentas de sin_plato.
+     · **Fuente compartida, estados independientes**: usa el transporte
+       completo de #736. La preparación y las funciones del cierre pasan a
+       `destino_base.js`, antepuesto en ambas piezas; cada componente tiene
+       su raíz y su estado. No se añade un import Python nuevo a un módulo
+       ya cacheado para llamarlo desde el renderer nuevo (regla #357).
+     · **Todas las selecciones son locales**: cierre, alimento/operación,
+       filtros, búsqueda literal por producto/código/familia, soles o
+       unidades, orden, producto y mes de su gráfico. Se conservan el umbral
+       abs(salio_v) + abs(entro_v) + abs(aj_v) > 0.5, las reglas de bajas,
+       sin salida registrada y sobrante, y el orden inicial por sinplato_v
+       o falt_v según el grupo. Los porcentajes siempre usan soles, también
+       cuando se muestran unidades. No se suman unidades entre productos.
+     · **La referencia es ponderada**: pct_previo suma sinplato_v y salio_v
+       de los seis cierres anteriores y divide, sólo con salio_v > 0.5.
+       Excluye el actual y los demasiado antiguos; no promedia porcentajes.
+       Sin referencia queda vacío. La columna muestra puntos porcentuales.
+     · **Ficha enriquecida**: reparto físico con sus preparaciones
+       identificadas; saldo calculado contra fin_q del kardex y diferencia
+       explícita, con tolerancia original de 0.05. Combos ya incluidos en
+       venta y stocks negativos se explican. Muestra cambio en soles frente
+       al cierre anterior, duración real de ambos y porcentaje de los seis
+       anteriores. Un sobrante no se resta de lo que salió sin plato.
+       Las parejas conservan umbral de veinte soles, palabra clave,
+       signo contrario y dos candidatos del helper original; se presentan
+       como pista para revisar receta/conteo, nunca como conclusión.
+     · **Historia sin mezclar unidades**: doce cierres de código y unidad
+       del elegido, barras de cantidad positivas de la referencia,
+       sobrante invertido y marca de entradas. Operación lleva consumido al
+       contar y notas, sin barra de sobrante, como antes. Un cierre sin fila
+       se dibuja a cero y queda identificado en la descarga; no se inventa
+       una fila fuente. Tocar un cierre abre esa cuenta localmente.
+     · **Volumen, foco y salto**: tabla por tandas de 150; cambiar producto
+       sólo actualiza ficha y la selección. Un foco más allá de la primera
+       tanda se carga. El eco del estado Python conserva la elección local
+       en un rerun sin novedad; el nonce del salto fuerza foco/cierre incluso
+       si se pide de nuevo el mismo producto. Sigue recibiendo el contrato
+       de `_ir_al_producto` de #645 y #736.
+     · **Seis hojas de Excel**: visibles en su orden, todos los productos
+       del grupo, fuente completa del cierre sin filtros del navegador,
+       historia del elegido, series de su gráfico y contexto con fechas y
+       bases. Números a seis decimales, códigos como texto y cantidades en
+       su unidad. Los porcentajes históricos de referencia se calculan por
+       su propio cierre. `test_destino_producto_pieza.py` prueba contra los
+       helpers, ventanas, grupos y filtros, foco/caché, cuenta, negativos,
+       teclado, tandas, estado, exportación y móvil. (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
