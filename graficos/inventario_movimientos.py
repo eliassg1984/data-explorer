@@ -150,7 +150,9 @@ def armar_movimientos(d, mov, foto_ini, foto_fin, *, col_cod_area, col_cod,
     if palabras:
         pajar = [_plano(f"{n} {c}") for n, c in zip(base["producto"],
                                                      base["cod"])]
-        base = base[[all(p in h for p in palabras) for h in pajar]]
+        # Un [] sin dtype se interpreta como selección de columnas cuando
+        # el recorte previo quedó vacío; la máscara booleana conserva el esquema.
+        base = base.loc[np.asarray([all(p in h for p in palabras) for h in pajar], dtype=bool)]
     base = base.drop_duplicates(["area_cod", "cod"])
 
     m = pd.DataFrame({
@@ -473,6 +475,14 @@ def _aviso_sin_costo(M):
 
 def seccion_movimientos(d, *, col_cod_area, col_cod, col_area, col_prod,
                         col_fam=None, col_punit=None):
+    """Filtros, balance y contribuciones locales, misma firma (#738)."""
+    from .inventario_movimientos_pieza import renderizar
+    return renderizar(d,col_cod_area=col_cod_area,col_cod=col_cod,col_area=col_area,
+                      col_prod=col_prod,col_fam=col_fam,col_punit=col_punit)
+
+
+def _seccion_movimientos_legacy(d, *, col_cod_area, col_cod, col_area, col_prod,
+                              col_fam=None, col_punit=None):
     """La tarjeta entera: la fila de filtros (período, áreas, familias,
     buscador y Por tipo / Por área), el título y la vista."""
     st.markdown("<style>" + css_filtros("inv_mov", _K_BUSCAR)

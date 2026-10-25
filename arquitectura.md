@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-737 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+738 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (240)
 
@@ -415,7 +415,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 
-**Plotly y figuras** (126)
+**Plotly y figuras** (127)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -543,6 +543,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#722** — Requerimientos y Salidas por período son PIEZAS PROPIAS con selección de tramos, búsqueda y…
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 - **#737** — En qué se fue cada producto es una pieza propia, con tabla y ficha locales y la cuenta del…
+- **#738** — Movimientos por Tipo de Stock es una pieza propia, con filtros y contribuciones locales sin…
 
 **AgGrid y tablas** (96)
 
@@ -1019,7 +1020,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 
-**Fechas, rangos y cortes** (20)
+**Fechas, rangos y cortes** (21)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -1041,6 +1042,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#730** — Rendimiento como pieza propia: curvas, cortes y el porqué del precio
 - **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
 - **#734** — Requerimientos por Área es una pieza propia completa: la cadena, los productos y su ficha…
+- **#738** — Movimientos por Tipo de Stock es una pieza propia, con filtros y contribuciones locales sin…
 
 **Asistente IA** (5)
 
@@ -56371,6 +56373,71 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        su propio cierre. `test_destino_producto_pieza.py` prueba contra los
        helpers, ventanas, grupos y filtros, foco/caché, cuenta, negativos,
        teclado, tandas, estado, exportación y móvil. (2026-10-25.)
+
+738. **Movimientos por Tipo de Stock es una pieza propia, con filtros y
+     contribuciones locales sin alterar el balance del kardex.** La firma
+     de `seccion_movimientos` y sus seis argumentos de columna se conservan;
+     delega al nuevo `inventario_movimientos_pieza.py`. La sección anterior
+     queda como `_seccion_movimientos_legacy`; dataclass, cuentas y figuras
+     de referencia permanecen en `inventario_movimientos.py`.
+     · **El período conserva su dueño**: mismo date_input, clave, límites,
+       mes por defecto y tratamiento de un solo día. Lee los movimientos
+       entre ambos días incluidos y las fotos con kardex.momento a la hora
+       23 del día anterior y del último día, igual que antes. Una fuente
+       ausente conserva el mensaje, sin inventar stock cero. La huella de
+       caché incluye los cuatro frames, columnas, fechas y contexto. Los
+       controles locales no llaman a Python; los filtros generales de la
+       página siguen delimitando la base activa recibida.
+     · **La misma normalización**: códigos/textos con _texto, valores de
+       movimientos y fotos con coerce/fillna de la referencia, precio de
+       hoy ausente separado, tipos clasificados por kardex.grupo_de.
+       Primero se filtra el maestro por áreas, familias y palabras de
+       producto/código; después se elige una fila por área-código-producto.
+       No se deduplica antes del filtro de familia. La búsqueda conserva
+       NFKD, eliminación de caracteres no ASCII, minúsculas y todas las
+       palabras. El helper de referencia corrige su máscara vacía: usa un
+       array booleano explícito, para que un recorte sin filas no borre sus
+       columnas en pandas y rompa el cruce con las fotos.
+     · **Balance y cascada**: tipos por grupo/tipo, fotos por nombre de
+       área, movimientos netos y residual final - inicial - netos, con
+       valores firmados y ceros. Entre áreas siempre aparece en el gráfico,
+       aunque sume cero; Otros menor a medio sol se omite sólo del dibujo,
+       como antes, y se explica su alcance. Sus cifras quedan en totales y
+       fuentes. La tabla por área conserva su orden y omite Otros sólo si
+       ninguna área acumula medio sol en magnitud. Enfocar una barra filtra
+       únicamente el detalle de tipos: no quita flujos del balance ni los
+       convierte artificialmente en valorización.
+     · **Enriquecimiento por producto**: panel plegable ordenado por la
+       magnitud del cambio de stock, movimientos netos, valorización o las
+       puntas. La ficha presenta inicial + movimientos + valorización =
+       final y los tipos del producto por área, dentro del ámbito elegido.
+       Se incluyen productos con actividad aunque su neto sea cero y con
+       stock aunque no se hayan movido. Son valores monetarios; no se
+       suman cantidades de productos con unidades distintas. Seleccionar
+       producto actualiza la ficha sin repintar su lista.
+     · **Ventas sin costo aparte**: conserva la agrupación por nombre y
+       área, el primer precio actual no nulo y la aproximación cantidad ×
+       precio de hoy del helper. Los precios ausentes quedan identificados;
+       esa aproximación no se suma a costo ni balance. Tipos conserva las
+       marcas de anulados y movimientos sin costo. Las listas extensas se
+       dibujan en tandas de 150, con consulta y descarga completas.
+     · **Estado, rendimiento y móvil**: códigos y textos de búsqueda
+       preparados una vez; el resultado se reutiliza mientras no cambien
+       los filtros. El eco de estado conserva la selección local al cambiar
+       fecha o rerunear sin una nueva instrucción externa. Los filtros
+       sueltan etiquetas que desaparezcan de la fuente, sus checkboxes y
+       búsqueda conservan foco dentro de shadow root; Escape cierra paneles.
+       Tablas se desplazan por dentro y los cuadros se apilan en móvil.
+     · **Diez hojas de Excel**: tipos, áreas, contribuciones, ventas sin
+       costo, base recibida con duplicados, movimientos fuente, las dos
+       fotos, series del gráfico y contexto. Fuentes sin filtros locales,
+       restringidas a los códigos/áreas de la base de la página; cantidades
+       originales, números a seis decimales y códigos como texto. Los
+       filtros y las bases de cada cuenta quedan explícitos.
+       `test_stock_movimientos_pieza.py` compara filtros y balance contra
+       los helpers y comprueba puntas, precisión, nulos, vacíos, búsqueda,
+       deduplicación, contribuciones, drilles, estado, volumen, descarga y
+       móvil; forma parte de la batería obligatoria. (2026-10-25.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
