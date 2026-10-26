@@ -163,7 +163,7 @@ function enlaceOrigen(st, fila, periodo) {
       && [...st.fams].every(f => f === 'Envases')) return '';
   const enlace = st.todo.enlaces?.[st.grano]?.[periodo.k]?.[fila.k];
   if (!enlace) return '';
-  const href = enlace.url + '&familias=' + encodeURIComponent(JSON.stringify([...st.fams]))
+  const href = enlace.url + '&retorno=' + encodeURIComponent(st.todo.retorno || '') + '&familias=' + encodeURIComponent(JSON.stringify([...st.fams]))
     + '&extras=' + encodeURIComponent(JSON.stringify([...st.extra]));
   const titulo = `${enlace.nombre} · ${periodo.rot} · abrir en otra pestaña`;
   return `<a class="enlace-origen" href="${esc(href)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(titulo)}" title="${esc(titulo)}">↗</a>`;
@@ -252,7 +252,7 @@ function dibujar(raiz) {
       + `<button type="button" class="fila-btn" ${accion} aria-expanded="${abierta}"${tip}><span class="signo">${fila.signo || ''}</span>`
       + `<span class="nom">${esc(fila.nom)}</span><span class="flecha">▼</span></button>`
       + (fila.quitar ? `<button type="button" class="quitar" data-quitar="${esc(fila.quitar)}" aria-label="Quitar ${esc(fila.quitar)}">×</button>` : '')
-      + `</div></td>${val.mes.map((x, i) => `<td class="${claseCelda(fila, x)} ${w.per[i].k === st.seleccionado ? 'seleccionado' : ''}">${fmtCelda(fila, x)}${enlaceOrigen(st, fila, w.per[i])}${tasaCelda(st, data, w, F, fila, i)}</td>`).join('')}`
+      + `</div></td>${val.mes.map((x, i) => `<td data-retorno-clave="${esc(fila.k + '|' + w.per[i].k)}" class="${claseCelda(fila, x)} ${w.per[i].k === st.seleccionado ? 'seleccionado' : ''}">${fmtCelda(fila, x)}${enlaceOrigen(st, fila, w.per[i])}${tasaCelda(st, data, w, F, fila, i)}</td>`).join('')}`
       + `<td class="tot ${claseCelda(fila, val.tot)}">${fmtCelda(fila, val.tot)}${tasaCelda(st, data, w, F, fila, null)}</td></tr>`;
     if (abierta && !fila.calculo && !fila.grupo) cuerpo += detalle(st, data, w, fila, F, val);
   }

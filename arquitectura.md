@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-741 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+742 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (241)
+**CSS y estilos** (242)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -306,6 +306,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
 - **#733** — Consumo según recetas pasa del iframe a una pieza nativa y las tablas largas dejan de perder…
 - **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
+- **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
 
 **Layout y alturas** (106)
 
@@ -947,7 +948,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#725** — Compras › Vs año pasado es una PIEZA PROPIA con selección de varios meses y cobertura de…
 - **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
 
-**SUNAT y SIRE** (74)
+**SUNAT y SIRE** (75)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1023,6 +1024,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#708** — La columna lista ÁREAS y la franja que asoma es el ÍNDICE de las vistas del área: pestañas…
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 - **#741** — Documentos SUNAT también necesita una pieza para su tabla, además de las dos vistas de resumen
+- **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
 
 **Fechas, rangos y cortes** (22)
 
@@ -56623,6 +56625,41 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        tandas, scroll, exportación y móvil. En la batería obligatoria.
        (2026-10-25.)
 
+742. **Volver de un enlace requiere guardar el origen antes de sembrar el
+     destino** (`navegacion_retorno.py`, `.js` y `.css`): el botón contextual
+     «Volver a…» ocupa una banda fija sobre las pestañas. Sólo aparece tras
+     un salto de contenido; el menú normal no crea viajes. La pila conserva
+     hasta doce pasos y los desanda de uno en uno, incluso dentro del mismo
+     reporte. Carta, Ventas, Recetas y Pendientes llaman `capturar_origen`
+     ANTES de elegir el producto, la perspectiva o el filtro del destino.
+     · Python conserva fechas, filtros y selecciones de interfaz mediante
+       copias independientes. Excluye datos grandes, objetos del reporte,
+       credenciales, contextos del asistente y salidas de botones/componentes.
+       El callback de regreso restaura antes de crear widgets y retira las
+       semillas que sólo existían en el destino. Recupera los parámetros
+       originales completos, para que `desde_costos` no vuelva a filtrarlos.
+     · El navegador guarda posiciones en ambos ejes, desplegables y el foco
+       que originó el enlace, también dentro de shadow roots. Las piezas
+       compuestas con `js_movil` recuperan su estado local antes del dibujo
+       definitivo; Set y Map conservan sus tipos. Sólo viajan controles e
+       identificadores, nunca la tabla de datos. La reposición espera las
+       tandas pendientes, se acota en el tiempo y cede al gesto del usuario.
+       Una marca temporal identifica la celda de salida al volver.
+     · Los enlaces de la portada y de Costos mantienen otra pestaña y
+       `noopener noreferrer`. Un token aleatorio enlaza el contexto de Python
+       en memoria con la captura del navegador; no incluye datos en la URL.
+       El regreso reproduce el origen en la pestaña actual; no depende de
+       `window.opener` ni cierra la pestaña original. Los registros compartidos
+       caducan a las dos horas y están acotados. Un enlace externo no recibe
+       el token. Reiniciar el servidor pierde esos registros transitorios.
+     · No se restauran acciones: volver nunca simula clics de negocio,
+       solicitudes XML, guardados o envíos. Las llegadas internas de SUNAT
+       conservan su mecanismo existente. `test_navegacion_retorno.py` cubre
+       fecha, filtros, semillas, cadena, caducidad, separación de datos y el
+       recorrido en Chromium con shadow root y desplazamiento en dos ejes.
+       También se valida la presentación móvil con `test_movil.py`.
+       (2026-10-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -56635,7 +56672,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#741**; la próxima toma el número siguiente.
+> última regla es la **#742**; la próxima toma el número siguiente.
 
 >
 

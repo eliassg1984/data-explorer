@@ -29,6 +29,13 @@ actualiza este documento en el mismo commit.
 
 ## Vista móvil
 
+Los enlaces entre reportes ofrecen «Volver a…» en una banda fija sobre las
+pestañas, también en móvil. `navegacion_retorno.py` conserva el contexto de
+interfaz y la cadena de saltos; `.js` repone selección, desplegables y scroll
+en ambos ejes, y `.css` reserva su lugar. Los enlaces en otra pestaña usan
+un token transitorio (dos horas); vuelven al origen en la pestaña actual.
+`js_movil` conecta la reposición del estado local de las piezas. Regla #742.
+
 Hasta 900px, `navegacion.py` ofrece los reportes en `nav_menu_movil`, con
 los mismos destinos que la columna de escritorio. `_99_movil.py` organiza
 los indicadores en dos columnas, deja fechas y controles nativos en el

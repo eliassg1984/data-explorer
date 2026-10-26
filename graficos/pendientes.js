@@ -46,7 +46,7 @@ function fila(f, i) {
   const ir = f.ir ? `<span class="pd-ir">${esc(f.ir_rot)} →</span>` : '';
   const tag = f.ir ? 'button type="button"' : 'div';
   const cierre = f.ir ? 'button' : 'div';
-  return `<${tag} class="pd-fila${f.ir ? '' : ' fija'}" data-acc="ir" data-i="${i}"
+  return `<${tag} class="pd-fila${f.ir ? '' : ' fija'}" data-acc="ir" data-i="${i}" data-id="${esc(f.t)}"
       title="${esc(f.ayuda || '')}">
     <span class="pd-punto ${f.estado}" aria-label="${ESTADO[f.estado]}"></span>
     <span class="pd-txt"><span class="pd-t">${esc(f.t)}</span>

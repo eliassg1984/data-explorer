@@ -958,6 +958,8 @@ def _saltar_a_produccion(destino, ult, cod):
     try:
         import navegacion
         from graficos import movimientos_merma as mm
+        from navegacion_retorno import capturar_origen
+        capturar_origen()
         if destino == "rev":
             mm.ir_a_revisar(ult["doc"])
             vista = mm.VISTA_REV

@@ -411,6 +411,8 @@ def ir_desde_carta(cod):
     corrida completa (la Carta es otro fragment)."""
     try:
         import navegacion
+        from navegacion_retorno import capturar_origen
+        capturar_origen()
         n = st.session_state.get("_rec_cambios_n", 0) + 1
         st.session_state["_rec_cambios_n"] = n
         st.session_state[K_PLATO] = {"cod": str(cod), "n": n}

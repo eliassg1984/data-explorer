@@ -121,6 +121,8 @@ def _al_ir():
     if not v or not v.get("r"):
         return
     import navegacion
+    from navegacion_retorno import capturar_origen
+    capturar_origen()
     navegacion._ir_a_vista(v["r"], v["sk"], v["v"])
     if v.get("abrir"):
         st.session_state[K_ABRIR_CONSISTENCIA] = v["abrir"]

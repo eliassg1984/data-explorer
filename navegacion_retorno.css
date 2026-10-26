@@ -1,0 +1,21 @@
+<style>
+.st-key-retorno_contextual {
+  position: fixed !important; top: 0 !important;
+  left: var(--rail-reserva, 0px) !important; right: 0 !important;
+  width: auto !important; height: 40px !important; padding: 4px 16px !important;
+  background: #fff !important; z-index: 1000004 !important;
+  border-bottom: 1px solid #e8e3ef !important; box-sizing: border-box !important;
+}
+:root[data-retorno] .st-key-nav_franja_rep { top: 40px !important; }
+:root[data-retorno] [data-testid="stMainBlockContainer"] {
+  padding-top: calc(var(--cab-offset-contenido) + 40px) !important;
+}
+@media (min-width: 901px) {
+  :root[data-retorno] .st-key-nav_franja_rep { opacity: 1 !important; clip-path: none !important; }
+  :root[data-retorno] [data-testid="stMainBlockContainer"] { padding-top: 96px !important; }
+}
+@media (max-width: 900px) {
+  .st-key-retorno_contextual { left: 0 !important; height: 52px !important; padding: 4px 12px !important; }
+  :root[data-retorno] [data-testid="stMainBlockContainer"] { padding-top: 60px !important; }
+}
+</style>

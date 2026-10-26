@@ -613,6 +613,8 @@ def _ir_a_carta(cod):
     try:
         import navegacion
         from graficos.carta_costeada import _K_FOCO
+        from navegacion_retorno import capturar_origen
+        capturar_origen()
         st.session_state[_K_FOCO] = cod
         navegacion._ir_a_vista("Recetas", "rec_graf_tipo", "Carta costeada")
         st.session_state["_vt_mix_ir_carta"] = 1

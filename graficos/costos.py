@@ -38,6 +38,7 @@ import convenios_descuento
 import presupuesto_ventas
 import costo_ventas
 import costos_enlaces
+import navegacion_retorno
 import costos_calidad
 import data
 import definicion_venta
@@ -211,6 +212,7 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
                           and any(p["k"] == mes_enlace for p in mes["periodos"]))
         _TABLA(key="costos_tabla", data=dict(
             datos, documental=documental, enlaces=costos_enlaces.enlaces(datos["granos"]),
+            retorno=navegacion_retorno.enlace_desde_aqui(),
             mes_inicial=mes_enlace if desde_resumen else None,
             desde_resumen=desde_resumen), width="stretch")
     # Los dos editores, lado a lado y no como franjas a todo el ancho

@@ -40,6 +40,7 @@ from graficos.base import (_render_rail, compartimento_filtros,
                            contar_filtros, filtro_pills)
 from asistente import inject_asistente
 from navegacion import inject_navegacion
+import navegacion_retorno
 from aviso_ingreso import procesar_aviso_ingreso
 from perf import perf                                                       # ⚡ PERF
 import historial_recetas
@@ -164,6 +165,8 @@ if params.get("refresh"):
         del st.query_params["refresh"]
     st.rerun()
 
+navegacion_retorno.preparar(reporte)
+navegacion_retorno.dibujar()
 inject_navegacion(REPORTES, reporte, mostrar_inspector=bool(st.query_params.get("debug")))
 
 cfg = REPORTES[reporte]
@@ -1305,6 +1308,7 @@ if _dato_viejo:
 
 # ── Llamada al fragment ──────────────────────────────────────────────────────
 _render_contenido()
+navegacion_retorno.actualizar_enlaces()
 
 # ── Asistente flotante IA (tab derecho; cabecera del rail si hay rail) ───────
 # El asistente es ACCESORIO: si revienta, el reporte tiene que seguir en pie.

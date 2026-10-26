@@ -25,7 +25,9 @@ def js_movil(js):
     original = _EXPORT.sub("function __movilRenderOriginal(", js, count=1)
     return original + "\n" + _JS + """
 export default function(component) {
-  const resultado = __movilRenderOriginal(component);
+  const resultado = window.__retorno
+    ? window.__retorno.montar(component, __movilRenderOriginal)
+    : __movilRenderOriginal(component);
   const limpiarMovil = __movilAdaptar(component.parentElement);
   return () => {
     if (typeof resultado === 'function') resultado();
