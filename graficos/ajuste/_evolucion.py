@@ -44,6 +44,7 @@ a el va el neto como % del CONSUMO del mes (`pct_consumo`), que mide otra
 cosa: cuanto se perdio de lo que paso por el restaurante.
 """
 
+from graficos.movil import css_movil, js_movil
 import math
 from pathlib import Path
 
@@ -516,8 +517,8 @@ def kpis_rango_html(s):
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "evolucion_ajuste",
-    css=(_AQUI / "evolucion_ajuste.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "evolucion_ajuste.js").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "evolucion_ajuste.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "evolucion_ajuste.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "ajevo_pieza"
 _K_AREA = "ajuste_evo_filtro_area"

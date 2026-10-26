@@ -1,4 +1,5 @@
 """Consumo según recetas nativo; conserva el adaptador y sus seis decimales (#733)."""
+from graficos.movil import css_movil, js_movil
 import hashlib
 import json
 import pickle
@@ -14,8 +15,8 @@ _CSS = '.consumo-pieza{' + ''.join(f'--{k}:{v};' for k, v in _TOKENS.items()) + 
 _CSS += (_DIR / 'consumo.css').read_text(encoding='utf-8')
 _JS = (_DIR / 'consumo.js').read_text(encoding='utf-8').replace(
     '/*__HTML__*/null', json.dumps((_DIR / 'consumo.html').read_text(encoding='utf-8'), ensure_ascii=False))
-_PIEZA = st.components.v2.component('consumo_recetas_733', css=_CSS,
-    js=(_DIR / '_xlsx.js').read_text(encoding='utf-8') + _JS)
+_PIEZA = st.components.v2.component('consumo_recetas_733', css=css_movil(_CSS),
+    js=js_movil((_DIR / '_xlsx.js').read_text(encoding='utf-8') + _JS))
 
 
 def renderizar(fam_sel=(), sub_sel=(), rango=None, fecha=None):

@@ -30,6 +30,7 @@ compras (los precios de compra), recetas base y porcionamientos.
 Regla #656.
 """
 
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import streamlit as st
@@ -41,8 +42,8 @@ from graficos.recetas_comun import divisor_neto
 _AQUI = Path(__file__).parent
 _COMPONENTE = st.components.v2.component(
     "simulador_plato",
-    css=(_AQUI / "simulador_plato.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "simulador_plato.js").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "simulador_plato.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "simulador_plato.js").read_text(encoding="utf-8")),
 )
 
 AYUDA = ("Probá cambios en la receta —cantidades, precios de compra, la merma "

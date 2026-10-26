@@ -39,6 +39,7 @@ elige en la carta, regla #547), el plato sin costo cargado y el que cuesta
 más de lo que se cobra (casi siempre una receta mal cargada).
 """
 
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import numpy as np
@@ -261,8 +262,8 @@ def _soles(v, dec=2):
 
 _PIEZA = st.components.v2.component(
     "ventas_menu",
-    css=(Path(__file__).parent / "ventas_menu.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent / "ventas_menu.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "ventas_menu.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "ventas_menu.js").read_text(encoding="utf-8")),
 )
 
 

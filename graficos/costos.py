@@ -27,6 +27,7 @@ fila la tabla crece, y con techo la tarjeta sacaría barra propia (#382).
 Regla #622.
 """
 
+from graficos.movil import css_movil, js_movil
 import datetime as dt
 from pathlib import Path
 
@@ -70,11 +71,11 @@ _ARCHIVOS = ("compras.parquet", "salidas.parquet", "ventas.parquet",
 _AQUI = Path(__file__).parent
 _TABLA = st.components.v2.component(
     "costos_tabla",
-    css=(_AQUI / "costos_tabla.css").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "costos_tabla.css").read_text(encoding="utf-8")),
     # Un solo módulo: los paneles y las dos vistas de arriba (regla #679)
     # definen funciones que usa `costos_tabla.js`, que exporta el default.
-    js="\n".join((_AQUI / f).read_text(encoding="utf-8")
-                  for f in ("costos_paneles.js", "costos_vistas.js", "costos_tabla.js")),
+    js=js_movil("\n".join((_AQUI / f).read_text(encoding="utf-8")
+                  for f in ("costos_paneles.js", "costos_vistas.js", "costos_tabla.js"))),
 )
 
 

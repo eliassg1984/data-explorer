@@ -1,4 +1,5 @@
 """Documentos SUNAT propios; fuentes y acciones siguen en Python (#741)."""
+from graficos.movil import css_movil, js_movil
 import hashlib
 import pickle
 from pathlib import Path
@@ -45,8 +46,8 @@ def _doc(P,vis,identidad):
 def _pieza():
     css=(_DIR/'sunat_documentos.css').read_text(encoding='utf-8')
     css+='.sud{'+''.join(f'--sud-{k}:{v};' for k,v in dict(acento=tema.ACENTO,neg=tema.AJUSTE_NEG,pos=tema.AJUSTE_POS).items())+'}'
-    return st.components.v2.component('sunat_documentos_741',css=css,
-        js=(_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'sunat_documentos.js').read_text(encoding='utf-8'))
+    return st.components.v2.component('sunat_documentos_741',css=css_movil(css),
+        js=js_movil((_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'sunat_documentos.js').read_text(encoding='utf-8')))
 
 
 _PIEZA=_pieza()

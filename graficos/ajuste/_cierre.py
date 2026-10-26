@@ -1,4 +1,5 @@
 """Diferencias del cierre: dos perspectivas locales con estado propio (#720)."""
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 import hashlib
 
@@ -10,9 +11,9 @@ from ._cierre_datos import armar
 _DIR = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "ajuste_cierre",
-    css=(_DIR / "cierre.css").read_text(encoding="utf-8"),
-    js=(_DIR.parent / "_xlsx.js").read_text(encoding="utf-8")
-       + (_DIR / "cierre.js").read_text(encoding="utf-8"),
+    css=css_movil((_DIR / "cierre.css").read_text(encoding="utf-8")),
+    js=js_movil((_DIR.parent / "_xlsx.js").read_text(encoding="utf-8")
+       + (_DIR / "cierre.js").read_text(encoding="utf-8")),
 )
 
 

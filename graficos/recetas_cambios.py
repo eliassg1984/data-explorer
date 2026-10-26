@@ -34,6 +34,7 @@ ficha de Costo de Carta («Ver cambios») deja el plato en `K_PLATO`
 (`ir_desde_carta`) y la pieza abre filtrada en él.
 """
 
+from graficos.movil import css_movil, js_movil
 import datetime
 from pathlib import Path
 
@@ -74,8 +75,8 @@ K_PLATO = "rec_cambios_plato"
 
 _PIEZA = st.components.v2.component(
     "recetas_cambios",
-    css=(Path(__file__).parent / "recetas_cambios.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent / "recetas_cambios.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "recetas_cambios.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "recetas_cambios.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "rec_cambios_pieza"
 

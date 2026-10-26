@@ -6,6 +6,7 @@ proveedores, prioridad por impacto y puente precio/cantidad; sólo la fecha
 vuelve a Python. Los ayudantes originales siguen como referencia de tests.
 """
 
+from graficos.movil import css_movil, js_movil
 import math
 
 import pandas as pd
@@ -829,9 +830,9 @@ from graficos.base import rango_tarjeta
 
 _PIEZA = st.components.v2.component(
     "compras_volatilidad",
-    css=(Path(__file__).parent / "volatilidad.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent.parent / "_xlsx.js").read_text(encoding="utf-8")
-    + (Path(__file__).parent / "volatilidad.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "volatilidad.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent.parent / "_xlsx.js").read_text(encoding="utf-8")
+    + (Path(__file__).parent / "volatilidad.js").read_text(encoding="utf-8")),
 )
 _K_CACHE = "_cp_vol_pieza_cache"
 

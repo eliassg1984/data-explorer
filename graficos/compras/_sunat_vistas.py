@@ -26,6 +26,7 @@ Este módulo arma los datos (funciones puras, las prueba `test_graficos.py`)
 y monta la pieza. El cruce y su censo los calcula `documentos_sunat.py`.
 """
 
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import pandas as pd
@@ -37,8 +38,8 @@ from cortes import MESES_ABR_ES
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "sunat_vistas",
-    css=(_AQUI / "sunat_vistas.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "sunat_vistas.js").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "sunat_vistas.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "sunat_vistas.js").read_text(encoding="utf-8")),
 )
 
 VISTA_CRUCE = "Cruce con SUNAT"

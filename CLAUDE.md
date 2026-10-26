@@ -19,6 +19,15 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 > reglas conservaron el nombre `arquitectura.md` porque hay 166 citas
 > `arquitectura.md #NNN` en el código. Ver regla #163.
 
+## Presentación móvil
+
+Las piezas v2 componen su CSS y JS con `graficos/movil.py`: tamaños
+táctiles, filtros plegables, tablas anchas y distribuciones por reporte.
+Los controles originales conservan sus eventos y estado. Antes de publicar
+cambios de interfaz, correr también `python test_movil.py` (incluye retorno
+a escritorio y cabeceras nativas sin solapes). El detalle vive en
+`mapa.md`, sección «Vista móvil».
+
 ## Flujo de trabajo
 
 - Push directo a `main`. No hay staging: se valida en Streamlit Cloud.

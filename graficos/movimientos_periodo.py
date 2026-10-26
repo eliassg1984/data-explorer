@@ -101,6 +101,7 @@ son las piezas puras que las arman, y que `test_graficos.py` prueba sin
 navegador.
 """
 
+from graficos.movil import js_movil
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
@@ -545,8 +546,8 @@ def resaltado_vigente(estado, partir, ops):
 
 _FILA_KPI = st.components.v2.component(
     "fila_kpi_movimientos",
-    js=(Path(__file__).parent / "movimientos_kpi.js").read_text(
-        encoding="utf-8"),
+    js=js_movil((Path(__file__).parent / "movimientos_kpi.js").read_text(
+        encoding="utf-8")),
     isolate_styles=False,
 )
 """La fila de KPI como pieza propia (regla #649): el MISMO HTML de

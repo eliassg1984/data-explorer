@@ -1,4 +1,5 @@
 """Stock por Producto como pieza propia (#721). Sólo una foto pide Python."""
+from graficos.movil import css_movil, js_movil
 import datetime as dt
 import hashlib
 from pathlib import Path
@@ -14,10 +15,10 @@ from . import inventario_productos_datos as datos
 _DIR = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "stock_productos",
-    css=(_DIR / "inventario_productos.css").read_text(encoding="utf-8"),
-    js=(_DIR / "_xlsx.js").read_text(encoding="utf-8")
+    css=css_movil((_DIR / "inventario_productos.css").read_text(encoding="utf-8")),
+    js=js_movil((_DIR / "_xlsx.js").read_text(encoding="utf-8")
        + (_DIR / "inventario_base.js").read_text(encoding="utf-8")
-       + (_DIR / "inventario_productos.js").read_text(encoding="utf-8"))
+       + (_DIR / "inventario_productos.js").read_text(encoding="utf-8")))
 _K_PIEZA, _K_PEDIDO = "inv_stock_pieza", "_inv_stock_pedido"
 _K_CACHE, _K_FOTOS = "_inv_stock_base", "_inv_stock_fotos"
 

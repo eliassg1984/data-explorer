@@ -42,6 +42,7 @@ Dos reglas que la maqueta de la #653 midió y la vista cumple en todos lados:
   cargada a S/ 15,85 el kilo.
 """
 
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import numpy as np
@@ -493,11 +494,11 @@ def armar_ranking(res_p, res_f, res_s, nombres, rango, ultimo, prev_total,
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "compras_producto",
-    css=(_AQUI / "producto.css").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "producto.css").read_text(encoding="utf-8")),
     # El Excel (`libro`, `bajar`, `archivo`) vive en `_xlsx.js`, compartido
     # con Costo de Carta y Consistencia: se antepone.
-    js=(_AQUI.parent / "_xlsx.js").read_text(encoding="utf-8")
-    + (_AQUI / "producto.js").read_text(encoding="utf-8"),
+    js=js_movil((_AQUI.parent / "_xlsx.js").read_text(encoding="utf-8")
+    + (_AQUI / "producto.js").read_text(encoding="utf-8")),
 )
 
 _K_RANK = "cp_prod_pieza_rank"

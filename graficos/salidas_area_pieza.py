@@ -1,4 +1,5 @@
 """Salidas por Área: cadena y notas locales, mismas cuentas de referencia (#735)."""
+from graficos.movil import css_movil, js_movil
 import hashlib
 import pickle
 from pathlib import Path
@@ -16,8 +17,8 @@ _CSS='.rqa{'+''.join(f'--{k}:{v};' for k,v in {
     'text-secondary':tema.GRIS_TEXTO,'border':tema.GRIS_BORDE,'bg-card':tema.BLANCO,
     'saa-alza':tema.ERROR,'saa-baja':tema.AJUSTE_POS_TEXTO}.items())+'}'
 _CSS+=(_DIR/'requerimientos_area.css').read_text(encoding='utf-8')+(_DIR/'salidas_area.css').read_text(encoding='utf-8')
-_PIEZA=st.components.v2.component('salidas_area_735',css=_CSS,
-    js=(_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'salidas_area.js').read_text(encoding='utf-8'))
+_PIEZA=st.components.v2.component('salidas_area_735',css=css_movil(_CSS),
+    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'salidas_area.js').read_text(encoding='utf-8')))
 
 
 def renderizar(d,d_vent,cols,niveles,vent,*,d_ant=None,rango=None,fecha=None,nota=None,titulo='Salidas por área',rotulo_ant='',sin_comparar=(),aviso=None,contexto=None):

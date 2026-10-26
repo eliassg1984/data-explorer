@@ -1,4 +1,5 @@
 """Movimientos de Stock: sólo el período consulta las fuentes (#738)."""
+from graficos.movil import css_movil, js_movil
 import datetime as dt
 import hashlib
 import json
@@ -14,8 +15,8 @@ from . import inventario_movimientos_datos as datos
 
 _DIR=Path(__file__).parent
 _CSS='.imv{'+''.join(f'--{k}:{v};' for k,v in dict(acento=tema.ACENTO,pos=tema.AJUSTE_POS,neg=tema.AJUSTE_NEG).items())+'}'+(_DIR/'inventario_movimientos.css').read_text(encoding='utf-8')
-_PIEZA=st.components.v2.component('stock_movimientos_738',css=_CSS,
-    js=(_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'inventario_movimientos.js').read_text(encoding='utf-8'))
+_PIEZA=st.components.v2.component('stock_movimientos_738',css=css_movil(_CSS),
+    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'inventario_movimientos.js').read_text(encoding='utf-8')))
 
 
 def renderizar(d,*,col_cod_area,col_cod,col_area,col_prod,col_fam=None,col_punit=None):

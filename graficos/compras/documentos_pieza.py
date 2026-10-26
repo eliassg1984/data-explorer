@@ -1,4 +1,5 @@
 """Detalle docs.: controles locales; fecha y aviso del ranking releen Python (#726)."""
+from graficos.movil import css_movil, js_movil
 import hashlib
 from pathlib import Path
 
@@ -11,8 +12,8 @@ from . import documentos_datos as datos
 
 _DIR=Path(__file__).parent
 _PIEZA=st.components.v2.component('compras_documentos',
-    css=(_DIR/'documentos.css').read_text(encoding='utf-8'),
-    js=(_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'documentos.js').read_text(encoding='utf-8'))
+    css=css_movil((_DIR/'documentos.css').read_text(encoding='utf-8')),
+    js=js_movil((_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'documentos.js').read_text(encoding='utf-8')))
 
 
 def renderizar(d,cols):

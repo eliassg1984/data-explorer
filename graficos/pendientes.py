@@ -29,6 +29,7 @@ corrida del fragment de la sección, y cambiar de reporte pide la completa:
 el mismo patrón que «Recetas vs Porcionado» (`st.rerun(scope="app")`).
 """
 
+from graficos.movil import css_movil, js_movil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -42,8 +43,8 @@ from cortes import sesiones_inventario, ultimo_cierre
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "pendientes",
-    css=(_AQUI / "pendientes.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "pendientes.js").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "pendientes.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "pendientes.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "pendientes_pieza"
 _K_IR = "_pend_ir"

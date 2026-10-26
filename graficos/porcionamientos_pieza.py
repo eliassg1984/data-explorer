@@ -1,4 +1,5 @@
 """Porcionamientos nativo; fecha y valorización compartida siguen en Python (#728)."""
+from graficos.movil import css_movil, js_movil
 import hashlib
 from pathlib import Path
 
@@ -10,8 +11,8 @@ from . import porcionamientos_datos as datos
 
 _DIR=Path(__file__).parent
 _PIEZA=st.components.v2.component('porcionamientos_periodo',
-    css=(_DIR/'movimientos_periodo.css').read_text(encoding='utf-8'),
-    js=(_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'movimientos_periodo.js').read_text(encoding='utf-8'))
+    css=css_movil((_DIR/'movimientos_periodo.css').read_text(encoding='utf-8')),
+    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'movimientos_periodo.js').read_text(encoding='utf-8')))
 
 
 def _huella(d):

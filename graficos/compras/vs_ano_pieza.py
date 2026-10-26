@@ -1,4 +1,5 @@
 """Montaje de Vs año pasado. Sus controles trabajan en el navegador (#725)."""
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import streamlit as st
@@ -8,8 +9,8 @@ from . import vs_ano_pasado as vp
 
 _DIR=Path(__file__).parent
 _PIEZA=st.components.v2.component(
-    'compras_ano',css=(_DIR/'vs_ano.css').read_text(encoding='utf-8'),
-    js=(_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'vs_ano.js').read_text(encoding='utf-8'))
+    'compras_ano',css=css_movil((_DIR/'vs_ano.css').read_text(encoding='utf-8')),
+    js=js_movil((_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'vs_ano.js').read_text(encoding='utf-8')))
 
 
 def renderizar(d,cols,d_full=None):

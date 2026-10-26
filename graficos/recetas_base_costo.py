@@ -64,6 +64,7 @@ atípicas no entran en el promedio del mes ni en el último costo; el gráfico
 las muestra aparte.
 """
 
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import numpy as np
@@ -152,8 +153,8 @@ _AREA_ESCRITA = {"PRODUCCION": "Producción", "PASTELERIA": "Pastelería", "FRIO
 
 _PIEZA = st.components.v2.component(
     "recetas_base_costo",
-    css=(Path(__file__).parent / "recetas_base_costo.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent / "recetas_base_costo.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "recetas_base_costo.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "recetas_base_costo.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "rec_rb_pieza"
 VERSION = 1

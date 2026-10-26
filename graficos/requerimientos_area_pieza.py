@@ -1,4 +1,5 @@
 """Requerimientos por Área nativo: jerarquía, productos y ficha locales (#734)."""
+from graficos.movil import css_movil, js_movil
 import hashlib
 import pickle
 from pathlib import Path
@@ -14,8 +15,8 @@ _CSS='.rqa{'+''.join(f'--{k}:{v};' for k,v in {
     'accent':tema.ACENTO,'accent-tint':tema.LAVANDA_FONDO,'text-primary':tema.TEXTO_PRINCIPAL,
     'text-secondary':tema.GRIS_TEXTO,'border':tema.GRIS_BORDE,'bg-card':tema.BLANCO}.items())+'}'
 _CSS+=(_DIR/'requerimientos_area.css').read_text(encoding='utf-8')
-_PIEZA=st.components.v2.component('requerimientos_area_734',css=_CSS,
-    js=(_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'requerimientos_area.js').read_text(encoding='utf-8'))
+_PIEZA=st.components.v2.component('requerimientos_area_734',css=css_movil(_CSS),
+    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'requerimientos_area.js').read_text(encoding='utf-8')))
 
 
 def renderizar(d,d_vent,cols,cols_marcas,vent,*,unidades=None,rango=None,fecha=None,nota=None,titulo='Requerido por sub almacén',contexto=None):

@@ -33,6 +33,7 @@ las fórmulas escritas igual.
 fuera él.
 """
 
+from graficos.movil import css_movil, js_movil
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -435,8 +436,8 @@ def _estilo_costo(v):
 
 _PIEZA = st.components.v2.component(
     "ventas_mix",
-    css=(Path(__file__).parent / "ventas_mix.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent / "ventas_mix.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "ventas_mix.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "ventas_mix.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "vt_mix_pieza"
 _K_GRAN = "vt_mix_gran"

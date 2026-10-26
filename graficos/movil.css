@@ -1,0 +1,86 @@
+/* Base común de las piezas v2. El DOM de escritorio se restaura al salir
+   del breakpoint y todas las reglas quedan limitadas a móvil. */
+@media (max-width: 900px) {
+  .rpt-movil { min-width: 0 !important; max-width: 100% !important; font-size: 14px; }
+  .rpt-movil, .rpt-movil * { box-sizing: border-box; }
+  .rpt-movil > * { min-width: 0; max-width: 100%; }
+  .rpt-movil :is(button, select, summary, input:not([type=checkbox]):not([type=radio])) {
+    min-height: 44px !important; max-width: 100%;
+  }
+  .rpt-movil :is(input:not([type=checkbox]):not([type=radio]), select) { font-size: 16px !important; min-width: 0; }
+  .rpt-movil :is(input[type=checkbox], input[type=radio]) { width: 20px; height: 20px; flex-shrink: 0; }
+  .rpt-movil :is(h1, h2, h3) { overflow-wrap: anywhere; white-space: normal; }
+  .rpt-movil :is(header, footer) { flex-wrap: wrap; gap: 10px; }
+  .rpt-movil-panel { flex: 1 1 100%; width: 100%; min-width: 0; border: 1px solid var(--border-lavender); border-radius: 10px; background: var(--bg-card); }
+  .rpt-movil-panel > summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px;
+    padding: 10px 12px; cursor: pointer; color: var(--accent-deep); background: var(--accent-tint); border-radius: 9px; font-size: 14px; font-weight: 600; list-style: none; }
+  .rpt-movil-panel > summary::after { content: '▾'; }
+  .rpt-movil-panel[open] > summary::after { content: '▴'; }
+  .rpt-movil-panel > summary small { flex-basis: 100%; font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+  .rpt-movil-panel > summary::-webkit-details-marker { display: none; }
+  .rpt-movil-panel > .rpt-movil-filtros { padding: 12px !important; margin: 0 !important; width: 100% !important; max-width: 100% !important;
+    flex-wrap: wrap !important; gap: 10px !important; height: auto !important; min-height: 0 !important; }
+  .rpt-movil-filtros > :is(label, select, .ms, .campo, .g, .men) { flex: 1 1 100%; width: 100%; max-width: 100%; }
+  .rpt-movil-filtros :is(.ms-l, .men-p, .ley-p, .como-p) { position: static !important; width: 100%; max-width: 100%; }
+  .rpt-movil :is(.ms-l, .men-p, .ley-p, .como-p) { max-width: calc(100vw - 48px); }
+  .rpt-movil .isp-options { bottom: calc(88px + env(safe-area-inset-bottom)) !important; max-width: calc(100vw - 24px); }
+  .rpt-tabla-scroll, .rpt-graf-scroll { width: 100%; max-width: 100%; min-width: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .rpt-tabla-scroll { max-height: min(480px, 65dvh); }
+  .rpt-tabla-ancha { min-width: 640px !important; }
+  .rpt-movil :is(.seg, .pestanas, .tabs, .modos) { max-width: 100%; flex-wrap: wrap; }
+  .rpt-movil td { font-size: 13px; }
+  .rpt-movil :is(.rk-f, .pl-f, .pb-f, .ft-f, .tf, .dl-l) { height: auto !important; min-height: 44px; font-size: 13px; }
+  .rpt-movil :is(.rk-l, .ft-l, .tl) { overflow-x: auto; overscroll-behavior: contain; }
+
+  /* Compras: rankings, ficha y análisis de documentos. */
+  :is(.cpvr, .cpvf, .cpr, .cpf).rpt-movil { height: auto !important; min-height: 0 !important; }
+  .rpt-movil :is(.cab, .ctl, .cc, .cpvf .tabs, .cpf .tabs) { flex-wrap: wrap; }
+  :is(.cpvf, .cpf).rpt-movil .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :is(.cpvf, .cpf).rpt-movil .cuerpo { overflow-x: auto; overscroll-behavior: contain; }
+  :is(.cpvr, .cpr).rpt-movil .rk-f { grid-template-columns: minmax(140px, 1fr) 96px 76px 48px; min-width: 400px; }
+  :is(.cpvr, .cpr).rpt-movil .tabla { overflow-x: auto; overscroll-behavior: contain; }
+  :is(.cpvr, .cpr).rpt-movil .rk-l { min-width: 400px; max-height: 420px; }
+  .rpt-movil :is(.vap-dos, .cv-lower, .iar-rankings, .iar-analisis-cuerpo, .pvu-cuerpo, .mre-cuerpo, .mrv-cuerpo) { display: flex; flex-direction: column; }
+  .rpt-movil :is(.vap-serie, .vap-explica, .vap-detalle, .cv-rank, .cv-detail, .cv-analysis, .dc-main, .dc-ficha, .iar-main, .iar-analisis, .pvu-main, .mre-main, .mrv-main) { height: auto !important; min-height: 0 !important; }
+  .rpt-movil :is(.dc-kpis, .cv-kpis, .vap-kpis) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rpt-movil :is(.dc-main > header, .cv-native-space, .mv-main header) { padding-right: 0; padding-top: 0; min-height: 0; }
+  .rpt-movil :is(.vap-chart, .vap-waterfall, .cv-plot) { min-height: 240px; flex: none; }
+
+  /* Ventas: período, comparativo, platos, mix, horarios y meseros. */
+  .vp.rpt-movil :is(.ctl, .cab, .kp, .pie, .ctx) { flex-wrap: wrap; }
+  .vp.rpt-movil .kp { flex: 1 1 100%; width: 100%; }
+  .vp.rpt-movil .tit { flex-basis: 100%; white-space: normal; }
+  .vp.rpt-movil .ley { flex: 1 1 100%; width: 100%; }
+  .vp.rpt-movil .ley-b { width: 100%; min-width: 0; }
+  .vp.rpt-movil .fils { justify-content: flex-start; }
+  .vp.rpt-movil .lugar-fecha { display: none; }
+  .vp.rpt-movil .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow: visible; flex-basis: 100%; }
+  .vp.rpt-movil .kpi { flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; padding: 8px; white-space: normal; }
+  .rpt-movil-kpis { grid-column: 1 / -1; width: 100%; }
+  .rpt-movil-kpis > summary { min-height: 44px; padding: 10px 12px; border-radius: 8px; cursor: pointer; color: var(--accent-deep); background: var(--accent-tint); }
+  .rpt-kpis-mas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 8px; }
+  .vp.rpt-movil :is(.det, .vp-cuerpo, .vm-cuerpo, .ig-cuerpo, .cuerpo, .cuerpo2, .pcuerpo, .vcc-grid, .ms-grid, .ctl-cuerpo) { display: grid; grid-template-columns: minmax(0, 1fr); height: auto !important; }
+  .rpt-movil :is(.vm-cuerpo, .ig-cuerpo, .vh .cuerpo, .vh .cuerpo2, .vh .pcuerpo, .vcc-grid, .ms-grid, .ctl-cuerpo) { grid-template-columns: minmax(0, 1fr); height: auto !important; }
+  .rpt-movil :is(.vp-kpis, .vm-kpis, .ig-kpis, .vcc-kpis, .ms-kpis, .ctl-kpis) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vh.rpt-movil :is(.split, .grid2) { grid-template-columns: minmax(0, 1fr); }
+  .rpt-movil :is(.vp-ctrl, .vm-ctrl, .vcc-controls, .ms-toolbar, .ctl-controles) { flex-wrap: wrap; }
+
+  /* Inventario, movimientos, producción y mermas. */
+  .rpt-movil :is(.isp-card, .isp-ficha, .ajc-card, .mv-main, .mv-detalle, .rqa-card) { height: auto !important; min-height: 0 !important; }
+  .rpt-movil :is(.isp-band, .imv-grid, .adf-grid, .apv-comparar, .dst-grid, .dst-producto-grid, .rqa-ficha-grid, .mre-grid, .mre-graficas) { grid-template-columns: minmax(0, 1fr) !important; }
+  .rpt-movil :is(.isp-kpis, .imv-kpis, .ajc-kpis, .dif-kpis, .pvu-kpis, .mre-kpis, .mrv-kpis, .spd-kpis) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .rpt-movil .mv-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rpt-movil :is(.mv-controles, .mv-filtros, .rqa-controles, .dst-control) { flex-wrap: wrap; }
+  .rpt-movil :is(.mv-grafico, .imv-chart, .dst-chart) { min-height: 240px; }
+
+  /* Recetas, costos, portada y herramientas de costeo. */
+  .rpt-movil :is(.cc-cuerpo, .sa-cuerpo, .nc-cuerpo, .rr .cuerpo, .rb .cuerpo, .cr .cuerpo, .ev .cuerpo, .cd-cuerpo) { grid-template-columns: minmax(0, 1fr); height: auto !important; }
+  .rpt-movil :is(.cc-kpis, .sa-kpis, .pd-kpis, .cd-kpis) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .re.rpt-movil :is(.re-grid, .re-lower, .re-method-body) { grid-template-columns: minmax(0, 1fr); }
+  .re.rpt-movil .re-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cv.rpt-movil { --cv-concepto: 148px; --cv-periodo: 100px; --cv-total: 108px; }
+  .cv.rpt-movil :is(td, th).tot { right: auto; }
+  .cv.rpt-movil .marco { scroll-padding-right: 8px; }
+  .rpt-movil :is(.cc-buscar, .sa-buscar, .buscar, .busca input) { max-width: 100%; }
+  :is(.rb, .rr, .cr, .sim).rpt-movil :is(.cuerpo, .kpis) { grid-template-columns: minmax(0, 1fr); }
+}

@@ -51,6 +51,7 @@ LAS CUENTAS QUE NO SE PUEDEN HACER EN EL NAVEGADOR
     fecha (regla #552).
 """
 
+from graficos.movil import css_movil, js_movil
 import datetime as _dt
 import hashlib
 from pathlib import Path
@@ -105,8 +106,8 @@ plato que la pieza abre en «Qué se vende a cada hora»."""
 
 _PIEZA = st.components.v2.component(
     "ventas_horario",
-    css=(Path(__file__).parent / "ventas_horario.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent / "ventas_horario.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "ventas_horario.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "ventas_horario.js").read_text(encoding="utf-8")),
 )
 
 _TILDES_AREA = {"Pasteleria": "Pastelería", "Frios": "Fríos"}

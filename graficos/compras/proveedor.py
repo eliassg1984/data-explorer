@@ -43,6 +43,7 @@ precio» del histórico de un producto, que antes salía de la columna de
 precio unitario del parquet (regla #653).
 """
 
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import numpy as np
@@ -175,11 +176,11 @@ _AQUI = Path(__file__).parent
 # de proveedores; esa pieza pide actualizar sólo su propio fragment (#726).
 _PIEZA = st.components.v2.component(
     "compras_proveedor",
-    css=(_AQUI / "proveedor.css").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "proveedor.css").read_text(encoding="utf-8")),
     # El Excel (`libro`, `bajar`, `archivo`) vive en `_xlsx.js`, compartido
     # con Producto, Costo de Carta y Consistencia: se antepone.
-    js=(_AQUI.parent / "_xlsx.js").read_text(encoding="utf-8")
-    + (_AQUI / "proveedor.js").read_text(encoding="utf-8"),
+    js=js_movil((_AQUI.parent / "_xlsx.js").read_text(encoding="utf-8")
+    + (_AQUI / "proveedor.js").read_text(encoding="utf-8")),
 )
 
 _K_RANK = "cp_prov_pieza_rank"

@@ -1,4 +1,5 @@
 """Rendimiento nativo, valorización y foco compartidos (#730)."""
+from graficos.movil import css_movil, js_movil
 import json
 from pathlib import Path
 
@@ -9,8 +10,8 @@ from . import merma_rendimiento_datos as datos
 
 _DIR=Path(__file__).parent
 _PIEZA=st.components.v2.component('merma_rendimiento',
-    css=(_DIR/'merma_rendimiento.css').read_text(encoding='utf-8'),
-    js=(_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'merma_rendimiento.js').read_text(encoding='utf-8'))
+    css=css_movil((_DIR/'merma_rendimiento.css').read_text(encoding='utf-8')),
+    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'merma_rendimiento.js').read_text(encoding='utf-8')))
 
 
 def _producto():

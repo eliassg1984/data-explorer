@@ -80,6 +80,7 @@ título del gráfico, que pasó a HTML junto con la leyenda.
 """
 
 
+from graficos.movil import css_movil, js_movil
 from html import escape
 from pathlib import Path
 
@@ -1831,10 +1832,10 @@ def sello_pieza(b, nc, hist_ops):
 
 _PIEZA = st.components.v2.component(
     "compras_periodo",
-    css=(Path(__file__).parent / "semanal.css").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "semanal.css").read_text(encoding="utf-8")),
     # El Excel (`libro`, `bajar`, `archivo`) vive en `_xlsx.js`: se antepone.
-    js=(Path(__file__).parent.parent / "_xlsx.js").read_text(encoding="utf-8")
-    + (Path(__file__).parent / "semanal.js").read_text(encoding="utf-8"),
+    js=js_movil((Path(__file__).parent.parent / "_xlsx.js").read_text(encoding="utf-8")
+    + (Path(__file__).parent / "semanal.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "cp_sem_pieza"
 _K_CACHE = "_cp_sem_pieza_cache"

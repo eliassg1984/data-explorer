@@ -23,6 +23,7 @@ parquets: la primera vez de cada versión tarda alrededor de un minuto).
 Reglas #686, #689 y #690.
 """
 
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import pandas as pd
@@ -34,11 +35,11 @@ import data
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "costos_consistencia",
-    css=(_AQUI / "costos_consistencia.css").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "costos_consistencia.css").read_text(encoding="utf-8")),
     # El Excel (`libro`, `bajar`) vive en `_xlsx.js`, compartido con
     # «Costo de Carta» (#696): se antepone, y queda en el mismo módulo.
-    js=(_AQUI / "_xlsx.js").read_text(encoding="utf-8")
-    + (_AQUI / "costos_consistencia.js").read_text(encoding="utf-8"),
+    js=js_movil((_AQUI / "_xlsx.js").read_text(encoding="utf-8")
+    + (_AQUI / "costos_consistencia.js").read_text(encoding="utf-8")),
 )
 
 

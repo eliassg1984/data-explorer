@@ -436,4 +436,64 @@ CSS = """    .st-key-nav_menu_movil { display: none !important; }
         .st-key-nav_franja_kpis .franja-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
         .st-key-nav_franja_kpis .franjakpi-par { padding: 6px 10px; }
     }
+    /* Misma geometría móvil en todos los reportes. Las fechas y filtros
+       nativos conservan su estado y pasan al flujo antes de las piezas. */
+    @media screen and (max-width: 900px) {
+        :root {
+            --nav-top-alto: 0px;
+            --franja-rep-alto: 0px;
+            --franja-rep-reserva: 0px;
+        }
+        html body [data-testid="stAppViewContainer"][data-testid="stAppViewContainer"][data-testid="stAppViewContainer"]
+            [data-testid="stMainBlockContainer"] {
+            padding: 12px 12px calc(96px + env(safe-area-inset-bottom)) !important;
+            max-width: 100% !important;
+        }
+        html body [data-testid="stAppViewContainer"] [data-testid="stMain"] {
+            scroll-snap-type: none !important;
+            scroll-padding-top: 0 !important;
+        }
+        html body [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] { gap: 8px !important; }
+        [class*="st-key-"][class*="_sec_"]:not([class*="st-key-pila_go_"]) { min-height: 0 !important; }
+        html body .st-key-fila_ajuste_top {
+            position: static !important; height: auto !important; min-height: 0 !important;
+            margin: 0 !important; padding: 0 !important;
+        }
+        .st-key-fila_ajuste_top::before { display: none !important; }
+        html body .st-key-fecha_ajuste_pill {
+            position: static !important; top: auto !important; left: auto !important;
+            right: auto !important; width: auto !important; margin: 0 !important;
+        }
+        .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 8px !important; }
+        html body .st-key-chips_ajuste_tabla { position: static !important; height: auto !important; margin: 0 !important; }
+        html body :is(.st-key-vt_periodo_fecha, .st-key-cp_vol_fecha, .st-key-vt_mes_fecha,
+            .st-key-vt_ctl_nativa_fecha, .st-key-cp_docs_nativa_fecha,
+            .st-key-ajdet_fecha_nativa, .st-key-mov_pporc_nativa_fecha,
+            .st-key-stock_mov_fecha, .st-key-merma_revision_fecha,
+            .st-key-rec_carta_cab_fecha, .st-key-rec_alza_cab_fecha, .st-key-rec_cambios_cab_fecha,
+            [class*="_nativa_fecha"]) {
+            position: static !important; top: auto !important; left: auto !important;
+            right: auto !important; width: 100% !important; height: auto !important;
+            min-height: 0 !important; margin: 0 0 8px !important;
+        }
+        html body [data-testid="stAppViewContainer"] [data-testid="stPopoverButton"],
+        html body [data-testid="stAppViewContainer"] [data-testid="stButton"] button {
+            min-height: 44px !important; height: auto !important;
+            max-width: 100% !important;
+        }
+        html body [data-testid="stAppViewContainer"] [data-testid="stPopoverButton"] {
+            padding: 8px 12px !important; font-size: 14px !important;
+        }
+        .st-key-fila_ajuste_top .franja-titulo-app { position: static !important; }
+        :is(.st-key-rec_carta_cab, .st-key-rec_alza_cab, .st-key-rec_cambios_cab,
+            .st-key-vt_mix_cab, .st-key-vt_hora_cab) {
+            flex-wrap: wrap !important; gap: 8px !important;
+        }
+        :is(.st-key-rec_carta_cab, .st-key-rec_alza_cab, .st-key-rec_cambios_cab,
+            .st-key-vt_mix_cab, .st-key-vt_hora_cab)
+            > :is([data-testid="stLayoutWrapper"], [data-testid="stElementContainer"]) {
+            flex: 1 1 100% !important; width: 100% !important; min-width: 0 !important;
+        }
+        .pila-hueco { min-height: 240px; }
+    }
     </style>"""

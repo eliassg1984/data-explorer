@@ -56,6 +56,7 @@ porcionamiento va en la tabla, y la ventana de 90 días está a un clic.
 `test_graficos.py::_pruebas_revisar_recetas`.
 """
 
+from graficos.movil import css_movil, js_movil
 import datetime as dt
 from pathlib import Path
 
@@ -281,8 +282,8 @@ def revisar(porc, n1, recetas_venta, recetas_base, carta, maestro, salidas, ini,
 
 _PIEZA = st.components.v2.component(
     "recetas_revisar",
-    css=(Path(__file__).parent / "recetas_revisar.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent / "recetas_revisar.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "recetas_revisar.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "recetas_revisar.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "rec_rev_pieza"
 SEMANAS = 13

@@ -31,13 +31,19 @@ actualiza este documento en el mismo commit.
 
 Hasta 900px, `navegacion.py` ofrece los reportes en `nav_menu_movil`, con
 los mismos destinos que la columna de escritorio. `_99_movil.py` organiza
-los indicadores en dos columnas (cuatro en horizontal de poca altura),
-deja la fecha de Compras por período en el flujo y reserva el pie para las
-vistas, pantalla completa y actualización. `semanal.js`/`.css` pliegan los
-filtros locales, conservan las selecciones al cerrar el panel y muestran
-el total horizontal; tocar una barra abre su desglose y el acceso a sus
-documentos. Las tablas conservan desplazamiento lateral dentro de la
-tarjeta. Desde 901px se conserva la distribución de escritorio.
+los indicadores en dos columnas, deja fechas y controles nativos en el
+flujo y reserva el pie para vistas, pantalla completa y actualización.
+
+Todas las piezas v2 componen sus hojas y montajes con `css_movil` y
+`js_movil`, de `graficos/movil.py`. `movil.css` reúne tamaños táctiles y
+distribuciones por reporte; `movil.js` pliega sus grupos de filtros sin
+recrear los controles ni cambiar sus eventos, aísla tablas anchas y
+restaura el DOM al pasar a escritorio. Conserva la apertura del panel
+durante los renders y libera observadores al desmontar. Compras por
+período conserva su adaptación propia de etiquetas y detalle al tocar.
+Desde 901px se conserva la distribución de escritorio. `test_movil.py`
+verifica cobertura, eventos, precisión, filtros, desmontaje y piezas
+reales en 320/390/844/1366px.
 
 ## Mapa de ficheros
 

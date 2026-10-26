@@ -1,4 +1,5 @@
 """Para revisar nativo: fecha y valorización compartidas, casos locales (#732)."""
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import streamlit as st
@@ -8,8 +9,8 @@ from . import merma_revision_datos as datos
 
 _DIR=Path(__file__).parent
 _PIEZA=st.components.v2.component('merma_revision',
-    css=(_DIR/'merma_revision.css').read_text(encoding='utf-8'),
-    js=(_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'merma_revision.js').read_text(encoding='utf-8'))
+    css=css_movil((_DIR/'merma_revision.css').read_text(encoding='utf-8')),
+    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'merma_revision.js').read_text(encoding='utf-8')))
 
 
 def renderizar(d_rango,d_hist,cols,rango,fecha=None):

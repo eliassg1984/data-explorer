@@ -33,6 +33,7 @@ lo desliza la página, como en Compras › Producto (#382). Dentro, sólo se
 desliza la lista.
 """
 
+from graficos.movil import css_movil, js_movil
 import html
 from pathlib import Path
 
@@ -241,8 +242,8 @@ def _clave(fila):
 _AQUI = Path(__file__).parent
 _LISTA = st.components.v2.component(
     "lista_diferencias_ajuste",
-    css=(_AQUI / "lista_diferencias.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "lista_diferencias.js").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "lista_diferencias.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "lista_diferencias.js").read_text(encoding="utf-8")),
 )
 _K_LISTA = "ajdif_lista"
 

@@ -74,6 +74,7 @@ confirmó (probado contra R2 real: ningún candidato matcheó, la insignia
 simplemente no sale, arquitectura.md regla #100).
 """
 
+from graficos.movil import css_movil, js_movil
 import json
 import smtplib
 import uuid
@@ -2645,8 +2646,8 @@ def _abrir_panel(modo):
 
 _PIEZA = st.components.v2.component(
     "nuevo_costeo",
-    css=(Path(__file__).parent / "graficos" / "nuevo_costeo.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent / "graficos" / "nuevo_costeo.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "graficos" / "nuevo_costeo.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "graficos" / "nuevo_costeo.js").read_text(encoding="utf-8")),
 )
 
 CANALES = ("En el Local", "Delivery", "Para Llevar", "Rappi", "Pedidos Ya")
@@ -2967,8 +2968,8 @@ def _listar_propuestas_guardadas():
 
 _PIEZA_GUARDADAS = st.components.v2.component(
     "nc_guardadas",
-    css=(Path(__file__).parent / "graficos" / "nuevo_costeo.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent / "graficos" / "nc_guardadas.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "graficos" / "nuevo_costeo.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "graficos" / "nc_guardadas.js").read_text(encoding="utf-8")),
 )
 _K_GUARDADA = "form_receta_guardada_sel"
 """La clave en R2 de la propuesta elegida en «Guardadas»."""

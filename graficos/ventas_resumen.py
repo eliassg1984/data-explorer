@@ -31,6 +31,7 @@ son la referencia contra la que `test_ventas_periodo.py` compara el `.js`.
 Si se toca una, se toca la otra.
 """
 
+from graficos.movil import css_movil, js_movil
 import re
 from pathlib import Path
 
@@ -1003,11 +1004,11 @@ def pagos_periodo(d_pagos, col_fecha, idoc):
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "ventas_periodo",
-    css=(_AQUI / "ventas_periodo.css").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "ventas_periodo.css").read_text(encoding="utf-8")),
     # El Excel (`libro`, `bajar`, `archivo`) vive en `_xlsx.js`, compartido
     # con Costo de Carta, Consistencia y Producto: se antepone.
-    js=(_AQUI / "_xlsx.js").read_text(encoding="utf-8")
-    + (_AQUI / "ventas_periodo.js").read_text(encoding="utf-8"),
+    js=js_movil((_AQUI / "_xlsx.js").read_text(encoding="utf-8")
+    + (_AQUI / "ventas_periodo.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "vt_periodo_pieza"
 _K_LINEAS = "vt_periodo_lineas"

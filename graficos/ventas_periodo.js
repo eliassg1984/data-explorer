@@ -404,7 +404,8 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
 
   // ── El gráfico (`_ventas_resumen`, sin Plotly) ──────────────────────────
   function grafico(R, st, ancho, alto, M) {
-    const g = R.g, n = R.n, PL = 54, PR = 54, PT = 14, PB = 24, PH = alto - PT - PB, W = Math.max(400, ancho), PW = W - PL - PR, slot = PW / n;
+    const movil = window.matchMedia('(max-width: 900px)').matches;
+    const g = R.g, n = R.n, PL = 54, PR = 54, PT = 14, PB = 24, PH = alto - PT - PB, W = Math.max(movil ? 260 : 400, ancho), PW = W - PL - PR, slot = PW / n;
     const vis = R.canales.length > 1 ? R.canales.filter((c) => !st.apag[`canal_${slug(c)}`]) : R.canales;
     const cols = colores(R.canales.length), colDe = (c) => (R.canales.length > 1 ? cols[R.canales.indexOf(c)] : 'var(--accent)');
     const totVis = R.claves.map((_, i) => vis.reduce((s, c) => s + R.porCanal.get(c).v[i], 0));
@@ -414,7 +415,8 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     const tapa = R.claves.map((_, i) => (hayTapa ? Math.max(0, vis.reduce((s, c) => s + R.porCanal.get(c).carta[i] - R.porCanal.get(c).v[i], 0)) : 0));
     const alturaBarra = totVis.map((t, i) => t + tapa[i]);
     const hi = Math.max(1, ...alturaBarra);
-    const rotar = n > 12;
+    const rotar = !movil && n > 12;
+    const cadaEtiqueta = movil ? Math.max(1, Math.ceil(n / Math.max(1, Math.floor(PW / 64)))) : 1;
     const largoEtq = Math.max(...totVis.map((t, i) => (U.fmtK(t) + ' ' + (varsEtq[i][0] === 'ok' ? '+12.3%' : 'parcial')).length));
     const etq = rotar ? Math.min(largoEtq * 5.4 * 0.8, PH * 0.45) : 30;
     const yMax = hi * PH / (PH - etq);
@@ -454,10 +456,10 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
       // La etiqueta: total y variación (o «parcial»).
       const [est, pct] = varsEtq[i];
       const [vt, vc] = est === 'ok' ? varVenta(pct) : est === 'parcial' ? ['parcial', C.gris] : ['', C.gris];
-      if (totVis[i]) {
+      if (totVis[i] && i % cadaEtiqueta === 0) {
         const yTop = Y(alturaBarra[i]) - 4;
         if (rotar) s += `<text class="et" transform="translate(${X(i) + 3},${yTop}) rotate(-90)">${esc(fmtK(totVis[i]))}<tspan dx="4" style="fill:${vc}" font-weight="700"${est === 'parcial' ? ' font-style="italic"' : ''}>${esc(vt)}</tspan></text>`;
-        else s += `<text class="et" x="${X(i)}" y="${yTop - (vt ? 12 : 0)}" text-anchor="middle">${esc(fmtK(totVis[i]))}</text>${vt ? `<text class="et" x="${X(i)}" y="${yTop}" text-anchor="middle" style="fill:${vc}" font-weight="700">${esc(vt)}</text>` : ''}`;
+        else s += `<text class="et" x="${X(i)}" y="${yTop - (!movil && vt ? 12 : 0)}" text-anchor="middle">${esc(fmtK(totVis[i]))}</text>${!movil && vt ? `<text class="et" x="${X(i)}" y="${yTop}" text-anchor="middle" style="fill:${vc}" font-weight="700">${esc(vt)}</text>` : ''}`;
       }
     });
     // Clientes, punteado sobre su eje a la derecha.

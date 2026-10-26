@@ -19,6 +19,7 @@ escenario en su raíz y en `localStorage`: nada vuelve a Python, así que
 cambiar un % no pide una corrida, y cambiar la fecha conserva el escenario.
 """
 
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import pandas as pd
@@ -39,8 +40,8 @@ TITULO = "Simular Alza de Insumos"
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "recetas_alza",
-    css=(_AQUI / "recetas_alza.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "recetas_alza.js").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "recetas_alza.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "recetas_alza.js").read_text(encoding="utf-8")),
 )
 
 AYUDA = ("Costo = unidades vendidas en las fechas elegidas × receta de hoy, "

@@ -47,6 +47,7 @@ Las cuentas son puras (`marcas_lineas`, `frecuencia`, `salida_por_area`,
 `productos_requeridos`) y las prueba `test_graficos.py::_pruebas_marcas_requerimientos`.
 """
 
+from graficos.movil import js_movil
 import hashlib
 from html import escape
 from pathlib import Path
@@ -399,8 +400,8 @@ sin semáforo, el más intenso para lo de todos los días."""
 
 _BOTONES = st.components.v2.component(
     "botones_requerimientos_movimientos",
-    js=(Path(__file__).parent / "movimientos_kpi.js").read_text(
-        encoding="utf-8"),
+    js=js_movil((Path(__file__).parent / "movimientos_kpi.js").read_text(
+        encoding="utf-8")),
     isolate_styles=False,
 )
 """Los botones de frecuencia y el de «Salió menos de la mitad»: el MISMO

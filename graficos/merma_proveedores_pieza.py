@@ -1,4 +1,5 @@
 """Montaje del costo por unidad útil y foco compartido con Rendimiento (#729)."""
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import streamlit as st
@@ -8,8 +9,8 @@ from . import merma_proveedores_datos as datos
 
 _DIR=Path(__file__).parent
 _PIEZA=st.components.v2.component('merma_proveedores_731',
-    css=(_DIR/'merma_proveedores.css').read_text(encoding='utf-8'),
-    js=(_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'merma_proveedores.js').read_text(encoding='utf-8'))
+    css=css_movil((_DIR/'merma_proveedores.css').read_text(encoding='utf-8')),
+    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'merma_proveedores.js').read_text(encoding='utf-8')))
 
 
 def _producto():

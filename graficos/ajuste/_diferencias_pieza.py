@@ -1,4 +1,5 @@
 """Análisis de diferencias: sesión nativa; filtros, lista y ficha locales (#739)."""
+from graficos.movil import css_movil, js_movil
 import hashlib
 import json
 import pickle
@@ -14,8 +15,8 @@ from . import _diferencias_datos as datos
 _DIR=Path(__file__).parent
 _CSS=dif._CSS.replace('<style>','').replace('</style>','')+(_DIR/'diferencias.css').read_text(encoding='utf-8')
 _CSS+='.adf{'+''.join(f'--{k}:{v};' for k,v in dict(acento=tema.ACENTO,neg=tema.AJUSTE_NEG,pos=tema.AJUSTE_POS).items())+'}'
-_PIEZA=st.components.v2.component('ajuste_diferencias_739',css=_CSS,
-    js=(_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'diferencias.js').read_text(encoding='utf-8'))
+_PIEZA=st.components.v2.component('ajuste_diferencias_739',css=css_movil(_CSS),
+    js=js_movil((_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'diferencias.js').read_text(encoding='utf-8')))
 
 
 def renderizar(df_full,col_fecha,col_familia,col_area,col_ajuste_val,col_producto):

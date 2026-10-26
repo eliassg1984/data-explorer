@@ -16,6 +16,7 @@ con los nombres privados de siempre para no tocar a sus consumidores.
 """
 
 
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import numpy as np
@@ -283,8 +284,8 @@ def recargar_si_cambio_mes():
 _AQUI = Path(__file__).parent
 _PANEL_SESION = st.components.v2.component(
     "panel_sesion_ajuste",
-    css=(_AQUI / "panel_sesion.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "panel_sesion.js").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "panel_sesion.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "panel_sesion.js").read_text(encoding="utf-8")),
 )
 _ARCHIVO_AJUSTE = "ajusteinventario.parquet"
 

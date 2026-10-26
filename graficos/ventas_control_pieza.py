@@ -1,4 +1,5 @@
 """Montaje de Control de pedidos. Fecha nativa, demás controles locales (#723)."""
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 
 import streamlit as st
@@ -9,8 +10,8 @@ from . import ventas_control_datos as datos
 
 _DIR=Path(__file__).parent
 _PIEZA=st.components.v2.component(
-    'ventas_control',css=(_DIR/'ventas_control.css').read_text(encoding='utf-8'),
-    js=(_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'ventas_control.js').read_text(encoding='utf-8'))
+    'ventas_control',css=css_movil((_DIR/'ventas_control.css').read_text(encoding='utf-8')),
+    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'ventas_control.js').read_text(encoding='utf-8')))
 
 
 def renderizar(cortesias=frozenset(),canales=()):

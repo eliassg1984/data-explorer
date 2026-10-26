@@ -1,5 +1,6 @@
 """Portada mensual de ventas y consumo/costo; reportes completos en otra pestaña."""
 
+from graficos.movil import css_movil, js_movil
 import datetime as dt
 import logging
 from pathlib import Path
@@ -37,8 +38,8 @@ _ARCHIVOS = ("ajusteinventario.parquet", "compras.parquet", "salidas.parquet",
 _AQUI = Path(__file__).parent
 _COMPONENTE = st.components.v2.component(
     "resumen_ejecutivo",
-    css=(_AQUI / "resumen_ejecutivo.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "resumen_ejecutivo.js").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "resumen_ejecutivo.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "resumen_ejecutivo.js").read_text(encoding="utf-8")),
 )
 _LOG = logging.getLogger(__name__)
 

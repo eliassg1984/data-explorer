@@ -66,6 +66,7 @@ usaba AgGrid sólo para el clic en una fila; `st.dataframe` lo hace con
 `selection_mode="single-row-required"` (ver `_key_tabla`).
 """
 
+from graficos.movil import css_movil, js_movil
 import datetime
 import math
 from pathlib import Path
@@ -1308,11 +1309,11 @@ def _ficha(f, df_rv, agg, rango, porcionamientos=None):
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "carta_costeada",
-    css=(_AQUI / "carta_costeada.css").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "carta_costeada.css").read_text(encoding="utf-8")),
     # El Excel (`libro`, `bajar`) vive en `_xlsx.js`, compartido con
     # «Consistencia de datos»: se antepone, y queda en el mismo módulo.
-    js=(_AQUI / "_xlsx.js").read_text(encoding="utf-8")
-    + (_AQUI / "carta_costeada.js").read_text(encoding="utf-8"),
+    js=js_movil((_AQUI / "_xlsx.js").read_text(encoding="utf-8")
+    + (_AQUI / "carta_costeada.js").read_text(encoding="utf-8")),
 )
 
 _K_PIEZA = "rec_carta_pieza"

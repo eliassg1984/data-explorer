@@ -39,6 +39,7 @@ TRES COSAS QUE NO SON OBVIAS:
     evolución se muestra abajo.
 """
 
+from graficos.movil import css_movil, js_movil
 import datetime as _dt
 from pathlib import Path
 
@@ -433,8 +434,8 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
 
 _PIEZA = st.components.v2.component(
     "ventas_platos",
-    css=(Path(__file__).parent / "ventas_platos.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent / "ventas_platos.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "ventas_platos.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "ventas_platos.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "vt_pl_pieza"
 

@@ -49,6 +49,7 @@ LAS CUENTAS, y por qué así:
     el último día trae sólo las cenas cobradas pasada la medianoche.
 """
 
+from graficos.movil import css_movil, js_movil
 import datetime as _dt
 import io
 from html import escape
@@ -734,9 +735,9 @@ from pathlib import Path
 
 _PIEZA = st.components.v2.component(
     "ventas_meseros",
-    css=(Path(__file__).parent / "ventas_meseros.css").read_text(encoding="utf-8"),
-    js=(Path(__file__).parent / "_xlsx.js").read_text(encoding="utf-8")
-    + (Path(__file__).parent / "ventas_meseros.js").read_text(encoding="utf-8"),
+    css=css_movil((Path(__file__).parent / "ventas_meseros.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "_xlsx.js").read_text(encoding="utf-8")
+    + (Path(__file__).parent / "ventas_meseros.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA_CACHE = "_vt_mes_pieza_cache"
 

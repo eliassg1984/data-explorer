@@ -32,6 +32,7 @@ Las cuentas son puras (`productos_bajas`, `faltante_por_mes`, `grupo_de`) y
 las prueba `test_graficos.py::_pruebas_bajas`.
 """
 
+from graficos.movil import js_movil
 import hashlib
 from html import escape
 from pathlib import Path
@@ -312,8 +313,8 @@ lo puntual, lavanda lo ocasional."""
 
 _GRUPOS_BOTONES = st.components.v2.component(
     "grupos_bajas_movimientos",
-    js=(Path(__file__).parent / "movimientos_kpi.js").read_text(
-        encoding="utf-8"),
+    js=js_movil((Path(__file__).parent / "movimientos_kpi.js").read_text(
+        encoding="utf-8")),
     isolate_styles=False,
 )
 """Los tres botones de frecuencia: el MISMO componente que la fila de KPI

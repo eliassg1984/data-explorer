@@ -58,6 +58,7 @@ el mismo `{a, b}` y el botón dice las fechas («7–27 set 2026»). El panel ab
 en Semanas si lo vigente son semanas enteras y no meses enteros.
 """
 
+from graficos.movil import css_movil, js_movil
 import datetime
 from pathlib import Path
 
@@ -69,8 +70,8 @@ from estado_rango import aplicar_atajo, atajo_de, atajos_tarjeta
 _AQUI = Path(__file__).parent
 _COMPONENTE = st.components.v2.component(
     "panel_fecha",
-    css=(_AQUI / "panel_fecha.css").read_text(encoding="utf-8"),
-    js=(_AQUI / "panel_fecha.js").read_text(encoding="utf-8"),
+    css=css_movil((_AQUI / "panel_fecha.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "panel_fecha.js").read_text(encoding="utf-8")),
 )
 
 

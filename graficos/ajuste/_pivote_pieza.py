@@ -1,4 +1,5 @@
 """Tabla dinámica propia; calendario nativo, exploración local (#740)."""
+from graficos.movil import css_movil, js_movil
 from pathlib import Path
 import hashlib
 import pickle
@@ -10,8 +11,8 @@ from ._comun import ctx_meses, mes_operativo_activo, rango_meses, recortar_meses
 _DIR=Path(__file__).parent
 _CSS=(_DIR/'pivote.css').read_text(encoding='utf-8')
 _CSS+='.apv{'+''.join(f'--apv-{k}:{v};' for k,v in dict(acento=tema.ACENTO,neg=tema.AJUSTE_NEG,pos=tema.AJUSTE_POS).items())+'}'
-_PIEZA=st.components.v2.component('ajuste_pivote_740',css=_CSS,
-    js=(_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'pivote.js').read_text(encoding='utf-8'))
+_PIEZA=st.components.v2.component('ajuste_pivote_740',css=css_movil(_CSS),
+    js=js_movil((_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'pivote.js').read_text(encoding='utf-8')))
 
 
 def renderizar(d,col_fecha,col_familia,col_area,col_ajuste_val,col_producto,col_cantidad):
