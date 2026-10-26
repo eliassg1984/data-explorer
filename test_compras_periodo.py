@@ -275,6 +275,47 @@ class LasCuentasEnElNavegador(unittest.TestCase):
                 self.assertEqual(js[1], ref[1])
                 self.assertAlmostEqual(js[2], ref[2], places=6)
 
+    def test_movil_filtros_y_documentos_al_tocar(self):
+        """El panel conserva la selección y el toque permite llegar al detalle."""
+        pg = self.b.new_page(viewport={"width": 390, "height": 844}, has_touch=True)
+        try:
+            pg.set_content('<style>body {margin:12px}</style><div id="pieza"></div>')
+            pg.add_style_tag(content=(Path(sm.__file__).parent / "semanal.css").read_text(encoding="utf-8"))
+            pg.add_script_tag(content=_JS.replace("export default function (component)", "window.__montar = function (component)"))
+            pg.evaluate("P => window.__montar({data:P,parentElement:document.querySelector('#pieza')})", self.P)
+            pg.locator('.cpp').wait_for()
+            self.assertFalse(pg.locator('.fils').is_visible())
+            pg.locator('[data-acc="panel-filtros"]').click()
+            pg.locator('[data-acc="menu"][data-v="fam"]').click()
+            pg.locator('.ms-o input').first.check()
+            seleccion = pg.evaluate('window.__cpPer.st.fam.slice()')
+            self.assertEqual(len(seleccion), 1)
+            pg.locator('[data-acc="panel-filtros"]').click()
+            self.assertFalse(pg.locator('.fils').is_visible())
+            self.assertEqual(pg.evaluate('window.__cpPer.st.fam'), seleccion)
+            self.assertIn('1 activo', pg.locator('.filtros-toggle').inner_text())
+            pg.locator('.hit').first.click()
+            self.assertTrue(pg.locator('.lectura').is_visible())
+            self.assertIn('Total', pg.locator('.lectura').inner_text())
+            pg.locator('[data-acc="ver-barra"]').click()
+            self.assertEqual(pg.evaluate('window.__cpPer.st.modo'), 'Detalle')
+            self.assertIsNotNone(pg.evaluate('window.__cpPer.st.foco'))
+            pg.locator('[data-acc="restablecer"]').click()
+            self.assertEqual(pg.evaluate('window.__cpPer.st.fam'), [])
+            self.assertFalse(pg.locator('.lectura').count())
+            self.assertLessEqual(pg.locator('.cpp').evaluate('e=>e.scrollWidth-e.clientWidth'), 1)
+            for w, h in ((320, 700), (844, 390)):
+                pg.set_viewport_size({"width": w, "height": h})
+                pg.wait_for_timeout(250)
+                self.assertFalse(pg.locator('.etq[transform]').count())
+                self.assertLessEqual(pg.locator('.cpp').evaluate('e=>e.scrollWidth-e.clientWidth'), 1)
+            pg.set_viewport_size({"width": 1366, "height": 768})
+            pg.wait_for_timeout(250)
+            self.assertFalse(pg.locator('.filtros-toggle').is_visible())
+            self.assertTrue(pg.locator('.fils').is_visible())
+        finally:
+            pg.close()
+
 
 if __name__ == "__main__":
     unittest.main()

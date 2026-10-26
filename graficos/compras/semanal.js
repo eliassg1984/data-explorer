@@ -507,7 +507,9 @@ window.__cpPerCalc = { leer, calcular, rotuloPeriodo, variaciones, partesColumna
 const G = window.__cpPer || (window.__cpPer = { st: null, F: null, raiz: null });
 G.tandas = G.tandas || {};
 const estadoInicial = () => ({ gran: 'Semana', fam: [], sub: [], prov: [], prod: [], docu: 'Todos', montos: 'Sin IGV',
-  partir: SUB, res: {}, modo: 'Resumen Total', foco: null, doc: null, provDet: null, menu: null, q: {}, orden: {}, ctx: '' });
+  partir: SUB, res: {}, modo: 'Resumen Total', foco: null, doc: null, provDet: null, menu: null, q: {}, orden: {}, ctx: '',
+  filtrosAbiertos: false, lectura: null });
+const esMovil = () => window.matchMedia('(max-width: 900px)').matches;
 
 // ── El gráfico ───────────────────────────────────────────────────────────
 function grafico(F, V, st, W, H) {
@@ -525,7 +527,12 @@ function grafico(F, V, st, W, H) {
   const slot = plotW / n, bw = Math.max(1, slot * 0.8);
   const X = (i) => PL + (i + 0.5) * slot;
   const tot = V.tot;
-  const [forma, k, altoEtq] = planEtiquetas(V.reng, slot, plotH, F.techo);
+  // En móvil sólo el total y siempre horizontal. El desglose se consulta
+  // tocando la barra; no se achica ni se gira para hacerlo entrar.
+  const movil = esMovil();
+  const reng = movil ? tot.map((t) => [[fmtK(t), esc(fmtK(t))]]) : V.reng;
+  const plan = planEtiquetas(reng, slot, plotH, F.techo);
+  const [forma, k, altoEtq] = movil && plan[0] !== 'derecha' ? [null, 0, 0] : plan;
   const hi = Math.max(0, ...tot), lo = Math.min(0, ...tot);
   let y0 = lo, y1 = hi || 1;
   if (forma) { const a = Math.min(altoEtq, plotH * F.techo); y1 = lo + (hi - lo) * plotH / (plotH - a); } else y1 = hi * 1.06 || 1;
@@ -563,7 +570,7 @@ function grafico(F, V, st, W, H) {
   });
   // Las etiquetas.
   if (forma) {
-    V.reng.forEach((r, i) => {
+    reng.forEach((r, i) => {
       if (!r.length) return;
       const ls = r.slice(0, k), yTop = Y(Math.max(tot[i], 0)) - 3, x = X(i);
       if (forma === 'derecha') {
@@ -590,6 +597,15 @@ function grafico(F, V, st, W, H) {
     ticks = grupos.filter((g, j) => !(j % cada)).map(([i0, i1, d]) => [(X(i0) + X(i1)) / 2, cap(DIAS[diaSemana(d)]), dm(d)])
       .filter(([x]) => { if (x - ultX < ROTULO_DIA_PX) return false; ultX = x; return true; });
   }
+  if (!ticks && movil && gran === 'Semana') {
+    const cada = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(plotW / 48))));
+    ticks = V.claves.flatMap((c, i) => {
+      if (i % cada) return [];
+      const [a, b] = limites(c, gran), ini = Math.max(a, F.R0), fin = Math.min(b, F.R1);
+      const [, m, d] = ymd(ini), [, mf, df] = ymd(fin);
+      return [[X(i), ini === fin ? String(d) : `${d}–${df}`, m === mf ? MES[m - 1] : `${MES[m - 1]}–${MES[mf - 1]}`]];
+    });
+  }
   if (!ticks) {
     // En «Día» con muchos días el rótulo es «24 jul» y no la clave ISO.
     const rot = gran === 'Día' ? V.diaDe.map((d) => { const [, m, dd] = ymd(d); return `${dd} ${MES[m - 1]}`; }) : V.lbls;
@@ -608,7 +624,7 @@ function grafico(F, V, st, W, H) {
     svg += `<text class="tx" x="${x.toFixed(1)}" y="${PT + plotH + 14}" text-anchor="middle">${esc(a)}</text>`;
     if (b) svg += `<text class="tx sub" x="${x.toFixed(1)}" y="${PT + plotH + 26}" text-anchor="middle">${esc(b)}</text>`;
   });
-  for (let i = 0; i < n; i += 1) svg += `<rect class="hit" data-acc="barra" data-v="${i}" x="${(PL + i * slot).toFixed(1)}" y="${PT}" width="${slot.toFixed(1)}" height="${plotH}"></rect>`;
+  for (let i = 0; i < n; i += 1) svg += `<rect class="hit" role="button" tabindex="0" aria-label="${esc(V.hov[i].replace(/<[^>]+>/g, ''))}: ${esc(s2(tot[i]))}" data-acc="barra" data-v="${i}" x="${(PL + i * slot).toFixed(1)}" y="${PT}" width="${slot.toFixed(1)}" height="${plotH}"></rect>`;
   return { svg: svg + '</svg>', X };
 }
 
@@ -838,20 +854,25 @@ function listaMenu(F, V, st, k) {
     + (ops.length > 400 ? `<p class="mas">y ${ops.length - 400} más: escribí para buscar</p>` : '') + (!ops.length ? '<p class="mas">Sin coincidencias.</p>' : '');
 }
 function cabecera(F, V, st) {
+  const activos = FILTROS.filter(([k]) => st[k].length).length + (st.docu !== 'Todos' ? 1 : 0) + (st.montos !== 'Sin IGV' ? 1 : 0);
   const disp = { fam: F.hayFam && V.famOps.length, sub: F.haySub && V.subOps.length, prov: F.hayProv, prod: true };
   const fil = FILTROS.filter(([k]) => disp[k]).map(([k, rot, todas, plural]) => {
     const s = st[k];
     const nom = (o) => (k === 'prov' ? (F.provN[F.provs.indexOf(o)] || o) : k === 'fam' ? F.famN[F.fams.indexOf(o)] || o : o);
     const txt = !s.length ? todas : s.length === 1 ? `${rot}: ${nom(s[0])}` : `${s.length} ${plural}`;
-    return `<div class="ms"><button class="ms-b${s.length ? ' on' : ''}" data-acc="menu" data-v="${k}" title="${esc(s.map(nom).join(', '))}">${esc(txt)} <i>▾</i></button>`
+    return `<div class="ms"><button class="ms-b${s.length ? ' on' : ''}" data-acc="menu" data-v="${k}" aria-expanded="${st.menu === k}" title="${esc(s.map(nom).join(', '))}">${esc(txt)} <i>▾</i></button>`
       + (st.menu === k ? `<div class="ms-l"><input class="ms-q" data-k="${k}" placeholder="Buscar…" value="${esc(st.q[k] || '')}" autocomplete="off">`
         + `<div class="ms-o">${listaMenu(F, V, st, k)}</div>${s.length ? `<button class="ms-x" data-acc="limpiar" data-v="${k}">Quitar el filtro</button>` : ''}</div>` : '') + '</div>';
   }).join('');
   return `<div class="cab"><div class="seg">${GRANOS.map(([k, t]) => `<button class="${k === st.gran ? 'on' : ''}" data-acc="gran" data-v="${k}">${t}</button>`).join('')}</div>`
+    + `<button class="filtros-toggle" data-acc="panel-filtros" aria-expanded="${!!st.filtrosAbiertos}">Filtros${activos ? ` · ${activos} activo${activos === 1 ? '' : 's'}` : ''} <span aria-hidden="true">${st.filtrosAbiertos ? '▴' : '▾'}</span></button>`
     + `<div class="fils">${fil}</div><span class="lugar-fecha" aria-hidden="true"></span></div>`
     + `<div class="docrow"><span class="rot">Documento</span><div class="seg chico">${DOCUS.map((k) => `<button class="${k === st.docu ? 'on' : ''}" data-acc="docu" data-v="${k}">${k}</button>`).join('')}</div>`
     + `<span class="rot dos">Montos</span><div class="seg chico">${MONTOS.map((k) => `<button class="${k === st.montos ? 'on' : ''}" data-acc="montos" data-v="${k}">${k}</button>`).join('')}</div>`
-    + '<span class="nota">Sólo esta tarjeta · «Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito</span></div>';
+    + '<span class="nota">Sólo esta tarjeta · «Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito</span></div>'
+    + `<div class="filtro-estado"><span>${esc(st.docu)} · ${esc(st.montos)}</span>`
+    + FILTROS.filter(([k]) => st[k].length).map(([k, rot]) => `<button data-acc="limpiar" data-v="${k}" aria-label="Quitar filtro de ${rot}">${rot}: ${esc(st[k].length === 1 ? st[k][0] : st[k].length)} ×</button>`).join('')
+    + (activos ? '<button data-acc="restablecer">Limpiar filtros</button>' : '') + '</div>';
 }
 
 // ── Dibujar ──────────────────────────────────────────────────────────────
@@ -860,10 +881,11 @@ function pintar() {
   if (!raiz || !F) return;
   // Cambiar el grano, un filtro o Documento suelta el foco (el `_ctx` de antes).
   const ctx = JSON.stringify([st.gran, st.fam, st.sub, st.prov, st.prod, st.docu]);
-  if (st.ctx !== ctx) { st.ctx = ctx; st.foco = null; st.doc = null; }
+  if (st.ctx !== ctx) { st.ctx = ctx; st.foco = null; st.doc = null; st.lectura = null; }
   const V = calcular(F, st);
   G.V = V;
   const W = raiz.clientWidth || 1150, H = raiz.clientHeight || 540;
+  raiz.dataset.filtrosAbiertos = String(!!st.filtrosAbiertos);
   let html = cabecera(F, V, st);
   if (V.vacio) {
     raiz.innerHTML = html + `<div class="vacio grande"><b>${esc(V.titulo)}</b> — sin compras que mostrar. Ampliá el rango de fechas (arriba a la derecha) o soltá algún filtro de la tarjeta.</div>`;
@@ -882,10 +904,15 @@ function pintar() {
   html += '</div>';
   const fijo = 32 + 26 + 30 + 30 + 5 * 6;
   const libre = Math.max(200, H - fijo);
-  const altoG = V.conTabla ? Math.max(150, Math.min(300, Math.round(libre * 0.46))) : libre - 6;
+  const altoG = esMovil() ? Math.max(230, Math.min(320, Math.round(window.innerHeight * 0.38)))
+    : V.conTabla ? Math.max(150, Math.min(300, Math.round(libre * 0.46))) : libre - 6;
   const gr = grafico(F, V, st, W, altoG);
   G.X = gr.X; G.W = W;
   html += `<div class="graf" style="height:${altoG}px">${gr.svg}<div class="tip" hidden></div></div>`;
+  if (esMovil()) {
+    if (st.lectura != null && st.lectura < V.n) html += `<div class="lectura" role="region" aria-label="Detalle del período"><button class="lectura-cerrar" data-acc="cerrar-lectura" aria-label="Cerrar detalle">×</button><div>${tip(F, V, st, st.lectura)}</div><button class="ver-documentos" data-acc="ver-barra" data-v="${st.lectura}">Ver documentos de este período</button></div>`;
+    else html += '<p class="ayuda-tocar">Toca una barra para ver su desglose.</p>';
+  }
   if (V.n === 1) html += '<p class="aviso1">Sólo hay compras en un período dentro del rango de fechas activo (arriba) — ampliá el rango para ver la evolución.</p>';
   // La fila del modo y la zona de abajo.
   let zona;
@@ -907,6 +934,7 @@ function pintar() {
 }
 
 function pintarTip(i) {
+  if (esMovil()) return;
   const raiz = G.raiz, t = raiz && raiz.querySelector('.tip');
   if (!t || !G.V) return;
   if (i == null) { t.hidden = true; return; }
@@ -932,8 +960,14 @@ function excel() {
 // ── Los clics ────────────────────────────────────────────────────────────
 function accion(acc, val, el) {
   const st = G.st, V = G.V;
+  if (acc === 'barra' && esMovil()) { st.lectura = +val; pintar(); return; }
+  const verDocumentos = acc === 'ver-barra';
+  if (verDocumentos) { acc = 'barra'; st.lectura = null; }
   if (acc !== 'menu' && acc !== 'filtro') st.menu = null;
-  if (acc === 'gran') st.gran = val;
+  if (acc === 'panel-filtros') st.filtrosAbiertos = !st.filtrosAbiertos;
+  else if (acc === 'cerrar-lectura') st.lectura = null;
+  else if (acc === 'restablecer') { FILTROS.forEach(([k]) => { st[k] = []; }); st.docu = 'Todos'; st.montos = 'Sin IGV'; }
+  else if (acc === 'gran') st.gran = val;
   else if (acc === 'menu') { st.menu = st.menu === val ? null : val; }
   else if (acc === 'filtro') {
     const k = el.dataset.k, xs = st[k];
@@ -957,8 +991,13 @@ function accion(acc, val, el) {
   } else if (acc === 'excel') { excel(); return; }
   else return;
   pintar();
+  if (acc === 'panel-filtros') G.raiz.querySelector('.filtros-toggle')?.focus();
+  if (verDocumentos) G.raiz.querySelector('.pie')?.scrollIntoView({ block: 'start' });
 }
 function enlazar(raiz) {
+  raiz.addEventListener('keydown', (ev) => {
+    if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('.hit')) { ev.preventDefault(); ev.target.dispatchEvent(new MouseEvent('click', { bubbles: true })); }
+  });
   raiz.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-acc]');
     if (!b || !raiz.contains(b) || b.disabled) return;

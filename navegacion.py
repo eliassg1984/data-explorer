@@ -1355,29 +1355,27 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # que es el mismo motivo por el que la cabecera del rail lateral la
     # recibe hecha en vez de armarla.
     #
-    # Sin KPIs (`_par_act` es None para las herramientas) no se dibuja nada:
-    # la franja se queda con las vistas y el cruce no ocurre. Mejor eso que
-    # una franja vacía donde antes había navegación.
+    # El nombre también identifica el reporte en móvil cuando no hay KPIs
+    # disponibles (herramientas o consulta sin respuesta). No inventar ceros.
     _kpis_arriba = _kpis_franja(_info_act) if not _info_act.get("tool") else None
-    if _kpis_arriba:
-        _piezas = "".join(
-            '<span class="franjakpi-par">'
-            f'<i class="franjakpi-rot">{html.escape(_et)}</i>'
-            f'<b class="franjakpi-val{" kpi-neg" if _neg else ""}">'
-            f'{html.escape(_txt)}</b>'
-            '</span>'
-            for _et, _txt, _neg in _kpis_arriba
+    _piezas = "".join(
+        '<span class="franjakpi-par">'
+        f'<i class="franjakpi-rot">{html.escape(_et)}</i>'
+        f'<b class="franjakpi-val{" kpi-neg" if _neg else ""}">'
+        f'{html.escape(_txt)}</b>'
+        '</span>'
+        for _et, _txt, _neg in (_kpis_arriba or ())
+    )
+    _nom_kpis = _info_act.get("label_largo") or reporte_activo
+    with st.container(key="nav_franja_kpis"):
+        st.markdown(
+            '<div class="franja-kpis">'
+            f'<span class="franjakpi-nom">{html.escape(_nom_kpis)}</span>'
+            '<span class="franjakpi-sep"></span>'
+            f'{_piezas}'
+            '</div>',
+            unsafe_allow_html=True,
         )
-        _nom_kpis = _info_act.get("label_largo") or reporte_activo
-        with st.container(key="nav_franja_kpis"):
-            st.markdown(
-                '<div class="franja-kpis">'
-                f'<span class="franjakpi-nom">{html.escape(_nom_kpis)}</span>'
-                '<span class="franjakpi-sep"></span>'
-                f'{_piezas}'
-                '</div>',
-                unsafe_allow_html=True,
-            )
 
     # ── EL ÁRBOL: dónde empiezan las vistas (2026-09-19; 2026-09-26) ─────
     # Desde 901px las vistas del reporte activo van en la misma columna,
@@ -1459,6 +1457,21 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
 
     _areas_dibujadas = set()
     with st.container(key="compras_tabs_row"):
+        # En móvil no se comprimen todos los reportes en una tira: el menú
+        # conserva los mismos destinos y callbacks que la columna de PC.
+        with st.container(key="nav_menu_movil"):
+            with st.popover("Menú", icon=":material/menu:"):
+                st.markdown('<strong class="navmovil-panel">Reportes</strong>',
+                            unsafe_allow_html=True)
+                for nombre, info in visibles.items():
+                    st.button(
+                        info.get("label_largo") or nombre,
+                        key=f"navmovil_{_slug(nombre)}",
+                        icon=info.get("icono"),
+                        type="primary" if nombre == reporte_activo else "secondary",
+                        use_container_width=True,
+                        on_click=_on_nav_click, args=(nombre,),
+                    )
         with st.container(key="graf_tipo_chips"):
             for nombre, info in visibles.items():
                 area = info.get("area")

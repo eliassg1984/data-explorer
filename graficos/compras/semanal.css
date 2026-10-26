@@ -17,6 +17,7 @@
 .cpp * { box-sizing: border-box; }
 .cpp button, .cpp input { font: inherit; color: inherit; }
 .cpp button:focus-visible, .cpp input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.filtros-toggle, .filtro-estado { display: none; }
 .r { text-align: right; }
 .b { font-weight: 700; }
 .gr { color: var(--text-secondary); fill: var(--text-secondary); }
@@ -121,12 +122,52 @@
 
 /* Angosto (columnas apiladas): la pieza mide su contenido y las tablas se
    deslizan de lado con su ancho de escritorio. */
-@media (max-width: 768px) {
-  .cpp { height: auto; min-height: 0; }
-  .cab { flex-wrap: wrap; padding-right: 0; padding-top: 38px; }
-  .fils { flex-wrap: wrap; flex-basis: 100%; }
-  .ms { max-width: none; flex-basis: 45%; }
-  .docrow, .tit, .pie { flex-wrap: wrap; }
+@media (max-width: 900px) {
+  .cpp { height: auto; min-height: 0; gap: 12px; font-size: 14px; }
+  .cab { flex-wrap: wrap; padding: 0; gap: 10px; }
+  .cab > .seg { width: 100%; display: flex; }
+  .cab > .seg button { flex: 1 1 auto; padding: 8px 4px; font-size: 13px; }
+  .seg button, .seg.chico button, .pill { min-height: 44px; }
+  .filtros-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 44px;
+    padding: 8px 12px; border: 1px solid var(--border-lavender); border-radius: 10px; background: var(--accent-tint); color: var(--accent-deep); font-weight: 600; }
+  .fils, .docrow { display: none; }
+  .cpp[data-filtros-abiertos="true"] .fils { display: flex; flex-direction: column; flex-basis: 100%; gap: 8px; }
+  .cpp[data-filtros-abiertos="true"] .docrow { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
+  .ms { max-width: none; width: 100%; flex: 0 0 auto; }
+  .ms-b { min-height: 44px; height: auto; font-size: 14px; white-space: normal; text-align: left; }
+  .ms-l { position: static; width: 100%; max-width: 100%; margin-top: 6px; box-shadow: none; }
+  .ms-q { min-height: 44px; font-size: 16px; }
+  .ms-o { max-height: 220px; }
+  .ms-o label { min-height: 44px; padding: 8px; font-size: 14px; }
+  .ms-o input { width: 20px; height: 20px; flex: 0 0 auto; }
+  .ms-x { min-height: 44px; font-size: 14px; }
+  .docrow .rot, .docrow .rot.dos { flex-basis: 100%; margin: 0; font-size: 11px; }
+  .docrow .seg { max-width: 100%; }
+  .docrow .seg button { white-space: normal; padding: 6px 8px; font-size: 13px; }
+  .docrow .nota { margin: 0; white-space: normal; font-size: 12px; }
+  .filtro-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12px; }
+  .filtro-estado button { min-height: 36px; padding: 6px 9px; max-width: 100%; overflow-wrap: anywhere;
+    border: 1px solid var(--border-lavender); border-radius: 8px; background: var(--bg-card); color: var(--accent-deep); }
+  .tit, .pie { flex-wrap: wrap; gap: 8px; }
+  .tit .t { flex-basis: 100%; white-space: normal; overflow: visible; font-size: 17px; }
+  .tit .t small { font-size: 12px; }
+  .tit > .seg { max-width: 100%; }
+  .tit > .seg button { padding: 6px 10px; font-size: 13px; }
+  .res { flex-basis: 100%; padding-bottom: 2px; }
+  .pill { padding: 6px 12px; font-size: 13px; }
+  .graf .etq { font-size: 11px; font-weight: 600; }
+  .graf .hit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .graf .tip { display: none; }
+  .ayuda-tocar { margin: 0; font-size: 12px; color: var(--text-secondary); }
+  .lectura { position: relative; padding: 14px; padding-right: 44px; border: 1px solid var(--border-lavender);
+    border-radius: 10px; background: var(--accent-tint); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+  .lectura-cerrar { position: absolute; right: 0; top: 0; width: 44px; height: 44px; border: 0; background: transparent; font-size: 24px !important; }
+  .ver-documentos { min-height: 44px; margin-top: 10px; padding: 8px; border: 1px solid var(--border-lavender);
+    border-radius: 8px; background: var(--bg-card); color: var(--accent-deep); text-align: left; }
+  .pie > .seg { width: 100%; display: flex; }
+  .pie > .seg button { flex: 1 1 0; min-width: 0; padding: 6px 4px; white-space: normal; font-size: 12px; }
+  .pie .cap { flex-basis: calc(100% - 80px); white-space: normal; font-size: 12px; }
+  .excel { min-height: 44px; font-size: 13px; }
   .zona { overflow-x: auto; overscroll-behavior: contain; }
   .tb { min-width: 640px; }
   .tl { max-height: 320px; }

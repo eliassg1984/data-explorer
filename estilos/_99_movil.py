@@ -1,12 +1,13 @@
-"""estilos._99_movil - SIEMPRE AL FINAL. Unico @media que agrupa los overrides moviles de Ajuste, selector de vista y franjas fijas. Va ultimo a proposito: si sube de posicion, las reglas de escritorio lo pisan.
+"""estilos._99_movil - SIEMPRE AL FINAL. Overrides moviles de Ajuste, Compras, navegación y franjas fijas. Va ultimo a proposito: si sube de posicion, las reglas de escritorio lo pisan.
 
 Extraido de estilos.py (lineas 1554-1694 del original).
 El orden respecto a estilos/__init__.py es parte del comportamiento del CSS.
 """
 
-CSS = """    /* =================================================================== */
+CSS = """    .st-key-nav_menu_movil { display: none !important; }
+    /* =================================================================== */
     /* MÓVIL — AJUSTE DE INVENTARIO Y ELEMENTOS FIJOS                       */
-    /* ÚNICO @media final: agrupa todos los overrides móviles de la sección */
+    /* Bloque de Ajuste: agrupa los overrides móviles de la sección         */
     /* Ajuste + selector de vista + franjas fijas. Va al final para que no  */
     /* lo pisen los estilos de escritorio definidos arriba.                 */
     /* =================================================================== */
@@ -240,4 +241,199 @@ CSS = """    /* ================================================================
         }
     }
 
+    /* Compras en teléfono y tablet angosta. También cubre el teléfono
+       girado: 769–900px no debe volver al cromo fijo de escritorio. */
+    @media screen and (max-width: 900px) {
+        :root:has(.st-key-app_reporte_compras) {
+            --nav-top-alto: 0px;
+            --franja-rep-alto: 0px;
+            --franja-rep-reserva: 0px;
+        }
+        html body [data-testid="stAppViewContainer"][data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
+            [data-testid="stMainBlockContainer"] {
+            padding: 12px 12px calc(96px + env(safe-area-inset-bottom)) !important;
+            max-width: 100% !important;
+        }
+        html body [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
+            [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] {
+            gap: 6px !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) [data-testid="stMain"] {
+            scroll-snap-type: none !important;
+            scroll-padding-top: 0 !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) [class*="st-key-compras_sec_"] {
+            min-height: 0 !important;
+        }
+        [data-testid="stLayoutWrapper"]:has(> .st-key-rail_rotulo_rep),
+        [data-testid="stLayoutWrapper"]:has(> .st-key-rail_pestillo_plegado),
+        [data-testid="stLayoutWrapper"]:has(> .st-key-rail_pestillo_abierto),
+        [data-testid="stLayoutWrapper"]:has(> .st-key-nav_franja_rep),
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
+            [data-testid="stLayoutWrapper"]:has(> .st-key-fila_ajuste_top) {
+            display: none !important;
+        }
+        .st-key-nav_menu_movil {
+            display: block !important;
+            width: auto !important;
+            flex: 0 0 auto !important;
+        }
+        .st-key-nav_menu_movil [data-testid="stPopoverButton"] {
+            min-height: 44px !important;
+            min-width: 110px !important;
+            padding: 8px 14px !important;
+            font-size: 14px !important;
+        }
+        [data-testid="stPopoverBody"]:has(.navmovil-panel) {
+            width: min(360px, calc(100vw - 24px)) !important;
+            max-height: 70dvh !important;
+            overflow-y: auto !important;
+        }
+        [class*="st-key-navmovil_"] [data-testid="stButton"] button {
+            min-height: 44px !important;
+            justify-content: flex-start !important;
+        }
+        .st-key-compras_tabs_row {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 12px !important;
+            overflow: visible !important;
+            border: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            background: transparent !important;
+        }
+        .st-key-compras_tabs_row > [data-testid="stLayoutWrapper"],
+        .st-key-compras_tabs_row > [data-testid="stVerticalBlock"] {
+            flex: 0 0 auto !important;
+            width: auto !important;
+        }
+        .st-key-graf_tipo_chips.st-key-graf_tipo_chips { display: none !important; }
+        .st-key-rail_refresh {
+            position: static !important;
+            width: auto !important;
+            height: auto !important;
+            margin: 0 !important;
+        }
+        .st-key-rail_refresh button {
+            min-height: 44px !important;
+            padding: 8px 12px !important;
+        }
+        .st-key-nav_franja_kpis {
+            position: static !important;
+            height: auto !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+            background: transparent !important;
+            z-index: auto !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+        .st-key-nav_franja_kpis .franja-kpis {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+            white-space: normal !important;
+        }
+        .st-key-nav_franja_kpis .franjakpi-nom {
+            grid-column: 1 / -1;
+            padding: 4px 48px 6px 0;
+            font-size: 22px !important;
+        }
+        .st-key-nav_franja_kpis .franjakpi-sep { display: none !important; }
+        .st-key-nav_franja_kpis .franjakpi-par {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg-card);
+            gap: 4px !important;
+        }
+        .st-key-nav_franja_kpis .franjakpi-rot { font-size: 11px !important; letter-spacing: normal !important; color: var(--text-secondary) !important; }
+        .st-key-nav_franja_kpis .franjakpi-val { font-size: 18px !important; }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-fila_ajuste_top { display: none !important; }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-nav_franja_rep { display: none !important; }
+        .st-key-cp_sem_fecha {
+            position: static !important;
+            width: 100% !important;
+            margin: 0 !important;
+        }
+        .st-key-cp_sem_fecha button[data-testid="stPopoverButton"] {
+            min-height: 44px !important;
+            max-width: 100% !important;
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+            white-space: normal !important;
+        }
+        .st-key-ajuste_graf_card_izq_sem {
+            padding: 12px !important;
+            border-radius: 16px !important;
+            gap: 10px !important;
+        }
+        /* Navegación de vistas y actualización comparten un pie opaco;
+           el gráfico termina antes y el fullscreen tiene su propio sitio. */
+        html body .st-key-nav_rail {
+            position: fixed !important;
+            display: flex !important;
+            flex-direction: row !important;
+            top: auto !important;
+            bottom: calc(24px + env(safe-area-inset-bottom)) !important;
+            left: 56px !important;
+            right: 0 !important;
+            width: calc(100% - 56px) !important;
+            height: 56px !important;
+            min-height: 56px !important;
+            padding: 4px !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: var(--bg-card) !important;
+            box-shadow: var(--shadow-md) !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            z-index: 1000000 !important;
+        }
+        html body .st-key-nav_rail [data-testid="stElementContainer"],
+        html body .st-key-nav_rail [data-testid="stButton"] {
+            width: auto !important;
+            flex: 0 0 auto !important;
+        }
+        html body .st-key-nav_rail [data-testid="stButton"] button {
+            width: auto !important;
+            min-height: 44px !important;
+            height: 44px !important;
+            padding: 0 14px !important;
+            border-radius: 10px !important;
+        }
+        html body .st-key-nav_rail [data-testid="stButton"] button p { font-size: 13px !important; }
+        html body #sello-actualizacion {
+            display: flex !important;
+            top: auto !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            height: calc(24px + env(safe-area-inset-bottom)) !important;
+            padding: 3px 12px calc(3px + env(safe-area-inset-bottom)) !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: var(--bg-card) !important;
+            font-size: 10px !important;
+        }
+        html body #app-fs-btn {
+            display: block !important;
+            left: 0 !important;
+            bottom: calc(24px + env(safe-area-inset-bottom)) !important;
+            width: 56px !important;
+            height: 56px !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+    }
+    @media screen and (min-width: 600px) and (max-width: 900px) and (max-height: 500px) {
+        .st-key-nav_franja_kpis .franja-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+        .st-key-nav_franja_kpis .franjakpi-par { padding: 6px 10px; }
+    }
     </style>"""
