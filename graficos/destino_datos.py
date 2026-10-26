@@ -5,6 +5,10 @@ import math
 
 import pandas as pd
 import sin_plato
+from tema import (
+    ACENTO, ACENTO_TEXTO, BLANCO, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA,
+    GRIS_TEXTO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
+)
 
 IDENTIDAD=('cod','producto','unidad','familia','clase')
 
@@ -28,6 +32,9 @@ def armar(per,filas,tot,contexto=None):
     P=dict(version=736,identidad=list(IDENTIDAD),columnas=columnas,productos=meta,filas=rows,
         periodos=periodos,totales=[{c:numero(v) for c,v in r.items()} for r in tot.to_dict('records')],
         alimentos=sin_plato.ALIMENTOS,operacion=sin_plato.OPERACION,colores=md.C,
-        contexto=contexto or {},cierres_grafico=md.CIERRES_GRAFICO)
+        contexto=contexto or {},cierres_grafico=md.CIERRES_GRAFICO,
+        tema_flujo=dict(acento=ACENTO,activo=ACENTO_TEXTO,panel=BLANCO,
+            fondo=GRIS_FONDO,borde=GRIS_BORDE,linea=GRIS_LINEA,
+            suave=GRIS_TEXTO,seleccion=LAVANDA_FONDO,texto=TEXTO_PRINCIPAL))
     P['sello']=hashlib.sha256(json.dumps(P,ensure_ascii=False,allow_nan=False,sort_keys=True).encode()).hexdigest()
     return P

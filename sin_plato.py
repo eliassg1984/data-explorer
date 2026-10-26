@@ -77,12 +77,14 @@ import numpy as np
 import pandas as pd
 
 import definicion_venta as dv
+import kardex
 from cortes import MESES_ABR_ES, MESES_LARGOS_ES
 
-VERSION = 2
+VERSION = 3
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula. La 2: las líneas que se descargan por insumo bajan
-por su receta base (regla #648)."""
+por su receta base (regla #648). La 3 conserva el desglose por tipo del
+Sankey; no cambia las columnas de la cuenta original."""
 
 DESDE = (2025, 9)
 """El cierre desde el que se cuenta: el primer período es octubre 2025.
@@ -207,9 +209,13 @@ def movimientos(kx):
     `cant_out`, `val_in`, `val_out`) a una fila por (`cod`, `k`) con lo que
     entró, se vendió, se usó en preparaciones, salió por notas y se ajustó,
     en cantidad y en soles. Pura."""
+    detalle = ([f"{lado}_{tipo}_v" for tipo in TIPOS_PRODUCE
+                for lado in ("ing", "prep")]
+               + [f"nota_{tipo}_v" for tipo in TIPOS_NOTAS]
+               + ["otros_ing_v", "otros_sal_v"])
     cols = ["cod", "k"] + [f"{p}_{s}" for p in ("entro", "prep", "vend",
                                                 "aj", "notas")
-                          for s in ("q", "v")] + ["compra_v"]
+                          for s in ("q", "v")] + ["compra_v"] + detalle
     if kx is None or kx.empty:
         return pd.DataFrame(columns=cols)
     t = kx.assign(cod=_cod(kx["cod"]), tipo=_cod(kx["tipo"]))
@@ -234,6 +240,17 @@ def movimientos(kx):
         "notas_q": np.where(notas, cout - cin, 0.0),
         "notas_v": np.where(notas, vout - vin, 0.0),
     })
+    for codigo in TIPOS_PRODUCE:
+        b[f"ing_{codigo}_v"] = np.where(tipo == codigo, vin, 0.0)
+        b[f"prep_{codigo}_v"] = np.where(tipo == codigo, vout, 0.0)
+    for codigo in TIPOS_NOTAS:
+        b[f"nota_{codigo}_v"] = np.where(tipo == codigo, vout - vin, 0.0)
+    # Los tipos desconocidos quedan explícitos; 97/99 son traslados internos
+    # excluidos por la consulta del restaurante entero, no consumo adicional.
+    otros = ~(compra | produce | ventas | ajuste | notas
+              | tipo.isin((*kardex.TIPOS_ENTRE_AREAS, "SI")))
+    b["otros_ing_v"] = np.where(otros, vin, 0.0)
+    b["otros_sal_v"] = np.where(otros, vout, 0.0)
     return b.groupby(["cod", "k"], as_index=False)[cols[2:]].sum()[cols]
 
 
@@ -527,7 +544,8 @@ def calcular(per, kx, fotos, salidas, vend, recetaventa, carta, maestro,
                           OPERACION, ALIMENTOS)
     # Sin nada que contar: ni movimiento ni stock en ninguna punta.
     vivo = (g[["entro_v", "salio_v", "aj_v", "ini_v", "fin_v",
-               "entro_q", "salio_q", "ini_q", "fin_q"]].abs() > 1e-9).any(axis=1)
+               "entro_q", "salio_q", "ini_q", "fin_q",
+               "otros_ing_v", "otros_sal_v"]].abs() > 1e-9).any(axis=1)
     g = g[vivo].reset_index(drop=True)
     return {"periodos": per, "filas": g, "totales": totales(g, len(per))}
 

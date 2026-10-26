@@ -332,6 +332,9 @@ COLORES_DESTINO = {
     "otras": "#3f63c4",
     "falt": "#a1263a",
     "sobr": AJUSTE_POS,
+    "stock": AJUSTE_POS,
+    "valorizacion": GRIS_TEXTO,
+    "otros_mov": GRIS_TEXTO_SUAVE,
 }
 """Las partes de lo que salió de un producto, en el ORDEN en que se apilan:
 venta, cortesía, eventos y venta interna, en preparaciones | bajas, otras

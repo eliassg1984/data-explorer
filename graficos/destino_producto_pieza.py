@@ -11,9 +11,9 @@ from . import destino_datos as datos
 from . import movimientos_destino as md
 
 _DIR=Path(__file__).parent
-_CSS=md._CSS.replace('<style>','').replace('</style>','')+(_DIR/'destino.css').read_text(encoding='utf-8')
+_CSS=md._CSS.replace('<style>','').replace('</style>','')+(_DIR/'destino.css').read_text(encoding='utf-8')+(_DIR/'destino_flujo.css').read_text(encoding='utf-8')
 _PIEZA=st.components.v2.component('destino_producto_737',css=css_movil(_CSS),
-    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'destino_base.js').read_text(encoding='utf-8')+(_DIR/'destino_producto.js').read_text(encoding='utf-8')))
+    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'destino_base.js').read_text(encoding='utf-8')+(_DIR/'destino_flujo.js').read_text(encoding='utf-8')+(_DIR/'destino_producto.js').read_text(encoding='utf-8')))
 
 
 def renderizar(fam_sel=()):

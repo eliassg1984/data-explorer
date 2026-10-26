@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 742 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (242)
+**CSS y estilos** (243)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -305,6 +305,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#727** — Producción › Órdenes de producción es una PIEZA PROPIA con cola de pendientes y su importe…
 - **#728** — Producción › Porcionamientos › Por período es una PIEZA PROPIA con ficha de rendimiento, dos…
 - **#733** — Consumo según recetas pasa del iframe a una pieza nativa y las tablas largas dejan de perder…
+- **#737** — En qué se fue cada producto es una pieza propia, con tabla y ficha locales y la cuenta del…
 - **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
 - **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
 
@@ -56334,7 +56335,25 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      locales y la cuenta del kardex a la vista.** La firma pública
      `tarjeta_por_producto(fam_sel=())` delega al nuevo
      `destino_producto_pieza.py`. El cuerpo anterior y los helpers quedan
-     como referencia; no se cambian la carga ni las cuentas de sin_plato.
+     como referencia; se conservan la carga y las columnas canónicas de la
+     cuenta de sin_plato.
+     · **Sankey del mismo cierre y selección** (`destino_flujo.js` y
+       `.css`, 2026-10-26): arriba del detalle, balance en soles de productos
+       visibles o del producto elegido, con Resumen/Desglose. Los nodos
+       filtran localmente los productos que contribuyen, sin reducir la
+       base del gráfico al propio destino. Las unidades de la tabla no
+       cambian la medida monetaria del Sankey. Mantiene stock final real,
+       devoluciones y stocks negativos; la diferencia de valorización o
+       conciliación se identifica aparte, sin convertirla en faltante.
+       `sin_plato.VERSION = 3` invalida la caché y añade importes por tipos
+       90/94/96, notas 91/92/98 y otros movimientos; no altera las sumas
+       originales. El 95 conserva sus partes y combos ya incluidos. El 93
+       distingue faltante de alimentos del consumo al contar de operación.
+       Los traslados 97/99 siguen excluidos de la cuenta del restaurante.
+       La simulación modifica una copia agregada y recalcula el stock;
+       tabla y ficha permanecen reales. Los cambios se reinician al cambiar
+       cierre, fuente o alcance, y el eco conserva el escenario del mismo
+       contexto. Observadores y eventos se liberan al desmontar.
      · **Fuente compartida, estados independientes**: usa el transporte
        completo de #736. La preparación y las funciones del cierre pasan a
        `destino_base.js`, antepuesto en ambas piezas; cada componente tiene
@@ -56372,10 +56391,12 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        en un rerun sin novedad; el nonce del salto fuerza foco/cierre incluso
        si se pide de nuevo el mismo producto. Sigue recibiendo el contrato
        de `_ir_al_producto` de #645 y #736.
-     · **Seis hojas de Excel**: visibles en su orden, todos los productos
+     · **Siete hojas de Excel**: visibles en su orden, todos los productos
        del grupo, fuente completa del cierre sin filtros del navegador,
        historia del elegido, series de su gráfico y contexto con fechas y
-       bases. Números a seis decimales, códigos como texto y cantidades en
+       bases, más el flujo real del alcance elegido. Una octava hoja,
+       «Escenario simulado», aparece sólo con la simulación activada.
+       Números a seis decimales, códigos como texto y cantidades en
        su unidad. Los porcentajes históricos de referencia se calculan por
        su propio cierre. `test_destino_producto_pieza.py` prueba contra los
        helpers, ventanas, grupos y filtros, foco/caché, cuenta, negativos,

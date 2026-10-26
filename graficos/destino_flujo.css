@@ -1,0 +1,33 @@
+.dst-flujo{border-bottom:1px solid var(--dstf-borde);padding:10px 0 17px;margin-bottom:18px;color:var(--dstf-texto)}
+.dstf-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.destino .dstf-head h3{font-size:15px;margin:0}.dstf-head p{margin:3px 0 0}
+.dstf-controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.dstf-controls>div{display:flex;gap:3px}.dstf-controls label{display:flex;align-items:center;gap:5px;font-size:11px}
+.dstf-controls input[type=checkbox]{accent-color:var(--dstf-acento)}
+.dstf-metrics{display:flex;align-items:center;flex-wrap:wrap;gap:22px;margin:15px 0 12px}
+.dstf-metrics>div{padding-left:10px;border-left:2px solid var(--dstf-borde)}
+.dstf-metrics>div:first-child{border-color:var(--dstf-acento)}
+.dstf-metrics span{display:block;color:var(--dstf-suave);font-size:11px}
+.dstf-metrics strong{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.dstf-metrics p{flex-basis:100%;font-size:11px;color:var(--dstf-suave);margin:0}
+.dstf-metrics .dstf-aviso{color:var(--dstf-activo);background:var(--dstf-seleccion);padding:7px 10px;border-radius:7px}
+.dstf-grid{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:20px}
+.dstf-canvas{position:relative;min-width:0}.dstf-svg{display:block;width:100%;overflow:visible}
+.dstf-svg text{font:11px Arial,sans-serif;fill:var(--dstf-texto)}.dstf-svg .dstf-etiqueta{fill:var(--dstf-suave);font-size:10px}
+.dstf-nodos{position:absolute;inset:0;pointer-events:none}
+.destino .dstf-nodo{position:absolute;pointer-events:auto;min-height:44px;max-height:62px;padding:4px 5px;border:0;border-radius:6px;text-align:left;line-height:1.25;background:transparent}
+.destino .dstf-nodo:hover,.destino .dstf-nodo[aria-pressed=true]{background:var(--dstf-seleccion);color:var(--dstf-texto)}
+.dstf-nodo span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:11px;overflow-wrap:anywhere}.dstf-nodo small{display:block;font-size:11px;color:var(--dstf-suave);margin-top:3px;font-variant-numeric:tabular-nums}
+.dstf-editor{background:var(--dstf-fondo);padding:15px;border-radius:10px;align-self:start;min-width:0}
+.dstf-tag{font-size:10px;letter-spacing:.6px;color:var(--dstf-activo);margin-bottom:13px}.destino .dstf-editor h3{font-size:16px;margin-bottom:6px}
+.dstf-valor{display:block;font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;margin:13px 0}
+.dstf-campo{display:grid;grid-template-columns:minmax(0,1fr) minmax(75px,100px);gap:8px;align-items:center;padding:12px 0;border-top:1px solid var(--dstf-borde)}
+.dstf-campo label{font-size:11px;overflow-wrap:anywhere}.dstf-campo small{display:block;color:var(--dstf-suave);margin-top:3px;font-size:10px}
+.dstf-campo>span{text-align:right;font-size:11px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.destino .dstf-campo input{width:100%;min-width:0;text-align:right;padding:6px;font-size:12px;font-variant-numeric:tabular-nums;background:var(--dstf-panel)}
+.dstf-campo input[aria-invalid=true]{outline:2px solid var(--dstf-activo)}
+.dstf-validacion{font-size:11px;color:var(--dstf-suave);margin:12px 0}.dstf-error{font-weight:600;color:var(--dstf-activo)}
+.dstf-editor button{margin-bottom:8px}.dstf-seleccion{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--dstf-suave);margin-top:9px}
+.dstf-metodo{font-size:11px;color:var(--dstf-suave);margin-top:10px}.dstf-metodo summary{cursor:pointer}.dstf-metodo p{margin:8px 0;max-width:1000px}
+@media(max-width:900px){.dstf-grid{grid-template-columns:minmax(0,1fr)}.dstf-editor-content{display:flex;flex-wrap:wrap;gap:6px 15px;align-items:center}.dstf-editor-content>.dstf-tag,.dstf-editor-content>h3,.dstf-editor-content>p{flex-basis:100%;margin:0}.dstf-editor-content>.dstf-campo{flex:1 1 230px}.dstf-valor{margin:5px 0}.dstf-controls{width:100%}}
+@media(max-width:540px){.dstf-metrics{gap:14px}.dstf-metrics strong{font-size:17px}.dstf-controls{gap:8px}.dstf-grid{gap:10px}.destino .dstf-campo input{font-size:16px}.destino .dstf-nodo{padding:3px}.dstf-campo{grid-template-columns:minmax(0,1fr) 110px}}
