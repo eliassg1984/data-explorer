@@ -61,9 +61,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-742 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+743 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (243)
+**CSS y estilos** (244)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -308,6 +308,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#737** — En qué se fue cada producto es una pieza propia, con tabla y ficha locales y la cuenta del…
 - **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
 - **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
+- **#743** — «En qué se fue cada producto» se cuenta con dos relojes y por área: el flujo es NETO, la…
 
 **Layout y alturas** (106)
 
@@ -822,7 +823,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 
-**Datos, R2 y DuckDB** (124)
+**Datos, R2 y DuckDB** (125)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -948,6 +949,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#721** — Stock por Producto es una PIEZA PROPIA con ficha de producto y escenario de cobertura
 - **#725** — Compras › Vs año pasado es una PIEZA PROPIA con selección de varios meses y cobertura de…
 - **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
+- **#743** — «En qué se fue cada producto» se cuenta con dos relojes y por área: el flujo es NETO, la…
 
 **SUNAT y SIRE** (75)
 
@@ -56338,7 +56340,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      como referencia; se conservan la carga y las columnas canónicas de la
      cuenta de sin_plato.
      · **Sankey del mismo cierre y selección** (`destino_flujo.js` y
-       `.css`, 2026-10-26): arriba del detalle, balance en soles de productos
+       `.css`, 2026-10-26; lo reemplazó el flujo neto de la #743): arriba del detalle, balance en soles de productos
        visibles o del producto elegido, con Resumen/Desglose. Los nodos
        filtran localmente los productos que contribuyen, sin reducir la
        base del gráfico al propio destino. Las unidades de la tabla no
@@ -56681,6 +56683,69 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        También se valida la presentación móvil con `test_movil.py`.
        (2026-10-26.)
 
+743. **«En qué se fue cada producto» se cuenta con dos relojes y por
+     área: el flujo es NETO, la franja manda y el mapa va alrededor del
+     Almacén** (`sin_plato.py`, `kardex.py`, `data.py::_sin_plato_cacheable`,
+     `graficos/destino_flujo.js`, `destino_areas.js` y `destino_flujo.css`).
+     Reemplaza el Sankey bruto de la #737, sobre el boceto de trece estados
+     que eligió el usuario (2026-10-26).
+     · **Dos relojes, una caché.** «Fechas: Kardex | Operativas» en la
+       cabecera. Kardex, el default, es la cuenta de siempre: cada
+       movimiento en su día y el período hasta el fin del último día de
+       conteo; da al céntimo lo de la versión 3. Operativas corta cada área
+       en la hora siguiente a su último ajuste (93) de la sesión
+       (`cortes_de_conteo`, `periodos_operativos`): setiembre 2026 son 29,3
+       días, del 2 set 10:00 al 1 oct 18:00, con Venta Interna hasta el
+       6 oct. El stock es la foto de SU área antes de SU corte
+       (`stock_por_area`, la regla de correlativo de `stock_en_momentos`;
+       con las ventanas del kardex da lo mismo, y lo prueba
+       `test_graficos.py::_pruebas_relojes_sin_plato`).
+       `_sin_plato_cacheable` calcula los dos juntos y el puente entre
+       ellos. El botón es el único trigger de la pieza y no reinicia lo
+       elegido: el reloj no va en `comun`. «Sin plato por cierre» sigue con
+       el del kardex.
+     · **Las ventas del borde.** El descargo de ventas se corre a mano por
+       la mañana (#650): lo vendido antes de un conteo y descontado
+       después figura como faltante. `ventas_del_borde` lo mide con el
+       paloteo y `descargosventas.parquet` y, con fechas operativas y el
+       grupo entero (sin filtro ni búsqueda), lo pasa de faltante a plato
+       EN EL TOTAL. No se reparte por producto: haría falta abrir el
+       paloteo por recetas y unidades. Setiembre: +3.160 de este cierre,
+       −1.819 que eran de agosto, 2.674 nunca descontados.
+     · **El flujo es neto**: stock inicial + compras + sobrante
+       (± valorización) = a un plato + sin plato + quedó. Sin la producción
+       interna (S/ 152.044 en setiembre: sale como insumo y vuelve como
+       corte), con el stock negativo neteado en su punta y la valorización
+       compensada. Un concepto negativo cambia de lado. «Cómo se calcula»
+       concilia el balance producto por producto de antes (433.710) con el
+       neto (238.620), muestra el puente kardex → operativo y qué fecha usa
+       cada movimiento.
+     · **La franja manda.** Compacta, arriba de la tabla: la barra al 100 %,
+       sus grupos, la leyenda, el cambio POR DÍA contra el cierre anterior
+       con el mismo reloj y el aviso de stock negativo. Tocar un concepto
+       filtra la tabla, que conserva su orden. «Ver flujo» la abre:
+       Resumen/Desglose, Simular (−10/−20/−30 % o el mejor cierre, sobre
+       una copia), y un panel con el código del kardex, doce cierres por día
+       y los productos que más pesan. La ficha suma el balance en soles,
+       que cierra con la valorización. En el celular el flujo no se abre:
+       queda la lista plegable.
+     · **Por área.** MSUBKARDEX 97/99 dice el área de la fila, no de dónde
+       a dónde: la fila nueva «transferencias» del Sheet trae origen y
+       destino (`por_area`). El mapa va ALREDEDOR del Almacén Central, no de
+       izquierda a derecha (pedido): arriba quien más le devuelve, a la
+       derecha quien más le pide, la esquina y una fila abajo; con más de
+       seis abajo, la última junta a las demás. Capas que se muestran u
+       ocultan, el valor al pasar el cursor (un aviso propio: el `title`
+       tarda), el clic con los productos, la matriz origen × destino y
+       «Presentar» en seis pasos con textos que salen de los datos. Lo que
+       falta en un área y sobra en otra se compensa (setiembre: 7.077 en
+       172 productos). El chip Familia no lo filtra, y lo dice.
+     · **El costo**: la primera carga del día calcula los dos relojes
+       (medido en la laptop: de 77 a 181 s); después, caché de disco por
+       los sellos. `sin_plato.VERSION = 4`. Lo vigilan
+       `_pruebas_relojes_sin_plato` y `test_destino_producto_pieza.py`.
+       (2026-10-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -56693,7 +56758,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#742**; la próxima toma el número siguiente.
+> última regla es la **#743**; la próxima toma el número siguiente.
 
 >
 

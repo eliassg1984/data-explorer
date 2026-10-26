@@ -345,6 +345,28 @@ deutan/protan) y visión normal (≥ 17). El naranja de las bajas y el ámbar de
 `PALETA_SERIES` no se distinguen con deuteranopía (ΔE 5): por eso «otras»
 es azul y no ámbar."""
 
+COLORES_FLUJO_DESTINO = {
+    "ini": "#8e8a99",      # stock inicial
+    "compra": "#5f5a6e",   # compras netas: lo que entró de afuera
+    "sobr": AJUSTE_POS,    # sobrante al contar
+    "val": "#b9b4c3",      # valorización: no es pérdida
+    "fin": "#64748b",      # quedó en stock
+    "consumo": "#96591f",  # insumos de operación: consumido al contar
+    "req": "#3f8f8a",      # 99 · requerimientos
+    "tr": "#c26a1a",       # 97 · transferencias
+    "prod": "#14697f",     # 94 · 96 · producción
+    "vende": "#4a3db8",    # 95 · descargo de ventas
+    "notas": "#2f4c99",    # 91 · 92 · 98 · notas de salida
+    "ajuste": "#8c1d31",   # 93 · ajuste del conteo
+    "aviso_texto": "#8a4a12", "aviso_fondo": "#fff6ee",
+    "aviso_borde": "#f0c9a8", "aviso_on": "#fbe3cf",
+    "bien": "#2f7d4a", "mal": "#b3261e",
+}
+"""Lo que agrega el flujo de «En qué se fue cada producto» (regla #743) a
+`COLORES_DESTINO`: los orígenes y el stock de la franja, y en el mapa por
+área un color por tipo de movimiento del kardex. Los de destino siguen
+siendo los de `COLORES_DESTINO`."""
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # NOTAS DE USO

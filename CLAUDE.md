@@ -2431,6 +2431,10 @@ pieza propia: tabla, porcentajes ponderados de seis cierres, cuenta física,
 historia y pistas contra las referencias, filtros y foco locales, salto
 repetido, volumen y Excel. Comparte `destino_base.js` y los datos con Sin
 plato por cierre, con estados y renderizadores separados. Regla #737.
+Desde la #743 también la franja neta, «Fechas: Kardex | Operativas» (el
+único trigger, validado por sello), «Cómo se calcula», la simulación y el
+mapa por área con capas, matriz y «Presentar»; los relojes y el balance
+por área los vigila `test_graficos.py::_pruebas_relojes_sin_plato`.
 
 `test_stock_movimientos_pieza.py` vigila Movimientos por Tipo de Stock:
 balance, filtros locales, tipos, áreas y ventas sin costo contra

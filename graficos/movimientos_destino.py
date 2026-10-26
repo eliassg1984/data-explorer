@@ -65,6 +65,9 @@ _K_SALTO = "_mov_pr_salto"
 _K_IR = "_mov_sp_ir"
 _K_N_FIG = "_mov_sp_n_fig"
 _K_N_TOP = "_mov_sp_n_top"
+K_RELOJ = "mov_pr_reloj"
+"""Qué fecha usa cada movimiento en «En qué se fue cada producto»: la del
+kardex (el default) u operativa (`sin_plato.RELOJES`, regla #743)."""
 K_GRUPO = "mov_pr_grupo"
 K_FILTRO = "mov_pr_filtro"
 K_MEDIDA = "mov_pr_medida"
@@ -179,10 +182,11 @@ def _corto(v):
 
 # ── datos ───────────────────────────────────────────────────────────────
 
-def _cargar(fam_sel):
-    """`(periodos, filas, totales)` de la cuenta, con el chip Familia
-    aplicado (y los totales rehechos sobre lo filtrado), o None."""
-    r = data.sin_plato_por_cierre()
+def _cargar(fam_sel, reloj="kardex"):
+    """`(periodos, filas, totales)` de la cuenta con el reloj `reloj`
+    (`sin_plato.RELOJES`, regla #743), con el chip Familia aplicado (y los
+    totales rehechos sobre lo filtrado), o None."""
+    r = data.sin_plato_por_cierre(reloj)
     if not r or not r.get("periodos"):
         return None
     per, filas, tot = r["periodos"], r["filas"], r["totales"]

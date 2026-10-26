@@ -80,11 +80,13 @@ import definicion_venta as dv
 import kardex
 from cortes import MESES_ABR_ES, MESES_LARGOS_ES
 
-VERSION = 3
+VERSION = 4
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula. La 2: las líneas que se descargan por insumo bajan
 por su receta base (regla #648). La 3 conserva el desglose por tipo del
-Sankey; no cambia las columnas de la cuenta original."""
+Sankey; no cambia las columnas de la cuenta original. La 4 agrega el reloj
+operativo y el balance por área (regla #743); el reloj del kardex da lo
+mismo que la 3."""
 
 DESDE = (2025, 9)
 """El cierre desde el que se cuenta: el primer período es octubre 2025.
@@ -157,7 +159,9 @@ def periodos(sesiones, desde=DESDE):
     de dicts con `k` (0..n-1), `clave` (la de la sesión que lo cierra),
     `mes`, `nombre` («Setiembre 2026»), `corto` («set 26»), `desde`/`hasta`
     (`date`, inclusive), `t0`/`t1` (Timestamps, `t1` exclusivo), `cierre` y
-    `cierre_ant` (los días de los dos conteos) y `sesion` (la del cierre).
+    `cierre_ant` (los días de los dos conteos), `sesion` (la del cierre) y
+    `sesion_ant` (la del cierre anterior: de ahí arrancan las ventanas por
+    área del reloj operativo, `periodos_operativos`).
 
     `sesiones` es lo de `cortes.sesiones_inventario`; sólo cuentan los
     cierres de mes desde `desde`, que es el BORDE de entrada: con (2025, 9)
@@ -175,7 +179,7 @@ def periodos(sesiones, desde=DESDE):
             "corto": f"{MESES_ABR_ES[m - 1]} {y % 100:02d}",
             "desde": t0.date(), "hasta": b["fin"], "t0": t0, "t1": t1,
             "cierre": b["etiqueta_anio"], "cierre_ant": a["etiqueta_anio"],
-            "sesion": b,
+            "sesion": b, "sesion_ant": a,
         })
     return out
 
@@ -474,10 +478,12 @@ def _maestro(maestro):
 # ═══════════════════════════════════════════════════════════════════════
 
 def calcular(per, kx, fotos, salidas, vend, recetaventa, carta, maestro,
-             recetabase=None):
+             recetabase=None, stock=None):
     """Todo lo que dibujan las dos vistas: `{"periodos", "filas",
     "totales"}`. `recetabase` abre las líneas que se descargan por insumo
-    (`mapa_descargo`, regla #648).
+    (`mapa_descargo`, regla #648). `stock` es lo de `stock_por_area` (el
+    stock de cada área en SU corte, regla #743); sin él, las fotos se sacan
+    al final del día de cada período (`momentos`), como siempre.
 
     `filas`: una por (`cod`, `k`) con algún movimiento o stock, con
     `producto`, `unidad`, `familia`, `clase` (ALIMENTOS u OPERACION) y cada
@@ -489,13 +495,20 @@ def calcular(per, kx, fotos, salidas, vend, recetaventa, carta, maestro,
     `totales`—. Pura."""
     per = list(per or [])
     m = movimientos(kx)
-    instantes = momentos(per)
-    fot = stock_en_momentos(fotos, instantes)
-    ini = fot.rename(columns={"i": "k", "q": "ini_q", "v": "ini_v"})
-    fin = fot.assign(i=fot["i"] - 1).rename(
-        columns={"i": "k", "q": "fin_q", "v": "fin_v"})
-    fin = fin[fin["k"] >= 0]
-    ini = ini[ini["k"] < len(per)]
+    if stock is not None:
+        s = stock.groupby(["punta", "k", "cod"], as_index=False)[["q", "v"]].sum()
+        ini = s[s["punta"] == "ini"].drop(columns="punta").rename(
+            columns={"q": "ini_q", "v": "ini_v"})
+        fin = s[s["punta"] == "fin"].drop(columns="punta").rename(
+            columns={"q": "fin_q", "v": "fin_v"})
+    else:
+        instantes = momentos(per)
+        fot = stock_en_momentos(fotos, instantes)
+        ini = fot.rename(columns={"i": "k", "q": "ini_q", "v": "ini_v"})
+        fin = fot.assign(i=fot["i"] - 1).rename(
+            columns={"i": "k", "q": "fin_q", "v": "fin_v"})
+        fin = fin[fin["k"] >= 0]
+        ini = ini[ini["k"] < len(per)]
     g = (m.merge(bajas(salidas, per), on=["cod", "k"], how="outer")
           .merge(ini, on=["cod", "k"], how="outer")
           .merge(fin, on=["cod", "k"], how="outer"))
@@ -652,3 +665,384 @@ def parejas(filas_k, cod, n=2, minimo=20.0):
           & c["producto"].str.lower().str.contains(clave, regex=False)]
     c = c[c["producto"].map(palabra_clave) == clave]
     return c.reindex(c["aj_v"].abs().sort_values(ascending=False).index).head(n)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# EL RELOJ OPERATIVO Y EL BALANCE POR ÁREA (regla #743)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Con el reloj del KARDEX el período va del día siguiente al último conteo
+# del cierre anterior al último conteo de este, a las 23:59, para todo el
+# restaurante. Si una sola área se cuenta días después que las demás (Venta
+# Interna, el 6 oct 2026, cuando las otras doce se contaron el 1 oct a las
+# 17:35), el período de todas arrastra esos días: setiembre 2026 traía
+# S/ 20.156 de compras de octubre y un stock final con esas compras y sin
+# sus ventas (el descargo no corre entre el conteo y el fin del cierre).
+#
+# Con el reloj OPERATIVO cada área se corta en la hora de SU conteo. El
+# ajuste (93) entra al kardex en la misma hora en que se abre el conteo
+# (medido en todos los cierres de jun–set 2026), así que esa hora, cerrada,
+# es el corte. Lo vendido antes de un conteo y descontado después (o nunca:
+# el último día del mes, regla #650) se pasa al período de la venta con el
+# paloteo; su contrapartida está en el ajuste.
+
+RELOJES = ("kardex", "operativo")
+_HORA = pd.Timedelta(hours=1)
+
+
+def cortes_de_conteo(sesion, ajustes):
+    """`{área: corte}` de una sesión de conteo: la hora siguiente al último
+    ajuste (93) de cada área en los días de la sesión. `ajustes` es un
+    DataFrame (`area`, `f`) con las horas del kardex en que hubo un 93.
+    Pura."""
+    if ajustes is None or ajustes.empty or not sesion:
+        return {}
+    dias = {pd.Timestamp(d).date() for d in sesion.get("dias", ())}
+    f = pd.to_datetime(ajustes["f"])
+    a = ajustes.assign(f=f)[f.dt.date.isin(dias)]
+    if a.empty:
+        return {}
+    return {int(area): pd.Timestamp(t) + _HORA
+            for area, t in a.groupby("area")["f"].max().items()}
+
+
+def _corte_principal(cortes, respaldo):
+    """El corte de la mayoría de las áreas (el más temprano si empatan): el
+    que marca el período para lo que no es de un área."""
+    if not cortes:
+        return pd.Timestamp(respaldo)
+    cuenta = pd.Series(list(cortes.values())).value_counts()
+    return min(cuenta[cuenta == cuenta.max()].index)
+
+
+def periodos_operativos(per, ajustes, areas):
+    """Los períodos de `periodos` con el reloj operativo: cada uno con
+    `ventanas` (`{área: (t0, t1)}`, cada área de su conteo al siguiente),
+    `t0`/`t1` en el corte de la mayoría, `desde`/`hasta` sus días y `dias`
+    en fracción (29,33 en setiembre 2026). El área que no se contó en un
+    cierre toma el corte de la mayoría. Pura."""
+    out = []
+    for p in per:
+        ca = cortes_de_conteo(p.get("sesion_ant"), ajustes)
+        cb = cortes_de_conteo(p.get("sesion"), ajustes)
+        t0 = _corte_principal(ca, p["t0"])
+        t1 = _corte_principal(cb, p["t1"])
+        vent = {int(a): (ca.get(int(a), t0), cb.get(int(a), t1)) for a in areas}
+        out.append(dict(p, t0=t0, t1=t1, ventanas=vent, reloj="operativo",
+                        desde=t0.date(), hasta=(t1 - _HORA).date(),
+                        dias=(t1 - t0) / pd.Timedelta(days=1)))
+    return out
+
+
+def ventanas(per, areas):
+    """`(k, area, t0, t1)` de cada período y área, `t1` exclusivo: las del
+    reloj operativo si el período las trae, si no la del período entero para
+    todas (el reloj del kardex). Pura."""
+    filas = []
+    for p in per:
+        v = p.get("ventanas") or {}
+        for a in areas:
+            t0, t1 = v.get(int(a), (p["t0"], p["t1"]))
+            filas.append((int(p["k"]), int(a), pd.Timestamp(t0), pd.Timestamp(t1)))
+    return pd.DataFrame(filas, columns=["k", "area", "t0", "t1"])
+
+
+def stock_por_area(fotos, ven):
+    """El stock de cada producto en cada área al empezar y al terminar cada
+    período (`punta` «ini»/«fin», `k`, `area`, `cod`, `q`, `v`): la foto
+    del kardex en la última hora ANTES del corte de esa área. La regla de
+    la foto es la de `stock_en_momentos` (el movimiento de mayor
+    correlativo); con las ventanas del reloj del kardex, sumada por
+    producto, da lo mismo que ella. Pura."""
+    vacio = pd.DataFrame(columns=["punta", "k", "area", "cod", "q", "v"])
+    if fotos is None or fotos.empty or ven is None or ven.empty:
+        return vacio
+    st_ = _num(fotos["stock"])
+    f = pd.DataFrame({
+        "area": pd.to_numeric(fotos["area"], errors="coerce"),
+        "cod": _cod(fotos["cod"]),
+        "fecha": pd.to_datetime(fotos["fecha"], errors="coerce"),
+        "correlativo": pd.to_numeric(fotos["correlativo"], errors="coerce"),
+        "q": st_, "v": st_ * _num(fotos["precio"]),
+    }).dropna(subset=["fecha", "area"])
+    f["area"] = f["area"].astype(int)
+    # En orden de fecha, cada fila apunta a la de MAYOR correlativo vista
+    # hasta ella en su área y producto: la foto en un instante es la fila a
+    # la que apunta la última anterior a él. Así un movimiento cargado con
+    # fecha atrasada (correlativo mayor, fecha menor) manda, como en
+    # `stock_en_momentos`, sin recorrer instante por instante.
+    f = f.sort_values(["area", "cod", "fecha", "correlativo"], kind="stable").reset_index(drop=True)
+    grupo = [f["area"], f["cod"]]
+    tope = f["correlativo"].fillna(-np.inf).groupby(grupo).cummax()
+    pos = pd.Series(np.where(f["correlativo"].fillna(-np.inf) >= tope, np.arange(len(f)), np.nan))
+    f["pos"] = pos.groupby(grupo).ffill()
+    usos = pd.concat([ven[["k", "area", "t0"]].rename(columns={"t0": "t"}).assign(punta="ini"),
+                      ven[["k", "area", "t1"]].rename(columns={"t1": "t"}).assign(punta="fin")],
+                     ignore_index=True)
+    pares = f[["area", "cod"]].drop_duplicates()
+    # merge_asof exige la misma resolución de fecha en los dos lados (DuckDB
+    # entrega microsegundos y un Timestamp suelto, nanosegundos).
+    izq = usos.merge(pares, on="area")
+    izq["t"] = pd.to_datetime(izq["t"]).astype("datetime64[ns]")
+    izq = izq.sort_values("t", kind="stable")
+    der = f[["area", "cod", "fecha", "pos"]].assign(
+        fecha=f["fecha"].astype("datetime64[ns]")).sort_values("fecha", kind="stable")
+    m = pd.merge_asof(izq, der, left_on="t", right_on="fecha", by=["area", "cod"],
+                      direction="backward", allow_exact_matches=False).dropna(subset=["pos"])
+    if m.empty:
+        return vacio
+    filas = f.loc[m["pos"].astype(int).to_numpy(), ["q", "v"]].reset_index(drop=True)
+    out = m[["punta", "k", "area", "cod"]].reset_index(drop=True).join(filas)
+    out["k"] = out["k"].astype(int)
+    return out[["punta", "k", "area", "cod", "q", "v"]]
+
+
+def ventas_del_borde(pedidos, corridas, per):
+    """Por período (`k`, `fin`, `ini`, `nunca`, en soles al costo del
+    paloteo): `fin` es lo vendido dentro del período y descontado después
+    de su corte o nunca —el descargo de ventas se corre a mano por la
+    mañana y no corre entre el conteo y el fin del cierre—; `ini`, lo
+    vendido antes de su comienzo y descontado dentro; `nunca`, la parte de
+    `fin` que ninguna corrida tomó (el último día del mes, regla #650).
+
+    `pedidos`: (`t`, `costo`), el costo de lo vendido por hora de pedido;
+    `corridas`: (`ini`, `desde`, `hasta`), el calendario del descargo
+    (`descargosventas.parquet`). Una venta la descuenta la primera corrida
+    que la cubre y empieza después de ella. Pura."""
+    cols = ["k", "fin", "ini", "nunca"]
+    if pedidos is None or pedidos.empty or not per:
+        return pd.DataFrame([(p["k"], 0.0, 0.0, 0.0) for p in per], columns=cols)
+    p = pd.DataFrame({"t": pd.to_datetime(pedidos["t"]), "c": _num(pedidos["costo"])})
+    p = p.dropna(subset=["t"]).sort_values("t", kind="stable").reset_index(drop=True)
+    desc = pd.Series(pd.NaT, index=p.index, dtype="datetime64[ns]")
+    if corridas is not None and not corridas.empty:
+        c = pd.DataFrame({"ini": pd.to_datetime(corridas["ini"]),
+                          "desde": pd.to_datetime(corridas["desde"]),
+                          "hasta": pd.to_datetime(corridas["hasta"])}).dropna()
+        for r in c.sort_values("ini", kind="stable").itertuples(index=False):
+            m = desc.isna() & (p["t"] >= r.desde) & (p["t"] <= r.hasta) & (p["t"] <= r.ini)
+            desc[m] = r.ini
+    out = []
+    for q in per:
+        a, z = pd.Timestamp(q["t0"]), pd.Timestamp(q["t1"])
+        dentro = (p["t"] >= a) & (p["t"] < z)
+        tarde = desc.isna() | (desc >= z)
+        out.append((q["k"], float(p.loc[dentro & tarde, "c"].sum()),
+                    float(p.loc[(p["t"] < a) & (desc >= a) & (desc < z), "c"].sum()),
+                    float(p.loc[dentro & desc.isna(), "c"].sum())))
+    return pd.DataFrame(out, columns=cols)
+
+
+def _tops(serie, nombres, n=4):
+    """`[total, cuántos, [[nombre, valor], …]]` de una Series código → soles
+    (sólo lo positivo), los `n` que más pesan."""
+    s = serie[serie > 0.5].sort_values(ascending=False)
+    return [round(float(s.sum()), 2), int(len(s)),
+            [[str(nombres.get(c, c)), round(float(v), 2)] for c, v in s.head(n).items()]]
+
+
+_COLS_AREA = ("ini", "fin", "fin_neg", "compra", "req_in", "req_out", "tr_in", "tr_out",
+              "prod_in", "prod_out", "venta", "notas", "aj_pos", "aj_neg", "val")
+"""El orden de los números de cada área en `por_area` (y en el `.js`)."""
+
+
+def _traslados(trans, ven, clase):
+    """Los requerimientos y transferencias con su período: la fila es del
+    área que la registró —la que envía, salvo lo que sale del Almacén
+    Central, que registra quien recibe— y cae en la ventana de esa área."""
+    cols = ["k", "tipo", "o", "d", "cod", "v", "doc", "clase"]
+    if trans is None or trans.empty or ven is None or ven.empty:
+        return pd.DataFrame(columns=cols)
+    t = pd.DataFrame({"tipo": _cod(trans["tipo"]), "t": pd.to_datetime(trans["t"], errors="coerce"),
+                      "o": pd.to_numeric(trans["o"], errors="coerce"),
+                      "d": pd.to_numeric(trans["d"], errors="coerce"),
+                      "cod": _cod(trans["cod"]), "v": _num(trans["v"]),
+                      "doc": _cod(trans["doc"])}).dropna(subset=["t", "o", "d"])
+    t["o"], t["d"] = t["o"].astype(int), t["d"].astype(int)
+    dueno = np.where(t["o"] == 0, t["d"], t["o"])
+    t["k"] = -1
+    for w in ven.itertuples(index=False):
+        t.loc[(dueno == w.area) & (t["t"] >= w.t0) & (t["t"] < w.t1), "k"] = w.k
+    t = t[t["k"] >= 0]
+    t["clase"] = t["cod"].map(clase).fillna(ALIMENTOS)
+    return t[cols]
+
+
+def por_area(kx, stock, trans, ven, clase, nombres):
+    """El balance de cada área, las flechas entre áreas y lo que se compensa
+    entre ellas, por período: `{clase: [por cada k: {"areas", "flechas",
+    "detalle", "compensa"}]}`, con `clase` ALIMENTOS u OPERACION.
+
+    `kx`: lo del kardex por (`k`, `area`, `cod`, `tipo`) con los traslados
+    (97/99) incluidos; `stock`: lo de `stock_por_area`; `trans`: cada
+    requerimiento y transferencia de `transferencias.parquet` (`tipo`, `t`,
+    `o`, `d`, `cod`, `v`, `doc`), que dice el ORIGEN y el DESTINO que el
+    kardex por área pierde; `ven`: las ventanas de `ventanas`; `clase`:
+    código → clase; `nombres`: código → nombre.
+
+    `areas[área]` son los números de `_COLS_AREA`. El ajuste va por
+    producto Y área: lo que falta en un área y sobra en otra no se netea, y
+    esa diferencia con el restaurante entero es `compensa`. Pura."""
+    nk = int(ven["k"].max()) + 1 if ven is not None and not ven.empty else 0
+    out = {ALIMENTOS: [], OPERACION: []}
+    if nk == 0:
+        return out
+    if kx is not None and not kx.empty:
+        x = pd.DataFrame({"k": pd.to_numeric(kx["k"]).astype(int),
+                          "area": pd.to_numeric(kx["area"]).astype(int),
+                          "cod": _cod(kx["cod"]), "tipo": _cod(kx["tipo"]),
+                          "vin": _num(kx["val_in"]), "vout": _num(kx["val_out"])})
+    else:
+        x = pd.DataFrame({"k": [], "area": [], "cod": [], "tipo": [], "vin": [], "vout": []})
+    x["clase"] = x["cod"].map(clase).fillna(ALIMENTOS)
+    num = pd.to_numeric(x["tipo"], errors="coerce")
+    x["grupo"] = np.select(
+        [num.notna() & (num < 90), x["tipo"] == "99", x["tipo"] == "97",
+         x["tipo"].isin(TIPOS_PRODUCE), x["tipo"] == TIPO_VENTAS,
+         x["tipo"].isin(TIPOS_NOTAS), x["tipo"] == TIPO_AJUSTE],
+        ["compra", "req", "tr", "prod", "venta", "notas", "aj"], "otro")
+    if stock is not None and not stock.empty:
+        s = stock.assign(cod=_cod(stock["cod"]), area=pd.to_numeric(stock["area"]).astype(int))
+    else:
+        s = pd.DataFrame({"punta": [], "k": [], "area": [], "cod": [], "v": []})
+    s["clase"] = s["cod"].map(clase).fillna(ALIMENTOS)
+    t = _traslados(trans, ven, clase)
+
+    # Todo con UN groupby por clase, período y área (regla #537): recorrer
+    # áreas y períodos filtrando el kardex entero costaba 26 s.
+    g = x.groupby(["clase", "k", "area", "grupo"])[["vin", "vout"]].sum()
+    g = g.unstack("grupo").fillna(0.0) if not g.empty else g
+
+    def col(lado, grupo):
+        return g[(lado, grupo)] if not g.empty and (lado, grupo) in g.columns else pd.Series(0.0, index=g.index)
+    base = pd.DataFrame(index=g.index)
+    base["compra"] = col("vin", "compra") - col("vout", "compra")
+    base["req_in"], base["req_out"] = col("vin", "req"), col("vout", "req")
+    base["tr_in"], base["tr_out"] = col("vin", "tr"), col("vout", "tr")
+    base["prod_in"], base["prod_out"] = col("vin", "prod"), col("vout", "prod")
+    base["venta"] = col("vout", "venta") - col("vin", "venta")
+    base["notas"] = col("vout", "notas") - col("vin", "notas")
+    aj = (x[x["grupo"] == "aj"].assign(n=lambda d: d["vin"] - d["vout"])
+          .groupby(["clase", "k", "area", "cod"])["n"].sum())
+    ajp = aj.clip(lower=0).groupby(["clase", "k", "area"]).sum()
+    ajn = (-aj).clip(lower=0).groupby(["clase", "k", "area"]).sum()
+    ini = s[s["punta"] == "ini"].groupby(["clase", "k", "area"])["v"].sum()
+    fin = s[s["punta"] == "fin"].groupby(["clase", "k", "area"])["v"].sum()
+    neg = s[(s["punta"] == "fin") & (s["v"] < 0)].groupby(["clase", "k", "area"])["v"].sum()
+    idx = base.index.union(ini.index).union(fin.index).union(ajp.index)
+    b = base.reindex(idx).fillna(0.0)
+    b["ini"], b["fin"], b["fin_neg"] = ini.reindex(idx).fillna(0.0), fin.reindex(idx).fillna(0.0), neg.reindex(idx).fillna(0.0)
+    b["aj_pos"], b["aj_neg"] = ajp.reindex(idx).fillna(0.0), ajn.reindex(idx).fillna(0.0)
+    b["val"] = b["fin"] - (b["ini"] + b["compra"] + b["req_in"] - b["req_out"] + b["tr_in"] - b["tr_out"]
+                           + b["prod_in"] - b["prod_out"] - b["venta"] - b["notas"] + b["aj_pos"] - b["aj_neg"])
+    b = b[list(_COLS_AREA)]
+    b = b[b.abs().sum(axis=1) > 0.5]
+
+    # Lo que forma cada chip: los productos que más pesan, por grupo
+    serie = x.assign(n=np.where(x["grupo"] == "prod", x["vin"], x["vout"] - x["vin"]))
+    serie = serie[serie["grupo"].isin(["venta", "notas", "prod"])].groupby(
+        ["clase", "k", "area", "grupo", "cod"])["n"].sum()
+    partes = [serie.rename("n").reset_index().replace({"grupo": {"venta": "95", "notas": "98"}}),
+              (-aj).rename("n").reset_index().assign(grupo="falta"),
+              aj.rename("n").reset_index().assign(grupo="sobra")]
+    det = pd.concat([p_ for p_ in partes if not p_.empty], ignore_index=True) if any(not p_.empty for p_ in partes) else pd.DataFrame()
+    detalle = {}
+    if not det.empty:
+        det = det[det["n"] > 0.5].sort_values("n", ascending=False, kind="stable")
+        claves = ["clase", "k", "area", "grupo"]
+        tot = det.groupby(claves)["n"].agg(["sum", "count"])
+        tot = dict(zip(tot.index, zip(tot["sum"], tot["count"])))
+        # Fila por fila y no grupo por grupo: son miles de grupos de cuatro.
+        for r in det.groupby(claves, sort=False).head(4).itertuples(index=False):
+            clv = (r.clase, r.k, r.area, r.grupo)
+            e = detalle.setdefault(clv[:3], {})
+            if clv[3] not in e:
+                sm, cn = tot[clv]
+                e[clv[3]] = [round(float(sm), 2), int(cn), []]
+            e[clv[3]][2].append([str(nombres.get(r.cod, r.cod)), round(float(r.n), 2)])
+
+    # Las flechas entre áreas, con lo que más pesó en cada una
+    flechas = {}
+    if not t.empty:
+        claves = ["clase", "k", "tipo", "o", "d"]
+        tt = t[t["o"] != t["d"]]
+        agg = tt.groupby(claves).agg(v=("v", "sum"), n=("v", "size"), docs=("doc", "nunique"))
+        pc = tt.groupby([*claves, "cod"])["v"].sum().rename("n").reset_index()
+        pc = pc[pc["n"] > 0.5].sort_values("n", ascending=False, kind="stable").groupby(claves, sort=False).head(4)
+        tops = {}
+        for r in pc.itertuples(index=False):
+            tops.setdefault((r.clase, r.k, r.tipo, r.o, r.d), []).append(
+                [str(nombres.get(r.cod, r.cod)), round(float(r.n), 2)])
+        for clv, r in agg.iterrows():
+            flechas.setdefault(clv[:2], []).append(
+                [str(clv[2]), int(clv[3]), int(clv[4]), round(float(r["v"]), 2), int(r["n"]),
+                 int(r["docs"]), tops.get(clv, [])])
+
+    # Lo que faltó en un área y sobró en otra, producto por producto
+    comp = {}
+    if not aj.empty:
+        pc = aj.rename("n").reset_index()
+        pos = pc[pc["n"] > 0].groupby(["clase", "k", "cod"])["n"].sum()
+        ng = -pc[pc["n"] < 0].groupby(["clase", "k", "cod"])["n"].sum()
+        c = pd.concat([pos.rename("pos"), ng.rename("neg")], axis=1).fillna(0.0)
+        c["comp"] = c[["pos", "neg"]].min(axis=1)
+        c = c[c["comp"] > 0.5].sort_values("comp", ascending=False, kind="stable")
+        primeros = c.groupby(level=["clase", "k"], sort=False).head(5)
+        lados = pc[(pc["n"].abs() > 0.5)
+                   & pd.MultiIndex.from_frame(pc[["clase", "k", "cod"]]).isin(primeros.index)]
+        lados_d = {}
+        for r in lados.sort_values("n", kind="stable").itertuples(index=False):
+            lados_d.setdefault((r.clase, r.k, r.cod), []).append([int(r.area), round(float(r.n), 2)])
+        lados = lados_d
+        for (cl, k), h in c.groupby(level=["clase", "k"], sort=False):
+            comp[(cl, k)] = {"total": round(float(h["comp"].sum()), 2), "n": int(len(h)), "tops": [
+                [str(nombres.get(cod, cod)), round(float(r["comp"]), 2), lados.get((cl, k, cod), [])]
+                for (_, _, cod), r in h.head(5).iterrows()]}
+    falta = (-aj).clip(lower=0).groupby(["clase", "k"]).sum() if not aj.empty else pd.Series(dtype=float)
+    sobra = aj.clip(lower=0).groupby(["clase", "k"]).sum() if not aj.empty else pd.Series(dtype=float)
+
+    for cl in (ALIMENTOS, OPERACION):
+        for k in range(nk):
+            areas = {}
+            if not b.empty and (cl, k) in b.index.droplevel("area"):
+                for a, fila in b.loc[(cl, k)].iterrows():
+                    areas[int(a)] = [round(float(v), 2) for v in fila]
+            cmp_ = dict(comp.get((cl, k), {"total": 0.0, "n": 0, "tops": []}))
+            cmp_["falta"] = round(float(falta.get((cl, k), 0.0)), 2)
+            cmp_["sobra"] = round(float(sobra.get((cl, k), 0.0)), 2)
+            out[cl].append({
+                "areas": areas,
+                "flechas": sorted(flechas.get((cl, k), []), key=lambda f: -f[3]),
+                "detalle": {int(a): detalle.get((cl, k, a), {}) for a in areas},
+                "compensa": cmp_})
+    return out
+
+
+def resumen_reloj(filas, per, borde=None):
+    """La cuenta del restaurante de cada período con lo que se ve al abrir
+    la vista —alimentos y bebidas que se movieron—, para comparar los dos
+    relojes: `[{k, dias, compra, plato, falt, sobr, notas, fin, ini, prep,
+    sinplato}]`. Con `borde` (lo de `ventas_del_borde`), lo vendido de un
+    lado del conteo y descontado del otro pasa de faltante a plato. Pura."""
+    b = {} if borde is None or borde.empty else {int(r.k): r for r in borde.itertuples(index=False)}
+    out = []
+    for p in per:
+        k = p["k"]
+        h = filas[(filas["k"] == k) & (filas["clase"] == ALIMENTOS)] if not filas.empty else filas
+        if not h.empty:
+            mov = (h["salio_v"].abs() + h["entro_v"].abs() + h["aj_v"].abs()
+                   + h.get("otros_ing_v", 0).abs() + h.get("otros_sal_v", 0).abs())
+            h = h[mov > 0.5]
+
+        def s(c):
+            return float(h[c].sum()) if not h.empty else 0.0
+        mover = (b[k].fin - b[k].ini) if k in b else 0.0
+        dias = p.get("dias")
+        if dias is None:
+            dias = (pd.Timestamp(p["t1"]) - pd.Timestamp(p["t0"])) / pd.Timedelta(days=1)
+        out.append({"k": k, "dias": round(float(dias), 2), "compra": s("compra_v"),
+                    "plato": s("plato_v") + mover, "falt": s("falt_v") - mover,
+                    "sobr": s("sobr_v"), "notas": s("baja_v") + s("otras_v"),
+                    "fin": s("fin_v"), "ini": s("ini_v"), "prep": s("prep_v"),
+                    "sinplato": s("sinplato_v") - mover})
+    return out

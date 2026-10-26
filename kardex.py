@@ -269,6 +269,56 @@ def sql_dias_ajuste(relacion):
     """
 
 
+def sql_horas_ajuste(relacion, desde):
+    """Cada hora del kardex en que un área tuvo un ajuste (93) desde `desde`:
+    `area` (entero) y `f`. De ahí salen los cortes del reloj operativo
+    (`sin_plato.periodos_operativos`, regla #743): el 93 entra en la misma
+    hora en que se abre el conteo del área."""
+    return f"""
+        SELECT DISTINCT CAST("CODIGO AREA" AS INTEGER) AS area, "{COL_FECHA}" AS f
+        FROM {relacion}
+        WHERE "COD TIPO" = '93' AND "{COL_FECHA}" >= TIMESTAMP '{desde:%Y-%m-%d %H:%M:%S}'
+    """
+
+
+def sql_areas(relacion, desde):
+    """Las áreas (enteros) con algún movimiento desde `desde`."""
+    return f"""
+        SELECT DISTINCT CAST("CODIGO AREA" AS INTEGER) AS area FROM {relacion}
+        WHERE "{COL_FECHA}" >= TIMESTAMP '{desde:%Y-%m-%d %H:%M:%S}'
+    """
+
+
+def sql_movimientos_ventanas(relacion, ventanas):
+    """Como `sql_movimientos_cortes`, pero por ÁREA y con la ventana de cada
+    una: `ventanas` es una lista de `(k, area, t0, t1)` (`t1` exclusivo), y
+    vuelve también el `area`. Trae los traslados (97/99): la cuenta del
+    restaurante los ignora (`sin_plato.movimientos`), el balance por área
+    los necesita (`sin_plato.por_area`, regla #743). Sin la fila del saldo
+    inicial."""
+    if not ventanas:
+        return ('SELECT NULL AS k, NULL AS area, NULL AS cod, NULL AS tipo, NULL AS cant_in, '
+                'NULL AS cant_out, NULL AS val_in, NULL AS val_out WHERE false')
+
+    def ts(x):
+        return f"TIMESTAMP '{x:%Y-%m-%d %H:%M:%S}'"
+    valores = ", ".join(f"({int(k)}, {int(a)}, {ts(t0)}, {ts(t1)})" for k, a, t0, t1 in ventanas)
+    desde = min(v[2] for v in ventanas)
+    hasta = max(v[3] for v in ventanas)
+    return f"""
+        WITH v(k, area, t0, t1) AS (VALUES {valores})
+        SELECT v.k, v.area, x."CODIGO PRODUCTO" AS cod, x."COD TIPO" AS tipo,
+               sum(x."CANT INGRESO") AS cant_in, sum(x."CANT SALIDA") AS cant_out,
+               sum(x."VALOR INGRESO") AS val_in, sum(x."VALOR SALIDA") AS val_out
+        FROM {relacion} x
+        JOIN v ON CAST(x."CODIGO AREA" AS INTEGER) = v.area
+              AND x."{COL_FECHA}" >= v.t0 AND x."{COL_FECHA}" < v.t1
+        WHERE x."COD TIPO" <> 'SI'
+          AND x."{COL_FECHA}" >= {ts(desde)} AND x."{COL_FECHA}" < {ts(hasta)}
+        GROUP BY 1, 2, 3, 4
+    """
+
+
 def sql_movimientos_cortes(relacion, cortes):
     """Por PERÍODO, producto y tipo de documento, lo que entró y salió en el
     RESTAURANTE ENTERO: las áreas sumadas, sin los movimientos entre áreas

@@ -8426,6 +8426,144 @@ def _pruebas_sin_plato():
     return fallos
 
 
+def _pruebas_relojes_sin_plato():
+    """Los dos relojes de cierre a cierre y el balance por área (regla
+    #743), sobre un kardex de mentira con cada caso real.
+
+      1. EL CORTE DE CADA ÁREA es la hora siguiente a su último ajuste (93)
+         en los días de la sesión; el período, el de la mayoría (el más
+         temprano si empatan), y el área que no se contó toma ése.
+      2. LA FOTO EN SU CORTE: con las ventanas del reloj del kardex,
+         `stock_por_area` da lo mismo que `stock_en_momentos`, también con
+         un movimiento cargado con fecha atrasada (correlativo mayor).
+      3. LAS VENTAS DEL BORDE: lo vendido antes del conteo y descontado
+         después o nunca, y lo del período anterior descontado en éste.
+      4. POR ÁREA: el balance de cada área cierra (valorización cero), la
+         flecha sale del origen al destino de `transferencias.parquet` y
+         lo que falta en un área y sobra en otra se compensa.
+      5. EL RESUMEN de cada reloj pasa las ventas del borde de faltante a
+         plato.
+    """
+    import datetime as dt
+
+    import pandas as pd
+
+    import sin_plato as sp
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    relojes #743 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA relojes #743 · {nombre}: got={got!r} exp={exp!r}")
+
+    T = pd.Timestamp
+    # ── 1) Los cortes ───────────────────────────────────────────────────
+    aj = pd.DataFrame({"area": [0, 1, 2, 0, 1, 5, 0, 3], "f": [
+        T("2026-09-02 09:00"), T("2026-09-02 09:00"), T("2026-09-02 15:00"),
+        T("2026-10-01 16:00"), T("2026-10-01 17:00"), T("2026-10-06 11:00"),
+        T("2026-10-01 17:00"), T("2026-09-15 10:00")]})
+    ses_ant = {"dias": [dt.date(2026, 9, 2)]}
+    ses = {"dias": [dt.date(2026, 10, 1), dt.date(2026, 10, 6)]}
+    check("el corte es la hora siguiente al último 93 de la sesión",
+          sp.cortes_de_conteo(ses, aj),
+          {0: T("2026-10-01 18:00"), 1: T("2026-10-01 18:00"), 5: T("2026-10-06 12:00")})
+    check("un parcial fuera de la sesión no corta", 3 in sp.cortes_de_conteo(ses, aj), False)
+    check("si empatan, el corte más temprano",
+          sp._corte_principal({1: T("2026-10-01 11:00"), 2: T("2026-10-01 10:00")}, T("2026-10-02")),
+          T("2026-10-01 10:00"))
+    per = [{"k": 0, "t0": T("2026-09-03"), "t1": T("2026-10-02"), "sesion_ant": ses_ant,
+            "sesion": ses, "desde": dt.date(2026, 9, 3), "hasta": dt.date(2026, 10, 1)}]
+    op = sp.periodos_operativos(per, aj, [0, 1, 2, 5])[0]
+    check("el período va del corte de la mayoría al de la mayoría",
+          (op["t0"], op["t1"], op["desde"], op["hasta"]),
+          (T("2026-09-02 10:00"), T("2026-10-01 18:00"), dt.date(2026, 9, 2), dt.date(2026, 10, 1)))
+    check("los días van en fracción", round(op["dias"], 2), 29.33)
+    check("cada área de su conteo al siguiente; la que no se contó, el de la mayoría",
+          op["ventanas"], {0: (T("2026-09-02 10:00"), T("2026-10-01 18:00")),
+                           1: (T("2026-09-02 10:00"), T("2026-10-01 18:00")),
+                           2: (T("2026-09-02 16:00"), T("2026-10-01 18:00")),
+                           5: (T("2026-09-02 10:00"), T("2026-10-06 12:00"))})
+
+    # ── 2) La foto en el corte ──────────────────────────────────────────
+    fotos = pd.DataFrame({
+        "area": [0, 0, 0, 1, 1], "cod": ["A", "A", "A", "A", "B"],
+        "fecha": [T("2026-09-01 10:00"), T("2026-09-10 12:00"), T("2026-09-05 09:00"),
+                  T("2026-09-02 08:00"), T("2026-09-20 15:00")],
+        "correlativo": [1, 3, 5, 2, 1], "stock": [10.0, 4.0, 7.0, 3.0, -2.0],
+        "precio": [2.0, 2.0, 2.0, 2.0, 5.0]})
+    ven = sp.ventanas(per, [0, 1])
+    nuevo = (sp.stock_por_area(fotos, ven).groupby(["punta", "cod"])[["q", "v"]].sum()
+             .round(6).reset_index().sort_values(["punta", "cod"]).values.tolist())
+    viejo = sp.stock_en_momentos(fotos, sp.momentos(per))
+    viejo["punta"] = viejo["i"].map({0: "ini", 1: "fin"})
+    viejo = (viejo[["punta", "cod", "q", "v"]].round(6).sort_values(["punta", "cod"])
+             .values.tolist())
+    check("con las ventanas del kardex da lo mismo que stock_en_momentos", nuevo, viejo)
+    check("manda el correlativo mayor aunque su fecha sea anterior",
+          nuevo, [["fin", "A", 10.0, 20.0], ["fin", "B", -2.0, -10.0], ["ini", "A", 13.0, 26.0]])
+    per_op = [dict(per[0], ventanas={0: (T("2026-09-03"), T("2026-09-05 08:00")),
+                                     1: (T("2026-09-03"), T("2026-10-02"))})]
+    s_op = sp.stock_por_area(fotos, sp.ventanas(per_op, [0, 1]))
+    fin0 = s_op[(s_op["punta"] == "fin") & (s_op["area"] == 0)]
+    check("cada área, la foto antes de SU corte", fin0[["cod", "q"]].values.tolist(), [["A", 10.0]])
+
+    # ── 3) Las ventas del borde ─────────────────────────────────────────
+    per_b = [{"k": 0, "t0": T("2026-09-02 10:00"), "t1": T("2026-10-01 18:00")}]
+    pedidos = pd.DataFrame({"t": [T("2026-09-01 20:00"), T("2026-09-02 09:00"),
+                                  T("2026-09-30 20:00"), T("2026-10-01 12:00"),
+                                  T("2026-09-15 13:00")],
+                            "costo": [5.0, 7.0, 11.0, 13.0, 17.0]})
+    corridas = pd.DataFrame({
+        "ini": [T("2026-09-02 08:00"), T("2026-09-03 07:00"), T("2026-09-16 07:00"), T("2026-10-02 07:00")],
+        "desde": [T("2026-09-01"), T("2026-09-02"), T("2026-09-15"), T("2026-10-01")],
+        "hasta": [T("2026-09-01 23:59"), T("2026-09-02 23:59"), T("2026-09-15 23:59"), T("2026-10-01 23:59")]})
+    b = sp.ventas_del_borde(pedidos, corridas, per_b).iloc[0]
+    check("descontado después del conteo o nunca, el de antes descontado adentro",
+          (b["fin"], b["ini"], b["nunca"]), (24.0, 7.0, 11.0))
+
+    # ── 4) Por área ─────────────────────────────────────────────────────
+    kx = pd.DataFrame({
+        "k": [0] * 6, "area": [0, 0, 1, 1, 0, 1], "cod": ["A"] * 6,
+        "tipo": ["01", "99", "99", "95", "93", "93"],
+        "cant_in": [0.0] * 6, "cant_out": [0.0] * 6,
+        "val_in": [100.0, 0.0, 60.0, 0.0, 0.0, 8.0], "val_out": [0.0, 60.0, 0.0, 30.0, 10.0, 0.0]})
+    st_ = pd.DataFrame({"punta": ["fin", "fin"], "k": [0, 0], "area": [0, 1],
+                        "cod": ["A", "A"], "q": [0.0, 0.0], "v": [30.0, 38.0]})
+    trans = pd.DataFrame({"tipo": ["99"], "t": [T("2026-09-10 12:00")], "o": [0], "d": [1],
+                          "cod": ["A"], "v": [60.0], "doc": ["R1"]})
+    pa = sp.por_area(kx, st_, trans, ven, {"A": sp.ALIMENTOS}, {"A": "Producto A"})[sp.ALIMENTOS][0]
+    cols = list(sp._COLS_AREA)
+    a0, a1 = dict(zip(cols, pa["areas"][0])), dict(zip(cols, pa["areas"][1]))
+    check("el Almacén: compra, envía y le falta",
+          (a0["compra"], a0["req_out"], a0["aj_neg"], a0["fin"], a0["val"]), (100.0, 60.0, 10.0, 30.0, 0.0))
+    check("la Cocina: recibe, vende y le sobra",
+          (a1["req_in"], a1["venta"], a1["aj_pos"], a1["fin"], a1["val"]), (60.0, 30.0, 8.0, 38.0, 0.0))
+    check("la flecha va del origen al destino con su documento",
+          pa["flechas"], [["99", 0, 1, 60.0, 1, 1, [["Producto A", 60.0]]]])
+    check("lo que falta en un área y sobra en otra se compensa",
+          (pa["compensa"]["total"], pa["compensa"]["n"], pa["compensa"]["falta"], pa["compensa"]["sobra"]),
+          (8.0, 1, 10.0, 8.0))
+    check("el producto compensado, con cada área",
+          pa["compensa"]["tops"], [["Producto A", 8.0, [[0, -10.0], [1, 8.0]]]])
+    check("el chip 95 dice qué se vendió", pa["detalle"][1]["95"], [30.0, 1, [["Producto A", 30.0]]])
+
+    # ── 5) El resumen ───────────────────────────────────────────────────
+    cero = {c: 0.0 for c in ("salio_v", "entro_v", "aj_v", "otros_ing_v", "otros_sal_v",
+                             "compra_v", "plato_v", "falt_v", "sobr_v", "baja_v", "otras_v",
+                             "fin_v", "ini_v", "prep_v", "sinplato_v")}
+    filas = pd.DataFrame([dict(cero, k=0, clase=sp.ALIMENTOS, salio_v=100.0, plato_v=60.0,
+                               falt_v=40.0, sinplato_v=40.0)])
+    borde = pd.DataFrame({"k": [0], "fin": [24.0], "ini": [7.0], "nunca": [11.0]})
+    r = sp.resumen_reloj(filas, [dict(per_b[0], dias=29.33)], borde)[0]
+    check("el borde pasa de faltante a plato", (r["plato"], r["falt"], r["sinplato"], r["dias"]),
+          (77.0, 23.0, 23.0, 29.33))
+    return fallos
+
+
 def _pruebas_diferencias_ajuste():
     """Ajuste › «Análisis de diferencias» (regla #650): `diferencias_ajuste.py`
     sobre un conteo de mentira con cada caso real del cierre de setiembre
@@ -13028,6 +13166,7 @@ def main():
     fallos += _pruebas_marcas_requerimientos()
     fallos += _pruebas_salidas_comparar()
     fallos += _pruebas_sin_plato()
+    fallos += _pruebas_relojes_sin_plato()
     fallos += _pruebas_diferencias_ajuste()
     fallos += _pruebas_diferencias_combos()
     fallos += _pruebas_diferencias_req_sunat()

@@ -2262,50 +2262,119 @@ def _venta_clase_dia_cacheable(archivo, sello, definicion=None):
 
 
 # Los parquets que, además del kardex, lee la cuenta de cierre a cierre
-# (`sin_plato.calcular`): sus sellos van en la clave de la caché.
+# (`sin_plato.calcular`): sus sellos van en la clave de la caché. Los cuatro
+# últimos son del reloj operativo y del balance por área (regla #743):
+# origen y destino de cada traslado, el costo de lo vendido por hora de
+# pedido, el calendario del descargo de ventas y los nombres de las áreas.
 _ARCHIVOS_SIN_PLATO = ("salidas.parquet", "ventas.parquet",
                        "recetaventa.parquet", "cartacosteada.parquet",
-                       "inventariovalorizado.parquet", "recetabase.parquet")
+                       "inventariovalorizado.parquet", "recetabase.parquet",
+                       "transferencias.parquet", "paloteoinsumosnivel1.parquet",
+                       "descargosventas.parquet", "ajusteinventario.parquet")
+
+
+def _df_o_vacio(con, sql):
+    """El resultado de `sql`, o un DataFrame vacío si el parquet todavía no
+    existe (la fila del Sheet es nueva) o no se pudo leer: el reloj
+    operativo y el mapa por área quedan sin ese dato, la cuenta no."""
+    try:
+        return con.execute(sql).df()
+    except Exception:
+        return pd.DataFrame()
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
 def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
     """En qué se fue cada producto, de cierre a cierre de inventario
-    (`sin_plato.calcular`, regla #645). Si falla, LANZA: no se cachea.
+    (`sin_plato.calcular`, regla #645), con los DOS relojes (regla #743):
+    `{"kardex": {...}, "operativo": {...}, "puente", "nombres_area"}`, cada
+    reloj con `periodos`, `filas`, `totales`, `areas` (el balance por área,
+    `sin_plato.por_area`) y `borde` (lo vendido de un lado del conteo y
+    descontado del otro; sólo el operativo). Si falla, LANZA: no se cachea.
 
-    `archivo` es el kardex, que manda; `sellos`, los de los otros seis
-    parquets (`_ARCHIVOS_SIN_PLATO`), y `version`, la de la cuenta. Ninguno
-    se usa en el cuerpo: son la clave (ver el bloque del sello). Del kardex
-    se baja lo agregado por período, producto y tipo (unas 30 mil filas) y
-    las fotos del stock, que ya cachea `_kardex_fotos_cacheable`."""
+    `archivo` es el kardex, que manda; `sellos`, los de los otros parquets
+    (`_ARCHIVOS_SIN_PLATO`), y `version`, la de la cuenta. Ninguno se usa en
+    el cuerpo: son la clave (ver el bloque del sello). Del kardex se baja lo
+    agregado por período, área, producto y tipo, y las fotos del stock, que
+    ya cachea `_kardex_fotos_cacheable`. Los dos relojes comparten todo eso:
+    calcularlos juntos cuesta poco más que uno."""
     if not secrets_disponibles():
         return None
     con = get_conn()
     bucket = st.secrets["R2_BUCKET"]
-    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+
+    def ruta(a):
+        return f"read_parquet('s3://{bucket}/{a}')"
+    rel = ruta(archivo)
     dias = con.execute(kardex.sql_dias_ajuste(rel)).df()
     per = sin_plato.periodos(sesiones_inventario(pd.to_datetime(dias["dia"])))
     if not per:
         return None
-    kx = con.execute(kardex.sql_movimientos_cortes(
-        rel, [(p["t0"], p["t1"]) for p in per])).df()
+    desde = per[0]["t0"] - pd.Timedelta(days=10)
+    areas = [int(a) for a in con.execute(kardex.sql_areas(rel, desde)).df()["area"].dropna()]
+    per_op = sin_plato.periodos_operativos(
+        per, con.execute(kardex.sql_horas_ajuste(rel, desde)).df(), areas)
     fotos = _kardex_fotos_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
                                     version=kardex.VERSION)
     vend = _venta_clase_dia_cacheable(
         "ventas.parquet", sello_datos("ventas.parquet"),
         definicion=_version_preparar("ventas.parquet"))
-    return sin_plato.calcular(
-        per, kx, fotos, cargar("salidas.parquet"), vend,
-        cargar("recetaventa.parquet"), cargar("cartacosteada.parquet"),
-        cargar("inventariovalorizado.parquet"),
-        recetabase=cargar("recetabase.parquet"))
+    salidas, recetaventa = cargar("salidas.parquet"), cargar("recetaventa.parquet")
+    carta, maestro = cargar("cartacosteada.parquet"), cargar("inventariovalorizado.parquet")
+    recetabase = cargar("recetabase.parquet")
+    desde_sql = f"TIMESTAMP '{desde:%Y-%m-%d %H:%M:%S}'"
+    trans = _df_o_vacio(con, f"""
+        SELECT "COD TIPO" AS tipo, "FECHA HORA" AS t, "CODIGO AREA ORIGEN" AS o,
+               "CODIGO AREA DESTINO" AS d, "CODIGO PRODUCTO" AS cod, "VALOR" AS v,
+               "DOCUMENTO" AS doc, "AREA ORIGEN" AS no, "AREA DESTINO" AS nd
+        FROM {ruta('transferencias.parquet')} WHERE "FECHA HORA" >= {desde_sql}""")
+    nombres_area = {}
+    for col_c, col_n in (("o", "no"), ("d", "nd")):
+        if not trans.empty:
+            for c, n in zip(pd.to_numeric(trans[col_c], errors="coerce"), trans[col_n]):
+                if pd.notna(c) and isinstance(n, str) and n.strip():
+                    nombres_area.setdefault(int(c), n.strip())
+    aj_nom = _df_o_vacio(con, f"""SELECT DISTINCT "CODIGO AREA" AS c, "AREA" AS n
+        FROM {ruta('ajusteinventario.parquet')}""")
+    for c, n in zip(pd.to_numeric(aj_nom.get("c", pd.Series(dtype=str)), errors="coerce"),
+                    aj_nom.get("n", pd.Series(dtype=str))):
+        if pd.notna(c) and isinstance(n, str) and n.strip():
+            nombres_area.setdefault(int(c), n.strip())
+    mae = sin_plato._maestro(maestro)
+    clase = dict(zip(mae["cod"], np.where(mae["familia"].str.upper() == sin_plato.FAMILIA_OPERACION,
+                                          sin_plato.OPERACION, sin_plato.ALIMENTOS)))
+    nombres = dict(zip(mae["cod"], mae["producto"]))
+    res = {}
+    for reloj, pp in (("kardex", per), ("operativo", per_op)):
+        ven = sin_plato.ventanas(pp, areas)
+        kx = con.execute(kardex.sql_movimientos_ventanas(
+            rel, list(ven.itertuples(index=False, name=None)))).df()
+        stock = sin_plato.stock_por_area(fotos, ven)
+        r = sin_plato.calcular(pp, kx, fotos, salidas, vend, recetaventa, carta,
+                               maestro, recetabase=recetabase, stock=stock)
+        r["areas"] = sin_plato.por_area(kx, stock, trans, ven, clase, nombres)
+        r["borde"] = None
+        res[reloj] = r
+    pedidos = _df_o_vacio(con, f"""
+        SELECT "FECHA PEDIDO" AS t, sum("COSTO TOTAL") AS costo
+        FROM {ruta('paloteoinsumosnivel1.parquet')}
+        WHERE "FECHA PEDIDO" >= {desde_sql} GROUP BY 1""")
+    corridas = _df_o_vacio(con, f"""
+        SELECT "INICIO CORRIDA" AS ini, "VENTAS DESDE" AS desde, "VENTAS HASTA" AS hasta
+        FROM {ruta('descargosventas.parquet')}""")
+    res["operativo"]["borde"] = sin_plato.ventas_del_borde(pedidos, corridas, per_op)
+    res["puente"] = {
+        "kardex": sin_plato.resumen_reloj(res["kardex"]["filas"], per),
+        "operativo": sin_plato.resumen_reloj(res["operativo"]["filas"], per_op,
+                                             res["operativo"]["borde"])}
+    res["nombres_area"] = nombres_area
+    return res
 
 
-def sin_plato_por_cierre():
-    """`{"periodos", "filas", "totales"}` de `sin_plato.calcular`: lo que
-    dibujan «Sin plato, cierre por cierre» y «En qué se fue cada producto»
-    (regla #645). `None` si no se pudo calcular —sin secrets, R2 caído, el
-    kardex sin cierres—: quien lo pide avisa. No cacheada (la interna sí)."""
+def sin_plato_relojes():
+    """Lo de `_sin_plato_cacheable` entero —los dos relojes, el puente y los
+    nombres de las áreas— o `None` si no se pudo calcular (sin secrets, R2
+    caído, el kardex sin cierres): quien lo pide avisa. Regla #743."""
     try:
         return _sin_plato_cacheable(
             kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
@@ -2314,6 +2383,15 @@ def sin_plato_por_cierre():
                      _version_preparar("ventas.parquet")))
     except Exception:
         return None
+
+
+def sin_plato_por_cierre(reloj="kardex"):
+    """`{"periodos", "filas", "totales", "areas", "borde"}` de un reloj
+    (`sin_plato.RELOJES`): lo que dibujan «Sin plato, cierre por cierre» y
+    «En qué se fue cada producto» (reglas #645 y #743). `None` si no se pudo
+    calcular. No cacheada (la interna sí)."""
+    r = sin_plato_relojes()
+    return r.get(reloj) if r else None
 
 
 # Lo que lee «Consistencia de datos» de Costos (`consistencia_maestro`,
