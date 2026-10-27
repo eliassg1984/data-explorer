@@ -43,7 +43,7 @@
 .ajc-search{margin-left:auto;min-width:190px;max-width:300px;flex:1;}
 .ajc-detail td:nth-child(2),.ajc-detail td:nth-child(3),.ajc-detail td:nth-child(4),.ajc-detail td:nth-child(5),.ajc-detail td:nth-child(6){text-align:left;}
 .ajc-lists{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
-.ajc-lists section{min-width:0;}
+.ajc-lists section{min-width:0;}.ajc-lists table{table-layout:fixed;width:100%;min-width:0;}.ajc-lists th,.ajc-lists td{padding:8px 6px;overflow:hidden;text-overflow:ellipsis;}.ajc-lists th:nth-child(1){width:84px;}.ajc-lists th:nth-child(3){width:64px;}.ajc-lists th:nth-child(4){width:58px;}.ajc-lists th:nth-child(5){width:72px;}.ajc-lists th:nth-child(6){width:92px;}.ajc-lists td:nth-child(2),.ajc-lists th:nth-child(2){text-align:left;}
 .ajc-child{background:var(--ajc-soft);color:var(--text-secondary);}
 .ajc-comparison-note{position:sticky;left:0;max-width:100%;padding:3px 0 8px;color:var(--text-secondary);font-size:11px;white-space:normal;}
 .ajc-status{position:sticky;left:0;padding-bottom:8px;}

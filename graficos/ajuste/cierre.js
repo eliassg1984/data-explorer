@@ -155,7 +155,7 @@ function ctabproductos(G,D){
     }
     const listas=clistas(D.scope,st.juntas).filter(r=>cbuscar(r,st.q));
     const ambos=['Faltantes','Sobrantes'].map(l=>{const ps=listas.filter(r=>l==='Faltantes'?r.val<0:r.val>0);
-      return `<section><h4>${l} · ${cs(csum(ps,'val'))}</h4>${ctabla(['Código','Producto','Área','Unidad','Diferencia','Ajuste S/'],ps.slice(0,st.limite).map(r=>`<tr><td>${cesc(r.cod)}</td><td>${cesc(r.prod)}</td><td>${cesc(r.area)}</td><td>${cesc(r.um)}</td><td>${cn(r.dif,3)}</td><td>${cs(r.val)}</td></tr>`))}</section>`;});
+      return `<section><h4>${l} · ${cs(csum(ps,'val'))}</h4>${ctabla(['Código','Producto','Área','Unidad','Diferencia','Ajuste S/'],ps.slice(0,st.limite).map(r=>`<tr><td>${cesc(r.cod)}</td><td title="${cesc(r.prod)}">${cesc(r.prod)}</td><td title="${cesc(r.area)}">${cesc(r.area)}</td><td>${cesc(r.um)}</td><td>${cn(r.dif,3)}</td><td>${cs(r.val)}</td></tr>`))}</section>`;});
     const ps=listas;G.exportar={nombre:'Listas',cabeza:cprodheads,filas:ps.map(cprodvals),decimales:6};
     G.nfilas=Math.max(...['Faltantes','Sobrantes'].map(l=>ps.filter(r=>l==='Faltantes'?r.val<0:r.val>0).length),0);return `<div class="ajc-lists">${ambos.join('')}</div>`;
   }
