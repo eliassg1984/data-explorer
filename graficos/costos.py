@@ -69,6 +69,10 @@ _PILA = pila_sin_tablas(())
 _ARCHIVOS = ("compras.parquet", "salidas.parquet", "ventas.parquet",
              "notascreditocompras.parquet", "inventariovalorizado.parquet", kardex.ARCHIVO)
 
+K_MES_DESDE_RESUMEN = "_costos_mes_desde_resumen"
+"""El mes con que abre «Costo de ventas» al llegar desde la portada de
+Inicio, con su ámbito (regla #745). Se lee una vez."""
+
 _AQUI = Path(__file__).parent
 _TABLA = st.components.v2.component(
     "costos_tabla",
@@ -207,8 +211,11 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
         publicar_contexto_ia("Costos", costo_ventas.tabla_larga(mes))
         # Enlace del Resumen: abre Mes con el período y los defaults que
         # resume la portada. No altera las preferencias guardadas de Costos.
-        mes_enlace = st.query_params.get("mes", "")
-        desde_resumen = (st.query_params.get("desde_resumen") == "1"
+        # Desde la regla #745 la portada salta en la MISMA pestaña: deja el
+        # mes una vez en `K_MES_DESDE_RESUMEN`, que la tabla toma al montarse.
+        salto = st.session_state.pop(K_MES_DESDE_RESUMEN, None)
+        mes_enlace = salto or st.query_params.get("mes", "")
+        desde_resumen = ((salto is not None or st.query_params.get("desde_resumen") == "1")
                           and any(p["k"] == mes_enlace for p in mes["periodos"]))
         _TABLA(key="costos_tabla", data=dict(
             datos, documental=documental, enlaces=costos_enlaces.enlaces(datos["granos"]),

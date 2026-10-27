@@ -17,10 +17,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 ## Resumen ejecutivo mensual — 2026-10-17
 
 La portada `graficos/resumen_ejecutivo.py` reúne ventas y consumo/costo,
-sin indicadores de compras ni stock al día. Desde el 2026-10-21 entra en
-una pantalla de laptop con seis indicadores —venta, clientes, ticket,
-descuentos, costo real y costo del Sistema— y las señales por importancia
-(regla #693). Las cuentas se resumen en
+sin indicadores de compras ni stock al día. Desde el 2026-10-26 (regla
+#745) cuenta el mes con su contexto: una frase, cinco indicadores con sus
+doce meses y el presupuesto, el gráfico del indicador elegido, una sola
+lista con las señales del mes y las de Pendientes, y enlaces en la misma
+pestaña. Del 2026-10-21 al 26 eran seis indicadores y las señales por
+importancia (regla #693). Las cuentas se resumen en
 `resumen_ejecutivo.py` desde venta preparada y `costo_ventas.armar`, con
 las cuatro familias, Eventos incluido, Venta interna excluida y todas las
 salidas no bajas deducidas (los defaults de Costos). El costo operativo
@@ -34,11 +36,11 @@ calendario; sin cobertura se muestra sin base, nunca cero inventado.
 Pedidos netos reutiliza `definicion_venta.pax_por` con signos por
 comprobante para evitar duplicar pagos, cuentas divididas y canjes.
 
-Los enlaces abren otra pestaña (`target="_blank"`, `noopener noreferrer`).
-Ventas recibe `desde`/`hasta` ISO como default de `asegurar_rango`; el
-estado elegido después por el usuario manda. Costos recibe `mes` y
-`desde_resumen=1`: abre ese mes y el ámbito de la portada en el componente,
-sin escribir las preferencias guardadas. La caché mensual incluye los
+Los enlaces entran al reporte en la misma pestaña desde la regla #745:
+Ventas con el rango del mes (`aplicar_atajo`) y Costos con el mes y el
+ámbito de la portada (`costos.K_MES_DESDE_RESUMEN`), sin escribir las
+preferencias guardadas. Los parámetros `desde`/`hasta` y `mes` con
+`desde_resumen=1` siguen leyéndose para los enlaces viejos. La caché mensual incluye los
 sellos de cierres, compras, salidas, ventas y notas de crédito, las
 versiones de las cuentas y la tabla de convenios. No carga el kardex.
 
@@ -61,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-744 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+745 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (244)
 
@@ -824,7 +826,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 
-**Datos, R2 y DuckDB** (125)
+**Datos, R2 y DuckDB** (126)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -951,6 +953,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#725** — Compras › Vs año pasado es una PIEZA PROPIA con selección de varios meses y cobertura de…
 - **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
 - **#743** — «En qué se fue cada producto» se cuenta con dos relojes y por área: el flujo es NETO, la…
+- **#745** — La portada de Inicio cuenta el mes CON su contexto: el presupuesto, los doce meses, lo…
 
 **SUNAT y SIRE** (75)
 
@@ -1107,7 +1110,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (221)
+**Decisiones de diseño y UX** (222)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1330,6 +1333,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#729** — Costo por unidad útil como pieza propia: atribución intacta, comparación explicable
 - **#733** — Consumo según recetas pasa del iframe a una pieza nativa y las tablas largas dejan de perder…
 - **#734** — Requerimientos por Área es una pieza propia completa: la cadena, los productos y su ficha…
+- **#745** — La portada de Inicio cuenta el mes CON su contexto: el presupuesto, los doce meses, lo…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -56793,6 +56797,65 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        sólo rehace las cifras de arriba y «Para quedar en», que
        `test_ficha_plato.py` compara en Chromium. (2026-10-26.)
 
+745. **La portada de Inicio cuenta el mes CON su contexto: el presupuesto,
+     los doce meses, lo habitual; una sola lista para revisar y los
+     enlaces en la misma pestaña** (`resumen_ejecutivo.py`,
+     `graficos/resumen_ejecutivo.py`, `.js` y `.css`). A pedido
+     (2026-10-26), sobre un análisis medido con datos reales y un boceto
+     aprobado tal cual (https://claude.ai/artifact/FyAq1T6hRPgb456zeZ7wQL).
+     La de la #693 entraba en una pantalla pero contaba el mes solo: 415
+     palabras y 42 cifras, casi todas a 11–12 px; «la venta cae 10,9 %» como
+     mala noticia cuando era la caída interanual más chica desde febrero;
+     sin el presupuesto que ya estaba en R2 (#669: setiembre 2026, 71 %); la
+     fila de indicadores contra dos bases (set 2025 y ago 2026); el gráfico
+     sin respuesta al cursor y el diario contra la misma FECHA (el martes 1
+     contra un lunes, #659); y S/ 10.202 sin explicar con «!» ámbar arriba y
+     con punto verde «al día» en Pendientes.
+     · **Una frase arriba** (`titular`): la venta, el presupuesto, el año
+       pasado con su racha («la caída más chica desde febrero») y el costo
+       con su puesto en los últimos 12 meses. Se arma en Python con las
+       mismas cifras que las tarjetas.
+     · **Cinco indicadores con sus doce meses** (venta, clientes, ticket,
+       descuentos, costo de ventas real con el Sistema y lo sin explicar en
+       su segunda línea): todos contra el mismo mes del año pasado, y tocar
+       uno cambia el gráfico grande. La venta ofrece «el mes» (acumulado o
+       diario, con el año pasado a 364 días y el presupuesto de cada día) y
+       «12 meses»; los demás, los doce meses.
+     · **Los doce meses salen de una caché mensual** (`data.ventas_por_mes`,
+       `persist="disk"` con el sello): una lectura del parquet por versión
+       del dato —32 s en frío en la laptop, una vez al día— con la MISMA
+       cuenta que el mes elegido (`ventas_del_rango`); setiembre cuadra al
+       céntimo. No se bajan doce meses de líneas en cada visita. La venta
+       diaria, de `venta_por_grupo_dia`; el presupuesto, de
+       `presupuesto_ventas` (neto, todos los servicios; un mes en curso
+       contra sus mismos días).
+     · **«Para revisar» y Pendientes son una lista**: las señales del mes
+       (`para_revisar`: presupuesto, sin costo, ticket o clientes bajo lo
+       habitual —la mediana de los seis meses anteriores—, descuentos,
+       costo que sube, observaciones) y las filas rojas o ámbar de
+       Pendientes (`de_pendientes`), una línea cada una y el detalle al
+       tocarla. Lo que está al día se pliega en una fila; lo sin explicar
+       se juzga con la regla de Pendientes y Costos
+       (`pendientes.umbral_sin_explicar`), así que ya no se contradicen.
+       La cuenta de Pendientes pasó a `graficos/pendientes.py::armar`, que
+       leen las dos vistas; «Calcular» de la portada pide lo mismo
+       (`pedir_calculo`) en una corrida completa.
+     · **Los enlaces entran en la MISMA pestaña, con «Volver»** (#742): el
+       navegador devuelve sólo el id de un destino que armó Python
+       (`_res_destinos`); el callback captura el origen, siembra el rango de
+       Ventas con `aplicar_atajo` o el mes de Costos
+       (`costos.K_MES_DESDE_RESUMEN`, leído una vez) y salta con
+       `_ir_a_vista`. Reemplaza, sólo para la portada, la «otra pestaña» de
+       la #742: cada pestaña nueva arrancaba la app de cero.
+     · **Debajo, el costo**: familias como puntos real contra Sistema (la
+       barra de antes medía soles y Alimentos ganaba siempre; Bebidas sale
+       al revés) y lo sin explicar como un puente de barras en vez de siete
+       renglones de cifras.
+     Medido a 1323×619 con R2: la primera pantalla cierra con la frase, los
+     indicadores, el gráfico y la lista (909 px en total, antes 983); en el
+     celular la lista va antes del gráfico. Subió `resumen_ejecutivo.VERSION`
+     a 4. Lo vigila `test_resumen_ejecutivo.py`. (2026-10-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -56805,7 +56868,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#744**; la próxima toma el número siguiente.
+> última regla es la **#745**; la próxima toma el número siguiente.
 
 >
 

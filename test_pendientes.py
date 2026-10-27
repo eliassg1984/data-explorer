@@ -144,10 +144,11 @@ class Pendientes(unittest.TestCase):
     def test_nada_pesado_sin_pedirlo(self):
         """Lo pesado sólo se pide con «Calcular ahora»: cada llamada a la
         consistencia o a las diferencias sin `solo_si_calculado=True` está
-        dentro del `if calcular`."""
+        dentro del `if calcular`. Desde la regla #745 la cuenta vive en
+        `armar`, que leen esta vista y la portada."""
         arbol = ast.parse((RAIZ / "graficos" / "pendientes.py").read_text(encoding="utf-8"))
         fn = next(n for n in ast.walk(arbol)
-                  if isinstance(n, ast.FunctionDef) and n.name == "renderizar")
+                  if isinstance(n, ast.FunctionDef) and n.name == "armar")
         si = next(n for n in ast.walk(fn) if isinstance(n, ast.If)
                   and getattr(n.test, "id", "") == "calcular")
         dentro = {id(c) for c in ast.walk(ast.Module(body=si.body, type_ignores=[]))}

@@ -134,5 +134,181 @@ class ResumenTest(unittest.TestCase):
         self.assertEqual(parse_qs(url[1:])["mes"], ["2026-09"])
 
 
+def _mes(k, venta, ppto=None, ap=None, parcial=False, costo=None, **otros):
+    """Un mes de `historia`, para armar casos a mano."""
+    h = {"k": k, "parcial": parcial, "venta": venta, "ppto": ppto, "costo": costo,
+         "ap": {"venta": ap} if ap is not None else None}
+    for c in re.CIFRAS:
+        h.setdefault(c, otros.get(c))
+    h["venta"] = venta
+    return h
+
+
+class PortadaDoceMesesTest(unittest.TestCase):
+    """La portada de la regla #745: doce meses, presupuesto, frase y lista."""
+
+    def test_meses_con_la_misma_cuenta_que_el_rango(self):
+        filas = [("2026-08-31", "P1", "B1", "I1", dv.VENTA, 100),
+                 ("2026-09-01", "P2", "B2", "I2", dv.VENTA, 50),
+                 ("2026-09-01", "P2", "B2", "I2", dv.VENTA, 50),   # dos pagos
+                 ("2026-09-15", "P3", "N1", "I3", dv.NOTA_CREDITO, -20)]
+        d = pd.DataFrame(filas, columns=[dv.FECHA, re.PEDIDO, dv.LLAVE_DOC,
+                                        dv.LLAVE_ITEM, dv.CLASE, dv.NETO_ITEM])
+        m = re.ventas_por_mes(d)
+        self.assertEqual(sorted(m), ["2026-08", "2026-09"])
+        self.assertEqual(m["2026-09"]["venta"],
+                         re.ventas_del_rango(d, *re.rango_mes("2026-09"))["venta"])
+        self.assertEqual(m["2026-09"]["venta"], 30)
+        self.assertEqual(set(m["2026-08"]), set(re.CIFRAS))
+        self.assertEqual(re.ventas_por_mes(None), {})
+
+    def test_presupuesto_por_mes_y_por_dia(self):
+        tabla = pd.DataFrame({"anio": [2026, 2026, 2026], "mes": [9, 9, 10],
+                              "servicio": ["ALMUERZO", "CENA", "CENA"],
+                              "bruta": [130, 260, 1], "neta": [100, 200, 0]})
+        self.assertEqual(re.presupuesto_por_mes(tabla), {"2026-09": 300.0})
+        diario = pd.DataFrame({"dia": pd.to_datetime(["2026-09-01", "2026-09-01", "2026-09-03"]),
+                               "servicio": ["ALMUERZO", "CENA", "CENA"], "neta": [10.0, 20.0, 5.0]})
+        self.assertEqual(re.presupuesto_dias(diario, dt.date(2026, 9, 1), dt.date(2026, 9, 3)),
+                         [30.0, 0.0, 5.0])
+        self.assertIsNone(re.presupuesto_dias(diario, dt.date(2026, 10, 1), dt.date(2026, 10, 2)))
+        self.assertEqual(re.presupuesto_por_mes(None), {})
+
+    def test_ano_pasado_diario_cae_en_el_mismo_dia_de_la_semana(self):
+        ini, fin = re.rango_mes("2026-09")
+        a, b = re.alinear_ano_pasado(ini, fin)
+        self.assertEqual((a, b), (dt.date(2025, 9, 2), dt.date(2025, 10, 1)))
+        self.assertEqual(a.weekday(), ini.weekday())
+        grupos = pd.DataFrame({"dia": pd.to_datetime(["2025-09-02", "2025-09-02", "2025-09-03"]),
+                               "clase": [dv.VENTA, dv.CORTESIA, dv.VENTA], "neto": [10.0, 99.0, 5.0]})
+        self.assertEqual(re.venta_diaria(grupos, dt.date(2025, 9, 2), dt.date(2025, 9, 4)),
+                         [10.0, 5.0, 0.0])
+        # Un día antes del parquet no es un cero.
+        self.assertIsNone(re.venta_diaria(grupos, dt.date(2025, 9, 1), dt.date(2025, 9, 3)))
+
+    def test_historia_toma_el_tramo_del_mes_en_curso(self):
+        ventas = {"2026-09": {"venta": 300}, "2025-09": {"venta": 250}, "2025-10": {"venta": 200}}
+        h = re.historia("2026-10", ventas, None, {"2026-09": 400, "2026-10": 900},
+                        actual={"venta": 120}, anterior={"venta": 100},
+                        ppto_tramo=[50.0, 50.0], parcial=True)
+        self.assertEqual(len(h), re.MESES_HISTORIA)
+        self.assertEqual([x["k"] for x in h][-2:], ["2026-09", "2026-10"])
+        self.assertEqual((h[-1]["venta"], h[-1]["ap"]["venta"], h[-1]["ppto"]), (120, 100, 100.0))
+        self.assertTrue(h[-1]["parcial"])
+        self.assertEqual((h[-2]["venta"], h[-2]["ap"]["venta"], h[-2]["ppto"]), (300, 250, 400))
+        # Sin presupuesto de esos días, un mes en curso no se compara con el mes entero.
+        h = re.historia("2026-10", ventas, None, {"2026-10": 900}, actual={"venta": 120},
+                        parcial=True)
+        self.assertIsNone(h[-1]["ppto"])
+
+    def test_habitual_es_la_mediana_de_seis_meses_anteriores(self):
+        h = [_mes(f"2026-{i:02d}", 1, ticket=t) for i, t in enumerate(
+            [999, 100, 110, 120, 130, 140, 150, 60], start=1)]
+        self.assertEqual(re.habitual(h, "ticket"), 125)
+        self.assertIsNone(re.habitual(h[-3:], "ticket"))
+
+    def test_titular_dice_presupuesto_ano_pasado_y_racha(self):
+        meses = ["2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07",
+                 "2026-08", "2026-09"]
+        ventas, ap = [96, 88, 72, 83, 74, 56, 68, 89], [100] * 8
+        h = [_mes(k, v, ap=a) for k, v, a in zip(meses, ventas, ap)]
+        h[-1]["ppto"] = 125.0
+        costo = {"porcentaje": 0.40}
+        t = "".join(x for x, _c in re.titular("2026-09", h, costo, {"porcentaje": 0.42},
+                                               False, dt.date(2026, 9, 30)))
+        self.assertIn("Setiembre cerró en S/ 89", t)
+        self.assertIn("71% del presupuesto", t)
+        self.assertIn("11.0% menos que setiembre 2025", t)
+        self.assertIn("la caída más chica desde febrero", t)
+        self.assertIn("bajó a 40.0%", t)
+        clases = dict((x, c) for x, c in re.titular("2026-09", h, costo, None, False,
+                                                     dt.date(2026, 9, 30)))
+        self.assertEqual(clases["71% del presupuesto"], "bad")
+        # En curso: el costo espera el cierre.
+        h[-1]["parcial"] = True
+        t = "".join(x for x, _c in re.titular("2026-09", h, None, None, True, dt.date(2026, 9, 16)))
+        self.assertTrue(t.startswith("Al 16 de setiembre van"))
+        self.assertIn("espera el cierre", t)
+        self.assertEqual(re.titular("2026-09", [_mes("2026-09", None)], None, None, False,
+                                    dt.date(2026, 9, 30)), [])
+
+    def test_sin_explicar_con_la_regla_de_pendientes(self):
+        """La portada y Pendientes juzgan lo sin explicar igual: no puede
+        salir ámbar arriba y verde abajo."""
+        import pendientes
+        meses = [("2026-04", 4513, 282000), ("2026-05", 9764, 321000),
+                 ("2026-06", 2533, 291000), ("2026-07", 39757, 213000),
+                 ("2026-08", 10682, 283000), ("2026-09", 10202, 325180)]
+        costo = {"porcentaje": 0.40, "porcentaje_faltante": 10202 / 325180, "faltante": 10202,
+                 "carta": 120697, "pos": 109423, "bajas": 1071, "observaciones": {}}
+        h = [_mes("2026-09", 1)]
+        items = re.para_revisar("2026-09", h, {}, costo, None, meses, False)
+        portada = next(x for x in items if x["t"].startswith("Sin explicar"))
+        fila = pendientes.de_costos([(k, f, v) for k, f, v in meses])
+        self.assertEqual(portada["nivel"] == re.VERDE, fila["estado"] == pendientes.VERDE)
+        self.assertEqual(portada["nivel"], re.VERDE)
+        raro = re.para_revisar("2026-07", h, {}, dict(costo, porcentaje_faltante=0.187,
+                                                      faltante=39757), None, meses[:4], False)
+        self.assertEqual(next(x for x in raro if x["t"].startswith("Sin explicar"))["nivel"],
+                         re.ROJO)
+
+    def test_senales_de_presupuesto_ticket_y_orden(self):
+        h = [_mes(f"2026-{i:02d}", 100, ppto=100, ticket=130) for i in range(3, 9)]
+        h.append(_mes("2026-09", 71, ppto=100, ticket=110))
+        items = re.para_revisar("2026-09", h, {"sin_costo_pct": 0.065, "sin_costo": 21636,
+                                               "sin_costo_top": [{"plato": "Agua"}],
+                                               "sin_costo_n": 3}, None, None, [], False)
+        titulos = [x["t"] for x in items]
+        self.assertEqual(items[0]["nivel"], re.ROJO)
+        self.assertEqual(titulos[0], "La venta quedó lejos del presupuesto")
+        self.assertIn("71% · −S/ 29", items[0]["chip"])
+        self.assertIn("El ticket está 15% bajo lo habitual", titulos)
+        sc = next(x for x in items if x["t"] == "Vendido sin costo en el POS")
+        self.assertIn("Agua y 2 más.", sc["det"][0])
+        self.assertTrue(all(x["ir"] in ("comparativo", "ventas", "platos", "costos") for x in items))
+        self.assertEqual([x["nivel"] for x in items],
+                         sorted((x["nivel"] for x in items), key=re._ORDEN.get))
+        cumplido = re.para_revisar("2026-09", [_mes("2026-09", 120, ppto=100)], {}, None,
+                                   None, [], False)
+        self.assertEqual((cumplido[0]["t"], cumplido[0]["nivel"]), ("Presupuesto cumplido", re.VERDE))
+
+    def test_de_pendientes_deja_afuera_lo_sin_explicar(self):
+        import pendientes
+        armado = pendientes.armar({"pesos": {"n": 3, "docs": 2},
+                                   "costos": [("ago", 100.0, 1000.0)] * 4,
+                                   "horas": {"ventas.parquet": 1.0}}, 26)
+        items, al_dia, sin = re.de_pendientes(armado)
+        self.assertEqual([x["t"] for x in items], ["Peso por unidad raro"])
+        self.assertEqual(items[0]["destino"]["v"], pendientes.REVISAR_MERMA[2])
+        self.assertIn("Parquets sin refrescar", al_dia)
+        self.assertNotIn("Sin explicar del último mes", al_dia)
+        self.assertEqual(sin, 10)
+
+    def test_la_vista_salta_con_volver_y_destinos_validados(self):
+        """Los enlaces entran en la misma pestaña: el callback captura el
+        origen ANTES de saltar y sólo acepta destinos que armó Python; el
+        .js lee las claves que Python manda."""
+        import ast
+        from pathlib import Path
+        raiz = Path(__file__).parent
+        src = (raiz / "graficos" / "resumen_ejecutivo.py").read_text(encoding="utf-8")
+        fn = next(n for n in ast.walk(ast.parse(src))
+                  if isinstance(n, ast.FunctionDef) and n.name == "_al_ir")
+        cuerpo = ast.unparse(fn)
+        self.assertLess(cuerpo.index("capturar_origen()"), cuerpo.index("_ir_a_vista("))
+        self.assertIn("_K_DESTINOS", cuerpo)
+        self.assertIn("aplicar_atajo(", cuerpo)
+        self.assertIn("K_MES_DESDE_RESUMEN", cuerpo)
+        js = (raiz / "graficos" / "resumen_ejecutivo.js").read_text(encoding="utf-8")
+        for clave in ("d.titular", "d.hist", "d.diario", "d.items", "d.al_dia", "d.sin_calcular",
+                      "d.calculable", "d.destinos", "d.habitual", "d.costo_ap"):
+            self.assertIn(clave, js)
+        for trigger in ("'ir'", "'mes'", "'calcular'"):
+            self.assertIn(f"setTriggerValue({trigger}", js)
+        self.assertNotIn('target="_blank"', js)
+        from graficos import costos
+        self.assertTrue(costos.K_MES_DESDE_RESUMEN)
+
+
 if __name__ == "__main__":
     unittest.main()

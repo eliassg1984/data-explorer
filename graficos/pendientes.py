@@ -130,41 +130,54 @@ def _al_ir():
 
 
 def _al_calcular():
+    pedir_calculo()
+
+
+def pedir_calculo():
+    """Lo que hace «Calcular ahora»: la próxima corrida que arme las señales
+    (`armar`) calcula lo pesado. Lo pide también la portada (regla #745)."""
     st.session_state[_K_CALCULAR] = True
+
+
+def armar(ajuste, costos, rotulo):
+    """Las señales de Pendientes (`pendientes.armar`), con lo pesado leído de
+    lo ya calculado o calculado ahora si se pidió (`pedir_calculo`). Las lee
+    esta vista y la lista «Para revisar» de la portada: la misma fuente."""
+    calcular = bool(st.session_state.pop(_K_CALCULAR, None))
+    cierre = _cierre(ajuste)
+    if calcular:
+        with st.spinner("Calculando lo que faltaba… la primera vez de los "
+                        "datos de hoy tarda alrededor de un minuto."):
+            consist = data.consistencia_maestro()
+            difs = data.diferencias_ajuste_sesion(cierre["clave"]) if cierre else None
+    else:
+        consist = data.consistencia_maestro(solo_si_calculado=True)
+        difs = (data.diferencias_ajuste_sesion(cierre["clave"], solo_si_calculado=True)
+                if cierre else None)
+    from graficos import recetas_revisar
+    fuentes = {
+        "consistencia": consist, "diferencias": difs,
+        "cierre": cierre["nombre"] if cierre else None,
+        "revisar": data.recordado("revisar_recetas", recetas_revisar.sellos_pendiente()),
+        "pesos": _pesos_raros(data.sello_datos("porcionamientos.parquet")),
+        "costos": _meses_cerrados(costos, rotulo),
+        "horas": _horas_de_los_parquets(),
+    }
+    armado = pendientes.armar(fuentes, data.HORAS_DATO_VIEJO)
+    armado["cierre"] = cierre["nombre"] if cierre else ""
+    # «Calcular ahora» sólo si falta algo que ESTE botón calcula: Recetas
+    # vs Porcionado se calcula al abrir su vista, no desde acá.
+    armado["calculable"] = consist is None or (cierre is not None and difs is None)
+    return armado
 
 
 def renderizar(ajuste, costos, rotulo):
     """La vista entera, en su tarjeta. `ajuste` es ajusteinventario.parquet
     (el `archivo` de Inicio), `costos` lo de la portada
     (`_meses_costos`, o None) y `rotulo` cómo se nombra un mes."""
-    ss = st.session_state
-    if ss.pop(_K_IR, None):
+    if st.session_state.pop(_K_IR, None):
         st.rerun(scope="app")
-    calcular = bool(ss.pop(_K_CALCULAR, None))
-    cierre = _cierre(ajuste)
     with st.container(border=True, key="ajuste_graf_card_izq_pend"):
-        if calcular:
-            with st.spinner("Calculando lo que faltaba… la primera vez de los "
-                            "datos de hoy tarda alrededor de un minuto."):
-                consist = data.consistencia_maestro()
-                difs = data.diferencias_ajuste_sesion(cierre["clave"]) if cierre else None
-        else:
-            consist = data.consistencia_maestro(solo_si_calculado=True)
-            difs = (data.diferencias_ajuste_sesion(cierre["clave"], solo_si_calculado=True)
-                    if cierre else None)
-        from graficos import recetas_revisar
-        fuentes = {
-            "consistencia": consist, "diferencias": difs,
-            "cierre": cierre["nombre"] if cierre else None,
-            "revisar": data.recordado("revisar_recetas", recetas_revisar.sellos_pendiente()),
-            "pesos": _pesos_raros(data.sello_datos("porcionamientos.parquet")),
-            "costos": _meses_cerrados(costos, rotulo),
-            "horas": _horas_de_los_parquets(),
-        }
-        armado = pendientes.armar(fuentes, data.HORAS_DATO_VIEJO)
-        armado["cierre"] = cierre["nombre"] if cierre else ""
-        # «Calcular ahora» sólo si falta algo que ESTE botón calcula: Recetas
-        # vs Porcionado se calcula al abrir su vista, no desde acá.
-        armado["calculable"] = consist is None or (cierre is not None and difs is None)
+        armado = armar(ajuste, costos, rotulo)
         _PIEZA(key=_K_PIEZA, data=armado, width="stretch",
                on_ir_change=_al_ir, on_calcular_change=_al_calcular)

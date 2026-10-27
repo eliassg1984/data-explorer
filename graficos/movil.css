@@ -78,6 +78,9 @@
   .rpt-movil :is(.cc-kpis, .sa-kpis, .pd-kpis, .cd-kpis) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .re.rpt-movil :is(.re-grid, .re-lower, .re-method-body) { grid-template-columns: minmax(0, 1fr); }
   .re.rpt-movil .re-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .re.rpt-movil .re-kpi:last-child { grid-column: span 2; }
+  .re.rpt-movil .re-revisar { order: -1; }
+  .re.rpt-movil .re-chart { flex: none; height: 240px; }
   .cv.rpt-movil { --cv-concepto: 148px; --cv-periodo: 100px; --cv-total: 108px; }
   .cv.rpt-movil :is(td, th).tot { right: auto; }
   .cv.rpt-movil .marco { scroll-padding-right: 8px; }

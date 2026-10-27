@@ -1472,6 +1472,7 @@ def limpiar_cache(archivo):
     _venta_por_producto_dia_cacheable.clear()
     _venta_por_canal_dia_cacheable.clear()
     _venta_por_grupo_dia_cacheable.clear()
+    _ventas_por_mes_cacheable.clear()
     _consumo_recetas_cacheable.clear()
     _demanda_nivel1_cacheable.clear()
     _demanda_semanas_cacheable.clear()
@@ -2026,6 +2027,48 @@ def venta_por_grupo_dia(archivo="ventas.parquet"):
         return _venta_por_grupo_dia_cacheable(
             archivo, sello_datos(archivo),
             definicion=_version_preparar(archivo))
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _ventas_por_mes_cacheable(archivo, sello, definicion=None, cuenta=None):
+    """Las cifras de la portada de Inicio para CADA mes del parquet
+    (`resumen_ejecutivo.ventas_por_mes`): venta, pedidos, clientes, ticket,
+    descuentos y lo vendido sin costo, por día del turno. Si falla, LANZA:
+    no se cachea. `cuenta` es `resumen_ejecutivo.VERSION`, sólo la clave.
+
+    El mismo camino que `_venta_por_grupo_dia_cacheable`: sólo las columnas
+    que la cuenta lee. Una lectura del parquet por versión del dato y unas
+    pocas decenas de filas guardadas: la portada no baja doce meses de
+    líneas en cada visita (regla #745)."""
+    import resumen_ejecutivo
+    prep = _PREPARAR[archivo]
+    if not secrets_disponibles():
+        return resumen_ejecutivo.ventas_por_mes(
+            prep.preparar(_datos_demo(archivo), turno=True))
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    url = f"s3://{bucket}/{archivo}"
+    nombres = [r[0] for r in con.execute(
+        f"DESCRIBE SELECT * FROM read_parquet('{url}')").fetchall()]
+    vacio = pd.DataFrame(columns=nombres)
+    pide = (*prep.COLUMNAS, resumen_ejecutivo.PEDIDO, resumen_ejecutivo.NOMBRE)
+    reales = list(dict.fromkeys(c for c in (prep.columna(vacio, q) for q in pide) if c))
+    lista = ", ".join(f'"{c}"' for c in reales)
+    df = con.execute(f"SELECT {lista} FROM read_parquet('{url}')").df()
+    return resumen_ejecutivo.ventas_por_mes(prep.preparar(df, turno=True))
+
+
+def ventas_por_mes(archivo="ventas.parquet"):
+    """`{mes: cifras}` de la portada de Inicio, o None si no se pudo."""
+    if archivo not in _PREPARAR:
+        return None
+    try:
+        import resumen_ejecutivo
+        return _ventas_por_mes_cacheable(
+            archivo, sello_datos(archivo),
+            definicion=_version_preparar(archivo), cuenta=resumen_ejecutivo.VERSION)
     except Exception:
         return None
 

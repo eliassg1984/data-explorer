@@ -1394,6 +1394,26 @@ Python, puesto encima de la pieza— pide una corrida. Lo que muerde:
   «Análisis por hora»), y la pieza llamada con la misma `sello` no se
   redibuja.
 
+## Inicio: la portada cuenta el mes con su contexto
+
+Desde el 2026-10-26 (regla #745) la portada de Inicio abre con una frase
+(la venta, el presupuesto, el año pasado con su racha y el costo), cinco
+indicadores con sus doce meses que eligen el gráfico grande, y UNA lista
+«Para revisar» con las señales del mes y las de Pendientes. Lo que muerde:
+
+- **Los doce meses salen de `data.ventas_por_mes`**, cacheada en disco con
+  el sello: 32 s en frío una vez por versión del dato, con la misma cuenta
+  que el mes elegido. Tocar la cuenta es subir `resumen_ejecutivo.VERSION`.
+- **Lo sin explicar se juzga con la regla de Pendientes**
+  (`pendientes.umbral_sin_explicar`); la portada y Pendientes leen las
+  señales de `graficos/pendientes.py::armar`. Si se separan, vuelven a
+  contradecirse (ámbar arriba, verde abajo).
+- **Los enlaces entran en la misma pestaña, con «Volver»**: el navegador
+  manda sólo el id de un destino que armó Python; Ventas recibe el rango
+  por `aplicar_atajo` y Costos el mes por `costos.K_MES_DESDE_RESUMEN`.
+- **El año pasado del gráfico diario es a 364 días** (#659); los totales
+  del mes, contra la misma fecha del calendario.
+
 ## La compra resta las notas de crédito: `definicion_compra.py`
 
 Desde el 2026-10-04. Las notas de crédito de los proveedores NO están en
