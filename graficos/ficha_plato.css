@@ -1,0 +1,180 @@
+/* Recetas › «Costo de Carta» › la ficha del plato elegido (regla #744).
+   Vive en el shadow root del componente (graficos/carta_costeada.py::_ficha):
+   ninguna regla de acá sale de la pieza, y ninguna de estilos/ entra. Los
+   colores son las variables de estilos/_00_base.py, que SÍ cruzan el shadow
+   root. Ningún selector :has, por la regla #469. Los SVG se dibujan al
+   ancho real de su panel (el JS lo mide): con un viewBox fijo, la letra
+   crecería con la pantalla. */
+
+.fp { display: grid; gap: 12px; min-width: 0; color: var(--text-primary); font-size: 13px; line-height: 1.4;
+  border-top: 1px solid var(--border); padding-top: 14px; }
+.fp > *, .fp-cuerpo > * { min-width: 0; }
+.fp button { font: inherit; color: inherit; }
+.fp button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.der { text-align: right; }
+.gris { color: var(--text-secondary); }
+.chico { font-size: 11.5px; }
+.rojo { color: var(--danger-text); }
+.ambar { color: var(--warning-text); }
+.verde { color: var(--success-text); }
+.fuerte { font-weight: 600; }
+
+/* Cabecera: el plato y de dónde es; Copiar y Simular. */
+.fp-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.fp-tit { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; min-width: 0; }
+.fp-tit h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.fp-tit span { color: var(--text-secondary); font-size: 12px; }
+.fp-acc { display: flex; gap: 8px; flex-wrap: wrap; }
+.fp-btn { height: 30px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 12.5px; white-space: nowrap;
+  border: 1px solid var(--border-lavender); background: var(--bg-card); color: var(--accent-deep) !important; }
+.fp-btn:hover { background: var(--accent-tint); }
+.fp-btn.prim { background: var(--accent); border-color: var(--accent); color: var(--bg-card) !important; }
+.fp-btn.prim:hover { background: var(--accent-hover); }
+
+/* Cinco indicadores, una tira. */
+.fp-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.fp-kpi { border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; background: var(--bg-card); min-width: 0;
+  display: grid; gap: 1px; }
+.fp-kpi b { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-kpi span { color: var(--text-secondary); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Avisos y «Qué mueve el costo de hoy». */
+.fp-nota { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--bg-card-tenue); font-size: 12.5px; }
+.fp-nota.ambar { background: var(--warning-bg); color: var(--warning-text); }
+.fp-mueve { display: flex; gap: 14px; align-items: flex-start; padding: 12px 14px; border-radius: 10px;
+  background: var(--warning-bg); border: 1px solid var(--warning-border); }
+.fp-mueve-txt { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.fp-mueve-tit { color: var(--warning-text); }
+.fp-mueve-acc { display: flex; flex-direction: column; gap: 6px; flex: none; }
+
+/* El cuerpo: la receta | las pestañas. */
+.fp-cuerpo { display: grid; grid-template-columns: minmax(320px, 470px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.fp-rec, .fp-der { border: 1px solid var(--border); border-radius: 10px; min-width: 0; background: var(--bg-card); }
+.fp-rec { padding: 10px 8px; display: grid; gap: 2px; }
+.fp-der { padding: 10px 12px; display: grid; gap: 10px; }
+.fp-rec > p { margin: 4px 8px; }
+.fp-rec-cab { display: flex; justify-content: space-between; align-items: center; padding: 0 8px 4px; }
+.fp-rot { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); letter-spacing: .02em; text-transform: uppercase; }
+.fp-lineas { max-height: 460px; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 1px; }
+.fp-fila { display: grid; grid-template-columns: minmax(0, 1fr) 90px 60px 56px; align-items: center; gap: 8px; width: 100%;
+  border: 0; background: transparent; text-align: left; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.fp-fila:hover { background: var(--bg-hover); }
+.fp-fila.sel { background: var(--accent-tint); }
+.fp-fila.arriba .num.der:nth-child(3) { font-weight: 600; }
+.fp-fila.enc { cursor: default; color: var(--text-secondary); font-size: 11px; padding-top: 0; padding-bottom: 2px; }
+.fp-fila.enc:hover, .fp-fila.tot:hover { background: transparent; }
+.fp-fila.tot { cursor: default; border-top: 1px solid var(--border); border-radius: 0; margin-top: 4px; padding-top: 8px; font-weight: 600; }
+.fp-nom { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.fp-nom em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-car { width: 12px; flex: none; color: var(--text-muted); font-size: 10px; }
+.fp-chip { flex: none; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--accent-tint);
+  color: var(--accent-deep); }
+.fp-chip.P { background: var(--warning-bg); color: var(--warning-text); }
+.fp-barra { display: block; height: 6px; border-radius: 3px; background: var(--rail-fondo); overflow: hidden; }
+.fp-barra.ancha { height: 8px; min-width: 60px; }
+.fp-barra i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.fp-barra i.ult { background: var(--warning); }
+.fp-pie { margin: 0; color: var(--text-secondary); font-size: 11.5px; }
+
+/* Las pestañas. */
+.fp-der-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fp-tabs { display: flex; gap: 2px; background: var(--rail-fondo); border-radius: 8px; padding: 2px; flex-wrap: wrap; }
+.fp-tabs button { height: 28px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+  font-size: 12.5px; color: var(--text-secondary) !important; }
+.fp-tabs button.on { background: var(--bg-card); color: var(--accent-deep) !important; font-weight: 600; box-shadow: var(--shadow); }
+.fp-tabs.chico button { height: 24px; padding: 0 8px; font-size: 11.5px; }
+.fp-vista { display: grid; gap: 10px; min-width: 0; }
+
+/* Evolución. */
+.fp-ley { display: flex; gap: 4px 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--text-secondary); }
+.fp-ley i { display: inline-block; vertical-align: middle; margin-right: 2px; }
+.l-linea { width: 14px; height: 2px; background: var(--accent); }
+.l-hoy { width: 14px; border-top: 1px dashed var(--text-secondary); }
+.l-barra { width: 8px; height: 10px; background: var(--border-lavender); }
+.l-imp { width: 10px; height: 10px; background: var(--border); }
+.l-costo { width: 10px; height: 10px; background: var(--danger); opacity: .7; }
+.l-margen { width: 10px; height: 10px; background: var(--success); opacity: .7; }
+.fp-ley .mk, svg .mk { color: var(--accent-deep); fill: var(--accent-deep); }
+.fp-ley .ca, svg .ca { color: var(--warning-text); fill: var(--warning-text); }
+.fp-ley .pk { color: var(--danger); }
+.fp-graf { position: relative; width: 100%; }
+.fp-graf svg { position: absolute; left: 0; top: 0; overflow: visible; }
+svg .mk, svg .ca { font-size: 11px; text-anchor: middle; }
+svg .g { stroke: var(--line-soft); stroke-width: 1; }
+svg .t { fill: var(--text-secondary); font-size: 10.5px; font-family: inherit; }
+svg .t.c { text-anchor: middle; }
+svg .rango { fill: var(--accent-tint); }
+svg .b { fill: var(--border-lavender); }
+svg .b.ran { fill: var(--accent-light); }
+svg .b.sel { fill: var(--accent); }
+svg .hoy { stroke: var(--text-secondary); stroke-dasharray: 3 3; stroke-width: 1; }
+svg .linea { fill: none; stroke: var(--accent); stroke-width: 2; }
+svg .pt { fill: var(--accent); }
+svg .pt.sin { fill: var(--warning); }
+svg .pt.sel { fill: var(--bg-card); stroke: var(--accent-deep); stroke-width: 2; }
+svg .pico { fill: none; stroke: var(--danger); stroke-width: 2; }
+.fp-mes { position: absolute; top: 0; bottom: 22px; border: 0; padding: 0; background: transparent; cursor: pointer; border-radius: 3px; }
+.fp-mes:hover { background: var(--bg-hover); mix-blend-mode: multiply; }
+.fp-det { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg-card-tenue); }
+.fp-lista { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; }
+.fp-lista li { display: flex; gap: 8px; align-items: baseline; }
+.fp-lista li > span:first-child { flex: none; }
+.fp-lista .marca { color: var(--accent-deep); }
+.fp-lista .cambio { color: var(--warning-text); }
+.fp-lista .pico { color: var(--danger); }
+.fp-lista .porc { color: var(--warning); }
+
+/* Costo y utilidad. */
+.fp-util { display: grid; gap: 6px; }
+.fp-util-cab { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.fp-util-barra { display: flex; height: 34px; border-radius: 6px; overflow: hidden; min-width: 0; }
+.fp-util-barra > div { display: flex; align-items: center; min-width: 0; overflow: hidden; }
+.fp-util-barra span { padding-left: 8px; font-size: 11.5px; white-space: nowrap; }
+.fp-util-barra .i { background: var(--border); color: var(--text-secondary); }
+.fp-util-barra .c { background: var(--danger); color: var(--bg-card); font-weight: 600; opacity: .8; }
+.fp-util-barra .m { background: var(--success); color: var(--bg-card); font-weight: 600; opacity: .8; }
+.fp-obj { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+
+/* Reparto del precio. */
+svg .bd { fill: var(--accent); fill-opacity: .22; }
+svg .bd.on { fill-opacity: .55; }
+svg .bc { fill: var(--danger); fill-opacity: .3; }
+svg .bm { fill: var(--success); fill-opacity: .3; }
+svg .nc { fill: var(--danger); }
+svg .nm { fill: var(--success); }
+svg .nn { fill: var(--text-secondary); }
+.fp-nodo { position: absolute; left: 0; display: flex; justify-content: space-between; align-items: center; gap: 6px;
+  min-height: 18px; padding: 0 6px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; font-size: 12px; }
+.fp-nodo:hover { background: var(--bg-hover); }
+.fp-nodo.on { background: var(--accent-tint); }
+.fp-nodo span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-nodo-v { flex: none; white-space: nowrap; }
+.fp-sk-rot { position: absolute; font-size: 12px; white-space: nowrap; }
+
+/* Porcionados. */
+.fp-cortes { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.fp-chipc { height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-card);
+  cursor: pointer; font-size: 12.5px; }
+.fp-chipc.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-deep) !important; font-weight: 600; }
+.fp-scroll { overflow-x: auto; overscroll-behavior: contain; }
+.fp-tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.fp-tabla th { font-weight: 500; color: var(--text-secondary); text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+  font-size: 11.5px; white-space: nowrap; }
+.fp-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.fp-tabla th.der, .fp-tabla td.der { text-align: right; }
+.fp-tabla tr.ult td { background: var(--warning-bg); }
+
+/* Angosto: todo en una columna. */
+@media (max-width: 900px) {
+  .fp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fp-cuerpo { grid-template-columns: minmax(0, 1fr); }
+  .fp-mueve { flex-direction: column; }
+  .fp-mueve-acc { flex-direction: row; flex-wrap: wrap; }
+  .fp-det { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .fp-fila { grid-template-columns: minmax(0, 1fr) 62px 52px; gap: 6px; padding: 4px 4px; }
+  .fp-fila > :nth-child(4) { display: none; }
+}

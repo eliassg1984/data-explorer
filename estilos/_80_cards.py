@@ -1776,7 +1776,6 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_tipo,
     .st-key-rec_carta_cab_buscar,
     .st-key-rec_carta_cab_fecha,
-    .st-key-rec_carta_det_modo,
     .st-key-rec_alza_cab_fecha {
         position: relative;
         padding-left: 11px !important;
@@ -1923,9 +1922,7 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab [data-testid="stSelectbox"] [role="group"],
     .st-key-rec_carta_cab [data-baseweb="select"] > div,
     .st-key-rec_carta_cab [data-testid="stTextInputRootElement"],
-    .st-key-rec_carta_cab [data-baseweb="input"],
-    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"],
-    .st-key-rec_carta_det_modo [data-baseweb="select"] > div {
+    .st-key-rec_carta_cab [data-baseweb="input"] {
         min-height: 0 !important;
         height: 28px !important;
         border: none !important;
@@ -1937,14 +1934,11 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab [data-testid="stSelectbox"] [role="group"]:hover,
     .st-key-rec_carta_cab [data-baseweb="select"] > div:hover,
     .st-key-rec_carta_cab [data-testid="stTextInputRootElement"]:hover,
-    .st-key-rec_carta_cab [data-baseweb="input"]:hover,
-    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"]:hover {
+    .st-key-rec_carta_cab [data-baseweb="input"]:hover {
         border-bottom-color: var(--accent) !important;
     }
     .st-key-rec_carta_cab [data-testid="stSelectbox"] input,
-    .st-key-rec_carta_cab [data-baseweb="select"] div[value],
-    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] input,
-    .st-key-rec_carta_det_modo [data-baseweb="select"] div[value] {
+    .st-key-rec_carta_cab [data-baseweb="select"] div[value] {
         height: 26px !important;
         padding: 0 0 0 2px !important;
         font-size: 13px !important;
@@ -1960,80 +1954,13 @@ CSS = """    /* ================================================================
         font-size: 13px !important;
         background: transparent !important;
     }
-    .st-key-rec_carta_cab [data-testid="stSelectbox"] [role="group"] button,
-    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"] button {
+    .st-key-rec_carta_cab [data-testid="stSelectbox"] [role="group"] button {
         width: 22px !important;
         height: 26px !important;
     }
-    /* La sub-tarjeta de `_card()` de la ficha —lo que descarga un producto
-       sin receta— sin marco ni relleno: adentro de la tarjeta blanca sería
-       una caja dentro de la caja. */
-    .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga {
-        border: none !important;
-        padding: 0 !important;
-        box-shadow: none !important;
-        background: transparent !important;
-    }
-    /* «Qué descarga del almacén» lleva su título al pie (`.chart-card-pie`)
-       y guarda 16px ABAJO: el `<p>` del título cuelga 1rem por debajo de su
-       contenedor (el margen negativo con que Streamlit cierra un markdown),
-       y sin relleno caía encima de lo que sigue — medido en el teléfono,
-       donde el `gap` es de 4px. */
-    .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga {
-        padding-bottom: 16px !important;
-    }
-    /* La ficha del plato elegido va DEBAJO de la tabla desde la regla #657
-       (al costado desde la #570): la separa una línea arriba. */
-    .st-key-rec_carta_plato {
-        border-top: 1px solid var(--border);
-        padding-top: 12px;
-        margin-top: 4px;
-    }
-    /* Lo que va al lado del nombre: de dónde es (gris) y sus cifras. */
-    .rec-ficha-ruta {
-        margin-left: 8px;
-        font-size: 12px;
-        font-weight: 400;
-        color: var(--text-secondary);
-    }
-    .rec-ficha-cifras {
-        margin: 0;
-        font-size: 12.5px !important;
-        color: var(--text-secondary);
-        white-space: nowrap;
-    }
-    .rec-ficha-aviso {
-        margin: 0;
-        font-size: 12.5px !important;
-        color: var(--warning-text);
-    }
-    /* Debajo de la evolución: las ediciones de sus recetas base y los
-       picos del rango, en palabras. */
-    .rec-evo-lista {
-        margin: 0;
-        padding-left: 0;
-        list-style: none;
-        font-size: 12px;
-        line-height: 1.45;
-        color: var(--text-secondary);
-    }
-    /* `!important` en el tamaño: el `li` de `.stMarkdown` (1rem) le gana
-       a una clase sola. */
-    .rec-evo-lista li {
-        margin: 0 0 3px 0;
-        font-size: 12px !important;
-        line-height: 1.45 !important;
-    }
-    .rec-evo-lista .rec-evo-marca {
-        color: var(--accent-deep);
-    }
-    .rec-evo-lista .rec-evo-pico {
-        color: var(--danger-text);
-    }
-    /* ◆ los cambios de factor, unidad o descargo de la auditoría (#658). */
-    .rec-evo-lista .rec-evo-cambio {
-        color: var(--warning-text);
-    }
+    /* La ficha del plato elegido es una pieza propia desde la regla #744
+       (`graficos/ficha_plato.css`): su línea de arriba, sus tamaños y sus
+       colores viven en su shadow root. */
     /* La fecha de la tarjeta, al final del renglón del título (#657): la
        píldora de las tarjetas de Compras y Movimientos. */
     .st-key-rec_carta_f_fila,
@@ -2067,72 +1994,6 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_f_escala button > div > div:last-child:not(:first-child),
     .st-key-rec_alza_f_escala button > div > div:last-child:not(:first-child) {
         display: none !important;
-    }
-    /* El renglón del nombre (#572): el nombre se corta con «…» y «Simular»
-       queda a su derecha. La línea de abajo es de la FILA y no del `<p>`:
-       en el `<p>` subrayaría sólo el nombre y dejaría el interruptor
-       colgando de nada. Lo mismo el título de la receta base y su «Subir». */
-    .st-key-rec_carta_plato_hdr {
-        border-bottom: 1px solid var(--border);
-        padding-bottom: 6px;
-        flex-wrap: nowrap !important;
-    }
-    .st-key-rec_carta_plato_hdr .chart-card-hdr {
-        border-bottom: none;
-        margin: 0;
-        padding: 0;
-    }
-    .st-key-rec_carta_base_hdr {
-        flex-wrap: nowrap !important;
-    }
-    .st-key-rec_carta_plato_hdr > .stElementContainer:first-child,
-    .st-key-rec_carta_base_hdr > .stElementContainer:first-child {
-        flex: 1 1 0 !important;
-        min-width: 0 !important;
-    }
-    /* Sin la barrita de íconos que `st.dataframe` asoma sobre la esquina
-       de arriba a la derecha al pasar el cursor (buscar, bajar, pantalla
-       completa) en las tablas del panel: queda ENCIMA del renglón de
-       arriba y se come el clic de «Simular» y de «↑ Subir» (medido con
-       Playwright: «stElementToolbar … intercepts pointer events»). En
-       tablas de seis filas no hace falta; la de la carta la conserva. */
-    .st-key-rec_carta_plato .stElementToolbar {
-        display: none !important;
-    }
-    
-    /* En estas filas horizontales el texto no se centra contra sus
-       controles: Streamlit cierra el markdown con `margin-bottom: -1rem`,
-       su contenedor mide 3px y el `<p>` cuelga 16px por debajo (medido:
-       «Vendidos en» 8px más abajo que sus botones). */
-    .st-key-rec_carta_mas_fila [data-testid="stMarkdownContainer"],
-    .st-key-rec_carta_plato_hdr [data-testid="stMarkdownContainer"],
-    .st-key-rec_carta_base_hdr [data-testid="stMarkdownContainer"] {
-        margin-bottom: 0 !important;
-    }
-    /* «↑ Subir» y «✕» de la receta base: chicos, del alto del título. Y
-       «Ver curva» / «Revisar», los saltos a Movimientos (regla #647). */
-    .st-key-rec_carta_base_subir button,
-    .st-key-rec_carta_base_cerrar button,
-    .st-key-rec_carta_base_curva button,
-    .st-key-rec_carta_base_revisar button {
-        min-height: 0 !important;
-        padding: 2px 10px !important;
-    }
-    .st-key-rec_carta_base_subir button p,
-    .st-key-rec_carta_base_cerrar button p,
-    .st-key-rec_carta_base_curva button p,
-    .st-key-rec_carta_base_revisar button p {
-        font-size: 12px !important;
-        white-space: nowrap !important;
-    }
-    .st-key-rec_carta_base_revisar button p {
-        color: var(--danger-text) !important;
-        font-weight: 600 !important;
-    }
-    .rec-vend-rot {
-        margin: 0;
-        font-size: 12px !important;
-        color: var(--text-secondary);
     }
     .st-key-form_receta_card_receta {
         background: var(--bg-card);

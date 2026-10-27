@@ -123,8 +123,10 @@ def _limpiar(estado):
     return out
 
 
-def simular_plato(cod, nombre, precio, df_rv):
-    """El simulador del plato `cod`, adentro de la modal."""
+def simular_plato(cod, nombre, precio, df_rv, estado=None):
+    """El simulador del plato `cod`, adentro de la modal. `estado`
+    ({ruta: {cant, P, merma, peso}}) lo abre ya editado: «Simular con
+    S/ …» de la ficha de Costo de Carta (regla #744)."""
     with st.spinner("Armando la receta con sus precios de compra…"):
         nodos = armar_arbol(df_rv, cod)
     k = f"rec_sim_{cod}"
@@ -164,6 +166,7 @@ def simular_plato(cod, nombre, precio, df_rv):
         "obj": PCT_OBJETIVO,
         "usuario": _usuario(),
         "aviso": avisos.get(cod, ""),
+        "estado": _limpiar(estado),
     }
     _COMPONENTE(key=k, data=data, on_guardar_change=_al_guardar,
                 width="stretch")

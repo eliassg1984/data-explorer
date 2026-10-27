@@ -297,7 +297,7 @@ export default function (component) {
     raiz.__st = {
       cod: p.cod, nodos: d.nodos || [], div: d.divisor || DIV_DEF,
       precio0: +p.precio || 0, precio: +p.precio || 0, obj: +d.obj || 30,
-      modo: 'hoy', estado: {}, abiertos: new Set(d.lectura ? [] : ['0']), por: d.usuario || '', aviso: '',
+      modo: 'hoy', estado: Object.assign({}, d.estado || {}), abiertos: new Set(d.lectura ? [] : ['0']), por: d.usuario || '', aviso: '',
       lectura: !!d.lectura,
     };
   }

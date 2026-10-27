@@ -61,7 +61,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-743 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+744 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (244)
 
@@ -419,7 +419,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 
-**Plotly y figuras** (127)
+**Plotly y figuras** (128)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -548,6 +548,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 - **#737** — En qué se fue cada producto es una pieza propia, con tabla y ficha locales y la cuenta del…
 - **#738** — Movimientos por Tipo de Stock es una pieza propia, con filtros y contribuciones locales sin…
+- **#744** — La ficha del plato de «Costo de Carta» es una pieza propia: dice qué mueve el costo de hoy y…
 
 **AgGrid y tablas** (97)
 
@@ -1029,7 +1030,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#741** — Documentos SUNAT también necesita una pieza para su tabla, además de las dos vistas de resumen
 - **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
 
-**Fechas, rangos y cortes** (22)
+**Fechas, rangos y cortes** (23)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -1053,6 +1054,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#734** — Requerimientos por Área es una pieza propia completa: la cadena, los productos y su ficha…
 - **#738** — Movimientos por Tipo de Stock es una pieza propia, con filtros y contribuciones locales sin…
 - **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
+- **#744** — La ficha del plato de «Costo de Carta» es una pieza propia: dice qué mueve el costo de hoy y…
 
 **Asistente IA** (5)
 
@@ -56746,6 +56748,51 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        `_pruebas_relojes_sin_plato` y `test_destino_producto_pieza.py`.
        (2026-10-26.)
 
+744. **La ficha del plato de «Costo de Carta» es una pieza propia: dice
+     qué mueve el costo de hoy y no esconde una vista detrás de otra**
+     (`graficos/carta_costeada.py::armar_ficha`, `ficha_plato.js` y `.css`).
+     Debajo de la lista de la #696 estaban el árbol de `simulador_plato` en
+     modo lectura, una figura de Plotly, la dona, el Sankey de
+     `recetaventa` y un `st.dataframe` con un desplegable (#657): la última
+     vista de Recetas hecha con widgets nativos. Sobre el boceto aprobado
+     (2026-10-26, con el Lomo Saltado real): cabecera con «Copiar receta a
+     Nuevo Costeo» y «Simular», cinco indicadores, la receta como lista con
+     barras (las recetas base se abren en su lugar; un corte porcionado
+     lleva a sus porcionamientos) y Evolución | Costo y utilidad | Reparto
+     del precio | Porcionados.
+     · **«Qué mueve el costo de hoy»** (`que_mueve`): aparece sólo si la
+       línea que más pesa (15 % del plato o más) es un corte porcionado, la
+       receta tiene el precio de su ÚLTIMO porcionamiento y ese se aparta
+       10 % o más de lo habitual (`habitual_corte`: los porcionamientos de
+       los 30 días anteriores, ponderados por lo que salió). Nació del
+       hallazgo del boceto: el Lomo Saltado estaba en 44,1 % porque el
+       PO-2610000187 del 21/10 se hizo desde Lomo cabeza —un corte del lomo
+       fino— y dejó la pieza en S/ 22,16; con lo habitual (S/ 15,49, once
+       porcionamientos) quedaría en 33,7 %. El aviso dice si el origen es a
+       su vez un corte (`de_porc`).
+     · **«Simular con S/ …» siembra el simulador**: el trigger `simular`
+       lleva `{ruta: {P}}` y `simular_plato(..., estado=)` abre la modal ya
+       editada. `P` es el precio de ORIGEN que deja el corte en lo habitual,
+       despejado de la fórmula del simulador (corte = P ÷ (1 − merma) ×
+       peso): si se toca una, se toca la otra; el test lo verifica con
+       `simulador_receta.costo_nodo`.
+     · **Tres triggers vuelven a Python**: `simular`, `nuevo_costeo` (la
+       misma importación que «Importar» de «Modificar» y el salto a Nuevo
+       Costeo) y `produccion` (Rendimiento o Para revisar). Como son
+       callbacks, no pueden llamar a `st.rerun`: dejan el destino escrito
+       (`_preparar_salto`) y la marca `_rec_cambios_ir`, que la corrida del
+       fragment convierte en una corrida completa (la de «Ver cambios»,
+       #707).
+     · **Los SVG van al ancho real** de su panel, medido y redibujado con
+       un ResizeObserver, como `st.anchoGraf` de Costos: con un viewBox
+       fijo la letra crece con la pantalla. Un clic en un mes lo explica
+       debajo (ediciones ▼, auditoría ◆, picos ◯ y el porcionamiento que
+       fijó el precio de un corte) en vez de pedir el cursor encima.
+     · Las cuentas siguen en Python (`costo_mensual`, `porcionamientos_de`,
+       `ultimo_porcionamiento`, `marcas_plato`, `picos_plato`); la pieza
+       sólo rehace las cifras de arriba y «Para quedar en», que
+       `test_ficha_plato.py` compara en Chromium. (2026-10-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -56758,7 +56805,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#743**; la próxima toma el número siguiente.
+> última regla es la **#744**; la próxima toma el número siguiente.
 
 >
 

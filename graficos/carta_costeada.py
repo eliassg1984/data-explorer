@@ -68,13 +68,12 @@ usaba AgGrid sólo para el clic en una fila; `st.dataframe` lo hace con
 
 from graficos.movil import css_movil, js_movil
 import datetime
-import math
-from pathlib import Path
-from html import escape
+import re
 
 import numpy as np
+from pathlib import Path
+
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 import simulador_receta as sr
@@ -82,20 +81,13 @@ from cortes import MESES_ABR_ES
 from data import _cargar_cacheable, cargar, secrets_disponibles, sello_datos
 from estado_rango import atajos_tarjeta, clave_rango
 from graficos import alturas
-from graficos.base import (_card, _compras_layout, _resolver,
+from graficos.base import (_resolver,
                            rango_tarjeta, selector_fecha_tarjeta,
                            una_vez_por_corrida)
 from graficos.recetas_comun import divisor_neto
-from graficos.recetaventa import (
-    _dib_sankey_insumo_costo, _dib_torta_costo_utilidad, _receta_original,
-    columnas_receta,
-)
-from graficos.simulador_plato import (receta_lectura,
-                                      simular_plato)
+from graficos.simulador_plato import armar_arbol, simular_plato
 from graficos.ventas_mix import pct_costo
-from tema import (ACENTO, ACENTO_TEXTO, ADVERTENCIA, ADVERTENCIA_TEXTO, ERROR,
-                  GRIS_CUADRICULA, GRIS_TEXTO, LAVANDA_BORDE, LAVANDA_FILA,
-                  LAVANDA_FOCO)
+from tema import (ADVERTENCIA_TEXTO, ERROR)
 from utils import _norm
 
 ARCHIVO = "cartacosteada.parquet"
@@ -174,17 +166,6 @@ _K_SOLO_VEND = "rec_carta_solo_vend"
 """«Sólo vendidos en el rango»: 320 de 605 productos activos no se
 vendieron en 90 días (medido el 2026-10-15). Arranca apagado: la carta
 entera."""
-
-_K_FICHA_VISTA = "rec_carta_ficha_vista"
-"""Qué muestra el lado derecho de la ficha: la evolución (por defecto), la
-dona, el Sankey o los porcionados del plato."""
-
-_K_PORC = "rec_carta_porc_sel"
-"""El porcionado elegido en «Porcionados» de la ficha."""
-
-PROPORCION_FICHA = (1.45, 1)
-"""La receta | la evolución, en la ficha de debajo de la tabla: la del
-boceto. A 1323px el árbol mide ~650 y deja ~450 al gráfico."""
 
 _SIN_FECHA = pd.Timestamp("1900-01-01")
 """Una fecha que falta. `st.dataframe` pinta «None» en un vacío aunque el
@@ -454,41 +435,6 @@ def columnas_carta(con_ventas_=True, movil=False):
 
 
 # ─── El panel del producto elegido ────────────────────────────────────────
-def _descarga(f):
-    """Lo que va en el lugar de la receta cuando el producto no tiene una."""
-    with _card("rec_carta_descarga", "Qué descarga del almacén"):
-        if f["Tipo"] == "Directo":
-            art = f["Descarga"] or "(sin nombre)"
-            st.markdown(f"Se descarga **directo** del almacén: "
-                        f"**{escape(art)}**. Su costo es el del artículo.")
-            if f["SinCosto"]:
-                st.warning("El artículo no tiene costo en el POS: la venta de "
-                           "este producto entra al FoodCost en cero.")
-        elif f["Tipo"] == "Combo":
-            st.markdown(f"**Combo {f['TipoCombo'].lower() or ''}** · "
-                        f"{escape(f['Metodo'] or 'sin método')}")
-            banda = pd.DataFrame({
-                "": ["Mínimo", "Promedio", "Esperado", "Máximo",
-                     "Real 90 días"],
-                "Costo": [f["Minimo"], f["Promedio"], f["Esperado"],
-                          f["Maximo"], f["Real90"]],
-            })
-            st.dataframe(banda.style.format(_soles, subset=["Costo"]),
-                         hide_index=True, row_height=27,
-                         height=alturas.por_filas(5, px_fila=27, extra=38,
-                                                  minimo=0, rol=alturas.MINI))
-            st.caption("El POS no costea los combos: la banda la calcula la "
-                       "consulta del Sheet (regla #548).")
-        elif f["Tipo"] == "No aplica":
-            st.markdown("Su descargo está en **«No aplica»**: el POS no "
-                        "descarga nada del almacén al venderlo, así que no "
-                        "tiene costo.")
-        else:
-            st.markdown("**Sin enlace**: no está enlazado a una receta ni a "
-                        "un artículo, así que el POS no descarga nada al "
-                        "venderlo y no tiene costo.")
-
-
 # ─── El costo en el tiempo (regla #557) ───────────────────────────────────
 # La tercera pestaña del panel: con qué costo se vendió el producto, mes a
 # mes. No es otra cuenta del costo: es la FOTO que el POS guarda en cada
@@ -540,165 +486,16 @@ def meses_del_rango(meses, rango):
     return [a <= m <= b for m in meses]
 
 
-def _hover_mes(r):
-    partes = [f"<b>{_etiqueta_mes(r['mes'])}</b>"]
-    if pd.notna(r["costo_unit"]):
-        partes.append(f"S/ {r['costo_unit']:,.2f} por unidad al vender")
-    else:
-        partes.append("vendido sin costo")
-    partes.append(f"{r['unidades']:,.0f} vendidos")
-    if pd.notna(r["pct"]):
-        partes.append(f"al {r['pct']:.1f} % de costo")
-    if r["neto_sin_costo"] > 0:
-        partes.append(f"S/ {r['neto_sin_costo']:,.0f} sin costo")
-    return "<br>".join(partes)
-
-
-def _dib_evolucion(f, agg, rango, marcas=(), picos=(), auditoria=(),
-                   alto=alturas.CARTA_EVOLUCION):
-    """La evolución del costo del plato (regla #657): por mes, lo vendido en
-    barras (las del rango, más fuertes) y el costo por unidad con que se
-    vendió en una línea —la foto del POS en cada pedido, regla #557—; el
-    costo de HOY punteado; ▼ arriba en los meses en que se editó una de sus
-    recetas base (`marcas`, del log del Almacén), ◆ en los que se cambió el
-    factor, la unidad o el precio de uno de sus artículos o el descargo del
-    plato (`auditoria`, de la auditoría del POS, regla #658) y un círculo
-    rojo en los picos (`picos`). El rango de la fecha, sombreado."""
-    g = costo_mensual(agg, f["Cod"])
-    if g.empty:
-        st.info("No se vendió desde enero de 2025, que es desde cuando hay "
-                "ventas en la app: no hay costo al vender que mostrar.")
-        return
-    etq = [_etiqueta_mes(p) for p in g["mes"]]
-    en = meses_del_rango(list(g["mes"]), rango)
-    sin = g["neto_sin_costo"] > 0
-    pos = {m: i for i, m in enumerate(g["mes"])}
-
-    fig = go.Figure(go.Bar(
-        x=etq, y=g["unidades"], name="Vendidos",
-        marker=dict(color=[LAVANDA_FOCO if e else LAVANDA_BORDE for e in en]),
-        # `hovertext` y no `text`: en una barra, `text` se escribe ADENTRO.
-        hovertext=[_hover_mes(r) for _, r in g.iterrows()],
-        hovertemplate="%{hovertext}<extra></extra>"))
-    # El rango, sombreado detrás: en un eje de categorías la posición de
-    # cada mes es su índice, y la franja va de medio mes antes a medio
-    # después.
-    if any(en):
-        i0 = en.index(True)
-        i1 = len(en) - 1 - en[::-1].index(True)
-        fig.add_vrect(x0=i0 - 0.5, x1=i1 + 0.5, fillcolor=LAVANDA_FILA,
-                      line_width=0, layer="below")
-    _compras_layout(fig, alto=alto)
-    paso = max(1, math.ceil(len(etq) / 8))
-    fig.update_layout(showlegend=False, bargap=0.35,
-                      margin=dict(l=6, r=8, t=24, b=6))
-    fig.update_xaxes(type="category", tickangle=0, tickfont=dict(size=10),
-                     tickvals=etq[::paso], ticktext=etq[::paso],
-                     fixedrange=True)
-    tope_u = float(g["unidades"].max() or 1.0)
-    fig.update_yaxes(showticklabels=False, fixedrange=True,
-                     range=[0, tope_u * 2.4], showgrid=False)
-
-    # El costo va en un eje APARTE, creado después de los `update_*axes`
-    # (que tocan todos los ejes que existan, CLAUDE.md § Plotly) y al lado
-    # izquierdo: las barras son la escala de abajo y no llevan números.
-    cu = g["costo_unit"]
-    tope = float(np.nanmax([cu.max() if cu.notna().any() else 0.0,
-                            f["Costo"] or 0.0,
-                            *[p["pico"] for p in picos]] or [1.0])) or 1.0
-    fig.add_trace(go.Scatter(
-        x=etq, y=cu, mode="lines+markers", connectgaps=False, yaxis="y2",
-        line=dict(color=ACENTO, width=2),
-        # Un mes con algo vendido sin costo, en ámbar (regla #556).
-        marker=dict(size=7, color=[ADVERTENCIA if s else ACENTO for s in sin]),
-        text=[_hover_mes(r) for _, r in g.iterrows()],
-        hovertemplate="%{text}<extra></extra>"))
-    if not f["SinCosto"]:
-        fig.add_trace(go.Scatter(
-            x=[etq[0], etq[-1]], y=[float(f["Costo"])] * 2, mode="lines",
-            yaxis="y2", line=dict(color=GRIS_TEXTO, width=1, dash="dot"),
-            hovertemplate=f"Hoy: S/ {f['Costo']:,.2f}<extra></extra>"))
-        fig.add_annotation(x=etq[0], y=float(f["Costo"]), yref="y2",
-                           text=f"hoy S/ {f['Costo']:,.2f}", showarrow=False,
-                           xanchor="left", yanchor="bottom",
-                           font=dict(size=10, color=GRIS_TEXTO))
-    # Los picos: un círculo rojo en su mes, a la altura del costo del pico.
-    pk = [p for p in picos if pd.Period(p["ini"], freq="M") in pos]
-    if pk:
-        fig.add_trace(go.Scatter(
-            x=[etq[pos[pd.Period(p["ini"], freq="M")]] for p in pk],
-            y=[p["pico"] for p in pk], mode="markers", yaxis="y2",
-            marker=dict(size=13, color="rgba(0,0,0,0)",
-                        line=dict(width=2, color=ERROR)),
-            text=[_texto_pico(p) for p in pk],
-            hovertemplate="%{text}<extra></extra>"))
-    # Las ediciones de sus recetas base: ▼ arriba de todo, una por mes.
-    mk = {}
-    for m in marcas:
-        per = pd.Period(pd.Timestamp(m["t"]), freq="M")
-        if per in pos:
-            mk.setdefault(per, []).append(m)
-    if mk:
-        fig.add_trace(go.Scatter(
-            x=[etq[pos[p]] for p in mk], y=[tope * 1.18] * len(mk),
-            mode="markers", yaxis="y2",
-            marker=dict(symbol="triangle-down", size=10, color=ACENTO_TEXTO),
-            text=["<br>".join(_texto_marca(m) for m in ms[:4])
-                  + (f"<br>y {len(ms) - 4} más" if len(ms) > 4 else "")
-                  for ms in mk.values()],
-            hovertemplate="%{text}<extra></extra>"))
-    # Los cambios de la auditoría: ◆ debajo de los ▼, una por mes.
-    ma = {}
-    for c in auditoria:
-        per = pd.Period(pd.Timestamp(c["t"]), freq="M")
-        if per in pos:
-            ma.setdefault(per, []).append(c)
-    if ma:
-        fig.add_trace(go.Scatter(
-            x=[etq[pos[p]] for p in ma], y=[tope * 1.08] * len(ma),
-            mode="markers", yaxis="y2",
-            marker=dict(symbol="diamond", size=9, color=ADVERTENCIA),
-            text=["<br>".join(_texto_cambio(c) for c in cs[:4])
-                  + (f"<br>y {len(cs) - 4} más" if len(cs) > 4 else "")
-                  for cs in ma.values()],
-            hovertemplate="%{text}<extra></extra>"))
-    fig.update_layout(
-        hoverlabel=dict(align="left"),
-        yaxis2=dict(overlaying="y", side="left", showticklabels=True,
-                    tickprefix="S/ ", tickformat=",.2f" if tope < 20 else ",.0f",
-                    tickfont=dict(size=10), automargin=True, fixedrange=True,
-                    range=[0, tope * 1.28], showgrid=True,
-                    gridcolor=GRIS_CUADRICULA, zeroline=False))
-    st.plotly_chart(fig, use_container_width=True,
-                    key=f"rec_carta_evo_{f['Cod']}",
-                    config={"displaylogo": False, "displayModeBar": False})
-
-    con = g[cu.notna()]
-    pie = []
-    if len(con) >= 2:
-        a, b = con.iloc[0], con.iloc[-1]
-        var = (b["costo_unit"] / a["costo_unit"] - 1) * 100 if a["costo_unit"] else 0.0
-        pie.append(f"De S/ {a['costo_unit']:,.2f} ({_etiqueta_mes(a['mes'])}) a "
-                   f"S/ {b['costo_unit']:,.2f} ({_etiqueta_mes(b['mes'])}): "
-                   f"{'+' if var >= 0 else '−'}{abs(var):.1f} %, el costo que "
-                   "guardó el POS al vender.")
-    if any(en):
-        pie.append("Sombreado: el rango de la fecha.")
-    if f["Tipo"] == "Combo" and (g["mes"] < _COMBO_ANTES).any():
-        pie.append("Hasta setiembre de 2025 el POS registró los platos de los "
-                   "combos entre 8 y 32 % más baratos que sueltos.")
-    if pie:
-        st.caption(" ".join(pie))
-
-
 def _texto_marca(m):
+    """Una edición de una receta base, en una línea de texto llano (la pieza
+    la escapa)."""
     signo = "+" if m["esp"] >= 0 else "−"
     quien = f" · {m['usr']}" if m.get("usr") else ""
     otros = m.get("n", 1) - 1
     mas = (f" (y {otros} {'cambio' if otros == 1 else 'cambios'} más)"
            if otros > 0 else "")
-    return (f"▼ {pd.Timestamp(m['t']):%d/%m/%y}{quien} · {escape(m['base'])}: "
-            f"{escape(m['txt'])}{mas} → {signo}S/ {abs(m['esp']):,.2f} por plato")
+    return (f"{pd.Timestamp(m['t']):%d/%m/%y}{quien} · {m['base']}: "
+            f"{m['txt']}{mas} → {signo}S/ {abs(m['esp']):,.2f} por plato")
 
 
 def _texto_cambio(c):
@@ -706,52 +503,19 @@ def _texto_cambio(c):
     quien = f" · {c['usr']}" if c.get("usr") else ""
     veces = (f" (×{c['veces']:,.0f} si su receta no cambió)"
              if c.get("veces") and c["veces"] >= 2 else "")
-    return (f"◆ {pd.Timestamp(c['t']):%d/%m/%y}{quien} · {escape(c['nombre'])}: "
-            f"{escape(c['txt'])}{veces}")
+    return (f"{pd.Timestamp(c['t']):%d/%m/%y}{quien} · {c['nombre']}: "
+            f"{c['txt']}{veces}")
 
 
 def _texto_pico(p):
-    dias = (f"{p['ini']:%d/%m/%y}" if p["ini"] == p["fin"]
+    dias = (f"el {p['ini']:%d/%m/%y}" if p["ini"] == p["fin"]
             else f"del {p['ini']:%d/%m} al {p['fin']:%d/%m/%y}")
-    t = (f"<b>Pico {dias}</b><br>S/ {p['pico']:,.2f} por unidad (lo habitual, "
-         f"S/ {p['normal']:,.2f})<br>{p['unid']:,.0f} vendidos: "
-         f"S/ {p['exceso']:,.0f} de costo de más")
+    t = (f"Pico {dias}: S/ {p['pico']:,.2f} por plato (lo habitual, "
+         f"S/ {p['normal']:,.2f}), {p['unid']:,.0f} vendidos, "
+         f"S/ {p['exceso']:,.0f} de costo de más.")
     if p.get("causa"):
-        t += "<br>" + escape(p["causa"])
+        t += " " + str(p["causa"])
     return t
-
-
-def _lista_en_rango(marcas, picos, rango, auditoria=()):
-    """Debajo del gráfico, con palabras: lo que movió el costo EN el rango —
-    las ediciones de sus recetas base, los cambios de sus artículos en la
-    auditoría del POS y los picos con su posible causa—."""
-    if rango is None:
-        return
-    a = pd.Timestamp(rango[0])
-    b = pd.Timestamp(rango[1]) + pd.Timedelta(days=1)
-    ms = [m for m in marcas if a <= pd.Timestamp(m["t"]) < b]
-    cs = [c for c in auditoria if a <= pd.Timestamp(c["t"]) < b]
-    ps = [p for p in picos if a <= p["ini"] < b]
-    if not (ms or cs or ps):
-        return
-    filas = []
-    for m in ms[-6:][::-1]:
-        filas.append(f'<li class="rec-evo-marca">{_texto_marca(m)}</li>')
-    for c in cs[-6:][::-1]:
-        filas.append(f'<li class="rec-evo-cambio">{_texto_cambio(c)}</li>')
-    for p in ps[::-1]:
-        dias = (f"{p['ini']:%d/%m}" if p["ini"] == p["fin"]
-                else f"{p['ini']:%d/%m}–{p['fin']:%d/%m}")
-        causa = f" {escape(p['causa'])}" if p.get("causa") else ""
-        filas.append(f'<li class="rec-evo-pico">● {dias}: S/ {p["pico"]:,.2f} por '
-                     f'unidad (lo habitual, S/ {p["normal"]:,.2f}), S/ '
-                     f'{p["exceso"]:,.0f} de más.{causa}</li>')
-    extra = (f'<li class="rec-evo-marca">y {len(ms) - 6} ediciones más</li>'
-             if len(ms) > 6 else "")
-    if len(cs) > 6:
-        extra += f'<li class="rec-evo-cambio">y {len(cs) - 6} cambios más</li>'
-    st.markdown(f'<ul class="rec-evo-lista">{"".join(filas)}{extra}</ul>',
-                unsafe_allow_html=True)
 
 
 # ─── Las recetas base (regla #572) ───────────────────────────────────────
@@ -935,10 +699,6 @@ def costo_de_origen(costo_unit, costo_base, costo_porc):
             else "porc")
 
 
-def _cant(v, unid):
-    return f"{v:,.3f}".rstrip("0").rstrip(".") + (f" {unid.lower()}" if unid else "")
-
-
 def _reciente(df_po, fecha, dias=30):
     """Si `fecha` cae en los últimos `dias` días con porcionamientos: el
     rango con que abre «Para revisar». Un salto a uno más viejo llegaría a
@@ -950,11 +710,13 @@ def _reciente(df_po, fecha, dias=30):
     return bool(fecha >= tope.normalize() - pd.Timedelta(days=dias - 1))
 
 
-def _saltar_a_produccion(destino, ult, cod):
-    """Deja escrito a dónde se va y pide la corrida COMPLETA que cambia de
-    reporte: el botón vive en el fragment de la sección, y una corrida de
-    fragment no vuelve a elegir reporte (regla #647). Con un `graficos`
-    viejo en Cloud (regla #357), no hace nada."""
+def _preparar_salto(destino, ult, cod):
+    """Deja escrito a dónde se va (regla #647): Producción › Rendimiento en
+    el corte (`rend`) o Para revisar en su porcionamiento (`rev`). El salto
+    lo hace la corrida COMPLETA que pide quien llama: la ficha vive en el
+    fragment de la sección, y una corrida de fragment no vuelve a elegir
+    reporte. Con un `graficos` viejo en Cloud (regla #357), no hace nada y
+    devuelve False."""
     try:
         import navegacion
         from graficos import movimientos_merma as mm
@@ -970,64 +732,8 @@ def _saltar_a_produccion(destino, ult, cod):
             vista = mm.VISTA_PORC
         navegacion._ir_a_vista(mm.REPORTE_MERMA, mm.RAIL_PRODUCCION, vista)
     except (ImportError, AttributeError):
-        return
-    st.rerun(scope="app")
-
-
-def _tabla_porcionamientos(po, actual, ult=None):
-    """Los últimos porcionamientos del insumo abierto (regla #574). No se
-    clica: el producto de origen es de otro porcionamiento o de una compra,
-    y el costo se lee acá. El más nuevo va en rojo si su peso por unidad
-    quedó fuera de lo habitual (`ultimo_porcionamiento`, regla #647).
-    Los formatos van en el Styler, no en `column_config`: con un Styler,
-    el que manda es el Styler."""
-    if po.empty:
-        st.info("No hay porcionamientos de este insumo en el parquet.")
-        return
-    v = pd.DataFrame({
-        "Fecha": po["Fecha"].dt.strftime("%d/%m/%y"),
-        "De": po["De"],
-        "Porcionado": [_cant(q, u) for q, u in zip(po["Porcionado"], po["UnidIni"])],
-        "Salió": [_cant(q, u) for q, u in zip(po["Salio"], po["UnidFin"])],
-        "Merma": po["Merma"],
-        "Costo u.": po["Costo"],
-    })
-    raro = bool(ult and ult["raro"] and po["Fecha"].iloc[0] == ult["fecha"])
-    sty = (v.style.format({"Merma": "{:.0f}%", "Costo u.": "S/ {:,.2f}"})
-           .apply(lambda r: ([f"color: {ERROR}; font-weight: 600"] * len(r)
-                             if raro and r.name == 0 else [""] * len(r)),
-                  axis=1))
-    st.dataframe(sty, hide_index=True, row_height=27,
-                 height=alturas.por_filas(len(v), px_fila=27, extra=38,
-                                          minimo=0, rol=alturas.CARTA_RECETA),
-                 column_config={
-                     # Suman 426: el panel mide ~431 a 1323px (con 438, la
-                     # última columna quedaba cortada contra el borde).
-                     "Fecha": st.column_config.TextColumn(width=60),
-                     "De": st.column_config.TextColumn(
-                         width=118, help="Lo que se porcionó"),
-                     "Porcionado": st.column_config.TextColumn(width=70),
-                     "Salió": st.column_config.TextColumn(
-                         width=62, help="Lo que salió de este corte"),
-                     "Merma": st.column_config.Column(
-                         width=50,
-                         help="Merma del porcionamiento, sobre lo porcionado"),
-                     "Costo u.": st.column_config.Column(
-                         width=66,
-                         help="Costo por unidad de este corte: el del producto "
-                              "porcionado, repartido entre los cortes"),
-                 })
-    unit = actual["costo"] / actual["escala"] if actual["escala"] else 0.0
-    ult = float(po["Costo"].iloc[0])
-    fecha = po["Fecha"].iloc[0]
-    # En UN renglón: con dos, abrirlo estiraba la tarjeta fuera de la
-    # pantalla del usuario (medido a 1323×619).
-    if ult and abs(unit - ult) <= max(0.01, 0.01 * ult):
-        st.caption(f"Receta: S/ {unit:,.2f} c/u, el del último porcionamiento "
-                   f"({fecha:%d/%m/%y}).")
-    else:
-        st.caption(f"Receta: S/ {unit:,.2f} c/u, promedio del almacén · último: "
-                   f"S/ {ult:,.2f} ({fecha:%d/%m/%y}).")
+        return False
+    return True
 
 
 def _lo_vendido(ventas):
@@ -1055,7 +761,7 @@ def _cerrar_simulador():
     st.session_state[_K_SIM_ABIERTO] = None
 
 
-def _modal_simulador(cod, nombre, precio, df_rv):
+def _modal_simulador(cod, nombre, precio, df_rv, estado=None):
     """El simulador del plato en una modal ancha (`st.dialog`), como la ficha
     de Documentos SUNAT (regla #587): la página queda detrás y la ✕, Esc o un
     clic afuera la cierran. El título va por plato, así que el decorador se
@@ -1063,7 +769,7 @@ def _modal_simulador(cod, nombre, precio, df_rv):
     se llama dentro del de `seccion_perezosa` (regla #456)."""
     def _contenido():
         with st.container(key="rec_sim_modal"):
-            simular_plato(cod, nombre, precio, df_rv)
+            simular_plato(cod, nombre, precio, df_rv, estado=estado)
 
     una_vez_por_corrida(st.dialog(f"Simular · {nombre}", width="large",
                                   on_dismiss=_cerrar_simulador)(_contenido))()
@@ -1142,14 +848,34 @@ def cambios_auditoria():
         return None
 
 
-# ─── La ficha del plato elegido (regla #657) ──────────────────────────────
-def _receta_para_sankey(df_rv, cod):
-    """La receta del parquet, como la lee el Sankey (Insumo, Costo…)."""
-    c = columnas_receta(df_rv)
-    if df_rv is None or not c["cod"]:
-        return None
-    return _receta_original(df_rv, str(cod), c["cod"], c["ins"], c["cant"],
-                            c["total"], c["cod_ins"], c["factor"])
+# ─── La ficha del plato elegido: una pieza propia (regla #744) ────────────
+# Debajo de la lista, el plato elegido: cabecera con «Simular» y «Copiar
+# receta a Nuevo Costeo», cinco indicadores, «Qué mueve el costo de hoy»,
+# la receta como lista con barras y, al costado, Evolución | Costo y
+# utilidad | Reparto del precio | Porcionados. Hasta esa regla eran el árbol
+# de `simulador_plato` en modo lectura, una figura de Plotly, la dona, el
+# Sankey de `recetaventa` y un `st.dataframe` con un desplegable (#657). Las
+# cuentas siguen acá (`costo_mensual`, `porcionamientos_de`,
+# `ultimo_porcionamiento`, las marcas y los picos de `simulador_receta`):
+# `armar_ficha` las junta y la pieza sólo las dibuja.
+_PREFIJO = re.compile(r"^\s*(\([A-Za-z]{1,3}\)|RP-ST)\s*")
+"""El «(P)», «(Rs)», «(L)» o «RP-ST» con que el Almacén empieza el nombre de
+un artículo producido: en la lista lo dice la ficha de color."""
+
+DIAS_HABITUAL = 30
+"""Los días ANTERIORES al último porcionamiento de un corte que cuentan
+para su precio habitual."""
+
+UMBRAL_HABITUAL = 0.10
+"""Desde cuánto se aparta el último porcionamiento de lo habitual para que
+«Qué mueve el costo de hoy» lo diga."""
+
+PESO_MINIMO = 0.15
+"""Cuánto del costo del plato tiene que pesar esa línea para que lo diga."""
+
+
+def _limpio(nombre):
+    return _PREFIJO.sub("", str(nombre or "")).strip()
 
 
 def _porcionados(nodos):
@@ -1167,144 +893,266 @@ def _porcionados(nodos):
     return acc
 
 
-def _vista_porcionados(porcs, df_po):
-    """Los últimos porcionamientos de un corte del plato (regla #574), con
-    los saltos a Producción (reglas #647 y #709). Elegido en un desplegable: en el
-    árbol, un corte no se clica."""
-    cods = list(porcs)
-    if st.session_state.get(_K_PORC) not in cods:
-        st.session_state[_K_PORC] = cods[0]
-    with st.container(horizontal=True, vertical_alignment="center",
-                      key="rec_carta_base_hdr"):
-        with st.container(key="rec_carta_det_modo", width="content"):
-            cod = st.selectbox("Corte", cods, key=_K_PORC,
-                               label_visibility="collapsed", width=230,
-                               format_func=lambda c: porcs[c]["ins"])
-        po = porcionamientos_de(df_po, cod)
-        ult = ultimo_porcionamiento(df_po, cod) if not po.empty else None
-        if ult and ult["cod_de"]:
-            if st.button("Ver curva", key="rec_carta_base_curva",
-                         help="La curva de su precio, porcionamiento por "
-                              "porcionamiento, y qué la movió —el insumo, la "
-                              "merma o el gramaje—, en Producción › "
-                              "Rendimiento."):
-                _saltar_a_produccion("rend", ult, cod)
-            if ult["raro"] and _reciente(df_po, ult["fecha"]):
-                if st.button(
-                        "Revisar", key="rec_carta_base_revisar",
-                        help=f"PO-{ult['doc']} ({ult['fecha']:%d/%m/%y}) le "
-                             f"asignó {ult['kgu']:,.3f} por unidad y lo "
-                             f"habitual es {ult['hab']:,.3f}: su costo, y el "
-                             "de esta receta, pueden estar mal. Verlo en "
-                             "Producción › Para revisar."):
-                    _saltar_a_produccion("rev", ult, cod)
-    n = porcs[cod]
-    actual = {"costo": float(n["costo"]),
-              "escala": float(n["cant"]) / float(n["factor"] or 1.0)}
-    _tabla_porcionamientos(po, actual, ult)
+def filas_receta(nodos):
+    """El árbol aplanado en el orden en que se lee, cada línea UNA fila:
+    [id, padre (−1 arriba), nivel, nombre, ficha («Rs» receta base, «P»
+    corte porcionado, «»), cantidad, unidad, costo en el plato, cuántas
+    líneas cuelgan, código, fecha de la receta base, ruta (la del
+    simulador: «0.2.1»)]. Pura."""
+    out = []
+
+    def bajar(n, par, nivel, ruta):
+        i = len(out)
+        hijos = n.get("hijos") or []
+        ficha = ("Rs" if hijos else "P" if sr.es_porcionado(n) else "")
+        out.append([i, par, nivel, _limpio(n.get("ins")), ficha,
+                    round(float(n.get("cant") or 0), 6), str(n.get("unid") or ""),
+                    round(float(n.get("costo") or 0), 6), len(hijos), str(n.get("cod") or ""),
+                    str((n.get("base") or {}).get("fecha") or ""), ruta])
+        for j, h in enumerate(hijos):
+            bajar(h, i, nivel + 1, f"{ruta}.{j}")
+    for k, n in enumerate(nodos):
+        bajar(n, -1, 0, str(k))
+    return out
 
 
-def _cabecera_ficha(f):
-    """El renglón del nombre de la ficha de abajo: el plato y de dónde es.
-    Las cifras, los canales y «Simular» van en la ficha de la pieza, al
-    costado de la lista (regla #696)."""
-    ruta_txt = " › ".join(x for x in (f["Grupo"], f["Subgrupo"]) if x)
-    with st.container(horizontal=True, vertical_alignment="center",
-                      key="rec_carta_plato_hdr"):
-        st.markdown(
-            f'<p class="chart-card-hdr">{escape(str(f["Producto"]))} '
-            f'<span class="rec-ficha-ruta">{escape(ruta_txt)} · '
-            f'{escape(f["Tipo"])} · receta y evolución</span></p>',
-            unsafe_allow_html=True)
+def habitual_corte(po, dias=DIAS_HABITUAL):
+    """Lo habitual de un corte: los porcionamientos de los `dias` días
+    ANTERIORES al último (`po`, de `porcionamientos_de`, del más nuevo al
+    más viejo), con su costo por unidad ponderado por lo que salió de cada
+    uno. {costo, n, salio} o None si no hubo ninguno. Pura."""
+    if po is None or len(po) < 2:
+        return None
+    ult = po["Fecha"].iloc[0]
+    if pd.isna(ult):
+        return None
+    prev = po.iloc[1:]
+    prev = prev[(prev["Fecha"] >= ult - pd.Timedelta(days=dias))
+                & (prev["Salio"] > 0) & (prev["Costo"] > 0)]
+    if prev.empty:
+        return None
+    salio = float(prev["Salio"].sum())
+    return {"costo": float((prev["Salio"] * prev["Costo"]).sum() / salio),
+            "n": int(len(prev)), "salio": salio}
+
+
+def que_mueve(filas, cortes, costo, neto):
+    """«Qué mueve el costo de hoy»: la línea de arriba que más pesa, si es un
+    corte porcionado que pesa al menos `PESO_MINIMO` del plato, la receta
+    tiene el precio de su ÚLTIMO porcionamiento y ese se aparta de lo
+    habitual (`habitual_corte`) en `UMBRAL_HABITUAL` o más. Con lo que el
+    plato costaría y su % al precio habitual. None si no. Pura."""
+    if not filas or not costo or costo <= 0:
+        return None
+    arriba = [f for f in filas if f[1] == -1]
+    top = max(arriba, key=lambda f: f[7])
+    c = cortes.get(top[9]) if top[4] == "P" else None
+    if not c or not c.get("hab") or top[7] / costo < PESO_MINIMO:
+        return None
+    ult, hab = c["filas"][0], c["hab"]["costo"]
+    unit = top[7] / top[5] if top[5] else 0.0
+    if not (ult[7] and abs(unit - ult[7]) <= max(0.01, 0.01 * ult[7])):
+        return None
+    if abs(ult[7] / hab - 1) < UMBRAL_HABITUAL:
+        return None
+    plato = costo - top[7] + hab * top[5]
+    return {"id": top[0], "cod": top[9], "nombre": top[3], "pct": top[7] / costo * 100,
+            "ult": ult[7], "fecha": ult[0], "doc": (c.get("ult") or {}).get("doc", ""),
+            "de": ult[1], "merma": ult[6], "de_porc": bool(c.get("de_porc")),
+            "hab": hab, "n": c["hab"]["n"], "unid": c["u"],
+            "plato": plato, "pct_hab": plato / neto * 100 if neto else None,
+            "ruta": top[11], "P": c.get("P_hab")}
+
+
+def _iso_dia(v):
+    return "" if v is None or pd.isna(v) else f"{pd.Timestamp(v):%Y-%m-%d}"
+
+
+def cortes_del_plato(nodos, df_po, n=_N_PORC):
+    """Los porcionamientos de cada corte del plato (regla #574) para la
+    pieza: {cod: {n (nombre), u (unidad del corte), unit (lo que la receta
+    le pone por unidad), filas ([fecha, desde, porcionado, unidad, salió,
+    unidad, merma %, costo por unidad], del más nuevo), ult (el documento,
+    su origen y la marca de «Para revisar»), hab (`habitual_corte`), de_porc
+    (si lo de origen es a su vez un corte) y P_hab (el precio de origen con
+    que el simulador lo deja en lo habitual)}}. Pura."""
+    if df_po is None or getattr(df_po, "empty", True):
+        return {}
+    origen = codigos_porcionados(df_po)
+    out = {}
+    for cod, nodo in _porcionados(nodos).items():
+        todos = porcionamientos_de(df_po, cod, n=max(n, 60))
+        if todos.empty:
+            continue
+        po = todos.head(n)
+        ult = ultimo_porcionamiento(df_po, cod) or {}
+        hab = habitual_corte(todos)
+        p = nodo.get("porc") or {}
+        P_hab = None
+        if hab and p.get("peso"):
+            P_hab = hab["costo"] * (1 - float(p.get("merma") or 0) / 100) / float(p["peso"])
+        out[cod] = {
+            "n": _limpio(nodo.get("ins")), "u": str(po["UnidFin"].iloc[0] or nodo.get("unid") or ""),
+            "unit": float(nodo["costo"]) / float(nodo["cant"] or 1.0),
+            "filas": [[_iso_dia(r.Fecha), _limpio(r.De), round(float(r.Porcionado), 3), r.UnidIni,
+                       round(float(r.Salio), 3), r.UnidFin, round(float(r.Merma), 2),
+                       round(float(r.Costo), 4)] for r in po.itertuples(index=False)],
+            "ult": {"doc": ult.get("doc", ""), "fecha": _iso_dia(ult.get("fecha")),
+                    "cod_de": ult.get("cod_de", ""), "raro": bool(ult.get("raro")),
+                    "kgu": _f(ult.get("kgu", float("nan"))), "hab": _f(ult.get("hab", float("nan"))),
+                    "reciente": bool(ult.get("fecha") is not None
+                                     and _reciente(df_po, ult.get("fecha")))},
+            "hab": hab, "de_porc": str(ult.get("cod_de", "")) in origen,
+            "P_hab": round(P_hab, 6) if P_hab else None,
+        }
+    return out
+
+
+def _mensual(agg, cod):
+    g = costo_mensual(agg, cod)
+    return [[f"{r.mes.year}-{r.mes.month:02d}", _f(r.unidades, 3),
+             _f(r.costo_unit) if pd.notna(r.costo_unit) else None, _f(r.neto, 2),
+             _f(r.pct, 2) if pd.notna(r.pct) else None, _f(r.neto_sin_costo, 2)]
+            for r in g.itertuples(index=False)]
+
+
+def armar_ficha(f, nodos, agg, rango, marcas=(), picos=(), auditoria=(), cortes=None,
+                faltan=()):
+    """Lo que recibe la pieza de la ficha: el plato con sus cifras de la
+    Carta, la receta aplanada (`filas_receta`), lo vendido mes a mes
+    (`costo_mensual`), las marcas, los cambios de la auditoría y los picos
+    como texto, los porcionamientos de cada corte (`cortes_del_plato`) y
+    «Qué mueve el costo de hoy» (`que_mueve`). Pura: la lee el test."""
+    cortes = cortes or {}
+    filas = filas_receta(nodos)
+    costo = _f(f["Costo"])
+    neto = _f(f["Neto"])
+    sin_neto = _f(f.get("SinCostoNeto", 0.0), 2)
+    combo = None
+    if f["Tipo"] == "Combo":
+        combo = {"tipo": str(f.get("TipoCombo") or ""), "metodo": str(f.get("Metodo") or ""),
+                 "banda": [["Mínimo", _f(f.get("Minimo"), 2)], ["Promedio", _f(f.get("Promedio"), 2)],
+                           ["Esperado", _f(f.get("Esperado"), 2)], ["Máximo", _f(f.get("Maximo"), 2)],
+                           ["Real 90 días", _f(f.get("Real90"), 2)]]}
+    return {
+        "plato": {
+            "cod": str(f["Cod"]), "nombre": str(f["Producto"]),
+            "ruta": " › ".join(x for x in (f["Grupo"], f["Subgrupo"]) if x),
+            "tipo": str(f["Tipo"]), "precio": _f(f["Precio"], 2), "neto": neto,
+            "costo": costo, "sin_costo": bool(f["SinCosto"]),
+            "vend": _f(f.get("Vendidos", 0.0), 3), "vneto": _f(f.get("VendidoNeto", 0.0), 2),
+            "vcosto": _f(f.get("CostoVendido", 0.0), 2), "sin_neto": sin_neto,
+            "sin_causa": ("el POS no le tiene costo" if f["SinCosto"] else
+                          "se vendió antes de que el POS se lo cargara") if sin_neto > 0 else "",
+            "receta": _iso(f.get("Actualizado", pd.NaT)), "descarga": str(f.get("Descarga") or ""),
+            "combo": combo,
+        },
+        "filas": filas,
+        "meses": _mensual(agg, f["Cod"]),
+        "rango": [_iso_dia(rango[0]), _iso_dia(rango[1])] if rango else None,
+        "marcas": [{"t": _iso_dia(m["t"]), "x": _texto_marca(m)} for m in marcas],
+        "cambios": [{"t": _iso_dia(c["t"]), "x": _texto_cambio(c)} for c in auditoria],
+        "picos": [{"ini": _iso_dia(p["ini"]), "fin": _iso_dia(p["fin"]), "pico": _f(p["pico"]),
+                   "x": _texto_pico(p)} for p in picos],
+        "cortes": cortes,
+        "q": que_mueve(filas, cortes, costo, neto),
+        "divisor": divisor_neto(),
+        "umbrales": [_UMBRAL_COSTO_OK, _UMBRAL_COSTO_WARN],
+        "combo_antes": f"{_COMBO_ANTES.year}-{_COMBO_ANTES.month:02d}",
+        "faltan": list(faltan),
+    }
+
+
+_FICHA = st.components.v2.component(
+    "ficha_plato",
+    css=css_movil((Path(__file__).parent / "ficha_plato.css").read_text(encoding="utf-8")),
+    js=js_movil((Path(__file__).parent / "ficha_plato.js").read_text(encoding="utf-8")),
+)
+
+_K_FICHA = "rec_carta_ficha"
+
+_K_SIM_SEMILLA = "rec_carta_sim_semilla"
+"""Con qué abre el simulador: {cod, estado} de «Simular con S/ …» (el precio
+habitual de un corte). «Simular» a secas la borra."""
+
+
+def _a_nuevo_costeo(cod):
+    """«Copiar receta a Nuevo Costeo»: importa el plato en «Modificar» como
+    lo hace su botón «Importar» y pide el salto a esa vista (una corrida
+    completa: la Carta es un fragment). Con un `formulario_receta` viejo en
+    Cloud (regla #357), no hace nada."""
+    try:
+        import navegacion
+        import formulario_receta as fr
+        from navegacion_retorno import capturar_origen
+        capturar_origen()
+        st.session_state["form_receta_modificar_que"] = "plato"
+        fr._importar(str(cod))
+        st.session_state["form_receta_modo"] = "Modificar"
+        navegacion._ir_a_vista("Recetas", "rec_graf_tipo", "Nueva receta")
+        st.session_state["_rec_cambios_ir"] = 1
+    except (ImportError, AttributeError):
+        return
 
 
 def _ficha(f, df_rv, agg, rango, porcionamientos=None):
-    """Debajo de la tabla (regla #657): el plato elegido. A la izquierda su
-    receta como árbol —o lo que descarga, si no tiene—; a la derecha la
-    evolución de su costo, la dona Costo/Utilidad, el Sankey o sus
-    porcionados. «Simular» abre la modal de la regla #656."""
+    """Debajo de la lista (reglas #657 y #744): el plato elegido, como pieza
+    propia. A Python vuelven sólo «Simular» (la modal de la regla #656),
+    «Copiar receta a Nuevo Costeo» y los saltos a Producción."""
+    ss = st.session_state
     cod, nombre = str(f["Cod"]), str(f["Producto"])
     es_receta = f["Tipo"] == "Receta"
     df_po = porcionamientos() if callable(porcionamientos) else porcionamientos
+    if es_receta and ss.get(_K_SIM_ABIERTO) == cod:
+        semilla = ss.get(_K_SIM_SEMILLA) or {}
+        _modal_simulador(cod, nombre, float(f["Precio"]), df_rv,
+                         semilla.get("estado") if semilla.get("cod") == cod else None)
+    nodos = []
+    if es_receta:
+        with st.spinner("Armando la receta con sus precios…"):
+            nodos = armar_arbol(df_rv, cod)
+    ediciones = ediciones_bases() if nodos else None
+    # Sin las que no movieron el plato ni un céntimo: un ▼ que dice
+    # «+S/ 0,00» es ruido.
+    marcas = [m for m in (sr.marcas_plato(nodos, ediciones) if ediciones else [])
+              if abs(m["esp"]) >= 0.01]
+    cambios = cambios_auditoria()
+    picos = sr.picos_plato(agg, cod, nodos, df_po, cambios=cambios)
+    auditoria = sr.cambios_del_plato(cambios, nodos, cod)
+    faltan = []
+    if es_receta and ediciones is None:
+        faltan.append("las ediciones de sus recetas base (filas «recetabaselog» y "
+                      "«recetabaselogdet»)")
+    if cambios is None:
+        faltan.append("los cambios de factor y unidad de la auditoría del POS (fila "
+                      "«auditoriacostos»)")
+    data = armar_ficha(f, nodos, agg, rango, marcas, picos, auditoria,
+                       cortes_del_plato(nodos, df_po), faltan)
+
+    def _valor(k):
+        return (ss.get(_K_FICHA) or {}).get(k)
+
+    def _al_simular():
+        v = _valor("simular")
+        if v:
+            ss[_K_SIM_SEMILLA] = {"cod": cod, "estado": v.get("estado")}
+            _abrir_simulador(cod)
+
+    def _al_nuevo():
+        if _valor("nuevo_costeo"):
+            _a_nuevo_costeo(cod)
+
+    def _al_produccion():
+        v = _valor("produccion") or {}
+        corte = str(v.get("cod") or "")
+        ult = ultimo_porcionamiento(df_po, corte) if corte else None
+        if ult and v.get("destino") in ("rend", "rev") and _preparar_salto(v["destino"], ult, corte):
+            ss["_rec_cambios_ir"] = 1
+
     with st.container(key="rec_carta_plato"):
-        _cabecera_ficha(f)
-        sin_costo_neto = float(f.get("SinCostoNeto", 0.0))
-        if sin_costo_neto > 0:
-            # Dos historias distintas con el mismo número: el que HOY no
-            # tiene costo (las aguas Munay, en «No aplica») y el que se
-            # vendió antes de que se lo cargaran (los platos nuevos de
-            # julio). El costo con que se vende es una foto: en los dos casos
-            # ese neto quedó en el FoodCost con costo 0 (regla #556).
-            causa = ("el POS no le tiene costo" if f["SinCosto"] else
-                     "se vendió antes de que el POS se lo cargara")
-            st.markdown(
-                f'<p class="rec-ficha-aviso">S/ {sin_costo_neto:,.0f} de lo '
-                f'vendido en el rango entró al FoodCost con costo 0: {causa}, '
-                'y así queda guardado.</p>', unsafe_allow_html=True)
-        if es_receta and st.session_state.get(_K_SIM_ABIERTO) == cod:
-            _modal_simulador(cod, nombre, float(f["Precio"]), df_rv)
-        nodos = []
-        # columnas-internas: la receta | su evolución, adentro de la ficha
-        # del plato (regla #657); no parte la página.
-        c_rec, c_evo = st.columns(list(PROPORCION_FICHA), gap="medium")
-        with c_rec:
-            if es_receta:
-                with st.container(key="rec_carta_arbol"):
-                    nodos = receta_lectura(cod, df_rv)
-            else:
-                _descarga(f)
-        ediciones = ediciones_bases() if nodos else None
-        # Sin las que no movieron el plato ni un céntimo: un ▼ que dice
-        # «+S/ 0,00» es ruido.
-        marcas = [m for m in (sr.marcas_plato(nodos, ediciones) if ediciones else [])
-                  if abs(m["esp"]) >= 0.01]
-        cambios = cambios_auditoria()
-        picos = sr.picos_plato(agg, cod, nodos, df_po, cambios=cambios)
-        auditoria = sr.cambios_del_plato(cambios, nodos, cod)
-        porcs = _porcionados(nodos)
-        with c_evo:
-            with st.container(key="rec_carta_evo"):
-                opciones = ["Evolución", "Costo / Utilidad", "Sankey"]
-                if porcs and df_po is not None:
-                    opciones.append("Porcionados")
-                if st.session_state.get(_K_FICHA_VISTA) not in opciones:
-                    st.session_state[_K_FICHA_VISTA] = opciones[0]
-                # NO `st.tabs`: dibuja todas y esconde las otras, y un gráfico
-                # escondido mide 0 (regla #500).
-                vista = st.segmented_control(
-                    "Vista", opciones, key=_K_FICHA_VISTA,
-                    label_visibility="collapsed") or opciones[0]
-                if vista == "Evolución":
-                    _dib_evolucion(f, agg, rango, marcas, picos, auditoria)
-                    _lista_en_rango(marcas, picos, rango, auditoria)
-                    faltan = []
-                    if es_receta and ediciones is None:
-                        faltan.append("las ediciones de sus recetas base (filas "
-                                      "«recetabaselog» y «recetabaselogdet»)")
-                    if cambios is None:
-                        faltan.append("los cambios de factor y unidad de la "
-                                      "auditoría del POS (fila «auditoriacostos»)")
-                    if faltan:
-                        st.caption("Sin " + " ni ".join(faltan) + ": todavía "
-                                   "no están en R2. Se agregan en el Sheet.")
-                elif vista == "Sankey":
-                    r = _receta_para_sankey(df_rv, cod) if es_receta else None
-                    if r is None:
-                        st.info("Sin receta no hay Sankey: el Sankey reparte "
-                                "el costo entre los insumos de la receta.")
-                    else:
-                        _dib_sankey_insumo_costo(r, nombre, cod,
-                                                 alto=alturas.CARTA_EVOLUCION)
-                elif vista == "Porcionados":
-                    _vista_porcionados(porcs, df_po)
-                elif f["SinCosto"]:
-                    # Sin costo, la dona dibujaría «0 % de costo» y toda la
-                    # porción como utilidad: una cifra que no existe.
-                    st.info("Sin costo cargado: no hay cómo repartir el "
-                            "precio entre costo y utilidad.")
-                else:
-                    _dib_torta_costo_utilidad(f["Neto"], f["Costo"], f["Pct"],
-                                              cod, alto=alturas.CARTA_EVOLUCION)
+        _FICHA(key=_K_FICHA, data=data, on_simular_change=_al_simular,
+               on_nuevo_costeo_change=_al_nuevo, on_produccion_change=_al_produccion,
+               width="stretch")
 
 
 # ─── La pieza propia (regla #696) ─────────────────────────────────────────
@@ -1475,6 +1323,7 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
             v = (ss.get(_K_PIEZA) or {}).get("simular")
             if v:
                 ss[_K_FOCO] = str(v)
+                ss[_K_SIM_SEMILLA] = None
                 _abrir_simulador(str(v))
 
         def _al_cambios():
