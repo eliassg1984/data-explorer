@@ -1,16 +1,14 @@
-/* Recetas › «Costo de Carta» › la ficha del plato elegido (regla #744).
-   Vive en el shadow root del componente (graficos/carta_costeada.py::_ficha):
-   ninguna regla de acá sale de la pieza, y ninguna de estilos/ entra. Los
-   colores son las variables de estilos/_00_base.py, que SÍ cruzan el shadow
-   root. Ningún selector :has, por la regla #469. Los SVG se dibujan al
-   ancho real de su panel (el JS lo mide): con un viewBox fijo, la letra
-   crecería con la pantalla. */
+/* Recetas › «Costo de Carta» › lo de la ficha del plato que dibuja
+   FichaPlato (reglas #744 y #746): la receta, la evolución, «Costo y
+   utilidad», el reparto y los porcionados. Desde la #746 no es una pieza
+   aparte: `carta_costeada.py` pone esta hoja después de
+   `carta_costeada.css`, en el MISMO shadow root, y la ficha del costado
+   ajusta lo que el panel angosto necesita (`.cc-fpanel .fp-*`). Los colores
+   son las variables de estilos/_00_base.py. Ningún selector :has, por la
+   regla #469. Los SVG se dibujan al ancho real de su panel (el JS lo mide):
+   con un viewBox fijo, la letra crecería con la pantalla. */
 
-.fp { display: grid; gap: 12px; min-width: 0; color: var(--text-primary); font-size: 13px; line-height: 1.4;
-  border-top: 1px solid var(--border); padding-top: 14px; }
-.fp > *, .fp-cuerpo > * { min-width: 0; }
-.fp button { font: inherit; color: inherit; }
-.fp button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fp-cuerpo > * { min-width: 0; }
 .num { font-variant-numeric: tabular-nums; }
 .der { text-align: right; }
 .gris { color: var(--text-secondary); }

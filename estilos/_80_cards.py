@@ -1958,9 +1958,9 @@ CSS = """    /* ================================================================
         width: 22px !important;
         height: 26px !important;
     }
-    /* La ficha del plato elegido es una pieza propia desde la regla #744
-       (`graficos/ficha_plato.css`): su línea de arriba, sus tamaños y sus
-       colores viven en su shadow root. */
+    /* La ficha del plato elegido es parte de la pieza de la lista desde la
+       regla #746 (`graficos/carta_costeada.css` y `ficha_plato.css`): sus
+       tamaños y sus colores viven en ese shadow root. */
     /* La fecha de la tarjeta, al final del renglón del título (#657): la
        píldora de las tarjetas de Compras y Movimientos. */
     .st-key-rec_carta_f_fila,

@@ -163,9 +163,10 @@ que uno roto no tape a los demás. La cifra sobre R2 la da
 `test_costo_carta.py` vigila «Costo de Carta» (`graficos/carta_costeada.py`):
 los CINCO CANALES del POS que trae `cartacosteada.parquet` —un precio y un
 costo por canal; precio de S/ 1 o menos, no se vende por ahí—, lo vendido
-por canal (el principal sale restando los otros del total) y que el `.js`
-lea las filas en las mismas posiciones en que Python las arma. Ver
-`arquitectura.md` regla #696.
+por canal (el principal sale restando los otros del total), que el `.js`
+lea las filas en las mismas posiciones en que Python las arma y lo que se
+pagó «Sobre el 30 %» (costo de hoy × vendidos − 30 % de lo COBRADO). Ver
+`arquitectura.md` reglas #696 y #746.
 
 `test_nuevo_costeo.py` vigila la pieza de «Nuevo Costeo»
 (`formulario_receta.py::_pieza`): lo que recibe —cada línea con su id, su
@@ -1820,10 +1821,31 @@ grupos con su % de costo, la lista y, al costado, la ficha del elegido con
 los CINCO CANALES del POS (En el Local, Delivery, Para Llevar, Rappi,
 Pedidos Ya: un precio y un costo cada uno en `cartacosteada.parquet`), y
 el Excel de lo que se ve (`graficos/_xlsx.js`, compartido con
-Consistencia). Todo lo de la lista lo resuelve el navegador; sólo elegir
-un producto (`elegir`) y «Simular» vuelven a Python, que dibuja DEBAJO la
-receta y la evolución. Lo vendido por canal sale de
-`data.venta_por_canal_dia` (sólo los canales que no son «En el Local»).
+Consistencia). Todo lo de la lista lo resuelve el navegador. Lo vendido
+por canal sale de `data.venta_por_canal_dia` (sólo los canales que no son
+«En el Local»).
+
+**Y desde el 2026-10-27 es UNA pieza con UNA ficha** (regla #746): el plato
+salía tres veces —fila, ficha del costado y ficha de abajo (#744)— con
+cifras de canales distintos. Ahora la ficha va al costado, con Resumen |
+Receta | Evolución | Canales; `ficha_plato.js` dejó de ser una pieza: es un
+módulo (`FichaPlato`) que `carta_costeada.py` antepone a la lista, y su
+`.css` va en la misma hoja. Lo que muerde:
+
+- **La ficha viaja EN la pieza** (`data.ficha`, de `_datos_ficha`). Al
+  elegir, la ficha cambia en el navegador con lo de la lista y espera la
+  receta y la evolución con su aviso (1,5–2,6 s con la app quieta); la
+  lista no se rehace si la carta es la misma (`firma`), y una corrida
+  vieja no pisa el último plato pedido (`pedido`).
+- **La lista abre por «Sobre el 30 %»**: costo de hoy × vendidos − 30 % de
+  lo COBRADO en el canal (con descuentos, no a precio de carta).
+- **Nada se perdió de las dos fichas**: Costo y utilidad y el «Qué mueve»
+  en el Resumen; Lista | Reparto | Porcionados en Receta; la Evolución
+  entera; Costo, Margen y Receta como columnas opcionales; «No se
+  vendieron» y «Receta sin tocar» en el desplegable «Ver».
+- **Una tabla con `flex: 1 1 0` dentro de una caja sin alto mide 0 px**: así
+  no se veía la lista en el celular. Debajo de 900px, la tabla y el panel
+  de la ficha van con `flex: none`.
 
 **«Nuevo Costeo» también, desde el mismo día** (regla #697): la tabla de la
 receta y el precio son `graficos/nuevo_costeo.js` + `.css`; el buscador, el
@@ -2487,10 +2509,13 @@ validan sello e IDs contra el censo del servidor; abrir el lote conserva
 su confirmación y no envía pedidos. Fecha, mes y proveedor compartidos,
 ficha original y conversor siguen en Python. Regla #741.
 
-`test_ficha_plato.py` vigila la ficha del plato de Costo de Carta como pieza
-propia (`graficos/ficha_plato.js` y `.css`, `carta_costeada.armar_ficha`):
-la receta aplanada con sus rutas, lo habitual de un corte (30 días
-anteriores, ponderado por lo que salió), «Qué mueve el costo de hoy», el
-precio de origen con que «Simular con S/ …» siembra el simulador contra
-`simulador_receta.costo_nodo`, y en Chromium las cifras, las pestañas y los
-tres triggers (`simular`, `nuevo_costeo`, `produccion`). Regla #744.
+`test_ficha_plato.py` vigila la ficha del plato de Costo de Carta
+(`graficos/ficha_plato.js` y `.css`, `carta_costeada.armar_ficha`): la
+receta aplanada con sus rutas, lo habitual de un corte (30 días anteriores,
+ponderado por lo que salió), «Qué mueve el costo de hoy», el precio de
+origen con que «Simular con S/ …» siembra el simulador contra
+`simulador_receta.costo_nodo`, y en Chromium la pieza ÚNICA (lista +
+ficha): las cifras, los cuatro indicadores, las cuatro pestañas, la espera
+de la receta de otro plato, las columnas opcionales y los cinco triggers
+(`elegir`, `simular`, `cambios`, `nuevo_costeo`, `produccion`). Reglas #744
+y #746.

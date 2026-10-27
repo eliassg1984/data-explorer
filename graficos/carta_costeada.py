@@ -1063,14 +1063,6 @@ def armar_ficha(f, nodos, agg, rango, marcas=(), picos=(), auditoria=(), cortes=
     }
 
 
-_FICHA = st.components.v2.component(
-    "ficha_plato",
-    css=css_movil((Path(__file__).parent / "ficha_plato.css").read_text(encoding="utf-8")),
-    js=js_movil((Path(__file__).parent / "ficha_plato.js").read_text(encoding="utf-8")),
-)
-
-_K_FICHA = "rec_carta_ficha"
-
 _K_SIM_SEMILLA = "rec_carta_sim_semilla"
 """Con qué abre el simulador: {cod, estado} de «Simular con S/ …» (el precio
 habitual de un corte). «Simular» a secas la borra."""
@@ -1095,14 +1087,16 @@ def _a_nuevo_costeo(cod):
         return
 
 
-def _ficha(f, df_rv, agg, rango, porcionamientos=None):
-    """Debajo de la lista (reglas #657 y #744): el plato elegido, como pieza
-    propia. A Python vuelven sólo «Simular» (la modal de la regla #656),
-    «Copiar receta a Nuevo Costeo» y los saltos a Producción."""
+def _datos_ficha(f, df_rv, agg, rango, df_po=None):
+    """Lo de la ficha del elegido que sólo sabe Python (reglas #744 y #746):
+    la receta con sus precios, lo vendido mes a mes, las marcas, los picos y
+    los porcionamientos de sus cortes (`armar_ficha`). Viaja en la MISMA
+    pieza que la lista, en `ficha`, y la ficha del costado lo dibuja en sus
+    pestañas. Si «Simular» quedó abierto para este plato, abre la modal de
+    la regla #656."""
     ss = st.session_state
     cod, nombre = str(f["Cod"]), str(f["Producto"])
     es_receta = f["Tipo"] == "Receta"
-    df_po = porcionamientos() if callable(porcionamientos) else porcionamientos
     if es_receta and ss.get(_K_SIM_ABIERTO) == cod:
         semilla = ss.get(_K_SIM_SEMILLA) or {}
         _modal_simulador(cod, nombre, float(f["Precio"]), df_rv,
@@ -1126,43 +1120,23 @@ def _ficha(f, df_rv, agg, rango, porcionamientos=None):
     if cambios is None:
         faltan.append("los cambios de factor y unidad de la auditoría del POS (fila "
                       "«auditoriacostos»)")
-    data = armar_ficha(f, nodos, agg, rango, marcas, picos, auditoria,
+    return armar_ficha(f, nodos, agg, rango, marcas, picos, auditoria,
                        cortes_del_plato(nodos, df_po), faltan)
 
-    def _valor(k):
-        return (ss.get(_K_FICHA) or {}).get(k)
 
-    def _al_simular():
-        v = _valor("simular")
-        if v:
-            ss[_K_SIM_SEMILLA] = {"cod": cod, "estado": v.get("estado")}
-            _abrir_simulador(cod)
-
-    def _al_nuevo():
-        if _valor("nuevo_costeo"):
-            _a_nuevo_costeo(cod)
-
-    def _al_produccion():
-        v = _valor("produccion") or {}
-        corte = str(v.get("cod") or "")
-        ult = ultimo_porcionamiento(df_po, corte) if corte else None
-        if ult and v.get("destino") in ("rend", "rev") and _preparar_salto(v["destino"], ult, corte):
-            ss["_rec_cambios_ir"] = 1
-
-    with st.container(key="rec_carta_plato"):
-        _FICHA(key=_K_FICHA, data=data, on_simular_change=_al_simular,
-               on_nuevo_costeo_change=_al_nuevo, on_produccion_change=_al_produccion,
-               width="stretch")
-
-
-# ─── La pieza propia (regla #696) ─────────────────────────────────────────
+# ─── La pieza propia (reglas #696 y #746) ─────────────────────────────────
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "carta_costeada",
-    css=css_movil((_AQUI / "carta_costeada.css").read_text(encoding="utf-8")),
+    # La ficha del costado dibuja la receta y la evolución con las clases
+    # `fp-*` de `ficha_plato.css`: van en la misma hoja, después.
+    css=css_movil((_AQUI / "carta_costeada.css").read_text(encoding="utf-8")
+                  + (_AQUI / "ficha_plato.css").read_text(encoding="utf-8")),
     # El Excel (`libro`, `bajar`) vive en `_xlsx.js`, compartido con
-    # «Consistencia de datos»: se antepone, y queda en el mismo módulo.
+    # «Consistencia de datos», y la ficha del plato (`FichaPlato`) en
+    # `ficha_plato.js`: se anteponen, y quedan en el mismo módulo.
     js=js_movil((_AQUI / "_xlsx.js").read_text(encoding="utf-8")
+    + (_AQUI / "ficha_plato.js").read_text(encoding="utf-8")
     + (_AQUI / "carta_costeada.js").read_text(encoding="utf-8")),
 )
 
@@ -1258,21 +1232,23 @@ def armar_pieza(t, rango, por_canal, sel, n_sin_precio=0):
 
 def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
                           porcionamientos=None, ventas_canal=None):
-    """La vista entera (regla #696): UNA tarjeta con la PIEZA PROPIA
-    —indicadores, filtros, la lista y la ficha del elegido con sus cinco
-    canales— y, debajo, la receta y la evolución del elegido (regla #657).
-    `df` es `cartacosteada.parquet` (o None si no se pudo cargar); `df_rv`,
-    recetaventa.parquet (las recetas y su fecha); `ventas`, lo vendido por
-    producto y día, o la FUNCIÓN que lo carga (`data.venta_por_producto_dia`,
-    regla #573); `ventas_canal`, lo vendido fuera de «En el Local» o la
-    función que lo carga (`data.venta_por_canal_dia`); `df_rb`, por la firma
-    del dispatcher; `porcionamientos`, el parquet o la función que lo carga
-    (regla #574).
+    """La vista entera (reglas #696 y #746): UNA tarjeta, UNA pieza propia
+    —filtros, indicadores, la lista y, al costado, la ficha del elegido con
+    Resumen | Receta | Evolución | Canales—. `df` es `cartacosteada.parquet`
+    (o None si no se pudo cargar); `df_rv`, recetaventa.parquet (las recetas
+    y su fecha); `ventas`, lo vendido por producto y día, o la FUNCIÓN que lo
+    carga (`data.venta_por_producto_dia`, regla #573); `ventas_canal`, lo
+    vendido fuera de «En el Local» o la función que lo carga
+    (`data.venta_por_canal_dia`); `df_rb`, por la firma del dispatcher;
+    `porcionamientos`, el parquet o la función que lo carga (regla #574).
 
-    Todo lo que se elige en la lista —canal, grupo, tipo, buscar, orden, el
-    Excel— lo resuelve el navegador: la pieza recibe la carta entera (con
-    inactivos y venta interna) y no pide una corrida. Sólo elegir un
-    producto o «Simular» vuelven a Python, que dibuja la ficha de abajo."""
+    Todo lo que se elige en la lista —canal, grupo, tipo, buscar, orden,
+    columnas, el Excel— lo resuelve el navegador: la pieza recibe la carta
+    entera (con inactivos y venta interna) y no pide una corrida. Elegir un
+    producto pide su ficha (`_datos_ficha`), que viaja en la misma pieza; la
+    ficha cambia en el navegador en el momento y espera la receta y la
+    evolución con su aviso. También vuelven «Simular», «Ver cambios»,
+    «Copiar receta a Nuevo Costeo» y los saltos a Producción."""
     ss = st.session_state
     if ss.pop("_rec_cambios_ir", None):
         # «Ver cambios» pidió el salto a otra sección: una corrida completa,
@@ -1314,30 +1290,57 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
             base = visibles if not visibles.empty else carta
             sel = str(base.sort_values("VendidoNeto", ascending=False)["Cod"].iloc[0])
 
+        codigos = set(carta["Cod"])
+        df_po = porcionamientos() if callable(porcionamientos) else porcionamientos
+
+        def _valor(k):
+            return (ss.get(_K_PIEZA) or {}).get(k)
+
+        def _cod(v):
+            """El código que manda el navegador, si es uno de la carta."""
+            c = v.get("cod") if isinstance(v, dict) else v
+            return str(c) if c is not None and str(c) in codigos else None
+
         def _al_elegir():
-            v = (ss.get(_K_PIEZA) or {}).get("elegir")
-            if v:
-                ss[_K_FOCO] = str(v)
+            c = _cod(_valor("elegir"))
+            if c:
+                ss[_K_FOCO] = c
 
         def _al_simular():
-            v = (ss.get(_K_PIEZA) or {}).get("simular")
-            if v:
-                ss[_K_FOCO] = str(v)
-                ss[_K_SIM_SEMILLA] = None
-                _abrir_simulador(str(v))
+            # Desde la ficha: «Simular» a secas o «Simular con S/ …», que la
+            # siembra con el precio habitual de un corte (`estado`).
+            v = _valor("simular")
+            c = _cod(v)
+            if c:
+                ss[_K_FOCO] = c
+                estado = v.get("estado") if isinstance(v, dict) else None
+                ss[_K_SIM_SEMILLA] = {"cod": c, "estado": estado}
+                _abrir_simulador(c)
 
         def _al_cambios():
             # «Ver cambios» (regla #707): adentro, por el import circular
             # (recetas_cambios lee de acá la auditoría y el log).
-            v = (ss.get(_K_PIEZA) or {}).get("cambios")
-            if v and v.get("cod"):
+            c = _cod(_valor("cambios"))
+            if c:
                 from graficos.recetas_cambios import ir_desde_carta
-                ir_desde_carta(v["cod"])
+                ir_desde_carta(c)
 
-        _PIEZA(key=_K_PIEZA, data=armar_pieza(carta, rango, por_canal, sel, n_sin_precio),
-               on_elegir_change=_al_elegir, on_simular_change=_al_simular,
-               on_cambios_change=_al_cambios,
-               width="stretch")
+        def _al_nuevo():
+            c = _cod(_valor("nuevo_costeo"))
+            if c:
+                _a_nuevo_costeo(c)
+
+        def _al_produccion():
+            v = _valor("produccion") or {}
+            corte = str(v.get("cod") or "") if isinstance(v, dict) else ""
+            ult = ultimo_porcionamiento(df_po, corte) if corte else None
+            if ult and v.get("destino") in ("rend", "rev") and _preparar_salto(v["destino"], ult, corte):
+                ss["_rec_cambios_ir"] = 1
+
+        datos = armar_pieza(carta, rango, por_canal, sel, n_sin_precio)
         f = carta[carta["Cod"] == sel]
-        if not f.empty:
-            _ficha(f.iloc[0], df_rv, agg, rango, porcionamientos)
+        datos["ficha"] = _datos_ficha(f.iloc[0], df_rv, agg, rango, df_po) if not f.empty else None
+        _PIEZA(key=_K_PIEZA, data=datos,
+               on_elegir_change=_al_elegir, on_simular_change=_al_simular,
+               on_cambios_change=_al_cambios, on_nuevo_costeo_change=_al_nuevo,
+               on_produccion_change=_al_produccion, width="stretch")

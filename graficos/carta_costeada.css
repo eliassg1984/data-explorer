@@ -1,24 +1,27 @@
-/* Recetas › «Costo de Carta» (regla #696).
+/* Recetas › «Costo de Carta» (reglas #696 y #746).
    Vive en el shadow root del componente (graficos/carta_costeada.py):
    ninguna regla de acá sale de la pieza, y ninguna de estilos/ entra. Los
    colores son las variables de estilos/_00_base.py, que SÍ cruzan el shadow
-   root. Ningún selector :has, por la regla #469.
+   root. Ningún selector :has, por la regla #469. Lo de la ficha que dibuja
+   FichaPlato (receta, evolución, reparto, porcionados) usa las clases
+   `fp-*` de `ficha_plato.css`, que va a continuación.
 
-   Como Consistencia (#690): arriba la cabecera, los indicadores y los
-   filtros; debajo, la lista y la ficha a la altura que queda de una
-   pantalla, cada una con su scroll. El JS mide lo de arriba y lo escribe en
-   `--cc-arriba`; los 110px son la cabecera de la tarjeta (título y fecha,
-   que dibuja Streamlit) y su padding. La receta y la evolución del elegido
-   van DEBAJO de la pieza, en Python: la tarjeta no tiene techo (#657). */
+   UNA pantalla (#746): arriba la cabecera, una fila de desplegables y los
+   cuatro indicadores; debajo, la lista y la ficha del elegido a la altura
+   que queda, cada una con su scroll. El JS mide lo de arriba y lo escribe
+   en `--cc-arriba`; los 110px son la cabecera de la tarjeta (título y
+   fecha, que dibuja Streamlit) y su padding. */
 
 .cc { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; color: var(--text-primary);
   font-size: 13px; line-height: 1.4; }
 .cc > *, .cc-cuerpo > * { min-width: 0; }
-.cc button { font: inherit; color: inherit; }
-.cc button:focus-visible, .cc input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cc button, .cc select { font: inherit; color: inherit; }
+.cc button:focus-visible, .cc input:focus-visible, .cc select:focus-visible, .cc .cc-tabla:focus-visible,
+.cc .cc-ayuda:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .num { font-variant-numeric: tabular-nums; }
 .rojo { color: var(--danger-text); }
 .ambar { color: var(--warning-text); }
+.verde { color: var(--success-text); }
 .cc-arriba { display: grid; gap: 8px; }
 
 /* Cabecera: Carta | Combos y el «?» a la izquierda; buscar y Excel. */
@@ -30,7 +33,7 @@
 .cc-tabs button.on { background: var(--bg-card); color: var(--accent-deep) !important; font-weight: 600; box-shadow: var(--shadow); }
 .cc-ayuda { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border);
   color: var(--text-secondary); font-size: 11px; font-weight: 600; cursor: help; }
-.cc-buscar input { height: 30px; width: 190px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font: inherit;
+.cc-buscar input { height: 30px; width: 210px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font: inherit;
   font-size: 12.5px; background: var(--bg-card); color: var(--text-primary); }
 .cc-btn { height: 30px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 12.5px; border: 1px solid var(--border-lavender);
   background: var(--bg-card); color: var(--accent-deep) !important; white-space: nowrap; }
@@ -38,54 +41,49 @@
 .cc-btn.prim { background: var(--accent); border-color: var(--accent); color: var(--bg-card) !important; }
 .cc-btn.prim:hover { background: var(--accent-hover); }
 
-/* Indicadores, UNA tira; cada uno filtra la lista. */
-.cc-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+/* Una fila de desplegables (hoy eran cuatro filas de botones). */
+.cc-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cc-sel { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 2px 0 10px; border: 1px solid var(--border);
+  border-radius: 14px; background: var(--bg-card); max-width: 100%; }
+.cc-sel span { font-size: 11.5px; color: var(--text-secondary); }
+.cc-sel select { border: 0; background: transparent; height: 26px; padding: 0 4px; font-size: 12.5px; font-weight: 600;
+  color: var(--accent-deep); cursor: pointer; max-width: 230px; text-overflow: ellipsis;
+  /* El ancho de lo elegido, no el de la opción más larga: así la fila entra en un renglón. */
+  field-sizing: content; }
+.cc-sel.on { border-color: var(--accent); background: var(--accent-tint); }
+.cc-link { border: 0; background: none; padding: 0 4px; cursor: pointer; color: var(--accent-deep) !important; font-size: 12px;
+  text-decoration: underline dotted; }
+
+/* Cuatro indicadores; cada uno filtra la lista. */
+.cc-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .cc-kpi { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 6px 12px; text-align: left;
   display: grid; gap: 1px; min-width: 0; cursor: pointer; }
 .cc-kpi:disabled { cursor: default; }
 .cc-kpi:not(:disabled):hover { border-color: var(--border-lavender); background: var(--accent-tint); }
 .cc-kpi.on { border-color: var(--accent); background: var(--accent-tint); }
 .cc-kpi-rot { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cc-kpi-lin { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.cc-kpi-lin { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .cc-kpi-val { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cc-kpi-sub { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* Canal, grupos y tipos. */
-.cc-filtros { display: grid; gap: 6px; }
-.cc-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.cc-rot { font-size: 11px; color: var(--text-secondary); margin: 0 2px 0 6px; }
-.cc-rot:first-child { margin-left: 0; }
-.cc-canales { display: flex; gap: 2px; background: var(--rail-fondo); border-radius: 8px; padding: 2px; flex-wrap: wrap; }
-.cc-canal { height: 26px; padding: 0 12px; border-radius: 6px; border: 0; cursor: pointer; font-size: 12.5px; background: transparent;
-  color: var(--text-primary) !important; }
-.cc-canal small { font-size: 10.5px; color: var(--text-muted); }
-.cc-canal.apagado { color: var(--text-secondary) !important; }
-.cc-canal.on { background: var(--bg-card); color: var(--accent-deep) !important; font-weight: 600; box-shadow: var(--shadow); }
-.cc-chip { height: 26px; padding: 0 10px; border-radius: 13px; font-size: 12px; cursor: pointer; border: 1px solid var(--border);
-  background: var(--bg-card); color: var(--text-primary) !important; white-space: nowrap; }
-.cc-chip:hover { border-color: var(--border-lavender); }
-.cc-chip.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-deep) !important; }
-.cc-chip b { font-weight: 500; font-size: 11px; color: var(--text-secondary); }
-.cc-chip b.ambar { color: var(--warning-text); }
-.cc-chip b.rojo { color: var(--danger-text); }
-.cc-mas { margin-left: auto; font-size: 11.5px; color: var(--text-secondary); }
-.cc-link { border: 0; background: none; padding: 0; cursor: pointer; color: var(--accent-deep) !important; text-decoration: underline dotted; }
-.cc-link.on { font-weight: 700; text-decoration: none; }
+.cc-meta { position: relative; flex: 1; min-width: 40px; height: 5px; border-radius: 3px; background: var(--line-soft); }
+.cc-meta i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent); }
+.cc-meta i.ambar { background: var(--warning); }
+.cc-meta i.rojo { background: var(--danger); }
+.cc-meta b { position: absolute; top: -3px; width: 2px; height: 11px; border-radius: 1px; background: var(--text-primary); }
 
 /* Lista | ficha, a la altura que queda de la pantalla. */
 .cc-cuerpo { display: flex; gap: 10px; align-items: stretch; min-height: 340px;
-  height: calc(var(--alto-util) - var(--cc-arriba, 190px) - 110px); }
-.cc-lista { flex: 1 1 0; min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card);
+  height: calc(var(--alto-util) - var(--cc-arriba, 150px) - 110px); }
+.cc-lista { position: relative; flex: 1 1 0; min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card);
   display: flex; flex-direction: column; overflow: hidden; }
 .cc-tabla { flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .cc-tabla table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 .cc-tabla th { position: sticky; top: 0; z-index: 1; background: var(--bg-card-tenue); text-align: left; padding: 4px 6px;
-  border-bottom: 1px solid var(--border); white-space: nowrap; }
+  border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 11px; color: var(--text-secondary); font-weight: 600; }
 .cc-tabla th.num { text-align: right; }
 .cc-tabla th button { border: 0; background: none; cursor: pointer; font-size: 11px; font-weight: 600; padding: 2px 4px;
   color: var(--text-secondary) !important; white-space: nowrap; }
 .cc-tabla th button.on { color: var(--accent-deep) !important; }
-.cc-tabla th { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
 .cc-tabla td { padding: 5px 6px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; white-space: nowrap; }
 .cc-tabla td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .cc-f { cursor: pointer; }
@@ -93,7 +91,7 @@
 .cc-f.sel td { background: var(--accent-tint); }
 .cc-f.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .cc-f.apagada td { color: var(--text-muted); }
-.cc-prod { max-width: 220px; }
+.cc-prod { max-width: 240px; }
 .cc-prod div { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .cc-prod b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cc-prod > span, .cc-sub { font-size: 11px; color: var(--text-secondary); }
@@ -110,57 +108,98 @@
 .pill.nulo { background: transparent; color: var(--text-muted); font-weight: 400; }
 .cc-bar { display: flex; align-items: center; gap: 6px; }
 .cc-bar i { display: block; height: 8px; border-radius: 2px; background: var(--focus-lavender); flex: none; }
+.cc-bar.ex { justify-content: flex-end; }
+.cc-bar.ex i { background: var(--danger); opacity: .45; }
 .cc-lpie { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 6px 10px; flex: none;
   border-top: 1px solid var(--line-soft); font-size: 11px; color: var(--text-muted); }
 .cc-lpie b { font-weight: 500; }
 .cc-vacio { margin: 12px; padding: 10px 12px; border-radius: 8px; background: var(--accent-tint); color: var(--accent-deep); font-size: 12.5px; }
+.cc-colmenu { position: absolute; bottom: 30px; right: 8px; z-index: 3; display: grid; padding: 4px; border-radius: 10px;
+  background: var(--bg-card); border: 1px solid var(--border); box-shadow: var(--sombra-capa); min-width: 200px; }
+.cc-colmenu button { display: flex; gap: 8px; align-items: center; border: 0; background: transparent; padding: 6px 10px;
+  border-radius: 7px; cursor: pointer; text-align: left; font-size: 12.5px; }
+.cc-colmenu button:hover { background: var(--bg-hover); }
+.cc-colmenu i { width: 14px; font-style: normal; color: var(--accent-deep); font-weight: 700; }
 
-/* La ficha del elegido. */
-.cc-ficha { flex: 0 1 380px; min-width: 300px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card);
-  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow: auto; overscroll-behavior: contain; }
-.cc-ficha > * { flex: none; }
-.cc-fcab { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-.cc-fcab span { font-size: 11px; color: var(--text-secondary); }
-.cc-fcab h3 { margin: 0; font-size: 15px; font-weight: 700; }
-.cc-facc { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: none; }
-.cc-barra { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--line-soft); }
-.cc-barra i { display: block; height: 14px; }
+/* La ficha del elegido: cabecera, pestañas y su panel con scroll. */
+.cc-ficha { flex: 0 1 460px; min-width: 380px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card);
+  display: flex; flex-direction: column; overflow: hidden; }
+.cc-fcab { padding: 10px 14px 0; display: grid; gap: 2px; flex: none; }
+.cc-fruta { font-size: 11px; color: var(--text-secondary); }
+.cc-ftit { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cc-ftit h3 { margin: 0; font-size: 15px; font-weight: 700; min-width: 0; }
+.cc-facc { display: flex; gap: 6px; flex: none; }
+.cc-menu-ancla { position: relative; }
+.cc-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 4; display: grid; padding: 4px; border-radius: 10px;
+  background: var(--bg-card); border: 1px solid var(--border); box-shadow: var(--sombra-capa); min-width: 240px; }
+.cc-menu button { border: 0; background: transparent; padding: 7px 10px; border-radius: 7px; cursor: pointer; text-align: left; font-size: 12.5px; }
+.cc-menu button:hover { background: var(--bg-hover); }
+.cc-ftabs { display: flex; gap: 2px; padding: 8px 14px 0; border-bottom: 1px solid var(--border); flex: none; }
+.cc-ftabs button { border: 0; background: transparent; padding: 6px 10px; font-size: 12.5px; color: var(--text-secondary) !important;
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.cc-ftabs button.on { color: var(--accent-deep) !important; border-bottom-color: var(--accent); font-weight: 600; }
+.cc-fpanel { flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 10px 14px 12px;
+  display: flex; flex-direction: column; gap: 10px; }
+.cc-fpanel > * { flex: none; }
+.cc-celdas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; }
+.cc-cel { display: grid; min-width: 0; }
+.cc-cel span { font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-cel b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-barra { position: relative; display: flex; height: 12px; border-radius: 4px; overflow: visible; background: var(--line-soft); }
+.cc-barra i { display: block; height: 12px; }
+.cc-barra i:first-child { border-radius: 4px 0 0 4px; }
 .cc-barra i.ok { background: var(--accent); }
 .cc-barra i.ambar { background: var(--warning); }
 .cc-barra i.rojo { background: var(--danger); }
-.cc-barra i.margen { background: var(--accent-light); }
-.cc-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 6px 10px; }
-.cc-cifras div { display: grid; min-width: 0; }
-.cc-cifras span { font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cc-cifras b { font-size: 13px; white-space: nowrap; }
+.cc-barra i.margen { background: var(--accent-light); border-radius: 0 4px 4px 0; }
+.cc-barra b { position: absolute; top: -3px; width: 2px; height: 18px; background: var(--text-primary); opacity: .5; }
 .cc-aviso { padding: 8px 10px; border-radius: 8px; background: var(--rail-fondo); font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
 .cc-aviso.ambar { background: var(--warning-bg); color: var(--warning-text); }
 .cc-aviso.rojo { background: var(--danger-bg); color: var(--danger-text); }
+.cc-cargando { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); padding: 6px 2px; }
+.cc-cargando::before { content: ""; flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--accent-light);
+  border-top-color: var(--accent); animation: cc-gira .8s linear infinite; }
+@keyframes cc-gira { to { transform: rotate(360deg); } }
 .cc-fbloque { display: flex; flex-direction: column; gap: 5px; }
 .cc-frot { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-secondary); }
 .cc-mini { border-collapse: collapse; width: 100%; font-size: 12px; }
 .cc-mini th { font-size: 10.5px; color: var(--text-secondary); font-weight: 600; text-align: left; padding: 3px 5px;
   border-bottom: 1px solid var(--border); }
-.cc-mini td { padding: 4px 5px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.cc-mini td { padding: 5px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
 .cc-mini .num { text-align: right; font-variant-numeric: tabular-nums; }
+.cc-mini small { color: var(--text-muted); }
 .cc-canal-t tbody tr { cursor: pointer; }
 .cc-canal-t tbody tr:hover td { background: var(--bg-hover); }
 .cc-canal-t tbody tr.on td { background: var(--accent-tint); font-weight: 600; }
+.cc-canal-t tbody tr.apagado td { color: var(--text-muted); }
 .cc-opc { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px; padding: 6px 10px; border-radius: 8px;
   border: 1px solid var(--border); }
 .cc-opc.prop { background: var(--accent-tint); border-color: var(--border-lavender); }
 .cc-opc span { font-size: 11px; color: var(--text-secondary); }
 .cc-opc span.num { text-align: right; }
 .cc-fpie { font-size: 11px; color: var(--text-muted); }
+/* Lo de FichaPlato dentro del panel angosto. */
+.cc-fpanel .fp-lineas { max-height: none; }
+.cc-fpanel .fp-det { grid-template-columns: minmax(0, 1fr); }
+.cc-fpanel .fp-mueve { flex-direction: column; gap: 8px; }
+.cc-fpanel .fp-mueve-acc { flex-direction: row; flex-wrap: wrap; }
+.cc-fpanel .fp-rec { border: 0; padding: 0; }
+.cc-fpanel .fp-tabs { align-self: flex-start; }
 
-/* Angosto: sin altura fija; la lista con su tope y la ficha debajo. */
 @media (max-width: 1100px) {
-  .cc-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cc-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* Angosto: sin altura fija; la lista con su tope y la ficha debajo. La
+   tabla NO puede quedarse con `flex: 1 1 0`: dentro de una lista sin alto
+   propio mide 0 px, y en el celular la lista no se veía (#746). */
 @media (max-width: 900px) {
   .cc-cuerpo { flex-direction: column; height: auto; min-height: 0; }
-  .cc-lista { flex: none; max-height: 460px; }
-  .cc-ficha { flex: none; overflow: visible; min-width: 0; }
-  .cc-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cc-buscar input { width: 140px; }
+  .cc-lista { flex: none; }
+  .cc-tabla { flex: none; max-height: min(460px, 62dvh); }
+  .cc-ficha { flex: none; min-width: 0; overflow: visible; }
+  .cc-fpanel { flex: none; overflow: visible; }
+  .cc-buscar input { width: 150px; }
+  .cc-prod { max-width: 150px; }
+  .cc-celdas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+@media (prefers-reduced-motion: reduce) { .cc-cargando::before { animation: none; } }

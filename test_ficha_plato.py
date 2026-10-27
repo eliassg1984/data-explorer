@@ -1,8 +1,9 @@
-"""La ficha del plato de «Costo de Carta» como pieza propia (regla #744):
-la receta aplanada, lo habitual de un corte, «Qué mueve el costo de hoy»,
-lo que recibe el navegador y, en Chromium, que el .js haga las mismas
-cuentas y siembre el simulador con el precio que lo deja en lo habitual.
-Sin secrets ni red."""
+"""La ficha del plato de «Costo de Carta» (reglas #744 y #746): la receta
+aplanada, lo habitual de un corte, «Qué mueve el costo de hoy», lo que
+recibe el navegador y, en Chromium, la pieza ÚNICA (lista + ficha con
+Resumen | Receta | Evolución | Canales): las mismas cuentas, lo que se pagó
+sobre el 30 %, la espera de la receta de otro plato y que siembre el
+simulador con el precio que lo deja en lo habitual. Sin secrets ni red."""
 import re
 import unittest
 from pathlib import Path
@@ -13,8 +14,12 @@ import pandas as pd
 import simulador_receta as sr
 from graficos import carta_costeada as cc
 
-_JS = (Path(cc.__file__).parent / "ficha_plato.js").read_text(encoding="utf-8")
-_CSS = (Path(cc.__file__).parent / "ficha_plato.css").read_text(encoding="utf-8")
+_AQUI = Path(cc.__file__).parent
+_JS = (_AQUI / "ficha_plato.js").read_text(encoding="utf-8")
+_CSS = (_AQUI / "ficha_plato.css").read_text(encoding="utf-8")
+_JS_LISTA = (_AQUI / "carta_costeada.js").read_text(encoding="utf-8")
+_CSS_LISTA = (_AQUI / "carta_costeada.css").read_text(encoding="utf-8")
+_XLSX = (_AQUI / "_xlsx.js").read_text(encoding="utf-8")
 
 
 def nodos():
@@ -132,19 +137,29 @@ class LaFichaEnPython(unittest.TestCase):
 
 class ElCodigo(unittest.TestCase):
     def test_sin_colores_sueltos_ni_has(self):
-        sin_comentarios = re.sub(r"/\*.*?\*/", "", _CSS, flags=re.S)
-        self.assertNotRegex(sin_comentarios, r"#[0-9a-fA-F]{3,6}\b")
-        self.assertNotRegex(_JS, r"#[0-9a-fA-F]{6}\b")
-        self.assertNotIn(":has(", _CSS)
+        for css in (_CSS, _CSS_LISTA):
+            sin_comentarios = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+            self.assertNotRegex(sin_comentarios, r"#[0-9a-fA-F]{3,6}\b")
+            self.assertNotIn(":has(", css)
+        self.assertNotRegex(_JS + _JS_LISTA, r"#[0-9a-fA-F]{6}\b")
 
     def test_triggers_que_lee_python(self):
+        """Desde la regla #746 la ficha va en la MISMA pieza que la lista:
+        todos los pedidos salen de ella y los lee `render_carta_costeada`."""
         src = Path(cc.__file__).read_text(encoding="utf-8")
-        for t in ("simular", "nuevo_costeo", "produccion"):
-            self.assertIn(f"enviar('{t}'", _JS)
+        for t in ("elegir", "simular", "cambios", "nuevo_costeo", "produccion"):
+            self.assertIn(f"'{t}'", _JS + _JS_LISTA)
             self.assertIn(f"on_{t}_change", src)
-        # Ni Plotly ni st.dataframe en la ficha: es la pieza.
-        ficha = src[src.index("def _ficha("):src.index("# ─── La pieza propia (regla #696)")]
+        # Ya no hay una segunda pieza: la ficha es un módulo de la lista.
+        self.assertNotIn("export default", _JS)
+        self.assertEqual(src.count("st.components.v2.component("), 1)
+        ficha = src[src.index("def _datos_ficha("):src.index("# ─── La pieza propia")]
         self.assertNotRegex(ficha, r"st\.(plotly_chart|dataframe|segmented_control|selectbox)")
+        # La pieza lleva los tres archivos, en este orden, y las dos hojas.
+        pieza = src[src.index("_PIEZA = st.components.v2.component("):]
+        self.assertLess(pieza.index('"_xlsx.js"'), pieza.index('"ficha_plato.js"'))
+        self.assertLess(pieza.index('"ficha_plato.js"'), pieza.index('"carta_costeada.js"'))
+        self.assertIn('"ficha_plato.css"', pieza[:pieza.index("js=")])
 
 
 def _chromium():
@@ -155,14 +170,74 @@ def _chromium():
     return sync_playwright
 
 
+def _pieza():
+    """La pieza de la lista con la ficha del Lomo adentro, como la arma
+    `render_carta_costeada`: la carta de test_costo_carta y el plato de acá."""
+    import test_costo_carta as tcc
+    with patch.object(cc, "divisor_neto", return_value=1.235):
+        t, n = cc.preparar(tcc.carta(), incluir_inactivos=True)
+        rango = (pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-31"))
+        t, _ = cc.con_ventas(t, tcc.vendido(), rango=(rango[0].date(), rango[1].date()))
+        datos = cc.armar_pieza(t, rango, cc.ventas_por_canal(tcc.otros_canales(), rango), "0000001", n)
+        datos["ficha"] = cc.armar_ficha(plato(Cod="0000001", Producto="Lomo"), nodos(),
+                                        vendido().assign(producto="0000001"), rango,
+                                        cortes=cc.cortes_del_plato(nodos(), porcionamientos()))
+    return datos
+
+
+_RECORRIDO = """([d, css]) => {
+  const sr = document.getElementById('h').attachShadow({ mode: 'open' });
+  const s = document.createElement('style'); s.textContent = css; sr.appendChild(s);
+  const c = document.createElement('div'); sr.appendChild(c);
+  window.__t = [];
+  window.__montar({ data: d, parentElement: c, setTriggerValue: (k, v) => window.__t.push([k, v]) });
+  const $ = (q) => sr.querySelector(q), $$ = (q) => [...sr.querySelectorAll(q)];
+  const F = window.FichaPlato, cf = F.cifras(d.ficha);
+  const kpis = $$('.cc-kpi').map((k) => k.querySelector('.cc-kpi-rot').textContent);
+  const ex = $('.cc-kpi[data-id=ex] .cc-kpi-val').textContent;
+  const filtros = $$('.cc-filtros select').map((x) => x.dataset.acc);
+  const tabs = $$('[data-acc=ftab]').map((x) => x.textContent);
+  const resumen = $('.cc-fpanel').textContent;
+  $('[data-acc=simular-hab]').click();
+  $('.cc-ftit [data-acc=simular]').click();
+  $('[data-acc=fmenu]').click();
+  $('.cc-menu [data-acc=nuevo]').click();
+  $('[data-acc=fmenu]').click();
+  $('.cc-menu [data-acc=cambios]').click();
+  $('[data-acc=ftab][data-id=receta]').click();
+  const formas = $$('[data-acc=rec]').map((x) => x.textContent);
+  $('[data-acc=linea][data-id="1"]').click();
+  const filasAbiertas = $$('.fp-lineas .fp-fila').length;
+  $('[data-acc=rec][data-id=rep]').click();
+  const reparto = !!$('.fp-nodo');
+  $('[data-acc=rec][data-id=porc]').click();
+  const rend = $('[data-acc=rend]');
+  if (rend) rend.click();
+  $('[data-acc=ftab][data-id=evo]').click();
+  const evo = !!$('.fp-graf svg');
+  $('[data-acc=ftab][data-id=canales]').click();
+  const canales = $$('.cc-canal-t tbody tr').length;
+  // Otro producto: la ficha cambia ya y espera la receta.
+  $('tr.cc-f[data-cod="0000002"]').click();
+  $('[data-acc=ftab][data-id=receta]').click();
+  const espera = !!$('.cc-cargando');
+  const titulo = $('.cc-ftit h3').textContent;
+  // Las columnas que se suman.
+  $('[data-acc=cols]').click();
+  $('[data-acc=col][data-id=margen]').click();
+  const conMargen = $$('.cc-tabla th').map((x) => x.textContent.trim()).includes('Margen');
+  return { cf, kpis, ex, filtros, tabs, resumen, formas, filasAbiertas, reparto, evo, canales, espera, titulo,
+           conMargen, rep: F.reparto(d.ficha.filas), t: window.__t,
+           cortos: ['Lomo trozos 170gr x und (produccion)', 'Salsa de lomo x kg (Calientes)', 'Pasta x gratinar'].map(F.corto) };
+}"""
+
+
 @unittest.skipIf(_chromium() is None, "sin Playwright (requirements-dev.txt)")
 class EnElNavegador(unittest.TestCase):
-    def test_mismas_cuentas_y_triggers(self):
-        with patch.object(cc, "divisor_neto", return_value=1.235):
-            d = cc.armar_ficha(plato(), nodos(), vendido(),
-                               (pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-25")),
-                               cortes=cc.cortes_del_plato(nodos(), porcionamientos()))
-        js = _JS.replace("export default function (component)", "window.__montar = function (component)")
+    def test_una_pieza_mismas_cuentas_y_triggers(self):
+        d = _pieza()
+        js = (_XLSX + _JS + _JS_LISTA).replace("export default function (component)",
+                                               "window.__montar = function (component)")
         with _chromium()() as p:
             try:
                 b = p.chromium.launch()
@@ -171,29 +246,9 @@ class EnElNavegador(unittest.TestCase):
             pg = b.new_page(viewport={"width": 1280, "height": 900})
             errores = []
             pg.on("pageerror", lambda e: errores.append(str(e)))
-            pg.set_content("<div id=h></div>")
+            pg.set_content("<div id=h style='--alto-util:800px'></div>")
             pg.add_script_tag(content=js)
-            out = pg.evaluate("""([d, css]) => {
-              const sr = document.getElementById('h').attachShadow({ mode: 'open' });
-              const s = document.createElement('style'); s.textContent = css; sr.appendChild(s);
-              const c = document.createElement('div'); sr.appendChild(c);
-              window.__t = [];
-              window.__montar({ data: d, parentElement: c, setTriggerValue: (k, v) => window.__t.push([k, v]) });
-              const F = window.FichaPlato, cf = F.cifras(d);
-              const tabs = [...sr.querySelectorAll('[data-acc=tab]')].map((x) => x.textContent);
-              for (const id of ['util', 'rep', 'porc', 'evo']) sr.querySelector(`[data-acc=tab][data-id=${id}]`).click();
-              sr.querySelector('[data-acc=linea][data-id="1"]').click();
-              const filasAbiertas = sr.querySelectorAll('.fp-lineas .fp-fila').length;
-              sr.querySelector('[data-acc=simular-hab]').click();
-              sr.querySelector('[data-acc=simular]').click();
-              sr.querySelector('[data-acc=nuevo]').click();
-              sr.querySelector('[data-acc=tab][data-id=porc]').click();
-              const rend = sr.querySelector('[data-acc=rend]');
-              if (rend) rend.click();
-              return { cf, tabs, filasAbiertas, rep: F.reparto(d.filas), t: window.__t,
-                       cortos: ['Lomo trozos 170gr x und (produccion)', 'Salsa de lomo x kg (Calientes)', 'Pasta x gratinar']
-                         .map(F.corto) };
-            }""", [d, _CSS])
+            out = pg.evaluate(_RECORRIDO, [d, _CSS_LISTA + _CSS])
             b.close()
         self.assertEqual(errores, [])
         cf = out["cf"]
@@ -204,16 +259,33 @@ class EnElNavegador(unittest.TestCase):
         for o, u in zip(cf["objetivos"], (30, 35)):
             self.assertAlmostEqual(o["precio"], sr.precio_sugerido(26.0, u, 1.235))
             self.assertAlmostEqual(o["costo"], 64 * u / 100)
-        self.assertEqual(out["tabs"], ["Evolución", "Costo y utilidad", "Reparto del precio", "Porcionados"])
+        self.assertEqual(out["kpis"], ["% costo · ponderado por lo vendido", "Sobre el 30 %, en soles",
+                                       "Sobre 35 %", "Datos para revisar"])
+        # El Lomo en «En el Local»: 13 vendidos (15 − 2 de Rappi) y S/ 815.90
+        # cobrados → 28.35 × 13 − 30 % de 815.90 = S/ 123.78.
+        self.assertEqual(out["ex"], "S/ 124")
+        self.assertEqual(out["filtros"], ["canal", "grupo", "tipo", "oferta", "ver", "incluir"])
+        self.assertEqual(out["tabs"], ["Resumen", "Receta", "Evolución", "Canales"])
+        for texto in ("Qué mueve el costo de hoy", "Costo y utilidad", "Para quedar en 30 %",
+                      "Al vender, mes a mes", "set → oct (+20.0 %)"):
+            self.assertIn(texto, out["resumen"])
+        self.assertEqual(out["formas"], ["Lista", "Reparto del precio", "Porcionados"])
         self.assertEqual(out["filasAbiertas"], 4)
+        self.assertTrue(out["reparto"] and out["evo"])
+        self.assertEqual(out["canales"], 5)
+        self.assertTrue(out["espera"])
+        self.assertEqual(out["titulo"], "Agua")
+        self.assertTrue(out["conMargen"])
         self.assertEqual([r["v"] for r in out["rep"]], [22.0, 4.0])
         self.assertEqual(out["cortos"], ["Lomo trozos 170gr", "Salsa de lomo", "Pasta x gratinar"])
         t = out["t"]
-        self.assertEqual([k for k, _ in t], ["simular", "simular", "nuevo_costeo", "produccion"])
-        self.assertEqual(t[0][1]["estado"], {"0": {"P": d["q"]["P"]}})
+        self.assertEqual([k for k, _ in t], ["simular", "simular", "nuevo_costeo", "cambios", "produccion", "elegir"])
+        self.assertEqual(t[0][1]["estado"], {"0": {"P": d["ficha"]["q"]["P"]}})
+        self.assertEqual([x[1]["cod"] for x in t[:4]], ["0000001"] * 4)
         self.assertIsNone(t[1][1]["estado"])
-        self.assertEqual((t[3][1]["destino"], t[3][1]["cod"]), ("rend", "C1"))
-        self.assertTrue(re.fullmatch(r"\d+", str(t[3][1]["n"])))
+        self.assertEqual((t[4][1]["destino"], t[4][1]["cod"]), ("rend", "C1"))
+        self.assertTrue(re.fullmatch(r"\d+", str(t[4][1]["n"])))
+        self.assertEqual(t[5][1], "0000002")
 
 
 if __name__ == "__main__":

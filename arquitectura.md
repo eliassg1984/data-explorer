@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-745 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+746 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (244)
+**CSS y estilos** (245)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -311,6 +311,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
 - **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
 - **#743** — «En qué se fue cada producto» se cuenta con dos relojes y por área: el flujo es NETO, la…
+- **#746** — «Costo de Carta» es UNA pieza con UNA ficha: la lista ordenada por lo que se pagó sobre el 30…
 
 **Layout y alturas** (106)
 
@@ -56755,6 +56756,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 744. **La ficha del plato de «Costo de Carta» es una pieza propia: dice
      qué mueve el costo de hoy y no esconde una vista detrás de otra**
      (`graficos/carta_costeada.py::armar_ficha`, `ficha_plato.js` y `.css`).
+     Desde la regla #746 va al costado de la lista, en la misma pieza.
      Debajo de la lista de la #696 estaban el árbol de `simulador_plato` en
      modo lectura, una figura de Plotly, la dona, el Sankey de
      `recetaventa` y un `st.dataframe` con un desplegable (#657): la última
@@ -56856,6 +56858,50 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      celular la lista va antes del gráfico. Subió `resumen_ejecutivo.VERSION`
      a 4. Lo vigila `test_resumen_ejecutivo.py`. (2026-10-26.)
 
+746. **«Costo de Carta» es UNA pieza con UNA ficha: la lista ordenada por lo
+     que se pagó sobre el 30 % y, al costado, Resumen | Receta | Evolución |
+     Canales** (`graficos/carta_costeada.py`, `carta_costeada.js` y `.css`;
+     `ficha_plato.js` y `.css` pasan a ser un módulo de la misma pieza). A
+     pedido (2026-10-27), sobre un análisis medido con datos reales y un
+     boceto aprobado (https://claude.ai/artifact/WwfU8asEK7P6S97C1nrir7),
+     con la condición de no perder nada de lo que había.
+     · **Lo que estaba mal, medido a 1323×619**: el plato elegido salía TRES
+       veces —la fila, la ficha del costado (#696) y la de abajo (#744)— y
+       las cifras no coincidían (Lomo Saltado: 749 vendidos y 47,9 % en el
+       canal, 754 y 47,7 % en todos); 222 px de filtros antes de la lista
+       (cinco indicadores y cuatro filas de botones, el canal una fila entera
+       para tres canales sin ventas); la lista ordenada por venta; la ficha
+       del costado cortada en los canales; al elegir, el costado cambiaba en
+       ~1 s y la de abajo en ~4 s, con dos platos distintos en pantalla. Y en
+       el celular `.cc-tabla` medía 0 px: no se podía elegir un plato.
+     · **UNA pieza**: la ficha viaja en la de la lista (`data.ficha`,
+       `_datos_ficha`, que reemplaza a `_ficha` y su segundo componente). Al
+       elegir, la ficha cambia en el navegador con lo de la lista y espera la
+       receta y la evolución con su aviso (1,5–2,6 s con la app quieta; antes
+       ~4 s). La lista no se rehace si la carta es la misma (`firma`), y la
+       corrida de un pedido viejo no pisa el plato que se eligió después
+       (`pedido`). ↑ ↓ recorren la lista y piden la ficha al dejar de moverse.
+     · **«Sobre el 30 %»** = costo de hoy × vendidos − 30 % de lo COBRADO en
+       el canal: con los descuentos, no a precio de carta (a precio de carta
+       daba unos S/ 48 mil en tres meses; con lo cobrado, S/ 66.288). La
+       lista abre ordenada por eso y es el segundo indicador; siete platos
+       son el 66 %.
+     · **Nada se perdió**: Costo y utilidad, «Qué mueve el costo de hoy» y
+       el costo al vender mes a mes van en el Resumen, junto al precio para
+       quedar en 30 o 35 % (con «o bajar el costo a S/ …»); la receta
+       completa con Lista | Reparto del precio | Porcionados (y los saltos a
+       Producción); la Evolución entera con sus marcas y el clic en un mes;
+       Costo, Margen y Receta como columnas opcionales («Columnas ▾»); «No se
+       vendieron» y «Receta sin tocar hace 6 meses» en el desplegable «Ver»;
+       los vendidos por canal en el desplegable de Canal; los conteos por
+       tipo en el de Tipo; «carta impresa» en cada fila; buscar por código.
+       «Ver cambios» y «Copiar receta a Nuevo Costeo» en el «⋯» de la ficha.
+     · **Una tabla con `flex: 1 1 0` dentro de una caja sin alto propio mide
+       0 px**: era el bug del celular, y el panel de la ficha nuevo lo repetía.
+       Debajo de 900px los dos van con `flex: none` y la tabla con su tope.
+     Lo vigilan `test_costo_carta.py` y `test_ficha_plato.py` (la pieza única
+     en Chromium). (2026-10-27.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -56868,7 +56914,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#745**; la próxima toma el número siguiente.
+> última regla es la **#746**; la próxima toma el número siguiente.
 
 >
 

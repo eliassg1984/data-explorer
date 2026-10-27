@@ -126,6 +126,11 @@ class LoQueRecibeLaPieza(unittest.TestCase):
         # Lo del canal principal sale restando los otros, y el neto con el divisor.
         self.assertIn("u -= ou; neto -= on; costo -= oc;", js)
         self.assertIn("precio / d.divisor", js)
+        # «Sobre el 30 %» (regla #746): el costo de hoy de lo vendido menos la
+        # meta sobre lo COBRADO, no sobre el precio de carta.
+        self.assertIn("x.costo * x.u - d.umbrales[0] / 100 * x.vneto", js)
+        # Y la lista abre ordenada por eso.
+        self.assertIn("orden: 'ex'", js)
 
 
 if __name__ == "__main__":
