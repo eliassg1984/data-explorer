@@ -1838,6 +1838,73 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_buscar::before { content: "Buscar"; }
     .st-key-rec_carta_cab_fecha::before { content: "Fecha de lo vendido"; }
     .st-key-rec_alza_cab_fecha::before { content: "Período de ventas"; }
+
+    /* Stock › «Movimientos por Tipo» (regla #747): el título, el reloj
+       (De conteo a conteo | Fechas del calendario) y el período ‹ mes › o
+       el botón de fecha en UN renglón, como la cabecera de Costo de Carta.
+       La tarjeta no lleva techo: crece con su pieza y scrollea la página
+       (como Compras › Producto, #382); hasta la #747 lo decía un <style>
+       suelto en la pieza. */
+    .st-key-ajuste_graf_card_izq_inv_movimientos {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+    .st-key-stock_mov_cab {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 6px;
+        gap: 10px !important;
+        flex-wrap: wrap !important;
+        overflow: visible !important;
+    }
+    .st-key-stock_mov_cab .chart-card-hdr {
+        border-bottom: none;
+        margin: 0 6px 0 0;
+        padding: 0;
+    }
+    /* Streamlit le da −16px abajo a un markdown: el título quedaba 8px más
+       bajo que los botones de su renglón. */
+    .st-key-stock_mov_cab [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .st-key-stock_mov_cab_periodo {
+        gap: 4px !important;
+    }
+    .st-key-stock_mov_ant button,
+    .st-key-stock_mov_sig button {
+        min-height: 32px !important;
+        height: 32px !important;
+        width: 32px !important;
+        padding: 0 !important;
+    }
+    /* La fecha del reloj del calendario: la píldora de Costo de Carta, a la
+       altura de los botones del reloj. */
+    .st-key-stock_mov_f_fila {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        width: auto !important;
+    }
+    .st-key-stock_mov_f_escala button {
+        min-width: 0 !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        padding: 0 12px !important;
+        border-radius: 8px !important;
+        border: 1px solid var(--border-lavender) !important;
+        background: var(--bg-card) !important;
+        color: var(--accent-deep) !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+    }
+    .st-key-stock_mov_f_escala button:hover {
+        background: var(--accent-tint) !important;
+    }
+    .st-key-stock_mov_f_escala button > div > div:last-child:not(:first-child) {
+        display: none !important;
+    }
     .st-key-rec_alza_cab { flex-wrap: wrap !important; }
     /* Escenario de varios insumos: las cifras se reacomodan en móvil. */
     .rec-alza-kpis {

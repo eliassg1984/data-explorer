@@ -175,7 +175,16 @@ def sql_movimientos(relacion, desde, hasta):
     d1 = dt.datetime.combine(hasta, dt.time(0, 0)) + dt.timedelta(days=1)
     return f"""
         SELECT "CODIGO AREA" AS area, "CODIGO PRODUCTO" AS cod,
-               "COD TIPO" AS tipo, any_value("TIPO MOVIMIENTO") AS nombre,
+               "COD TIPO" AS tipo, {_SUMAS_POR_TIPO}
+        FROM {relacion}
+        WHERE "COD TIPO" <> 'SI'
+          AND "{COL_FECHA}" >= TIMESTAMP '{d0:%Y-%m-%d %H:%M:%S}'
+          AND "{COL_FECHA}" < TIMESTAMP '{d1:%Y-%m-%d %H:%M:%S}'
+        GROUP BY 1, 2, 3
+    """
+
+
+_SUMAS_POR_TIPO = f"""any_value("TIPO MOVIMIENTO") AS nombre,
                sum("CANT INGRESO") AS cant_in, sum("CANT SALIDA") AS cant_out,
                sum("VALOR INGRESO") AS val_in, sum("VALOR SALIDA") AS val_out,
                sum("MOVIMIENTOS") AS movs, sum("ANULACIONES") AS anul,
@@ -184,13 +193,49 @@ def sql_movimientos(relacion, desde, hasta):
                         THEN "CANT SALIDA" ELSE 0 END) AS cant_sin_costo,
                sum(CASE WHEN "COD TIPO" = '{TIPO_VENTAS}'
                          AND "CANT SALIDA" > 0 AND abs("VALOR SALIDA") < 1e-9
-                        THEN "MOVIMIENTOS" ELSE 0 END) AS movs_sin_costo
+                        THEN "MOVIMIENTOS" ELSE 0 END) AS movs_sin_costo"""
+"""Las columnas de `sql_movimientos` después de área, producto y tipo: las
+comparte con `sql_movimientos_tipo_ventanas`, para que los dos relojes de
+Movimientos por Tipo sumen igual (regla #747)."""
+
+
+def sql_movimientos_tipo_ventanas(relacion, ventanas):
+    """Lo de `sql_movimientos` —por área, producto y tipo de documento, con
+    los movimientos, las anulaciones y lo vendido sin costo— pero con la
+    ventana de CADA área: `ventanas` es una lista de `(area, t0, t1)` (área
+    entera, `t1` exclusivo). Es el reloj «De conteo a conteo» de Stock ›
+    Movimientos por Tipo (regla #747): cada área desde la hora siguiente a
+    su conteo hasta la de su conteo siguiente
+    (`sin_plato.periodos_operativos`). `area` vuelve con el código como lo
+    escribe el kardex («001»), igual que en `sql_movimientos`."""
+    if not ventanas:
+        return ('SELECT NULL AS area, NULL AS cod, NULL AS tipo, NULL AS nombre, '
+                'NULL AS cant_in, NULL AS cant_out, NULL AS val_in, NULL AS val_out, '
+                'NULL AS movs, NULL AS anul, NULL AS cant_sin_costo, '
+                'NULL AS movs_sin_costo WHERE false')
+
+    def ts(x):
+        return f"TIMESTAMP '{_instante(x):%Y-%m-%d %H:%M:%S}'"
+    valores = ", ".join(f"({int(a)}, {ts(t0)}, {ts(t1)})" for a, t0, t1 in ventanas)
+    desde = min(_instante(v[1]) for v in ventanas)
+    hasta = max(_instante(v[2]) for v in ventanas)
+    return f"""
+        WITH v(va, vt0, vt1) AS (VALUES {valores})
+        SELECT "CODIGO AREA" AS area, "CODIGO PRODUCTO" AS cod,
+               "COD TIPO" AS tipo, {_SUMAS_POR_TIPO}
         FROM {relacion}
+        JOIN v ON CAST("CODIGO AREA" AS INTEGER) = v.va
+              AND "{COL_FECHA}" >= v.vt0 AND "{COL_FECHA}" < v.vt1
         WHERE "COD TIPO" <> 'SI'
-          AND "{COL_FECHA}" >= TIMESTAMP '{d0:%Y-%m-%d %H:%M:%S}'
-          AND "{COL_FECHA}" < TIMESTAMP '{d1:%Y-%m-%d %H:%M:%S}'
+          AND "{COL_FECHA}" >= {ts(desde)} AND "{COL_FECHA}" < {ts(hasta)}
         GROUP BY 1, 2, 3
     """
+
+
+def _instante(x):
+    """Un `datetime` de lo que llegue (Timestamp, datetime o texto ISO): las
+    ventanas viajan como texto en la clave de la caché de disco."""
+    return dt.datetime.fromisoformat(x) if isinstance(x, str) else x
 
 
 TIPOS_ENTRE_AREAS = ("97", "99")

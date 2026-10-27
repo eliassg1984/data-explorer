@@ -1,10 +1,156 @@
-.imv{font:12px/1.4 Arial,sans-serif;color:#443d4e;min-width:0}.imv *{box-sizing:border-box}.imv [hidden]{display:none!important}
-.imv button,.imv select,.imv input{font:inherit;min-width:0;border:1px solid #ddd7e6;border-radius:7px;padding:5px 8px;background:white;color:inherit}.imv button{cursor:pointer}.imv button:hover,.imv button.on{background:#f0eafa;color:#715397}.imv :focus-visible{outline:2px solid var(--acento);outline-offset:2px}
-.imv h3{font-size:13px;font-weight:600;margin:0 0 8px}.imv-h,.imv-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:space-between}.imv-controls{justify-content:flex-start;margin:6px 0 9px}.imv-controls>input{flex:1;min-width:150px}.imv-ayuda{font-size:11px;color:#77717f;margin:5px 0 8px}
-.imv-filtro{position:relative}.imv summary{cursor:pointer;color:#715397}.imv-filtro>summary{border:1px solid #ddd7e6;border-radius:7px;padding:5px 8px}.imv-pop{position:absolute;left:0;top:100%;background:white;border:1px solid #ddd7e6;border-radius:7px;box-shadow:0 6px 18px #38274d22;width:245px;max-width:calc(100vw - 55px);padding:9px;z-index:9;max-height:260px;overflow:auto;overscroll-behavior:contain}.imv-pop label{display:flex;align-items:center;gap:7px;margin:5px 0}.imv-pop input{accent-color:var(--acento)}
-.imv-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:7px 0 12px}.imv-kpi{border:1px solid #e8e2ed;border-radius:8px;padding:7px 9px;min-width:0}.imv-kpi span{display:block;font-size:10px;color:#77717f}.imv-kpi b{font-size:17px;font-variant-numeric:tabular-nums}.imv-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:15px}.imv section{min-width:0}.imv-chart svg{display:block;width:100%;height:auto;max-height:330px}.imv-chart [data-a]{cursor:pointer}.imv-chart text{font:10px Arial,sans-serif;fill:#77717f}
-.imv-wrap{max-height:325px;overflow:auto;overscroll-behavior:contain;border:1px solid #ece8f0;border-radius:7px}.imv table{width:100%;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}.imv th{text-align:left;position:sticky;top:0;background:#faf8fc;z-index:1;font-weight:500;white-space:nowrap}.imv td,.imv th{padding:5px 7px;border-bottom:1px solid #f0edf4}.imv td.num{text-align:right;white-space:nowrap}.imv td small{display:block;font-size:10px;color:#89828e}.imv tr.grupo{background:#f5f1fa;color:#715397;font-weight:600}.imv tfoot td{position:sticky;bottom:0;background:#faf8fc;font-weight:600;border-top:1px solid #ddd7e6}.imv tr[data-a]{cursor:pointer}.imv tr[data-a]:hover,.imv tr.on{background:#f0eafa}.imv .neg{color:#a33657}.imv .pos{color:#45895c}.imv th button{border:0;padding:0;background:transparent;font:inherit}.imv .imv-mas{font-size:10px;padding:3px 7px;margin-top:4px}
-.imv-exp{border-top:1px solid #ece8f0;padding-top:8px;margin-top:10px}.imv-exp>summary{font-size:12px;font-weight:600}.imv-alerta{border:1px solid #e5d8b0;border-radius:8px;background:#fffcf2;padding:7px 9px;margin-top:9px}.imv-alerta summary{color:#836428}.imv-alerta .imv-wrap{margin-top:8px}.imv-ficha{background:#faf8fc;border:1px solid #e8e2ed;border-radius:8px;padding:9px;margin-top:8px}.imv-ficha h3{color:#715397}.imv-products{margin-top:9px}.imv-products table{min-width:640px}.imv-areas table{min-width:900px}.imv-pop button{font-size:10px}
-@media(max-width:750px){.imv-grid{grid-template-columns:minmax(0,1fr)}.imv-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.imv-kpi b{font-size:15px}.imv-controls{gap:6px}.imv-pop{width:220px}.imv-wrap{max-height:315px}}
+/* Stock › «Movimientos por Tipo» (reglas #738 y #747). Vive en el shadow
+   root del componente (graficos/inventario_movimientos_pieza.py): ninguna
+   regla de acá sale de la pieza. Los colores son las variables de
+   estilos/_00_base.py, que SÍ cruzan el shadow root; ningún :has (#469).
 
-.imv-filtro:nth-child(2) .imv-pop{left:auto;right:0}
+   Arriba la ventana del período y los filtros; los cuatro indicadores; la
+   cascada y las áreas lado a lado (las áreas son el índice de la cascada);
+   abajo las pestañas. Hasta la #747 era Arial con colores sueltos. */
+
+.imv { display: grid; gap: 10px; min-width: 0; color: var(--text-primary); font-size: 13px; line-height: 1.4; }
+.imv * { box-sizing: border-box; }
+.imv [hidden] { display: none !important; }
+.imv button, .imv select, .imv input { font: inherit; color: inherit; }
+.imv :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.imv h3, .imv h4, .imv p { margin: 0; }
+.num { font-variant-numeric: tabular-nums; }
+.neg { color: var(--danger-text); }
+.pos { color: var(--success-text); }
+.tenue, .imv-tenue { color: var(--text-secondary); }
+.imv-pista { font-size: 12px; color: var(--text-secondary); }
+.imv-vacio { font-size: 12.5px; color: var(--text-secondary); padding: 10px 2px; }
+
+/* La ventana del período y los controles locales. */
+.imv-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; }
+.imv-ventana { font-size: 12.5px; color: var(--text-secondary); flex: 1 1 420px; min-width: 0; }
+.imv-ventana b { color: var(--text-primary); font-weight: 600; }
+.imv-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.imv-controles input { height: 30px; width: 200px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px;
+  background: var(--bg-card); font-size: 12.5px; }
+.imv-btn { height: 30px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 12.5px; white-space: nowrap;
+  border: 1px solid var(--border-lavender); background: var(--bg-card); color: var(--accent-deep) !important; }
+.imv-btn:hover { background: var(--accent-tint); }
+.imv-btn.prim { background: var(--accent); border-color: var(--accent); color: var(--bg-card) !important; margin-top: 8px; }
+.imv-btn.prim:hover { background: var(--accent-hover); }
+.imv-link { border: 0; background: none; padding: 0; cursor: pointer; color: var(--accent-deep) !important; font-size: 12px;
+  text-decoration: underline dotted; }
+.imv-filtro { position: relative; }
+.imv-filtro > summary { list-style: none; cursor: pointer; height: 30px; display: inline-flex; align-items: center; padding: 0 12px;
+  border: 1px solid var(--border-lavender); border-radius: 8px; color: var(--accent-deep); font-size: 12.5px; background: var(--bg-card); }
+.imv-filtro > summary::-webkit-details-marker { display: none; }
+.imv-filtro > summary::after { content: "▾"; margin-left: 6px; font-size: 10px; }
+.imv-filtro[open] > summary { background: var(--accent-tint); }
+.imv-pop { position: absolute; right: 0; top: calc(100% + 4px); background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: var(--shadow-md); width: 250px; max-width: calc(100vw - 40px); padding: 8px 10px; z-index: 9;
+  max-height: 280px; overflow: auto; overscroll-behavior: contain; }
+.imv-pop label { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 12.5px; cursor: pointer; }
+.imv-pop input { accent-color: var(--accent); }
+
+/* El aviso del calendario: qué conteo cae adentro y qué queda afuera. */
+.imv-aviso { border-radius: 10px; padding: 8px 12px; font-size: 12.5px; background: var(--warning-bg); color: var(--warning-text);
+  border: 1px solid var(--warning-border); }
+.imv-aviso b { font-weight: 650; }
+
+/* Cuatro indicadores; cada uno abre los productos que lo explican. */
+.imv-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.imv-kpi { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 7px 12px; text-align: left;
+  display: grid; gap: 1px; min-width: 0; cursor: pointer; }
+.imv-kpi:hover { border-color: var(--border-lavender); background: var(--accent-tint); }
+.imv-kpi-rot { font-size: 11.5px; color: var(--text-secondary); }
+.imv-kpi-val { font-size: 18px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.imv-kpi-sub { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* La cascada | las áreas. */
+.imv-cuerpo { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(300px, 1fr); gap: 10px; }
+.imv-panel { border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; min-width: 0; background: var(--bg-card); }
+.imv-phead { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; min-height: 22px; }
+.imv-phead h3 { font-size: 13.5px; font-weight: 650; margin-right: auto; color: var(--text-primary); }
+.imv-chip { font-size: 12px; border-radius: 999px; padding: 1px 4px 1px 10px; background: var(--accent-tint); color: var(--accent-deep);
+  display: inline-flex; gap: 2px; align-items: center; }
+.imv-chip button { border: 0; background: none; cursor: pointer; color: var(--accent-deep); padding: 0 5px; }
+.imv-chart { position: relative; min-height: 236px; }
+.imv-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.imv-chart text { fill: var(--text-secondary); font-size: 10.5px; }
+.imv-chart text.v { fill: var(--text-primary); font-weight: 600; }
+.imv-chart text.v.chica { font-size: 9.5px; }
+.imv-chart .cero { stroke: var(--border); }
+.imv-chart .con { stroke: var(--text-muted); stroke-dasharray: 2 2; }
+.imv-chart .b-t { fill: var(--accent); }
+.imv-chart .b-p { fill: var(--success); }
+.imv-chart .b-n { fill: var(--danger); }
+.imv-chart .b-v { fill: var(--focus-lavender); }
+.imv-chart .toque { fill: transparent; }
+.imv-chart g[data-a] { cursor: pointer; outline: none; }
+.imv-chart g[data-a]:hover rect:not(.toque), .imv-chart g[data-a]:focus-visible rect:not(.toque) { opacity: .82; }
+.imv-tip { position: absolute; pointer-events: none; background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px;
+  box-shadow: var(--shadow-md); padding: 7px 10px; font-size: 12px; z-index: 3; max-width: 270px; line-height: 1.45; }
+.imv-pie { font-size: 11.5px; color: var(--text-secondary); margin-top: 4px; }
+
+.imv-areas { display: grid; max-height: 268px; overflow: auto; overscroll-behavior: contain; align-content: start; }
+.imv-area { display: grid; grid-template-columns: minmax(0, 1fr) 78px 78px 70px; gap: 8px; align-items: center; padding: 5px 6px;
+  border-radius: 7px; border: 0; background: transparent; text-align: left; cursor: pointer; font-size: 12.5px; width: 100%; }
+.imv-area:hover { background: var(--bg-hover); }
+.imv-area.on { background: var(--accent-tint); box-shadow: inset 3px 0 0 var(--accent); }
+.imv-area.enc { cursor: default; font-size: 11px; color: var(--text-secondary); position: sticky; top: 0; background: var(--bg-card); z-index: 1; }
+.imv-area.enc:hover { background: var(--bg-card); }
+.imv-area .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imv-area .d { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Las pestañas. */
+.imv-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 8px; overflow-x: auto; }
+.imv-tabs button { border: 0; background: transparent; padding: 6px 10px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.imv-tabs button[aria-selected="true"] { color: var(--accent-deep); border-bottom-color: var(--accent); font-weight: 600; }
+.imv-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 6px; }
+.imv-sel { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 2px 0 10px; border: 1px solid var(--border);
+  border-radius: 14px; background: var(--bg-card); }
+.imv-sel span { font-size: 11.5px; color: var(--text-secondary); }
+.imv-sel select { border: 0; background: transparent; height: 26px; padding: 0 4px; font-size: 12.5px; font-weight: 600;
+  color: var(--accent-deep); cursor: pointer; }
+
+.imv-prod { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); gap: 12px; align-items: start; }
+.imv-lista { min-width: 0; }
+.imv-wrap { overflow: auto; max-height: 360px; overscroll-behavior: contain; border: 1px solid var(--line-soft); border-radius: 8px; }
+.imv table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.imv th { text-align: right; color: var(--text-secondary); font-weight: 500; font-size: 11.5px; padding: 6px 8px; white-space: nowrap;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg-card); z-index: 1; }
+.imv td { padding: 5px 8px; border-bottom: 1px solid var(--line-soft); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.imv th:first-child, .imv td:first-child { text-align: left; white-space: normal; min-width: 180px; }
+.imv td small { display: block; font-size: 11px; color: var(--text-secondary); }
+.imv th.t, .imv td.t { text-align: left; white-space: normal; }
+.imv-ficha th:first-child, .imv-ficha td:first-child { min-width: 110px; }
+.imv tr.grupo td { background: var(--rail-fondo); color: var(--accent-deep); font-weight: 600; font-size: 12px; }
+.imv tfoot td { font-weight: 650; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--bg-card); }
+.imv tr[data-a] { cursor: pointer; }
+.imv tr[data-a]:hover td { background: var(--bg-hover); }
+.imv tr.on td { background: var(--accent-tint); }
+.imv tr.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.imv-mas { margin-top: 6px; border: 1px solid var(--border-lavender); border-radius: 8px; background: var(--bg-card);
+  color: var(--accent-deep) !important; padding: 4px 12px; cursor: pointer; font-size: 12px; }
+.imv-ficha { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; min-width: 0;
+  background: var(--bg-card-tenue); }
+.imv-ficha h4 { font-size: 14px; font-weight: 650; color: var(--accent-deep); }
+.imv-ficha .imv-wrap { max-height: 230px; background: var(--bg-card); }
+.imv-cuenta { font-size: 12.5px; }
+.imv-cuenta b { font-variant-numeric: tabular-nums; }
+.imv-relojes { max-width: 720px; }
+.imv tr.marca td { background: var(--warning-bg); }
+.imv tr.fuerte td { font-weight: 650; }
+
+@media (max-width: 1100px) {
+  .imv-cuerpo { grid-template-columns: minmax(0, 1fr); }
+  .imv-areas { max-height: none; }
+  .imv-prod { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .imv-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .imv-controles { width: 100%; }
+  .imv-controles input { flex: 1 1 160px; width: auto; }
+  .imv-area { grid-template-columns: minmax(0, 1fr) 68px 68px; }
+  .imv-area .x { display: none; }
+  .imv-pop { right: auto; left: 0; }
+}
+@media (pointer: coarse) {
+  .imv-area { padding-block: 9px; }
+  .imv-tabs button { min-height: 40px; }
+}

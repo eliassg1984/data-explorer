@@ -469,7 +469,7 @@ CSS = """    .st-key-nav_menu_movil { display: none !important; }
         html body :is(.st-key-vt_periodo_fecha, .st-key-cp_vol_fecha, .st-key-vt_mes_fecha,
             .st-key-vt_ctl_nativa_fecha, .st-key-cp_docs_nativa_fecha,
             .st-key-ajdet_fecha_nativa, .st-key-mov_pporc_nativa_fecha,
-            .st-key-stock_mov_fecha, .st-key-merma_revision_fecha,
+            .st-key-stock_mov_cab_fecha, .st-key-merma_revision_fecha,
             .st-key-rec_carta_cab_fecha, .st-key-rec_alza_cab_fecha, .st-key-rec_cambios_cab_fecha,
             [class*="_nativa_fecha"]) {
             position: static !important; top: auto !important; left: auto !important;
@@ -493,6 +493,14 @@ CSS = """    .st-key-nav_menu_movil { display: none !important; }
             .st-key-vt_mix_cab, .st-key-vt_hora_cab)
             > :is([data-testid="stLayoutWrapper"], [data-testid="stElementContainer"]) {
             flex: 1 1 100% !important; width: 100% !important; min-width: 0 !important;
+        }
+        /* Movimientos por Tipo (regla #747): el título y el reloj se apilan,
+           pero ‹ mes › sigue en su renglón. Apilado, el ancho del desplegable
+           (200px) pasaba a ser su ALTO: un hueco de 160px entre las flechas. */
+        html body .st-key-stock_mov_cab_periodo {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
         }
         .pila-hueco { min-height: 240px; }
     }

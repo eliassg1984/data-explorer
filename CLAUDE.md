@@ -2483,7 +2483,12 @@ balance, filtros locales, tipos, áreas y ventas sin costo contra
 `armar_movimientos`; deduplicación después del filtro, puntas del kardex,
 contribuciones por producto, gráfico, tandas, búsquedas, Excel y móvil.
 La firma y los helpers de `inventario_movimientos.py` se conservan; sólo
-el período es nativo y consulta las fuentes. Regla #738.
+el reloj y el período son nativos y consultan las fuentes. Regla #738.
+Desde la #747 abre «De conteo a conteo» (cada área de su conteo al
+siguiente, `data.movimientos_conteo` con `kardex.sql_movimientos_tipo_ventanas`)
+y «Fechas del calendario» avisa qué conteo cae adentro; el test cubre la
+consulta por ventana en DuckDB, el área en foco, las pestañas y «Los dos
+relojes», que trae el otro reloj sólo si se pide (trigger `comparar`).
 
 `test_ajuste_diferencias_pieza.py` vigila Análisis de diferencias como pieza
 propia completa: grupos y pistas contra `agrupar_por_producto`, cobertura,

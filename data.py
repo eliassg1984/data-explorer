@@ -20,7 +20,7 @@ import kardex
 import analisis_stock
 import sin_plato
 import diferencias_ajuste
-from cortes import sesiones_inventario
+from cortes import MESES_ABR_ES, MESES_LARGOS_ES, sesiones_inventario
 
 
 # ===========================================================================
@@ -1480,6 +1480,8 @@ def limpiar_cache(archivo):
     _kardex_fotos_cacheable.clear()
     _historia_stock_cacheable.clear()
     _movimientos_cacheable.clear()
+    _periodos_conteo_cacheable.clear()
+    _movimientos_conteo_cacheable.clear()
     _venta_clase_dia_cacheable.clear()
     _sin_plato_cacheable.clear()
     _diferencias_cacheable.clear()
@@ -2822,3 +2824,122 @@ def movimientos_kardex(desde, hasta):
                                       desde, hasta, version=kardex.VERSION)
     except Exception:
         return None
+
+
+# ── Movimientos por Tipo, de conteo a conteo (regla #747) ──────────────
+# El reloj operativo de «En qué se fue cada producto» (#743) para Stock ›
+# Movimientos por Tipo: cada área desde la hora siguiente a su conteo hasta
+# la de su conteo siguiente. Los períodos salen de los ajustes (93) del
+# kardex; las puntas, de la foto en la hora del corte de cada área, o sea
+# el stock CONTADO.
+
+def _primer_cierre():
+    """El mes del cierre que abre el primer período: el anterior a
+    `kardex.INICIO`, para que enero de 2025 tenga su período."""
+    y, m = kardex.INICIO.year, kardex.INICIO.month
+    return (y - 1, 12) if m == 1 else (y, m - 1)
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _periodos_conteo_cacheable(archivo, sello, version=None):
+    """`{"periodos": [...], "sesiones": [...]}`: los períodos de conteo a
+    conteo (`sin_plato.periodos_operativos`, sin las sesiones adentro), más
+    el que está EN CURSO —desde el último cierre hasta el último movimiento
+    del kardex—, y las sesiones de conteo (`cortes.sesiones_inventario`).
+    Si falla, LANZA: no se cachea. `sello` y `version` son la clave."""
+    if not secrets_disponibles():
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+    dias = con.execute(kardex.sql_dias_ajuste(rel)).df()
+    ses = sesiones_inventario(pd.to_datetime(dias["dia"]))
+    per = sin_plato.periodos(ses, desde=_primer_cierre())
+    sesiones = [{k: s[k] for k in ("clave", "tipo", "mes", "nombre", "etiqueta",
+                                   "etiqueta_anio", "dias", "ini", "fin")}
+                for s in ses]
+    if not per:
+        return {"periodos": [], "sesiones": sesiones}
+    desde = per[0]["t0"] - pd.Timedelta(days=10)
+    areas = [int(a) for a in con.execute(kardex.sql_areas(rel, desde)).df()["area"].dropna()]
+    horas = con.execute(kardex.sql_horas_ajuste(rel, desde)).df()
+    per_op = sin_plato.periodos_operativos(per, horas, areas)
+    campos = ("k", "clave", "mes", "nombre", "corto", "desde", "hasta", "t0", "t1",
+              "dias", "ventanas", "cierre", "cierre_ant")
+    out = [dict({c: p[c] for c in campos}, en_curso=False) for p in per_op]
+    tope = con.execute(kardex.sql_ultimo_movimiento(rel)).fetchone()[0]
+    ult = out[-1]
+    if tope is not None and pd.Timestamp(tope) >= ult["t1"]:
+        # El período que está corriendo: cada área desde su último conteo
+        # hasta el final de la hora del último movimiento.
+        t1 = pd.Timestamp(tope).floor("h") + pd.Timedelta(hours=1)
+        y, m = ult["mes"]
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+        out.append({
+            "k": len(out), "clave": f"en_curso_{y}-{m:02d}", "mes": (y, m),
+            "nombre": f"{MESES_LARGOS_ES[m - 1].capitalize()} {y}",
+            "corto": f"{MESES_ABR_ES[m - 1]} {y % 100:02d}",
+            "desde": ult["t1"].date(), "hasta": (t1 - pd.Timedelta(hours=1)).date(),
+            "t0": ult["t1"], "t1": t1, "dias": (t1 - ult["t1"]) / pd.Timedelta(days=1),
+            "ventanas": {a: (v[1], t1) for a, v in ult["ventanas"].items()},
+            "cierre": None, "cierre_ant": ult["cierre"], "en_curso": True})
+    return {"periodos": out, "sesiones": sesiones}
+
+
+def periodos_conteo():
+    """Lo de `_periodos_conteo_cacheable`, o `None` si no se pudo leer el
+    kardex: la vista se queda con las fechas del calendario."""
+    try:
+        return _periodos_conteo_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
+                                          version=kardex.VERSION)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _movimientos_conteo_cacheable(archivo, sello, ventanas, version=None):
+    """Lo que entró y salió de cada área y producto por tipo de documento
+    dentro de SU ventana (`ventanas`: tupla de `(área, t0, t1)` en texto
+    ISO, `t1` exclusivo), y las dos fotos —el stock en la hora del corte de
+    cada área—: `(mov, foto_ini, foto_fin)` con las columnas de
+    `kardex.sql_movimientos` y `kardex.sql_stock_al`. Si falla, LANZA."""
+    if not secrets_disponibles():
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+    mov = con.execute(kardex.sql_movimientos_tipo_ventanas(rel, list(ventanas))).df()
+    fotos = _kardex_fotos_cacheable(archivo, sello_datos(archivo), version=version)
+    ven = pd.DataFrame([(0, int(a), pd.Timestamp(t0), pd.Timestamp(t1))
+                        for a, t0, t1 in ventanas], columns=["k", "area", "t0", "t1"])
+    stock = sin_plato.stock_por_area(fotos, ven)
+    # El código del área como lo escribe el kardex («001»), no el entero.
+    codigo = {}
+    for c in fotos["area"].dropna().astype(str).str.strip().unique():
+        if c.isdigit():
+            codigo.setdefault(int(c), c)
+
+    def foto(punta):
+        s = stock[stock["punta"] == punta]
+        q = pd.to_numeric(s["q"], errors="coerce").fillna(0.0)
+        v = pd.to_numeric(s["v"], errors="coerce").fillna(0.0)
+        return pd.DataFrame({
+            "area": s["area"].map(lambda a: codigo.get(int(a), f"{int(a):03d}")),
+            "cod": s["cod"].astype(str), "stock": q,
+            "precio": np.where(q.abs() > 1e-12, v / q.where(q.abs() > 1e-12, 1.0), 0.0),
+        }).reset_index(drop=True)
+    return mov, foto("ini"), foto("fin")
+
+
+def movimientos_conteo(periodo):
+    """`(mov, foto_ini, foto_fin)` del `periodo` de `periodos_conteo`, o
+    `None` si no se pudo leer: quien lo pide avisa. No cacheada (la interna
+    sí)."""
+    ventanas = tuple((int(a), pd.Timestamp(t0).isoformat(), pd.Timestamp(t1).isoformat())
+                     for a, (t0, t1) in sorted(periodo["ventanas"].items()))
+    try:
+        r = _movimientos_conteo_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
+                                          ventanas, version=kardex.VERSION)
+    except Exception:
+        return None
+    return r

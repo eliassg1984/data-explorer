@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-746 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+747 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (245)
 
@@ -1034,7 +1034,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#741** — Documentos SUNAT también necesita una pieza para su tabla, además de las dos vistas de resumen
 - **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
 
-**Fechas, rangos y cortes** (23)
+**Fechas, rangos y cortes** (24)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -1059,6 +1059,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#738** — Movimientos por Tipo de Stock es una pieza propia, con filtros y contribuciones locales sin…
 - **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
 - **#744** — La ficha del plato de «Costo de Carta» es una pieza propia: dice qué mueve el costo de hoy y…
+- **#747** — Stock › «Movimientos por Tipo» se lee con DOS relojes: abre «De conteo a conteo» y el…
 
 **Asistente IA** (5)
 
@@ -1111,7 +1112,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (222)
+**Decisiones de diseño y UX** (223)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1335,6 +1336,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#733** — Consumo según recetas pasa del iframe a una pieza nativa y las tablas largas dejan de perder…
 - **#734** — Requerimientos por Área es una pieza propia completa: la cadena, los productos y su ficha…
 - **#745** — La portada de Inicio cuenta el mes CON su contexto: el presupuesto, los doce meses, lo…
+- **#747** — Stock › «Movimientos por Tipo» se lee con DOS relojes: abre «De conteo a conteo» y el…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -56902,6 +56904,73 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      Lo vigilan `test_costo_carta.py` y `test_ficha_plato.py` (la pieza única
      en Chromium). (2026-10-27.)
 
+747. **Stock › «Movimientos por Tipo» se lee con DOS relojes: abre «De conteo
+     a conteo» y el calendario avisa qué conteo cae adentro**
+     (`graficos/inventario_movimientos_pieza.py`, `_datos.py`, `.js` y `.css`;
+     `kardex.sql_movimientos_tipo_ventanas`; `data.periodos_conteo` y
+     `data.movimientos_conteo`). A pedido (2026-10-27), sobre un análisis
+     medido con datos reales y un boceto aprobado
+     (https://claude.ai/artifact/2GUsYZtBuwo4EH9gAroqjW).
+     · **Lo que estaba mal**: la vista cortaba por días del CALENDARIO (fotos
+       a las 23 h, #602) y los cierres se cuentan del 1 al 7 del mes que
+       sigue, así que los «Ajustes» de cada mes eran el conteo del mes
+       ANTERIOR y las puntas, el stock del sistema antes de contar. Medido:
+       junio 2026 salía con un «sobrante» de +8.386 cuando su conteo dio
+       −10.711; setiembre iba de 73.450 a 72.288 con Cocina en −5.335 al
+       empezar y Venta Interna en −10.384 al terminar, y el +18.321 de
+       Cocina era el conteo de agosto corrigiendo ese negativo.
+     · **«De conteo a conteo»** (el default) es el reloj operativo de
+       Destino (#743): cada área desde la hora siguiente a su conteo hasta
+       la de su conteo siguiente (`sin_plato.periodos_operativos`, desde el
+       cierre anterior a `kardex.INICIO`), más el período EN CURSO hasta el
+       último movimiento del kardex. Las puntas son la foto en la hora del
+       corte de cada área (`sin_plato.stock_por_area`): lo contado.
+       Setiembre: 57.131 → 67.318, conteo −14.157, valorización +2.067. Se
+       elige con ‹ mes ›; la key del desplegable lleva el mes, para que las
+       flechas lo estrenen.
+     · **«Fechas del calendario»** queda para un rango libre que cuadre con
+       los reportes del POS por fecha, con el panel de fecha de las tarjetas
+       (`selector_fecha_tarjeta`, categoría `mov_tipo`, ctx propio porque
+       Stock no tiene fecha en la franja) y abre en «Mes pasado», como el
+       `date_input` de antes. Un aviso dice qué conteos caen dentro del
+       rango, cuál queda afuera (el cierre del mes, contado después) y qué
+       áreas empiezan o terminan en negativo. NO se trajo el reloj «Kardex»
+       de Destino (de cierre a cierre por días): setiembre iría del 3 de
+       setiembre al 7 de octubre y metería S/ 21 mil de compras de octubre.
+     · **Las dos cuentas por tipo suman igual** porque comparten las
+       columnas (`kardex._SUMAS_POR_TIPO`): la consulta por ventana cambia
+       sólo el JOIN. La cuenta del navegador (`STOCKMOV.calcular`, la de
+       #738) no cambió.
+     · **«Los dos relojes»** compara el mismo mes de las dos maneras,
+       renglón por renglón. El otro reloj se trae SÓLO si se pide (el trigger
+       `comparar`, validado por sello; después queda encendido en la sesión)
+       y viaja resumido por área y familia (`resumen_por_area`, 6 KB): se
+       filtra por área, familia y foco, no por la búsqueda, y lo dice.
+     · **Lo que se ve**: la paleta de la app (era Arial con colores
+       sueltos); cuatro indicadores sin decimales y con el signo de verdad
+       (al empezar, al terminar, lo que dejó el conteo, valorización —se fue
+       «Movimiento neto»—), cada uno abre los productos que lo explican; la
+       cascada con ficha al pasar el cursor; las áreas como ÍNDICE de la
+       cascada (un clic arma la cuenta de esa área, `s.foco`); y abajo las
+       pestañas Productos | Tipos de documento | Vendido sin costo | Los dos
+       relojes. Nada se perdió: «Por tipo» es la cascada más su pestaña;
+       «Por área» con sus 10 columnas es la cascada de cada área y la hoja
+       «Areas del recorte» del Excel; lo vendido sin costo y los productos,
+       que estaban plegados al pie, son pestañas.
+     · **Viaja menos**: las fotos traían el kardex ENTERO (13.800 filas por
+       punta, casi todas en cero); ahora sólo las áreas y productos de la
+       base y sin las filas en cero. Setiembre: 2,3 MB → 1,5 MB.
+     · **Un `st.container(horizontal=True)` se apila en el celular** (la
+       regla de `_00_base.py` sobre `stHorizontalBlock`) y ahí el ancho del
+       desplegable (`width=200`) pasa a ser su ALTO: ‹ y › quedaban a 160 px
+       uno del otro. `_99_movil.py` devuelve esa fila a `row`. Y el markdown
+       del título trae −16 px abajo: sin anularlo queda 8 px más bajo que los
+       botones de su renglón.
+     Lo vigila `test_stock_movimientos_pieza.py`: la consulta por ventana en
+     DuckDB, el resumen del otro reloj contra `armar_movimientos`, qué
+     consulta cada reloj, el foco, las pestañas, el aviso y la comparación en
+     Chromium. (2026-10-27.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -56914,7 +56983,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#746**; la próxima toma el número siguiente.
+> última regla es la **#747**; la próxima toma el número siguiente.
 
 >
 
