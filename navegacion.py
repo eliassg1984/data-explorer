@@ -492,6 +492,7 @@ ROTULO_PESTANA = {
     ("Producción", "Merma para revisar"): "Para revisar",
     ("Producción", "Producción"): "Órdenes",
     ("Producción", "Consumo según recetas"): "Consumo",
+    ("Producción", "Flujo del producto"): "Flujo",
     ("Recetas", "Carta costeada"): "Costo de Carta",
     ("Recetas", "Alza de insumo"): "Alza",
     ("Recetas", "Costo de recetas base"): "Recetas base",

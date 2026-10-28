@@ -332,10 +332,11 @@ CATEGORIA_VISTA = {
     "mov_sec_merma_rev":   "merma_rev",
     "mov_sec_prod":        "prod",
     "mov_sec_consumo":     "consumo",
+    "mov_sec_flujo":       "flujo_producto",
 }
-VISTAS_EN_12_MESES = ("req_periodo", "sal_periodo", "porc", "prod")
-"""Las cuatro «por período» abren en «Últimos 12 meses»: dibujan una serie,
-y con un mes les queda una barra. Las demás, en «Últimos 30 días»."""
+VISTAS_EN_12_MESES = ("req_periodo", "sal_periodo", "porc", "prod", "flujo_producto")
+"""Las vistas por período y el mapa abren en «Últimos 12 meses»: las primeras
+necesitan una serie; el mapa reúne relaciones observadas. Las demás, en 30 días."""
 
 
 def ctx_de_vista(categoria, fechas=None):
@@ -1601,6 +1602,13 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
         rng, fecha = _rango_y_boton("mov_sec_consumo", fechas_reg)
         tarjeta_consumo(fam_sel, sub_sel, rango=rng, fecha=fecha)
 
+    def _dib_flujo():
+        from .flujo_producto_pieza import renderizar as dibujar_flujo
+        rng, fecha = _rango_y_boton("mov_sec_flujo", fechas_reg)
+        # El mapa conecta productos de distintas familias/áreas: los chips
+        # no recortan sus eslabones. La selección ocurre dentro del mapa.
+        dibujar_flujo(rng, fecha=fecha)
+
     def _dib_lados():
         # LAS PERSPECTIVAS (regla #710): qué lado y qué corte, en una franja
         # pegada arriba de la tarjeta, y debajo la vista de siempre de esa
@@ -1628,6 +1636,7 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
         "mov_sec_merma_prov":  _dib_merma(tarjeta_proveedores, False),
         "mov_sec_prod":        _dib_prod,
         "mov_sec_consumo":     _dib_consumo,
+        "mov_sec_flujo":       _dib_flujo,
     }
 
     for _sec, (_cl, _ejes, _persp) in (perspectivas or {}).items():

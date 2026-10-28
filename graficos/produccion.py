@@ -60,6 +60,7 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # almacén. El ícono es una olla. Con seis vistas la lista no lleva
     # subtítulos (`base.AGRUPAR_VISTAS_DESDE`): el rótulo va entero.
     ("Consumo", (("Consumo según recetas", "Consumo según ventas", ":material/soup_kitchen:"),)),
+    ("Procesos", (("Flujo del producto", "Flujo del producto", ":material/account_tree:"),)),
 ))
 
 # El orden de la página, y el apareo sección ↔ vista del rail. Las keys
@@ -73,6 +74,7 @@ _PILA = pila_sin_tablas((
     ("mov_sec_merma_rev",   "Merma para revisar"),
     ("mov_sec_prod",        "Producción"),
     ("mov_sec_consumo",     "Consumo según recetas"),
+    ("mov_sec_flujo",       "Flujo del producto"),
 ))
 
 

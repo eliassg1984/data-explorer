@@ -72,6 +72,9 @@ python test_navegacion_retorno.py && python test_movil.py
 `test_navegacion_retorno.py` cubre la vuelta contextual entre reportes y
 pestañas: filtros, fechas, cadena y ubicación dentro de tablas. Regla #742.
 
+`python test_flujo_producto.py` verifica el mapa de capacitación de Producción:
+códigos de producto/plato separados, recetas activas, rango y documentos únicos.
+
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
 estilo marcarían cientos de líneas de CSS embebido y el ruido haría que
 nadie mire la salida. Se instala con `pip install -r requirements-dev.txt`
