@@ -82,9 +82,14 @@ def _hora(t):
     return f'{t.day} {_ABR[t.month-1]} {t.hour:02d}:00'
 
 
+def _dia(d):
+    return f'{d.day} {_ABR[d.month-1]}'
+
+
 def periodo_js(p,nombres_area):
-    """Lo que la pieza dice del período de conteo: sus cortes y las áreas
-    que se cortaron en OTRA hora que la mayoría, con su nombre."""
+    """Lo que la pieza dice del período de conteo: el mes físico (regla
+    #752: se cuenta el día 1 por la mañana), las aperturas de la mayoría en
+    el sistema y las áreas que abrieron en OTRO día, con su nombre."""
     # Una hora de diferencia es lo normal (cada área cierra su conteo cuando
     # termina); se nombra el área que se contó OTRO día, como Venta Interna
     # el 6 de octubre de 2026 con las demás el 1.
@@ -94,6 +99,8 @@ def periodo_js(p,nombres_area):
          for a,(t0,t1) in sorted(p['ventanas'].items())
          if a in nombres_area and (lejos(t0,p['t0']) or lejos(t1,p['t1']))]
     return dict(nombre=p['nombre'],en_curso=bool(p['en_curso']),t0=_hora(p['t0']),t1=_hora(p['t1']),
+                desde=_dia(p['desde']) if p.get('desde') is not None else '',
+                hasta=_dia(p['hasta']) if p.get('hasta') is not None else '',
                 dias=round(float(p['dias']),2),excepciones=exc,cierre=p.get('cierre'),cierre_ant=p.get('cierre_ant'))
 
 

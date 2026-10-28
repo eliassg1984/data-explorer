@@ -214,12 +214,16 @@ export default function (component) {
     const p = P.periodo;
     if (op && p) {
       const exc = p.excepciones || [];
-      const otras = exc.length ? ` Contada otro día: ${exc.map(([a, t]) => `${esc(rot(a))}, ${esc(t)}`).join('; ')}.` : '';
+      // El cierre físico (regla #752): se cuenta el día 1 por la mañana y la
+      // apertura en el sistema llega después; lo digitado hasta ella es del
+      // mes que cerró.
+      const otras = exc.length ? ` Abrió el conteo otro día: ${exc.map(([a, t]) => `${esc(rot(a))}, ${esc(t)}`).join('; ')}.` : '';
       const dias = p.dias.toLocaleString('en-US', {maximumFractionDigits: 1});
-      const horas = `title="Cada área, desde la hora siguiente a su conteo hasta la de su conteo siguiente: la mayoría del ${p.t0} al ${p.t1}"`;
+      const horas = `title="Se cuenta el día 1 por la mañana; el conteo se abre en el sistema después (la mayoría, el ${p.t0} y el ${p.t1}). Lo digitado hasta la apertura es del mes que cerró; la venta y la compra del mes nuevo registradas antes, del suyo."`;
+      const mes = p.desde && p.hasta ? ` · del ${esc(p.desde)} al ${esc(p.hasta)}` : '';
       return p.en_curso
-        ? `<span ${horas}>Desde el conteo del <b>${esc(p.cierre_ant)}</b> hasta el último movimiento del kardex (${p.t1}) · ${dias} días.</span> El período sigue abierto: el stock al terminar es el del sistema, todavía sin contar.${otras}`
-        : `<span ${horas}>Del conteo del <b>${esc(p.cierre_ant)}</b> al del <b>${esc(p.cierre)}</b> · ${dias} días · cada área de su conteo al siguiente.</span> Las puntas son lo contado.${otras}`;
+        ? `<span ${horas}>Desde el conteo del <b>${esc(p.cierre_ant)}</b> hasta el último movimiento del kardex (${p.t1})${mes} · ${dias} días.</span> El período sigue abierto: el stock al terminar es el del sistema, todavía sin contar.${otras}`
+        : `<span ${horas}>Del conteo del <b>${esc(p.cierre_ant)}</b> al del <b>${esc(p.cierre)}</b>${mes} · ${dias} días · el mes que se contó.</span> Las puntas son lo contado; lo digitado hasta que se abrió el conteo es de este mes.${otras}`;
     }
     return `Del <b>${fecha(P.desde)}</b> al <b>${fecha(P.hasta)}</b>, por la fecha de cada movimiento en el kardex. Las puntas son el stock del sistema al cierre del día anterior y del último día: cuadra con los reportes del POS por fecha.`;
   }
@@ -467,7 +471,7 @@ export default function (component) {
     const p = P.periodo;
     hoja('Contexto', ['Campo', 'Valor'], [
       ['Reloj', op ? 'De conteo a conteo' : 'Fechas del calendario'],
-      ...(op && p ? [['Desde', p.t0], ['Hasta (sin incluir)', p.t1], ['Días', p.dias]] : [['Desde incluido', P.desde], ['Hasta incluido', P.hasta]]),
+      ...(op && p ? [['Mes', `${p.desde || ''} – ${p.hasta || ''}`], ['Apertura del conteo inicial (mayoría)', p.t0], ['Apertura del conteo final (mayoría)', p.t1], ['Días', p.dias]] : [['Desde incluido', P.desde], ['Hasta incluido', P.hasta]]),
       ['Areas locales', s.areas.join(', ') || 'Todas'], ['Area en foco', s.foco || 'Todas'], ['Familias locales', s.familias.join(', ') || 'Todas'],
       ['Busqueda por palabras', s.q], ['Grupo de detalle', s.grupo || 'Todos'], ['Orden productos', 'Magnitud de ' + s.porden],
       ['Fuentes', 'Sin filtros locales; sólo códigos/áreas presentes en la base recibida. Base conserva sus duplicados para aplicar filtros antes de elegir una fila por código/área.'],

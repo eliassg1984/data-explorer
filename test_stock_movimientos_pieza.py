@@ -32,7 +32,7 @@ def muestra(n=0):
     return d,pd.DataFrame(mov),fi,ff
 
 
-PERIODO=dict(nombre='Setiembre 2026',en_curso=False,t0='2 set 10:00',t1='1 oct 18:00',dias=29.33,excepciones=[['BARRA','hasta el 6 oct 12:00']],cierre='1 y 6 oct 2026',cierre_ant='2 set 2026')
+PERIODO=dict(nombre='Setiembre 2026',en_curso=False,t0='2 set 10:00',t1='1 oct 18:00',desde='1 set',hasta='30 set',dias=30,excepciones=[['BARRA','hasta el 6 oct 12:00']],cierre='1 y 6 oct 2026',cierre_ant='2 set 2026')
 CONTEOS=[dict(nombre='Cierre de agosto',etiqueta='2 set',tipo='cierre',dentro=True),dict(nombre='Cierre de setiembre',etiqueta='1 y 6 oct',tipo='cierre',dentro=False)]
 
 
@@ -224,7 +224,7 @@ class Navegador(unittest.TestCase):
 
     def test_ventana_de_conteo_y_aviso_del_calendario(self):
         root=self.mount(payload(reloj='op',periodo=PERIODO));t=root.locator('[data-k=ventana]').inner_text()
-        self.assertIn('Del conteo del 2 set 2026 al del 1 y 6 oct 2026',t);self.assertIn('Contada otro día: Barra, hasta el 6 oct 12:00',t);self.assertTrue(root.locator('[data-k=aviso]').is_hidden())
+        self.assertIn('Del conteo del 2 set 2026 al del 1 y 6 oct 2026',t);self.assertIn('Abrió el conteo otro día: Barra, hasta el 6 oct 12:00',t);self.assertIn('del 1 set al 30 set · 30 días · el mes que se contó',t);self.assertTrue(root.locator('[data-k=aviso]').is_hidden())
         self.assertIn('lo contado',root.locator('.imv-kpi[data-v=ini]').inner_text())
         root=self.mount(payload(reloj='cal',conteos=CONTEOS));a=root.locator('[data-k=aviso]');self.assertTrue(a.is_visible())
         self.assertIn('Cierre de agosto',a.inner_text());self.assertIn('queda afuera',a.inner_text());self.assertIn('antes de contar',a.inner_text())
