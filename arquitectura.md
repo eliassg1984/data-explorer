@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-748 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+749 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (246)
+**CSS y estilos** (247)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -313,6 +313,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#743** — «En qué se fue cada producto» se cuenta con dos relojes y por área: el flujo es NETO, la…
 - **#746** — «Costo de Carta» es UNA pieza con UNA ficha: la lista ordenada por lo que se pagó sobre el 30…
 - **#748** — Ajuste › «Diferencias del cierre» abre con TODAS las familias y los insumos de operación…
+- **#749** — Compras › «Vs año pasado» abre en el TOTAL, pone la venta al lado y parte la diferencia en…
 
 **Layout y alturas** (106)
 
@@ -1113,7 +1114,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (224)
+**Decisiones de diseño y UX** (225)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1339,6 +1340,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#745** — La portada de Inicio cuenta el mes CON su contexto: el presupuesto, los doce meses, lo…
 - **#747** — Stock › «Movimientos por Tipo» se lee con DOS relojes: abre «De conteo a conteo» y el…
 - **#748** — Ajuste › «Diferencias del cierre» abre con TODAS las familias y los insumos de operación…
+- **#749** — Compras › «Vs año pasado» abre en el TOTAL, pone la venta al lado y parte la diferencia en…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57036,6 +57038,70 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      ±S/ 5», los 12 cierres y la tabla con parciales, el salto con su
      validación en Python y la línea que manda el navegador. (2026-10-27.)
 
+749. **Compras › «Vs año pasado» abre en el TOTAL, pone la venta al lado y
+     parte la diferencia en precio, volumen, lo que se dejó de comprar y lo
+     nuevo** (`graficos/compras/vs_ano_pieza.py`, `vs_ano_datos.py`,
+     `vs_ano.js` y `.css`). A pedido (2026-10-28), sobre un análisis medido
+     y un boceto aprobado (https://claude.ai/artifact/VixMJWQcG1RfSsZBFmqg57),
+     con la condición de no perder nada de la #725.
+     · **Lo que estaba mal**: abría enfocada en el ítem de mayor |Δ| —el Bife
+       Angosto, que este año no se compró: −100 %, una cascada sin precio— y
+       el total pedía un clic. «Cantidad / sin base» (−S/ 128 mil a 3 meses)
+       juntaba lo que se compró menos de los mismos productos (−118 mil), 148
+       que se dejaron de comprar (−74 mil) y 126 nuevos (+54 mil). Y no
+       decía lo que contesta la pregunta de fondo: la compra cayó 23 % y la
+       venta 22 %, S/ 42 por cada S/ 100 vendidos los dos años.
+     · **El navegador empareja**: Python manda cada producto-mes UNA vez y,
+       si el mes tuvo compras después del día del mes parcial, también lo
+       comprado hasta ese día (`vs_ano_datos._filas`). Con eso la pieza arma
+       las parejas contra cualquier «Contra» —el año pasado (12 meses), hace
+       dos años (24), el período anterior (el largo de la ventana) o «Desde»
+       otro mes— con la regla de `vs_ano_pasado._con_ano_pasado`: outer, el
+       mes parcial contra los mismos días de su espejo, y sin los meses que
+       no tienen base en los datos (los cuenta un aviso). El test la compara
+       con esa función para cada «Contra», ventana y familia.
+     · **UN calendario para la página**: hasta acá cada familia tenía su plan
+       y su mes parcial; una que no compró los últimos días recortaba su
+       espejo y las fichas de familia no sumaban el total. No comprar es el
+       dato. La familia es la del producto (0 de 1.605 productos tienen dos).
+     · **Precio repartido parejo (Bennet)**: (precio de ahora − precio de la
+       base) × la cantidad PROMEDIO de los dos, producto por producto. El de
+       antes usaba la cantidad de este año (+S/ 25.644 contra +S/ 35.531):
+       dependía de cuál se tomara de base. Lo demás de los que se compraron
+       en los dos es volumen; un producto de un solo lado es nuevo o se dejó
+       de comprar, y uno con cantidad cero o negativa en un lado (notas,
+       ajustes) va a «Sin cantidad comparable». Las cinco partes suman el Δ.
+     · **La venta llega DESPUÉS**: `data.ventas_por_mes` (la de la portada)
+       tarda ~27 s sin caché, así que la pieza dibuja las compras y pide la
+       venta con el trigger `venta` (una vez por sesión, `K_VENTA`). La
+       compra por S/ 100 vendidos cuenta sólo meses completos con venta en
+       los dos lados; es un cálculo propio, no el costo de ventas.
+     · **La fecha es el panel de MESES** (`ctx_fecha`, como el de Ajuste:
+       `solo_meses` y `atajos_meses`, abre en «Últimos 3 meses»), con su
+       categoría `vs_ano`, que NO va en `CATEGORIA_SEC`: el dispatcher
+       sembraría la clave con los 12 meses del reporte antes que la tarjeta
+       (#376), y esta vista empareja sobre `d_full`. Se fue «Rango de la
+       página», que heredaba una fecha que la franja de Compras ya no
+       muestra. El botón flota sobre la cabecera (`cp_vap_nativa_fecha`);
+       en el celular baja a su renglón.
+     · **Cantidad y Precio, sólo con un producto (o grupo) enfocado**: con
+       el total, «Cantidad» saltaba sola al primer producto. Sin foco la
+       serie mide soles y lleva la línea de compra por S/ 100 vendidos.
+     · **Qué productos, en cuatro pestañas**: Subieron de precio (y
+       Bajaron), Se compró menos (y más), Dejaron de comprarse y nuevos (con
+       «Dónde se reemplazó» por subfamilia) y Todos, la tabla de antes con
+       ocho columnas en vez de trece —«Sin base de precio» 0/1 pasó a
+       «Motivo»—, con Registros y «Aplicar meses elegidos». Un clic en un
+       producto lo enfoca arriba aunque la tabla esté por subfamilia
+       (`focoPor`).
+     · **Cifras sin decimales** («S/ 17,860», «−22 %»); los precios por
+       unidad con dos. Familias y subfamilias como nombre propio.
+     · **En el celular, un solo «Filtros y opciones»** (sólo hay un
+       `.vap-controles`); las fichas de familia se deslizan de lado y el
+       «Cambio %» de las pestañas de precio y volumen baja a la celda de al
+       lado, o «Impacto» no entraba en 390 px.
+     Lo vigila `test_compras_ano_pieza.py`. (2026-10-28.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57048,7 +57114,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#748**; la próxima toma el número siguiente.
+> última regla es la **#749**; la próxima toma el número siguiente.
 
 >
 

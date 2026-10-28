@@ -299,14 +299,14 @@ esa composición. La única acción propia que pide Python es el salto a
 Por producto, con sello y selección validados. Ver regla #724.
 
 `test_compras_ano_pieza.py` vigila Compras › Vs año pasado como pieza propia
-(`compras/vs_ano.js` y `.css`, `vs_ano_datos.py` y `vs_ano_pieza.py`):
-meses espejo y parciales, ventanas y agrupaciones contra las funciones
-anteriores; efectos calculados por producto, registros sólo de un período,
-cantidades sin base positiva, precio ponderado de un producto, selección
-de varios meses, filtros del detalle, Excel numérico, estado y móvil.
-`vs_ano_pasado.py` conserva su firma y las cuentas de referencia. Los
-controles propios son locales; los chips y la fecha de la página siguen
-aplicándose en Python. Ver regla #725.
+(`compras/vs_ano.js` y `.css`, `vs_ano_datos.py` y `vs_ano_pieza.py`): las
+parejas que arma el navegador contra `vs_ano_pasado._con_ano_pasado` en cada
+«Contra» (año pasado, hace dos años, período anterior, desde otro mes),
+ventana y familia, con el mes parcial; el precio repartido parejo, dejados,
+nuevos y «Sin cantidad comparable» sumando el Δ; la venta pedida una sola
+vez y la compra por S/ 100 vendidos en meses completos; Cantidad y Precio
+sólo con foco; las cuatro pestañas, Excel numérico, alto y móvil. Reglas
+#725 y #749.
 
 `test_compras_documentos_pieza.py` vigila Compras › Detalle docs. como
 pieza propia (`compras/documentos.js` y `.css`, `documentos_datos.py` y
@@ -950,163 +950,37 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
   `seccion_perezosa`; las tarjetas con fragment propio dentro de un drill
   siguen expuestas. Ver `arquitectura.md` #456.
 
-## La cabecera de «Compra Vs Año Pasado» se lee de global a local
+## «Vs año pasado»: el navegador empareja, y abre en el total
 
-Sus siete controles NO mandan todos sobre lo mismo, y desde el 2026-09-17
-el orden lo dice. Tres tramos, separados por una línea y con un rótulo
-cada uno:
+Desde el 2026-10-28 (regla #749; pieza propia desde la #725). Python manda
+cada producto-mes UNA vez —y, si el mes tuvo compras después del día del mes
+parcial, lo comprado hasta ese día— (`vs_ano_datos._filas`); la pieza
+(`graficos/compras/vs_ano.js`) arma las parejas contra lo que diga «Contra»:
+el año pasado, hace dos años, el período anterior o desde otro mes. Lo que
+muerde:
 
-| Control | Dónde vive | Manda sobre |
-|---|---|---|
-| ventana, Familia («Qué entra») | la cabecera | las tres tarjetas |
-| **Ver** | la tarjeta de la serie | la serie y la cascada |
-| **Partir por** | la tarjeta de la cascada | sólo la cascada |
-| agrupador, buscador («El detalle») | la cabecera | la tabla |
+- **Las parejas siguen la regla de `vs_ano_pasado._con_ano_pasado`** con k
+  meses en vez de 12: outer, el mes parcial contra los mismos días de su
+  espejo, y los meses sin base en los datos fuera. Si se toca una, se toca la
+  otra: el test las compara para cada «Contra», ventana y familia.
+- **Un calendario para la página**, no uno por familia: no comprar los
+  últimos días es el dato, y con un calendario por familia las fichas no
+  sumaban el total de arriba.
+- **El precio se reparte parejo** (cantidad promedio de los dos períodos,
+  producto por producto); lo demás de los que se compraron en los dos es
+  volumen, y los de un solo lado son nuevos o se dejaron de comprar. Las
+  partes suman el Δ.
+- **La venta se pide después de dibujar** (trigger `venta`):
+  `data.ventas_por_mes` tarda ~27 s sin caché y las compras no la esperan.
+- **La fecha es el panel de MESES** (`vs_ano_pieza.ctx_fecha`, categoría
+  `vs_ano`), que NO va en `CATEGORIA_SEC`: el dispatcher sembraría la clave
+  con los 12 meses del reporte antes que la tarjeta (#376).
+- **Cantidad y Precio sólo con algo enfocado**: sin foco «Cantidad» sumaba
+  kilos con unidades, y por eso saltaba al primer producto.
 
-**Cada control bajó a la tarjeta que gobierna** el 2026-09-17, a pedido,
-con la condición de que las tarjetas no crecieran. De dónde salen sus
-píxeles:
-
-- **`Ver`** abre una fila propia en la tarjeta de la serie y la paga la
-  FIGURA: `alturas.FRANJA_CTRL_SERIE` son 47px medidos — 26 de la fila,
-  4,8 de su margen y los 16 del gap de Streamlit.
-- **`Partir por`** NO abre fila: se mete en el renglón del rótulo de la
-  cascada, que ya existía. Una fila propia le habría costado 47 de los 163
-  que mide esa figura; así cuesta 7 (`FRANJA_ROTULO`, de 17 a 24, porque
-  ahora quien manda en ese renglón es el desplegable y no el texto).
-- **Y va en la fila del RÓTULO y no en la del veredicto**: medido, con el
-  control al lado del veredicto la columna cae a 287px, el veredicto pide
-  350 y lo que se come el «…» es la causa. El rótulo es 10,5px y
-  secundario. Reglas #445 y #446.
-
-Y por eso `st.columns` se crea arriba, junto al cálculo, y las tarjetas se
-rellenan ochenta líneas después: **en Streamlit el orden de ejecución es
-el orden en que se leen los valores**, así que un widget que hace falta
-temprano tiene que dibujarse temprano, viva donde viva.
-
-**La tarjeta de la cascada dice tres cosas, en tres renglones:**
-
-```
-            Magret De Pato Macho x Kg                ← azul, centrado en la TARJETA
-Δ Valorizado de Compra  −S/ 16,660    [Por qué ▾]    ← rótulo y monto JUNTOS
-−62.6% vs año pasado · por comprar menos
-```
-
-El símbolo **Δ** no es adorno: debajo hay una RESTA, y «valorizado de
-compra: −S/ 16,660» no existe. El monto va **al lado** de su rótulo y no
-debajo — una etiqueta arriba y un número abajo se leen como dos cosas. Y el
-rótulo **se sirve tal como se escribe**: sin `text-transform: uppercase`,
-porque en versalitas se lee como etiqueta de formulario y no como el NOMBRE
-de lo que mide la tarjeta.
-
-Dos cosas que ya costaron una corrección: **«al medio de la tarjeta» no es
-«al medio de su columna»** —el nombre no puede compartir renglón con un
-widget si tiene que centrarse en la tarjeta—, y **el reparto de alto entre
-renglones NO se deduce de sus cajas**: sumar lo que devuelve
-`getBoundingClientRect` de cada uno dio 70 cuando el real era 75, y las
-tarjetas saltaron a 251. Lo que se mide es la TARJETA. Regla #449.
-
-Y las barras de los bordes dicen el **año en número**, sacado de los meses
-que hay en pantalla y no de `today()`: con la ventana de 12 meses son
-«2024-25» y «2025-26», porque va a caballo de dos calendarios. **Ojo:** eso
-obligó a poner `type="category"` en `_fig_puente` — sin él Plotly parsea
-«2025» como número, el eje sale `linear` y **las dos barras de efectos no
-se dibujan**. Es la #325 mordiendo de nuevo: cambiar un rótulo puede
-cambiar el TIPO de un eje, y los tests no lo ven porque la figura se
-construye igual. Regla #448.
-
-**La cascada tiene además su propio `@st.fragment`** (`_tarjeta_cascada`),
-para que `Partir por` no redibuje las otras tres — mismo patrón que
-`volatilidad.py::_tarjeta_compras_semana` y por la misma queja. La
-condición es que el fragment sea **cerrado sobre sus argumentos**:
-Streamlit lo re-ejecuta con los de la última corrida del drill, así que
-nada puede leerse del scope de afuera. Quedan sin aislar el buscador (toca
-sólo la tabla pero vive en la cabecera) y `Ver` (toca dos tarjetas). Regla
-#447.
-
-La vista **abre con el primer ítem de la tabla enfocado** (el de mayor
-|Δ S/|) y su nombre en la tarjeta de barras. Dos trampas ahí:
-
-- **El foco sembrado NO se escribe en `compras_vap_foco`**: esa clave es
-  el espejo de lo que tiene seleccionado AG Grid, y sembrarla sin decirle
-  nada a la grilla es un bucle de reruns que revienta el fragment.
-- **«Sin foco» son dos estados** —nadie eligió todavía / el usuario lo
-  soltó— y los distingue `compras_vap_foco_tocado`. Sin esa marca, soltar
-  el foco es imposible.
-
-Consecuencia visible y aceptada: la fila sembrada no sale resaltada en la
-tabla, así que el primer clic sobre ella parece no hacer nada.
-
-**El orden lo pone `vs_ano_pasado.py`, no el CSS**: la fila es un flex y
-Streamlit apila los `st.container` en el orden en que se crean. En
-`estilos/_80_cards.py` viven sólo el ancho de cada control, el rótulo del
-tramo y la línea — los dos últimos son **pseudo-elementos**, para que no
-cuenten como ítems del flex ni se cobren el `gap`. El rótulo y la línea
-van sobre el PRIMERO de cada tramo: «Partir por» desaparece en modo
-Precio, así que anclarlos al último dejaría la línea colgando de un
-control que no está.
-
-Dos cosas que conviene saber antes de tocar esta fila:
-
-- **Tres nombres para esta vista, cada uno en su sitio:** el título de la
-  tarjeta dice «Compra Vs Año Pasado» (de `_TITULO`); el rail, «Comparación
-  Año Pasado» (rótulo de `_COMPRAS_RAIL_CATEGORIAS`); y el id interno —el que
-  usan `_PILA`, la key `compras_sec_vs_ano_pasado`, el esqueleto y los dicts
-  de KPI— sigue siendo el corto «Vs año pasado». Hasta el 2026-09-21 el rail
-  también decía «Vs año pasado» (más corto, porque a 769–900px la franja
-  reparte su ancho entre siete ítems); se alargó a pedido y entra en el árbol
-  de escritorio con el `ellipsis` de `_28_arbol.py` como red. Renombrar el
-  rail es cambiar SÓLO ese rótulo, nunca el id.
-- **El ⛶ del modo «solo» ya no está** (se quitó a pedido el 2026-09-17),
-  pero `compras_pila_solo` sigue vivo en el dispatcher y en
-  `_20_compras_rail.py`: lo que falta es quién lo encienda. Si lo
-  reactivás, mirá el hueco que dejó el botón — sin la defensa
-  anti-tooltip-fantasma, el ícono sale duplicado.
-
-Detalle y mediciones en `arquitectura.md` regla #444.
-
-## La cascada de «Vs año pasado» tiene TRES coordenadas, no una
-
-Desde el 2026-09-16. La tarjeta del puente medía siempre soles y no lo
-decía: se reportó como «solamente veo un valor en moneda» y, el mismo día,
-como «no es muy interesante que toda la vista tenga una tarjeta siempre
-fija». Eran la misma queja — la tarjeta SÍ cambiaba con el foco de la
-tabla, pero nada en ella lo anunciaba.
-
-Lo que dibuja queda definido por tres cosas, y cada una la mueve quien
-corresponde:
-
-- **Magnitud** — qué se mide. La pone el selector «Ver» (soles / la unidad
-  del producto / S/ por unidad). El **rótulo** de arriba de la cascada la
-  nombra, junto con el ámbito, y **nunca dice «total»**: con un ítem en
-  foco sería falso.
-- **Ámbito** — sobre qué. NO se toca desde esta tarjeta: lo ponen el clic
-  en una fila de la tabla (el ítem) y el clic en un mes de la serie. El
-  mes acota SÓLO la cascada — la serie y la tabla siguen enteras, y los
-  meses no elegidos se apagan.
-- **Eje** — cómo se parte el Δ. Es el único control propio de la tarjeta
-  («Partir por», en la fila de la cabecera): *Por qué* (efecto
-  precio/cantidad), *Quién* (qué ítems) y *Cuándo* (qué meses).
-
-**Un corte se ofrece sólo si la magnitud es ADITIVA en ese eje y el ámbito
-tiene más de un elemento** (`_cortes_disponibles`). De ahí salen los cinco
-casos sin escribir ninguno a mano — en Precio no aplica ninguno y quedan
-tres barras. Los descartados van al `help` del control **con su motivo**:
-un selector que ofrece tres cosas hoy y una mañana sin decir por qué se lee
-como un bug.
-
-Dos cosas que ya costaron una corrección acá:
-
-- **El clic del mes se resuelve ARRIBA DE TODO**, antes de la cabecera: la
-  selección de `on_select` persiste entre reruns (hay que leerla antes de
-  dibujar, con contador en la key) y además el mes decide qué cortes ofrece
-  la cabecera, que se dibuja mucho antes que la serie.
-- **«Rótulo de N caracteres» no es una medida.** El partidor de etiquetas
-  salió suponiendo un eje de 9px; el eje rotula en 12 y el rótulo medía
-  138px contra una columna de 54. Antes de creerle a un corte de texto,
-  medirlo con el nombre más largo del parquet.
-
-Detalle y mediciones en `arquitectura.md` regla #443.
+La vista de antes —la cabecera de global a local, la cascada de tres
+coordenadas, el foco sembrado— está en las reglas #443 a #449, y su código
+sigue en `vs_ano_pasado.py` como referencia de las cuentas.
 
 ## En Compras, cada tarjeta tiene SU rango de fecha
 

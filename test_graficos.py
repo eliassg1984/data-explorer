@@ -3731,9 +3731,10 @@ def _pruebas_rango_por_tarjeta():
     check("y el par no comparte con ninguna otra sección",
           sorted(set(_solas.values())
                  & {gc.CATEGORIA_SEC["compras_sec_proveedor"]}), [])
-    # Las dos secciones SIN este selector quedan fuera a propósito: su
-    # control de fecha es el desplegable de `graficos/periodo.py`, que ya
-    # era por tarjeta. Meterlas les daría dos controles que se pisan.
+    # Las dos quedan fuera a propósito. «Tabla» tiene el desplegable de
+    # `graficos/periodo.py`; «Vs año pasado» tiene su panel de meses con la
+    # categoría `vs_ano` desde la regla #749, sembrada por la tarjeta: desde
+    # este mapa abriría en los 12 meses del reporte (#376).
     check("las secciones sin trigger quedan fuera",
           sorted({"compras_sec_vs_ano_pasado", "compras_sec_tabla"}
                  & set(gc.CATEGORIA_SEC)), [])

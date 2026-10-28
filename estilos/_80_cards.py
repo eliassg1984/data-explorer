@@ -1905,6 +1905,50 @@ CSS = """    /* ================================================================
     .st-key-stock_mov_f_escala button > div > div:last-child:not(:first-child) {
         display: none !important;
     }
+    /* Compras › Vs año pasado (regla #749): el panel de meses de Python
+       flota sobre la derecha de la cabecera de la pieza, como el de
+       «Detalle docs.». La pieza le reserva el ancho (`.vap-cab`). Por
+       debajo de 901px lo baja a su renglón `_99_movil.py` (`_nativa_fecha`). */
+    .st-key-cp_vap_nativa {
+        position: relative;
+        gap: 0 !important;
+    }
+    .st-key-cp_vap_nativa > [data-testid="stElementContainer"] {
+        margin: 0 !important;
+    }
+    .st-key-cp_vap_nativa_fecha {
+        position: absolute;
+        right: 16px;
+        top: 12px;
+        z-index: 5;
+        width: auto !important;
+    }
+    .st-key-cp_vap_f_fila {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        width: auto !important;
+    }
+    .st-key-cp_vap_f_escala button {
+        min-width: 0 !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        padding: 0 12px !important;
+        border-radius: 8px !important;
+        border: 1px solid var(--border-lavender) !important;
+        background: var(--bg-card) !important;
+        color: var(--accent-deep) !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+    }
+    .st-key-cp_vap_f_escala button:hover {
+        background: var(--accent-tint) !important;
+    }
+    .st-key-cp_vap_f_escala button > div > div:last-child:not(:first-child) {
+        display: none !important;
+    }
     .st-key-rec_alza_cab { flex-wrap: wrap !important; }
     /* Escenario de varios insumos: las cifras se reacomodan en móvil. */
     .rec-alza-kpis {

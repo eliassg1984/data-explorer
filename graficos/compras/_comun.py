@@ -507,10 +507,12 @@ palabra con la que se cuentan las filas ES el grano (2026-09-20, a pedido).
 # clave por sección. Cuatro entradas para seis secciones, y las dos que
 # faltan no son un olvido:
 #
-#   · «Vs año pasado» y «Tabla» NO tienen este selector. Tienen el OTRO —
-#     el desplegable Rango/3m/12m/24m/Todo de `graficos/periodo.py`, que ya
-#     era por tarjeta. Meterlas acá les daría dos controles de fecha que se
-#     pisan, que es justo el enredo que este cambio viene a deshacer.
+#   · «Tabla» NO tiene este selector: tiene el OTRO, el desplegable
+#     Rango/3m/12m/24m/Todo de `graficos/periodo.py`, que ya era por
+#     tarjeta. «Vs año pasado» sí lo tiene desde la regla #749, con el panel
+#     de MESES y su categoría `vs_ano` (`vs_ano_pieza.CATEGORIA`), pero
+#     fuera de este mapa: sembrada desde acá abriría en los 12 meses del
+#     reporte y no en sus 3 (#376), y esa vista empareja sobre `d_full`.
 #   · «Documentos SUNAT» está fuera de la pila y dibuja el pill entero de
 #     la franja, cuya key ES la clave canónica. Ése no se puede mover sin
 #     mover el widget, y no es lo que se pidió.
