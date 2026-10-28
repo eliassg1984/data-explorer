@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-753 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+754 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (247)
 
@@ -1118,7 +1118,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (228)
+**Decisiones de diseño y UX** (229)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1348,6 +1348,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#750** — El borde de un cierre lo ponen las áreas que CONTARON STOCK, y Destino cuenta sólo de conteo…
 - **#751** — Producción › «Consumo según ventas» dice la cuenta de cada porcionamiento, deja elegir el…
 - **#752** — El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre después; lo digitado hasta la…
+- **#754** — Costos cuenta el cierre FÍSICO: las notas digitadas hasta la apertura del conteo restan en el…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57286,6 +57287,32 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      `_movimientos_conteo_cacheable`. Lo vigila
      `test_graficos.py::_pruebas_relojes_sin_plato`. (2026-10-28.)
 
+754. **Costos cuenta el cierre FÍSICO: las notas digitadas hasta la
+     apertura del conteo restan en el mes que cerró** (`costo_ventas.
+     aperturas_por_mes`, `fecha_de_cierre`, `armar`; el texto de «Cómo se
+     calcula» en `graficos/costos_tabla.js`). A pedido (2026-10-28), con la
+     misma regla de la #752.
+     · **Por qué sólo las notas**: el inventario de Costos es lo CONTADO
+       (el stock al cierre del mes, contado el día 1 por la mañana), no el
+       ajuste del sistema; las compras van por fecha de emisión y la venta
+       por día de turno, que ya son el mes físico. Lo que no lo era: las
+       notas de salida (bajas, comida de personal, despacho a Mayta) que se
+       digitan el día 1 o 2, antes de abrir el conteo, y caían en el mes
+       nuevo por su fecha de registro.
+     · **La regla**: una nota registrada entre el día 1 y la apertura del
+       conteo de su área es del mes que cerró y va a su último instante. Si
+       su área no contó stock (Cocina Personal, Venta Interna), la apertura
+       de la mayoría (la mediana de las áreas con stock, #750). Un parcial
+       de mitad de mes no es una apertura de cierre.
+     · **Medido** (12 meses a set 2026, cuatro familias): el sin explicar
+       se corre ±S/ 2.232 por mes y −S/ 110 en el año. Marzo 2026 pasa de
+       4,6 % a 2,7 % de la venta y abril de 1,6 % a 4,5 %: la comida de
+       personal (S/ 3.608) y el despacho a Mayta (S/ 4.497) de marzo se
+       digitaron el 1 abr antes de las 13:10. El ⚠ sigue marcando sólo julio.
+     · Sólo el grano Mes: semana y quincena usan el inventario del kardex.
+     Subir `costo_ventas.VERSION` (va en 7). Lo vigila
+     `test_costo_ventas.py`. (2026-10-28.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57298,7 +57325,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#753**; la próxima toma el número siguiente.
+> última regla es la **#754**; la próxima toma el número siguiente.
 
 >
 

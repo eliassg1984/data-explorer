@@ -125,6 +125,31 @@ igual(float(sal["Comida Personal"].loc[P("2026-09"), "Alimentos"]), 100.0,
       "las salidas se suman por mes de registro")
 igual(float(sal["Bajas"].loc[P("2026-10"), "Vinos"]), 15.0, "las bajas de vinos")
 
+# ── el cierre físico (regla #754) ────────────────────────────────────────
+# Se cuenta el día 1 por la mañana y se abre después: lo digitado hasta la
+# apertura del conteo de su área (la de la mayoría si no contó stock) es del
+# mes que cerró. El cierre de setiembre abre el 1 oct: Almacén 17:00, Cocina
+# 18:00; la mayoría, la mediana, 17:00.
+ap = cv.aperturas_por_mes(ajuste)
+igual(ap[P("2026-10")]["COCINA"], pd.Timestamp("2026-10-01 18:00"),
+      "la apertura del cierre de setiembre es del mes que EMPIEZA")
+igual(ap[P("2026-10")][""], pd.Timestamp("2026-10-01 17:00"), "la de la mayoría")
+ok(P("2026-09") in ap and pd.Timestamp("2026-09-16 15:00") not in ap[P("2026-09")].values(),
+   "un parcial de mitad de mes no es una apertura de cierre")
+notas = pd.DataFrame({
+    "FECHA REGISTRO": pd.to_datetime(["2026-10-01 10:00", "2026-10-01 17:30", "2026-10-01 17:30",
+                                      "2026-10-01 19:00", "2026-10-04 09:00"]),
+    "AREA": ["COCINA", "COCINA", "VENTA INTERNA", "COCINA", "COCINA"]})
+igual(list(cv.fecha_de_cierre(notas, ajuste)),
+      [pd.Timestamp("2026-09-30 23:59:59")] * 2 + list(pd.to_datetime(
+          ["2026-10-01 17:30", "2026-10-01 19:00", "2026-10-04 09:00"])),
+      "antes de la apertura de su área, al mes que cerró; sin stock, la de la mayoría")
+salidas_ap = pd.DataFrame({
+    "FECHA REGISTRO": pd.to_datetime(["2026-10-01 10:00", "2026-10-05 10:00"]),
+    "NOMBRE ESTADO SALIDA": ["PROCESADO", "PROCESADO"], "AREA": ["COCINA", "COCINA"],
+    "TIPO DESCARGO": ["Comida Personal", "Comida Personal"],
+    "NOMBRE FAMILIA": ["ALIMENTOS", "ALIMENTOS"], "VALOR NETO": [70.0, 5.0]})
+
 # ── ventas: definicion_venta.por_grupo_dia ───────────────────────────────
 ventas = pd.DataFrame({
     dv.FECHA: pd.to_datetime(["2026-09-03", "2026-09-03", "2026-09-04", "2026-09-05",
@@ -288,6 +313,10 @@ ok(set(cv.tabla_larga(D).columns) == {"PERIODO", "FAMILIA", "CONCEPTO", "SOLES"}
    "la tabla para el asistente, con columnas por nombre")
 igual(cv.armar(ajuste.iloc[:0], compras, salidas, pgd)["periodos"], [],
       "sin cierres no hay meses (y no revienta)")
+D_ap = cv.armar(ajuste, compras, salidas_ap, pgd)
+igual((D_ap["salidas"]["Comida Personal"]["Alimentos"][0],
+       D_ap["salidas"]["Comida Personal"]["Alimentos"][1]), (70.0, 5.0),
+      "armar: la comida de personal digitada el 1 oct antes de abrir resta en setiembre (#754)")
 
 # ── Semanas y quincenas: el inventario del kardex ────────────────────────
 import datetime as dt  # noqa: E402

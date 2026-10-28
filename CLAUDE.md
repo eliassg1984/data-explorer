@@ -1387,7 +1387,11 @@ ejecutivo aplica la misma cuenta. Esta decisión sustituye la comparación
 ajustada por descuentos de la regla #661; ver regla #676.
 
 **Mes desde enero de 2024**, con inventario inicial y final y movimientos
-de venta del mes. El inventario es lo CONTADO valorizado del último cierre
+de venta del mes. **Con el cierre físico** (regla #754): se cuenta el día
+1 por la mañana y la apertura llega después; las notas de salida digitadas
+entre el día 1 y la apertura del conteo de su área restan en el mes que
+cerró (`costo_ventas.fecha_de_cierre`). Compras (por emisión) y venta (por
+turno) ya caen en su mes. El inventario es lo CONTADO valorizado del último cierre
 por área en el mes operativo, no el ajuste de Kardex. Un parcial anterior
 al final de mes no habilita su consumo mensual. `costos_calidad.py` revisa
 ambas puntas por período y familia: stock con precio cero, negativos,

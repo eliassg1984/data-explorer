@@ -55,7 +55,9 @@ DE DÓNDE SALE EL RESTO (las definiciones del usuario):
     restadas por `data.cargar` (regla #603), por fecha del documento.
   · Salidas: las notas de salida PROCESADAS, a su `VALOR NETO`, por fecha de
     REGISTRO —la «Relación de Notas de Salidas» del Almacén, regla #614—,
-    una serie por tipo de descargo. «Bajas» va siempre; las otras se suman
+    una serie por tipo de descargo. En el grano Mes, con el CIERRE FÍSICO
+    (regla #754): lo registrado entre el día 1 y la apertura del conteo es
+    digitación atrasada y cuenta en el mes que cerró (`fecha_de_cierre`). «Bajas» va siempre; las otras se suman
     desde la pantalla.
   · Venta neta, costo según el POS y costo de las cortesías: de
     `definicion_venta.por_grupo_dia` (regla #524), por el día del turno.
@@ -86,12 +88,14 @@ import pandas as pd
 
 from cortes import MESES_ABR_ES, fecha_operativa
 
-VERSION = 6
+VERSION = 7
 """Subirla cuando cambie QUÉ se calcula. 2: semanas y quincenas. 3: los
 rótulos de los períodos sin «cierre»/«kardex» (lo dice la cabecera). 4: el
 costo de descuentos (regla #661). 5: lo que devuelve el banco de un
 convenio (regla #665). 6: conciliación con costo completo, histórico mensual
-desde 2024 y observaciones de valorización (regla #676)."""
+desde 2024 y observaciones de valorización (regla #676). 7: el cierre
+físico, las notas digitadas hasta la apertura del conteo en el mes que
+cerró (regla #754)."""
 
 DESDE = pd.Period("2025-10", freq="M")
 """Inicio del histórico de SEMANA/QUINCENA, basado en Kardex."""
@@ -262,6 +266,61 @@ def inventario_por_mes(ajuste):
         if abs(valor) > 0.5:
             areas.setdefault(mes, {})[nombre] = (g["f"].max().date(), valor)
     return inv, areas
+
+
+def aperturas_por_mes(ajuste):
+    """`{mes nuevo: {área: apertura, "": la de la mayoría}}`: a qué hora se
+    abrió en el sistema el conteo de cierre de cada área que contó stock
+    (más de S/ 0,50, como `sin_plato.areas_con_stock`, regla #750). El mes
+    es el que EMPIEZA: el cierre de setiembre, abierto el 1 oct, da octubre.
+    «La mayoría» es la mediana de esas aperturas: la toman las áreas que no
+    contaron stock (Cocina Personal, Venta Interna)."""
+    if ajuste is None or ajuste.empty:
+        return {}
+    c_f, c_nom = _col(ajuste, "FECHA APERTURA INVENTARIO"), _col(ajuste, "AREA")
+    c_val = _col(ajuste, "VALORIZADO TOTAL")
+    if not (c_f and c_nom and c_val):
+        return {}
+    f = pd.to_datetime(ajuste[c_f], errors="coerce")
+    b = pd.DataFrame({"f": f, "mes": fecha_operativa(f).dt.to_period("M"),
+                      "area": ajuste[c_nom].map(_norm), "v": _num(ajuste[c_val])}).dropna(subset=["f", "mes"])
+    b = b[b["f"] == b.groupby(["mes", "area"])["f"].transform("max")]
+    g = b.groupby(["mes", "area"]).agg(f=("f", "max"), v=("v", "sum")).reset_index()
+    g = g[(g["v"].abs() > 0.5) & (g["f"] >= g["mes"].map(lambda m: (m + 1).start_time))]
+    out = {}
+    for mes, x in g.groupby("mes"):
+        d = dict(zip(x["area"], x["f"]))
+        d[""] = x["f"].sort_values().iloc[(len(x) - 1) // 2]
+        out[mes + 1] = d
+    return out
+
+
+def fecha_de_cierre(salidas, ajuste):
+    """La `FECHA REGISTRO` de cada nota de salida, con el CIERRE FÍSICO
+    (regla #754): el conteo se hace el día 1 por la mañana —es el stock al
+    cierre del mes— y la apertura en el sistema llega después, cuando se
+    terminó de digitar lo atrasado. Una nota registrada entre el día 1 y la
+    apertura del conteo de su área (la de la mayoría si su área no contó
+    stock) es del mes que cerró: va a su último instante. Así la comida de
+    personal de marzo 2026, registrada el 1 abr por la mañana, resta en
+    marzo. Las demás, sin cambio."""
+    c_f = _col(salidas, "FECHA REGISTRO")
+    f = pd.to_datetime(salidas[c_f], errors="coerce")
+    ap = aperturas_por_mes(ajuste)
+    if not ap:
+        return f
+    c_area = _col(salidas, "AREA")
+    area = salidas[c_area].map(_norm) if c_area else pd.Series("", index=salidas.index)
+    mes = f.dt.to_period("M")
+    corte = pd.Series(pd.NaT, index=salidas.index, dtype="datetime64[ns]")
+    for m, d in ap.items():
+        sel = mes == m
+        if sel.any():
+            corte[sel] = area[sel].map(lambda a: d.get(a, d[""])).astype("datetime64[ns]")
+    mover = f.notna() & corte.notna() & (f < corte)
+    out = f.copy()
+    out[mover] = mes[mover].dt.start_time - pd.Timedelta(seconds=1)
+    return out
 
 
 def base_activa(maestro):
@@ -492,6 +551,11 @@ def armar(ajuste, compras, salidas, por_grupo_dia, convenios=None):
         meses = [m for m in meses if ultimos.loc[m] >= m.end_time.normalize()]
     prev = inv.copy()
     prev.index = [m + 1 for m in prev.index]
+    # El cierre físico (#754): las notas digitadas hasta la apertura del
+    # conteo cuentan en el mes que cerró. Compras (por emisión) y venta (por
+    # turno) ya caen en su mes; el inventario es lo contado.
+    if salidas is not None and not salidas.empty and _col(salidas, "FECHA REGISTRO"):
+        salidas = salidas.assign(**{_col(salidas, "FECHA REGISTRO"): fecha_de_cierre(salidas, ajuste)})
     out = {"grano": "mes", "inventario": "cierre", "periodos": []}
     for m in meses:
         fechas = sorted(f for f, _ in areas.get(m, {}).values())
