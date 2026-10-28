@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-751 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+752 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (247)
 
@@ -830,7 +830,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 
-**Datos, R2 y DuckDB** (127)
+**Datos, R2 y DuckDB** (128)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -959,6 +959,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#743** — «En qué se fue cada producto» se cuenta con dos relojes y por área: el flujo es NETO, la…
 - **#745** — La portada de Inicio cuenta el mes CON su contexto: el presupuesto, los doce meses, lo…
 - **#750** — El borde de un cierre lo ponen las áreas que CONTARON STOCK, y Destino cuenta sólo de conteo…
+- **#752** — El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre después; lo digitado hasta la…
 
 **SUNAT y SIRE** (75)
 
@@ -1116,7 +1117,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (227)
+**Decisiones de diseño y UX** (228)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1345,6 +1346,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#749** — Compras › «Vs año pasado» abre en el TOTAL, pone la venta al lado y parte la diferencia en…
 - **#750** — El borde de un cierre lo ponen las áreas que CONTARON STOCK, y Destino cuenta sólo de conteo…
 - **#751** — Producción › «Consumo según ventas» dice la cuenta de cada porcionamiento, deja elegir el…
+- **#752** — El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre después; lo digitado hasta la…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57200,6 +57202,58 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      Subir `consumo_recetas.VERSION` (va en 4). Lo vigilan
      `test_consumo_recetas.py` y `test_consumo_pieza.py`. (2026-10-28.)
 
+752. **El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre
+     después; lo digitado hasta la apertura es del cierre, lo vendido desde
+     el día 1 es del mes nuevo** (`sin_plato.periodos_operativos` —`c0`/`c1`—,
+     `bordes_fisicos`, `ventas_del_mes_nuevo`, `cierre_fisico`,
+     `ventas_del_borde`; `kardex.sql_descargos_antes_de_apertura`;
+     `data._sin_plato_cacheable`, `_mov_cierre_fisico`). A pedido
+     (2026-10-28), con el dato operativo del usuario.
+     · **Cómo se trabaja**: el Almacén cuenta el día 1 por la mañana, antes
+       de que haya movimientos, y lo contado es el stock al cierre del mes.
+       La APERTURA del conteo en el sistema llega después —el 1 por la
+       tarde, el 2 o el 3—, cuando terminaron de digitar lo atrasado
+       (producción, porcionamientos, notas, requerimientos), que en el
+       kardex aparece del 30 al 2. Todo eso es del mes que cerró.
+     · **Medido: el POS ajusta contra el stock del sistema EN LA
+       APERTURA**, no al fin del mes: en 8 de 8 aperturas (Almacén, Cocina y
+       Barra, cuatro cierres), el «stock al cierre» de
+       `ajusteinventario.parquet` es la foto del kardex a la hora de la
+       apertura en todos los productos que se movieron entre el día 1 y
+       ella (115 de 115 el 1 oct 2026 en el Almacén).
+     · **Lo que eso rompía**: el descargo de ventas que corre antes de la
+       apertura. En 2025 corría solo a las 00:20 y descontaba el día
+       anterior (del mes que cerraba: bien). En 2026 corre a mano: el 1 jul
+       a las 23:15 descontó lo vendido el 1 de julio y Cocina abrió el 2 a
+       las 17:33. Esa venta caía en junio y, como el ajuste se calculó
+       después, junio mostraba ese monto de sobrante falso y julio el mismo
+       de faltante. Y «ventas del borde» (#743) tomaba la apertura como hora
+       del conteo: el almuerzo del 1 oct pasaba a setiembre.
+     · **La regla**: el período es el MES calendario (`c0`/`c1`; `desde`,
+       `hasta` y `dias` son los suyos: setiembre, 30 días). La ventana del
+       kardex de cada área sigue hasta su apertura (lo digitado entra al
+       cierre). De los descargos (95) registrados entre el día 1 y la
+       apertura, la parte que vendió el mes nuevo —el costo de lo que cubrió
+       la corrida (`descargosventas.parquet`) vendido desde el día 1 a las 6
+       (`CORTE_TURNO`), por el paloteo— pasa al mes siguiente, y el ajuste
+       (93) se corrige en los dos: vuelve al cierre el faltante que el POS
+       borró y se le quita al siguiente el que le cargó (`cierre_fisico`).
+       Las fotos (lo contado) no cambian y cada período sigue cerrando
+       contra el kardex. Lo vendido por día (`reparto_venta`) va por el mes
+       físico; las bajas (por fecha de proceso), por la apertura.
+     · **Lo que queda aproximado**: las compras ingresadas entre el día 1 y
+       la apertura se quedan en el cierre. La regla del Almacén es la fecha
+       de EMISIÓN, que el kardex no trae; casi todas son facturas del mes
+       que cerró (1 oct 2026: S/ 2.722 de 3.499) y el resto queda en el
+       cierre.
+     · **Movimientos por Tipo** (#747) usa lo mismo por período
+       (`_mov_cierre_fisico`): lo vendido este mes antes de la apertura de
+       inicio entra; lo del mes siguiente antes de la de fin sale.
+     · **Vale también para Costos** cuando se pase a esta cuenta: venta y
+       compras por calendario, lo digitado hasta la apertura al cierre.
+     Subir `sin_plato.VERSION` (va en 6: la #750 no subió el número). Lo
+     vigila `test_graficos.py::_pruebas_relojes_sin_plato`. (2026-10-28.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57212,7 +57266,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#751**; la próxima toma el número siguiente.
+> última regla es la **#752**; la próxima toma el número siguiente.
 
 >
 

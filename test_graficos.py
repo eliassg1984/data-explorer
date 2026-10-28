@@ -8506,6 +8506,53 @@ def _pruebas_relojes_sin_plato():
     check("sin el dato de la sesión anterior, ésa corta como antes",
           op_s["ventanas"][2], (T("2026-09-02 16:00"), T("2026-10-01 18:00")))
     check("sólo queda el reloj de conteo a conteo", sp.RELOJES, ("operativo",))
+    # Regla #752: el CIERRE FÍSICO. Se cuenta el día 1 por la mañana (el
+    # stock al cierre del mes) y se abre después: lo digitado hasta la
+    # apertura es del cierre; lo vendido desde el día 1, del mes nuevo.
+    op_m = sp.periodos_operativos([dict(per[0], mes=(2026, 9))], aj, [0, 1, 2, 5])[0]
+    check("el período es el mes físico",
+          (op_m["c0"], op_m["c1"], op_m["desde"], op_m["hasta"], op_m["dias"]),
+          (T("2026-09-01"), T("2026-10-01"), dt.date(2026, 9, 1), dt.date(2026, 9, 30), 30.0))
+    check("la ventana de cada área sigue hasta su apertura",
+          op_m["ventanas"][1], (T("2026-09-02 10:00"), T("2026-10-01 18:00")))
+    check("los bordes: del 1 del mes nuevo a la apertura de cada área",
+          sp.bordes_fisicos([op_m])[:2],
+          [(0, 0, T("2026-10-01"), T("2026-10-01 18:00")), (0, 1, T("2026-10-01"), T("2026-10-01 18:00"))])
+    desc = pd.DataFrame({
+        "k": [0, 0], "area": [1, 1], "cod": ["A", "B"],
+        "h": [T("2026-10-01 23:00"), T("2026-10-01 00:00")], "c": [T("2026-10-01")] * 2,
+        "cant_in": [0.0, 0.0], "cant_out": [4.0, 2.0], "val_in": [0.0, 0.0], "val_out": [40.0, 20.0]})
+    corridas = pd.DataFrame({
+        "ini": [T("2026-10-01 23:15"), T("2026-10-01 00:20")],
+        "desde": [T("2026-10-01 00:00"), T("2026-09-30 08:00")],
+        "hasta": [T("2026-10-01 23:59"), T("2026-10-01 03:00")]})
+    pedidos = pd.DataFrame({"t": [T("2026-09-30 21:00"), T("2026-10-01 02:00"),
+                                  T("2026-10-01 13:00"), T("2026-10-01 20:00")],
+                            "costo": [50.0, 10.0, 30.0, 30.0]})
+    nv = sp.ventas_del_mes_nuevo(desc, corridas, pedidos)
+    check("el descargo del día 1 vendió el mes nuevo en la parte de su costo (60 de 70: la 1 am es del 30)",
+          (list(nv["cod"]), round(float(nv["cant_out"].iloc[0]), 4), round(float(nv["val_out"].iloc[0]), 2)),
+          (["A"], round(4 * 60 / 70, 4), round(40 * 60 / 70, 2)))
+    kx = pd.DataFrame({"k": [0, 1], "area": [1, 1], "cod": ["A", "A"], "tipo": ["95", "95"],
+                       "cant_in": [0.0, 0.0], "cant_out": [10.0, 5.0], "val_in": [0.0, 0.0],
+                       "val_out": [100.0, 50.0]})
+    nuevas = pd.DataFrame({"k": [0], "area": [1], "cod": ["A"], "cant_in": [0.0],
+                           "cant_out": [4.0], "val_in": [0.0], "val_out": [40.0]})
+    mf = sp.movimientos(sp.cierre_fisico(kx, nuevas, 2)).set_index("k")
+    check("la venta pasa a su mes y el ajuste vuelve al físico en los dos",
+          [(float(mf.loc[k, "vend_q"]), float(mf.loc[k, "aj_q"])) for k in (0, 1)],
+          [(6.0, -4.0), (9.0, 4.0)])
+    check("cada período sigue cerrando: el stock que mueven es el mismo",
+          [float(-mf.loc[k, "vend_v"] + mf.loc[k, "aj_v"]) for k in (0, 1)], [-100.0, -50.0])
+    check("lo que pasa al mes en curso se cae: sólo se corrige el cierre",
+          sp.cierre_fisico(kx, nuevas, 1).iloc[len(kx):]["k"].tolist(), [0, 0])
+    borde_f = sp.ventas_del_borde(
+        pedidos.iloc[[0, 2]], pd.DataFrame({"ini": [T("2026-10-02 08:00")], "desde": [T("2026-10-01 00:00")],
+                                            "hasta": [T("2026-10-01 23:59")]}),
+        [{"k": 0, "t0": T("2026-09-02 10:00"), "t1": T("2026-10-01 18:00"),
+          "c0": T("2026-09-01"), "c1": T("2026-10-01")}]).iloc[0]
+    check("el borde: lo del 30 sin descontar pasa a plato; el almuerzo del 1 oct ya no",
+          (float(borde_f["fin"]), float(borde_f["nunca"]), float(borde_f["ini"])), (50.0, 50.0, 0.0))
 
     # ── 2) La foto en el corte ──────────────────────────────────────────
     fotos = pd.DataFrame({

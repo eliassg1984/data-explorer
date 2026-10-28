@@ -31,12 +31,22 @@ def _hora(t):
     return f"{t.day} {_MESES[t.month-1]} {t:%H:%M}"
 
 
+def _dia(t):
+    t=pd.Timestamp(t)
+    return f"{t.day} {_MESES[t.month-1]}"
+
+
 def subtitulo_operativo(p,nombres):
-    """El período del reloj operativo: del corte de la mayoría al de la
-    mayoría, y las áreas que se contaron en otro momento."""
+    """El período: el mes físico del cierre (regla #752) y hasta cuándo se
+    tomó lo digitado —la apertura de la mayoría y las áreas que abrieron en
+    otro momento—. Sin `c0`, el de las aperturas (#743)."""
     t0,t1=pd.Timestamp(p['t0']),pd.Timestamp(p['t1'])
     aparte=sorted(((w[1],a) for a,w in (p.get('ventanas') or {}).items() if pd.Timestamp(w[1])!=t1),reverse=True)
     extra=''.join(f" ({'; '.join(nombre_area(nombres.get(a,a))+', hasta el '+_hora(t) for t,a in aparte[:2])})") if aparte else ''
+    if p.get('c0') is not None and p.get('c1') is not None:
+        c0,c1=pd.Timestamp(p['c0']),pd.Timestamp(p['c1'])
+        return (f"Del {_dia(c0)} al {_dia(c1-pd.Timedelta(days=1))}: lo contado el {_dia(c1)} por la mañana; "
+                f"lo digitado hasta la apertura del {_hora(t1)}{extra} es de este cierre · el restaurante entero")
     return (f"Del {_hora(t0)} al {_hora(t1)}, de conteo a conteo de cada área"
             f"{extra} · el restaurante entero")
 

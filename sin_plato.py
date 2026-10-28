@@ -80,14 +80,17 @@ import definicion_venta as dv
 import kardex
 from cortes import MESES_ABR_ES, MESES_LARGOS_ES
 
-VERSION = 4
+VERSION = 6
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula. La 2: las líneas que se descargan por insumo bajan
 por su receta base (regla #648). La 3 conserva el desglose por tipo del
 Sankey; no cambia las columnas de la cuenta original. La 4 agrega el reloj
 operativo y el balance por área (regla #743); el reloj del kardex da lo
 mismo que la 3. La 5: el corte lo ponen sólo las áreas que contaron
-stock, y Destino queda sólo con el reloj operativo (regla #750)."""
+stock, y Destino queda sólo con el reloj operativo (regla #750) —el número
+no se subió en ese commit—. La 6: el cierre físico, el mes calendario con
+lo digitado hasta la apertura y las ventas del día 1 en su mes (regla
+#752)."""
 
 DESDE = (2025, 9)
 """El cierre desde el que se cuenta: el primer período es octubre 2025.
@@ -196,11 +199,15 @@ def momentos(per):
     return [ini] + [dt.datetime.combine(p["hasta"], dt.time(23)) for p in per]
 
 
-def _periodo_de(fechas, per):
-    """El `k` de cada fecha (NaN fuera de todos los períodos)."""
+def _periodo_de(fechas, per, fisico=False):
+    """El `k` de cada fecha (NaN fuera de todos los períodos). Con
+    `fisico`, por el mes físico (`c0`/`c1`, regla #752): lo VENDIDO cae en
+    el mes en que pasó; lo REGISTRADO (una nota, el proceso de una baja), en
+    el cierre que lo abarca hasta la apertura."""
     if not per:
         return pd.Series(np.nan, index=fechas.index)
-    bordes = [p["t0"] for p in per] + [per[-1]["t1"]]
+    a, z = ("c0", "c1") if fisico and "c0" in per[0] else ("t0", "t1")
+    bordes = [p[a] for p in per] + [per[-1][z]]
     return pd.cut(pd.to_datetime(fechas, errors="coerce"), bins=bordes,
                   right=False, labels=False)
 
@@ -437,7 +444,7 @@ def reparto_venta(vend, mapa, per):
                    np.where(grupo.isin(GRUPOS_APARTE), "evvi", "venta"))
     v = pd.DataFrame({"cp": _cod(vend["producto"]), "cat": cat,
                       "n": _num(vend["unidades"]),
-                      "k": _periodo_de(vend["dia"], per)}).dropna(subset=["k"])
+                      "k": _periodo_de(vend["dia"], per, fisico=True)}).dropna(subset=["k"])
     x = v.merge(mapa, on="cp", how="inner")
     if x.empty:
         return vacio
@@ -755,11 +762,17 @@ def _con_stock(cortes, sesion, con_stock):
 
 def periodos_operativos(per, ajustes, areas, con_stock=None):
     """Los períodos de `periodos` con el reloj operativo: cada uno con
-    `ventanas` (`{área: (t0, t1)}`, cada área de su conteo al siguiente),
-    `t0`/`t1` en el corte de la mayoría, `desde`/`hasta` sus días y `dias`
-    en fracción (29,33 en setiembre 2026). El área que no se contó en un
+    `ventanas` (`{área: (t0, t1)}`, cada área de su APERTURA a la siguiente:
+    lo que el kardex registró antes de abrir el conteo es del cierre) y
+    `t0`/`t1` en la apertura de la mayoría. El área que no se contó en un
     cierre —o que contó sin stock, con `con_stock` de `areas_con_stock`,
-    regla #750— toma el corte de la mayoría. Pura."""
+    regla #750— toma la de la mayoría.
+
+    Desde la regla #752 el período es el mes FÍSICO: el conteo se hace el
+    día 1 por la mañana y es el stock al cierre del mes; la apertura llega
+    después, cuando se terminó de digitar lo atrasado. `c0`/`c1` son el
+    1 del mes y el 1 del siguiente; `desde`/`hasta` y `dias` (30 en
+    setiembre 2026), los de ese mes. Pura."""
     out = []
     for p in per:
         ca = _con_stock(cortes_de_conteo(p.get("sesion_ant"), ajustes),
@@ -769,9 +782,18 @@ def periodos_operativos(per, ajustes, areas, con_stock=None):
         t0 = _corte_principal(ca, p["t0"])
         t1 = _corte_principal(cb, p["t1"])
         vent = {int(a): (ca.get(int(a), t0), cb.get(int(a), t1)) for a in areas}
-        out.append(dict(p, t0=t0, t1=t1, ventanas=vent, reloj="operativo",
-                        desde=t0.date(), hasta=(t1 - _HORA).date(),
-                        dias=(t1 - t0) / pd.Timedelta(days=1)))
+        # El cierre FÍSICO (regla #752): el mes calendario del cierre. Sin
+        # `mes` (un período armado a mano), el de las aperturas.
+        c0, c1 = t0, t1
+        if p.get("mes"):
+            y, m = p["mes"]
+            c0 = pd.Timestamp(int(y), int(m), 1)
+            c1 = c0 + pd.offsets.MonthBegin(1)
+        fis = bool(p.get("mes"))
+        out.append(dict(p, t0=t0, t1=t1, c0=c0, c1=c1, ventanas=vent, reloj="operativo",
+                        desde=c0.date(),
+                        hasta=((c1 - pd.Timedelta(days=1)) if fis else (t1 - _HORA)).date(),
+                        dias=(c1 - c0) / pd.Timedelta(days=1)))
     return out
 
 
@@ -786,6 +808,117 @@ def ventanas(per, areas):
             t0, t1 = v.get(int(a), (p["t0"], p["t1"]))
             filas.append((int(p["k"]), int(a), pd.Timestamp(t0), pd.Timestamp(t1)))
     return pd.DataFrame(filas, columns=["k", "area", "t0", "t1"])
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# EL CIERRE FÍSICO (regla #752)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# El conteo se hace el día 1 por la mañana, antes de que haya movimientos:
+# es el stock al cierre del mes. La APERTURA del conteo en el sistema llega
+# después (el día 1 por la tarde, el 2 o el 3), cuando se terminó de digitar
+# lo atrasado —producción, porcionamientos, notas, requerimientos—, que es
+# del mes que cerró. Y el POS calcula el ajuste contra el stock del sistema
+# EN LA APERTURA (medido: 8 de 8 aperturas, todos los productos movidos).
+#
+# Lo único del mes NUEVO que puede registrarse antes de la apertura es el
+# descargo de ventas: la corrida del 1 jul 2026 a las 23:15 descontó lo
+# vendido el 1 de julio, y Cocina abrió el 2 a las 17:33. Esa venta queda en
+# la ventana del cierre que se abrió y, como el ajuste se calculó después,
+# reaparece como sobrante del cierre; en el mes siguiente vuelve como
+# faltante. `cierre_fisico` la pasa a su mes y corrige los dos ajustes.
+
+CORTE_TURNO = pd.Timedelta(hours=6)
+"""Lo vendido hasta las 6 de la mañana del día 1 es del turno del último
+día del mes: se contó después."""
+
+
+def bordes_fisicos(per):
+    """`(k, area, c, t)`: de cada período, el tramo entre el fin del mes
+    físico (`c1`) y la apertura de cada área (el fin de su ventana), donde
+    el kardex puede traer descargos del mes nuevo. Pura."""
+    out = []
+    for p in per:
+        if "c1" not in p:
+            continue
+        c = pd.Timestamp(p["c1"])
+        for a, (_t0, t1) in sorted((p.get("ventanas") or {}).items()):
+            if pd.Timestamp(t1) > c:
+                out.append((int(p["k"]), int(a), c, pd.Timestamp(t1)))
+    return out
+
+
+def ventas_del_mes_nuevo(desc, corridas, pedidos):
+    """La parte de cada descargo (95) registrado entre el fin de un mes y la
+    apertura de su área que descontó ventas del mes NUEVO. `desc`: (`k`, el
+    período que cierra ese conteo; `area`, `cod`, `h` la hora del kardex,
+    `c` el 1 del mes nuevo; `cant_in`, `cant_out`, `val_in`, `val_out`).
+    `corridas`: (`ini`, `desde`, `hasta`), el calendario del descargo;
+    `pedidos`: (`t`, `costo`), lo vendido por hora de pedido. La parte es la
+    del costo que la corrida cubrió vendido desde el día 1 a las 6; sin
+    corrida en esa hora, nada (se queda en el cierre). Devuelve `desc` con
+    los montos multiplicados por esa parte, sin las filas en cero. Pura."""
+    cols = ["k", "area", "cod", "cant_in", "cant_out", "val_in", "val_out"]
+    if desc is None or desc.empty or corridas is None or corridas.empty:
+        return pd.DataFrame(columns=cols)
+    p = pd.DataFrame({"t": pd.to_datetime(pedidos["t"]), "c": _num(pedidos["costo"])}) \
+        if pedidos is not None and not pedidos.empty else pd.DataFrame(columns=["t", "c"])
+    co = pd.DataFrame({"ini": pd.to_datetime(corridas["ini"]),
+                       "desde": pd.to_datetime(corridas["desde"]),
+                       "hasta": pd.to_datetime(corridas["hasta"])}).dropna()
+    co["h"] = co["ini"].dt.floor("h")
+    parte = {}
+    for (h, c), _g in desc.groupby(["h", "c"]):
+        rs = co[co["h"] == pd.Timestamp(h)]
+        tot = nuevo = 0.0
+        for r in rs.itertuples(index=False):
+            en = p[(p["t"] >= r.desde) & (p["t"] <= r.hasta)]
+            tot += float(en["c"].sum())
+            nuevo += float(en.loc[en["t"] >= pd.Timestamp(c) + CORTE_TURNO, "c"].sum())
+        parte[(pd.Timestamp(h), pd.Timestamp(c))] = nuevo / tot if tot > 0 else 0.0
+    d = desc.copy()
+    f = np.array([parte.get((pd.Timestamp(h), pd.Timestamp(c)), 0.0)
+                  for h, c in zip(d["h"], d["c"])])
+    for col in ("cant_in", "cant_out", "val_in", "val_out"):
+        d[col] = _num(d[col]) * f
+    d = d[f > 1e-9]
+    if d.empty:
+        return pd.DataFrame(columns=cols)
+    d = d.assign(cod=_cod(d["cod"]), k=d["k"].astype(int), area=d["area"].astype(int))
+    return d.groupby(["k", "area", "cod"], as_index=False)[cols[3:]].sum()[cols]
+
+
+def cierre_fisico(kx, nuevas, n_periodos):
+    """`kx` (lo de `kardex.sql_movimientos_ventanas`) con las ventas del mes
+    nuevo (`ventas_del_mes_nuevo`) en su mes: el descargo sale del período
+    `k` y entra al `k + 1`, y el ajuste (93) se corrige en los dos —en `k`
+    vuelve el faltante que el POS borró al ajustar contra el sistema en la
+    apertura; en `k + 1` se le quita el que le cargó—. La foto de cada punta
+    (lo contado) no cambia, y cada período sigue cerrando contra el kardex.
+    Lo que cae fuera de `0 … n_periodos − 1` se descarta: un `k` de −1 en
+    `nuevas` es el borde de ANTES del primer período (sólo entra a él); lo
+    que pasa al siguiente del último es del mes en curso. `kx` lleva `k`;
+    el `area` de lo agregado es entera. Pura."""
+    if nuevas is None or nuevas.empty or kx is None:
+        return kx
+    n = nuevas.assign(cod=_cod(nuevas["cod"]))
+    m = ("cant_in", "cant_out", "val_in", "val_out")
+
+    def filas(k, tipo, signo, cruzado):
+        orden = ("cant_out", "cant_in", "val_out", "val_in") if cruzado else m
+        x = pd.DataFrame({"k": k, "area": n["area"].astype(int), "cod": n["cod"], "tipo": tipo})
+        for dest, src in zip(m, orden):
+            x[dest] = signo * _num(n[src])
+        return x
+    extra = pd.concat([
+        filas(n["k"], TIPO_VENTAS, -1.0, False),      # el descargo sale del cierre…
+        filas(n["k"], TIPO_AJUSTE, 1.0, False),       # …y su ajuste vuelve al físico
+        filas(n["k"] + 1, TIPO_VENTAS, 1.0, False),   # entra al mes en que se vendió…
+        filas(n["k"] + 1, TIPO_AJUSTE, 1.0, True),    # …sin el faltante que le cargó
+    ], ignore_index=True)
+    extra = extra[(extra["k"] >= 0) & (extra["k"] < n_periodos)]
+    return pd.concat([kx, extra[[c for c in extra.columns if c in kx.columns]]],
+                     ignore_index=True)
 
 
 def stock_por_area(fotos, ven):
@@ -866,10 +999,15 @@ def ventas_del_borde(pedidos, corridas, per):
     out = []
     for q in per:
         a, z = pd.Timestamp(q["t0"]), pd.Timestamp(q["t1"])
-        dentro = (p["t"] >= a) & (p["t"] < z)
+        # Desde la regla #752 lo VENDIDO se mira por el mes físico (hasta las
+        # 6 del día 1) y lo DESCONTADO, por la apertura: lo vendido el día 1
+        # antes de abrir el conteo ya no pasa al cierre anterior.
+        va, vz = ((pd.Timestamp(q["c0"]) + CORTE_TURNO, pd.Timestamp(q["c1"]) + CORTE_TURNO)
+                  if "c0" in q else (a, z))
+        dentro = (p["t"] >= va) & (p["t"] < vz)
         tarde = desc.isna() | (desc >= z)
         out.append((q["k"], float(p.loc[dentro & tarde, "c"].sum()),
-                    float(p.loc[(p["t"] < a) & (desc >= a) & (desc < z), "c"].sum()),
+                    float(p.loc[(p["t"] < va) & (desc >= a) & (desc < z), "c"].sum()),
                     float(p.loc[dentro & desc.isna(), "c"].sum())))
     return pd.DataFrame(out, columns=cols)
 

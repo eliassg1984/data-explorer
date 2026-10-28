@@ -2369,7 +2369,12 @@ por área los vigila `test_graficos.py::_pruebas_relojes_sin_plato`. Desde
 la #750 hay UN reloj, de conteo a conteo —se fue «Fechas: Kardex |
 Operativas», y con él su trigger—, y el borde del cierre lo ponen sólo las
 áreas que contaron stock (`sin_plato.areas_con_stock`): Venta Interna,
-que contó el 6 oct sin mercadería, ya no estira setiembre.
+que contó el 6 oct sin mercadería, ya no estira setiembre. Desde la #752
+el período es el MES FÍSICO: se cuenta el día 1 por la mañana y la apertura
+llega después; lo digitado hasta ella es del cierre, y el descargo de
+ventas del mes nuevo que corrió antes pasa a su mes con el ajuste
+corregido (`sin_plato.cierre_fisico`: el POS ajusta contra el stock del
+sistema EN LA APERTURA). Movimientos por Tipo, igual.
 
 `test_stock_movimientos_pieza.py` vigila Movimientos por Tipo de Stock:
 balance, filtros locales, tipos, áreas y ventas sin costo contra

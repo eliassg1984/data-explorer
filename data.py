@@ -2407,14 +2407,6 @@ def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
     clase = dict(zip(mae["cod"], np.where(mae["familia"].str.upper() == sin_plato.FAMILIA_OPERACION,
                                           sin_plato.OPERACION, sin_plato.ALIMENTOS)))
     nombres = dict(zip(mae["cod"], mae["producto"]))
-    ven = sin_plato.ventanas(per_op, areas)
-    kx = con.execute(kardex.sql_movimientos_ventanas(
-        rel, list(ven.itertuples(index=False, name=None)))).df()
-    stock = sin_plato.stock_por_area(fotos, ven)
-    r = sin_plato.calcular(per_op, kx, fotos, salidas, vend, recetaventa, carta,
-                           maestro, recetabase=recetabase, stock=stock)
-    r["areas"] = sin_plato.por_area(kx, stock, trans, ven, clase, nombres)
-    res = {"operativo": r}
     pedidos = _df_o_vacio(con, f"""
         SELECT "FECHA PEDIDO" AS t, sum("COSTO TOTAL") AS costo
         FROM {ruta('paloteoinsumosnivel1.parquet')}
@@ -2422,6 +2414,20 @@ def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
     corridas = _df_o_vacio(con, f"""
         SELECT "INICIO CORRIDA" AS ini, "VENTAS DESDE" AS desde, "VENTAS HASTA" AS hasta
         FROM {ruta('descargosventas.parquet')}""")
+    ven = sin_plato.ventanas(per_op, areas)
+    kx = con.execute(kardex.sql_movimientos_ventanas(
+        rel, list(ven.itertuples(index=False, name=None)))).df()
+    # El cierre físico (#752): lo que el descargo de antes de la apertura
+    # vendió el mes nuevo pasa a su mes, y el ajuste se corrige.
+    nuevas = sin_plato.ventas_del_mes_nuevo(
+        _df_o_vacio(con, kardex.sql_descargos_antes_de_apertura(
+            rel, sin_plato.bordes_fisicos(per_op))), corridas, pedidos)
+    kx = sin_plato.cierre_fisico(kx, nuevas, len(per_op))
+    stock = sin_plato.stock_por_area(fotos, ven)
+    r = sin_plato.calcular(per_op, kx, fotos, salidas, vend, recetaventa, carta,
+                           maestro, recetabase=recetabase, stock=stock)
+    r["areas"] = sin_plato.por_area(kx, stock, trans, ven, clase, nombres)
+    res = {"operativo": r}
     res["operativo"]["borde"] = sin_plato.ventas_del_borde(pedidos, corridas, per_op)
     res["puente"] = {
         "operativo": sin_plato.resumen_reloj(res["operativo"]["filas"], per_op,
@@ -2885,7 +2891,7 @@ def _periodos_conteo_cacheable(archivo, sello, version=None, sello_ajuste=None):
         per, horas, areas,
         con_stock=sin_plato.areas_con_stock(_contado_por_area_dia(con, bucket), ses))
     campos = ("k", "clave", "mes", "nombre", "corto", "desde", "hasta", "t0", "t1",
-              "dias", "ventanas", "cierre", "cierre_ant")
+              "c0", "c1", "dias", "ventanas", "cierre", "cierre_ant")
     out = [dict({c: p[c] for c in campos}, en_curso=False) for p in per_op]
     tope = con.execute(kardex.sql_ultimo_movimiento(rel)).fetchone()[0]
     ult = out[-1]
@@ -2899,8 +2905,9 @@ def _periodos_conteo_cacheable(archivo, sello, version=None, sello_ajuste=None):
             "k": len(out), "clave": f"en_curso_{y}-{m:02d}", "mes": (y, m),
             "nombre": f"{MESES_LARGOS_ES[m - 1].capitalize()} {y}",
             "corto": f"{MESES_ABR_ES[m - 1]} {y % 100:02d}",
-            "desde": ult["t1"].date(), "hasta": (t1 - pd.Timedelta(hours=1)).date(),
-            "t0": ult["t1"], "t1": t1, "dias": (t1 - ult["t1"]) / pd.Timedelta(days=1),
+            "desde": ult["c1"].date(), "hasta": (t1 - pd.Timedelta(hours=1)).date(),
+            "t0": ult["t1"], "t1": t1, "c0": ult["c1"], "c1": None,
+            "dias": (t1 - ult["c1"]) / pd.Timedelta(days=1),
             "ventanas": {a: (v[1], t1) for a, v in ult["ventanas"].items()},
             "cierre": None, "cierre_ant": ult["cierre"], "en_curso": True})
     return {"periodos": out, "sesiones": sesiones}
@@ -2917,20 +2924,65 @@ def periodos_conteo():
         return None
 
 
+def _mov_cierre_fisico(con, bucket, rel, mov, ventanas, c0, c1):
+    """`mov` (lo de `kardex.sql_movimientos_tipo_ventanas`, un período) con
+    el cierre físico (regla #752): lo que el descargo de antes de la apertura
+    del conteo de INICIO vendió este mes entra (con el sobrante que le cargó
+    al cierre anterior, de vuelta), y lo que el de antes de la apertura del
+    de FIN vendió el mes siguiente sale (con el faltante que el POS borró).
+    `c0`/`c1`: el 1 del mes y el del siguiente (`c1` None en el que corre)."""
+    bordes = []
+    for a, t0, t1 in ventanas:
+        if c0:
+            bordes.append((-1, int(a), pd.Timestamp(c0), pd.Timestamp(t0)))
+        if c1:
+            bordes.append((0, int(a), pd.Timestamp(c1), pd.Timestamp(t1)))
+    desc = _df_o_vacio(con, kardex.sql_descargos_antes_de_apertura(rel, bordes))
+    if desc.empty:
+        return mov
+    d0 = pd.Timestamp(min(b[2] for b in bordes)) - pd.Timedelta(days=40)
+    pedidos = _df_o_vacio(con, f"""
+        SELECT "FECHA PEDIDO" AS t, sum("COSTO TOTAL") AS costo
+        FROM read_parquet('s3://{bucket}/paloteoinsumosnivel1.parquet')
+        WHERE "FECHA PEDIDO" >= TIMESTAMP '{d0:%Y-%m-%d %H:%M:%S}' GROUP BY 1""")
+    corridas = _df_o_vacio(con, f"""
+        SELECT "INICIO CORRIDA" AS ini, "VENTAS DESDE" AS desde, "VENTAS HASTA" AS hasta
+        FROM read_parquet('s3://{bucket}/descargosventas.parquet')""")
+    nuevas = sin_plato.ventas_del_mes_nuevo(desc, corridas, pedidos)
+    if nuevas.empty:
+        return mov
+    codigo = {int(c): str(c) for c in mov["area"].dropna().astype(str).str.strip() if c.isdigit()}
+    nombre = dict(zip(mov["tipo"], mov["nombre"]))
+    m = mov.assign(k=0, area=pd.to_numeric(mov["area"], errors="coerce"))
+    m = sin_plato.cierre_fisico(m, nuevas, 1)
+    m["area"] = m["area"].map(lambda a: codigo.get(int(a), f"{int(a):03d}"))
+    m["nombre"] = m["nombre"].fillna(m["tipo"].map(nombre)).fillna(
+        m["tipo"].map({sin_plato.TIPO_VENTAS: "Descargo de Ventas",
+                       sin_plato.TIPO_AJUSTE: "Ajuste Inventarios"}))
+    nums = [c for c in mov.columns if c not in ("area", "cod", "tipo", "nombre")]
+    m[nums] = m[nums].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    g = m.groupby(["area", "cod", "tipo"], as_index=False).agg(
+        nombre=("nombre", "first"), **{c: (c, "sum") for c in nums})
+    return g[list(mov.columns)]
+
+
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
-def _movimientos_conteo_cacheable(archivo, sello, ventanas, version=None):
+def _movimientos_conteo_cacheable(archivo, sello, ventanas, version=None, c0=None, c1=None):
     """Lo que entró y salió de cada área y producto por tipo de documento
     dentro de SU ventana (`ventanas`: tupla de `(área, t0, t1)` en texto
     ISO, `t1` exclusivo), y las dos fotos —el stock en la hora del corte de
     cada área—: `(mov, foto_ini, foto_fin)` con las columnas de
-    `kardex.sql_movimientos` y `kardex.sql_stock_al`. Si falla, LANZA."""
+    `kardex.sql_movimientos` y `kardex.sql_stock_al`. Con `c0`/`c1` (el mes
+    físico, texto ISO), el cierre físico de la regla #752
+    (`_mov_cierre_fisico`). Si falla, LANZA."""
     if not secrets_disponibles():
         return None
     con = get_conn()
     bucket = st.secrets["R2_BUCKET"]
     rel = f"read_parquet('s3://{bucket}/{archivo}')"
     mov = con.execute(kardex.sql_movimientos_tipo_ventanas(rel, list(ventanas))).df()
-    fotos = _kardex_fotos_cacheable(archivo, sello_datos(archivo), version=version)
+    mov = _mov_cierre_fisico(con, bucket, rel, mov, ventanas, c0, c1)
+    fotos = _kardex_fotos_cacheable(archivo, sello_datos(archivo), version=kardex.VERSION)
     ven = pd.DataFrame([(0, int(a), pd.Timestamp(t0), pd.Timestamp(t1))
                         for a, t0, t1 in ventanas], columns=["k", "area", "t0", "t1"])
     stock = sin_plato.stock_por_area(fotos, ven)
@@ -2958,9 +3010,13 @@ def movimientos_conteo(periodo):
     sí)."""
     ventanas = tuple((int(a), pd.Timestamp(t0).isoformat(), pd.Timestamp(t1).isoformat())
                      for a, (t0, t1) in sorted(periodo["ventanas"].items()))
+
+    def iso(x):
+        return pd.Timestamp(x).isoformat() if x is not None and pd.notna(x) else None
     try:
         r = _movimientos_conteo_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
-                                          ventanas, version=kardex.VERSION)
+                                          ventanas, version=(kardex.VERSION, sin_plato.VERSION),
+                                          c0=iso(periodo.get("c0")), c1=iso(periodo.get("c1")))
     except Exception:
         return None
     return r

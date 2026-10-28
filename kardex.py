@@ -364,6 +364,36 @@ def sql_movimientos_ventanas(relacion, ventanas):
     """
 
 
+def sql_descargos_antes_de_apertura(relacion, bordes):
+    """Los descargos de ventas (95) que el kardex registró entre el fin de un
+    mes —el conteo físico— y la apertura del conteo de cada área, por hora:
+    `bordes` es una lista de `(k, area, c, t)` (`c` el 1 del mes nuevo, `t`
+    exclusivo la apertura; `k` el período que ese conteo cierra). Vuelven
+    `k`, `area`, `cod`, `h`, `c` y los cuatro montos: de ahí
+    `sin_plato.ventas_del_mes_nuevo` saca qué parte vendió el mes nuevo
+    (regla #752)."""
+    vacio = ('SELECT NULL AS k, NULL AS area, NULL AS cod, NULL AS h, NULL AS c, '
+             'NULL AS cant_in, NULL AS cant_out, NULL AS val_in, NULL AS val_out WHERE false')
+    bordes = [b for b in bordes if _instante(b[3]) > _instante(b[2])]
+    if not bordes:
+        return vacio
+
+    def ts(x):
+        return f"TIMESTAMP '{_instante(x):%Y-%m-%d %H:%M:%S}'"
+    valores = ", ".join(f"({int(k)}, {int(a)}, {ts(c)}, {ts(t)})" for k, a, c, t in bordes)
+    return f"""
+        WITH b(k, area, c, t) AS (VALUES {valores})
+        SELECT b.k, b.area, x."CODIGO PRODUCTO" AS cod, x."{COL_FECHA}" AS h, b.c,
+               sum(x."CANT INGRESO") AS cant_in, sum(x."CANT SALIDA") AS cant_out,
+               sum(x."VALOR INGRESO") AS val_in, sum(x."VALOR SALIDA") AS val_out
+        FROM {relacion} x
+        JOIN b ON CAST(x."CODIGO AREA" AS INTEGER) = b.area
+              AND x."{COL_FECHA}" >= b.c AND x."{COL_FECHA}" < b.t
+        WHERE x."COD TIPO" = '{TIPO_VENTAS}'
+        GROUP BY 1, 2, 3, 4, 5
+    """
+
+
 def sql_movimientos_cortes(relacion, cortes):
     """Por PERÍODO, producto y tipo de documento, lo que entró y salió en el
     RESTAURANTE ENTERO: las áreas sumadas, sin los movimientos entre áreas
