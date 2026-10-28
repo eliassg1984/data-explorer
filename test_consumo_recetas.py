@@ -338,6 +338,60 @@ ok("RET" not in d["porcs"]["PE"], "un corte que ninguna venta usó no viaja (los
 viejo = mc.datos_de_la_vista({k: v for k, v in r.items() if k != "porcs"}, ())
 ok(viejo["porcs"] == {}, "con una caché anterior a la VERSION 3 la página no los lista, y no se cae")
 
+print("\n── la cuenta de cada rendimiento y «último mes» (regla #751) ──")
+# La cuenta: rend = lo que puso el insumo ÷ las unidades del corte de TODOS los
+# porcionamientos de la ventana; y el peso de los cortes de este insumo.
+f_pc = rp[(rp["cod_x"] == "PC") & (rp["cod_e"] == "PE")].iloc[0]
+igual(f_pc["entra"], 2.4 + 4.0, "lo que puso el pulpo entero al corte: 2,4 + 4 kg")
+igual(f_pc["tot"], 18.0, "las unidades del corte en la ventana: 8 + 10")
+igual(f_pc["entra"] / f_pc["tot"], f_pc["rend"], "y el rendimiento es esa división")
+igual(f_pc["peso_e"], 2.4 + 2.0, "el peso de esos cortes: 2,4 + 2 kg (P2 tuvo 2 kg de merma)")
+igual(1 - f_pc["peso_e"] / f_pc["entra"], 1 - 4.4 / 6.4, "la merma real sale de esas dos cifras")
+ok(f_pc["alcance"] == "90", "con «90», la ventana de 90 días", f"{f_pc['alcance']!r}")
+_pcs = PCS.set_index("porc")
+ok(list(PCS.loc[PCS["cod_x"] == "PC", "meses"].iloc[0]) == ["2026-09-01"],
+   "cada porcionamiento dice en la ventana de qué meses entró")
+igual(_pcs.loc["P2", "peso"], 2.0, "y su peso")
+# «Último mes»: un porcionamiento de agosto entra en los 90 días de septiembre
+# pero no en el mes; un corte que en septiembre no se porcionó sigue con 90 días.
+PORC3 = pd.concat([PORC, pd.DataFrame([
+    ("P8", T("2026-08-15 10:00"), "PE", "PC", 5.0, 5.0, 10.0, 5.0),
+    ("P9", T("2026-08-20 10:00"), "PE", "PQ", 2.0, 2.0, 8.0, 2.0),
+], columns=PORC.columns)], ignore_index=True)
+con.register("po3", PORC3)
+
+
+def _rend(modo):
+    x = cr.calcular(n1, con.execute(cr.sql_recetas("rb")).df(), con.execute(cr.sql_porcionamientos("po3")).df(),
+                    con.execute(cr.sql_maestro("ma")).df(), INI, FIN, rendimiento=modo)
+    return x, x["rend"].set_index(["cod_x", "cod_e"])
+
+
+r90, k90 = _rend("90")
+rmes, kmes = _rend("mes")
+igual(k90.loc[("PC", "PE"), "rend"], (2.4 + 4.0 + 5.0) / 28.0, "con «90», el de agosto entra: 11,4 kg ÷ 28 cortes")
+igual(kmes.loc[("PC", "PE"), "rend"], (2.4 + 4.0) / 18.0, "con «último mes», sólo los de septiembre")
+ok(kmes.loc[("PC", "PE"), "alcance"] == "mes", "y lo dice", f"{kmes.loc[('PC', 'PE'), 'alcance']!r}")
+igual(kmes.loc[("PQ", "PE"), "rend"], 2.0 / 8.0, "un corte sin porcionamientos en el mes sigue con los de 90 días")
+ok(kmes.loc[("PQ", "PE"), "alcance"] == "90", "y lo dice", f"{kmes.loc[('PQ', 'PE'), 'alcance']!r}")
+igual(float(rmes["filas"].query("cod == 'PE' and padre == 'PC' and plato == 'Pulpo a la leña'")["q"].sum()), 2 * (2.4 + 4.0) / 18.0,
+      "el árbol baja con el rendimiento elegido: 2 cortes del Pulpo a la leña")
+try:
+    _rend("otro")
+    ok(False, "un rendimiento desconocido no se calcula")
+except ValueError:
+    ok(True, "un rendimiento desconocido no se calcula")
+# Lo que viaja a la página: la cuenta mes por mes y los porcionamientos del corte.
+from graficos import movimientos_consumo as mc  # noqa: E402
+_D = mc.datos_de_la_vista(r)
+ok(_D["rend_mes"]["PE"]["PC"]["2026-09-01"][:5] == [round(6.4 / 18, 6), 6.4, 18.0, 18.0, 4.4],
+   "la página recibe la cuenta del mes: rendimiento, puso, unidades, de este insumo, peso",
+   f"{_D['rend_mes']['PE']['PC']}")
+ok(_D["rend"]["PE"]["PC"][5:] == [6.4, 18.0, 18.0, 4.4, "90"], "y la del último mes, al final de lo de siempre",
+   f"{_D['rend']['PE']['PC']}")
+ok([p[0] for p in _D["porcs_corte"]["PC"]] == ["P2", "P1"] and _D["porcs_corte"]["PC"][0][6] == 2.0,
+   "los porcionamientos del corte en la ventana del último mes, con su peso", f"{_D['porcs_corte'].get('PC')}")
+
 print("\n── la venta interna, por la fecha en que se PRODUJO (regla #605) ──")
 # La charcutería de Mayta: la MASA se hace con una orden de producción el
 # 1 de agosto (10 kg, 1 kg de magret por kg), el 20 se porciona en
@@ -435,8 +489,8 @@ _data = ast.parse((RAIZ / "data.py").read_text(encoding="utf-8"))
 _calc = [n for n in ast.walk(_data) if isinstance(n, ast.Call)
          and getattr(n.func, "attr", "") == "calcular"
          and getattr(n.func.value, "id", "") == "consumo_recetas"]
-ok(_calc and all({"anual", "ordenes"} <= {k.arg for k in c.keywords} for c in _calc),
-   "la app le pasa al cálculo los 12 meses y las órdenes de producción (regla #605)")
+ok(_calc and all({"anual", "ordenes", "rendimiento"} <= {k.arg for k in c.keywords} for c in _calc),
+   "la app le pasa al cálculo los 12 meses, las órdenes de producción (regla #605) y el rendimiento (#751)")
 ok(cr.ARCHIVOS.get("ordenes") == "ordenesproduccion.parquet",
    "las órdenes de producción están entre los parquets del cálculo (su sello va en la caché)")
 

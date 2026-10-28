@@ -2076,7 +2076,8 @@ def ventas_por_mes(archivo="ventas.parquet"):
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
-def _consumo_recetas_cacheable(archivo, sello, ini, fin, sellos=(), version=None):
+def _consumo_recetas_cacheable(archivo, sello, ini, fin, sellos=(), version=None,
+                               rendimiento="90"):
     """El consumo de insumos de compra del rango (`consumo_recetas.calcular`,
     regla #558). Si falla, LANZA: no se cachea.
 
@@ -2120,17 +2121,19 @@ def _consumo_recetas_cacheable(archivo, sello, ini, fin, sellos=(), version=None
         ops = con.execute(consumo_recetas.sql_ordenes(rel("ordenes"))).df()
     except Exception:
         ops = None
-    r = consumo_recetas.calcular(n1, rb, po, ma, ini, fin, anual=anual, ordenes=ops)
+    r = consumo_recetas.calcular(n1, rb, po, ma, ini, fin, anual=anual, ordenes=ops,
+                                 rendimiento=rendimiento)
     r["resumen"]["hora_de_mesa"] = not con_hora
     return r
 
 
-def consumo_recetas_rango(ini, fin):
+def consumo_recetas_rango(ini, fin, rendimiento="90"):
     """Cuánto insumo de COMPRA usaron las ventas entre `ini` y `fin`
     (fechas del pedido, inclusive), bajando por las recetas base y los
-    porcionamientos — la sección «Consumo según recetas» de Movimientos,
+    porcionamientos — la sección «Consumo según ventas» de Producción,
     regla #558. `None` si no se pudo calcular (o sin secrets): quien lo pide
-    avisa en vez de caerse.
+    avisa en vez de caerse. `rendimiento`: el de los 90 días («90») o el
+    del último mes («mes»), regla #751.
 
     No cacheada (la interna sí), por lo mismo que `cargar()`."""
     A = consumo_recetas.ARCHIVOS
@@ -2140,9 +2143,9 @@ def consumo_recetas_rango(ini, fin):
             sellos=tuple((a, sello_datos(a)) for a in
                          (A["recetabase"], A["porcionamientos"], A["maestro"],
                           A["ordenes"])),
-            version=consumo_recetas.VERSION)
+            version=consumo_recetas.VERSION, rendimiento=rendimiento)
     except Exception as e:
-        st.error(f"Error calculando el consumo según recetas: {e}")
+        st.error(f"Error calculando el consumo según ventas: {e}")
         return None
 
 

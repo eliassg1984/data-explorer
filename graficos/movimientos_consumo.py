@@ -150,6 +150,21 @@ def _num(v, defecto):
     return defecto if v is None or (isinstance(v, float) and pd.isna(v)) else float(v)
 
 
+def _lista(v):
+    """Una lista que llega de DuckDB (lista, arreglo de numpy o nada)."""
+    return [] if v is None or (isinstance(v, float) and pd.isna(v)) else [str(x) for x in v]
+
+
+def _cuenta(x):
+    """La cuenta de un rendimiento (regla #751): [rendimiento, lo que puso
+    el insumo, unidades del corte de todos los porcionamientos, unidades y
+    peso de los de este insumo, cuántos, desde, hasta, fuente, alcance]."""
+    return [_q(x["rend"]), _q(_num(x.get("entra"), 0.0)), _q(_num(x.get("tot"), 0.0)),
+            _q(_num(x.get("sale_e"), 0.0)), _q(_num(x.get("peso_e"), 0.0)), int(x["n_porc"]),
+            str(pd.Timestamp(x["desde"]).date()), str(pd.Timestamp(x["hasta"]).date()),
+            _texto(x["fuente"]), _texto(x.get("alcance")) or "90"]
+
+
 def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
     """Lo que lee la página, desde lo que devuelve `consumo_recetas.calcular`.
 
@@ -225,16 +240,25 @@ def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
     usados = {(c, p) for c, p, u in zip(col["cod"], col["padre"], col["ultima"])
               if u == "porcionamiento"}
     rd = r["rend"]
-    rend, revisar = {}, []
+    rend, rend_mes, revisar = {}, {}, []
     if not rd.empty:
+        # La cuenta de cada rendimiento, MES POR MES (regla #751): la página
+        # escribe «unidades × kg por unidad = kg» de cada mes y de dónde sale
+        # el kg por unidad.
+        for x in rd[rd["usado"]].to_dict("records"):
+            if (x["cod_e"], x["cod_x"]) in usados:
+                rend_mes.setdefault(x["cod_e"], {}).setdefault(x["cod_x"], {})[
+                    str(pd.Timestamp(x["mes"]).date())] = _cuenta(x)
         rd = rd[(rd["mes"] == rd["mes"].max()) & rd["usado"]]
         suma, misma = {}, {}
         for x in rd.to_dict("records"):
             cx, ce = x["cod_x"], x["cod_e"]
             if (ce, cx) in usados:
+                c = _cuenta(x)
                 rend.setdefault(ce, {})[cx] = [
                     _q(x["rend"]), x["fuente"], int(x["n_porc"]),
-                    str(pd.Timestamp(x["desde"]).date()), str(pd.Timestamp(x["hasta"]).date())]
+                    str(pd.Timestamp(x["desde"]).date()), str(pd.Timestamp(x["hasta"]).date()),
+                    *c[1:5], c[9]]
             # «pesa más de lo que se le asignó»: por CORTE, sumando sus
             # orígenes, si todos van en la misma unidad de peso que el corte
             suma[cx] = suma.get(cx, 0.0) + float(x["rend"])
@@ -251,7 +275,7 @@ def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
     # tocó al corte, cortes], …]]}}, los más nuevos primero. Una venta no dice
     # de qué porcionamiento salió su corte: el rendimiento es de todos. Sin
     # `porcs` (una caché anterior a la VERSION 3), la página no los lista.
-    porcs = {}
+    porcs, porcs_corte = {}, {}
     pc = r.get("porcs")
     if pc is not None and not pc.empty:
         por_par, del_corte = {}, {}
@@ -266,6 +290,19 @@ def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
                 not any(bool(x["ventana"]) for x in xs),
                 [[_texto(x["porc"]), f, _q(x["porcionado"]), _q(x["entra"]), _q(x["sale"])]
                  for x, f in zip(xs[:PORCS_MAX], fechas)]]
+        # Los del corte en la ventana del ÚLTIMO mes, de CUALQUIER insumo
+        # (regla #751): el total de unidades del rendimiento los cuenta a
+        # todos. {corte: [[N°, fecha, insumo, porcionado, le tocó, cortes, peso]]}.
+        ultimo = str(pd.Timestamp(res["meses"][-1]).date()) if len(res["meses"]) else ""
+        usados_x = {cx for _, cx in usados}
+        for x in pc.to_dict("records"):
+            if x["cod_x"] in usados_x and ultimo in _lista(x.get("meses")):
+                porcs_corte.setdefault(x["cod_x"], []).append(
+                    [_texto(x["porc"]), str(pd.Timestamp(x["fecha"]).date()), _texto(x["cod_e"]),
+                     _q(x["porcionado"]), _q(x["entra"]), _q(x["sale"]), _q(_num(x.get("peso"), 0.0))])
+        for cx, xs in porcs_corte.items():
+            xs.sort(key=lambda p: (p[1], p[0]), reverse=True)
+            del xs[PORCS_MAX:]
 
     # ── lo comprado: el de los insumos de la página, y aparte (con su nombre)
     # lo que ninguna venta del rango usó
@@ -286,7 +323,9 @@ def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
                      n_dia=res["n_dia"], n_dias=(res["fin"] - res["ini"]).days + 1),
         horas=[int(h) for h in horas], caminos=caminos, platos=lista_platos,
         insumos=insumos, preps=preps, filas=salida, horas_ins=horas_ins, mapa_ins=mapa_ins,
-        rend=rend, revisar=revisar, porcionado=porcionado, porcs=porcs,
+        rend=rend, rend_mes=rend_mes, revisar=revisar, porcionado=porcionado, porcs=porcs,
+        porcs_corte=porcs_corte,
+        nombres={c: _texto(_m(c, "nombre", c)) for xs in porcs_corte.values() for c in {p[2] for p in xs}},
         compras=compras_d, comprados=comprados,
         compras_familias=fams_compras if compras is not None else [],
         venta_interna=dict(

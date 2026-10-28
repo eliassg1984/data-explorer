@@ -1,4 +1,6 @@
-// Consumo según recetas como componente nativo; misma cuenta de referencia (#733).
+// Consumo según ventas como componente nativo; misma cuenta de referencia (#733).
+// Desde la regla #751: la cuenta de cada porcionamiento, «Rendimiento» (90 días
+// o último mes, que pide a Python) y la merma esperada, que se guarda en R2.
 export default function(component){
   const previous=window.__consumoNative;previous?.cleanup();
   const {parentElement}=component,owner=parentElement.ownerDocument;
@@ -138,6 +140,16 @@ function pintarResumen() {
     `<div class="dr${i === ip ? ' pico' : ''}" title="${DIAS_L[i]}: ${sol(v)} por día en promedio"><i style="height:${Math.max(2, 40 * v / mx)}px"></i><span>${DIAS[i]}</span></div>`).join('');
   document.getElementById('k-cuando').innerHTML =
     `El <b>${DIAS_L[ip]}</b> se consume ${sol(mx)} por día; el ${DIAS_L[im]}, ${sol(mn)}. La cena lleva el ${pct0(ce, al + ce)}.`;
+  // Lo comprado, arriba (regla #751): antes sólo estaba en su pestaña.
+  const kc = document.getElementById('k-comp'), kb = document.getElementById('k-comp-barra'), ks = document.getElementById('k-comp-sub');
+  if (!D.compras_familias.length) { kc.textContent = '—'; kb.innerHTML = ''; ks.textContent = 'No se pudieron leer las compras del período.'; }
+  else {
+    const comp = filasCompras().filter(r => r.comp > 0), sT = suma(comp.map(r => r.sComp));
+    const sin = comp.filter(r => r.usado <= 0), sS = suma(sin.map(r => r.sComp));
+    kc.textContent = sol(sT);
+    kb.innerHTML = `<span style="width:${100 * (sT - sS) / (sT || 1)}%;background:var(--acento)" title="Lo usó alguna venta"></span><span style="width:${100 * sS / (sT || 1)}%;background:var(--adv-borde)" title="Ninguna venta lo usó"></span>`;
+    ks.textContent = sin.length ? `${sol(sS)} en ${sin.length} producto${sin.length === 1 ? '' : 's'} que ninguna venta del período usó.` : 'Todo lo comprado lo usó alguna venta del período.';
+  }
 }
 
 // ── la venta interna ──
@@ -145,7 +157,7 @@ function pintarResumen() {
   const vi = D.venta_interna;
   document.getElementById('vi-cuenta').textContent = vi.pedidos ? `· ${vi.platos} plato${vi.platos === 1 ? '' : 's'}` : '· no hubo';
   document.getElementById('vi-lbl').title = vi.pedidos
-    ? `${vi.nombres.join(', ')}: lo que se produce en casa para Mayta cuenta el día que se PRODUJO, no el que se facturó; igual va por tanda y corre el patrón de días y horas. Es la misma que apaga Ventas › Por hora.`
+    ? `${vi.nombres.join(', ')}: lo que se produce en casa para Mayta —el chorizo, la chistorra y la manteca de pato— cuenta el día que se PRODUJO y no el que se facturó: se factura por tanda (en agosto de 2026, nada; el 23 de septiembre, 600 unidades) y así el magret «se usaba» un mes después de comprado. Si sale de porcionar una masa que se hace con orden de producción, la fecha es la de esa orden; si no, la de su porcionamiento. Si también va al salón, la venta interna se lleva su parte de los últimos 12 meses. Lo que se revende tal cual (vinos, panceta) sigue por la factura. Igual va por tanda y corre el patrón de días y horas: es la misma que apaga Ventas › Por hora.`
     : 'En el período no hubo venta interna.';
   const cb = document.getElementById('vi');
   cb.checked = UI.vi;
@@ -233,7 +245,107 @@ const fDia = s => fCorta(s) + (fecha(s).a !== fecha(P.hasta).a ? ' ' + fecha(s).
 const porcsMeta = z => !z ? '' : (z[0] === 1
   ? ` · porcionamiento N° ${esc(z[5][0][0])} del ${fDia(z[2])}`
   : ` · ${n0(z[0])} porcionamientos, ${fDia(z[2])} – ${fDia(z[3])}`);
-function filaPorcs(z, cod, prep, ncol) {
+// ── la cuenta de cada porcionamiento (regla #751) ──
+// Lo que el árbol hizo con un corte, mes por mes: las unidades que usaron las
+// ventas × lo que puso el insumo por unidad = lo que se usó del insumo. Y de
+// dónde sale ese «por unidad»: lo que puso el insumo ÷ las unidades del corte
+// de TODOS los porcionamientos de la ventana (otro insumo también puede
+// hacerlo). rend_mes[insumo][corte][mes] = [rendimiento, puso, unidades,
+// unidades de este insumo, su peso, cuántos, desde, hasta, fuente, alcance].
+const REND = component.data.rendimiento === 'mes' ? 'mes' : '90';
+const MERMAS = component.data.mermas || {};
+const RM = D.rend_mes || {};
+const PCX = D.porcs_corte || {};
+const CONTEXTO = 'Lo que las ventas debieron usar: cada plato vendido, abierto por sus recetas hasta lo que se compra. Consumo teórico, a precios promedio de hoy; el real (inventarios + compras) está en Costos.';
+const nombreCod = c => D.insumos[c] ? D.insumos[c][0] : (D.preps[c] ? D.preps[c][0] : ((D.nombres || {})[c] || c));
+const kgU = v => !v ? '—' : Number(v).toLocaleString('en-US', { maximumFractionDigits: Math.abs(v) >= 10 ? 1 : (Math.abs(v) >= 1 ? 3 : 4) });
+// Los dos lados de una división, con un decimal: redondeados a entero no cierran a la vista.
+const q1 = v => !v ? '—' : (Math.abs(v) >= 10 ? dec(v, 1) : Number(v).toLocaleString('en-US', { maximumFractionDigits: 3 }));
+const porcsVer = new Set();
+function cuentaCorte(cod, b) {
+  const rm = (RM[cod] || {})[b.prep];
+  if (!rm) return null;
+  const meses = [];
+  P.meses.forEach((m, i) => {
+    const q = b.m[i], c = rm[m];
+    if (!c || !(q > 0)) return;
+    const [r, entra, tot, saleE, pesoE, n, desde, hasta, fuente, alcance] = c;
+    meses.push({ m, q, r, und: r > 0 ? q / r : 0, entra, tot, saleE, pesoE, n, desde, hasta, fuente, alcance });
+  });
+  if (!meses.length) return null;
+  const ult = meses[meses.length - 1];
+  const lista = ult.m === P.meses[NM - 1] ? (PCX[b.prep] || []) : [];
+  return { cod, prep: b.prep, meses, ult, lista, und: suma(meses.map(x => x.und)), kg: suma(meses.map(x => x.q)) };
+}
+// La merma real sale del peso de los cortes que salieron de este insumo contra
+// lo que puso; con la esperada, lo que habría pedido: kg × (1 − real) ÷ (1 − esperada).
+function mermaDe(cuentas) {
+  const xs = cuentas.flatMap(c => c.meses).filter(x => x.pesoE > 0 && x.entra > 0);
+  const q = suma(xs.map(x => x.q));
+  if (!q) return null;
+  const util = suma(xs.map(x => x.q * x.pesoE / x.entra));
+  const m = MERMAS[cuentas[0].cod], out = { q, real: 1 - util / q, esperada: m };
+  if (m != null) { out.std = util / (1 - m / 100); out.dif = q - out.std; }
+  return out;
+}
+const ventanaTxt = x => x.alcance === 'mes' ? `En ${fMes(x.m)}`
+  : x.alcance === 'respaldo' ? `Sin porcionamientos en 90 días ni receta, en los ${n0(x.n)} más cercanos (${fMes(x.desde)} – ${fMes(x.hasta)})`
+  : `En los 90 días que cierran ${fMes(x.m)} (${fDia(x.desde)} – ${fDia(x.hasta)})`;
+function htmlMerma(cod, mm, nombre) {
+  const [, u, pr] = D.insumos[cod];
+  const val = MERMAS[cod] != null ? MERMAS[cod] : '';
+  let lectura;
+  if (mm.esperada == null) lectura = 'Pon tu merma esperada para ver cuánto se fue de más o de menos.';
+  else {
+    const d = mm.dif, cls = d > 0.005 ? 'mas' : (d < -0.005 ? 'menos' : '');
+    lectura = `Con ${dec(mm.esperada, mm.esperada % 1 ? 1 : 0)} %, las ventas habrían pedido <b>${prom(mm.std)} ${esc(corta(u))}</b>: <b class="${cls}">${prom(Math.abs(d))} ${esc(corta(u))} ${d >= 0 ? 'más' : 'menos'}</b> de lo esperado, ≈ ${sol(Math.abs(d) * pr)}.`;
+  }
+  return `<div class="merma"><span><b>Merma real ${dec(100 * mm.real, 1)} %</b> en lo que llega por porcionamiento (${prom(mm.q)} ${esc(corta(u))}).</span>
+    <label>Tu merma esperada de ${esc(nombre)} <input type="number" inputmode="decimal" data-merma="${esc(cod)}" value="${val}" min="0" max="89.9" step="0.5" placeholder="—" aria-label="Merma esperada de ${esc(nombre)} en %"> %</label>
+    <span>${lectura}</span></div>`;
+}
+function filaCuenta(cu, z, cod, prep, ncol) {
+  if (!cu) return filaPorcsVieja(z, cod, prep, ncol);
+  const [nom, uIns] = D.insumos[cod], u = esc(corta(uIns)), uc = esc(corta(D.preps[prep] ? D.preps[prep][2] : ''));
+  const x = cu.ult, mios = cu.lista.filter(p => p[2] === cod), otros = cu.lista.filter(p => p[2] !== cod);
+  const nomOtros = [...new Set(otros.map(p => nombreCod(p[2])))];
+  const lineas = cu.meses.map(m => `${fMes(m.m)}: ${prom(m.und)} ${uc} × ${kgU(m.r)} = ${prom(m.q)} ${u}`);
+  const meses = lineas.length > 4 ? lineas.slice(-3).join(' · ') + ` · y ${lineas.length - 3} meses más (en el Excel)` : lineas.join(' · ');
+  let origen = `<b>De dónde sale ${kgU(x.r)} ${u} por ${uc}.</b> ${ventanaTxt(x)} se hicieron <b>${q1(x.tot)} ${uc}</b> de este corte en <b>${n0(x.n)} porcionamiento${x.n === 1 ? '' : 's'}</b>.`;
+  if (cu.lista.length) origen += ` ${mios.length === 1 ? 'El que salió' : `Los ${mios.length} que salieron`} de ${esc(nom)} le pusieron <b>${q1(x.entra)} ${u}</b>`;
+  else origen += ` ${esc(nom)} le puso <b>${q1(x.entra)} ${u}</b>`;
+  origen += `: <span class="mini-eq num">${q1(x.entra)} ÷ ${q1(x.tot)} = ${kgU(x.r)}</span>.`;
+  if (otros.length) origen += ` ${otros.length === 1 ? 'El otro salió' : `Los otros ${otros.length} salieron`} de ${esc(nomOtros.join(' y '))}: sus cortes cuentan en el total.`;
+  let ult = '';
+  if (mios.length) {
+    const rs = mios.map(p => p[4] / p[5]), p0 = mios[0];
+    ult = `<p class="ult">El último de ${esc(nom)}, del ${fDia(p0[1])} (N° ${esc(p0[0])}), dio <b>${kgU(p0[4] / p0[5])} ${u}</b> por ${uc}.${mios.length > 1 ? ` Es un dato, no la base: en la ventana van de ${kgU(Math.min(...rs))} a ${kgU(Math.max(...rs))}.` : ''}</p>`;
+  }
+  const mm = mermaDe([cu]);
+  const k = cod + '|' + prep, ver = porcsVer.has(k);
+  let tabla = '';
+  if (ver && cu.lista.length) {
+    const prm = suma(mios.map(p => p[4])) / (suma(mios.map(p => p[5])) || 1);
+    const mx = Math.max(...mios.map(p => p[4] / p[5]), 1e-9);
+    tabla = `<div class="porcs-wrap"><table class="porcs-t"><thead><tr><th>N° del Almacén</th><th>Fecha</th><th>Desde</th><th class="r">Se porcionaron</th><th class="r">A este corte</th><th class="r">Cortes</th><th class="r">${u} por ${uc}</th></tr></thead><tbody>
+      ${cu.lista.map(p => { const mio = p[2] === cod, r = p[4] / p[5], lejos = mio && Math.abs(r - prm) > 0.25 * prm;
+        return `<tr class="${mio ? '' : 'otro'}"><td class="num">${esc(p[0])}</td><td>${fDia(p[1])}</td><td>${esc(nombreCod(p[2]))}</td><td class="r num">${prom(p[3])}</td><td class="r num">${mio ? prom(p[4]) : '—'}</td><td class="r num">${prom(p[5])}</td>
+          <td class="r num">${mio ? `<span class="kgu${lejos ? ' lejos' : ''}"><i style="width:${Math.round(40 * r / mx)}px"></i>${kgU(r)}</span>` : '—'}</td></tr>`; }).join('')}
+      <tr class="tot"><td colspan="4">Lo que entra en la cuenta</td><td class="r num">${q1(x.entra)}</td><td class="r num">${q1(x.tot)}</td><td class="r num">${kgU(x.r)}</td></tr></tbody></table></div>
+      <p class="nota">«A este corte» es lo que le tocó por su peso, la regla del Almacén. ${otros.length ? 'Los cortes que salieron de otro insumo cuentan en el total. ' : ''}En ámbar, los que se apartan más de 25 % del promedio de ${esc(nom)}.</p>`;
+  }
+  return `<tr class="lvp"><td colspan="${ncol}"><div class="porcs cuenta">
+    <div class="eq"><span class="term"><b>${prom(cu.und)} ${uc}</b><small>de ${esc(prepNombre(prep))} usadas por las ventas</small></span><span class="op">×</span>
+      <span class="term"><b>${kgU(cu.kg / cu.und)} ${u}</b><small>de ${esc(nom)} por ${uc}</small></span><span class="op">=</span>
+      <span class="term res"><b>${prom(cu.kg)} ${u}</b><small>de ${esc(nom)}</small></span></div>
+    <div class="meses-eq num">${meses}</div>
+    <p class="origen">${origen}</p>${ult}
+    ${mm ? htmlMerma(cod, mm, nom) : ''}
+    ${cu.lista.length ? `<button type="button" class="ver-porcs" data-porcs="${esc(k)}" aria-expanded="${ver}">${ver ? 'Ocultar' : 'Ver'} los ${cu.lista.length} porcionamientos ${ver ? '▴' : '▾'}</button>` : ''}${tabla}
+  </div></td></tr>`;
+}
+// Sin la cuenta (una caché anterior a la versión 4): los N° del Almacén.
+function filaPorcsVieja(z, cod, prep, ncol) {
   const [n, nCorte, desde, , resp, l] = z;
   const u = esc(corta(D.insumos[cod][1])), uc = esc(corta(D.preps[prep] ? D.preps[prep][2] : ''));
   const nom = esc(D.insumos[cod][0]);
@@ -282,7 +394,8 @@ function pintarDinamica(foco) {
         <td class="c-nom"><div class="fila"><span class="flecha">${CHEV}</span><span class="txt"><span class="nm">${prepEtiqueta(b.prep)}</span><span class="meta num">${b.platos.size} plato${b.platos.size === 1 ? '' : 's'}${porcsMeta(z)}</span></span></div></td>
         <td class="c-tot num">${totTD(b, f, u)}</td>${celdasTD(b, f)}</tr>`);
       if (!ab1) continue;
-      if (z) filasH.push(filaPorcs(z, a.cod, b.prep, 2 + cubetas(b).length));
+      const cu = cuentaCorte(a.cod, b);
+      if (cu || z) filasH.push(filaCuenta(cu, z, a.cod, b.prep, 2 + cubetas(b).length));
       for (const c of platos) {
         const [pn, vi, vend, ed] = PLATOS[c.pid];
         const enReceta = c.n1.size ? `<span class="meta">en la receta: ${esc([...c.n1].map(prepNombre).join(' · '))}</span>` : '';
@@ -479,20 +592,32 @@ function pintarDetalle() {
   let rend = '';
   const cortes = [...a.porc.entries()].sort((x, y) => y[1] - x[1]);
   if (cortes.length) {
-    rend = `<div class="det-sec"><h3>Cómo se calculó el porcionamiento</h3>
-      <p class="nota" style="margin:0 0 10px">Cada corte vendido se pasa a ${esc(corta(u))} de ${esc(nom)} con el rendimiento del último mes del rango.</p>
-      <div class="rend">${cortes.map(([cx, q]) => {
-        const r = (D.rend[a.cod] || {})[cx];
-        const uc = D.preps[cx] ? D.preps[cx][2] : '';
-        if (!r) return `<div class="rend-item"><div class="rend-top"><b>${esc(prepNombre(cx))}</b><span class="num">${prom(q)} ${esc(corta(u))}</span></div></div>`;
-        const [rv, fuente, n, desde, hasta] = r;
-        const base = fuente === 'ventana'
-          ? `<span class="tag ok">Últimos 90 días</span><span class="num">${n} cortes · ${fCorta(desde)} – ${fCorta(hasta)}</span>`
-          : `<span class="tag resp">Respaldo</span><span class="num">sin porcionamientos en 90 días ni receta: los ${n} más cercanos (${fMes(desde)} – ${fMes(hasta)})</span>`;
-        const revisar = D.revisar.includes(cx) ? '<span class="tag rev" title="Al corte se le asignó menos insumo del que pesa: pasa con los subproductos (grasa, retazos, carcasa) a los que la cocina les anota poco peso para cargarles poco costo.">Revisar: pesa más de lo que se le asignó</span>' : '';
+    const cuentas = [];
+    const items = cortes.map(([cx, q]) => {
+      const b = a.preps.get(cx), cu = b ? cuentaCorte(a.cod, b) : null;
+      const uc = D.preps[cx] ? D.preps[cx][2] : '';
+      const revisar = D.revisar.includes(cx) ? '<span class="tag rev" title="Al corte se le asignó menos insumo del que pesa: pasa con los subproductos (grasa, retazos, carcasa) a los que la cocina les anota poco peso para cargarles poco costo.">Revisar: pesa más de lo que se le asignó</span>' : '';
+      if (cu) {
+        cuentas.push(cu);
+        const x = cu.ult;
+        const tag = x.alcance === 'respaldo' ? '<span class="tag resp">Respaldo</span>' : (x.alcance === 'mes' ? '<span class="tag ok">Último mes</span>' : '<span class="tag ok">Últimos 90 días</span>');
         return `<div class="rend-item"><div class="rend-top"><b>${esc(prepNombre(cx))}</b><span class="num">${prom(q)} ${esc(corta(u))}</span></div>
-          <div class="rend-meta"><span class="num">${rv.toLocaleString('en-US', { maximumFractionDigits: 4 })} ${esc(corta(u))} por ${esc(corta(uc))}</span>${base}${revisar}</div></div>`;
-      }).join('')}</div></div>`;
+          <div class="rend-cuenta num">${prom(cu.und)} ${esc(corta(uc))} × ${kgU(cu.kg / cu.und)} ${esc(corta(u))} = ${prom(cu.kg)} ${esc(corta(u))}</div>
+          <div class="rend-meta"><span class="num">${kgU(x.r)} = ${q1(x.entra)} ${esc(corta(u))} ÷ ${q1(x.tot)} ${esc(corta(uc))}</span>${tag}<span class="num">${n0(x.n)} porc. · ${x.alcance === 'respaldo' ? `${fMes(x.desde)} – ${fMes(x.hasta)}` : `${fCorta(x.desde)} – ${fCorta(x.hasta)}`}</span>${revisar}</div></div>`;
+      }
+      const r = (D.rend[a.cod] || {})[cx];
+      if (!r) return `<div class="rend-item"><div class="rend-top"><b>${esc(prepNombre(cx))}</b><span class="num">${prom(q)} ${esc(corta(u))}</span></div></div>`;
+      const [rv, fuente, n, desde, hasta] = r;
+      const base = fuente === 'ventana'
+        ? `<span class="tag ok">Últimos 90 días</span><span class="num">${n} cortes · ${fCorta(desde)} – ${fCorta(hasta)}</span>`
+        : `<span class="tag resp">Respaldo</span><span class="num">sin porcionamientos en 90 días ni receta: los ${n} más cercanos (${fMes(desde)} – ${fMes(hasta)})</span>`;
+      return `<div class="rend-item"><div class="rend-top"><b>${esc(prepNombre(cx))}</b><span class="num">${prom(q)} ${esc(corta(u))}</span></div>
+        <div class="rend-meta"><span class="num">${rv.toLocaleString('en-US', { maximumFractionDigits: 4 })} ${esc(corta(u))} por ${esc(corta(uc))}</span>${base}${revisar}</div></div>`;
+    });
+    const mm = cuentas.length ? mermaDe(cuentas) : null;
+    rend = `<div class="det-sec"><h3>Cómo se calculó el porcionamiento</h3>
+      <p class="nota" style="margin:0 0 10px">Cada corte: las unidades que usaron las ventas × lo que puso ${esc(nom)} por unidad. ${REND === 'mes' ? 'Con los porcionamientos de cada mes («Último mes»); si en el mes no hubo, los de 90 días.' : 'Con los porcionamientos de los 90 días que cierran cada mes.'}</p>
+      <div class="rend">${items.join('')}</div>${mm ? htmlMerma(a.cod, mm, nom) : ''}</div>`;
   }
   let real = '';
   const viaPorc = suma(cortes.map(x => x[1]));
@@ -516,7 +641,7 @@ function pintarDetalle() {
     </div>
     ${avisoVI}
     <div class="det-sec"><h3>Cómo llega al plato</h3>
-      <div class="barra" style="margin:0 0 10px">${cams.map(([k, v]) => `<span style="width:${100 * v / (totCam || 1)}%;background:${GRUPOS[k].col}"></span>`).join('')}</div>
+      <div class="barra-llega" style="margin:0 0 10px">${cams.map(([k, v]) => `<span style="width:${100 * v / (totCam || 1)}%;background:${GRUPOS[k].col}"></span>`).join('')}</div>
       ${barras(cams.map(([k, v]) => [GRUPOS[k].txt, v, GRUPOS[k].col]), null, v => `${prom(v)} ${esc(corta(u))} · ${pct(v, totCam)}`)}
     </div>
     <div class="det-sec"><h3>Platos que más lo usan</h3>
@@ -640,7 +765,7 @@ const abrirFicha = cod => { UI.vista = 'resumen'; UI.sel = cod; guardar(); pinta
 document.getElementById('cc-filas').addEventListener('click', e => { const tr = e.target.closest('tr[data-cod]'); if (tr) abrirFicha(tr.dataset.cod); });
 document.getElementById('cc-filas').addEventListener('keydown', e => { if (e.key === 'Enter') { const tr = e.target.closest('tr[data-cod]'); if (tr) abrirFicha(tr.dataset.cod); } });
 
-// ── cómo se calcula ──
+// ── cómo se calcula (regla #751): cinco pasos con su cifra y unas reglas ──
 // Lo producido contra lo facturado del período, producto por producto
 // (regla #605): la cuenta de arriba sale de lo primero.
 function notaProduccion() {
@@ -650,25 +775,36 @@ function notaProduccion() {
     `${esc(pl)}: ${n0(prod)} ${esc(u)} porcionad${prod === 1 ? 'o' : 'os'}, ${n0(fact)} facturad${fact === 1 ? 'o' : 'os'}${masa ? ' (fechado por su masa)' : ''}${parte < 0.995 ? ` (a la venta interna le toca el ${Math.round(parte * 100)} %)` : ''}`);
   return ' En el período: ' + filas.join(' · ') + '.';
 }
-{
-  const R = D.resumen;
-  const partes = [
-    '<b>Referencia en Inforest.</b> Paloteo de Insumos (spRep_PaloteoInsumo): aporta el primer nivel de consumo según recetas. La webapp lo amplía hasta los insumos de compra con recetas base y porcionamientos. Es consumo estimado según recetas, valorizado con precios promedio actuales. El consumo operativo de inventarios —inventario inicial + compras − inventario final— se consulta en Costos; el costo histórico de lo vendido, en Ventas.',
-    '<b>El árbol.</b> Cada plato vendido se abre en los insumos de su receta de venta —el primer nivel, el del POS—. Un insumo que es una preparación baja por su receta base, y así hasta llegar a lo que se compra (hasta ' + R.niveles + ' niveles en el rango). Un corte que sale de un porcionamiento pasa al insumo entero con el rendimiento REAL: los porcionamientos de los 90 días que terminan el último día de cada mes; si no hubo, su receta base; y sólo si tampoco tiene receta, los 10 porcionamientos más cercanos. El reparto entre los cortes de un porcionamiento es por su peso, la regla del propio Almacén.',
-    '<b>Unidades y precios.</b> Todo en la unidad del kardex (la de compra), con el factor de cada producto. Recetas y precios promedio: los de HOY — editar una receta cambia el consumo de meses pasados, como en el POS.',
-    `<b>El costo.</b> Al primer nivel, el del POS, el período suma ${sol(R.costo_nivel1)}; bajando hasta lo que se compra, ${sol(R.costo)}. Por las recetas base cierra: el Almacén recuesta cada preparación con sus insumos. La diferencia sale de los porcionamientos: las hojas llevan el rendimiento real, y el corte, el costo que le puso el Almacén.`,
-    `<b>El día y la hora.</b> El día es el del pedido. La hora es la de cada plato${R.hora_de_mesa ? ' — en este parquet todavía la de la MESA, que no trae la del plato' : ' y no la de la mesa: un postre llega unos 70 minutos después de abierta'}. «Día de la semana» es un promedio: lo de los lunes entre cuántos lunes hubo.`,
-    '<b>Venta interna.</b> Lo que se produce en casa para Mayta —el chorizo, la chistorra y la manteca de pato— cuenta el día que se PRODUJO y no el que se facturó: se factura por tanda (en agosto de 2026, nada; el 23 de septiembre, 600 unidades) y así el magret «se usaba» un mes después de comprado. Si sale de porcionar una masa que se hace con orden de producción, la fecha es la de esa orden, que es cuando se usó el magret; si no, la de su porcionamiento. Si también va al salón, la venta interna se lleva su parte de los últimos 12 meses. Lo que se revende tal cual (vinos, panceta) sigue por la factura. El interruptor la saca, como en Ventas › Por hora.' + notaProduccion(),
+function pintarMetodo() {
+  const R = D.resumen, g = new Map();
+  for (const a of A.lista) for (const [k, q] of a.cam) g.set(k, (g.get(k) || 0) + q * D.insumos[a.cod][2]);
+  const tot = suma([...g.values()]) || 1, parte = k => Math.round(100 * (g.get(k) || 0) / tot);
+  const pasos = [
+    ['Plato vendido', `Lo cobrado, por el día del pedido; la hora, la de cada plato${R.hora_de_mesa ? ' (en este parquet, la de la mesa)' : ''}.`, '', 'var(--suave-2)'],
+    ['Receta de venta', 'El primer nivel, el del POS (Paloteo de Insumos).', sol(R.costo_nivel1), 'var(--suave-2)'],
+    ['Receta base', `Una preparación baja por su receta, hasta ${R.niveles} niveles.`, `${parte('receta')} % <small>del costo llega así</small>`, 'var(--c-receta)'],
+    ['Porcionamiento', 'Un corte pasa al insumo entero con el rendimiento real.', `${parte('porc') + parte('mixto')} % <small>del costo</small>`, 'var(--c-porc)'],
+    ['Insumo de compra', 'En la unidad del kardex, a precio promedio de hoy.', `${sol(suma(A.lista.map(a => a.costo)))} <small>· ${n0(A.lista.length)} insumos</small>`, 'var(--acento-texto)'],
   ];
+  document.getElementById('metodo-flujo').innerHTML = pasos.map(([t, d, v, c]) =>
+    `<div class="paso" style="--c:${c}"><span class="t">${t}</span><span class="d">${d}</span>${v ? `<span class="v num">${v}</span>` : ''}</div>`).join('');
+  document.getElementById('metodo-puente').innerHTML = `De ${sol(R.costo_nivel1)} al primer nivel a ${sol(R.costo)} en insumos: por las recetas base cierra (el Almacén recuesta cada preparación con sus insumos); la diferencia sale de los porcionamientos, que llevan el rendimiento real y no el costo que el Almacén le puso al corte.`;
   const editadas = PLATOS.filter(p => p[3]);
-  if (editadas.length) partes.push(`<b>Recetas editadas.</b> ${editadas.length} plato${editadas.length === 1 ? '' : 's'} del período cambi${editadas.length === 1 ? 'ó' : 'aron'} de receta desde el ${fCorta(P.desde)} (${esc(editadas.slice(0, 4).map(p => `${p[0]}, ${fCorta(p[3])}`).join(' · '))}${editadas.length > 4 ? '…' : ''}): lo vendido antes de esa fecha se calcula con la receta de hoy. La tabla dinámica y la ficha los marcan.`);
-  partes.push(`<b>Contra compras.</b> Lo comprado del rango, por la fecha del documento y en la unidad del kardex —la misma de las compras en todas sus líneas—, ${D.compras_familias.length ? 'de ' + famsTexto() : 'que no se pudo leer'}. Comprar no es usar: el stock sube y baja entre compras.`);
-  if (R.sin_maestro || R.sin_factor) partes.push(`<b>Lo que no se pudo bajar.</b> ${R.sin_maestro} líneas con un insumo que no está en el maestro y ${R.sin_factor} sin factor de conversión: ${sol(R.costo_sin_convertir)} del primer nivel.`);
-  document.getElementById('metodo-txt').innerHTML = partes.join(' ');
+  const reglas = [
+    ['Recetas y precios: los de hoy.', editadas.length
+      ? `${editadas.length} plato${editadas.length === 1 ? '' : 's'} cambi${editadas.length === 1 ? 'ó' : 'aron'} de receta desde el ${fCorta(P.desde)} (${esc(editadas.slice(0, 3).map(p => `${p[0]}, ${fCorta(p[3])}`).join(' · '))}${editadas.length > 3 ? '…' : ''}): lo vendido antes se calcula con la nueva. Cada fila lo marca.`
+      : 'Editar una receta cambia el consumo de meses pasados, como en el POS.'],
+    ['Rendimiento.', `${REND === 'mes' ? 'Ahora, «Último mes»: los porcionamientos del mes; si en el mes no hubo, los de 90 días.' : 'Ahora, «90 días»: los porcionamientos de los 90 días que cierran cada mes.'} Sin ninguno, la receta base; sin receta, los 10 más cercanos. Entre los cortes se reparte por peso, la regla del Almacén.`],
+    ['Día y hora.', '«Día de la semana» es un promedio: lo de los lunes entre cuántos lunes hubo.'],
+    ['Venta interna.', 'Lo que se produce para Mayta cuenta el día que se produjo, no el que se facturó.' + notaProduccion()],
+    ['No es el consumo real.', 'Ése es inventario inicial + compras − inventario final, en Costos; el costo histórico de lo vendido, en Ventas.'],
+  ];
+  if (R.sin_maestro || R.sin_factor) reglas.push(['Lo que no se pudo bajar.', `${R.sin_maestro} líneas con un insumo que no está en el maestro y ${R.sin_factor} sin factor de conversión: ${sol(R.costo_sin_convertir)} del primer nivel.`]);
+  document.getElementById('metodo-txt').innerHTML = reglas.map(([b, t]) => `<p><b>${b}</b> ${t}</p>`).join('');
 }
 
 function pintarActiva(){
-  document.getElementById('ccn-seleccion').textContent='Tablas por tandas · Excel completo con los filtros de cada pestaña';
+  document.getElementById('ccn-seleccion').textContent=CONTEXTO;
   if(UI.vista==='tabla'){pintarSegTD();pintarDinamica();}
   else if(UI.vista==='resumen'){pintarFams();pintarModos();pintarCabeza();pintarFilas();pintarDetalle();}
   else pintarCompras();
@@ -677,7 +813,7 @@ function pintarTodo(){
   const fams=new Set(A.lista.map(a=>D.insumos[a.cod][3]));
   if(tdFam!=='Todas'&&!fams.has(tdFam))tdFam='Todas';
   if(famSel!=='Todas'&&!fams.has(famSel))famSel='Todas';
-  pintarResumen();pintarActiva();
+  pintarResumen();pintarMetodo();pintarActiva();
 }
 // abre con el primer insumo y su primera preparación desplegados: los tres niveles a la vista
 if (!UI.tdInit && A.lista.length) {
@@ -720,7 +856,7 @@ function comprasVisible(){
 function avisoFicha(vis){
   const a=A.ins.get(UI.sel);document.getElementById('ccn-seleccion').textContent=
     a&&!vis.includes(a)?`La ficha de ${D.insumos[a.cod][0]} queda fuera del filtro. Excel conserva su código en «Ficha».`:
-    'Tablas por tandas · Excel completo con los filtros de cada pestaña';
+    CONTEXTO;
 }
 function exportar(){
   const hs=[],hoja=(nombre,cabeza,filas)=>hs.push({nombre,cabeza,filas,decimales:6});
@@ -750,9 +886,17 @@ function exportar(){
   const porcs=[];
   for(const [cod,preps]of Object.entries(D.porcs||{}))for(const [prep,z]of Object.entries(preps))for(const po of z[5]||[])porcs.push([cod,D.insumos[cod]?.[0]||'',D.insumos[cod]?.[1]||'',prep,prepNombre(prep),z[0],z[1],z[2],z[3],z[4]?"Sí":"No",...po]);
   hoja('Porcionamientos',['Código insumo','Insumo','Unidad entrada','Código corte','Corte','N documentos insumo y corte','N documentos del corte','Desde','Hasta','Sólo respaldo','Documento','Fecha','Cantidad porcionada','Asignado al corte','Cantidad corte'],porcs);
+  // La cuenta de cada corte, mes por mes (regla #751).
+  const cuentas=[];
+  for(const a of A.lista)for(const b of a.preps.values()){const cu=cuentaCorte(a.cod,b);if(!cu)continue;
+    for(const x of cu.meses){const real=x.pesoE>0&&x.entra>0?1-x.pesoE/x.entra:'';const esp=MERMAS[a.cod];
+      cuentas.push([a.cod,D.insumos[a.cod][0],D.insumos[a.cod][1],b.prep,prepNombre(b.prep),x.m,x.und,x.r,x.q,x.entra,x.tot,x.saleE,x.pesoE,real,x.n,x.desde,x.hasta,x.alcance,esp??'',esp!=null&&real!==''?x.q*(1-real)/(1-esp/100):'']);}}
+  hoja('Rendimientos',['Código insumo','Insumo','Unidad entrada','Código corte','Corte','Mes','Unidades usadas','Rendimiento','Usado del insumo','Puso el insumo','Unidades del corte','Unidades de este insumo','Peso de esas unidades','Merma real','Porcionamientos','Desde','Hasta','Ventana','Merma esperada %','Usado con la merma esperada'],cuentas);
   hoja('Horas',['Código','Insumo','Unidad','Hora','Promedio por día'],A.lista.flatMap(a=>horasDe(a).map((q,i)=>[a.cod,D.insumos[a.cod][0],D.insumos[a.cod][1],D.horas[i],q])));
   hoja('Contexto',['Concepto','Valor'],[
     ['Desde incluido',P.desde],['Hasta incluido',P.hasta],['Vista',UI.vista],['Venta interna',UI.vi?'Incluida':'Excluida'],
+    ['Rendimiento',REND==='mes'?'Último mes: porcionamientos del mes; si no hubo, los de 90 días':'90 días: porcionamientos de los 90 días que cierran cada mes'],
+    ['Mermas esperadas',JSON.stringify(MERMAS)],
     ['Tabla: columnas',UI.tdCols],['Tabla: valor',UI.tdVal],['Tabla: familia',tdFam],['Tabla: búsqueda',tdTxt],
     ['Resumen: modo',UI.modo],['Resumen: familia',famSel],['Resumen: búsqueda',txt],['Ficha: código',UI.sel||''],
     ['Compras: filtro',ccFiltro],['Compras: búsqueda',ccTxt],
@@ -771,8 +915,30 @@ document.getElementById('ccn-excel').onclick=()=>bajar(`consumo_${P.desde}_${P.h
 
 pintarVista();
 pintarTodo();
+// «Rendimiento» rehace el cálculo en Python; la merma esperada se guarda en R2.
+{
+  const seg = document.getElementById('rend-seg');
+  seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.r === REND));
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || b.dataset.r === REND || seg.classList.contains('pidiendo')) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); seg.classList.add('pidiendo');
+    component.setTriggerValue('rendimiento', b.dataset.r);
+  });
+}
+raiz.addEventListener('click', e => {
+  const b = e.target.closest('[data-porcs]'); if (!b) return;
+  e.stopPropagation(); const k = b.dataset.porcs; porcsVer.has(k) ? porcsVer.delete(k) : porcsVer.add(k);
+  pintarDinamica(); const n = raiz.querySelector(`[data-porcs="${CSS.escape(k)}"]`); if (n) n.focus({ preventScroll: true });
+}, { signal: abort.signal, capture: true });
+raiz.addEventListener('change', e => {
+  const i = e.target.closest('input[data-merma]'); if (!i || i.disabled) return;
+  const t = i.value.trim(), v = t === '' ? null : Number(t.replace(',', '.'));
+  if (v !== null && !(v >= 0 && v < 90)) { i.setCustomValidity('Entre 0 y 89.9 %'); i.reportValidity(); return; }
+  i.setCustomValidity(''); i.disabled = true; i.closest('label')?.classList.add('guardando');
+  component.setTriggerValue('merma', { cod: i.dataset.merma, pct: v });
+}, { signal: abort.signal });
 
   const cleanup=()=>{abort.abort();observers.forEach(r=>r.disconnect());};
-  window.__consumoNative={raiz,datos:D,UI,arbolDe,cubetas,filasCompras,cleanup,pintarTodo,exportar,horasDe,mapaDe,diasDe,semanasDe,resumenVisible,comprasVisible,lotes,tdAbiertos};
+  window.__consumoNative={raiz,datos:D,UI,arbolDe,cubetas,filasCompras,cleanup,pintarTodo,exportar,horasDe,mapaDe,diasDe,semanasDe,resumenVisible,comprasVisible,lotes,tdAbiertos,cuentaCorte,mermaDe,porcsVer,A:()=>A};
   return cleanup;
 }

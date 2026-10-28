@@ -1,4 +1,6 @@
-"""Consumo nativo: cuenta histórica, límites de tablas, estado y Excel (#733)."""
+"""Consumo según ventas nativo: cuenta histórica, límites de tablas, estado y
+Excel (#733); la cuenta de cada porcionamiento, «Rendimiento» y la merma
+esperada (#751)."""
 import inspect
 import json
 import re
@@ -39,6 +41,19 @@ def muestra(n=3):
     return D
 
 
+def muestra_cuenta():
+    """El insumo de mayor costo ('0000003') llega en julio por el corte
+    porcionado '00100', con su cuenta y los porcionamientos de la ventana."""
+    D=muestra()
+    for f in D['filas']:
+        if f[0]=='0000003':f[7]=[[1,f[7][0][1]]]
+    D['rend_mes']={'0000003':{'00100':{'2026-07-01':[0.25,10.0,40.0,30.0,8.0,3,'2026-04-15','2026-07-01','ventana','90']}}}
+    D['porcs_corte']={'00100':[['P3','2026-07-01','0000003',6.0,4.0,12.0,3.2],['P2','2026-06-10','0000003',8.0,6.0,18.0,4.8],
+                               ['P1','2026-05-01','0000999',5.0,5.0,10.0,4.5]]}
+    D['nombres']={'0000999':'Otro insumo'}
+    return D
+
+
 class Contrato(unittest.TestCase):
     def test_firma_publica_y_delegacion(self):
         self.assertEqual(list(inspect.signature(mc.tarjeta_consumo).parameters),['fam_sel','sub_sel','rango','fecha'])
@@ -54,12 +69,44 @@ class Contrato(unittest.TestCase):
         from graficos import consumo_pieza as pieza
         r={'filas':pd.DataFrame({'q':[1.,2.]}),'horas':pd.DataFrame({'q':[3.]})};comp=pd.DataFrame({'cant':[1.]});D=muestra()
         fake=SimpleNamespace(session_state={},container=lambda **kw:nullcontext(),markdown=Mock(),caption=Mock(),info=Mock())
-        with patch.object(pieza,'st',fake),patch.object(pieza,'_PIEZA') as component,patch.object(mc.data,'consumo_recetas_rango',return_value=r),patch.object(mc.data,'cargar',return_value=None),patch.object(mc,'compras_del_rango',return_value=comp),patch.object(mc,'recetas_editadas',return_value={}),patch.object(mc,'datos_de_la_vista',return_value=D) as adapter:
+        with patch.object(pieza,'st',fake),patch.object(pieza,'_PIEZA') as component,patch.object(mc.data,'consumo_recetas_rango',return_value=r) as calc,patch.object(mc.data,'cargar',return_value=None),patch.object(mc,'compras_del_rango',return_value=comp),patch.object(mc,'recetas_editadas',return_value={}),patch.object(mc,'datos_de_la_vista',return_value=D) as adapter,patch.object(pieza.mermas_esperadas,'leer',return_value={'0000001':12.5}):
             rango=(pd.Timestamp('2026-06-01'),pd.Timestamp('2026-07-01'));fecha=Mock()
             pieza.renderizar([],['Cocina'],rango,fecha);pieza.renderizar([],[],rango,fecha)
             self.assertEqual(adapter.call_count,1);self.assertIs(component.call_args.kwargs['data']['datos'],D)
             r['filas']['q']=[2.,1.];pieza.renderizar([],[],rango,fecha);self.assertEqual(adapter.call_count,2)
             self.assertEqual(fecha.call_count,3);fake.caption.assert_called_once()
+            # Regla #751: el rendimiento de la sesión va al cálculo y a la pieza, con las mermas.
+            self.assertEqual(calc.call_args.kwargs['rendimiento'],'90')
+            fake.session_state[pieza.K_REND]='mes';pieza.renderizar([],[],rango,fecha)
+            self.assertEqual(calc.call_args.kwargs['rendimiento'],'mes')
+            data=component.call_args.kwargs['data'];self.assertEqual((data['rendimiento'],data['mermas']),('mes',{'0000001':12.5}))
+            fake.session_state[pieza.K_REND]='otro';pieza.renderizar([],[],rango,fecha)
+            self.assertEqual(calc.call_args.kwargs['rendimiento'],'90')
+
+    def test_rendimiento_y_merma_se_validan_en_python(self):
+        from graficos import consumo_pieza as pieza
+        import mermas_esperadas as me
+        ss={};fake=SimpleNamespace(session_state=ss)
+        with patch.object(pieza,'st',fake):
+            for v,esperado in [('mes','mes'),('otro','mes'),('90','90'),(None,'90')]:
+                ss[pieza.K_PIEZA]={'rendimiento':v};pieza._al_rendimiento();self.assertEqual(ss.get(pieza.K_REND),esperado)
+            with patch.object(me,'poner',return_value=True) as poner:
+                for v in [{'cod':'0000009','pct':10},{'cod':'0000001','pct':95},{'cod':'0000001','pct':'x'},'mal']:
+                    ss[pieza.K_PIEZA]={'merma':v};pieza._al_merma({'0000001':[]})
+                poner.assert_not_called()
+                ss[pieza.K_PIEZA]={'merma':{'cod':'0000001','pct':12.5}};pieza._al_merma({'0000001':[]})
+                ss[pieza.K_PIEZA]={'merma':{'cod':'0000001','pct':None}};pieza._al_merma({'0000001':[]})
+                self.assertEqual([c.args for c in poner.call_args_list],[('0000001',12.5),('0000001',None)])
+            with patch.object(me,'poner',return_value=False):
+                ss[pieza.K_PIEZA]={'merma':{'cod':'0000001','pct':5}};pieza._al_merma({'0000001':[]})
+                self.assertTrue(ss.get('_consumo_merma_error'))
+
+    def test_mermas_esperadas_normaliza(self):
+        import mermas_esperadas as me
+        self.assertEqual(me.normalizar({' 001 ':'12.345','002':95,'003':-1,'004':'x','':5}),{'001':12.35})
+        self.assertEqual(me.con({'001':5},'002',7),{'001':5.0,'002':7.0})
+        self.assertEqual(me.con({'001':5},'001',None),{})
+        self.assertIsNone(me.con({},'001',90));self.assertIsNone(me.con({},'',5))
 
     def test_datos_ausentes_no_inventan_ceros(self):
         from graficos import consumo_pieza as pieza
@@ -150,7 +197,7 @@ class Navegador(unittest.TestCase):
         self.assertTrue(all(len(r)==len(h['cabeza']) for r in h['filas']))
 
     def test_excel_completo_numeros_seis_decimales_codigos_texto(self):
-        root=self.mount();hs=self.pg.evaluate('__consumoNative.exportar()');self.assertEqual(len(hs),8)
+        root=self.mount();hs=self.pg.evaluate('__consumoNative.exportar()');self.assertEqual(len(hs),9)
         self.assertTrue(all(len(r)==len(h['cabeza']) for h in hs for r in h['filas']))
         with tempfile.TemporaryDirectory() as td:
             with self.pg.expect_download() as dl:root.locator('#ccn-excel').click()
@@ -183,6 +230,64 @@ class Navegador(unittest.TestCase):
         tr=root.locator('#td-filas tr[data-k]').nth(180);key=tr.get_attribute('data-k');tr.focus();tr.press('Enter')
         self.assertEqual(root.locator(f'tr[data-k="{key}"]').get_attribute('aria-expanded'),'true')
         self.assertEqual(root.evaluate('e=>e.getRootNode().activeElement?.getAttribute("data-k")'),key)
+
+    # ── regla #751 ──
+    def mount2(self,D,extra=None,ui=None):
+        self.pg.set_viewport_size({'width':1323,'height':619})
+        self.pg.evaluate('([D,extra,ui])=>{sessionStorage.setItem("consumo_recetas_ui",JSON.stringify(ui||{}));window.__req=[];montar({parentElement:mount,data:{datos:D,...extra},setTriggerValue:(...v)=>__req.push(v)})}',[D,extra or {},ui])
+        return self.pg.locator('.consumo-pieza')
+
+    def test_cuenta_del_corte_y_de_donde_sale(self):
+        root=self.mount2(muestra_cuenta(),{'rendimiento':'90','mermas':{'0000003':10}})
+        cu=self.pg.evaluate('()=>{const n=__consumoNative,a=n.A().ins.get("0000003");return n.cuentaCorte("0000003",a.preps.get("00100"))}')
+        q=3.123456+.25;self.assertAlmostEqual(cu['kg'],q,places=6);self.assertAlmostEqual(cu['und'],q/.25,places=6);self.assertEqual(len(cu['lista']),3)
+        t=root.locator('.porcs.cuenta').inner_text()
+        for s in ['jul 2026: 13.5 und × 0.25 = 3.37 kg','De dónde sale 0.25 kg por und','10.0 ÷ 40.0 = 0.25','Los 2 que salieron de Insumo 0002 le pusieron',
+                  'El otro salió de Otro insumo','El último de Insumo 0002, del 1 jul (N° P3)','Merma real 20.0 %','Con 10 %']:
+            self.assertIn(s,t)
+        mm=self.pg.evaluate('()=>{const n=__consumoNative,a=n.A().ins.get("0000003");return n.mermaDe([n.cuentaCorte("0000003",a.preps.get("00100"))])}')
+        self.assertAlmostEqual(mm['real'],.2,places=9);self.assertAlmostEqual(mm['std'],q*.8/.9,places=9);self.assertAlmostEqual(mm['dif'],q-q*.8/.9,places=9)
+
+    def test_ver_porcionamientos_con_sus_kilos(self):
+        root=self.mount2(muestra_cuenta());self.assertFalse(root.locator('.porcs-t').count())
+        root.locator('[data-porcs]').click();filas=root.locator('.porcs-t tbody tr')
+        self.assertEqual(filas.count(),4);self.assertIn('Otro insumo',filas.nth(2).inner_text())
+        self.assertIn('10.0',filas.nth(3).inner_text());self.assertIn('0.25',filas.nth(3).inner_text())
+        self.assertEqual(self.pg.evaluate('__req'),[])
+
+    def test_rendimiento_y_merma_piden_a_python(self):
+        root=self.mount2(muestra_cuenta(),{'rendimiento':'90'})
+        self.assertEqual(root.locator('#rend-seg [aria-pressed=true]').inner_text(),'90 días')
+        root.locator('#rend-seg [data-r="90"]').click();self.assertEqual(self.pg.evaluate('__req'),[])
+        root.locator('#rend-seg [data-r=mes]').click();root.locator('#rend-seg [data-r=mes]').click(force=True)
+        self.assertEqual(self.pg.evaluate('__req'),[['rendimiento','mes']])
+        for valor,esperado in [('12','{"cod":"0000003","pct":12}'),('','{"cod":"0000003","pct":null}'),('95',None)]:
+            self.mount2(muestra_cuenta(),{'rendimiento':'mes'});i=root.locator('input[data-merma]').first
+            i.fill(valor);i.dispatch_event('change')
+            req=self.pg.evaluate('__req.map(r=>r[0]+":"+JSON.stringify(r[1]))')
+            self.assertEqual(req,[] if esperado is None else ['merma:'+esperado])
+        self.assertEqual(root.locator('#rend-seg [aria-pressed=true]').inner_text(),'Último mes')
+
+    def test_metodo_corto_compra_arriba_y_nombres(self):
+        root=self.mount2(muestra_cuenta())
+        self.assertEqual(root.locator('#metodo-flujo .paso').count(),5)
+        palabras=len(root.locator('#metodo').evaluate('e=>e.textContent').split());self.assertLess(palabras,300)
+        self.assertIn('masa',root.locator('#vi-lbl').get_attribute('title'))
+        self.assertEqual(root.locator('#vistas button').all_inner_texts()[:2],['Insumo › plato','Por insumo'])
+        self.assertIn('Consumo teórico',root.locator('#ccn-seleccion').inner_text())
+        comp=self.pg.evaluate('__consumoNative.filasCompras().filter(r=>r.comp>0).reduce((a,r)=>a+r.sComp,0)')
+        self.assertEqual(root.locator('#k-comp').inner_text(),'S/ '+f'{comp:,.0f}')
+        self.assertIn('ninguna venta',root.locator('#k-comp-sub').inner_text())
+        self.assertFalse(root.locator('.barra').count());self.assertEqual(root.locator('.barra-llega').count(),2)
+
+    def test_ficha_con_la_cuenta_y_excel_de_rendimientos(self):
+        root=self.mount2(muestra_cuenta(),{'mermas':{'0000003':10}},{'vista':'resumen','sel':'0000003'})
+        t=root.locator('#detalle').inner_text()
+        for s in ['13.5 und × 0.25 kg = 3.37 kg','0.25 = 10.0 kg ÷ 40.0 und','Últimos 90 días','Merma real 20.0 %']:self.assertIn(s,t)
+        hs=self.pg.evaluate('__consumoNative.exportar()');h=hs[6]
+        self.assertEqual(h['nombre'],'Rendimientos');self.assertEqual(len(h['filas']),1);fila=dict(zip(h['cabeza'],h['filas'][0]))
+        self.assertAlmostEqual(fila['Merma real'],.2,places=9);self.assertEqual(fila['Merma esperada %'],10)
+        self.assertIn('90 días',dict(hs[-1]['filas'])['Rendimiento'])
 
 
 if __name__=='__main__':unittest.main()

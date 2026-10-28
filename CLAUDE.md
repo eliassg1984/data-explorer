@@ -366,12 +366,15 @@ shadow root, estado, listas/cortes largos, Excel numérico y móvil. Fecha y
 valorización siguen nativas y compartidas; firma y referencia legacy se
 conservan. Regla #732.
 
-`test_consumo_pieza.py` vigila Consumo según recetas como pieza propia:
+`test_consumo_pieza.py` vigila Consumo según ventas como pieza propia:
 cuentas contra el JavaScript anterior, calendario, venta interna, unidades,
 estado y búsqueda en shadow root, ficha, tablas de más de 600 productos y
 Excel completo con seis decimales. Conserva el adaptador y la firma de
-`movimientos_consumo.py`; sólo fecha y filtros de página vuelven a Python.
-Regla #733.
+`movimientos_consumo.py`; vuelven a Python la fecha, los filtros de página,
+«Rendimiento» y la merma esperada. Desde la #751 cubre además la cuenta de
+cada corte y de dónde sale, la merma con la esperada, que los dos triggers
+se validen en Python, el método en cinco pasos y la hoja «Rendimientos».
+Reglas #733 y #751.
 
 `test_requerimientos_area_pieza.py` vigila Requerimientos por Área como
 pieza propia: productos y cobertura contra los helpers originales, mediana
@@ -1670,6 +1673,15 @@ Lo que ya mordió:
   fino cierra (211 kg contra 209 porcionados) y el Lomo Saltado descarga
   medallón mientras la cocina porciona trozos. Eso lo muestra Recetas ›
   «Revisar recetas» (`graficos/recetas_revisar.py`, #559).
+- **Desde la #751 se llama «Consumo según ventas»** (el id de la vista no
+  cambia) **y cada porcionamiento dice su cuenta**: unidades × lo que puso
+  el insumo por unidad = lo usado, y ese «por unidad» = lo que puso ÷ las
+  unidades del corte de TODOS los porcionamientos de la ventana (otro
+  insumo también lo hace). «Rendimiento: 90 días | Último mes» rehace el
+  cálculo (`consumo_recetas.RENDIMIENTOS`, en la clave de la caché). La
+  merma esperada se guarda por insumo en R2 (`mermas_esperadas.py`) y es una
+  lectura aparte: no cambia el consumo; el peso de los cortes es el
+  `PESO RESULT` del Almacén.
 
 Detalle, trampas y mediciones en `arquitectura.md` regla #558.
 

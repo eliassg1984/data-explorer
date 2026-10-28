@@ -68,11 +68,13 @@ import datetime as dt
 
 import duckdb
 
-VERSION = 3
+VERSION = 4
 """Va en la clave de la caché de disco (que no caduca): subirla cuando cambie
 QUÉ se calcula, no cómo se ve. La 2: la venta interna de lo que se produce
 en casa, por la fecha en que se produjo (regla #605). La 3: devuelve además
-`porcs`, los porcionamientos de cada rendimiento (regla #609)."""
+`porcs`, los porcionamientos de cada rendimiento (regla #609). La 4: cada
+rendimiento trae su cuenta —lo que puso el insumo, las unidades del corte,
+su peso— y se puede pedir el del último mes (regla #751)."""
 
 ARCHIVOS = {
     "paloteo": "paloteoinsumosnivel1.parquet",
@@ -101,6 +103,11 @@ HORA_MADRUGADA = 6
 
 VENTANA_DIAS = 90
 RESPALDO_N = 10
+RENDIMIENTOS = ("90", "mes")
+"""De dónde sale el rendimiento de un corte cada mes (regla #751). «90»: los
+porcionamientos de los 90 días que cierran el mes (el de siempre). «mes»:
+sólo los del mes; si en el mes no hubo, los de 90 días. En los dos, sin
+ninguno cae a la receta base y, sin receta, a los más cercanos."""
 NIVELES_MAX = 12
 RECETA_ACTIVA = "RB.ACTIV"
 
@@ -267,7 +274,7 @@ def dias_por_dia_semana(ini, fin):
 
 
 def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
-             ordenes=None):
+             ordenes=None, rendimiento="90"):
     """El consumo de insumos de compra del rango.
 
     Recibe lo que devuelven las `sql_*` (DataFrames) y el rango (fechas,
@@ -299,8 +306,10 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
     el que se facturó (regla #605). Sin él, todo va por la fecha del pedido,
     como hasta el 2026-10-04. `ordenes` (lo que devuelve `sql_ordenes`,
     opcional): las órdenes de producción procesadas, para fechar por la de
-    la MASA lo que sale de porcionarla.
+    la MASA lo que sale de porcionarla. `rendimiento`: uno de `RENDIMIENTOS`.
     """
+    if rendimiento not in RENDIMIENTOS:
+        raise ValueError(f"rendimiento desconocido: {rendimiento!r}")
     g = grano(ini, fin)
     finas, meses = cubetas(ini, fin, g)
     con = duckdb.connect()
@@ -322,6 +331,12 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
         hace_un_ano = fin - dt.timedelta(days=364)
         lista_ns = ", ".join("'" + x.replace("'", "''") + "'" for x in GRUPOS_NO_SERVICIO)
         lunes0 = finas[0] if g == "semana" else ini - dt.timedelta(days=ini.weekday())
+        sql_ventana = ("SELECT * FROM ventana90" if rendimiento == "90" else """
+        SELECT * REPLACE ('mes' AS alcance) FROM ventana90 WHERE fecha >= mes
+        UNION ALL
+        SELECT * FROM ventana90 v
+        WHERE NOT EXISTS (SELECT 1 FROM ventana90 w
+                          WHERE w.cod_x = v.cod_x AND w.mes = v.mes AND w.fecha >= w.mes)""")
         con.execute(f"""
         CREATE TABLE maestro AS
         SELECT cod, ANY_VALUE(nombre) nombre, ANY_VALUE(unid) unid, ANY_VALUE(factor) factor,
@@ -443,7 +458,8 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
         -- `rid`: cada fila de corte una vez, aunque la usen varios meses.
         CREATE TABLE cortes AS
         SELECT row_number() OVER () rid, porc, CAST(fecha AS DATE) fecha, cod_e, cod_x,
-               cant_x sale_x, cant_porc * peso / cant_tot entra_e, cant_porc porcionado
+               cant_x sale_x, cant_porc * peso / cant_tot entra_e, cant_porc porcionado,
+               peso peso_x
         FROM porc_in
         WHERE cant_x > 0 AND cant_tot > 0 AND peso > 0 AND cod_e IS NOT NULL AND cod_x IS NOT NULL;
 
@@ -452,14 +468,20 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
         CREATE TABLE grilla AS
         SELECT x.cod_x, m.mes, m.fin FROM (SELECT DISTINCT cod_x FROM cortes) x CROSS JOIN meses m;
 
-        CREATE TABLE ventana AS
-        SELECT g.cod_x, g.mes, c.cod_e, c.entra_e, c.sale_x, c.fecha, c.rid, c.porc, c.porcionado
+        CREATE TABLE ventana90 AS
+        SELECT g.cod_x, g.mes, c.cod_e, c.entra_e, c.sale_x, c.fecha, c.rid, c.porc, c.porcionado,
+               c.peso_x, '90' alcance
         FROM grilla g JOIN cortes c
           ON c.cod_x = g.cod_x AND c.fecha > g.fin - {VENTANA_DIAS} AND c.fecha <= g.fin;
+
+        -- «Último mes» (regla #751): sólo los porcionamientos del mes; un corte
+        -- que no se porcionó en el mes sigue con los de 90 días.
+        CREATE TABLE ventana AS {sql_ventana};
 
         CREATE TABLE respaldo AS
         SELECT * EXCLUDE (rn) FROM (
           SELECT g.cod_x, g.mes, c.cod_e, c.entra_e, c.sale_x, c.fecha, c.rid, c.porc, c.porcionado,
+                 c.peso_x, 'respaldo' alcance,
                  ROW_NUMBER() OVER (PARTITION BY g.cod_x, g.mes
                                     ORDER BY abs(date_diff('day', c.fecha, g.fin)), c.fecha DESC, c.porc) rn
           FROM grilla g JOIN cortes c ON c.cod_x = g.cod_x
@@ -472,9 +494,15 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
           UNION ALL
           SELECT *, 'respaldo' FROM respaldo
         )
+        -- La cuenta de cada rendimiento (regla #751): `entra`, lo que puso ESTE
+        -- insumo; `tot`, las unidades del corte de TODOS los porcionamientos
+        -- (otros insumos también lo hacen); `sale_e` y `peso_e`, las unidades
+        -- y el peso que salieron de este insumo. rend = entra / tot.
         SELECT cod_x, mes, cod_e, ANY_VALUE(fuente) fuente,
                SUM(entra_e) / ANY_VALUE(tot_x) rend,
-               ANY_VALUE(n_x) n_porc, ANY_VALUE(desde) desde, ANY_VALUE(hasta) hasta
+               ANY_VALUE(n_x) n_porc, ANY_VALUE(desde) desde, ANY_VALUE(hasta) hasta,
+               SUM(entra_e) entra, ANY_VALUE(tot_x) tot, SUM(sale_x) sale_e, SUM(peso_x) peso_e,
+               ANY_VALUE(alcance) alcance
         FROM (SELECT *, SUM(sale_x) OVER (PARTITION BY cod_x, mes) tot_x,
                         COUNT(*) OVER (PARTITION BY cod_x, mes) n_x,
                         MIN(fecha) OVER (PARTITION BY cod_x, mes) desde,
@@ -615,11 +643,14 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
             ), u AS (
               SELECT rid, ANY_VALUE(cod_x) cod_x, ANY_VALUE(cod_e) cod_e, ANY_VALUE(porc) porc,
                      ANY_VALUE(fecha) fecha, ANY_VALUE(porcionado) porcionado,
-                     ANY_VALUE(entra_e) entra, ANY_VALUE(sale_x) sale, bool_or(ventana) ventana
+                     ANY_VALUE(entra_e) entra, ANY_VALUE(sale_x) sale, ANY_VALUE(peso_x) peso,
+                     bool_or(ventana) ventana, list(DISTINCT strftime(mes, '%Y-%m-%d')) meses
               FROM b GROUP BY rid
             )
+            -- `meses`: en la ventana de qué meses del rango entró (regla #751).
             SELECT cod_x, cod_e, porc, ANY_VALUE(fecha) fecha, ANY_VALUE(porcionado) porcionado,
-                   SUM(entra) entra, SUM(sale) sale, bool_or(ventana) ventana
+                   SUM(entra) entra, SUM(sale) sale, SUM(peso) peso, bool_or(ventana) ventana,
+                   list_sort(list_distinct(flatten(list(meses)))) meses
             FROM u GROUP BY cod_x, cod_e, porc
             ORDER BY cod_x, cod_e, fecha DESC, porc DESC""").df()
         porcionado = con.execute(f"""

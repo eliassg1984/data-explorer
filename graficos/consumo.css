@@ -14,12 +14,10 @@
 [hidden] { display: none !important; }
 
 /* resumen de arriba */
-.resumen { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(240px, 320px); border: 1px solid var(--borde); border-radius: 10px; }
+.resumen { display: grid; grid-template-columns: minmax(200px, 250px) minmax(0, 1fr) minmax(230px, 300px) minmax(200px, 250px); border: 1px solid var(--borde); border-radius: 10px; }
 .resumen > div { padding: 12px 16px; }
 .resumen > div + div { border-left: 1px solid var(--borde); }
 .grande { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; margin-top: 2px; }
-.barra { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--linea); margin-top: 10px; }
-.barra span { display: block; height: 100%; }
 .leyenda { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 12.5px; color: var(--texto-2); }
 .leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .leyenda b { font-weight: 600; color: var(--texto); }
@@ -196,7 +194,8 @@ details.metodo p { margin: 6px 0 0; max-width: 120ch; }
 
 @container (max-width: 1100px) {
   .resumen { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); }
-  .resumen > div:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--borde); }
+  .resumen > div:nth-child(3) { border-left: 0; border-top: 1px solid var(--borde); }
+  .resumen > div:nth-child(4) { border-top: 1px solid var(--borde); }
 }
 @container (max-width: 900px) {
   .cuerpo, .resumen { grid-template-columns: minmax(0, 1fr); }
@@ -213,3 +212,57 @@ details.metodo p { margin: 6px 0 0; max-width: 120ch; }
 .ccn-acciones{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:11px}.ccn-acciones button{margin-left:auto;border:1px solid var(--borde);border-radius:6px;padding:5px 8px;background:var(--fondo);color:var(--texto);cursor:pointer}.ccn-acciones span{color:var(--suave)}
 
 .ccn-mas{display:block;margin:8px auto;border:1px solid var(--borde);border-radius:6px;background:var(--fondo);color:var(--texto);padding:6px 12px;cursor:pointer}.ccn-vacio{padding:10px;color:var(--suave)}
+
+/* Regla #751: la cuenta de cada porcionamiento, el método en cinco pasos,
+   «Rendimiento» y la merma esperada. */
+.barra-llega { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--linea); margin-top: 10px; }
+.barra-llega span { display: block; height: 100%; }
+.rend-ctl .seg.pidiendo { opacity: .6; pointer-events: none; }
+.porcs.cuenta { display: grid; gap: 6px; padding: 6px 12px 12px 56px; color: var(--texto-2); font-size: 12.5px; white-space: normal; }
+.cuenta .eq { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.cuenta .term { display: inline-grid; padding: 4px 10px; border-radius: 8px; background: var(--gris-fondo); }
+.cuenta .term b { font-size: 15px; font-weight: 700; color: var(--texto); font-variant-numeric: tabular-nums; }
+.cuenta .term small { font-size: 11.5px; color: var(--suave); }
+.cuenta .term.res { background: var(--lav); } .cuenta .term.res b { color: var(--acento-texto); }
+.cuenta .op { color: var(--suave-2); font-size: 17px; }
+.cuenta .meses-eq { font-size: 12px; color: var(--suave); }
+.cuenta .origen, .cuenta .ult { margin: 0; line-height: 1.5; max-width: 130ch; }
+.cuenta .ult { color: var(--suave); font-size: 12px; }
+.cuenta .ult b, .cuenta .origen b { color: var(--texto); font-weight: 600; }
+.mini-eq { display: inline-block; background: var(--gris-fondo); border-radius: 6px; padding: 0 6px; font-weight: 600; color: var(--texto); }
+.merma { display: grid; gap: 4px; border-top: 1px dashed var(--borde); padding-top: 8px; margin-top: 4px; font-size: 12.5px; color: var(--texto-2); }
+.merma b { color: var(--texto); font-weight: 600; }
+.merma b.mas { color: var(--adv-texto); } .merma b.menos { color: var(--ok); }
+.merma label { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.merma input { width: 72px; height: 30px; border: 1px solid var(--lav-borde); border-radius: 6px; padding: 0 6px; background: var(--fondo); color: var(--texto); font: inherit; font-variant-numeric: tabular-nums; }
+.merma label.guardando { opacity: .6; }
+.ver-porcs { justify-self: start; border: 1px solid var(--lav-borde); background: var(--fondo); color: var(--acento-texto); border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.porcs-wrap { overflow-x: auto; max-width: 100%; }
+.porcs-t { border-collapse: collapse; font-size: 12px; min-width: 60%; }
+.porcs-t th { text-align: left; color: var(--suave); font-weight: 500; font-size: 11px; padding: 4px 8px; border-bottom: 1px solid var(--borde); white-space: nowrap; }
+.porcs-t td { padding: 4px 8px; border-bottom: 1px solid var(--linea); white-space: nowrap; color: var(--texto-2); }
+.porcs-t .r { text-align: right; }
+.porcs-t tr.otro td { color: var(--suave); }
+.porcs-t tr.tot td { font-weight: 600; color: var(--texto); border-top: 1px solid var(--borde); border-bottom: 0; }
+.kgu { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.kgu i { display: inline-block; height: 6px; border-radius: 3px; background: var(--lav-foco); }
+.kgu.lejos i { background: var(--adv-borde); } .kgu.lejos { color: var(--adv-texto); font-weight: 600; }
+.rend-cuenta { margin-top: 4px; font-size: 13px; color: var(--texto); }
+details.metodo summary .mini { font-weight: 400; color: var(--suave); margin-left: 8px; font-size: 12px; }
+.flujo { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; margin-top: 10px; }
+.paso { position: relative; display: grid; gap: 3px; align-content: start; padding: 9px 12px; margin-right: 18px; border-top: 3px solid var(--c, var(--acento)); border-radius: 0 0 8px 8px; background: var(--gris-fondo); }
+.paso:not(:last-child)::after { content: "→"; position: absolute; right: -15px; top: 50%; transform: translateY(-50%); color: var(--suave-2); }
+.paso:last-child { margin-right: 0; }
+.paso .t { font-weight: 650; color: var(--texto); font-size: 13px; }
+.paso .d { font-size: 12px; color: var(--suave); line-height: 1.35; }
+.paso .v { font-size: 15px; font-weight: 700; color: var(--texto); }
+.paso .v small { font-size: 11.5px; font-weight: 500; color: var(--suave); }
+.metodo .puente { margin: 8px 0 0; font-size: 12.5px; max-width: 130ch; }
+.metodo .reglas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 24px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--borde); }
+.metodo .reglas p { margin: 0; font-size: 12.5px; line-height: 1.4; }
+@container (max-width: 1100px) { .flujo { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; } }
+@container (max-width: 700px) {
+  .flujo, .metodo .reglas { grid-template-columns: minmax(0, 1fr); }
+  .paso { margin: 0 0 14px; } .paso:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -17px; transform: none; }
+  .porcs.cuenta { padding-left: 12px; }
+}

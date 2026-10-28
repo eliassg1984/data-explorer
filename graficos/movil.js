@@ -12,7 +12,7 @@ const __movilPerfiles = [
   ['.mv', '.mv-filtros'], ['.rqa', '.rqa-controles'], ['.saa', '.rqa-controles'], ['.destino', '.dst-control'],
   ['.pvu', '.pvu-filtros'], ['.mre', '.mre-controles'], ['.mrv', '.mrv-filtros'],
   ['.cc', '.cc-filtros'], ['.rb', '.cab .sel'], ['.cr', '.filtros'], ['.rr', '.rr-per'],
-  ['.sa', '.sa-esc'], ['.nc', ''], ['.sim', ''], ['.pd', '.pd-der'], ['.consumo-pieza', '.barra'],
+  ['.sa', '.sa-esc'], ['.nc', ''], ['.sim', ''], ['.pd', '.pd-der'], ['.consumo-pieza', '.ctrls'],
   ['.pf', ''], ['.pa', ''], ['.ps', ''], ['.ld', '']
 ];
 const __movilRaices = __movilPerfiles.map(([raiz]) => raiz).join(', ');

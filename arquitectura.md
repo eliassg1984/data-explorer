@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-750 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+751 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (247)
 
@@ -424,7 +424,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 
-**Plotly y figuras** (128)
+**Plotly y figuras** (129)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -554,6 +554,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#737** — En qué se fue cada producto es una pieza propia, con tabla y ficha locales y la cuenta del…
 - **#738** — Movimientos por Tipo de Stock es una pieza propia, con filtros y contribuciones locales sin…
 - **#744** — La ficha del plato de «Costo de Carta» es una pieza propia: dice qué mueve el costo de hoy y…
+- **#751** — Producción › «Consumo según ventas» dice la cuenta de cada porcionamiento, deja elegir el…
 
 **AgGrid y tablas** (97)
 
@@ -1115,7 +1116,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (226)
+**Decisiones de diseño y UX** (227)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1343,6 +1344,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#748** — Ajuste › «Diferencias del cierre» abre con TODAS las familias y los insumos de operación…
 - **#749** — Compras › «Vs año pasado» abre en el TOTAL, pone la venta al lado y parte la diferencia en…
 - **#750** — El borde de un cierre lo ponen las áreas que CONTARON STOCK, y Destino cuenta sólo de conteo…
+- **#751** — Producción › «Consumo según ventas» dice la cuenta de cada porcionamiento, deja elegir el…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57148,6 +57150,56 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      `test_graficos.py::_pruebas_relojes_sin_plato` y
      `test_destino_producto_pieza.py`. (2026-10-28.)
 
+751. **Producción › «Consumo según ventas» dice la cuenta de cada
+     porcionamiento, deja elegir el rendimiento y lee la merma esperada**
+     (`consumo_recetas.py`, `graficos/movimientos_consumo.py`,
+     `graficos/consumo_pieza.py`, `consumo.js`, `.css` y `.html`,
+     `mermas_esperadas.py`). A pedido (2026-10-28), sobre un análisis medido
+     y un boceto aprobado (https://claude.ai/artifact/A4bydmJvbnFXQDwYXP7kFE),
+     con la condición de no perder nada de la #733.
+     · **Lo que estaba mal**: la fila de un porcionamiento decía «El
+       rendimiento sale de 17 porcionamientos» y listaba 17 números de
+       documento, sin un kilo (los números sólo en el `title` de cada ficha);
+       la ficha, «0,1974 kg por und · 19 cortes», sin a cuántas unidades se
+       aplicaba. «Cómo se calcula» eran 578 palabras en un párrafo.
+     · **La cuenta, en la fila y en la ficha**: unidades usadas por las
+       ventas × lo que puso el insumo por unidad = lo que se usó, mes por mes;
+       y de dónde sale ese «por unidad»: lo que puso el insumo ÷ las unidades
+       del corte de TODOS los porcionamientos de la ventana (lomo trozos, oct
+       2026: 113,2 kg ÷ 573,5 und = 0,1974; 2 de los 19 salieron de Lomo
+       cabeza). Para eso `rend` trae `entra`, `tot`, `sale_e`, `peso_e` y
+       `alcance`, y `porcs` el peso y los meses en cuya ventana entró cada
+       uno; la página recibe `rend_mes` y `porcs_corte` (los de la ventana
+       del último mes, de cualquier insumo). Los N° pasan a una tabla al
+       pedirla, con sus kilos y el kg por unidad de cada uno. El último
+       porcionamiento va como DATO, no como base: uno solo va de 0,178 a 0,234.
+     · **«Rendimiento: 90 días | Último mes»** rehace el cálculo en Python
+       (trigger `rendimiento`, `consumo_recetas.RENDIMIENTOS`, en la clave de
+       la caché): «mes» usa sólo los porcionamientos del mes y, si en el mes
+       no hubo, los de 90 días; sin ninguno, la receta base y después los más
+       cercanos, como siempre. El consumo de 30 días pasó de S/ 100.807 a
+       S/ 103.644; la primera vez de un rango tarda ~35 s.
+     · **La merma esperada, como lectura aparte**: se pone por insumo y se
+       guarda en R2 (`_config/mermas_esperadas.json`, trigger `merma`,
+       validado en Python). Merma real = 1 − peso de los cortes ÷ lo que puso
+       el insumo (lomo fino: 17,6 %); con la esperada, lo usado habría sido
+       kg × (1 − real) ÷ (1 − esperada). Vale también para cortes por kilo y
+       sin el peso en el nombre: el peso es el `PESO RESULT` del Almacén (50
+       medallones, 8,5 kg). No cambia el consumo.
+     · **«Cómo se calcula»: cinco pasos con su cifra** (plato vendido →
+       receta de venta → receta base → porcionamiento → insumo de compra) y
+       cinco reglas; la historia de la venta interna pasó al `title` de su
+       interruptor y lo de compras a su pestaña. Lo comprado sube a la
+       cabecera (cuarto bloque) y las pestañas se llaman «Insumo › plato» y
+       «Por insumo».
+     · **El nombre visible es «Consumo según ventas»**; el id de la vista
+       («Consumo según recetas») no cambia, como el de «Vs año pasado».
+     · **En el celular la barra de «Cómo llegan al plato» volvió a verse**:
+       el perfil de `graficos/movil.js` plegaba `.barra`, que era esa barra.
+       Ahora es `.barra-llega` y lo que se pliega son los controles (`.ctrls`).
+     Subir `consumo_recetas.VERSION` (va en 4). Lo vigilan
+     `test_consumo_recetas.py` y `test_consumo_pieza.py`. (2026-10-28.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57160,7 +57212,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#750**; la próxima toma el número siguiente.
+> última regla es la **#751**; la próxima toma el número siguiente.
 
 >
 
