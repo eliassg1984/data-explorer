@@ -1,6 +1,9 @@
-"""Cierre nativo: mismas cuentas y comparación conservadora, sin red (#720)."""
+"""Cierre nativo: mismas cuentas y comparación conservadora, sin red (#720).
+Desde la #748: la operación aparte, los últimos 12 cierres, «dentro de
+±S/ 5» y el salto «¿Por qué?» a «Análisis de diferencias»."""
 import io
 import json
+import re
 import tempfile
 import unittest
 import zipfile
@@ -90,7 +93,8 @@ _cierre.vista_cierre(pd.DataFrame({"FECHA":[pd.Timestamp("2026-03-02")],
         d.loc[0,'AJUSTE VALORIZADO']+=.00000002
         self.assertNotEqual(datos.armar(d)['sello'],p['sello'])
         self.assertIn('const CJ={c:0,fam:1,area:2,prod:3,cod:4,sub:5,um:6,val:7,dif:8,sis:9,fis:10,stock:11,flags:12};',JS)
-        self.assertNotIn('setTriggerValue',JS)
+        # Lo único que vuelve a Python es «¿Por qué?» (regla #748).
+        self.assertEqual(set(re.findall(r"enviar\('(\w+)'",JS)),{'porque'})
         self.assertNotRegex(JS+CSS,r'#[0-9a-fA-F]{6}\b')
 
     def test_sin_fechas_sin_columnas_y_nan_no_inventan_cierres(self):
@@ -111,6 +115,33 @@ _cierre.vista_cierre(pd.DataFrame({"FECHA":[pd.Timestamp("2026-03-02")],
         self.assertEqual(len(p['filas']),3)
         d['CODIGO PRODUCTO']=['nan','None','  ']
         self.assertEqual(datos.armar(d)['dic']['cod'],[''])
+
+    def test_operacion_aparte_y_codigo_de_area(self):
+        d=inventario().iloc[:6].copy();d['CODIGO AREA']=['0000000000','0000000001','0000000002']*2
+        d.loc[d.index[:3],'FAMILIA']='COSTOS PRODUCCION '
+        p=datos.armar(d)
+        self.assertEqual(p['operacion'],['COSTOS PRODUCCION '])
+        self.assertEqual(p['acod'],{'CENTRAL':0,'COCINA':1,'CAVA':2})
+        self.assertEqual(datos.armar(inventario())['acod'],{})
+
+    def test_porque_deja_la_linea_en_analisis_y_pide_el_salto(self):
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        from graficos.ajuste import _cierre, _diferencias as dif
+        import navegacion
+        P={'sesiones':[{'clave':'cierre_2026-09'}],'acod':{'COCINA':1}}
+        ss={_cierre.K_PIEZA:{'porque':{'ses':'cierre_2026-09','area':'COCINA','cod':'0000004088','lado':'f','fam':'COSTOS PRODUCCION'}},dif.K_FAM:['ALIMENTOS'],dif.K_AREA:['BARRA']}
+        poner=lambda k,v:ss.__setitem__(k,v)
+        with patch.object(_cierre,'st',SimpleNamespace(session_state=ss)),patch.object(dif,'st',SimpleNamespace(session_state=ss)),patch.object(_cierre,'poner_seleccion',side_effect=poner),patch.object(dif,'poner_seleccion',side_effect=poner):
+            _cierre.al_porque(P)
+        self.assertEqual(ss[dif.K_SES],'cierre_2026-09');self.assertEqual(ss[dif._K_FOCO],'1|4088')
+        self.assertEqual(ss[dif.K_LADO],'fal');self.assertEqual(ss[dif.K_VER],'area');self.assertEqual(ss[dif.K_AREA],[])
+        self.assertEqual(ss[dif.K_FAM],['ALIMENTOS','COSTOS PRODUCCION']);self.assertEqual(ss[navegacion.CLAVE_SALTO_VISTA],_cierre.VISTA_ANALISIS)
+        self.assertTrue(ss[_cierre._K_IR])
+        for malo in [{'ses':'otra','area':'COCINA','cod':'1'},{'ses':'cierre_2026-09','area':'BARRA','cod':'1'},{'ses':'cierre_2026-09','area':'COCINA','cod':''},'texto']:
+            ss2={_cierre.K_PIEZA:{'porque':malo}}
+            with patch.object(_cierre,'st',SimpleNamespace(session_state=ss2)):_cierre.al_porque(P)
+            self.assertNotIn(_cierre._K_IR,ss2)
 
 
 try:
@@ -136,7 +167,7 @@ class Navegador(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):cls.b.close();cls.pw.stop()
 
-    def mount(self,p=None):self.pg.evaluate('P=>{window.__ajCierre=undefined;__montarCierre({data:P,parentElement:document.querySelector("#montar")})}',p or self.P)
+    def mount(self,p=None):self.pg.evaluate('P=>{window.__ajCierre=undefined;window.__envios=[];__montarCierre({data:P,parentElement:document.querySelector("#montar"),setTriggerValue:(k,v)=>__envios.push([k,v])})}',p or self.P)
 
     def test_cuentas_originales_por_corte_familia_y_area(self):
         p=self.P
@@ -209,23 +240,26 @@ class Navegador(unittest.TestCase):
 
     def test_ui_filtros_independientes_celdas_comparacion_y_remontaje(self):
         self.mount();pg=self.pg;root=pg.locator('.ajc')
+        self.assertEqual(pg.evaluate('__ajCierre.st.fams'),[])
         root.locator('[data-act="familia"][data-v="ALIMENTOS"]').first.click()
-        root.locator('[data-act="tab"][data-v="Comparar cierres"]').click()
+        self.assertEqual(pg.evaluate('__ajCierre.st.fam'),'ALIMENTOS')
+        root.locator('[data-act="tab"][data-v="comparar"]').click()
+        self.assertEqual(pg.evaluate('__ajCierre.st.status'),'Recurrente')
         root.locator('[data-act="estado"][data-v="Resuelta"]').click()
         self.assertTrue(pg.evaluate('__ajCierre.comp.every(r=>r.estado==="Resuelta")'))
         root.locator('[data-act="elegido"]').first.click()
         self.assertEqual(root.locator('.ajc-history').count(),1)
-        root.locator('[data-act="vista"][data-v="1"]').click()
-        self.assertEqual(pg.evaluate('__ajCierre.st.vistas[1].tab'),'Por producto')
+        root.locator('[data-act="vf"][data-v="cruce"]').click()
+        self.assertEqual(pg.evaluate('__ajCierre.st.vf'),'cruce')
         root.locator('[data-act="celda"]').first.click()
-        self.assertIsNotNone(pg.evaluate('__ajCierre.st.vistas[1].area'))
-        root.locator('[data-act="vista"][data-v="0"]').click()
-        self.assertEqual(pg.evaluate('__ajCierre.st.vistas[0].status'),'Resuelta')
+        self.assertIsNotNone(pg.evaluate('__ajCierre.st.area'))
+        root.locator('[data-act="vf"][data-v="lista"]').click()
         pg.evaluate('P=>__montarCierre({data:P,parentElement:document.querySelector("#montar")})',self.P)
-        self.assertEqual(pg.evaluate('__ajCierre.st.vistas[0].status'),'Resuelta')
-        root.locator('[data-act="tab"][data-v="Por producto"]').click()
-        root.locator('[data-act="orden"][data-v="3"]').click()
-        self.assertEqual(pg.evaluate('__ajCierre.st.vistas[0].orden["Por producto"].i'),3)
+        self.assertEqual(pg.evaluate('__ajCierre.st.status'),'Resuelta')
+        root.locator('[data-act="limpiar"]').first.click()
+        root.locator('[data-act="tab"][data-v="lineas"]').click()
+        root.locator('[data-act="ordentab"][data-v="lineas|3"]').click()
+        self.assertEqual(pg.evaluate('__ajCierre.st.ordenTabla.lineas.i'),3)
         root.locator('.ajc-search').fill('Aoz')
         root.locator('.ajc-search').evaluate('e=>e.setSelectionRange(1,1)')
         root.locator('.ajc-search').type('rr',delay=20)
@@ -233,14 +267,50 @@ class Navegador(unittest.TestCase):
         self.assertIn('Arroz',root.locator('.ajc-detail').inner_text())
         self.assertNotIn('Carne',root.locator('.ajc-detail').inner_text())
         root.locator('.ajc-search').fill('')
-        root.locator('[data-act="tab"][data-v="Pareto"]').click()
-        root.locator('[data-act="parProd"]').first.click()
-        self.assertEqual(root.locator('.ajc-pareto-areas').count(),1)
-        self.assertIsNotNone(pg.evaluate('__ajCierre.exportarExtra'))
+        root.locator('[data-act="tab"][data-v="listas"]').click()
+        root.locator('[data-act="abrirlista"]').first.click()
+        self.assertGreater(root.locator('.ajc-areas-de').count(),0)
+        root.locator('[data-act="orden"][data-v="pareto"]').click()
+        self.assertIn('acum.',root.locator('.ajc-lists').inner_text())
         self.assertEqual(pg.evaluate('Math.round(document.querySelector(".ajc-main").getBoundingClientRect().height)'),575)
         pg.set_viewport_size({'width':390,'height':844})
         self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'),390)
         pg.set_viewport_size({'width':1323,'height':619})
+
+    def test_operacion_aparte_tolerancia_y_doce_cierres(self):
+        d=self.d.copy();d.loc[d['NOMBRE PRODUCTO']=='Envase','FAMILIA']='COSTOS PRODUCCION'
+        p=datos.armar(d);self.mount(p);pg=self.pg;root=pg.locator('.ajc')
+        i=p['inicial'];ds=d[d.FECHA==pd.Timestamp('2026-03-02')];op=ds.FAMILIA=='COSTOS PRODUCCION'
+        D=pg.evaluate('({mc:__ajCierre.D.mc,mo:__ajCierre.D.mo,m:__ajCierre.D.m})')
+        self.assertAlmostEqual(D['mc']['saldo'],ds[~op]['AJUSTE VALORIZADO'].sum(),places=7)
+        self.assertAlmostEqual(D['mo']['saldo'],ds[op]['AJUSTE VALORIZADO'].sum(),places=7)
+        self.assertAlmostEqual(D['m']['saldo'],ds['AJUSTE VALORIZADO'].sum(),places=7)
+        contada=(ds['STOCK AL CIERRE'].fillna(0).abs()>1e-9)|(ds['STOCK DECLARADO'].fillna(0).abs()>1e-9)
+        self.assertEqual(D['m']['tol'],int((contada&(ds['AJUSTE VALORIZADO'].abs()<=5)).sum()))
+        self.assertEqual(root.locator('.ajc-aparte').count(),1)
+        self.assertIn('insumos de operación',root.locator('.ajc-frase').inner_text())
+        self.assertIn('Todo el cierre',root.locator('.ajc-familias').inner_text())
+        S=pg.evaluate('__ajCierreUI.serie(__ajCierre)')
+        cierres=[j for j,s in enumerate(p['sesiones']) if s['tipo']=='cierre' and j<=i]
+        self.assertEqual([r['i'] for r in S['cierres']],cierres[-12:])
+        self.assertEqual([r['i'] for r in S['tabla']],list(range(i,cierres[-12:][0]-1,-1)))
+        self.assertEqual(root.locator('rect.toque').count(),len(S['cierres']))
+        root.locator('rect.toque').first.dispatch_event('click')
+        self.assertEqual(pg.evaluate('__ajCierre.st.c'),S['cierres'][0]['i'])
+        root.locator('[data-act="vg"][data-v="tabla"]').click()
+        self.assertIn('parcial',root.locator('.ajc-main').inner_text().lower())
+        root.locator('[data-act="mover"][data-v="1"]').click()
+        self.assertEqual(pg.evaluate('__ajCierre.st.c'),S['cierres'][0]['i']+1)
+
+    def test_porque_manda_la_linea_de_mas_peso(self):
+        self.mount();pg=self.pg;root=pg.locator('.ajc')
+        b=root.locator('[data-act="porque"]').first;dest=json.loads(b.get_attribute('data-v'));b.click()
+        env=pg.evaluate('__envios');self.assertEqual(len(env),1);k,v=env[0]
+        self.assertEqual(k,'porque');self.assertEqual(v['ses'],self.P['sesiones'][self.P['inicial']]['clave'])
+        self.assertEqual({x:v[x] for x in ['area','cod','lado']},{x:dest[x] for x in ['area','cod','lado']})
+        d=self.d[self.d.FECHA==pd.Timestamp('2026-03-02')]
+        lado=d[(d['CODIGO PRODUCTO']==v['cod'])&((d['AJUSTE VALORIZADO']<0) if v['lado']=='f' else (d['AJUSTE VALORIZADO']>0))]
+        self.assertEqual(v['area'],lado.assign(a=lado['AREA'].str.strip()).groupby('a')['AJUSTE VALORIZADO'].sum().abs().idxmax())
 
     def test_cambios_de_datos_vacio_y_cantidades_de_unidades_distintas(self):
         d=self.d.iloc[:2].copy();d['CODIGO PRODUCTO']='MIX';d['NOMBRE PRODUCTO']='Mixto'
@@ -257,7 +327,10 @@ class Navegador(unittest.TestCase):
 
     def test_excel_contexto_filas_completas_y_seis_decimales(self):
         self.mount();pg=self.pg;root=pg.locator('.ajc')
-        root.locator('[data-act="tab"][data-v="Comparar cierres"]').click()
+        with pg.expect_download() as dl:root.locator('[data-act="excel"][data-v="resumen"]').click()
+        with zipfile.ZipFile(dl.value.path()) as z:
+            self.assertIn('Cortes',z.read('xl/workbook.xml').decode())
+        root.locator('[data-act="tab"][data-v="comparar"]').click()
         root.locator('[data-act="estado"][data-v="Sin base"]').click()
         with pg.expect_download() as dl:root.locator('[data-act="excel"][data-v="detalle"]').click()
         with tempfile.TemporaryDirectory() as temp:

@@ -13,6 +13,7 @@ import pandas as pd
 from cortes import sesiones_inventario, ultimo_cierre
 from graficos.base import _resolver
 from ._comun import FAMILIAS_DE_ENTRADA
+from sin_plato import FAMILIA_OPERACION
 from ._productos import COL_CODIGO, COL_SUBFAMILIA, COL_UNIDAD
 from ._cascada import _COL_SISTEMA, _COL_FISICO
 
@@ -31,6 +32,7 @@ def columnas(df):
         "dif": ["AJUSTE", "CANTIDAD AJUSTE", "CANTIDAD"],
         "val": ["AJUSTE VALORIZADO", "AJUSTEVALORIZADO"],
         "stock": ["VALORIZADO TOTAL", "VALORIZADO", "VALORIZADOTOTAL"],
+        "acod": ["CODIGO AREA"],
     }
     return {k: _resolver(df, v) for k, v in candidatos.items()}
 
@@ -93,9 +95,21 @@ def armar(df):
     ss = [{k: (str(v) if k in ("ini", "fin") and v else v)
            for k, v in s.items() if k != "dias"} for s in sesiones]
     ultimo = ultimo_cierre(sesiones)
+    # El código de cada área, para saltar a su línea en «Análisis de
+    # diferencias» (que la nombra por código, regla #748).
+    acod = {}
+    if c["acod"] and c["area"] and not d.empty:
+        nums = pd.to_numeric(d[c["acod"]], errors="coerce")
+        for a, n in zip(d[c["area"]].astype(object).where(d[c["area"]].notna(), "").map(str).str.strip(), nums):
+            if a and pd.notna(n):
+                acod.setdefault(a, int(n))
     p = {"dic": dic, "sesiones": ss, "filas": filas,
          "inicial": sesiones.index(ultimo) if ultimo else 0,
          "familias_iniciales": [v for v in FAMILIAS_DE_ENTRADA if v in dic["fam"]],
+         # Los insumos de operación van APARTE, no afuera (regla #748): ninguna
+         # receta los descarga, así que su consumo aparece recién al contar.
+         "operacion": [v for v in dic["fam"] if v.strip().upper() == FAMILIA_OPERACION],
+         "acod": acod,
          "hay": {k: bool(v) for k, v in c.items()},
          "sin_fecha": int(corte.isna().sum())}
     p["sello"] = hashlib.sha256(json.dumps(p, ensure_ascii=False, allow_nan=False,

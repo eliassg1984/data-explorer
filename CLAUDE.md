@@ -252,7 +252,11 @@ y `.css`): sesiones reales, exactitud por línea y faltantes/sobrantes sin
 compensar contra las cuentas anteriores; tabla, Pareto, comparación por
 código/área/unidad, ausencia y cero/cero como Sin base, recurrencias sin
 cortes futuros, filtros independientes y Excel numérico con seis decimales.
-Pruebas de Chromium sin red. Ver regla #720.
+Pruebas de Chromium sin red. Ver regla #720. Desde la #748 abre con todas
+las familias y los insumos de operación aparte; el test cubre además
+«dentro de ±S/ 5», los últimos 12 cierres con la tabla de parciales y el
+salto «¿Por qué? →» a «Análisis de diferencias» (`_cierre.al_porque`, el
+único trigger).
 
 `test_stock_producto_pieza.py` vigila Stock por Producto como pieza propia
 (`inventario_productos.js` y `.css`, `inventario_productos_datos.py` y

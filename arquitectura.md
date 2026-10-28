@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-747 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+748 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (245)
+**CSS y estilos** (246)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -312,6 +312,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
 - **#743** — «En qué se fue cada producto» se cuenta con dos relojes y por área: el flujo es NETO, la…
 - **#746** — «Costo de Carta» es UNA pieza con UNA ficha: la lista ordenada por lo que se pagó sobre el 30…
+- **#748** — Ajuste › «Diferencias del cierre» abre con TODAS las familias y los insumos de operación…
 
 **Layout y alturas** (106)
 
@@ -1112,7 +1113,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (223)
+**Decisiones de diseño y UX** (224)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1337,6 +1338,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#734** — Requerimientos por Área es una pieza propia completa: la cadena, los productos y su ficha…
 - **#745** — La portada de Inicio cuenta el mes CON su contexto: el presupuesto, los doce meses, lo…
 - **#747** — Stock › «Movimientos por Tipo» se lee con DOS relojes: abre «De conteo a conteo» y el…
+- **#748** — Ajuste › «Diferencias del cierre» abre con TODAS las familias y los insumos de operación…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -56971,6 +56973,69 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      consulta cada reloj, el foco, las pestañas, el aviso y la comparación en
      Chromium. (2026-10-27.)
 
+748. **Ajuste › «Diferencias del cierre» abre con TODAS las familias y los
+     insumos de operación APARTE, y lleva cada producto a «Análisis de
+     diferencias»** (`graficos/ajuste/_cierre.py`, `_cierre_datos.py`,
+     `cierre.js` y `.css`). A pedido (2026-10-27), sobre un análisis medido
+     con datos reales y un boceto aprobado y completado
+     (https://claude.ai/artifact/YU1N3wvBTK6weohWbKR8za), con la condición
+     de no perder nada de la #720.
+     · **Lo que estaba mal**: abría en «Familia: 5» (`FAMILIAS_DE_ENTRADA`)
+       y dejaba afuera Costos Producción. En el cierre de setiembre 2026 el
+       neto decía −S/ 196 y con todas era −S/ 12.650: leña y carbón −9.275,
+       limpieza −1.640, menaje −1.457, y esa familia falta en todos los
+       cierres (−S/ 7 a −25 mil). «Exactitud» daba 14 % (Cocina 1,3 %): en
+       kilos casi toda línea difiere en algo y no separa un buen conteo de
+       uno malo. «Faltó −27.014» arriba y «Faltantes −23.683» abajo sin
+       explicar la diferencia. Cifras a dos decimales, el corte en un
+       desplegable nativo, la tabla de familias con 5 filas y ~100 px en
+       blanco, el cruce con 14 columnas cortadas, el detalle con 5 pestañas
+       y 4 botones, y en el celular la tabla escondía el nombre.
+     · **Los insumos de operación van aparte, no afuera** (`P.operacion`, la
+       familia `sin_plato.FAMILIA_OPERACION`, como en Destino #645): la
+       frase y Faltó/Sobró/Neto son de alimentos y bebidas; operación es el
+       quinto indicador y una fila aparte con sus subfamilias; la tabla
+       cierra con «Todo el cierre». El filtro de familias abre en «todas» y
+       guarda «Sólo las cinco de antes».
+     · **«Dentro de ±S/ 5»** (`cmetricas().tol`, `CTOL`): líneas con stock
+       cuya diferencia valorizada es de S/ 5 o menos; 40 % en setiembre. La
+       exactitud sigue al lado, en los indicadores, las familias, las áreas
+       y los cortes.
+     · **Los últimos 12 cierres** (`cserie`): faltó y sobró de alimentos y
+       bebidas, su neto y la operación al lado, con los filtros y el foco;
+       un clic elige el cierre. «Tabla con parciales» es la pestaña «Por
+       corte» de antes, con sus días, áreas y líneas con stock (la cobertura
+       que evita leer un parcial como una mejora), y va al Excel del resumen
+       como hoja «Cortes».
+     · **Qué productos, en cuatro pestañas**: Faltantes y sobrantes (por
+       monto o Pareto con su % y acumulado; ▸ abre las áreas; «faltó n de 6
+       cierres», «sobró S/ x en otra área», «operación»; y lo compensado
+       entre áreas, que explica la diferencia con «Faltó»), Comparar cierres
+       (el cierre contra el que se compara y sus seis estados, abriendo en
+       «Recurrente»), Por área (con «de ello, operación») y Todas las líneas
+       (áreas juntas o separadas, ▸, la familia y el código debajo del
+       nombre). «Top productos» sigue con el cruce en «Stock».
+     · **«¿Por qué? →»** es lo único que vuelve a Python (`enviar('porque')`,
+       `_cierre.al_porque`): deja «Análisis de diferencias» en ese cierre y
+       en la línea de más peso del lado (área × producto: `acod|cod` sin
+       ceros, el `CODIGO AREA` del parquet viaja en `P.acod`), suma la
+       familia a su filtro si hace falta, reusa `_diferencias._ir` y salta
+       con `navegacion.CLAVE_SALTO_VISTA`. Esa vista es OTRO fragment: la
+       corrida completa la pide `vista_cierre` después de dibujar la pieza
+       (#373). Un pedido que no es de una sesión o un área de los datos no
+       hace nada.
+     · **Las cuentas no cambiaron**: `cmetricas` sólo suma `tol`;
+       `cresumen`, `cmatriz`, `cproductos`, `cpareto`, `clistas` y
+       `ccomparar` son las de la #720 y el test las sigue comparando con
+       `_cascada.py`, `_heatmap.py`, `_productos.py` y `_pareto.py`.
+     · **Un desplegable con `width` dentro de una fila que en el celular se
+       apila desborda la pantalla**: el selector de corte va con
+       `width:100%` debajo de 760 px, y la barra del neto se esconde para que
+       las cifras entren.
+     Lo vigila `test_cierre_pieza.py`: la operación aparte, «dentro de
+     ±S/ 5», los 12 cierres y la tabla con parciales, el salto con su
+     validación en Python y la línea que manda el navegador. (2026-10-27.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -56983,7 +57048,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#747**; la próxima toma el número siguiente.
+> última regla es la **#748**; la próxima toma el número siguiente.
 
 >
 
