@@ -1,7 +1,8 @@
 /* El flujo del inventario de «En qué se fue cada producto» (regla #743):
    la franja compacta, el flujo neteado del restaurante con su panel,
    «Cómo se calcula» y, con DESTINO_AREAS, el mapa por área. Trabaja sobre
-   las filas que ya trae la pieza; a Python sólo vuelve el reloj. */
+   las filas que ya trae la pieza; nada vuelve a Python. Desde la regla
+   #750, un solo reloj: de conteo a conteo de cada área. */
 const DESTINO_FLUJO = (() => {
   const fmt = (x, d = 0) => Number(x || 0).toLocaleString('es-PE', {maximumFractionDigits: d});
   const sol = x => (x < -0.005 ? '−' : '') + 'S/ ' + fmt(Math.abs(x));
@@ -124,23 +125,19 @@ const DESTINO_FLUJO = (() => {
     }[id] || '';
   }
 
+  /* El resumen del restaurante de cada cierre, de conteo a conteo (desde la
+     regla #750 el único reloj: el del kardex se fue). */
   function puente(P, k) {
-    const a = (P.puente.kardex || [])[k], b = (P.puente.operativo || [])[k];
-    return a && b ? {k: a, o: b, ka: (P.puente.kardex || [])[k - 1], oa: (P.puente.operativo || [])[k - 1]} : null;
+    const o = (P.puente.operativo || [])[k];
+    return o ? {o, oa: (P.puente.operativo || [])[k - 1]} : null;
   }
 
   function nota(ctx, id) {
-    const {P, n, k, grupo, completo, rows, ant} = ctx, op = P.reloj === 'operativo', b = P.borde[k] || [0, 0, 0], pu = puente(P, k);
-    const tarde = pu ? pu.k.compra - pu.o.compra : 0;
+    const {P, n, k, grupo, completo, rows, ant} = ctx, op = P.reloj === 'operativo', b = P.borde[k] || [0, 0, 0];
     if (id === 'ini' || id === 'fin') {
       const pos = rows.reduce((a, r) => a + Math.max(0, r[id + '_v'] || 0), 0), neg = rows.filter(r => (r[id + '_v'] || 0) < -0.5);
-      let t = `Neto: ${sol(pos)} en positivo menos ${sol(-neg.reduce((a, r) => a + r[id + '_v'], 0))} de ${neg.length} productos que ${id === 'ini' ? 'arrancaron' : 'cerraron'} en negativo.`;
-      if (id === 'fin' && !op && tarde > 0.5) t += ' Trae las compras posteriores al conteo y no sus ventas.';
-      return t;
+      return `Neto: ${sol(pos)} en positivo menos ${sol(-neg.reduce((a, r) => a + r[id + '_v'], 0))} de ${neg.length} productos que ${id === 'ini' ? 'arrancaron' : 'cerraron'} en negativo.`;
     }
-    if (id === 'compra' && tarde > 0.5 && completo) return op
-      ? `Sin los ${sol(tarde)} registrados después del conteo, que pasan al cierre siguiente.`
-      : `Incluye ${sol(tarde)} registrados entre el conteo y el fin del cierre: operativamente son del siguiente.`;
     if (grupo === P.operacion) return id === 'falt' ? 'Carbón, leña, limpieza y descartables: ninguna receta los descarga, su uso aparece al contar.' : '';
     if (id === 'plato' && b[0] > 0.5) return op
       ? `Suma ${sol(b[0])} vendidos antes del conteo y descontados después o nunca (${sol(b[2])} nunca) y resta ${sol(b[1])} que eran del cierre anterior.`
@@ -266,30 +263,28 @@ const DESTINO_FLUJO = (() => {
     const val = (I.val || 0) - Math.max(0, n.val), resto = b.entrada - prod - neg - val - neto;
     const fila = (t, v, fuerte) => `<span${fuerte ? ' class="f"' : ''}>${t}</span><b class="${fuerte ? 'f' : ''}">${fuerte ? '' : '−'}${fmt(Math.abs(v))}</b>`;
     const op = P.reloj === 'operativo', pu = puente(P, k), b0 = P.borde[k] || [0, 0, 0], p = P.periodos[k];
-    const col = r => `<b class="${P.reloj === r ? 'on' : ''}">${r === 'kardex' ? 'Kardex' : 'Operativas'}</b>`;
     const porDia = (x, xa) => x && xa ? flecha(cambio(x.sinplato / x.dias, xa.sinplato / xa.dias)) : '—';
     const platoDia = (x, xa) => x && xa ? flecha(cambio(x.plato / x.dias, xa.plato / xa.dias)) : '—';
     const tarde = (p.cortes_op || []).filter(c => p.t1_op && c[1].slice(0, 10) !== p.t1_op.slice(0, 10));
     const filasP = pu ? [
-      ['Período', fmt(pu.k.dias, 1) + ' días', fmt(pu.o.dias, 1) + ' días', p.t1_op ? `Operativas: termina en el conteo de cada área (la mayoría, ${hora(p.t1_op)}${tarde.length ? '; ' + tarde.slice(0, 2).map(c => `${c[0]}, ${hora(c[1])}`).join('; ') : ''}), no al fin del último día de conteo.` : ''],
-      ['Compras', fmt(pu.k.compra), fmt(pu.o.compra), pu.k.compra - pu.o.compra > 0.5 ? `${sol(pu.k.compra - pu.o.compra)} se registraron después del conteo: pasan al cierre siguiente.` : 'Igual con los dos relojes.'],
-      ['A un plato', fmt(pu.k.plato), fmt(pu.o.plato), b0[0] > 0.5 ? `+${fmt(b0[0])} vendidos antes del conteo y descontados después o nunca (${fmt(b0[2])} nunca); −${fmt(b0[1])} que eran del cierre anterior.` : 'Ninguna venta cruzó el conteo.'],
-      ['Faltante', fmt(pu.k.falt), fmt(pu.o.falt), 'La contrapartida: esas ventas no eran pérdida.'],
-      ['Quedó en stock', fmt(pu.k.fin), fmt(pu.o.fin), 'Foto justo después del conteo, sin lo registrado después.'],
-      ['Producción interna', fmt(pu.k.prep), fmt(pu.o.prep), 'Porcionamientos y órdenes hechos después del conteo.'],
-      ['Sin plato por día vs anterior', porDia(pu.k, pu.ka), porDia(pu.o, pu.oa), pu.ka ? `Cierre anterior: ${fmt(pu.ka.dias, 1)} días con el kardex, ${fmt(pu.oa.dias, 1)} operativos.` : ''],
-      ['A un plato por día vs anterior', platoDia(pu.k, pu.ka), platoDia(pu.o, pu.oa), 'El descargo que se corre después del conteo se lleva esas ventas al cierre siguiente.']
+      ['Período', fmt(pu.o.dias, 1) + ' días', p.t1_op ? `Cada área de su conteo al siguiente; termina en el conteo de las áreas con stock (la mayoría, ${hora(p.t1_op)}${tarde.length ? '; ' + tarde.slice(0, 2).map(c => `${c[0]}, ${hora(c[1])}`).join('; ') : ''}). Las que contaron sin stock toman ese corte.` : ''],
+      ['Compras', fmt(pu.o.compra), 'Registradas en el kardex antes del conteo de su área; lo registrado después es del cierre siguiente.'],
+      ['A un plato', fmt(pu.o.plato), b0[0] > 0.5 || b0[1] > 0.5 ? `+${fmt(b0[0])} vendidos antes del conteo y descontados después o nunca (${fmt(b0[2])} nunca); −${fmt(b0[1])} que eran del cierre anterior.` : 'Ninguna venta cruzó el conteo.'],
+      ['Faltante', fmt(pu.o.falt), b0[0] > 0.5 || b0[1] > 0.5 ? 'Sin esas ventas: no eran pérdida.' : 'Lo que el conteo encontró de menos.'],
+      ['Quedó en stock', fmt(pu.o.fin), 'Foto justo después del conteo de cada área, sin lo registrado después.'],
+      ['Sin plato por día vs anterior', porDia(pu.o, pu.oa), pu.oa ? `Cierre anterior: ${fmt(pu.oa.dias, 1)} días. Los períodos no miden lo mismo: por eso, por día.` : ''],
+      ['A un plato por día vs anterior', platoDia(pu.o, pu.oa), '']
     ] : [];
     const FECHAS = [
-      ['Compras', 'Registro en el kardex', 'Igual, cortado en el conteo de su área'],
-      ['Venta, cortesías, eventos', 'Corrida del descargo (a mano, por la mañana)', 'Hora del pedido, si cruza un conteo'],
-      ['Producción', 'Proceso en el kardex', 'Igual, cortado en el conteo'],
-      ['Bajas y notas', 'Fecha de proceso', 'Igual, cortado en el conteo'],
-      ['Stock', 'Kardex al fin del último día de conteo', 'Kardex justo después del conteo de cada área'],
-      ['Traslados 97 / 99', 'Fuera: se anulan entre áreas', 'Fuera, salvo áreas contadas en días distintos']
+      ['Compras', 'Registro en el kardex, cortado en el conteo de su área'],
+      ['Venta, cortesías, eventos', 'Corrida del descargo; la hora del pedido si cruza un conteo'],
+      ['Producción', 'Proceso en el kardex, cortado en el conteo'],
+      ['Bajas y notas', 'Fecha de proceso, cortada en el conteo'],
+      ['Stock', 'Kardex justo después del conteo de cada área'],
+      ['Traslados 97 / 99', 'Fuera, salvo áreas contadas en momentos distintos']
     ];
     return `<div class="dstf-calc">
-      <section class="dstf-caja"><div class="dstf-tag">DEL BRUTO AL NETO · ${op ? 'FECHAS OPERATIVAS' : 'FECHAS DEL KARDEX'}</div>
+      <section class="dstf-caja"><div class="dstf-tag">DEL BRUTO AL NETO</div>
         <p>Por qué el balance producto por producto suma ${esc(sol(b.entrada))} y el flujo, ${esc(sol(neto))}.</p>
         <div class="dstf-con"><span>Entradas producto por producto</span><b>${fmt(b.entrada)}</b>
         ${fila(`Producción interna: sale como insumo y vuelve como corte (porcionamientos ${fmt(I.prod96 || 0)} · órdenes ${fmt((I.prod94 || 0) + (I.prod90 || 0))})`, prod)}
@@ -298,11 +293,11 @@ const DESTINO_FLUJO = (() => {
         ${Math.abs(resto) > 0.5 ? fila('Reversos y otros movimientos (notas o compras al revés, tipos no clasificados)', resto) : ''}
         ${fila('Disponible neto', neto, true)}</div>
         <p class="dstf-nota">Los traslados entre áreas (97 transferencias, 99 requerimientos) se anulan en el restaurante entero y no entran.</p></section>
-      <section class="dstf-caja borde"><div class="dstf-tag">DEL KARDEX A LAS FECHAS OPERATIVAS · ${esc(p.nombre.toUpperCase())}</div>
-        ${pu ? `<div class="dstf-puente"><b>Concepto</b>${col('kardex')}${col('operativo')}<b>Por qué</b>${filasP.map(x => `<span>${esc(x[0])}</span><span class="n">${esc(x[1])}</span><span class="n f">${esc(x[2])}</span><span class="pq">${esc(x[3])}</span>`).join('')}</div><p class="dstf-nota">Alimentos y bebidas del restaurante entero${P.areas_familias ? ', sin el filtro de familias' : ''}.</p>` : '<p class="dstf-nota">Sin el otro reloj para este cierre.</p>'}</section>
+      <section class="dstf-caja borde"><div class="dstf-tag">DE CONTEO A CONTEO · ${esc(p.nombre.toUpperCase())}</div>
+        ${pu ? `<div class="dstf-puente uno"><b>Concepto</b><b class="n">S/</b><b>Por qué</b>${filasP.map(x => `<span>${esc(x[0])}</span><span class="n f">${esc(x[1])}</span><span class="pq">${esc(x[2])}</span>`).join('')}</div><p class="dstf-nota">Alimentos y bebidas del restaurante entero${P.areas_familias ? ', sin el filtro de familias' : ''}.</p>` : '<p class="dstf-nota">Sin el resumen de este cierre.</p>'}</section>
       <section class="dstf-caja"><div class="dstf-tag">QUÉ FECHA USA CADA MOVIMIENTO</div>
-        <div class="dstf-fechas"><b>Movimiento</b>${col('kardex')}${col('operativo')}${FECHAS.map(x => `<span class="f">${esc(x[0])}</span><span>${esc(x[1])}</span><span>${esc(x[2])}</span>`).join('')}</div>
-        <p class="dstf-nota">El Excel lleva la hoja «Flujo»: cada concepto con su código del kardex, bruto y neto, con los dos relojes.</p>
+        <div class="dstf-fechas uno"><b>Movimiento</b><b>Fecha que usa</b>${FECHAS.map(x => `<span class="f">${esc(x[0])}</span><span>${esc(x[1])}</span>`).join('')}</div>
+        <p class="dstf-nota">El Excel lleva la hoja «Flujo»: cada concepto con su código del kardex, bruto y neto.</p>
         <p class="dstf-nota">«Por área»: origen y destino de cada requerimiento y transferencia, de la fila «transferencias» del Sheet.</p></section></div>`;
   }
 
@@ -349,7 +344,7 @@ const DESTINO_FLUJO = (() => {
       if (f.vista === 'area') cuerpo = DESTINO_AREAS.html(ctx, ancho);
       else if (f.que === 'calculo') cuerpo = calculo(ctx);
       else cuerpo = `<div class="dstf-abierto"><div class="dstf-izq">${sankey(ancho, nodosV, f.sel, D, simAplica)}
-        ${alim && tira(ctx) ? `<div class="dstf-tira"><span>${esc(tira(ctx))}</span><button type="button" data-f="tira">${P.reloj === 'operativo' ? 'Ver el puente' : 'Ver con fechas operativas'}</button></div>` : ''}
+        ${alim && tira(ctx) ? `<div class="dstf-tira"><span>${esc(tira(ctx))}</span><button type="button" data-f="tira">Cómo se calcula</button></div>` : ''}
         ${n.prep > 0.5 ? `<p class="dstf-prod">No se dibuja la producción interna: ${esc(sol(n.prep))} salieron a porcionamientos y órdenes y volvieron como cortes. No es consumo.</p>` : ''}</div>
         <aside class="dstf-panel" aria-label="Detalle del concepto elegido">${panel(ctx, sel, V, ahorro)}</aside></div>`;
       el.innerHTML = cab + cuerpo;
@@ -364,11 +359,9 @@ const DESTINO_FLUJO = (() => {
       return c.grupo !== c.P.operacion && t.n ? `<button type="button" class="dstf-neg${on ? ' on' : ''}" data-f="sel:neg" aria-pressed="${on}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3 2 21h20z"/><path d="M12 10v5M12 18h.01"/></svg>${t.n} en negativo · ${esc(sol(t.v))}</button>` : '';
     }
     function tira(c) {
-      const {P, k} = c, pu = puente(P, k), p = P.periodos[k];
-      if (!pu) return '';
-      if (P.reloj === 'operativo') return `Respecto del kardex: ${fmt(pu.o.dias, 1)} días en vez de ${fmt(pu.k.dias, 1)} · compras ${sol(pu.o.compra - pu.k.compra)} y stock final ${sol(pu.o.fin - pu.k.fin)} (eran de después del conteo) · a un plato ${sol(pu.o.plato - pu.k.plato)} y faltante ${sol(pu.o.falt - pu.k.falt)} (ventas que el descargo no tomó a tiempo).`;
-      const tarde = pu.k.compra - pu.o.compra, aparte = (p.cortes_op || []).filter(c => p.t1_op && c[1].slice(0, 10) !== p.t1_op.slice(0, 10));
-      return `Fechas del kardex: el período llega al ${dia(p.hasta + 'T00:00')} a las 23:59${aparte.length ? ` por ${aparte.slice(0, 2).map(c => c[0]).join(' y ')}` : ''}${p.t1_op ? `, pero la mayoría de las áreas se contó hasta el ${hora(p.t1_op)}` : ''}.${tarde > 0.5 ? ` Por eso trae ${sol(tarde)} de compras posteriores al conteo y no las ventas de esos días.` : ''}`;
+      const {P, k} = c, b = P.borde[k] || [0, 0, 0];
+      if (b[0] <= 0.5 && b[1] <= 0.5) return '';
+      return `De conteo a conteo: ${sol(b[0])} vendidos antes del conteo y descontados después pasan de faltante a plato${b[1] > 0.5 ? `; ${sol(b[1])} eran del cierre anterior` : ''}.`;
     }
     function franja(c) {
       const {P, n, grupo, D, ant, s} = c, f = s.flujo, alim = grupo !== P.operacion;
@@ -393,27 +386,27 @@ const DESTINO_FLUJO = (() => {
     }
     function hojaFlujo() {
       if (!ctx) return [];
-      const {P, k, rows, n} = ctx, b = bruto(rows), pu = puente(P, k), fila = [];
-      const con = (t, c, lado, br, ne, kk, oo) => fila.push([t, c, lado, br, ne, kk ?? null, oo ?? null]);
+      const {P, k, rows, n} = ctx, b = bruto(rows), fila = [];
+      const con = (t, c, lado, br, ne) => fila.push([t, c, lado, br, ne]);
       const neto = (ctx.nodosL || nodos(P, n, ctx.grupo, 'resumen')).filter(x => x.lado === 'in').reduce((a, x) => a + x.v, 0);
       con('Total que había o entró', '', 'Origen', b.entrada, neto);
-      con('Stock inicial', 'Foto del kardex', 'Origen', b.ins.ini || 0, n.ini, pu?.k.ini, pu?.o.ini);
-      con('Compras netas', '< 90', 'Origen', b.ins.compra || 0, n.compra, pu?.k.compra, pu?.o.compra);
-      con('Producción interna (ingreso)', '90 · 94 · 96', 'Origen', (b.ins.prod90 || 0) + (b.ins.prod94 || 0) + (b.ins.prod96 || 0), 0, pu?.k.prep, pu?.o.prep);
-      con('Sobrante al contar', '93', 'Origen', b.ins.sobr || 0, n.sobr, pu?.k.sobr, pu?.o.sobr);
+      con('Stock inicial', 'Foto del kardex', 'Origen', b.ins.ini || 0, n.ini);
+      con('Compras netas', '< 90', 'Origen', b.ins.compra || 0, n.compra);
+      con('Producción interna (ingreso)', '90 · 94 · 96', 'Origen', (b.ins.prod90 || 0) + (b.ins.prod94 || 0) + (b.ins.prod96 || 0), 0);
+      con('Sobrante al contar', '93', 'Origen', b.ins.sobr || 0, n.sobr);
       con('Valorización', 'Diferencia del balance', n.val >= 0 ? 'Origen' : 'Destino', (b.ins.val || 0) - (b.outs.val || 0), n.val);
       con('Venta (incluye combos)', '95', 'Destino', b.outs.venta || 0, n.venta);
       con('Cortesías', '95', 'Destino', b.outs.cort || 0, n.cort);
       con('Eventos y venta interna', '95', 'Destino', b.outs.evvi || 0, n.evvi);
-      con('A un plato', '95', 'Destino', (b.outs.venta || 0) + (b.outs.cort || 0) + (b.outs.evvi || 0), n.plato, pu?.k.plato, pu?.o.plato);
-      con('Producción interna (insumo)', '90 · 94 · 96', 'Destino', b.outs.prep || 0, 0, pu?.k.prep, pu?.o.prep);
-      con('Faltante', '93', 'Destino', b.outs.falt || 0, n.falt, pu?.k.falt, pu?.o.falt);
+      con('A un plato', '95', 'Destino', (b.outs.venta || 0) + (b.outs.cort || 0) + (b.outs.evvi || 0), n.plato);
+      con('Producción interna (insumo)', '90 · 94 · 96', 'Destino', b.outs.prep || 0, 0);
+      con('Faltante', '93', 'Destino', b.outs.falt || 0, n.falt);
       con('Bajas', '98 · Bajas', 'Destino', b.outs.baja || 0, n.baja);
       con('Otras notas', '91 · 92 · 98', 'Destino', b.outs.otras || 0, n.otras);
-      con('Quedó en stock', 'Foto del kardex', 'Destino', b.outs.fin || 0, n.fin, pu?.k.fin, pu?.o.fin);
+      con('Quedó en stock', 'Foto del kardex', 'Destino', b.outs.fin || 0, n.fin);
       con('Stock negativo (neteado)', 'Foto del kardex', 'Ambos', (b.outs.ini_neg || 0) + (b.ins.fin_neg || 0), 0);
       con('Ventas que cruzan el conteo', 'Paloteo × descargos', 'Faltante → plato', (P.borde[k] || [0])[0], n.borde);
-      return [{nombre: 'Flujo', cabeza: ['Concepto', 'Código del kardex', 'Lado', 'Bruto S/ (este reloj)', 'Neto S/ (este reloj)', 'Restaurante · kardex', 'Restaurante · operativas'], filas: fila, decimales: 6}];
+      return [{nombre: 'Flujo', cabeza: ['Concepto', 'Código del kardex', 'Lado', 'Bruto S/', 'Neto S/'], filas: fila, decimales: 6}];
     }
     el.addEventListener('click', e => {
       const b = e.composedPath().find(x => x?.dataset?.f);
@@ -428,7 +421,7 @@ const DESTINO_FLUJO = (() => {
       else if (a === 'simular') { f.simular = !f.simular; if (f.simular && !['falt', 'sinplato'].includes(f.sel)) { f.sel = 'falt'; tabla = true; } }
       else if (a === 'sim') f.sim = v;
       else if (a === 'acc') f.movil = f.movil === v ? '' : v;
-      else if (a === 'tira') { if (ctx.P.reloj === 'operativo') f.que = 'calculo'; else { opts.reloj('operativo'); return; } }
+      else if (a === 'tira') f.que = 'calculo';
       else if (a === 'prod') { opts.producto(v); return; }
       else if (DESTINO_AREAS.accion(ctx, a, v)) { /* el mapa por área */ }
       else return;

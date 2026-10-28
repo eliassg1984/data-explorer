@@ -1,8 +1,9 @@
 """Transporte fiel de la cuenta de sin_plato; no vuelve a calcularla (#736).
 
 Desde la regla #743 lleva además el reloj con que se fechó la cuenta, las
-ventas que cruzan cada conteo, el puente entre los dos relojes y el balance
-por área: lo que dibuja el flujo de «En qué se fue cada producto»."""
+ventas que cruzan cada conteo, el resumen del reloj y el balance por área:
+lo que dibuja el flujo de «En qué se fue cada producto». Desde la #750 el
+reloj es siempre el operativo, de conteo a conteo."""
 import hashlib
 import json
 import math
@@ -58,7 +59,7 @@ def _areas_json(areas):
 def armar(per,filas,tot,contexto=None,extra=None):
     from . import movimientos_destino as md
     extra=extra or {}
-    reloj=extra.get('reloj','kardex');nombres=extra.get('nombres_area') or {}
+    reloj=extra.get('reloj','operativo');nombres=extra.get('nombres_area') or {}
     def numero(v):
         return float(v) if pd.notna(v) and math.isfinite(float(v)) else None
     columnas=[c for c in filas.columns if c not in IDENTIDAD]

@@ -71,7 +71,7 @@ class Contrato(unittest.TestCase):
         per=[dict(p,t0=T(str(p['desde']))+pd.Timedelta(hours=10),t1=T(str(p['hasta']))+pd.Timedelta(hours=18),dias=29.33,
                   ventanas={0:(T(str(p['desde'])),T(str(p['hasta']))+pd.Timedelta(hours=18)),20:(T(str(p['desde'])),T(str(p['hasta']))+pd.Timedelta(days=5))}) for p in per]
         extra={'reloj':'operativo','borde':pd.DataFrame({'k':[1],'fin':[30.0],'ini':[10.0],'nunca':[5.0]}),
-               'puente':{'kardex':[{'k':0,'dias':34.0}],'operativo':[{'k':0,'dias':29.33}]},
+               'puente':{'operativo':[{'k':0,'dias':29.33}]},
                'areas':{sp.ALIMENTOS:[{'areas':{0:[1.0]},'flechas':[],'detalle':{0:{}},'compensa':{}}]},
                'nombres_area':{0:'ALMACEN CENTRAL',20:'VENTA INTERNA'},'per_operativo':per}
         P=datos.armar(per,f,t,{},extra)
@@ -80,31 +80,19 @@ class Contrato(unittest.TestCase):
         self.assertEqual(P['periodos'][0]['cortes_op'][0][0],'Venta Interna');self.assertEqual(P['nombres_area'],{'0':'Almacén Central','20':'Venta Interna'})
         self.assertEqual(list(P['areas'][sp.ALIMENTOS][0]['areas']),['0']);self.assertEqual(P['puente']['operativo'][0]['dias'],29.33)
         import json;json.dumps(P,allow_nan=False)
-        self.assertEqual(datos.armar(*muestra())['reloj'],'kardex')
+        # Desde la #750 hay un solo reloj: sin `extra`, también el operativo.
+        self.assertEqual(datos.armar(*muestra())['reloj'],'operativo')
 
-    def test_reloj_se_valida_contra_el_sello(self):
+    def test_un_solo_reloj_sin_trigger(self):
+        # Regla #750: siempre de conteo a conteo, aunque la sesión traiga el
+        # «kardex» que se eligió antes; y la pieza no le pide nada a Python.
         from graficos import destino_producto_pieza as pieza
-        ss={'_destino_producto_cache':('f',{'sello':'abc'})};fake=SimpleNamespace(session_state=ss)
-        with patch.object(pieza,'st',fake):
-            for v in ({'reloj':'operativo','sello':'otro'},{'reloj':'semanal','sello':'abc'},'operativo'):
-                ss[pieza._K_PIEZA]={'reloj':v};pieza._reloj();self.assertNotIn(md.K_RELOJ,ss)
-            ss[pieza._K_PIEZA]={'reloj':{'reloj':'operativo','sello':'abc'}};pieza._reloj();self.assertEqual(ss[md.K_RELOJ],'operativo')
-
-    def test_volver_al_otro_reloj_no_rearma(self):
-        from graficos import destino_producto_pieza as pieza
-        ss={};fake=SimpleNamespace(session_state=ss,container=lambda **kw:nullcontext(),markdown=Mock())
-        with patch.object(pieza,'st',fake),patch.object(md,'st',fake),patch.object(md,'_cargar',return_value=muestra()),patch.object(pieza.data,'sin_plato_relojes',return_value=None),patch.object(pieza,'_PIEZA') as comp,patch.object(datos,'armar',wraps=datos.armar) as build:
-            for reloj in ('kardex','operativo','kardex','operativo'):
-                ss[md.K_RELOJ]=reloj;pieza.renderizar()
-                self.assertEqual(comp.call_args.kwargs['data']['reloj'],reloj)
-            self.assertEqual(build.call_count,2)
-
-    def test_renderizar_carga_el_reloj_elegido(self):
-        from graficos import destino_producto_pieza as pieza
-        fake=SimpleNamespace(session_state={md.K_RELOJ:'operativo'},container=lambda **kw:nullcontext(),markdown=Mock())
+        fake=SimpleNamespace(session_state={'mov_pr_reloj':'kardex'},container=lambda **kw:nullcontext(),markdown=Mock())
         with patch.object(pieza,'st',fake),patch.object(md,'st',fake),patch.object(md,'_cargar',return_value=muestra()) as load,patch.object(pieza.data,'sin_plato_relojes',return_value=None),patch.object(pieza,'_PIEZA') as comp:
             pieza.renderizar(('Prueba',));load.assert_called_once_with(('Prueba',),'operativo')
-            self.assertEqual(comp.call_args.kwargs['data']['reloj'],'operativo');self.assertIs(comp.call_args.kwargs['on_reloj_change'],pieza._reloj)
+            self.assertEqual(comp.call_args.kwargs['data']['reloj'],'operativo')
+            self.assertFalse([k for k in comp.call_args.kwargs if k.startswith('on_')])
+        self.assertEqual(sp.RELOJES,('operativo',));self.assertFalse(hasattr(pieza,'_reloj'))
     def test_desglose_del_kardex_conserva_la_cuenta_y_tipos_desconocidos(self):
         rows=[('01',100,0),('07',0,10),('94',50,20),('96',30,15),('90',5,2),('95',0,40),('91',0,3),('92',0,4),('98',2,10),('93',0,6),('97',0,800),('99',900,0),('X',11,7)]
         kx=pd.DataFrame([dict(k=0,cod='0001',tipo=t,cant_in=a,cant_out=b,val_in=a*2,val_out=b*2) for t,a,b in rows])
@@ -128,7 +116,7 @@ class Contrato(unittest.TestCase):
 
     def test_fuente_ausente_y_familias(self):
         from graficos import destino_producto_pieza as pieza
-        with patch.object(md,'_cargar',return_value=None) as load,patch.object(md,'_vacia') as vacia:pieza.renderizar(('ALIMENTOS',));load.assert_called_once_with(('ALIMENTOS',),'kardex');self.assertIn('dos cierres',vacia.call_args.args[2])
+        with patch.object(md,'_cargar',return_value=None) as load,patch.object(md,'_vacia') as vacia:pieza.renderizar(('ALIMENTOS',));load.assert_called_once_with(('ALIMENTOS',),'operativo');self.assertIn('dos cierres',vacia.call_args.args[2])
 
     def test_cache_reconoce_distribucion(self):
         from graficos import destino_producto_pieza as pieza
@@ -244,15 +232,20 @@ class Navegador(unittest.TestCase):
         root.locator('[data-a=quitar_sel]').click();self.assertEqual(root.locator('tr[data-a=producto]').count(),2)
         root.locator('.dstf-ley [data-f="sel:fin"]').click();root.locator('.dstf-ley [data-f="sel:fin"]').click();self.assertEqual(self.pg.evaluate('__destinoProducto.s.flujo.sel'),'')
 
-    def test_reloj_pide_python_con_su_sello_y_nada_mas(self):
-        P,_=payload_flujo();root=self.mount(P)
-        root.locator('[data-a=reloj][data-v=kardex]').click();self.assertEqual(self.pg.evaluate('triggers'),[])
-        root.locator('[data-a=reloj][data-v=operativo]').click()
-        self.assertEqual(self.pg.evaluate('triggers'),[['reloj',{'reloj':'operativo','sello':P['sello']}]])
-        self.assertTrue(root.evaluate('e=>e.classList.contains("dst-cargando")'))
-        P2=dict(P,reloj='operativo');ui=self.pg.evaluate('JSON.parse(sessionStorage.getItem("destino_producto_737"))')
-        root=self.mount(P2,ui);self.assertFalse(root.evaluate('e=>e.classList.contains("dst-cargando")'))
-        self.assertEqual(root.locator('[data-a=reloj].on').get_attribute('data-v'),'operativo')
+    def test_un_solo_reloj_y_lo_que_cruza_el_conteo(self):
+        # Regla #750: sin «Fechas: Kardex | Operativas»; la tira dice lo que
+        # cruzó el conteo y lleva a «Cómo se calcula», con una sola columna.
+        P,_=payload_flujo();P['borde']=[[0,0,0],[30,10,5]]
+        P['puente']={'operativo':[{'k':0,'dias':30.0,'compra':1200,'plato':650,'falt':25,'fin':480,'sinplato':125},
+                                  {'k':1,'dias':29.33,'compra':1200,'plato':690,'falt':5,'fin':480,'sinplato':105}]}
+        root=self.mount(P)
+        self.assertEqual(root.locator('[data-a=reloj]').count(),0)
+        root.locator('[data-f=abrir]').click()
+        tira=root.locator('.dstf-tira');self.assertIn('S/ 30 vendidos antes del conteo',tira.inner_text())
+        tira.locator('[data-f=tira]').click();texto=root.locator('.dstf-calc').inner_text()
+        for t in ('DE CONTEO A CONTEO','Fecha que usa','+30 vendidos antes del conteo','29.3 días'):self.assertIn(t,texto)
+        for t in ('Operativas','OPERATIVAS','FECHAS DEL KARDEX','otro reloj'):self.assertNotIn(t,texto)
+        self.assertEqual(self.pg.evaluate('triggers'),[])
 
     def test_operativo_pasa_el_borde_solo_con_el_grupo_entero(self):
         P,_=payload_flujo();P['reloj']='operativo';P['borde']=[[0,0,0],[30,10,5]];root=self.mount(P)
@@ -342,6 +335,6 @@ class Navegador(unittest.TestCase):
         P,_=payload_flujo();root=self.mount(P)
         lineas=self.pg.evaluate('__destinoProductoDatos.soles(__destinoProducto.F,true)')
         self.assertAlmostEqual(sum(v for _,v in lineas[:-1]),lineas[-1][1])
-        self.assertIn('En soles, con fechas del kardex',root.locator('.dst-soles').inner_text())
+        self.assertIn('En soles, de conteo a conteo',root.locator('.dst-soles').inner_text())
 
 if __name__=='__main__':unittest.main(verbosity=2)

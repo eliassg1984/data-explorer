@@ -86,7 +86,8 @@ cambie QUÉ se calcula. La 2: las líneas que se descargan por insumo bajan
 por su receta base (regla #648). La 3 conserva el desglose por tipo del
 Sankey; no cambia las columnas de la cuenta original. La 4 agrega el reloj
 operativo y el balance por área (regla #743); el reloj del kardex da lo
-mismo que la 3."""
+mismo que la 3. La 5: el corte lo ponen sólo las áreas que contaron
+stock, y Destino queda sólo con el reloj operativo (regla #750)."""
 
 DESDE = (2025, 9)
 """El cierre desde el que se cuenta: el primer período es octubre 2025.
@@ -685,8 +686,18 @@ def parejas(filas_k, cod, n=2, minimo=20.0):
 # es el corte. Lo vendido antes de un conteo y descontado después (o nunca:
 # el último día del mes, regla #650) se pasa al período de la venta con el
 # paloteo; su contrapartida está en el ajuste.
+#
+# Desde la regla #750 el corte lo ponen sólo las áreas que CONTARON STOCK
+# en ese cierre (`areas_con_stock`). Venta Interna, Cocina Personal, Eventos
+# o Bajas de Almacén registran su conteo —a veces días después: Venta
+# Interna el 6 oct 2026— pero no guardan mercadería: su conteo no mide nada
+# en el borde y sólo estiraba el mes. Toman el corte de la mayoría; su
+# ajuste sigue siendo del cierre. La regla mira el VALOR contado, no el
+# nombre: Limpieza contó S/ 5.500 en julio 2026 y S/ 0 en setiembre.
+# Destino usa sólo este reloj: el del kardex (días enteros hasta el último
+# conteo de la sesión) era un tercer «setiembre», del 3 set al 6 oct.
 
-RELOJES = ("kardex", "operativo")
+RELOJES = ("operativo",)
 _HORA = pd.Timedelta(hours=1)
 
 
@@ -715,16 +726,46 @@ def _corte_principal(cortes, respaldo):
     return min(cuenta[cuenta == cuenta.max()].index)
 
 
-def periodos_operativos(per, ajustes, areas):
+def areas_con_stock(contado, sesiones):
+    """`{clave de sesión: {área}}`: las áreas que contaron stock en cada
+    sesión. `contado` es un DataFrame (`area` entero, `dia`, `v`) con el
+    valor contado por área y día (`VALORIZADO TOTAL` de
+    `ajusteinventario.parquet`); cuenta el área cuyo valor en los días de
+    la sesión pasa S/ 0,50, como el inventario de Costos. Regla #750. Pura."""
+    if contado is None or contado.empty:
+        return {}
+    c = contado.assign(dia=pd.to_datetime(contado["dia"]).dt.date,
+                       v=_num(contado["v"]))
+    out = {}
+    for s in sesiones or []:
+        dias = {pd.Timestamp(d).date() for d in s.get("dias", ())}
+        v = c[c["dia"].isin(dias)].groupby("area")["v"].sum()
+        out[s["clave"]] = {int(a) for a, x in v.items() if abs(x) > 0.5}
+    return out
+
+
+def _con_stock(cortes, sesion, con_stock):
+    """Los `cortes` de las áreas que contaron stock en `sesion`. Sin el
+    dato de esa sesión, todos."""
+    if con_stock is None or not sesion or sesion.get("clave") not in con_stock:
+        return cortes
+    validas = con_stock[sesion["clave"]]
+    return {a: t for a, t in cortes.items() if a in validas}
+
+
+def periodos_operativos(per, ajustes, areas, con_stock=None):
     """Los períodos de `periodos` con el reloj operativo: cada uno con
     `ventanas` (`{área: (t0, t1)}`, cada área de su conteo al siguiente),
     `t0`/`t1` en el corte de la mayoría, `desde`/`hasta` sus días y `dias`
     en fracción (29,33 en setiembre 2026). El área que no se contó en un
-    cierre toma el corte de la mayoría. Pura."""
+    cierre —o que contó sin stock, con `con_stock` de `areas_con_stock`,
+    regla #750— toma el corte de la mayoría. Pura."""
     out = []
     for p in per:
-        ca = cortes_de_conteo(p.get("sesion_ant"), ajustes)
-        cb = cortes_de_conteo(p.get("sesion"), ajustes)
+        ca = _con_stock(cortes_de_conteo(p.get("sesion_ant"), ajustes),
+                        p.get("sesion_ant"), con_stock)
+        cb = _con_stock(cortes_de_conteo(p.get("sesion"), ajustes),
+                        p.get("sesion"), con_stock)
         t0 = _corte_principal(ca, p["t0"])
         t1 = _corte_principal(cb, p["t1"])
         vent = {int(a): (ca.get(int(a), t0), cb.get(int(a), t1)) for a in areas}

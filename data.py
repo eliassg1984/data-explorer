@@ -2328,21 +2328,34 @@ def _df_o_vacio(con, sql):
         return pd.DataFrame()
 
 
+def _contado_por_area_dia(con, bucket):
+    """El valor CONTADO por área y día de `ajusteinventario.parquet`
+    (`area` entero, `dia`, `v`): de ahí `sin_plato.areas_con_stock` saca
+    qué áreas ponen el corte de cada cierre (regla #750). Vacío si no se
+    pudo leer: entonces cortan todas, como antes."""
+    return _df_o_vacio(con, f"""
+        SELECT CAST("CODIGO AREA" AS INTEGER) AS area,
+               CAST("FECHA APERTURA INVENTARIO" AS DATE) AS dia,
+               sum("VALORIZADO TOTAL") AS v
+        FROM read_parquet('s3://{bucket}/ajusteinventario.parquet')
+        GROUP BY 1, 2""")
+
+
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
 def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
     """En qué se fue cada producto, de cierre a cierre de inventario
-    (`sin_plato.calcular`, regla #645), con los DOS relojes (regla #743):
-    `{"kardex": {...}, "operativo": {...}, "puente", "nombres_area"}`, cada
-    reloj con `periodos`, `filas`, `totales`, `areas` (el balance por área,
-    `sin_plato.por_area`) y `borde` (lo vendido de un lado del conteo y
-    descontado del otro; sólo el operativo). Si falla, LANZA: no se cachea.
+    (`sin_plato.calcular`, regla #645), con el reloj OPERATIVO —cada área de
+    su conteo al siguiente (regla #743); desde la #750, el único, y cortado
+    sólo por las áreas que contaron stock—: `{"operativo": {...}, "puente",
+    "nombres_area"}`, con `periodos`, `filas`, `totales`, `areas` (el
+    balance por área, `sin_plato.por_area`) y `borde` (lo vendido de un lado
+    del conteo y descontado del otro). Si falla, LANZA: no se cachea.
 
     `archivo` es el kardex, que manda; `sellos`, los de los otros parquets
     (`_ARCHIVOS_SIN_PLATO`), y `version`, la de la cuenta. Ninguno se usa en
     el cuerpo: son la clave (ver el bloque del sello). Del kardex se baja lo
     agregado por período, área, producto y tipo, y las fotos del stock, que
-    ya cachea `_kardex_fotos_cacheable`. Los dos relojes comparten todo eso:
-    calcularlos juntos cuesta poco más que uno."""
+    ya cachea `_kardex_fotos_cacheable`."""
     if not secrets_disponibles():
         return None
     con = get_conn()
@@ -2352,13 +2365,15 @@ def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
         return f"read_parquet('s3://{bucket}/{a}')"
     rel = ruta(archivo)
     dias = con.execute(kardex.sql_dias_ajuste(rel)).df()
-    per = sin_plato.periodos(sesiones_inventario(pd.to_datetime(dias["dia"])))
+    ses = sesiones_inventario(pd.to_datetime(dias["dia"]))
+    per = sin_plato.periodos(ses)
     if not per:
         return None
     desde = per[0]["t0"] - pd.Timedelta(days=10)
     areas = [int(a) for a in con.execute(kardex.sql_areas(rel, desde)).df()["area"].dropna()]
     per_op = sin_plato.periodos_operativos(
-        per, con.execute(kardex.sql_horas_ajuste(rel, desde)).df(), areas)
+        per, con.execute(kardex.sql_horas_ajuste(rel, desde)).df(), areas,
+        con_stock=sin_plato.areas_con_stock(_contado_por_area_dia(con, bucket), ses))
     fotos = _kardex_fotos_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
                                     version=kardex.VERSION)
     vend = _venta_clase_dia_cacheable(
@@ -2389,17 +2404,14 @@ def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
     clase = dict(zip(mae["cod"], np.where(mae["familia"].str.upper() == sin_plato.FAMILIA_OPERACION,
                                           sin_plato.OPERACION, sin_plato.ALIMENTOS)))
     nombres = dict(zip(mae["cod"], mae["producto"]))
-    res = {}
-    for reloj, pp in (("kardex", per), ("operativo", per_op)):
-        ven = sin_plato.ventanas(pp, areas)
-        kx = con.execute(kardex.sql_movimientos_ventanas(
-            rel, list(ven.itertuples(index=False, name=None)))).df()
-        stock = sin_plato.stock_por_area(fotos, ven)
-        r = sin_plato.calcular(pp, kx, fotos, salidas, vend, recetaventa, carta,
-                               maestro, recetabase=recetabase, stock=stock)
-        r["areas"] = sin_plato.por_area(kx, stock, trans, ven, clase, nombres)
-        r["borde"] = None
-        res[reloj] = r
+    ven = sin_plato.ventanas(per_op, areas)
+    kx = con.execute(kardex.sql_movimientos_ventanas(
+        rel, list(ven.itertuples(index=False, name=None)))).df()
+    stock = sin_plato.stock_por_area(fotos, ven)
+    r = sin_plato.calcular(per_op, kx, fotos, salidas, vend, recetaventa, carta,
+                           maestro, recetabase=recetabase, stock=stock)
+    r["areas"] = sin_plato.por_area(kx, stock, trans, ven, clase, nombres)
+    res = {"operativo": r}
     pedidos = _df_o_vacio(con, f"""
         SELECT "FECHA PEDIDO" AS t, sum("COSTO TOTAL") AS costo
         FROM {ruta('paloteoinsumosnivel1.parquet')}
@@ -2409,7 +2421,6 @@ def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
         FROM {ruta('descargosventas.parquet')}""")
     res["operativo"]["borde"] = sin_plato.ventas_del_borde(pedidos, corridas, per_op)
     res["puente"] = {
-        "kardex": sin_plato.resumen_reloj(res["kardex"]["filas"], per),
         "operativo": sin_plato.resumen_reloj(res["operativo"]["filas"], per_op,
                                              res["operativo"]["borde"])}
     res["nombres_area"] = nombres_area
@@ -2417,9 +2428,10 @@ def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
 
 
 def sin_plato_relojes():
-    """Lo de `_sin_plato_cacheable` entero —los dos relojes, el puente y los
-    nombres de las áreas— o `None` si no se pudo calcular (sin secrets, R2
-    caído, el kardex sin cierres): quien lo pide avisa. Regla #743."""
+    """Lo de `_sin_plato_cacheable` entero —el reloj operativo, su resumen
+    y los nombres de las áreas— o `None` si no se pudo calcular (sin
+    secrets, R2 caído, el kardex sin cierres): quien lo pide avisa. Reglas
+    #743 y #750."""
     try:
         return _sin_plato_cacheable(
             kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
@@ -2430,11 +2442,11 @@ def sin_plato_relojes():
         return None
 
 
-def sin_plato_por_cierre(reloj="kardex"):
-    """`{"periodos", "filas", "totales", "areas", "borde"}` de un reloj
-    (`sin_plato.RELOJES`): lo que dibujan «Sin plato, cierre por cierre» y
-    «En qué se fue cada producto» (reglas #645 y #743). `None` si no se pudo
-    calcular. No cacheada (la interna sí)."""
+def sin_plato_por_cierre(reloj="operativo"):
+    """`{"periodos", "filas", "totales", "areas", "borde"}` del reloj
+    operativo (`sin_plato.RELOJES`): lo que dibujan «Sin plato, cierre por
+    cierre» y «En qué se fue cada producto» (reglas #645, #743 y #750).
+    `None` si no se pudo calcular. No cacheada (la interna sí)."""
     r = sin_plato_relojes()
     return r.get(reloj) if r else None
 
@@ -2841,12 +2853,14 @@ def _primer_cierre():
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
-def _periodos_conteo_cacheable(archivo, sello, version=None):
+def _periodos_conteo_cacheable(archivo, sello, version=None, sello_ajuste=None):
     """`{"periodos": [...], "sesiones": [...]}`: los períodos de conteo a
     conteo (`sin_plato.periodos_operativos`, sin las sesiones adentro), más
     el que está EN CURSO —desde el último cierre hasta el último movimiento
     del kardex—, y las sesiones de conteo (`cortes.sesiones_inventario`).
-    Si falla, LANZA: no se cachea. `sello` y `version` son la clave."""
+    Si falla, LANZA: no se cachea. `sello`, `version` y `sello_ajuste` (el
+    de `ajusteinventario.parquet`, que dice qué áreas contaron stock, regla
+    #750) son la clave."""
     if not secrets_disponibles():
         return None
     con = get_conn()
@@ -2863,7 +2877,10 @@ def _periodos_conteo_cacheable(archivo, sello, version=None):
     desde = per[0]["t0"] - pd.Timedelta(days=10)
     areas = [int(a) for a in con.execute(kardex.sql_areas(rel, desde)).df()["area"].dropna()]
     horas = con.execute(kardex.sql_horas_ajuste(rel, desde)).df()
-    per_op = sin_plato.periodos_operativos(per, horas, areas)
+    # El corte lo ponen las áreas que contaron stock, como en Destino (#750).
+    per_op = sin_plato.periodos_operativos(
+        per, horas, areas,
+        con_stock=sin_plato.areas_con_stock(_contado_por_area_dia(con, bucket), ses))
     campos = ("k", "clave", "mes", "nombre", "corto", "desde", "hasta", "t0", "t1",
               "dias", "ventanas", "cierre", "cierre_ant")
     out = [dict({c: p[c] for c in campos}, en_curso=False) for p in per_op]
@@ -2891,7 +2908,8 @@ def periodos_conteo():
     kardex: la vista se queda con las fechas del calendario."""
     try:
         return _periodos_conteo_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
-                                          version=kardex.VERSION)
+                                          version=(kardex.VERSION, sin_plato.VERSION),
+                                          sello_ajuste=sello_datos("ajusteinventario.parquet"))
     except Exception:
         return None
 

@@ -3,11 +3,6 @@
    --dstfc-* (COLORES_FLUJO_DESTINO). */
 .dst-producto{--dstf-gris:color-mix(in srgb,var(--dstf-suave) 32%,white);--dstf-gris-claro:color-mix(in srgb,var(--dstf-suave) 14%,white)}
 .dst-cab{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.dst-reloj{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--dstf-suave)}
-.dst-reloj>div{display:flex;border:1px solid #ddd7e6;border-radius:7px;overflow:hidden}
-.destino .dst-reloj button{border:0;border-radius:0;margin:0;padding:5px 10px}
-.destino .dst-reloj button.on{font-weight:700}
-.dst-cargando .dst-reloj button[aria-busy=true]{cursor:progress}
 .dst-cargando .dst-flujo,.dst-cargando .dst-producto-grid{opacity:.55;transition:opacity .2s .4s}
 .dst-elegido{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px}
 .dst-elegido>span{background:#f0eafa;color:#715397;border-radius:999px;padding:3px 10px;font-weight:700}
@@ -90,6 +85,8 @@
 .dstf-puente>b,.dstf-fechas>b{border-bottom-color:#ddd7e6}.dstf-puente b.on,.dstf-fechas b.on{color:#715397;background:#f0eafa;border-radius:4px 4px 0 0;padding-left:3px}
 .dstf-puente .n{text-align:right}.dstf-puente .f{font-weight:700}.dstf-puente .pq{font-size:10.5px;color:#5d5866;padding-left:8px}
 .dstf-fechas{display:grid;grid-template-columns:84px minmax(0,1fr) minmax(0,1fr);gap:0 8px;font-size:10.5px}.dstf-fechas .f{font-weight:700}
+/* Un solo reloj (regla #750): concepto, cifra y por qué; movimiento y fecha. */
+.dstf-puente.uno{grid-template-columns:150px 80px minmax(0,1fr)}.dstf-fechas.uno{grid-template-columns:140px minmax(0,1fr)}
 .dstf-caja .dstf-nota{margin-top:6px;font-size:10.5px}
 /* Por área */
 .dsta-capas{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px}.dsta-capas>span{font-size:11px;color:var(--dstf-suave);margin-right:2px}
@@ -139,7 +136,6 @@
   .dstf-acc>button>span:nth-child(2){flex:1 1 auto;min-width:0}.dstf-acc b{display:block;font-size:13px}.dstf-acc small{display:block;font-size:11px;color:var(--dstf-suave)}
   .dstf-chev{color:var(--dstf-suave)}.dstf-acc-cuerpo{padding:0 2px 10px 22px}
   .dstf-acc-cuerpo p{display:flex;justify-content:space-between;margin:0;font-size:11px;line-height:1.7}.dstf-acc-cuerpo p span:first-child{display:flex;align-items:center;gap:6px}
-  .destino .dst-reloj button{min-height:42px}
 }
 .dsta-comp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 8px;margin:0 0 3px;font-variant-numeric:tabular-nums}
 .dsta-comp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsta-comp small{grid-column:1/-1;color:var(--dstf-suave);font-size:10.5px}

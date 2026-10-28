@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-749 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+750 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (247)
 
@@ -829,7 +829,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 
-**Datos, R2 y DuckDB** (126)
+**Datos, R2 y DuckDB** (127)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -957,6 +957,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#739** — Análisis de diferencias completa su conversión a pieza propia: la ficha, sus pestañas y los…
 - **#743** — «En qué se fue cada producto» se cuenta con dos relojes y por área: el flujo es NETO, la…
 - **#745** — La portada de Inicio cuenta el mes CON su contexto: el presupuesto, los doce meses, lo…
+- **#750** — El borde de un cierre lo ponen las áreas que CONTARON STOCK, y Destino cuenta sólo de conteo…
 
 **SUNAT y SIRE** (75)
 
@@ -1114,7 +1115,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (225)
+**Decisiones de diseño y UX** (226)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1341,6 +1342,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#747** — Stock › «Movimientos por Tipo» se lee con DOS relojes: abre «De conteo a conteo» y el…
 - **#748** — Ajuste › «Diferencias del cierre» abre con TODAS las familias y los insumos de operación…
 - **#749** — Compras › «Vs año pasado» abre en el TOTAL, pone la venta al lado y parte la diferencia en…
+- **#750** — El borde de un cierre lo ponen las áreas que CONTARON STOCK, y Destino cuenta sólo de conteo…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57102,6 +57104,50 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        lado, o «Impacto» no entraba en 390 px.
      Lo vigila `test_compras_ano_pieza.py`. (2026-10-28.)
 
+750. **El borde de un cierre lo ponen las áreas que CONTARON STOCK, y
+     Destino cuenta sólo de conteo a conteo**
+     (`sin_plato.areas_con_stock`, `periodos_operativos(con_stock=)`,
+     `RELOJES`; `data._contado_por_area_dia`, `_sin_plato_cacheable`,
+     `_periodos_conteo_cacheable`; `graficos/destino_producto_pieza.py`,
+     `destino_producto.js`, `destino_flujo.js`). A pedido (2026-10-28), tras
+     medir cuánto se corre Costos por mezclar relojes.
+     · **Lo que estaba mal**: «setiembre 2026» quería decir cuatro cosas.
+       Ventas y Compras, del 1 al 30 set; Costos, movimientos del 1 al 30
+       con el inventario contado el 1 oct a las 17:40; Destino «Operativas»,
+       del 2 set 10:00 al 1 oct 18:00; y Destino «Kardex», del 3 set al
+       6 OCT, porque la sesión del cierre junta lo contado del 1 al 7 y
+       Venta Interna —que no guarda mercadería— contó el 6. Ese reloj metía
+       S/ 23.700 de compras del 2 al 6 oct en setiembre.
+     · **El corte lo ponen las áreas con stock**: las que contaron más de
+       S/ 0,50 en los días de la sesión (`VALORIZADO TOTAL` de
+       `ajusteinventario.parquet`, el mismo umbral del inventario de Costos).
+       Las demás —Venta Interna, Cocina Personal, Eventos, Bajas de Almacén—
+       toman el corte de la mayoría; su conteo sigue siendo del cierre (el
+       +S/ 960 de Venta Interna del 6 oct es de setiembre). La regla mira el
+       VALOR y no el nombre: Limpieza contó S/ 5.500 en julio 2026 y S/ 0 en
+       setiembre, y entra o no según el cierre. No es un interruptor: un
+       área sin stock no mide nada en el borde, y otra versión de «setiembre»
+       es justo lo que se quería quitar. Vale para Destino y para
+       Movimientos por Tipo (#747), que comparten `periodos_operativos`.
+     · **Destino sin «Fechas: Kardex | Operativas»**: un solo reloj, de
+       conteo a conteo (`RELOJES = ("operativo",)`). «Sin plato, cierre por
+       cierre» también —antes iba por el del kardex— y el salto entre las
+       dos vistas cae en el mismo período. `_sin_plato_cacheable` calcula
+       una cuenta y no dos. «Cómo se calcula» dejó el puente Kardex /
+       Operativas por «De conteo a conteo»: cada concepto con su cifra y su
+       porqué, y lo vendido antes del conteo y descontado después; la tira
+       del flujo lo dice y lleva ahí. El Excel «Flujo» va con cinco columnas.
+     · **Lo que no cambió**: el mes operativo (`cortes.fecha_operativa`)
+       sigue nombrando el cierre; `sin_plato.periodos` (los días de la
+       sesión) sigue siendo la base de la que salen los cortes. Costos sigue
+       mezclando inventario por mes operativo y movimientos por calendario:
+       medido, ±S/ 2.500 de «sin explicar» por mes (abril 2026: 4.513 contra
+       13.257), que en el año se compensa; cambiarlo es otra decisión.
+     Tocar la regla es subir `sin_plato.VERSION` (va también en la clave de
+     `_periodos_conteo_cacheable`, con el sello del ajuste). Lo vigilan
+     `test_graficos.py::_pruebas_relojes_sin_plato` y
+     `test_destino_producto_pieza.py`. (2026-10-28.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57114,7 +57160,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#749**; la próxima toma el número siguiente.
+> última regla es la **#750**; la próxima toma el número siguiente.
 
 >
 

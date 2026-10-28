@@ -6,6 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 
+import data
 from . import destino_datos as datos
 from . import movimientos_destino as md
 
@@ -37,7 +38,9 @@ def renderizar(fam_sel=()):
     contexto={'Familias de la página':list(fam_sel),'Ámbito':'Restaurante entero; no aplica el filtro de subalmacén'}
     firma=hashlib.sha256(pickle.dumps((per,filas,tot,contexto),protocol=5)).hexdigest();cache=ss.get('_sin_plato_cierre_cache')
     if cache is None or cache[0]!=firma:
-        cache=(firma,datos.armar(per,filas,tot,contexto));ss['_sin_plato_cierre_cache']=cache
+        # Los nombres de las áreas: el subtítulo de un cierre dice cuál contó en otro momento (#750).
+        extra={'nombres_area':(data.sin_plato_relojes() or {}).get('nombres_area')}
+        cache=(firma,datos.armar(per,filas,tot,contexto,extra));ss['_sin_plato_cierre_cache']=cache
     P=dict(cache[1]);P['inicial']=md._k_elegido(md.K_CIERRE_1,per);P['parte']='cierre'
     st.markdown('<style>.st-key-ajuste_graf_card_izq_mov_sinplato{height:auto!important;max-height:none!important;overflow:visible!important}</style>',unsafe_allow_html=True)
     with st.container(border=True,key=md.CARD_CIERRE):

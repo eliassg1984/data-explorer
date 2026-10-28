@@ -8488,6 +8488,24 @@ def _pruebas_relojes_sin_plato():
                            1: (T("2026-09-02 10:00"), T("2026-10-01 18:00")),
                            2: (T("2026-09-02 16:00"), T("2026-10-01 18:00")),
                            5: (T("2026-09-02 10:00"), T("2026-10-06 12:00"))})
+    # Regla #750: el corte lo ponen las áreas que CONTARON STOCK. El área 5
+    # contó el 6 oct sin valor (Venta Interna): toma el de la mayoría; su
+    # ajuste sigue en el cierre. Sin el dato de una sesión, cortan todas.
+    ses_c = dict(ses, clave="c-sep")
+    contado = pd.DataFrame({"area": [0, 1, 5, 0, 7], "dia": [
+        dt.date(2026, 10, 1), dt.date(2026, 10, 1), dt.date(2026, 10, 6),
+        dt.date(2026, 9, 2), dt.date(2026, 10, 1)], "v": [900.0, 300.0, 0.0, 800.0, 0.4]})
+    check("con stock: valor contado de más de S/ 0,50 en los días de la sesión",
+          sp.areas_con_stock(contado, [ses_c, dict(ses_ant, clave="c-ago")]),
+          {"c-sep": {0, 1}, "c-ago": {0}})
+    op_s = sp.periodos_operativos([dict(per[0], sesion=ses_c)], aj, [0, 1, 2, 5],
+                                  con_stock={"c-sep": {0, 1}})[0]
+    check("el área sin stock toma el corte de la mayoría",
+          (op_s["t1"], op_s["ventanas"][5]),
+          (T("2026-10-01 18:00"), (T("2026-09-02 10:00"), T("2026-10-01 18:00"))))
+    check("sin el dato de la sesión anterior, ésa corta como antes",
+          op_s["ventanas"][2], (T("2026-09-02 16:00"), T("2026-10-01 18:00")))
+    check("sólo queda el reloj de conteo a conteo", sp.RELOJES, ("operativo",))
 
     # ── 2) La foto en el corte ──────────────────────────────────────────
     fotos = pd.DataFrame({
