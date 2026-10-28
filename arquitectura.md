@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-752 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+753 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (247)
 
@@ -830,7 +830,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 
-**Datos, R2 y DuckDB** (128)
+**Datos, R2 y DuckDB** (129)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -960,6 +960,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#745** — La portada de Inicio cuenta el mes CON su contexto: el presupuesto, los doce meses, lo…
 - **#750** — El borde de un cierre lo ponen las áreas que CONTARON STOCK, y Destino cuenta sólo de conteo…
 - **#752** — El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre después; lo digitado hasta la…
+- **#753** — Las compras del mes nuevo procesadas antes de la apertura van a su mes: compras.parquet trae…
 
 **SUNAT y SIRE** (75)
 
@@ -57241,11 +57242,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        Las fotos (lo contado) no cambian y cada período sigue cerrando
        contra el kardex. Lo vendido por día (`reparto_venta`) va por el mes
        físico; las bajas (por fecha de proceso), por la apertura.
-     · **Lo que queda aproximado**: las compras ingresadas entre el día 1 y
-       la apertura se quedan en el cierre. La regla del Almacén es la fecha
-       de EMISIÓN, que el kardex no trae; casi todas son facturas del mes
-       que cerró (1 oct 2026: S/ 2.722 de 3.499) y el resto queda en el
-       cierre.
+     · **Lo que quedaba aproximado** —las compras ingresadas entre el día 1
+       y la apertura se quedaban en el cierre, porque el kardex no trae la
+       fecha de emisión— lo resolvió la #753 con la hora de proceso.
      · **Movimientos por Tipo** (#747) usa lo mismo por período
        (`_mov_cierre_fisico`): lo vendido este mes antes de la apertura de
        inicio entra; lo del mes siguiente antes de la de fin sale.
@@ -57253,6 +57252,39 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        compras por calendario, lo digitado hasta la apertura al cierre.
      Subir `sin_plato.VERSION` (va en 6: la #750 no subió el número). Lo
      vigila `test_graficos.py::_pruebas_relojes_sin_plato`. (2026-10-28.)
+
+753. **Las compras del mes nuevo procesadas antes de la apertura van a su
+     mes: `compras.parquet` trae la hora de proceso** (`FECHA_PROCESO_DOC`,
+     de `MDOCUMENTO.fProcesa`; `sin_plato.compras_del_mes_nuevo`,
+     `cierre_fisico` con `tipo`; `data._sin_plato_cacheable`,
+     `_mov_cierre_fisico`). A pedido (2026-10-28), cerrando lo que la #752
+     dejó aproximado.
+     · **El dato**: la hora en que una compra entra al kardex es,
+       exactamente, `MDOCUMENTO.fProcesa` (verificado al segundo en los
+       documentos del 30 set al 2 oct 2026). El kardex no trae la factura ni
+       su emisión; `compras.parquet` traía la emisión y no el proceso. El
+       usuario sumó a la consulta de compras del Sheet
+       `MD.fProcesa AS FECHA_PROCESO_DOC` (fecha y hora; 53.814 de 53.814
+       líneas con valor).
+     · **La regla**: una compra EMITIDA desde el día 1 (la regla del Almacén
+       es la fecha de emisión) y PROCESADA entre el día 1 y la apertura del
+       Almacén Central es del mes nuevo: entró al sistema antes de abrir el
+       conteo, el conteo de la mañana no la tenía y el POS la borró con el
+       ajuste (#752). Pasa al mes siguiente con el ajuste corregido en los
+       dos, igual que el descargo de ventas. El 1 oct 2026: S/ 1.022 en diez
+       facturas de octubre procesadas entre las 14:36 y las 17:32.
+     · **Lo que se queda**: la factura del mes viejo digitada tarde (la guía
+       del 30 set procesada el 1 oct a las 09:52) es del cierre; la del mes
+       viejo procesada DESPUÉS de la apertura ya cae en el mes nuevo, y el
+       conteo dice que la mercadería no estaba (sin sobrante).
+     · Las líneas van SIN las notas de crédito (`notas_credito=False`): el
+       kardex las registra aparte (tipo 07). Sólo el borde del Almacén
+       Central: las compras entran al kardex por él.
+     · Sin la columna (un parquet viejo), no se mueve nada, como en la #752.
+     Subir `sin_plato.VERSION` (va en 7). `compras.parquet` va en
+     `_ARCHIVOS_SIN_PLATO` y su sello en la clave de
+     `_movimientos_conteo_cacheable`. Lo vigila
+     `test_graficos.py::_pruebas_relojes_sin_plato`. (2026-10-28.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -57266,7 +57298,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#752**; la próxima toma el número siguiente.
+> última regla es la **#753**; la próxima toma el número siguiente.
 
 >
 

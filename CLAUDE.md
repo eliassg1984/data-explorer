@@ -2374,7 +2374,10 @@ el período es el MES FÍSICO: se cuenta el día 1 por la mañana y la apertura
 llega después; lo digitado hasta ella es del cierre, y el descargo de
 ventas del mes nuevo que corrió antes pasa a su mes con el ajuste
 corregido (`sin_plato.cierre_fisico`: el POS ajusta contra el stock del
-sistema EN LA APERTURA). Movimientos por Tipo, igual.
+sistema EN LA APERTURA). Movimientos por Tipo, igual. Desde la #753
+también las compras del mes nuevo procesadas antes de la apertura, con la
+`FECHA_PROCESO_DOC` que la consulta de compras del Sheet trae desde el
+2026-10-28 (`MDOCUMENTO.fProcesa`, la hora exacta del kardex).
 
 `test_stock_movimientos_pieza.py` vigila Movimientos por Tipo de Stock:
 balance, filtros locales, tipos, áreas y ventas sin costo contra

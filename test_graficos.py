@@ -8546,6 +8546,28 @@ def _pruebas_relojes_sin_plato():
           [float(-mf.loc[k, "vend_v"] + mf.loc[k, "aj_v"]) for k in (0, 1)], [-100.0, -50.0])
     check("lo que pasa al mes en curso se cae: sólo se corrige el cierre",
           sp.cierre_fisico(kx, nuevas, 1).iloc[len(kx):]["k"].tolist(), [0, 0])
+    # Regla #753: la compra del mes nuevo procesada antes de la apertura del
+    # Almacén pasa a su mes; la del mes viejo digitada tarde se queda, y la
+    # procesada después de abrir ya cae en el mes nuevo.
+    comp = pd.DataFrame({
+        "COD_PRODUCTO": ["P", "Q", "R", "S"],
+        "FECHA_EMISION_DOC": [dt.date(2026, 10, 1), dt.date(2026, 9, 30),
+                              dt.date(2026, 10, 1), dt.date(2026, 10, 1)],
+        "FECHA_PROCESO_DOC": [T("2026-10-01 15:11"), T("2026-10-01 09:52"),
+                              T("2026-10-01 19:00"), T("2026-10-01 16:00")],
+        "CANTIDAD_COMPRA": [2.0, 5.0, 1.0, 3.0], "VALOR_COMPRA": [256.0, 1630.0, 10.0, 30.0]})
+    cn = sp.compras_del_mes_nuevo(comp, [(0, 0, T("2026-10-01"), T("2026-10-01 18:00")),
+                                         (0, 1, T("2026-10-01"), T("2026-10-01 17:00"))])
+    check("compras del mes nuevo: emitidas desde el 1 y procesadas antes de abrir el Almacén",
+          cn[["cod", "tipo", "cant_in", "val_in"]].values.tolist(),
+          [["P", "01", 2.0, 256.0], ["S", "01", 3.0, 30.0]])
+    kc = pd.DataFrame({"k": [0, 1], "area": [0, 0], "cod": ["P", "P"], "tipo": ["01", "01"],
+                       "cant_in": [2.0, 4.0], "cant_out": [0.0, 0.0], "val_in": [256.0, 512.0],
+                       "val_out": [0.0, 0.0]})
+    mc = sp.movimientos(sp.cierre_fisico(kc, cn[cn["cod"] == "P"], 2)).set_index("k")
+    check("la compra pasa a su mes y el ajuste vuelve al físico",
+          [(float(mc.loc[k, "compra_v"]), float(mc.loc[k, "aj_v"])) for k in (0, 1)],
+          [(0.0, 256.0), (768.0, -256.0)])
     borde_f = sp.ventas_del_borde(
         pedidos.iloc[[0, 2]], pd.DataFrame({"ini": [T("2026-10-02 08:00")], "desde": [T("2026-10-01 00:00")],
                                             "hasta": [T("2026-10-01 23:59")]}),

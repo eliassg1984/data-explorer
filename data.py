@@ -2314,11 +2314,14 @@ def _venta_clase_dia_cacheable(archivo, sello, definicion=None):
 # últimos son del reloj operativo y del balance por área (regla #743):
 # origen y destino de cada traslado, el costo de lo vendido por hora de
 # pedido, el calendario del descargo de ventas y los nombres de las áreas.
+# `compras.parquet`, desde la regla #753: la hora en que se procesó cada
+# compra, para pasar al mes nuevo la que se procesó antes de la apertura.
 _ARCHIVOS_SIN_PLATO = ("salidas.parquet", "ventas.parquet",
                        "recetaventa.parquet", "cartacosteada.parquet",
                        "inventariovalorizado.parquet", "recetabase.parquet",
                        "transferencias.parquet", "paloteoinsumosnivel1.parquet",
-                       "descargosventas.parquet", "ajusteinventario.parquet")
+                       "descargosventas.parquet", "ajusteinventario.parquet",
+                       "compras.parquet")
 
 
 def _df_o_vacio(con, sql):
@@ -2419,9 +2422,14 @@ def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
         rel, list(ven.itertuples(index=False, name=None)))).df()
     # El cierre físico (#752): lo que el descargo de antes de la apertura
     # vendió el mes nuevo pasa a su mes, y el ajuste se corrige.
-    nuevas = sin_plato.ventas_del_mes_nuevo(
-        _df_o_vacio(con, kardex.sql_descargos_antes_de_apertura(
-            rel, sin_plato.bordes_fisicos(per_op))), corridas, pedidos)
+    bordes = sin_plato.bordes_fisicos(per_op)
+    nuevas = pd.concat([
+        sin_plato.ventas_del_mes_nuevo(
+            _df_o_vacio(con, kardex.sql_descargos_antes_de_apertura(rel, bordes)),
+            corridas, pedidos),
+        # Y las compras del mes nuevo procesadas antes de la apertura (#753).
+        sin_plato.compras_del_mes_nuevo(cargar("compras.parquet", notas_credito=False), bordes),
+    ], ignore_index=True)
     kx = sin_plato.cierre_fisico(kx, nuevas, len(per_op))
     stock = sin_plato.stock_por_area(fotos, ven)
     r = sin_plato.calcular(per_op, kx, fotos, salidas, vend, recetaventa, carta,
@@ -2930,6 +2938,8 @@ def _mov_cierre_fisico(con, bucket, rel, mov, ventanas, c0, c1):
     del conteo de INICIO vendió este mes entra (con el sobrante que le cargó
     al cierre anterior, de vuelta), y lo que el de antes de la apertura del
     de FIN vendió el mes siguiente sale (con el faltante que el POS borró).
+    Igual las compras del mes que se procesaron antes de cada apertura
+    (`sin_plato.compras_del_mes_nuevo`, regla #753).
     `c0`/`c1`: el 1 del mes y el del siguiente (`c1` None en el que corre)."""
     bordes = []
     for a, t0, t1 in ventanas:
@@ -2937,18 +2947,23 @@ def _mov_cierre_fisico(con, bucket, rel, mov, ventanas, c0, c1):
             bordes.append((-1, int(a), pd.Timestamp(c0), pd.Timestamp(t0)))
         if c1:
             bordes.append((0, int(a), pd.Timestamp(c1), pd.Timestamp(t1)))
-    desc = _df_o_vacio(con, kardex.sql_descargos_antes_de_apertura(rel, bordes))
-    if desc.empty:
+    if not bordes:
         return mov
-    d0 = pd.Timestamp(min(b[2] for b in bordes)) - pd.Timedelta(days=40)
-    pedidos = _df_o_vacio(con, f"""
-        SELECT "FECHA PEDIDO" AS t, sum("COSTO TOTAL") AS costo
-        FROM read_parquet('s3://{bucket}/paloteoinsumosnivel1.parquet')
-        WHERE "FECHA PEDIDO" >= TIMESTAMP '{d0:%Y-%m-%d %H:%M:%S}' GROUP BY 1""")
-    corridas = _df_o_vacio(con, f"""
-        SELECT "INICIO CORRIDA" AS ini, "VENTAS DESDE" AS desde, "VENTAS HASTA" AS hasta
-        FROM read_parquet('s3://{bucket}/descargosventas.parquet')""")
-    nuevas = sin_plato.ventas_del_mes_nuevo(desc, corridas, pedidos)
+    desc = _df_o_vacio(con, kardex.sql_descargos_antes_de_apertura(rel, bordes))
+    partes = [sin_plato.compras_del_mes_nuevo(cargar("compras.parquet", notas_credito=False),
+                                              bordes)]
+    if not desc.empty:
+        d0 = pd.Timestamp(min(b[2] for b in bordes)) - pd.Timedelta(days=40)
+        pedidos = _df_o_vacio(con, f"""
+            SELECT "FECHA PEDIDO" AS t, sum("COSTO TOTAL") AS costo
+            FROM read_parquet('s3://{bucket}/paloteoinsumosnivel1.parquet')
+            WHERE "FECHA PEDIDO" >= TIMESTAMP '{d0:%Y-%m-%d %H:%M:%S}' GROUP BY 1""")
+        corridas = _df_o_vacio(con, f"""
+            SELECT "INICIO CORRIDA" AS ini, "VENTAS DESDE" AS desde, "VENTAS HASTA" AS hasta
+            FROM read_parquet('s3://{bucket}/descargosventas.parquet')""")
+        partes.append(sin_plato.ventas_del_mes_nuevo(desc, corridas, pedidos))
+    nuevas = pd.concat([p for p in partes if not p.empty], ignore_index=True) \
+        if any(not p.empty for p in partes) else pd.DataFrame()
     if nuevas.empty:
         return mov
     codigo = {int(c): str(c) for c in mov["area"].dropna().astype(str).str.strip() if c.isdigit()}
@@ -2958,7 +2973,7 @@ def _mov_cierre_fisico(con, bucket, rel, mov, ventanas, c0, c1):
     m["area"] = m["area"].map(lambda a: codigo.get(int(a), f"{int(a):03d}"))
     m["nombre"] = m["nombre"].fillna(m["tipo"].map(nombre)).fillna(
         m["tipo"].map({sin_plato.TIPO_VENTAS: "Descargo de Ventas",
-                       sin_plato.TIPO_AJUSTE: "Ajuste Inventarios"}))
+                       sin_plato.TIPO_AJUSTE: "Ajuste Inventarios", "01": "Factura"}))
     nums = [c for c in mov.columns if c not in ("area", "cod", "tipo", "nombre")]
     m[nums] = m[nums].apply(pd.to_numeric, errors="coerce").fillna(0.0)
     g = m.groupby(["area", "cod", "tipo"], as_index=False).agg(
@@ -2967,7 +2982,8 @@ def _mov_cierre_fisico(con, bucket, rel, mov, ventanas, c0, c1):
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
-def _movimientos_conteo_cacheable(archivo, sello, ventanas, version=None, c0=None, c1=None):
+def _movimientos_conteo_cacheable(archivo, sello, ventanas, version=None, c0=None, c1=None,
+                                  sello_compras=None):
     """Lo que entró y salió de cada área y producto por tipo de documento
     dentro de SU ventana (`ventanas`: tupla de `(área, t0, t1)` en texto
     ISO, `t1` exclusivo), y las dos fotos —el stock en la hora del corte de
@@ -3016,6 +3032,7 @@ def movimientos_conteo(periodo):
     try:
         r = _movimientos_conteo_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
                                           ventanas, version=(kardex.VERSION, sin_plato.VERSION),
+                                          sello_compras=sello_datos("compras.parquet"),
                                           c0=iso(periodo.get("c0")), c1=iso(periodo.get("c1")))
     except Exception:
         return None

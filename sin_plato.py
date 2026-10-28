@@ -80,7 +80,7 @@ import definicion_venta as dv
 import kardex
 from cortes import MESES_ABR_ES, MESES_LARGOS_ES
 
-VERSION = 6
+VERSION = 7
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula. La 2: las líneas que se descargan por insumo bajan
 por su receta base (regla #648). La 3 conserva el desglose por tipo del
@@ -90,7 +90,8 @@ mismo que la 3. La 5: el corte lo ponen sólo las áreas que contaron
 stock, y Destino queda sólo con el reloj operativo (regla #750) —el número
 no se subió en ese commit—. La 6: el cierre físico, el mes calendario con
 lo digitado hasta la apertura y las ventas del día 1 en su mes (regla
-#752)."""
+#752). La 7: las compras del mes nuevo procesadas antes de la apertura,
+también en su mes (regla #753)."""
 
 DESDE = (2025, 9)
 """El cierre desde el que se cuenta: el primer período es octubre 2025.
@@ -827,6 +828,10 @@ def ventanas(per, areas):
 # la ventana del cierre que se abrió y, como el ajuste se calculó después,
 # reaparece como sobrante del cierre; en el mes siguiente vuelve como
 # faltante. `cierre_fisico` la pasa a su mes y corrige los dos ajustes.
+# Desde la regla #753 también las COMPRAS del mes nuevo procesadas antes de
+# la apertura (`compras_del_mes_nuevo`, con la `FECHA_PROCESO_DOC` que el
+# Sheet agregó a `compras.parquet`): el 1 oct 2026, S/ 1.022 en facturas de
+# octubre procesadas antes de las 17:44.
 
 CORTE_TURNO = pd.Timedelta(hours=6)
 """Lo vendido hasta las 6 de la mañana del día 1 es del turno del último
@@ -888,6 +893,44 @@ def ventas_del_mes_nuevo(desc, corridas, pedidos):
     return d.groupby(["k", "area", "cod"], as_index=False)[cols[3:]].sum()[cols]
 
 
+AREA_ALMACEN = 0
+"""El Almacén Central: las compras entran al kardex por él."""
+
+
+def compras_del_mes_nuevo(compras, bordes):
+    """Las compras del mes NUEVO que el Almacén procesó antes de abrir el
+    conteo: factura emitida desde el día 1 (la regla del Almacén es la fecha
+    de emisión) y procesada entre el 1 y la apertura del Almacén Central
+    (`FECHA_PROCESO_DOC`, la hora en que entró al kardex). `compras` son las
+    líneas de `compras.parquet` SIN las notas de crédito (el kardex las
+    registra aparte); `bordes`, lo de `bordes_fisicos`. Devuelve (`k`,
+    `area`, `cod`, `tipo` «01», `cant_in`, `cant_out`, `val_in`, `val_out`)
+    para `cierre_fisico`. Sin la columna de proceso, nada. Regla #753. Pura."""
+    cols = ["k", "area", "cod", "tipo", "cant_in", "cant_out", "val_in", "val_out"]
+    c_cod, c_em = _col(compras, "COD_PRODUCTO"), _col(compras, "FECHA_EMISION_DOC")
+    c_pr, c_q = _col(compras, "FECHA_PROCESO_DOC"), _col(compras, "CANTIDAD_COMPRA")
+    c_v = _col(compras, "VALOR_COMPRA")
+    if compras is None or compras.empty or not all((c_cod, c_em, c_pr, c_q, c_v)):
+        return pd.DataFrame(columns=cols)
+    em = pd.to_datetime(compras[c_em], errors="coerce").dt.normalize()
+    pr = pd.to_datetime(compras[c_pr], errors="coerce")
+    partes = []
+    for k, a, c, t in bordes or []:
+        if int(a) != AREA_ALMACEN:
+            continue
+        c, t = pd.Timestamp(c), pd.Timestamp(t)
+        m = (em >= c.normalize()) & (pr >= c) & (pr < t)
+        if m.any():
+            partes.append(pd.DataFrame({
+                "k": int(k), "area": int(a), "cod": _cod(compras.loc[m, c_cod]), "tipo": "01",
+                "cant_in": _num(compras.loc[m, c_q]), "cant_out": 0.0,
+                "val_in": _num(compras.loc[m, c_v]), "val_out": 0.0}))
+    if not partes:
+        return pd.DataFrame(columns=cols)
+    return (pd.concat(partes, ignore_index=True)
+            .groupby(["k", "area", "cod", "tipo"], as_index=False)[cols[4:]].sum()[cols])
+
+
 def cierre_fisico(kx, nuevas, n_periodos):
     """`kx` (lo de `kardex.sql_movimientos_ventanas`) con las ventas del mes
     nuevo (`ventas_del_mes_nuevo`) en su mes: el descargo sale del período
@@ -902,6 +945,9 @@ def cierre_fisico(kx, nuevas, n_periodos):
     if nuevas is None or nuevas.empty or kx is None:
         return kx
     n = nuevas.assign(cod=_cod(nuevas["cod"]))
+    # El tipo de lo que se mueve: el descargo de ventas (95) o, desde la
+    # regla #753, la compra (lo de `compras_del_mes_nuevo`, «01»).
+    tipo = n["tipo"] if "tipo" in n.columns else pd.Series(TIPO_VENTAS, index=n.index)
     m = ("cant_in", "cant_out", "val_in", "val_out")
 
     def filas(k, tipo, signo, cruzado):
@@ -911,10 +957,10 @@ def cierre_fisico(kx, nuevas, n_periodos):
             x[dest] = signo * _num(n[src])
         return x
     extra = pd.concat([
-        filas(n["k"], TIPO_VENTAS, -1.0, False),      # el descargo sale del cierre…
+        filas(n["k"], tipo, -1.0, False),             # el movimiento sale del cierre…
         filas(n["k"], TIPO_AJUSTE, 1.0, False),       # …y su ajuste vuelve al físico
-        filas(n["k"] + 1, TIPO_VENTAS, 1.0, False),   # entra al mes en que se vendió…
-        filas(n["k"] + 1, TIPO_AJUSTE, 1.0, True),    # …sin el faltante que le cargó
+        filas(n["k"] + 1, tipo, 1.0, False),          # entra al mes en que pasó…
+        filas(n["k"] + 1, TIPO_AJUSTE, 1.0, True),    # …sin el ajuste que le cargó
     ], ignore_index=True)
     extra = extra[(extra["k"] >= 0) & (extra["k"] < n_periodos)]
     return pd.concat([kx, extra[[c for c in extra.columns if c in kx.columns]]],
