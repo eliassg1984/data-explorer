@@ -324,7 +324,10 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
 (function () {
   const V = window.VentasPeriodo, U = V.util, K = V.const, C = K.C;
   const { esc, fin, ent, s0, s2, fmtK, p1, p0, varVenta, txtPp, txtVar } = U;
-  const FIL = [['grupo', 'Grupo'], ['serv', 'Servicio'], ['canal', 'Canal'], ['tdoc', 'Documento']];
+  // Grupo no va acá: es el filtro «Venta» (`ventas_alcance.js`, regla #755),
+  // que escribe `st.fil.grupo` con los grupos que se cuentan.
+  const FIL = [['serv', 'Servicio'], ['canal', 'Canal'], ['tdoc', 'Documento']];
+  const VA = window.VentasAlcance;
   const SVG = 'http://www.w3.org/2000/svg';
   void SVG;
   const conAlfa = (c, a) => `color-mix(in srgb, ${c} ${Math.round(a * 100)}%, transparent)`;
@@ -847,7 +850,9 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     const gr = grafico(R, st, ancho, alto, M);
     S.X = gr.X; S.W = gr.W;
     const tit = { Día: 'Tendencia diaria de venta', Semana: 'Venta por semana', Mes: 'Venta por mes', Año: 'Venta por año' }[R.gran];
-    const fil = FIL.map(([k, rot]) => {
+    const A = S.A;
+    const filVa = A ? VA.html(A, st.va, S.va) : '';
+    const fil = filVa + FIL.map(([k, rot]) => {
       const sel = st.fil[k], ops = B.opciones[k];
       return `<div class="ms"><button class="ms-b${sel.length ? ' on' : ''}" data-acc="menu" data-v="${k}">${esc(sel.length ? `${rot}: ${sel.length === 1 ? sel[0] : sel.length + ' elegidos'}` : `${rot}: todos`)} <i>▾</i></button>`
         + (st.menu === k ? `<div class="ms-l">${ops.map((o) => `<label><input type="checkbox" data-acc="filtro" data-k="${k}" data-v="${esc(o)}" ${sel.includes(o) ? 'checked' : ''}> ${esc(o)}</label>`).join('')}${sel.length ? '<button class="ms-x" data-acc="limpiar" data-v="' + k + '">Quitar el filtro</button>' : ''}</div>` : '') + '</div>';
@@ -875,15 +880,18 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     const sub = st.modo === 'Resumen' ? st.sub : 'Detalle';
     const valores = sub === 'Pagos' ? 'Importes de pagos en soles' : sub === 'Costo' ? 'Neto sin IGV ni recargo' : 'Venta con impuestos · neto sin IGV ni recargo';
     const franja = Object.fromEntries((B.franja || []).map(([r, v]) => [r, v]));
-    const sel = [['Grupos', st.fil.grupo.length ? st.fil.grupo : franja.Grupos || []], ['Subgrupos', franja.Subgrupos || []],
+    const sel = [['Venta', A && st.va ? [VA.etiqueta(A, st.va)] : []],
       ['Canales', st.fil.canal.length ? st.fil.canal : franja.Canales || []], ['Servicios', st.fil.serv.length ? st.fil.serv : franja.Servicios || []],
       ['Documentos', st.fil.tdoc]].filter(([, v]) => v.length).map(([r, v]) => `${r}: ${v.join(', ')}`);
     const ambito = sel.length ? sel.join(' · ') : 'Todos los grupos y canales';
+    // «Cuánto se vendió»: la tarjeta dice si lo que muestra es el total.
+    const total = !sel.length;
+    const caja = `<span class="caja ${total ? 'ok' : 'no'}" title="${esc(total ? 'Sin filtros: toda la venta del rango' : 'Filtrada: ' + ambito)}">${total ? '✓ Toda la venta' : 'Filtrada · no es el total'}</span>`;
     const baseF = B.turno ? 'Día del turno del comprobante' : 'Emisión del comprobante';
     void ayuda;
     raiz.innerHTML = `<div class="ctl"><div class="seg">${K.GRANOS.map((x) => `<button class="${x === st.gran ? 'on' : ''}" data-acc="gran" data-v="${x}">${x}</button>`).join('')}</div>`
       + `<div class="fils">${fil}</div><span class="lugar-fecha" aria-hidden="true"></span></div>`
-      + `<div class="cab"><div class="kp"><span class="tit">${esc(tit)}</span><div class="kpis">${kpis(R, st, M)}</div>${M && st.modo === 'Detalle' && focoClaves(R, st) ? NUEVO : ''}</div><div class="ley">${leyenda(R, st)}</div></div>`
+      + `<div class="cab"><div class="kp"><span class="tit">${esc(tit)}</span>${caja}<div class="kpis">${kpis(R, st, M)}</div>${M && st.modo === 'Detalle' && focoClaves(R, st) ? NUEVO : ''}</div><div class="ley">${leyenda(R, st)}</div></div>`
       + `<div class="gr" style="height:${alto}px">${gr.svg}<div class="tip" hidden></div></div>`
       + `<div class="pie"><div class="seg">${['Resumen', 'Detalle'].map((x) => `<button class="${x === st.modo ? 'on' : ''}" data-acc="modo" data-v="${x}">${x}</button>`).join('')}</div>${ctrl2}<span class="pt">${pie}</span>`
       + (M ? `<button class="excel" data-acc="excel">Excel ${NUEVO}</button>` : '') + '</div>'
@@ -892,6 +900,14 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
       + zona + (st.aviso ? `<div class="aviso">${esc(st.aviso)}</div>` : '');
     const b = raiz.querySelector('#vp-busca');
     if (b && S.enfocarBusca) { b.focus(); b.setSelectionRange(b.value.length, b.value.length); S.enfocarBusca = false; }
+    const q = raiz.querySelector('.va-q');
+    if (q && S.enfocarVa) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); S.enfocarVa = false; }
+  }
+  // El filtro «Venta»: la elección (`st.va`) y los grupos que filtran.
+  function ponerVa(S, sel) {
+    S.st.va = sel;
+    S.st.fil.grupo = VA.listaGrupos(S.A, sel);
+    S.st.foco = null; S.st.tramo = null; S.st.ped = null;
   }
   const COMO = '<b>Fecha y alcance</b><p>Base temporal: día del turno del comprobante. Los filtros de esta vista se combinan con los de Ventas.</p>'
     + '<b>Venta documentada</b><p>Comprobantes pagados y por cobrar, menos notas de crédito. Cortesías y anulados se muestran aparte. «Venta» incluye impuestos y recargo; «Neto» los excluye. Cada ítem se cuenta una vez aunque tenga varias formas de pago.</p>'
@@ -942,12 +958,23 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
   function enlazar(raiz) {
     raiz.addEventListener('click', (ev) => {
       const el = ev.target.closest('[data-acc]');
+      const va = ev.target.closest('[data-va]'), S = raiz.__vp;
+      if (va && raiz.contains(va) && S.A) {
+        if (va.dataset.va === 'q') return;
+        const antes = S.st.va, nueva = VA.accion(S.A, antes, S.va, va);
+        if (!VA.igual(antes, nueva)) ponerVa(S, nueva);
+        S.st.menu = null;
+        render(raiz);
+        return;
+      }
+      if (S.va && S.va.abierto && !ev.target.closest('.va')) { S.va.abierto = false; S.va.q = ''; render(raiz); if (!el) return; }
       if (!el || !raiz.contains(el)) { if (ev.target.closest('.ms-l, .ley-p, .como-p')) return; if (raiz.__vp.st.menu) { raiz.__vp.st.menu = null; render(raiz); } return; }
       if (el.dataset.acc === 'buscar' || (el.dataset.acc === 'filtro' && ev.type === 'click' && el.tagName !== 'INPUT')) return;
       accion(raiz, el.dataset.acc, el, ev);
     });
     raiz.addEventListener('input', (ev) => {
       if (ev.target.dataset.acc === 'buscar') { raiz.__vp.st.q = ev.target.value; raiz.__vp.enfocarBusca = true; render(raiz); }
+      if (ev.target.dataset.va === 'q') { raiz.__vp.va.q = ev.target.value; raiz.__vp.enfocarVa = true; render(raiz); }
     });
     raiz.addEventListener('mouseover', (ev) => { const b = ev.target.closest('[data-acc="barra"]'); if (b) { pintarTip(raiz, +b.dataset.i); arrastrar(raiz, +b.dataset.i); } });
     raiz.addEventListener('mouseout', (ev) => { const b = ev.target.closest('[data-acc="barra"]'); if (b && !(ev.relatedTarget && ev.relatedTarget.closest && ev.relatedTarget.closest('[data-acc="barra"]'))) pintarTip(raiz, null); });
@@ -1013,7 +1040,7 @@ export default function (component) {
   if (fb && fb.offsetWidth) raiz.style.setProperty('--vp-fecha', `${fb.offsetWidth + 12}px`);
   G.mejoras = true;
   if (!G.st) G.st = UI.estadoInicial();
-  const ctx = JSON.stringify([data.sello, data.turno, data.franja]);
+  const ctx = JSON.stringify([data.sello, data.turno, data.franja, data.alcance, data.alcance_pedido]);
   if (G.sello !== data.sello) {
     G.B = window.VentasPeriodo.preparar(data);
     G.sello = data.sello;
@@ -1026,5 +1053,22 @@ export default function (component) {
   }
   G.ctx = ctx;
   G.B.turno = data.turno !== false; G.B.franja = data.franja || [];
+  // El filtro «Venta» (regla #755): abre en lo suyo, y un enlace (Costos)
+  // lo pide UNA vez por `n`; después manda el usuario.
+  const VA = window.VentasAlcance;
+  if (data.alcance && VA) {
+    const viejo = G.A;
+    G.A = data.alcance;
+    if (!G.va) G.va = VA.nuevaUi();
+    if (G.st.va === undefined) G.st.va = VA.inicio(G.A);
+    else if (JSON.stringify(viejo) !== JSON.stringify(G.A)) G.st.va = VA.reubicar(viejo, G.A, G.st.va);
+    const ped = data.alcance_pedido;
+    if (ped && ped.n !== G.vaN) {
+      G.vaN = ped.n;
+      G.st.va = VA.normalizar(G.A, VA.desdeLista(ped.lista));
+      if (ped.sub) { G.st.modo = 'Resumen'; G.st.sub = ped.sub; }
+    }
+    G.st.fil.grupo = VA.listaGrupos(G.A, G.st.va);
+  }
   UI.render(raiz);
 }

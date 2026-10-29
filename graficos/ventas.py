@@ -190,19 +190,18 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # contador como un filtro más, para que se note con el panel cerrado.
     _dia_otro = (st.session_state.get(dv.CLAVE_DIA, dv.DIA_TURNO)
                  != dv.DIA_TURNO)
+    #
+    # GRUPO Y SUB GRUPO SE FUERON DE ACÁ el 2026-10-29 (regla #755): una
+    # elección arriba movía las siete vistas, y mirar los vinos en el Mix
+    # dejaba a «Venta por Periodo» sin el total. Cada tarjeta trae su filtro
+    # «Venta» (`graficos/ventas_alcance.py`); las que todavía no lo tienen
+    # muestran todos los grupos. `fam_sel`/`sub_sel` quedan en None para no
+    # tocar las firmas de las vistas (regla #357).
+    fam_sel = sub_sel = None
     with compartimento_filtros(contar_filtros(
-            "ventas_graf_filtro_fam", "ventas_graf_filtro_sub",
             "ventas_graf_filtro_canal", "ventas_graf_filtro_serv")
             + int(_dia_otro)):
         _selector_dia_venta()
-        _, fam_sel = filtro_pills(df_f, col_fam,
-                                  "ventas_graf_filtro_fam", "Grupo")
-        # CASCADA: Sub Grupo sólo ofrece los que quedan bajo el Grupo elegido.
-        _dd = df_f
-        if fam_sel and col_fam:
-            _dd = _dd[_dd[col_fam].astype(str).isin(fam_sel)]
-        _, sub_sel = filtro_pills(_dd, col_sub,
-                                  "ventas_graf_filtro_sub", "Sub Grupo")
         _, canal_sel = filtro_pills(df_f, col_canal,
                                     "ventas_graf_filtro_canal", "Canal Venta")
         _, serv_sel = filtro_pills(df_f, col_serv,

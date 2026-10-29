@@ -65,7 +65,7 @@ a escritorio y cabeceras nativas sin solapes). El detalle vive en
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py && python test_sunat_documentos_pieza.py && python test_ficha_plato.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py && python test_sunat_documentos_pieza.py && python test_ficha_plato.py && python test_ventas_alcance.py
 python test_navegacion_retorno.py && python test_movil.py
 ```
 
@@ -1279,6 +1279,27 @@ Python, puesto encima de la pieza— pide una corrida. Lo que muerde:
   «Análisis por hora»), y la pieza llamada con la misma `sello` no se
   redibuja.
 
+## Ventas: cada tarjeta filtra sus grupos
+
+Desde el 2026-10-29 (regla #755) Grupo y Sub Grupo NO están en el
+«Filtros» de la franja: una elección arriba movía las siete vistas, y mirar
+los vinos en el Mix dejaba a Venta por Periodo sin el total. Cada tarjeta
+trae su botón «Venta: …» —el módulo `graficos/ventas_alcance.py` + `.js` +
+`.css`, que la pieza antepone a lo suyo— con tres bloques (Carta, Eventos,
+Otros) y cuatro atajos (toda, Carta + Eventos, sólo carta, como en Costos).
+Lo que muerde:
+
+- **Cada tarjeta abre en lo suyo y no se recuerda**: Venta por Periodo en
+  toda la venta (con el sello «✓ Toda la venta» / «Filtrada · no es el
+  total»), el Mix en Carta + Eventos. Las demás vistas lo esperan, con su
+  apertura ya acordada en la regla; mientras tanto Comparativo y Meseros
+  no filtran por grupo.
+- **Un enlace que llega a Ventas escribe el filtro de SU tarjeta**
+  (`ventas_resumen.K_ALCANCE`, aplicado una vez por `n`), no una clave de
+  la franja: así Costos › «Venta neta documentada» abre en el mismo número.
+- **Los botones del panel van con `!important` en el color**: una regla
+  general de la app les pinta el texto.
+
 ## Inicio: la portada cuenta el mes con su contexto
 
 Desde el 2026-10-26 (regla #745) la portada de Inicio abre con una frase
@@ -2432,3 +2453,10 @@ ficha): las cifras, los cuatro indicadores, las cuatro pestañas, la espera
 de la receta de otro plato, las columnas opcionales y los cinco triggers
 (`elegir`, `simular`, `cambios`, `nuevo_costeo`, `produccion`). Reglas #744
 y #746.
+
+`test_ventas_alcance.py` vigila el filtro «Venta» de cada tarjeta de Ventas
+(`graficos/ventas_alcance.py` + `.js`): los tres bloques y los cuatro
+atajos, con qué abre Venta por Periodo y el Mix, que la franja ya no filtre
+por grupo y que el enlace de Costos escriba el filtro de la tarjeta; en
+Chromium, la cuenta del módulo y Venta por Periodo llegando desde Costos
+filtrada y volviendo con la ✕. Regla #755.

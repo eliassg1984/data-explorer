@@ -44,7 +44,7 @@ import definicion_venta as dv
 from tema import ERROR, EXITO, GRIS_TEXTO
 from graficos.base import _resolver, preservar_widgets, selector_fecha_tarjeta
 from graficos.compras._comun import _periodo_serie
-from graficos import alturas
+from graficos import alturas, ventas_alcance
 from graficos.recetas_comun import TASA_RECARGO
 from utils import fmt_k
 
@@ -1004,12 +1004,19 @@ def pagos_periodo(d_pagos, col_fecha, idoc):
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "ventas_periodo",
-    css=css_movil((_AQUI / "ventas_periodo.css").read_text(encoding="utf-8")),
+    css=css_movil((_AQUI / "ventas_periodo.css").read_text(encoding="utf-8")
+                  + ventas_alcance.css()),
     # El Excel (`libro`, `bajar`, `archivo`) vive en `_xlsx.js`, compartido
-    # con Costo de Carta, Consistencia y Producto: se antepone.
+    # con Costo de Carta, Consistencia y Producto, y el filtro «Venta» en
+    # `ventas_alcance.js` (regla #755): se anteponen.
     js=js_movil((_AQUI / "_xlsx.js").read_text(encoding="utf-8")
+    + ventas_alcance.js()
     + (_AQUI / "ventas_periodo.js").read_text(encoding="utf-8")),
 )
+K_ALCANCE = "vt_periodo_alcance"
+"""Lo que pide un enlace (Costos › «Venta neta documentada»): `{"lista":
+[[grupo], …], "sub": subvista, "n": firma}`. La pieza lo aplica UNA vez por
+`n` y después manda el usuario (regla #755)."""
 _K_PIEZA = "vt_periodo_pieza"
 _K_LINEAS = "vt_periodo_lineas"
 _K_CACHE = "_vt_periodo_cache"
@@ -1083,12 +1090,16 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             cache = (*cache[:4], firma_d)
             st.session_state[_K_CACHE] = cache
         datos = dict(cache[3])
-        # Lo que dice la línea de contexto: los filtros de la franja.
+        # Lo que dice la línea de contexto: los filtros de la franja (Grupo
+        # y Sub Grupo ya no están ahí: son el filtro «Venta» de la tarjeta,
+        # regla #755).
         ss = st.session_state
         datos["turno"] = dv.columna(d, dv.FECHA_EMISION) is not None
         datos["franja"] = [[r, list(ss.get(k) or [])] for r, k in (
-            ("Grupos", "ventas_graf_filtro_fam"), ("Subgrupos", "ventas_graf_filtro_sub"),
             ("Canales", "ventas_graf_filtro_canal"), ("Servicios", "ventas_graf_filtro_serv"))]
+        # «Cuánto se vendió»: abre en toda la venta.
+        datos["alcance"] = ventas_alcance.datos(datos["grupos"], abre=ventas_alcance.TODA)
+        datos["alcance_pedido"] = ss.get(K_ALCANCE)
         _PIEZA(key=_K_PIEZA, data=datos, on_lineas_change=_al_pedir_lineas, width="stretch")
         pedido = st.session_state.get(_K_PEDIDO)
         if pedido and pedido.get("sello") == sello:

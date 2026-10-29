@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-754 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+755 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (247)
+**CSS y estilos** (248)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -314,6 +314,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#746** — «Costo de Carta» es UNA pieza con UNA ficha: la lista ordenada por lo que se pagó sobre el 30…
 - **#748** — Ajuste › «Diferencias del cierre» abre con TODAS las familias y los insumos de operación…
 - **#749** — Compras › «Vs año pasado» abre en el TOTAL, pone la venta al lado y parte la diferencia en…
+- **#755** — Ventas: el filtro de grupo es de CADA TARJETA, no de la franja
 
 **Layout y alturas** (106)
 
@@ -1118,7 +1119,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (229)
+**Decisiones de diseño y UX** (230)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1349,6 +1350,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#751** — Producción › «Consumo según ventas» dice la cuenta de cada porcionamiento, deja elegir el…
 - **#752** — El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre después; lo digitado hasta la…
 - **#754** — Costos cuenta el cierre FÍSICO: las notas digitadas hasta la apertura del conteo restan en el…
+- **#755** — Ventas: el filtro de grupo es de CADA TARJETA, no de la franja
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57313,6 +57315,54 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      Subir `costo_ventas.VERSION` (va en 7). Lo vigila
      `test_costo_ventas.py`. (2026-10-28.)
 
+755. **Ventas: el filtro de grupo es de CADA TARJETA, no de la franja**
+     (`graficos/ventas_alcance.py` + `.js` + `.css`, un módulo que cada
+     pieza antepone; `ventas_resumen.K_ALCANCE`; `ventas_mix.alcance_mix`;
+     `costos_enlaces.aplicar_contexto`). A pedido (2026-10-29), sobre el
+     boceto https://claude.ai/artifact/NbofNqpVLXrz5ZQvCPe3Us (pantallas 5
+     y 6).
+     · **El síntoma**: Costos › «Venta neta documentada» de set 26 decía
+       S/ 335.049 y su ↗ abría Ventas en S/ 335.434. Los S/ 385 eran el
+       grupo «Otros» (descorche, vales, desechos, donaciones, movilidad),
+       que Costos no cuenta porque no gasta inventario; en cinco de seis
+       meses la diferencia era «Otros» + «No Show» al sol. El enlace SÍ
+       intentaba filtrar: escribía `vt_resumen_grupo`, que nadie leía
+       desde que la tarjeta es pieza propia (#714).
+     · **Por qué no un filtro arriba**: Grupo y Sub Grupo estaban en el
+       «Filtros» de la franja y en la tarjeta de Venta por Periodo, y se
+       sumaban. Arriba, mirar los vinos en el Mix dejaba a Venta por
+       Periodo («cuánto se vendió») sin el total. Ahora cada tarjeta trae
+       su botón «Venta: …» y lo que se elige en una no toca a las otras.
+       La franja conserva la fecha, «Fecha de la venta», Canal y Servicio.
+     · **Tres bloques**: Carta (todo lo que no es de los otros dos: un
+       grupo nuevo del POS cae acá), Eventos, y Otros (Venta interna,
+       Otros, No Show). **Cuatro atajos**: toda la venta, Carta + Eventos,
+       sólo carta y «como en Costos» (`costo_ventas.GRUPOS_VENTA` + Eventos
+       + Venta interna). Marcado = se cuenta, como en Costos.
+     · **Con qué abre cada tarjeta** (acordado): Venta por Periodo, toda
+       la venta, con un sello «✓ Toda la venta» / «Filtrada · no es el
+       total»; Mix, Carta + Eventos, con subgrupos. No se recuerda entre
+       sesiones; la ✕ del botón vuelve a como abrió. Pendientes, con su
+       apertura acordada: Por hora (Carta + Eventos), Comparativo (toda),
+       Platos (sólo carta), Meseros (toda: recorta lo vendido, no la
+       propina, que es del pago) y Control (sin grupo, sólo Canal).
+       Mientras tanto Comparativo y Meseros no filtran por grupo; Por hora
+       y Platos conservan su selector propio.
+     · **El enlace de Costos** escribe `vt_periodo_alcance` = {lista de
+       grupos, subvista, `n`}; la pieza lo aplica UNA vez por `n` y después
+       manda el usuario. Medido: set 26 llega en «Como en Costos» con neto
+       S/ 335.049, el número de Costos.
+     · **Otro rango, otros grupos**: una elección que era un atajo sigue
+       siendo ese atajo (`reubicar`), así un grupo nuevo de la carta entra
+       en «Carta + Eventos»; una hecha a mano conserva lo que existe.
+       Nada marcado no es «todo»: Venta por Periodo filtra por un grupo
+       que no existe.
+     · **Los botones del panel llevan el color con `!important`**: una
+       regla general de la app les pintaba el texto y «Listo» no se veía.
+     Lo vigila `test_ventas_alcance.py` (los bloques y atajos, las dos
+     piezas, la franja, el enlace, y en Chromium la cuenta del módulo y
+     Venta por Periodo llegando desde Costos). (2026-10-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57325,7 +57375,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#754**; la próxima toma el número siguiente.
+> última regla es la **#755**; la próxima toma el número siguiente.
 
 >
 

@@ -45,6 +45,7 @@ import convenios_descuento
 from cortes import MESES_ABR_ES
 from data import REPORTES
 from tema import ADVERTENCIA_TEXTO, ERROR, PALETA_SERIES, SCROLL_THUMB
+from graficos import ventas_alcance
 from graficos.base import _resolver, selector_fecha_tarjeta
 from graficos.compras._comun import (_cobertura, _limites_periodo,
                                      _periodo_serie)
@@ -436,8 +437,11 @@ def _estilo_costo(v):
 
 _PIEZA = st.components.v2.component(
     "ventas_mix",
-    css=css_movil((Path(__file__).parent / "ventas_mix.css").read_text(encoding="utf-8")),
-    js=js_movil((Path(__file__).parent / "ventas_mix.js").read_text(encoding="utf-8")),
+    css=css_movil((Path(__file__).parent / "ventas_mix.css").read_text(encoding="utf-8")
+                  + ventas_alcance.css()),
+    # El filtro «Venta» de la tarjeta (regla #755) se antepone: es un módulo.
+    js=js_movil(ventas_alcance.js()
+                + (Path(__file__).parent / "ventas_mix.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "vt_mix_pieza"
 _K_GRAN = "vt_mix_gran"
@@ -536,6 +540,18 @@ def armar_mix(b, claves, gran, rango, b_ap=None, ap_nombres=None, nota="",
     }
 
 
+def alcance_mix(prods):
+    """El filtro «Venta» de la tarjeta (regla #755), con los grupos y
+    subgrupos de los productos que viajan (`armar_mix`: [grupo, subgrupo,
+    nombre, área]). «Cuánto se vendió por grupo»: abre en Carta + Eventos,
+    sin Venta interna, Otros ni No Show."""
+    subs = {}
+    for g, sub, *_ in prods:
+        subs.setdefault(g, set()).add(sub)
+    return ventas_alcance.datos(list(subs), subs=subs,
+                                abre=ventas_alcance.CARTA_EVENTOS)
+
+
 def _es_parcial(clave, gran, rango):
     """El rango corta el período: tiene menos días adentro que los suyos."""
     n, m = _cobertura(clave, gran, rango)
@@ -625,7 +641,8 @@ def _ir_a_carta(cod):
 def _ventas_mix(d, filtrar_cb=None):
     """«Mix de carta»: la venta por período partida por Grupo › Sub Grupo ›
     Producto. `d` es el df de la vista —sólo venta, un ítem una vez, con los
-    chips de la franja—, y `filtrar_cb` lo que se le aplica al df del año
+    chips de la franja (ya sin Grupo: lo filtra la tarjeta, regla #755)—, y
+    `filtrar_cb` lo que se le aplica al df del año
     pasado que la vista trae aparte de R2 (el `_filtrar_items` de
     `ventas.py`), para que los dos lados se comparen igual filtrados."""
     ss = st.session_state
@@ -698,11 +715,13 @@ def _ventas_mix(d, filtrar_cb=None):
         if v and v.get("cod"):
             _ir_a_carta(v["cod"])
 
+    datos = armar_mix(b, claves, gran, rango, b_ap, ap_nombres, nota,
+                      lineas_de(b, ss.get(_K_LINEAS)),
+                      hay_area=bool(cols.get("area")),
+                      codigos=_codigos_carta(), igv_notas=igv_notas)
+    datos["alcance"] = alcance_mix(datos["prods"])
     _PIEZA(key=_K_PIEZA,
-           data=armar_mix(b, claves, gran, rango, b_ap, ap_nombres, nota,
-                          lineas_de(b, ss.get(_K_LINEAS)),
-                          hay_area=bool(cols.get("area")),
-                          codigos=_codigos_carta(), igv_notas=igv_notas),
+           data=datos,
            on_gran_change=_al_gran, on_ap_change=_al_ap,
            on_lineas_change=_al_lineas, on_carta_change=_a_la_carta,
            width="stretch")

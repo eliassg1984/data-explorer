@@ -22,7 +22,13 @@
 // período, V, Q, C, B, NC, SC, IGV, REC, DESC, DEV]), `ap` (null o {filas,
 // nombres}: la misma forma, con el período de ESTE rango con el que se
 // compara cada fila), `lineas`, `nota`, `hay_area`, `niveles`, `umbrales`
-// ([0.45, 0.70]), `tramos` (7) y `ayuda`.
+// ([0.45, 0.70]), `tramos` (7), `ayuda` y `alcance` (el filtro «Venta»).
+//
+// EL FILTRO «VENTA» (regla #755, `ventas_alcance.js`, antepuesto por
+// Python): qué grupos y subgrupos se cuentan en ESTA tarjeta. Abre en Carta
+// + Eventos y no se recuerda entre sesiones. Recorta `filas` y `ap.filas`
+// por producto ANTES de todo lo demás (`conAlcance`): las cuentas de abajo
+// no se enteran.
 
 const CLAVE = 'vt_mix_est';
 const V = 0, Q = 1, C = 2, B = 3, NC = 4, SC = 5, IGV = 6, REC = 7, DESC = 8, DEV = 9;
@@ -134,7 +140,7 @@ function htmlKpis(d, st, x) {
   const prods = new Set();
   for (const r of d.filas) if (T.includes(r[1]) && r[2 + V] > 0.5 && enRuta(d, st, r[0], ruta)) prods.add(d.prods[r[0]][1] + '\u0001' + d.prods[r[0]][2]);
   h.push(k('Productos con venta', fn(prods.size)));
-  if (ruta.length) { const vl = sumT(totLocal, T, V); h.push(k('Del total del local', pc(vl ? v / vl : NaN))); }
+  if (ruta.length) { const vl = sumT(totLocal, T, V); h.push(k(st.va ? 'Del total de la vista' : 'Del total del local', pc(vl ? v / vl : NaN))); }
   if (sc > 0.5) {
     const sin = new Map();
     for (const r of d.filas) if (T.includes(r[1]) && r[2 + SC] > 0.5 && enRuta(d, st, r[0], ruta)) sin.set(d.prods[r[0]][2], (sin.get(d.prods[r[0]][2]) || 0) + r[2 + SC]);
@@ -159,9 +165,10 @@ function seg(opciones, actual, acc, apagadas = {}) {
   if (!opciones.length) return '';
   return `<div class="vm-seg" role="group">${opciones.map(([val, rot]) => `<button type="button" data-acc="${acc}" data-id="${esc(val)}" class="${val === actual ? 'on' : ''}" ${apagadas[val] ? `disabled title="${esc(apagadas[val])}"` : ''}>${esc(rot)}</button>`).join('')}</div>`;
 }
-function htmlControles(d, st) {
+function htmlControles(d, st, r) {
   const ejes = d.hay_area ? [['Carta', 'Carta'], ['Área', 'Área']] : [['Carta', 'Carta']];
-  return `<div class="vm-grupo"><span class="vm-rot">Abrir por</span>${seg(ejes, st.eje, 'eje')}</div>
+  const va = r && r.A ? `<div class="vm-grupo">${window.VentasAlcance.html(r.A, st.va, r.va)}</div>` : '';
+  return `${va}<div class="vm-grupo"><span class="vm-rot">Abrir por</span>${seg(ejes, st.eje, 'eje')}</div>
     <div class="vm-grupo"><span class="vm-rot">Agrupar</span>${seg(d.grans.map((g) => [g, g]), d.gran, 'gran')}</div>
     <div class="vm-grupo"><span class="vm-rot">Medir</span>${seg([['Soles', 'Soles'], ['Unidades', 'Unidades']], st.medida, 'medida')}</div>
     <div class="vm-grupo"><span class="vm-rot">Escala</span>${seg([['Monto', 'Monto'], ['%', '% del período']], st.escala, 'escala')}</div>
@@ -268,7 +275,7 @@ function htmlFicha(d, st, x) {
   const miembro = st.sel !== null;
   const a = miembro ? M.get(st.sel) : tot;
   const base = miembro ? tot : totLocal;
-  const nombre = miembro ? st.sel : (ruta.length ? ruta[ruta.length - 1] : 'Todo el local');
+  const nombre = miembro ? st.sel : (ruta.length ? ruta[ruta.length - 1] : (d.alcanceRot ? `Venta: ${d.alcanceRot}` : 'Todo el local'));
   const nivelRot = miembro ? niv[1][lvl] : (ruta.length ? niv[1][ruta.length - 1] : 'local');
   const camino = [niv[2], ...(miembro ? ruta : ruta.slice(0, -1))].join(' › ');
   const enQue = miembro ? (ruta.length ? ruta[ruta.length - 1] : 'el local') : 'el local';
@@ -616,9 +623,14 @@ function dibujar(raiz) {
   const x = calcular(raiz);
   z('kpis').innerHTML = htmlKpis(d, st, x);
   const buscando = raiz.querySelector('.vm-buscar[data-acc="buscar"]');
-  if (!buscando || raiz.__d.ctrlFirma !== `${d.gran}|${st.eje}|${st.medida}|${st.escala}|${d.hay_area}`) {
-    z('ctrl').innerHTML = htmlControles(d, st);
-    raiz.__d.ctrlFirma = `${d.gran}|${st.eje}|${st.medida}|${st.escala}|${d.hay_area}`;
+  const ui = raiz.__d.va || {};
+  const firmaCtrl = `${d.gran}|${st.eje}|${st.medida}|${st.escala}|${d.hay_area}|${JSON.stringify(st.va)}|${ui.abierto}|${ui.q}|${[...(ui.exp || [])]}`;
+  if (!buscando || raiz.__d.ctrlFirma !== firmaCtrl) {
+    z('ctrl').innerHTML = htmlControles(d, st, raiz.__d);
+    raiz.__d.ctrlFirma = firmaCtrl;
+    const q = raiz.querySelector('.va-q');
+    if (q && raiz.__d.enfocarVa) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+    raiz.__d.enfocarVa = false;
   }
   z('ruta').innerHTML = htmlRuta(d, st, x);
   z('ley').innerHTML = htmlLeyenda(d, st, x);
@@ -668,6 +680,16 @@ function enlazar(raiz) {
   };
   const ocultarTip = () => { const t = tip(); if (t) t.style.display = 'none'; };
   raiz.addEventListener('click', (ev) => {
+    // El filtro «Venta»: otra elección recorta los datos y redibuja todo.
+    const va = ev.target.closest('[data-va]'), R = raiz.__d;
+    if (va && raiz.contains(va) && R.A) {
+      if (va.dataset.va === 'q') return;
+      const antes = R.st.va, nueva = window.VentasAlcance.accion(R.A, antes, R.va, va);
+      if (!window.VentasAlcance.igual(antes, nueva)) { R.st.va = nueva; R.st.sel = null; conAlcance(raiz); llenarBuscador(raiz); }
+      dibujar(raiz);
+      return;
+    }
+    if (R.va && R.va.abierto && !ev.target.closest('.va')) { R.va.abierto = false; R.va.q = ''; dibujar(raiz); }
     const b = ev.target.closest('[data-acc]');
     const st = raiz.__d.st, d = raiz.__d.data;
     raiz.__d.mismaZona = false;
@@ -711,6 +733,7 @@ function enlazar(raiz) {
     recordar(st); dibujar(raiz);
   });
   raiz.addEventListener('input', (ev) => {
+    if (ev.target.dataset.va === 'q') { raiz.__d.va.q = ev.target.value; raiz.__d.enfocarVa = true; dibujar(raiz); return; }
     if (ev.target.dataset.acc !== 'calc') return;
     const st = raiz.__d.st, pos = ev.target.selectionStart;
     st.calc = ev.target.value;
@@ -737,6 +760,19 @@ function enlazar(raiz) {
   window.addEventListener('resize', () => { clearTimeout(espera); espera = setTimeout(() => { if (raiz.isConnected) dibujar(raiz); }, 150); });
 }
 
+// Los datos de la tarjeta con el filtro «Venta» aplicado: las filas (y las
+// del año pasado) de los productos cuyo grupo y subgrupo se cuentan.
+function conAlcance(raiz) {
+  const R = raiz.__d, f = R.full, VA = window.VentasAlcance;
+  if (!R.A || !VA || !R.st.va) { R.data = f; return; }
+  const sel = R.st.va, ok = f.prods.map((p) => VA.pasa(sel, p[0], p[1]));
+  R.data = Object.assign({}, f, {
+    alcanceRot: VA.etiqueta(R.A, sel),
+    filas: f.filas.filter((r) => ok[r[0]]),
+    ap: f.ap ? Object.assign({}, f.ap, { filas: f.ap.filas.filter((r) => ok[r[0]]) }) : f.ap,
+  });
+}
+
 export default function (component) {
   const { data, parentElement, setTriggerValue } = component;
   if (!data || !data.periodos || !data.periodos.length || !data.filas) return;
@@ -752,9 +788,18 @@ export default function (component) {
     if (!Array.isArray(raiz.__d.st.ruta)) raiz.__d.st.ruta = [];
     enlazar(raiz);
   }
-  const prev = raiz.__d.data;
+  const prev = raiz.__d.full;
   raiz.__d.enviar = setTriggerValue;
-  raiz.__d.data = data;
+  raiz.__d.full = data;
+  const VA = window.VentasAlcance;
+  if (data.alcance && VA) {
+    const viejo = raiz.__d.A;
+    raiz.__d.A = data.alcance;
+    if (!raiz.__d.va) raiz.__d.va = VA.nuevaUi();
+    if (raiz.__d.st.va === undefined) raiz.__d.st.va = VA.inicio(data.alcance);
+    else if (JSON.stringify(viejo) !== JSON.stringify(data.alcance)) raiz.__d.st.va = VA.reubicar(viejo, data.alcance, raiz.__d.st.va);
+  }
+  conAlcance(raiz);
   if (data.ap) raiz.__d.apPedido = true;
   if (!prev || prev.filas !== data.filas) { raiz.__d.ctrlFirma = null; }
   dibujar(raiz);

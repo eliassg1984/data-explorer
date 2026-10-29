@@ -152,12 +152,17 @@ def aplicar_contexto(reporte, df=None):
                     if mapa.get(cv._norm(v)) in familias
                     or (reporte == "Ventas" and cv.GRUPOS_APARTE.get(cv._norm(v)) in extras)]
     if reporte == "Ventas":
-        st.session_state["vt_resumen_grupo"] = elegidas
+        # El filtro «Venta» de la tarjeta a la que llega, «Venta por Periodo»
+        # (regla #755): los mismos grupos que sumó Costos, y la subvista.
+        # Lo aplica la pieza UNA vez por firma; las demás vistas no se
+        # enteran. Hasta el 2026-10-29 escribía `vt_resumen_grupo`, que
+        # nadie leía desde que la tarjeta es una pieza propia (#714): se
+        # llegaba con todos los grupos y la cifra no cuadraba.
         sub = params.get("subvista", "Venta")
-        if sub in ("Venta", "Costo", "Cortesías", "Descuentos"):
-            st.session_state["vt_resumen_modo"] = "Resumen"
-            st.session_state["vt_resumen_sub"] = sub
-            st.session_state["_vt_resumen_sub_eco"] = sub
+        st.session_state["vt_periodo_alcance"] = {
+            "lista": [[g] for g in sorted(elegidas)],
+            "sub": sub if sub in ("Venta", "Costo", "Cortesías", "Descuentos") else None,
+            "n": repr(firma)}
     elif reporte == "Compras":
         st.session_state["compras_sem_familias"] = elegidas
     elif reporte == "Movimientos":
