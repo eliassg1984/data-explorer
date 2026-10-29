@@ -95,7 +95,7 @@ import pandas as pd
 
 from cortes import MESES_ABR_ES, fecha_operativa
 
-VERSION = 8
+VERSION = 9
 """Subirla cuando cambie QUÉ se calcula. 2: semanas y quincenas. 3: los
 rótulos de los períodos sin «cierre»/«kardex» (lo dice la cabecera). 4: el
 costo de descuentos (regla #661). 5: lo que devuelve el banco de un
@@ -103,7 +103,8 @@ convenio (regla #665). 6: conciliación con costo completo, histórico mensual
 desde 2024 y observaciones de valorización (regla #676). 7: el cierre
 físico, las notas digitadas hasta la apertura del conteo en el mes que
 cerró (regla #754). 8: lo de Mayta una vez, como salida, y fuera de la
-venta (regla #756)."""
+venta (regla #756). 9: lo vendido fuera de la venta, para decirlo en
+pantalla (`fuera_por`, regla #757)."""
 
 DESDE = pd.Period("2025-10", freq="M")
 """Inicio del histórico de SEMANA/QUINCENA, basado en Kardex."""
@@ -454,6 +455,32 @@ def ventas_por(por_grupo_dia, clave):
     return venta, pos, cortesias, v_ap, c_ap
 
 
+def fuera_por(por_grupo_dia, clave):
+    """Lo vendido que NO es la venta del reporte, para decirlo en pantalla
+    (regla #757): `(período × grupo con su nombre del POS, {cubeta: [grupos
+    de carta]})`. Fuera es todo grupo que no está en `GRUPOS_VENTA` ni es
+    sumable (Eventos): Otros, No Show, la Venta interna —que va como salida
+    «Mayta», #756— y un grupo nuevo que la lista todavía no conoce. Sin
+    cortesías, como la venta."""
+    if por_grupo_dia is None or por_grupo_dia.empty:
+        return pd.DataFrame(), {}
+    d = por_grupo_dia
+    nombre = d["grupo"].astype(str).str.strip()
+    grupo = nombre.map(_norm)
+    cort = d["clase"].astype(str).str.upper().str.startswith("CORTES")
+    sumables = {_norm(g) for g in SUMABLES}
+    de_carta = grupo.isin(GRUPOS_VENTA)
+    m = ~de_carta & ~grupo.isin(sumables) & ~cort
+    carta = {}
+    for n, g in sorted(set(zip(nombre[de_carta], grupo[de_carta]))):
+        carta.setdefault(GRUPOS_VENTA[g], []).append(n)
+    b = pd.DataFrame({"k": clave(d["dia"])[m], "g": nombre[m], "neto": _num(d["neto"])[m]})
+    b = b.dropna(subset=["k"])
+    if b.empty:
+        return pd.DataFrame(), carta
+    return b.groupby(["k", "g"])["neto"].sum().unstack("g").fillna(0.0), carta
+
+
 def descuentos_por(por_grupo_dia, clave, convenios=None):
     """El costo de la parte descontada (`costo_descuento` de
     `definicion_venta.por_grupo_dia`): `(período × CUBETAS, período × grupo
@@ -557,6 +584,7 @@ def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave,
     orden = sorted(sal, key=lambda t: (t != BAJAS, -float(sal[t].to_numpy().sum())))
     # Eventos es lo único que se suma a la venta: lo de Mayta ya va arriba.
     aparte = list(SUMABLES)
+    fuera, carta = fuera_por(por_grupo_dia, clave)
     return {
         "filas": {
             "inv_inicial": serie(inv_ini),
@@ -569,6 +597,9 @@ def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave,
         },
         "salidas": {t: serie(sal[t]) for t in orden},
         "mayta_origen": origen,
+        "venta_fuera": {g: plana(fuera, g) for g in fuera.columns
+                        if any(abs(x) > 0.5 for x in plana(fuera, g))},
+        "grupos_carta": carta,
         "venta_extra": {g: plana(v_ap, g) for g in aparte},
         "costo_extra": {g: plana(c_ap, g) for g in aparte},
         "descuento_extra": {g: plana(d_ap, g) for g in aparte},

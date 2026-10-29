@@ -1456,7 +1456,9 @@ Eventos se suma a Alimentos por defecto. **La Venta interna no es venta del
 reporte** (regla #756): lo que va a Mayta se cuenta UNA vez, como la salida
 «Mayta» —la nota «Despacho Mayta» del período si hay, si no el costo de la
 factura—; con la casilla de antes se contaba dos veces cuando había las dos
-(`costo_ventas._mayta`). Familias del
+(`costo_ventas._mayta`). La línea de contexto lo dice: «Venta: 5 grupos
+de carta + Eventos» y lo que queda fuera en el período elegido, con su
+monto (`costo_ventas.fuera_por`, regla #757). Familias del
 Almacén y grupos de venta son clasificaciones distintas. Envases no tiene
 venta propia en esta agrupación. Los convenios bancarios se siguen editando
 en Costos y se guardan en R2 (`convenios_descuento.py`, regla #665); Mix de

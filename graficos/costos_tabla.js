@@ -221,15 +221,11 @@ function dibujar(raiz) {
     <span class="cv-campo"><span class="cv-rot">Sumar a la venta</span>${EXTRAS.map((g) =>
       `<label class="interruptor"><input type="checkbox" data-extra="${g}" ${st.extra.has(g) ? 'checked' : ''}> ${g}</label>`).join('')}</span>
     </div></div>`;
-  const estadoExtra = EXTRAS.map((g) => {
-    const incluido = F.includes('Alimentos') && st.extra.has(g);
-    return `${g} ${g === 'Eventos' ? (incluido ? 'incluidos' : 'excluidos') : (incluido ? 'incluida' : 'excluida')}`;
-  });
   html += `<div class="cv-contexto" role="status" aria-live="polite" aria-atomic="true">
     <span>${esMes ? 'Mes operativo · inventario contado' : `${st.grano === 'semana' ? 'Semana' : 'Quincena'} · inventario del kardex`}</span>
     <span>Venta y costo del Sistema: día contable del turno</span>
     <span>Familias: ${esc(F.join(', '))}</span>
-    <span>${esc(estadoExtra.join(' · '))}</span></div>`;
+    ${alcanceVenta(st, data, w, F, isel)}</div>`;
 
   // Las cifras de la ventana: las usan la cabecera de la tabla (⚠), las dos
   // vistas de arriba y la evolución (regla #679).
@@ -479,6 +475,27 @@ function detalle(st, data, w, fila, F, val) {
     <div>${stats}</div><div class="evolucion-grafico"><div class="graf" role="img" aria-label="Evolución de ${esc(fila.nom)} · ${st.modo === 'familia' ? 'por familia' : 'total'}">${svg}${puntos}</div>${vari}
       <div class="evolucion-periodos">${w.per.map(p => `<span>${esc(p.rot)}</span>`).join('')}</div></div><div>${comp}</div>
   </div></td></tr>`;
+}
+
+// Qué es la venta del reporte y qué queda fuera en el período elegido
+// (regla #757): la venta son los grupos de carta de las familias elegidas,
+// más Eventos si está marcado; lo demás —Otros, No Show, la Venta interna,
+// un grupo nuevo— se dice con su monto, para que la distancia con Ventas
+// se lea en la pantalla y no haya que abrir el cálculo.
+function alcanceVenta(st, data, w, F, isel) {
+  const carta = F.flatMap((b) => (data.grupos_carta || {})[b] || []);
+  const conEv = F.includes('Alimentos') && st.extra.has('Eventos');
+  const venta = `<span title="${esc(carta.join(', ') || 'sin grupos de carta')}">Venta: ${carta.length} ${carta.length === 1 ? 'grupo' : 'grupos'} de carta${conEv ? ' + Eventos' : ''}</span>`;
+  if (isel < 0) return venta;
+  const i = w.ini + isel, rot = w.per[isel].rot;
+  const vi = (g) => g.trim().toUpperCase() === 'VENTA INTERNA';
+  const fuera = Object.entries(data.venta_fuera || {}).map(([g, s]) => [g, s[i] || 0]);
+  if (!conEv) fuera.push(['Eventos', ((data.venta_extra || {}).Eventos || [])[i] || 0]);
+  const partes = fuera.filter(([, v]) => Math.abs(v) > 0.5).sort((a, b) => b[1] - a[1]).map(([g, v]) => {
+    const nota = vi(g) ? (st.agregadas.includes(MAYTA) && F.includes('Alimentos') ? ' (va como salida Mayta)' : ' (no se resta: Mayta quitada)') : '';
+    return `${esc(g)} ${soles(v)}${nota}`;
+  });
+  return venta + (partes.length ? `<span>Fuera de la venta en ${esc(rot)}: ${partes.join(' · ')}</span>` : '');
 }
 
 function notas(st, data, w) {

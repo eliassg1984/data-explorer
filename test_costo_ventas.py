@@ -395,6 +395,19 @@ ok('if g != _VENTA_INTERNA' in _src, "Mayta: la Venta interna ya no viaja como v
 _js = (RAIZ / "graficos" / "costos_tabla.js").read_text(encoding="utf-8")
 ok("const EXTRAS = ['Eventos'];" in _js, "Mayta: la pantalla sólo ofrece sumar Eventos")
 
+# ── Lo que queda fuera de la venta, para la pantalla (regla #757) ──────────
+_pg = pd.DataFrame({
+    "dia": pd.to_datetime(["2026-09-03"] * 6),
+    "grupo": ["Alimentos", "Eventos", "Otros", "Venta Interna", "Promociones", "Otros"],
+    "clase": ["Venta", "Venta", "Venta", "Venta", "Venta", "Cortesía"],
+    "neto": [1000.0, 200.0, 38.5, 90.0, 12.0, 0.0], "costo": [0.0] * 6})
+_fu, _ca = cv.fuera_por(_pg, cv.clave_mes)
+igual(sorted(_fu.columns), ["Otros", "Promociones", "Venta Interna"],
+      "fuera: Otros, Venta interna y un grupo nuevo; ni carta ni Eventos")
+igual(float(_fu["Otros"].iloc[0]), 38.5, "fuera: sin la cortesía")
+igual(_ca, {"Alimentos": ["Alimentos"]}, "fuera: los grupos de carta de cada familia")
+ok("alcanceVenta(st, data, w, F, isel)" in _js, "fuera: la línea de contexto lo dice")
+
 # ── Cableado ─────────────────────────────────────────────────────────────
 import graficos  # noqa: E402
 import data      # noqa: E402

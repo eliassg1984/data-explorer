@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-756 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+757 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (248)
 
@@ -1119,7 +1119,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (230)
+**Decisiones de diseño y UX** (231)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1351,6 +1351,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#752** — El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre después; lo digitado hasta la…
 - **#754** — Costos cuenta el cierre FÍSICO: las notas digitadas hasta la apertura del conteo restan en el…
 - **#755** — Ventas: el filtro de grupo es de CADA TARJETA, no de la franja
+- **#757** — Costos dice qué es su venta y qué queda fuera, con su monto
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57414,6 +57415,22 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      `armar` no sume la Venta interna y que la pantalla sólo ofrezca
      Eventos). (2026-10-29.)
 
+757. **Costos dice qué es su venta y qué queda fuera, con su monto**
+     (`costo_ventas.fuera_por`, `venta_fuera` y `grupos_carta` en `armar`;
+     `alcanceVenta` en `graficos/costos_tabla.js`; `VERSION` 9). A pedido
+     (2026-10-29): la pantalla decía «Familias: Todas · Eventos incluidos»
+     y nada más, y la distancia con Ventas no se leía.
+     · **La línea de contexto** suma «Venta: 5 grupos de carta + Eventos»
+       (el título lista los grupos; las familias del Almacén no son grupos
+       de venta) y «Fuera de la venta en <período>: …» con el monto de cada
+       grupo que no entra: Otros, No Show, la Venta interna —«va como
+       salida Mayta» (#756), o «no se resta» si esa salida se quitó—,
+       Eventos si se desmarcó, y un grupo nuevo del POS que
+       `GRUPOS_VENTA` todavía no conoce (así se nota que falta sumarlo).
+     · Medido: set 26 dice Venta Interna S/ 9.868 y Otros S/ 385; jun 26,
+       S/ 2.196 y S/ 346 (y Eventos S/ 51.860 al desmarcarlo).
+     Lo vigila `test_costo_ventas.py`. (2026-10-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57426,7 +57443,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#756**; la próxima toma el número siguiente.
+> última regla es la **#757**; la próxima toma el número siguiente.
 
 >
 
