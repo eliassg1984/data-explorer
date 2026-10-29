@@ -17,9 +17,11 @@ Los grupos van en tres BLOQUES:
   · Otros    — Venta interna, Otros (descorche, vales, desechos,
                donaciones, movilidad) y No Show.
 
-Y cuatro ATAJOS: toda la venta, Carta + Eventos, sólo carta y «como en
-Costos» (los grupos de `costo_ventas.GRUPOS_VENTA` más Eventos y Venta
-interna: la venta neta documentada de ese reporte).
+Y tres ATAJOS: toda la venta, Carta + Eventos y sólo carta. «Como en
+Costos» NO es un atajo fijo: Costos suma Venta interna sólo si su casilla
+está marcada (viene apagada), así que un atajo con los grupos de
+`costo_ventas` mentía para quien no la marcó. Lo trae el enlace de Costos,
+con las casillas de ese momento (`extra`), y dura lo que dure ese pedido.
 
 Cada tarjeta dice con cuál ABRE (`abre`), y la ✕ del botón vuelve ahí:
 
@@ -33,8 +35,6 @@ antepone a lo suyo: no es una pieza aparte, es un módulo
 
 from pathlib import Path
 
-import costo_ventas
-
 CARTA, EVENTOS, OTROS = "Carta", "Eventos", "Otros"
 BLOQUES = (CARTA, EVENTOS, OTROS)
 
@@ -43,8 +43,9 @@ _OTROS = frozenset({"VENTA INTERNA", "OTROS", "NO SHOW"})
 """Los grupos que no son la carta, por nombre normalizado. Lo que no está
 acá es Carta."""
 
-TODA, CARTA_EVENTOS, SOLO_CARTA, COMO_COSTOS = (
-    "Toda la venta", "Carta + Eventos", "Sólo carta", "Como en Costos")
+TODA, CARTA_EVENTOS, SOLO_CARTA = "Toda la venta", "Carta + Eventos", "Sólo carta"
+COMO_COSTOS = "Como en Costos"
+"""El nombre del atajo que trae el enlace de Costos (`datos(extra=…)`)."""
 
 _AQUI = Path(__file__).parent
 
@@ -63,17 +64,13 @@ def bloque(grupo):
     return CARTA
 
 
-def _de_costos(grupo):
-    g = _norm(grupo)
-    return g in costo_ventas.GRUPOS_VENTA or g in costo_ventas.GRUPOS_APARTE
-
-
-def datos(grupos, subs=None, abre=TODA):
+def datos(grupos, subs=None, abre=TODA, extra=None):
     """Lo que el filtro necesita, para el `data` de una pieza.
 
     `grupos`: los nombres que trae la tarjeta; `subs`: `{grupo: [subgrupos]}`
     si la tarjeta los tiene (sin ellos, el filtro es sólo de grupos);
-    `abre`: el nombre del atajo con que abre la tarjeta.
+    `abre`: el nombre del atajo con que abre la tarjeta; `extra`: atajos
+    de un pedido (`[[nombre, lista]]`), que van al final.
 
     Una elección viaja como lista de `[grupo]` (el grupo entero) o
     `[grupo, subgrupo]`; `None` es toda la venta."""
@@ -95,8 +92,9 @@ def datos(grupos, subs=None, abre=TODA):
         [TODA, None],
         [CARTA_EVENTOS, lista(lambda g: bloque(g) in (CARTA, EVENTOS))],
         [SOLO_CARTA, lista(lambda g: bloque(g) == CARTA)],
-        [COMO_COSTOS, lista(_de_costos)],
     ]
+    for nombre, pedida in extra or ():
+        atajos.append([nombre, [[str(x[0]).strip(), *x[1:]] for x in pedida or ()]])
     if abre not in {a[0] for a in atajos}:
         abre = TODA
     return {"bloques": bloques, "subs": sub_de, "atajos": atajos, "abre": abre}

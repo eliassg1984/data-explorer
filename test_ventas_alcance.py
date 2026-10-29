@@ -4,8 +4,8 @@ Grupo y Sub Grupo dejaron el «Filtros» de la franja: cada tarjeta trae el
 suyo (`graficos/ventas_alcance.py` + `.js`) y lo que se elige en una no toca
 a las otras. Vigila:
 
-  · los tres bloques (Carta, Eventos, Otros) y los cuatro atajos, con
-    «como en Costos» = los grupos que suma ese reporte;
+  · los tres bloques (Carta, Eventos, Otros) y los tres atajos fijos; «como
+    en Costos» no es uno: lo trae el enlace con las casillas de Costos;
   · con qué abre cada tarjeta (Venta por Periodo: toda; Mix: Carta +
     Eventos) y que las dos piezas antepongan el módulo;
   · que la franja ya no filtre por grupo y que el enlace desde Costos
@@ -51,11 +51,11 @@ class LosBloques(unittest.TestCase):
                         "Vinos y Espumantes", "Promociones"])
         self.assertEqual(at[va.SOLO_CARTA], carta)
         self.assertEqual(at[va.CARTA_EVENTOS], sorted(carta + ["Eventos"]))
-        # Como en Costos: sus cinco grupos de carta, Eventos y Venta interna;
-        # ni Otros, ni No Show, ni un grupo que Costos no conoce.
-        self.assertEqual(at[va.COMO_COSTOS], sorted(["Alimentos", "Bebidas c/ Alcohol", "Bebidas s/ Alcohol",
-                                                     "Bebidas Calientes", "Vinos y Espumantes", "Eventos",
-                                                     "Venta Interna"]))
+        # «Como en Costos» no es fijo: Costos suma Venta interna sólo con su
+        # casilla marcada (viene apagada). Lo trae el enlace, tal cual.
+        self.assertNotIn(va.COMO_COSTOS, at)
+        B = va.datos(_GRUPOS, extra=[[va.COMO_COSTOS, [["Alimentos"], [" Eventos"]]]])
+        self.assertEqual(B["atajos"][-1], [va.COMO_COSTOS, [["Alimentos"], ["Eventos"]]])
 
     def test_abre_y_subgrupos(self):
         A = va.datos(["Alimentos", "Eventos", None, " "], subs={"Alimentos": ["Postres", "Fondos", None]},
@@ -80,7 +80,7 @@ class CadaTarjetaLoSuyo(unittest.TestCase):
             self.assertIn("ventas_alcance.js()", src, f)
             self.assertIn("ventas_alcance.css()", src, f)
         src = (_AQUI / "graficos" / "ventas_resumen.py").read_text(encoding="utf-8")
-        self.assertIn('ventas_alcance.datos(datos["grupos"], abre=ventas_alcance.TODA)', src)
+        self.assertIn('ventas_alcance.datos(datos["grupos"], abre=ventas_alcance.TODA,', src)
 
     def test_la_franja_ya_no_filtra_por_grupo(self):
         src = (_AQUI / "graficos" / "ventas.py").read_text(encoding="utf-8")
@@ -194,7 +194,8 @@ class EnElNavegador(unittest.TestCase):
         import test_ventas_periodo as tvp
         from graficos import ventas_resumen as vr
         _t, P = tvp._armar()
-        P["alcance"] = va.datos(P["grupos"] + ["Eventos"], abre=va.TODA)
+        P["alcance"] = va.datos(P["grupos"] + ["Eventos"], abre=va.TODA,
+                                extra=[[va.COMO_COSTOS, [["Bebidas"]]]])
         P["alcance_pedido"] = {"lista": [["Bebidas"]], "sub": "Costo", "n": "costos-1"}
         js = (va.js() + (_AQUI / "graficos" / "_xlsx.js").read_text(encoding="utf-8")
               + (Path(vr.__file__).parent / "ventas_periodo.js").read_text(encoding="utf-8"))
@@ -229,7 +230,7 @@ class EnElNavegador(unittest.TestCase):
         self.assertEqual(r["grupo"], ["Bebidas"])
         self.assertEqual(r["sub"], "Costo")
         self.assertIn("no es el total", r["chip"])
-        self.assertIn("Venta: Bebidas", r["boton"])
+        self.assertIn("Venta: Como en Costos", r["boton"])
         self.assertEqual(r["grupo2"], [])
         self.assertIn("Toda la venta", r["chip2"])
         self.assertTrue(r["panel"])

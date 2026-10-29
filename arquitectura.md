@@ -57336,9 +57336,25 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        La franja conserva la fecha, «Fecha de la venta», Canal y Servicio.
      · **Tres bloques**: Carta (todo lo que no es de los otros dos: un
        grupo nuevo del POS cae acá), Eventos, y Otros (Venta interna,
-       Otros, No Show). **Cuatro atajos**: toda la venta, Carta + Eventos,
-       sólo carta y «como en Costos» (`costo_ventas.GRUPOS_VENTA` + Eventos
-       + Venta interna). Marcado = se cuenta, como en Costos.
+       Otros, No Show). **Tres atajos**: toda la venta, Carta + Eventos y
+       sólo carta. Marcado = se cuenta, como en Costos.
+     · **«Como en Costos» NO es un atajo fijo** (corregido el mismo día):
+       nació con los grupos de `costo_ventas` + Eventos + Venta interna,
+       pero Costos suma Venta interna sólo con su casilla marcada, y viene
+       apagada. Ahora lo trae el enlace de Costos con las casillas de ese
+       momento (`ventas_alcance.datos(extra=…)`).
+     · **Venta interna en Costos, medido** (a pedido, 2026-10-29; la
+       regla de Costos está SIN DECIDIR): lo que va a Mayta (chorizo y
+       chistorra de pato, alguna manteca y vino) se registró de tres
+       maneras. Hasta jun 2025, sólo la factura de Venta interna, con
+       costo. Nov 2025–mar 2026, factura SIN costo (S/ 0–390) y nota
+       «Despacho Mayta» con el costo. Jul–set 2025 y abr–jul 2026, las
+       DOS con costo y los mismos productos (abr 2026: S/ 9.934 en la
+       factura, S/ 9.264 en la nota): marcar Venta interna y restar la
+       nota cuenta el envío dos veces. Desde ago 2026, sólo la factura:
+       set 26 con Venta interna da sin explicar −S/ 1.730, y sin ella
+       ~+S/ 10.000 (su costo, S/ 11.783, sale igual del inventario). La
+       casilla sola no sirve para todos los meses.
      · **Con qué abre cada tarjeta** (acordado): Venta por Periodo, toda
        la venta, con un sello «✓ Toda la venta» / «Filtrada · no es el
        total»; Mix, Carta + Eventos, con subgrupos. No se recuerda entre

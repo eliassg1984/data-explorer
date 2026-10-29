@@ -1286,7 +1286,8 @@ Desde el 2026-10-29 (regla #755) Grupo y Sub Grupo NO están en el
 los vinos en el Mix dejaba a Venta por Periodo sin el total. Cada tarjeta
 trae su botón «Venta: …» —el módulo `graficos/ventas_alcance.py` + `.js` +
 `.css`, que la pieza antepone a lo suyo— con tres bloques (Carta, Eventos,
-Otros) y cuatro atajos (toda, Carta + Eventos, sólo carta, como en Costos).
+Otros) y tres atajos (toda, Carta + Eventos, sólo carta); «Como en
+Costos» lo trae sólo el enlace de Costos, con las casillas de allá.
 Lo que muerde:
 
 - **Cada tarjeta abre en lo suyo y no se recuerda**: Venta por Periodo en

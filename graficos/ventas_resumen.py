@@ -1098,8 +1098,12 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         datos["franja"] = [[r, list(ss.get(k) or [])] for r, k in (
             ("Canales", "ventas_graf_filtro_canal"), ("Servicios", "ventas_graf_filtro_serv"))]
         # «Cuánto se vendió»: abre en toda la venta.
-        datos["alcance"] = ventas_alcance.datos(datos["grupos"], abre=ventas_alcance.TODA)
-        datos["alcance_pedido"] = ss.get(K_ALCANCE)
+        # Un enlace de Costos trae su «Como en Costos»: las casillas de allá.
+        pedido = ss.get(K_ALCANCE)
+        extra = [[ventas_alcance.COMO_COSTOS, pedido["lista"]]] if pedido else None
+        datos["alcance"] = ventas_alcance.datos(datos["grupos"], abre=ventas_alcance.TODA,
+                                                extra=extra)
+        datos["alcance_pedido"] = pedido
         _PIEZA(key=_K_PIEZA, data=datos, on_lineas_change=_al_pedir_lineas, width="stretch")
         pedido = st.session_state.get(_K_PEDIDO)
         if pedido and pedido.get("sello") == sello:
