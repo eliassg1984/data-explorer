@@ -385,6 +385,9 @@ igual([float(x) for x in _m["Alimentos"]], [500.0, 400.0, 300.0],
 igual(float(_m.drop(columns="Alimentos").to_numpy().sum()), 0.0, "Mayta: sólo Alimentos")
 _s2, _m2, _o2 = cv._mayta({}, pd.DataFrame(), _cl)
 igual(_o2, ["", "", ""], "Mayta: sin nota ni factura no hay salida")
+_enl = (RAIZ / "costos_enlaces.py").read_text(encoding="utf-8")
+ok('_lista(params, "extras", cv.SUMABLES)' in _enl and cv.SUMABLES == ("Eventos",),
+   "Mayta: el enlace a Ventas no puede pedir Venta interna")
 ok("Venta interna" not in D["venta_extra"] and "mayta_origen" in D,
    "Mayta: armar no suma la Venta interna a la venta y dice el origen")
 _src = (RAIZ / "costo_ventas.py").read_text(encoding="utf-8")

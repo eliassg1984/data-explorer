@@ -140,6 +140,8 @@ MAYTA = "Mayta"
 """La salida que junta lo que va a Mayta (`_mayta`, regla #756)."""
 _DESPACHO_MAYTA = "DESPACHO MAYTA"
 _VENTA_INTERNA = "Venta interna"
+SUMABLES = tuple(g for g in GRUPOS_APARTE.values() if g != _VENTA_INTERNA)
+"""Lo que la pantalla puede sumar a la venta: sólo Eventos (#756)."""
 _TIPOS_FUERA = {"", "---", "NAN", "NONE"}
 
 
@@ -554,7 +556,7 @@ def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave,
         sal[MAYTA] = mayta
     orden = sorted(sal, key=lambda t: (t != BAJAS, -float(sal[t].to_numpy().sum())))
     # Eventos es lo único que se suma a la venta: lo de Mayta ya va arriba.
-    aparte = [g for g in GRUPOS_APARTE.values() if g != _VENTA_INTERNA]
+    aparte = list(SUMABLES)
     return {
         "filas": {
             "inv_inicial": serie(inv_ini),

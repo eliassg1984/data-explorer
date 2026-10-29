@@ -93,8 +93,16 @@ def datos(grupos, subs=None, abre=TODA, extra=None):
         [CARTA_EVENTOS, lista(lambda g: bloque(g) in (CARTA, EVENTOS))],
         [SOLO_CARTA, lista(lambda g: bloque(g) == CARTA)],
     ]
+    # Un atajo de un pedido igual a uno fijo no se agrega: dos fichas con
+    # lo mismo y distinto nombre confunden, y el botón ya dice cuál es.
+    vistos = [None if l is None else sorted(map(tuple, l)) for _, l in atajos]
     for nombre, pedida in extra or ():
-        atajos.append([nombre, [[str(x[0]).strip(), *x[1:]] for x in pedida or ()]])
+        l = [[str(x[0]).strip(), *x[1:]] for x in pedida or ()]
+        clave = sorted(map(tuple, (x for x in l if x[0] in gs)))
+        if clave == sorted(map(tuple, (x for x in lista(lambda g: True)))):
+            continue
+        if clave not in vistos:
+            atajos.append([nombre, l])
     if abre not in {a[0] for a in atajos}:
         abre = TODA
     return {"bloques": bloques, "subs": sub_de, "atajos": atajos, "abre": abre}

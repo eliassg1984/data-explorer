@@ -130,7 +130,9 @@ def aplicar_contexto(reporte, df=None):
         return
 
     familias = _lista(params, "familias", cv.CUBETAS)
-    extras = _lista(params, "extras", cv.GRUPOS_APARTE.values())
+    # Sólo Eventos: desde la #756 Costos no suma la Venta interna, y un
+    # enlace viejo (o una casilla recordada) que la pida no la cuela.
+    extras = _lista(params, "extras", cv.SUMABLES)
     # Costos asigna estos dos grupos a Alimentos: al mirar sólo bebidas
     # o vinos, su venta tampoco debe aparecer en la pestaña de origen.
     if "Alimentos" not in familias:

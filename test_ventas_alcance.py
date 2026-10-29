@@ -56,6 +56,11 @@ class LosBloques(unittest.TestCase):
         self.assertNotIn(va.COMO_COSTOS, at)
         B = va.datos(_GRUPOS, extra=[[va.COMO_COSTOS, [["Alimentos"], [" Eventos"]]]])
         self.assertEqual(B["atajos"][-1], [va.COMO_COSTOS, [["Alimentos"], ["Eventos"]]])
+        # Igual a un atajo fijo (lo normal desde la #756: carta + Eventos),
+        # no se repite con otro nombre.
+        carta_ev = [[g] for g in _GRUPOS if va.bloque(g) in (va.CARTA, va.EVENTOS)]
+        C = va.datos(_GRUPOS, extra=[[va.COMO_COSTOS, carta_ev]])
+        self.assertNotIn(va.COMO_COSTOS, [n for n, _ in C["atajos"]])
 
     def test_abre_y_subgrupos(self):
         A = va.datos(["Alimentos", "Eventos", None, " "], subs={"Alimentos": ["Postres", "Fondos", None]},
