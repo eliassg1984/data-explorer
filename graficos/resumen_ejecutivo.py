@@ -330,8 +330,9 @@ def _portada(df_f, nombre_reporte, ajuste):
     publicar_contexto_ia(nombre_reporte, pd.DataFrame(
         hechos, columns=["PERIODO", "INDICADOR", "VALOR"]), {
             "alcance": "Ventas: todos los grupos, día del turno. Costos: cuatro "
-                       "familias, incluye Eventos, excluye Venta interna; todas "
-                       "las salidas salvo bajas se deducen, como el default de Costos. "
+                       "familias, incluye Eventos, excluye Venta interna (lo que va a "
+                       "Mayta se descuenta una vez como salida); todas las "
+                       "salidas salvo bajas se deducen, como el default de Costos. "
                        "Presupuesto: el neto cargado en Costos, todos los servicios.",
             "rango": (ini.isoformat(), fin.isoformat()),
         })

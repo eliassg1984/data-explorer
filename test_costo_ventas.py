@@ -370,6 +370,28 @@ igual(K["salidas"]["Comida Personal"]["Alimentos"][-2:], [100.0, 0.0], "salidas 
 igual(K["filas"]["venta"]["Bebidas"][-2:], [10.0, 0.0], "venta por quincena")
 igual(K["inventario"], "kardex", "la quincena dice de dónde sale su inventario")
 
+# ── Lo que va a Mayta: una vez, como salida (regla #756) ─────────────────
+# Tres períodos, uno por cada manera en que se registró: sólo la factura de
+# Venta interna (con costo); la factura sin costo y la nota «Despacho
+# Mayta»; y las dos con costo, sobre los mismos productos.
+_cl = [pd.Period("2026-07", "M"), pd.Period("2026-08", "M"), pd.Period("2026-09", "M")]
+_nota = pd.DataFrame({"Alimentos": [0.0, 400.0, 300.0]}, index=_cl)
+_vi = pd.DataFrame({"Venta interna": [500.0, 0.0, 280.0], "Eventos": [9.0, 9.0, 9.0]}, index=_cl)
+_sal, _m, _org = cv._mayta({"Bajas": _nota * 0 + 1, "Despacho Mayta": _nota}, _vi, _cl)
+ok("Despacho Mayta" not in _sal and "Bajas" in _sal, "Mayta: la nota sale de las salidas sueltas")
+igual(_org, ["factura", "nota", "nota"], "Mayta: el origen de cada período")
+igual([float(x) for x in _m["Alimentos"]], [500.0, 400.0, 300.0],
+      "Mayta: la factura si no hay nota; la nota si hay (una vez, no 300 + 280)")
+igual(float(_m.drop(columns="Alimentos").to_numpy().sum()), 0.0, "Mayta: sólo Alimentos")
+_s2, _m2, _o2 = cv._mayta({}, pd.DataFrame(), _cl)
+igual(_o2, ["", "", ""], "Mayta: sin nota ni factura no hay salida")
+ok("Venta interna" not in D["venta_extra"] and "mayta_origen" in D,
+   "Mayta: armar no suma la Venta interna a la venta y dice el origen")
+_src = (RAIZ / "costo_ventas.py").read_text(encoding="utf-8")
+ok('if g != _VENTA_INTERNA' in _src, "Mayta: la Venta interna ya no viaja como venta aparte")
+_js = (RAIZ / "graficos" / "costos_tabla.js").read_text(encoding="utf-8")
+ok("const EXTRAS = ['Eventos'];" in _js, "Mayta: la pantalla sólo ofrece sumar Eventos")
+
 # ── Cableado ─────────────────────────────────────────────────────────────
 import graficos  # noqa: E402
 import data      # noqa: E402

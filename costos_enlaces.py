@@ -47,8 +47,11 @@ def enlaces(granos):
             agregar("c", "Compras", "compras_por_periodo", "Compras por período")
             for tipo in datos.get("salidas", {}):
                 fila = "bajas" if tipo == cv.BAJAS else f"s_{tipo}"
+                # «Mayta» junta la nota y la factura (#756): el enlace va a
+                # sus notas, que son las que tiene Movimientos.
                 agregar(fila, "Movimientos", "salidas_por_periodo",
-                        f"Salidas · {tipo}", tipo_salida=tipo)
+                        f"Salidas · {tipo}",
+                        tipo_salida="Despacho Mayta" if tipo == cv.MAYTA else tipo)
             for fila, fecha in (("ii", ini - dt.timedelta(days=1)), ("fi", fin)):
                 if grano == "mes":
                     agregar(fila, "Ajuste de Inventario", "diferencias",

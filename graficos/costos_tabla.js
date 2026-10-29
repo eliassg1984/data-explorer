@@ -2,7 +2,7 @@
 //
 // La monta graficos/costos.py con st.components.v2 (sin iframe, estilos en
 // un shadow root). Todo lo que pasa acá adentro es del navegador: elegir
-// familias, sumar Eventos y Venta interna, añadir salidas, abrir una fila.
+// familias, sumar Eventos, añadir salidas, abrir una fila.
 // Nada vuelve a Python: la tabla no recalcula la página.
 //
 // Python manda en `data.granos` un grano por clave (mes, quincena, semana),
@@ -18,7 +18,11 @@ const VENTANA = 6;
 const BAJAS = 'Bajas';
 // Lo que gasta inventario sin ser la venta del reporte y se puede sumar a la
 // venta de Alimentos (las claves de `venta_extra` en costo_ventas.py).
-const EXTRAS = ['Eventos', 'Venta interna'];
+// Venta interna ya no: lo que va a Mayta es la salida «Mayta», contada una
+// vez (regla #756). Una casilla vieja recordada en el navegador se ignora.
+const EXTRAS = ['Eventos'];
+const MAYTA = 'Mayta';
+const nomSalida = (t) => (t === MAYTA ? 'Mayta (nota o factura)' : t);
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function leer(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (_) { return def; } }
@@ -107,7 +111,7 @@ function filas(st) {
       { k: 'operativo', nom: 'Consumo operativo valorizado', signo: '=', tipo: 'suma', sentido: 'mal', hijo: true, tasa: 'operativo' },
       { k: 'nv', nom: 'Consumos no vendidos', nota: 'salidas seleccionadas y cortesías; descuentos separados', signo: '−', tipo: 'suma', sentido: 'mal', grupo: true });
     if (st.grupoAbierto) {
-      for (const t of st.agregadas) f.push({ k: `s_${t}`, nom: t, tipo: 'suma', sentido: 'mal', quitar: t, hijo: true });
+      for (const t of st.agregadas) f.push({ k: `s_${t}`, nom: nomSalida(t), tipo: 'suma', sentido: 'mal', quitar: t, hijo: true });
       f.push({ agregar: true }, { k: 'cort', nom: 'Costo de cortesías', tipo: 'suma', sentido: 'mal', hijo: true });
     }
   }
@@ -483,6 +487,10 @@ function notas(st, data, w) {
   const inventario = st.grano === 'mes'
     ? 'Inventario contado: último cierre de cada área en su mes operativo, valorizado como stock declarado × precio promedio. Los cierres registrados del 1 al 7 inclusive se asignan al mes anterior.'
     : 'Inventario del kardex al final del último día de cada período, sólo de productos activos, según la regla del Histórico del Almacén. El ajuste de un cierre cae en el período en que se registró: las semanas o quincenas pueden no sumar el resultado mensual basado en conteos.';
+  // Lo que va a Mayta, una vez (regla #756): de dónde salió en la ventana.
+  const org = cortar(data.mayta_origen || [], w), np_ = org.filter((x) => x === 'nota').length, nf = org.filter((x) => x === 'factura').length;
+  const mayta = 'Chorizo, chistorra y manteca de pato que se envían a Mayta. Es una transferencia casi a costo: no entra en la venta y se descuenta una sola vez como salida «Mayta». En cada período se toma la nota «Despacho Mayta» si hay; si no, el costo de la factura de Venta interna. Antes, marcar Venta interna y restar la nota la contaba dos veces.'
+    + (np_ || nf ? ` En esta ventana: ${np_} ${np_ === 1 ? 'período' : 'períodos'} por nota y ${nf} por factura.` : '');
   const extras = EXTRAS.map((g) => {
     const incluido = st.fams.has('Alimentos') && st.extra.has(g);
     const estado = g === 'Eventos' ? (incluido ? 'incluidos' : 'excluidos') : (incluido ? 'incluida' : 'excluida');
@@ -490,7 +498,8 @@ function notas(st, data, w) {
   }).join('');
   return {
     calculo: `<dl>
-    <dt>Venta neta documentada</dt><dd>Comprobantes pagados y por cobrar − notas de crédito, sin IGV ni recargo; excluye cortesías y anulados. Se agrupa por día contable del turno de caja, no por fecha del cobro. La selección de familias y las casillas de Eventos y Venta interna determinan el alcance.</dd>
+    <dt>Venta neta documentada</dt><dd>Comprobantes pagados y por cobrar − notas de crédito, sin IGV ni recargo; excluye cortesías y anulados. Se agrupa por día contable del turno de caja, no por fecha del cobro. La selección de familias y la casilla de Eventos determinan el alcance. La Venta interna no entra: es lo que va a Mayta, y se cuenta como salida.</dd>
+    <dt>Lo que va a Mayta</dt><dd>${mayta}</dd>
     <dt>Inventario inicial y final</dt><dd>${inventario} El inicial de un período es el final del anterior. El total de la ventana muestra el primer inventario inicial y el último final, sin sumarlos.</dd>
     <dt>Compras y salidas</dt><dd>Compras a valor neto, sin IGV, con las notas de crédito de proveedores restadas, por fecha del documento. Notas de salida procesadas a valor neto, por fecha de registro; las registradas entre el día 1 y la apertura del conteo son digitación atrasada y cuentan en el mes que cerró (el conteo se hace el día 1 por la mañana). Todas las salidas que no son bajas entran como deducción inicialmente; la × permite quitar una.</dd>
     <dt>Consumo operativo valorizado</dt><dd>Inventario inicial + compras − inventario final. Es la variación valorizada disponible para analizar el consumo del período; incluye los efectos de registros, ajustes de inventario y valorización.</dd>

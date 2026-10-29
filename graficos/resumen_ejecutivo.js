@@ -85,7 +85,7 @@ function indicadores(d) {
      l2: c ? `Sistema ${pct(c.porcentaje_pos)} · sin explicar ${pct(c.porcentaje_faltante)}`
            : (d.previo ? `${d.previo_corto}: ${pct(d.previo.porcentaje)}` : ''),
      serie: H.map(x => x.costo?.real ?? null), serie2: H.map(x => x.costo?.pos ?? null),
-     tip: 'Real: inventario inicial + compras − final, sobre la venta de Costos (Alimentos, Bebidas, Vinos y Envases; con Eventos, sin Venta interna). Sistema: el costo de las recetas del POS sobre la misma venta. La distancia la explica el puente de abajo.'},
+     tip: 'Real: inventario inicial + compras − final, sobre la venta de Costos (Alimentos, Bebidas, Vinos y Envases; con Eventos; lo que va a Mayta, como salida y no como venta). Sistema: el costo de las recetas del POS sobre la misma venta. La distancia la explica el puente de abajo.'},
   ];
   return lista;
 }

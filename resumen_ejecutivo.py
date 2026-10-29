@@ -146,7 +146,8 @@ def ventas_del_rango(df, ini, fin):
 
 
 def costo_del_mes(datos, mes):
-    """Mismos defaults que Costos: 4 familias, Eventos sí, Venta interna no.
+    """Mismos defaults que Costos: 4 familias, Eventos sí, Venta interna no
+    (lo que va a Mayta llega como la salida «Mayta», regla #756).
 
     Las bajas siguen dentro del consumo carta. Cortesías y las demás
     salidas se restan; los descuentos son referencia comercial. No se utiliza

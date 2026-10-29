@@ -1452,7 +1452,11 @@ cargado, antes de filtrar estados y sin XML/API en vivo. La cobertura es
 importes positivos pendientes se separan. No modifica compras ni consumo,
 no certifica recepción física y no interpreta falta de registro como cero.
 
-Eventos se suma a Alimentos por defecto; Venta interna no. Familias del
+Eventos se suma a Alimentos por defecto. **La Venta interna no es venta del
+reporte** (regla #756): lo que va a Mayta se cuenta UNA vez, como la salida
+«Mayta» —la nota «Despacho Mayta» del período si hay, si no el costo de la
+factura—; con la casilla de antes se contaba dos veces cuando había las dos
+(`costo_ventas._mayta`). Familias del
 Almacén y grupos de venta son clasificaciones distintas. Envases no tiene
 venta propia en esta agrupación. Los convenios bancarios se siguen editando
 en Costos y se guardan en R2 (`convenios_descuento.py`, regla #665); Mix de

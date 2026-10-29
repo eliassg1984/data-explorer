@@ -69,10 +69,17 @@ calientes) y Vinos. Todo se agrupa en cuatro CUBETAS para que la pantalla
 filtre de a familia: Alimentos, Bebidas, Vinos y Envases (que no tiene
 venta: el POS no costea los envases).
 
-EVENTOS Y VENTA INTERNA gastan inventario y no están en la venta de la
-definición. Viajan aparte (`venta_extra`, `costo_extra`) y la pantalla los
-suma a Alimentos con una casilla cada uno: Eventos marcada por defecto, Venta
-interna no.
+EVENTOS gasta inventario y no está en la venta de la definición. Viaja
+aparte (`venta_extra`, `costo_extra`) y la pantalla lo suma a Alimentos con
+una casilla, marcada por defecto.
+
+LO QUE VA A MAYTA (la Venta interna) NO ES VENTA DEL REPORTE: es una
+transferencia casi a costo, y se cuenta UNA vez, como salida (regla #756).
+Se registró de tres maneras —sólo la factura de Venta interna con costo;
+la factura sin costo y la nota «Despacho Mayta»; las dos con costo sobre los
+mismos productos—, y la casilla de antes contaba dos veces el tercer caso.
+`_mayta` arma la salida «Mayta»: la nota del período si hay, y si no, el
+costo de la factura (a Alimentos: chorizo, chistorra, manteca de pato).
 
 MES DESDE 2024, con dos cierres y cobertura de ventas. Las observaciones
 de valorización se calculan en costos_calidad. Semana y quincena conservan
@@ -88,14 +95,15 @@ import pandas as pd
 
 from cortes import MESES_ABR_ES, fecha_operativa
 
-VERSION = 7
+VERSION = 8
 """Subirla cuando cambie QUÉ se calcula. 2: semanas y quincenas. 3: los
 rótulos de los períodos sin «cierre»/«kardex» (lo dice la cabecera). 4: el
 costo de descuentos (regla #661). 5: lo que devuelve el banco de un
 convenio (regla #665). 6: conciliación con costo completo, histórico mensual
 desde 2024 y observaciones de valorización (regla #676). 7: el cierre
 físico, las notas digitadas hasta la apertura del conteo en el mes que
-cerró (regla #754)."""
+cerró (regla #754). 8: lo de Mayta una vez, como salida, y fuera de la
+venta (regla #756)."""
 
 DESDE = pd.Period("2025-10", freq="M")
 """Inicio del histórico de SEMANA/QUINCENA, basado en Kardex."""
@@ -128,6 +136,10 @@ GRUPOS_APARTE = {"EVENTOS": "Eventos", "VENTA INTERNA": "Venta interna"}
 """Grupos que gastan inventario y no son la venta: viajan aparte."""
 
 BAJAS = "Bajas"
+MAYTA = "Mayta"
+"""La salida que junta lo que va a Mayta (`_mayta`, regla #756)."""
+_DESPACHO_MAYTA = "DESPACHO MAYTA"
+_VENTA_INTERNA = "Venta interna"
 _TIPOS_FUERA = {"", "---", "NAN", "NONE"}
 
 
@@ -495,6 +507,32 @@ def meses_del_reporte(inv):
 
 # ── La tabla ─────────────────────────────────────────────────────────────
 
+def _mayta(salidas, costo_vi, claves):
+    """Lo que va a Mayta, UNA vez, como salida (regla #756).
+
+    `salidas` es `salidas_por` (con la nota «Despacho Mayta» si la hubo) y
+    `costo_vi` el costo según el POS de la Venta interna por período. Por
+    período: la nota si suma algo; si no, el costo de la factura, en
+    Alimentos. Devuelve `(salidas sin la nota, DataFrame de Mayta, origen)`
+    con `origen` por período: «nota», «factura» o «»."""
+    salidas = dict(salidas)
+    clave_nota = next((t for t in salidas if _norm(t) == _DESPACHO_MAYTA), None)
+    nota = salidas.pop(clave_nota) if clave_nota else pd.DataFrame()
+    nota = nota.reindex(index=claves, columns=list(CUBETAS)).fillna(0.0)
+    vi = pd.Series(0.0, index=claves)
+    if costo_vi is not None and not costo_vi.empty and _VENTA_INTERNA in costo_vi.columns:
+        vi = costo_vi[_VENTA_INTERNA].reindex(claves).fillna(0.0)
+    hay_nota = nota.abs().sum(axis=1) > 0.5
+    m = nota.copy()
+    sin_nota = ~hay_nota
+    m.loc[sin_nota, :] = 0.0
+    m.loc[sin_nota, "Alimentos"] = vi[sin_nota]
+    origen = ["nota" if n else ("factura" if abs(f) > 0.5 else "")
+              for n, f in zip(hay_nota, vi)]
+    return salidas, m, origen
+
+
+
 def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave,
            convenios=None):
     """Lo común a los tres granos: las series de cada fila en el orden de
@@ -511,6 +549,12 @@ def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave,
             return [0.0] * len(claves)
         return [round(float(x), 2) for x in df[col].reindex(claves).fillna(0.0)]
 
+    sal, mayta, origen = _mayta(salidas_por(salidas, clave), c_ap, claves)
+    if any(origen):
+        sal[MAYTA] = mayta
+    orden = sorted(sal, key=lambda t: (t != BAJAS, -float(sal[t].to_numpy().sum())))
+    # Eventos es lo único que se suma a la venta: lo de Mayta ya va arriba.
+    aparte = [g for g in GRUPOS_APARTE.values() if g != _VENTA_INTERNA]
     return {
         "filas": {
             "inv_inicial": serie(inv_ini),
@@ -521,10 +565,11 @@ def _tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia, clave,
             "cortesias": serie(cortesias),
             "descuentos": serie(descuentos),
         },
-        "salidas": {t: serie(df) for t, df in salidas_por(salidas, clave).items()},
-        "venta_extra": {g: plana(v_ap, g) for g in GRUPOS_APARTE.values()},
-        "costo_extra": {g: plana(c_ap, g) for g in GRUPOS_APARTE.values()},
-        "descuento_extra": {g: plana(d_ap, g) for g in GRUPOS_APARTE.values()},
+        "salidas": {t: serie(sal[t]) for t in orden},
+        "mayta_origen": origen,
+        "venta_extra": {g: plana(v_ap, g) for g in aparte},
+        "costo_extra": {g: plana(c_ap, g) for g in aparte},
+        "descuento_extra": {g: plana(d_ap, g) for g in aparte},
     }
 
 

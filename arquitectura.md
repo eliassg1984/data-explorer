@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-755 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+756 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (248)
 
@@ -1372,11 +1372,12 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#654** — «Análisis de diferencias» reconoce lo descontado desde un ÁREA a la que la receta ya no apunta
 - **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 
-**Sin tema asignado** (3)
+**Sin tema asignado** (4)
 
 - **#300** — Un riel que PINTA casilleros enteros dice de más cuando el rango es más fino que su escala:…
 - **#547** — Un plato de cortesía cobrado a S/ 0 no tiene neto cero: tiene un RESIDUO, y dividir por él da…
 - **#735** — Salidas por Área es una pieza propia de extremo a extremo, con cinco cuadros y la nota completa
+- **#756** — Costos: lo que va a Mayta se cuenta UNA vez, como salida, y no es venta
 
 <!-- INDICE:FIN -->
 
@@ -57343,8 +57344,8 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        pero Costos suma Venta interna sólo con su casilla marcada, y viene
        apagada. Ahora lo trae el enlace de Costos con las casillas de ese
        momento (`ventas_alcance.datos(extra=…)`).
-     · **Venta interna en Costos, medido** (a pedido, 2026-10-29; la
-       regla de Costos está SIN DECIDIR): lo que va a Mayta (chorizo y
+     · **Venta interna en Costos, medido** (a pedido, 2026-10-29; resuelto
+       en la #756): lo que va a Mayta (chorizo y
        chistorra de pato, alguna manteca y vino) se registró de tres
        maneras. Hasta jun 2025, sólo la factura de Venta interna, con
        costo. Nov 2025–mar 2026, factura SIN costo (S/ 0–390) y nota
@@ -57379,6 +57380,40 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      piezas, la franja, el enlace, y en Chromium la cuenta del módulo y
      Venta por Periodo llegando desde Costos). (2026-10-29.)
 
+756. **Costos: lo que va a Mayta se cuenta UNA vez, como salida, y no es
+     venta** (`costo_ventas._mayta`, `MAYTA`, `VERSION` 8; la casilla
+     «Venta interna» de `graficos/costos_tabla.js` se fue; el enlace de la
+     fila va a las notas «Despacho Mayta» en `costos_enlaces.enlaces`). A
+     pedido (2026-10-29), después de medirlo en la #755.
+     · **El problema**: el envío a Mayta (chorizo, chistorra y manteca de
+       pato; algún vino) se registró de tres maneras: sólo la factura de
+       Venta interna con costo (hasta jun 2025 y desde ago 2026); la
+       factura SIN costo y la nota «Despacho Mayta» con el costo (nov
+       2025–mar 2026); y las DOS con costo sobre los mismos productos
+       (jul–set 2025, abr–jul 2026). Con la casilla apagada, lo sin
+       explicar subía el costo del envío en los meses de sólo factura (set
+       26: +S/ 10.053); marcada, lo restaba dos veces en los meses con las
+       dos (12 meses a set 26: S/ 19.300 escondidos).
+     · **La regla**: la Venta interna sale de la venta del reporte (es una
+       transferencia casi a costo y deformaba el %), y la salida «Mayta»
+       toma por período la nota si suma algo y, si no, el costo de la
+       factura, en Alimentos. Va con las demás salidas (se resta por
+       defecto; la × la quita) y la portada y Pendientes la heredan por
+       `costo_del_mes`. La casilla vieja recordada en el navegador se
+       ignora.
+     · **Medido**: con los defaults, el sin explicar de cada mes es el
+       proyectado en la #755 al céntimo (set 26 −S/ 1.730, abr 26
+       S/ 12.798; 12 meses S/ 154.659 contra 168.779 y 135.384 de las dos
+       reglas viejas). La venta de set 26 baja de S/ 335.049 a 325.180.
+     · **Lo que no resuelve**: el desfase de meses entre la nota (cierre
+       físico) y la factura (por tanda): mar+abr 2026 casi cuadran
+       (S/ 9.556 contra 10.324) pero abril solo no. Emparejar por producto
+       lo afinaría. Julio 2026 sigue en S/ 40.394 (19 %) con cualquier
+       regla: no es Mayta.
+     Lo vigila `test_costo_ventas.py` (los tres casos de `_mayta`, que
+     `armar` no sume la Venta interna y que la pantalla sólo ofrezca
+     Eventos). (2026-10-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57391,7 +57426,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#755**; la próxima toma el número siguiente.
+> última regla es la **#756**; la próxima toma el número siguiente.
 
 >
 
