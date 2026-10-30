@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-759 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+760 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (248)
 
@@ -964,7 +964,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#752** — El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre después; lo digitado hasta la…
 - **#753** — Las compras del mes nuevo procesadas antes de la apertura van a su mes: compras.parquet trae…
 
-**SUNAT y SIRE** (76)
+**SUNAT y SIRE** (77)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1042,6 +1042,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#741** — Documentos SUNAT también necesita una pieza para su tabla, además de las dos vistas de resumen
 - **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
 - **#759** — ¿La app tiene todo lo de SUNAT? Una vista para contestarlo, y un mes que falla ya no desaparece
+- **#760** — Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían sin convertir
 
 **Fechas, rangos y cortes** (24)
 
@@ -1121,7 +1122,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (232)
+**Decisiones de diseño y UX** (233)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1355,6 +1356,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#755** — Ventas: el filtro de grupo es de CADA TARJETA, no de la franja
 - **#757** — Costos dice qué es su venta y qué queda fuera, con su monto
 - **#758** — Venta por Periodo no se aprieta: indicadores que eligen, comparación elegible y cierre
+- **#760** — Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían sin convertir
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57526,6 +57528,42 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      en `data` de una pieza revienta `JSON.parse` a toda pantalla. Lo vigila
      `test_sunat_control.py`. (2026-10-30.)
 
+760. **Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían
+     sin convertir.** A pedido, sobre un boceto («no se vea apretado como un mapa»).
+     Las tres vistas pasan de filas que se abren por dentro a lista a la izquierda y
+     ficha del elegido al costado, que scrollean por dentro.
+
+     **Cruce.** Abre en Mercadería, no en el total: el 46 % mezcla lo que se carga
+     con lo financiero, que no se carga. Cuatro indicadores que filtran, «Contra» en
+     vez de las píldoras de años (el año por año va en la ficha) y «mes a mes» por
+     tipo (`datos_cruce`, clave `mes`). Un mes lleva a ese mes en Proveedores:
+     `destino: "prov"` en el trigger `ir`, y `K_PROV_INICIAL`. «Tipo × año» se queda,
+     a todo el ancho. Las notas de crédito en una fila van cortas: con el texto entero,
+     cada fila medía el doble y entraban tres.
+
+     **Documentos.** Seis columnas y «Ampliar» trae las once de antes. Los estados son
+     botones con su cifra. «Mayor dif.» reemplaza a la brecha del total: 64 de 194
+     diferencias tenían el total igual y decían S/ 0,00. La ficha compara SUNAT contra
+     Almacén, dice una causa probable (`sunat_control.causa_documento`), y lista las
+     líneas de los dos lados; «Lado a lado» las pone en una tabla.
+
+     **Las líneas se piden al elegir.** Leer un XML por fila al cargar son 4.000 GET.
+     `_montar` es un fragment con la pieza y un montaje chico (`parte: "lineas"`), así
+     que elegir no rehace la página y la tabla no se vuelve a mandar. Lo que muerde:
+     (1) el mismo `data` vuelve con cada corrida del fragment, y la pieza no se rehace si
+     la clave es la misma; (2) un trigger NO sobrevive a la corrida que sigue: una acción
+     dentro del fragment hace `st.rerun()` y el cuerpo ya no la ve, así que se deja en
+     `_K_ACCION`; (3) `st.fragment` en una prueba sin runtime no corre: por eso existe
+     `_montar_cuerpo`. La clave de la causa sale de los montos, porque filtra la lista, y
+     la frase se afina con el XML; sin él, otra tasa de IGV sólo se reconoce en 10 o 10,5 %:
+     una mezcla con exonerados también da menos de 18 % y no es otra tasa.
+
+     **Dólares.** 11 de 17.392 documentos llegan con moneda USD y tipo de cambio 1 (9 en
+     jul-ago 2025): en dólares y sumados como soles. `sunat.convertir_sin_cambio` usa el
+     cambio de lo presentado, el de otros documentos del día o el del día más cercano, y
+     marca `cambio_estimado`. Es idempotente. Corre al subir el registro y sobre la cola en
+     vivo. No afecta Compras, que sale del Almacén. (2026-10-30.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57538,7 +57576,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#759**; la próxima toma el número siguiente.
+> última regla es la **#760**; la próxima toma el número siguiente.
 
 >
 

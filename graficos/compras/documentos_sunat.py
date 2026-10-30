@@ -1774,7 +1774,7 @@ def _tabla_detalle(lineas, doc=None):
 
 _COLS_LINEA_PARQUET = ["COD_PRODUCTO", "NOMBRE_PRODUCTO", "CANTIDAD_COMPRA",
                        "UNIDAD_DE_INGRESO", "PRECIO_UNIT", "VALOR_COMPRA",
-                       "FECHA_EMISION_DOC"]
+                       "FECHA_EMISION_DOC", "FECHA_PROCESO_DOC"]
 
 
 def _lineas_parquet_del_documento(d, doc):
@@ -4165,7 +4165,8 @@ def _vista_resumen(vista, censo, d, col_fecha, f_ini, f_fin, prov, tablas):
     rango = _rotulo_rango(f_ini, f_fin)
     if vista == sv.VISTA_PROV:
         series = sv.series_proveedores(sunat._registro_de_parquet(), f_fin)
-        sv.dibujar(sv.datos_proveedores(censo, series, f_fin), "sunat_pieza_prov")
+        sv.dibujar(sv.datos_proveedores(censo, series, f_fin)
+                   | {"inicial": st.session_state.get(sv.K_PROV_INICIAL)}, "sunat_pieza_prov")
         return
     # Lo que falta cargar de los últimos días sólo cuenta si el período
     # llega hasta ellos: en un rango cerrado hace meses no es demora.

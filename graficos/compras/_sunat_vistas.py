@@ -52,6 +52,10 @@ VISTAS = (VISTA_CRUCE, VISTA_PROV, VISTA_DOCS, VISTA_CONTROL)
 K_VISTA = "sunat_graf_tipo"
 """El `state_key` del rail del reporte (`sunat_reporte.py`)."""
 
+K_PROV_INICIAL = "sunat_prov_inicial"
+"""A qué fila abre «Proveedores y fechas» al llegar del «mes a mes» del Cruce:
+`{"agr", "k", "t"}`."""
+
 K_LLEGADA = "sunat_llegada"
 """Lo que la tabla de «Documentos» filtra al llegar desde un resumen:
 `{"desde", "tipo", "estados", "fini", "ffin", "texto"}`. No es un widget:
@@ -241,8 +245,16 @@ def datos_cruce(censo, previos=(), rango="", recientes=None, etiqueta=""):
         bx = _base(df)
         anios.append({"id": etiqueta, "nombre": etiqueta, "anio": etiqueta, "sub": r, "f": _fid(bx),
                       "det": _tipos_de(bx), "actual": False})
+    # «Mes a mes»: de todo y de cada tipo, con los mismos tramos que las barras.
+    bm = b[b["fe"].notna()].assign(m=b["fe"].dt.to_period("M").astype(str))
+    meses_t = {}
+    for (t_, m_), f_ in _fid_por(bm, ["tipo", "m"]).items():
+        meses_t.setdefault(t_, {})[m_] = f_
+    meses_t["__total"] = _fid_por(bm, ["m"])
+    mes = {t_: [{"k": m_, "f": fs_[m_]} for m_ in sorted(fs_)] for t_, fs_ in meses_t.items()}
+
     return {
-        "vista": "cruce", "rango": rango,
+        "vista": "cruce", "rango": rango, "mes": mes,
         "anio_prev": prev[0] if prev else None,
         "total": total, "tipos": tipos, "anios": anios, "avisos": avisos,
         "recientes": recientes or {"doc": 0, "soles": 0.0, "dias": 7},
@@ -405,6 +417,11 @@ def _al_ir():
     if not pedido:
         return
     ss["_sunat_ir_t"] = pedido["t"]
+    # Un mes del Cruce no lleva a la tabla: lleva a ese mes en «Proveedores».
+    if pedido.get("destino") == "prov":
+        ss[K_PROV_INICIAL] = {"agr": "mes", "k": str(pedido.get("mes") or ""), "t": pedido["t"]}
+        ss[K_VISTA] = VISTA_PROV
+        return
     # `prov` se anota también: «Quitar filtro» y «← Volver» lo sueltan.
     ss[K_LLEGADA] = {k: pedido.get(k) for k in ("desde", "tipo", "estados", "fini",
                                                 "ffin", "rotulo", "prov")}

@@ -3412,7 +3412,7 @@ CSS = """    /* ================================================================
     .st-key-ajuste_graf_card_izq_ventas_resumen { position: relative; }
     /* Los montajes chicos de la pieza sólo traen datos (reglas #714 y #758):
        en el flujo, la tarjeta les pagaba un gap y se deslizaba. */
-    .st-key-vt_periodo_lineas, .st-key-vt_periodo_historia {
+    .st-key-vt_periodo_lineas, .st-key-vt_periodo_historia, .st-key-sunat_documentos_pieza_lineas {
         position: absolute !important; width: 0 !important; height: 0 !important; overflow: hidden !important;
     }
     .st-key-vt_periodo_fecha {

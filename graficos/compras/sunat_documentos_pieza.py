@@ -6,6 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 import tema
+from graficos.base import una_vez_por_corrida
 import tipo_compra
 from . import documentos_sunat as ds
 from . import _sunat_vistas as sv
@@ -13,6 +14,10 @@ from . import sunat_documentos_datos as datos
 
 _DIR=Path(__file__).parent
 _KEY='sunat_documentos_pieza'
+_KEY_LINEAS=_KEY+'_lineas'
+_K_LINEAS='_sunat_docs_lineas'
+_K_LINEAS_VISTO='_sunat_docs_lineas_visto'
+_K_ACCION='_sunat_docs_accion'
 
 
 def validar_accion(a,P):
@@ -51,6 +56,48 @@ def _pieza():
 
 
 _PIEZA=_pieza()
+
+
+def validar_lineas(a,P):
+    """El id del pedido de líneas, si es de esta tabla."""
+    if not isinstance(a,dict) or a.get('sello')!=P['sello'] or not isinstance(a.get('id'),str):return None
+    return a['id'] if any(r['id']==a['id'] for r in P['filas']) else None
+
+
+def _lineas(P,vis,d,identidad):
+    r=next(r for r in P['filas'] if r['id']==identidad)
+    if r['_car']:
+        doc=ds._fila_de(vis,{'_car':r['_car']})
+        doc=doc.to_dict() if hasattr(doc,'to_dict') else dict(doc or {})
+    else:
+        raw=r['raw'];doc=dict(documento=raw.get('documento'),ruc_proveedor=raw.get('ruc_sistema'),fecha_emision=raw.get('fecha_emision'))
+    xml=None
+    if r['_car'] and r['XML']:
+        try:xml=ds.sunat._bytes_original(ds.sunat.claves_original(doc)[1])
+        except Exception:xml=None
+    return datos.lineas_documento(r,doc,d,xml)
+
+
+def _montar_cuerpo(P,vis,d):
+    """La pieza y su montaje chico, en un fragment: elegir una fila trae sus líneas
+    sin rehacer la página. Una acción (la ficha, ingresar, el lote) sí pide una
+    corrida completa, porque abre ventanas que viven fuera del fragment."""
+    ss=st.session_state
+    _PIEZA(key=_KEY,data=P,width='stretch',on_accion_change=lambda:None,on_lineas_change=lambda:None)
+    a=validar_accion((ss.get(_KEY) or {}).get('accion'),P)
+    if a and ss.get('_sunat_docs_atendida')!=(P['sello'],a['nonce']):
+        # El trigger no sobrevive a la corrida que sigue: se deja anotado.
+        ss[_K_ACCION]=a;st.rerun()
+    pedido=(ss.get(_KEY) or {}).get('lineas')
+    identidad=validar_lineas(pedido,P)
+    if identidad and ss.get(_K_LINEAS_VISTO)!=pedido.get('t'):
+        ss[_K_LINEAS_VISTO]=pedido.get('t')
+        ss[_K_LINEAS]=dict(id=identidad,d=_lineas(P,vis,d,identidad))
+    guardado=ss.get(_K_LINEAS)
+    if guardado:_PIEZA(key=_KEY_LINEAS,data=dict(parte='lineas',id=guardado['id'],d=guardado['d']),width='stretch')
+
+
+_montar=una_vez_por_corrida(st.fragment(_montar_cuerpo))
 
 
 def renderizar(d,col_fecha):
@@ -93,9 +140,8 @@ def renderizar(d,col_fecha):
         if cache is None or cache[0]!=firma:
             cache=(firma,datos.armar(cruce,vis,xmls,contexto));ss['_sunat_docs_datos_741']=cache
         P=dict(cache[1]);P['inicial']=dict(estado=ss.get('sunat_estado__eco') or '')
-        P['salto']=ss.get('_sunat_docs_salto',0)
-        _PIEZA(key=_KEY,data=P,width='stretch',on_accion_change=lambda:None)
-        a=validar_accion((ss.get(_KEY) or {}).get('accion'),P)
+        P['salto']=ss.get('_sunat_docs_salto',0);P['menos']=34 if llegada else 0
+        a=ss.pop(_K_ACCION,None) or validar_accion((ss.get(_KEY) or {}).get('accion'),P)
         if a and ss.get('_sunat_docs_atendida')!=(P['sello'],a['nonce']):
             ss['_sunat_docs_atendida']=(P['sello'],a['nonce'])
             if a['que']=='lote':ss['_sunat_docs_lote']=(P['sello'],a['ids']);ss[ds._K_LOTE_ABIERTO]=True
@@ -106,6 +152,7 @@ def renderizar(d,col_fecha):
                     marca=max(float(ss.get(ds._K_FICHA_PEDIDO) or 0),float(ss.get(ds._K_INGRESO_PEDIDO) or 0))+1
                     if a['que']=='ficha':ds._atender_pedido_de_ficha({'_ver':marca},doc)
                     else:ds._atender_pedido_de_ingreso({'_ing':marca},doc)
+        _montar(P,vis,d)
         elegido=ss.get('_sunat_docs_elegido')
         if elegido and elegido[0]==P['sello']:doc=_doc(P,vis,elegido[1])
         lote=ss.get('_sunat_docs_lote');ids=set(lote[1]) if lote and lote[0]==P['sello'] else set()

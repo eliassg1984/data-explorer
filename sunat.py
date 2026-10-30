@@ -306,6 +306,58 @@ def registros_a_df(registros):
     return df.sort_values("fecha_emision").reset_index(drop=True)
 
 
+_COLS_EN_MONEDA = ("base_imponible", "igv", "no_gravado", "total", "total_cp", "otros_sunat")
+
+
+def convertir_sin_cambio(df, cambios=None, referencia=None):
+    """Lleva a soles las filas en dólares que SUNAT trae con tipo de cambio 1.
+
+    El registro viene en soles (regla #313), salvo estas: la propuesta las
+    manda en dólares y con cambio 1, y `en_moneda_del_papel` las daría por
+    buenas. Medido: 11 de 17.392, 9 de ellas en jul-ago 2025, y S/ 26.337 de
+    menos. El cambio sale, en este orden, de lo presentado (`cambios`, por CAR:
+    es el del propio documento), del de otros documentos en dólares del mismo
+    día y, si no hay, del día más cercano. Sin ninguno, la fila queda como vino.
+
+    Devuelve una copia con `cambio_estimado` en las que tocó. Es idempotente:
+    una fila ya convertida no tiene cambio 1. `referencia` es otro registro de
+    donde sacar cambios: la cola en vivo son pocos días, y sus dólares pueden
+    no tener con quién compararse."""
+    if df is None or df.empty or not {"moneda", "tipo_cambio", "car"} <= set(df.columns):
+        return df
+    tc = pd.to_numeric(df["tipo_cambio"], errors="coerce").fillna(1.0)
+    malas = (df["moneda"].astype(str).str.strip() == "USD") & (tc <= 1.01)
+    if not malas.any():
+        return df
+    conocidos = [df.loc[(df["moneda"].astype(str).str.strip() == "USD") & (tc > 1.01), ["fecha_emision", "tipo_cambio"]]]
+    if referencia is not None and not referencia.empty and "tipo_cambio" in referencia.columns:
+        conocidos.append(referencia.loc[(referencia["moneda"].astype(str).str.strip() == "USD")
+                                        & (pd.to_numeric(referencia["tipo_cambio"], errors="coerce") > 1.01),
+                                        ["fecha_emision", "tipo_cambio"]])
+    k = pd.concat(conocidos, ignore_index=True)
+    k["fecha_emision"] = pd.to_datetime(k["fecha_emision"], errors="coerce").dt.normalize()
+    por_dia = k.dropna().groupby("fecha_emision")["tipo_cambio"].median().sort_index()
+    cambios = cambios or {}
+    salida = df.copy()
+    if "cambio_estimado" not in salida.columns:
+        salida["cambio_estimado"] = False
+    for i in salida.index[malas]:
+        r = salida.loc[i]
+        nuevo = cambios.get(str(r["car"]))
+        if not nuevo and not por_dia.empty and pd.notna(r["fecha_emision"]):
+            dia = pd.Timestamp(r["fecha_emision"]).normalize()
+            nuevo = (por_dia.loc[dia] if dia in por_dia.index
+                     else por_dia.iloc[abs((por_dia.index - dia).days).argmin()])
+        if not nuevo or float(nuevo) <= 1.01:
+            continue
+        for c in _COLS_EN_MONEDA:
+            if c in salida.columns and pd.notna(salida.at[i, c]):
+                salida.at[i, c] = round(float(salida.at[i, c]) * float(nuevo), 2)
+        salida.at[i, "tipo_cambio"] = float(nuevo)
+        salida.at[i, "cambio_estimado"] = True
+    return salida
+
+
 # ===========================================================================
 # CLIENTE HTTP
 # ===========================================================================
@@ -808,6 +860,7 @@ def comprobantes_rango(fecha_ini, fecha_fin, _progreso=None):
     # `concat` con un df vacío está deprecado en pandas 2.
     unido = (vivo.copy() if del_parquet.empty
              else pd.concat([del_parquet, vivo], ignore_index=True))
+    vivo = convertir_sin_cambio(vivo, referencia=df)
     # `car` es el identificador de la anotación en SUNAT y es la ÚNICA
     # clave sin colisiones: medido sobre los 16.583 comprobantes reales,
     # serie-número deja 1.422 duplicados de proveedores distintos y

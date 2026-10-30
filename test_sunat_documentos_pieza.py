@@ -62,6 +62,20 @@ class Contrato(unittest.TestCase):
         lote=dict(sello=P['sello'],nonce='2',que='lote',ids=[P['filas'][0]['id']]*2)
         self.assertEqual(pieza.validar_accion(lote,P)['ids'],[P['filas'][0]['id']]);self.assertIsNone(pieza.validar_accion(lote|{'ids':['ajeno']},P))
 
+    def test_pares_por_importe_y_validar_lineas(self):
+        lx=[dict(importe=100,igv=18),dict(importe=136.27,igv=24.53),dict(importe=5,igv=0)];la=[['A',1,'U',100,100],['B',1,'U',160.8,160.8]]
+        self.assertEqual(datos.completar_pares(lx,la,[0,None,None]),[0,1,None])
+        P=payload();i=P['filas'][0]['id']
+        self.assertEqual(pieza.validar_lineas(dict(id=i,sello=P['sello']),P),i)
+        for b in [dict(id=i,sello='viejo'),dict(id='otro',sello=P['sello']),dict(id=[i],sello=P['sello']),None]:self.assertIsNone(pieza.validar_lineas(b,P))
+
+    def test_lineas_de_un_documento_con_su_causa(self):
+        P=payload();r=next(x for x in P['filas'] if x['_car']=='car-b')
+        L=pd.DataFrame([dict(NOMBRE_PRODUCTO='Prod',CANTIDAD_COMPRA=1,UNIDAD_DE_INGRESO='UND',PRECIO_UNIT=10,VALOR_COMPRA=10,FECHA_PROCESO_DOC=pd.Timestamp('2026-01-03'))])
+        with patch.object(ds,'_lineas_parquet_del_documento',return_value=L),patch.object(ds,'_parear_lineas_sistema',return_value=[0]),patch.object(ds.sunat,'lineas_xml',return_value=[dict(descripcion='PROD',cantidad=1,unidad='u',precio_unitario=10,importe=10,igv=1.8,isc=0,igv_porcentaje=18)]):
+            d=datos.lineas_documento(r,dict(moneda='PEN'),None,b'x')
+        self.assertEqual((d['fp'],d['pa'],d['la'][0][0],d['lx'][0][0]),('03/01/2026',[0],'Prod','PROD'));self.assertTrue(d['ca']);json.dumps(d,allow_nan=False)
+
     def test_salto_externo_repetido_y_firma_publica(self):
         import inspect
         self.assertEqual(len(inspect.signature(ds.renderizar_documentos_sunat).parameters),3)
@@ -97,6 +111,7 @@ class Contrato(unittest.TestCase):
             avance=stack.enter_context(patch.object(ds,'_avance_lote_xml'))
             build=stack.enter_context(patch.object(datos,'armar',wraps=datos.armar))
             comp=stack.enter_context(patch.object(pieza,'_PIEZA'))
+            stack.enter_context(patch.object(pieza,'_montar',pieza._montar_cuerpo))
             enviar=stack.enter_context(patch.object(ds,'_pedir_lote'))
             abrir=stack.enter_context(patch.object(ds,'_atender_pedido_de_ficha'))
             pieza.renderizar(c,'FECHA');P=comp.call_args.kwargs['data'];ss[pieza._KEY]={'accion':dict(que='lote',sello=P['sello'],nonce='n1',ids=[P['filas'][2]['id']])}
@@ -133,7 +148,7 @@ class Navegador(unittest.TestCase):
     def tearDownClass(cls):cls.br.close();cls.pw.stop()
 
     def mount(self,P=None,s=None):
-        self.pg.set_viewport_size({'width':1323,'height':619});self.pg.evaluate('([P,s])=>{sessionStorage.setItem("sunat_docs_741",JSON.stringify(s||{}));window.pedidos=[];montarSUD({data:P,parentElement:mount,setTriggerValue:(k,v)=>pedidos.push({k,v})})}',[P or payload(),s]);return self.pg.locator('.sud')
+        self.pg.set_viewport_size({'width':1323,'height':619});self.pg.evaluate('([P,s])=>{sessionStorage.setItem("sunat_docs_741",JSON.stringify(s||{}));window.pedidos=[];window.__sudLineas={};mount.__sudClave=null;montarSUD({data:P,parentElement:mount,setTriggerValue:(k,v)=>pedidos.push({k,v})})}',[P or payload(),s]);return self.pg.locator('.sud')
 
     def test_filtros_y_totales_separados_por_fuente(self):
         self.mount();states=[dict(estado=e,q=q,tipo=t,xml=x,brecha=b,orden='fecha',dir='desc') for e in ['',*payload()['estados']] for q in ['','00000000002'] for t in ['','Servicios'] for x in ['','si','no'] for b in [False,True]]
@@ -148,18 +163,45 @@ class Navegador(unittest.TestCase):
                 vals=[r['raw'][field] for r in rows if r['raw'][field] is not None]
                 self.assertEqual(j['totales'][k],sum(vals) if vals else None)
 
-    def test_elegir_ordenar_comparar_y_buscar_no_piden_python(self):
-        root=self.mount();root.locator('tbody tr[data-id]').first.click();root.locator('[data-a=comparar]').click();self.assertTrue(root.locator('dialog').is_visible());self.pg.keyboard.press('Escape')
-        self.assertFalse(self.pg.evaluate('__sunatDocumentos.s.comparar'));root.locator('[data-a=orden][data-v=Total]').click();root.locator('[data-k=q]').fill('00000000002');self.pg.wait_for_function('__sunatDocumentos.D.visibles.length===1')
-        self.assertEqual(self.pg.evaluate('pedidos.length'),0);self.assertEqual(self.pg.evaluate('getComputedStyle(mount.querySelector(".sud")).fontSize'),'12px')
+    def test_elegir_ordenar_y_buscar_no_piden_acciones(self):
+        root=self.mount();root.locator('tbody tr[data-id]').first.click();self.assertIn('Almacén',root.locator('.sud-panel').inner_text())
+        root.locator('[data-a=orden][data-v=Total]').click();root.locator('[data-k=q]').fill('00000000002');self.pg.wait_for_function('__sunatDocumentos.D.visibles.length===1')
+        self.assertEqual(self.pg.evaluate('pedidos.filter(p=>p.k==="accion").length'),0);self.assertEqual(self.pg.evaluate('getComputedStyle(mount.querySelector(".sud")).fontSize'),'13px')
+
+    def test_elegir_pide_las_lineas_una_vez_y_las_muestra(self):
+        root=self.mount();fila=root.locator('tbody tr[data-id]',has_text='F001-1').first;fila.click();self.pg.wait_for_function('pedidos.some(p=>p.k==="lineas")')
+        a=self.pg.evaluate('pedidos.find(p=>p.k==="lineas").v');self.assertIn(a['id'],[r['id'] for r in payload()['filas']])
+        self.assertIn('Trayendo las líneas',root.locator('.sud-panel').inner_text())
+        d=dict(la=[['Producto A',2,'KILOS',59,118]],lx=[['PRODUCTO A',2,'kg',50,100,18,0]],pa=[0],mon='PEN',tc=1,fp='02/01/2026',ck='igv_adentro',ca='Parece cargado con el IGV adentro.')
+        self.pg.evaluate('([id,d])=>montarSUD({data:{parte:"lineas",id,d},parentElement:mount,setTriggerValue:()=>{}})',[a['id'],d])
+        t=root.locator('.sud-panel').inner_text();self.assertIn('Parece cargado con el IGV adentro.',t);self.assertIn('Producto A',t);self.assertIn('Es el neto',t.replace('El neto del Almacén es','Es el neto'))
+        root.locator('[data-a=dtab][data-v=fa]').click();self.assertIn('PRODUCTO A',root.locator('.sud-panel').inner_text())
+        root.locator('[data-a=lado]').click();self.assertIn('con IGV',root.locator('.sud-lado').inner_text())
+        root.locator('[data-a=nolado]').click();self.assertEqual(root.locator('.sud-lado').count(),0)
+        root.locator('tbody tr[data-id]',has_text='F004-5').click();fila.click();self.pg.wait_for_timeout(250)
+        self.assertEqual(self.pg.evaluate(f'pedidos.filter(p=>p.k==="lineas"&&p.v.id==="{a["id"]}").length'),1)
+
+    def test_mayor_diferencia_y_causa_con_el_total_igual(self):
+        c,s=muestra();c.loc[0,'base_sistema']+=7;c.loc[0,'igv_sistema']-=7;c.loc[0,'estado']='Diferencia';P=datos.armar(c,s)|dict(inicial={'estado':''},salto=0)
+        root=self.mount(P);root.locator('[data-a=estado][data-v=Diferencia]').click()
+        self.assertEqual(self.pg.evaluate('__sunatDocumentos.D.visibles.find(r=>r._car==="car-a")._mayor'),7)
+        self.assertEqual(self.pg.evaluate('__sunatDocumentos.s.elegido'),self.pg.evaluate('__sunatDocumentos.D.visibles[0].id'))
+        self.assertGreater(root.locator('[data-k=causa] option').count(),1)
+        k=root.locator('[data-k=causa] option').nth(1).get_attribute('value');root.locator('[data-k=causa]').select_option(k)
+        self.assertTrue(self.pg.evaluate('__sunatDocumentos.D.visibles.every(r=>r._ck===__sunatDocumentos.s.causa)'))
+
+    def test_ampliar_trae_todas_las_columnas(self):
+        root=self.mount();self.assertEqual(root.locator('thead th').count(),6);self.assertEqual(root.locator('.sud-panel').count(),1)
+        root.locator('[data-a=amp]').click();self.assertEqual(root.locator('thead th').count(),11);self.assertEqual(root.locator('.sud-panel').count(),0)
+        root.locator('[data-a=amp]').click();self.assertEqual(root.locator('thead th').count(),6)
 
     def test_acciones_envian_id_y_recorte_sin_fabricar_filas(self):
-        root=self.mount();root.locator('[data-a=ficha]').first.click();a=self.pg.evaluate('pedidos[0].v');self.assertEqual(a['que'],'ficha');self.assertIn(a['id'],[r['id'] for r in payload()['filas']])
-        root.locator('[data-k=estado]').select_option('Solo SUNAT');root.locator('[data-a=lote]').click();a=self.pg.evaluate('pedidos.at(-1).v');self.assertEqual(a['que'],'lote');self.assertEqual(len(a['ids']),1);self.assertNotIn('raw',a)
-        root.locator('[data-a=ingreso]').click();self.assertEqual(self.pg.evaluate('pedidos.at(-1).v.que'),'ingreso')
+        root=self.mount();root.locator('tbody tr[data-id]',has_text='F001-1').first.click();root.locator('[data-a=ficha]').first.click();a=self.pg.evaluate('pedidos.filter(p=>p.k==="accion")[0].v');self.assertEqual(a['que'],'ficha');self.assertIn(a['id'],[r['id'] for r in payload()['filas']])
+        root.locator('[data-a=estado][data-v="Solo SUNAT"]').click();root.locator('[data-a=lote]').click();a=self.pg.evaluate('pedidos.filter(p=>p.k==="accion").at(-1).v');self.assertEqual(a['que'],'lote');self.assertEqual(len(a['ids']),1);self.assertNotIn('raw',a)
+        root.locator('tbody tr[data-id]').first.click();root.locator('[data-a=ingreso]').click();self.assertEqual(self.pg.evaluate('pedidos.filter(p=>p.k==="accion").at(-1).v.que'),'ingreso')
 
     def test_repetir_salto_externo_y_conservar_filtros_al_rerun(self):
-        root=self.mount();root.locator('[data-k=estado]').select_option('Diferencia');self.pg.evaluate('montarSUD({data:__sunatDocumentos.P,parentElement:mount,setTriggerValue:()=>{}})');self.assertEqual(self.pg.evaluate('__sunatDocumentos.s.estado'),'Diferencia')
+        root=self.mount();root.locator('[data-a=estado][data-v=Diferencia]').click();self.pg.evaluate('montarSUD({data:__sunatDocumentos.P,parentElement:mount,setTriggerValue:()=>{}})');self.assertEqual(self.pg.evaluate('__sunatDocumentos.s.estado'),'Diferencia')
         self.pg.evaluate('montarSUD({data:{...__sunatDocumentos.P,salto:1},parentElement:mount,setTriggerValue:()=>{}})');self.assertEqual(self.pg.evaluate('__sunatDocumentos.s.estado'),'')
 
     def test_tandas_excel_completo_y_codigos_como_texto(self):
@@ -173,10 +215,10 @@ class Navegador(unittest.TestCase):
                 self.assertEqual(len([n for n in z.namelist() if n.startswith('xl/worksheets/')]),6)
                 self.assertIn('00000000002',z.read('xl/worksheets/sheet1.xml').decode());self.assertEqual(z.read('xl/worksheets/sheet3.xml').decode().count('<row r='),346)
 
-    def test_movil_dialogo_y_sin_contraparte_no_inventa_diferencia(self):
-        root=self.mount();self.pg.set_viewport_size({'width':390,'height':844});root.locator('[data-k=estado]').select_option('Solo sistema');root.locator('tbody tr[data-id]').click();root.locator('[data-a=comparar]').click()
-        self.assertTrue(root.locator('dialog').is_visible());self.assertIn('—',root.locator('dialog').inner_text());self.assertTrue(self.pg.evaluate('document.documentElement.scrollWidth<=innerWidth+2'))
-        box=root.locator('dialog').bounding_box();self.assertGreaterEqual(box['x'],0);self.assertLessEqual(box['x']+box['width'],390)
+    def test_movil_ficha_y_sin_contraparte_no_inventa_diferencia(self):
+        root=self.mount();self.pg.set_viewport_size({'width':390,'height':844});root.locator('[data-a=estado][data-v="Solo sistema"]').click();root.locator('tbody tr[data-id]').click()
+        panel=root.locator('.sud-panel');self.assertIn('—',panel.inner_text());self.assertTrue(self.pg.evaluate('document.documentElement.scrollWidth<=innerWidth+2'))
+        box=panel.bounding_box();self.assertGreaterEqual(box['x'],0);self.assertLessEqual(box['x']+box['width'],390)
 
     def test_brecha_en_base_con_total_igual_tambien_se_puede_revisar(self):
         c,s=muestra();c.loc[0,'base_sistema']+=1;P=datos.armar(c,s)|dict(inicial={'estado':''},salto=0)
@@ -190,7 +232,7 @@ class Navegador(unittest.TestCase):
         root.locator('[data-a=mas]').click();self.assertEqual(wrap.evaluate('e=>[e.scrollTop,e.scrollLeft]'),[300,100])
         # Un clic de selección no reconstruye la página ni manda acción.
         self.pg.evaluate('()=>{const r=mount.querySelector(".sud tbody tr[data-id]");r.dispatchEvent(new MouseEvent("click",{bubbles:true}))}')
-        self.assertEqual(wrap.evaluate('e=>[e.scrollTop,e.scrollLeft]'),[300,100]);self.assertEqual(self.pg.evaluate('pedidos.length'),0)
+        self.assertEqual(wrap.evaluate('e=>[e.scrollTop,e.scrollLeft]'),[300,100]);self.assertEqual(self.pg.evaluate('pedidos.filter(p=>p.k==="accion").length'),0)
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -228,6 +228,83 @@ def clasificar_presentado(pres, registro):
     return pres.assign(est=est, p_app=p_app, app=app)
 
 
+def cambios_presentados(presentado):
+    """`{car: tipo de cambio}` de lo presentado en dólares."""
+    if presentado is None or presentado.empty:
+        return {}
+    x = presentado[(presentado["moneda"] == "USD") & (presentado["tipo_cambio"] > 1.01)]
+    return dict(zip(x["car"].astype(str), x["tipo_cambio"].astype(float)))
+
+
+def _s(x):
+    return f"S/ {abs(x):,.2f}"
+
+
+def causa_documento(estado, su, al, lineas=None):
+    """`(clave, frase)`: por qué un documento no cuadra, en palabras.
+
+    `su` y `al` son `[base, igv, total]` de SUNAT y del Almacén. `lineas` son las
+    del XML (`sunat.lineas_xml`, ya en soles): `None` si no se consultó, y `[]`
+    si el documento no tiene XML. Sin ellas la clave sale de los montos, y es la
+    que filtra la lista; con ellas la frase dice qué línea y cuánto. Es una
+    lectura de las cifras: por eso dice «parece» donde no hay certeza."""
+    if estado == "Solo SUNAT":
+        return "falta", "Está en SUNAT y no en el Almacén."
+    if estado == "Solo sistema":
+        return "fuera", "Está en el Almacén y SUNAT no lo tiene."
+    if estado == "Coincide":
+        return "ok", "Base, IGV y total cuadran."
+    sb, si, st_ = [x or 0 for x in su]
+    ab, ai, at = [x or 0 for x in al]
+    db, di, dt = ab - sb, ai - si, at - st_
+    hay = bool(lineas)
+    xb = sum((x.get("importe") or 0) for x in lineas) if hay else 0.0
+    xisc = sum((x.get("isc") or 0) for x in lineas) if hay else 0.0
+    sin_igv = sum((x.get("importe") or 0) for x in lineas if abs(x.get("igv") or 0) < 0.005) if hay else 0.0
+    mx = max(abs(db), abs(di), abs(dt))
+    if mx <= TOLERANCIA:
+        return "centimos", f"Diferencia de céntimos ({_s(mx)}): probablemente redondeo."
+    if si > 1 and abs(si) / max(abs(sb), 1) > 0.05 and abs(ab - st_) <= TOLERANCIA:
+        return "igv_adentro", ("Parece cargado con el IGV adentro: el neto del Almacén es igual "
+                               f"al total de SUNAT. El neto queda {_s(db)} más alto.")
+    if hay and xisc > 0.5 and abs(ab - xb) <= TOLERANCIA and abs(sb - xb - xisc) <= TOLERANCIA:
+        return "isc", (f"La factura lleva {_s(xisc)} de ISC y el Almacén no lo tiene: su neto es "
+                       "igual a las líneas, sin el impuesto.")
+    if abs(dt) / max(abs(st_), abs(at), 1) > 0.5 and abs(dt) > 20:
+        return "otro_doc", ("Los montos son muy distintos: puede ser otro documento con el mismo "
+                            "número o un error de digitación.")
+    if abs(dt) <= 0.1:
+        pareja = abs(ai - ab * 0.18) <= 0.1 and abs(si - sb * 0.18) > 0.1
+        if pareja and sin_igv > 1:
+            return "igv_parejo", (f"Mismo total. La factura trae {_s(sin_igv)} sin IGV y el Almacén "
+                                  f"calcula 18 % sobre todo: {_s(di)} de IGV {'de más' if di > 0 else 'de menos'}.")
+        if pareja:
+            cola = " Sin la factura electrónica no se ve en qué línea." if lineas == [] else ""
+            return "igv_parejo", ("Mismo total. El Almacén tiene el IGV justo al 18 % y SUNAT no "
+                                  f"({_s(di)} de diferencia).{cola}")
+        if sin_igv > 1:
+            return "reparto", (f"Mismo total. La factura trae {_s(sin_igv)} sin IGV y el Almacén "
+                               f"reparte distinto la base y el IGV ({_s(di)}).")
+        return "reparto", f"Mismo total; el Almacén reparte distinto la base y el IGV ({_s(di)})."
+    tasa = None
+    if hay:
+        pesos = {}
+        for x in lineas:
+            if (x.get("igv_porcentaje") or 0) > 0:
+                k = round(float(x["igv_porcentaje"]), 1)
+                pesos[k] = pesos.get(k, 0) + abs(x.get("importe") or 0)
+        tasa = max(pesos, key=pesos.get) if pesos else None
+    elif abs(sb) > 1 and 9.5 <= abs(si / sb) * 100 <= 11:
+        # Sin el XML, sólo las tasas de restaurante y pan: una mezcla con
+        # exonerados también da menos de 18 % y no es otra tasa.
+        tasa = round(abs(si / sb) * 100, 1)
+    ra = abs(ai / ab) * 100 if abs(ab) > 0.01 else None
+    if tasa and abs(tasa - 18) > 1 and ra is not None and abs(ra - tasa) > 2:
+        cola = f" Además, el total difiere en {_s(dt)}." if abs(dt) > TOLERANCIA else ""
+        return "tasa", f"SUNAT tiene IGV de {tasa:g} % y el Almacén de {ra:.0f} %.{cola}"
+    return "monto", f"El Almacén tiene {_s(dt)} {'más' if dt > 0 else 'menos'} que SUNAT en el total."
+
+
 def docs_con_otro_total(registro):
     """`{periodo: [[fecha, doc, proveedor, total SUNAT, partes], ...]}`: los
     documentos cuyo total de SUNAT no es la suma de sus partes.

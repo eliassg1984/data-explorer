@@ -165,6 +165,8 @@ def construir_registro(progreso=None, detalle=None):
     df = (df.sort_values("situacion")           # "Pendiente" < "Registrado"
             .drop_duplicates(subset="car", keep="last"))
     df = sunat_control.rellenar_fallidos(df, previo, [p for p, _ in fallidos])
+    # Los dólares que la propuesta trae con cambio 1 (regla #760).
+    df = sunat.convertir_sin_cambio(df, sunat_control.cambios_presentados(sunat_control.leer_presentado()))
     if crudo != len(df):
         _log(f"Deduplicado por CAR: {crudo} -> {len(df)} "
              f"({crudo - len(df)} repetidos entre periodos).")

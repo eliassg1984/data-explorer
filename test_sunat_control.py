@@ -115,6 +115,64 @@ class Registro(unittest.TestCase):
         self.assertEqual(sc.rellenar_fallidos(pd.DataFrame(), ayer, ["202607"])["car"].tolist(), ["d"])
 
 
+class Dolares(unittest.TestCase):
+    def _df(self):
+        fila = lambda car, dia, tc, base, mon="USD": dict(car=car, fecha_emision=pd.Timestamp(dia), moneda=mon, tipo_cambio=tc, base_imponible=base,  # noqa: E731
+                                                          igv=base * .18, no_gravado=0.0, total=base * 1.18, total_cp=base * 1.18, otros_sunat=0.0)
+        return pd.DataFrame([fila("a", "2025-07-03", 1.0, 100.0), fila("b", "2025-07-03", 3.5, 350.0), fila("c", "2025-07-05", 1.0, 100.0),
+                             fila("d", "2025-07-09", 3.6, 360.0), fila("p", "2025-07-05", 1.0, 100.0, "PEN")])
+
+    def test_el_cambio_sale_de_lo_presentado_del_dia_o_del_mas_cercano(self):
+        d = sunat.convertir_sin_cambio(self._df(), {"c": 3.56}).set_index("car")
+        self.assertEqual(d.loc["c", "tipo_cambio"], 3.56)              # lo presentado manda
+        self.assertEqual(d.loc["c", "base_imponible"], 356.0)
+        self.assertEqual(d.loc["a", "tipo_cambio"], 3.5)               # otro documento del mismo día
+        self.assertEqual(d.loc["a", "total"], 413.0)
+        self.assertTrue(d.loc["a", "cambio_estimado"])
+        self.assertEqual(d.loc["b", "base_imponible"], 350.0)          # el que ya estaba bien
+        self.assertFalse(d.loc["b", "cambio_estimado"])
+        self.assertEqual(d.loc["p", "base_imponible"], 100.0)          # soles: no se toca
+
+    def test_dia_sin_cambio_usa_el_mas_cercano_y_es_idempotente(self):
+        d = sunat.convertir_sin_cambio(self._df())
+        self.assertEqual(d.set_index("car").loc["c", "tipo_cambio"], 3.5)
+        otra = sunat.convertir_sin_cambio(d)
+        pd.testing.assert_frame_equal(d, otra)
+
+    def test_sin_ninguna_referencia_queda_como_vino(self):
+        d = sunat.convertir_sin_cambio(self._df().iloc[[0]])
+        self.assertEqual(d.iloc[0]["base_imponible"], 100.0)
+        self.assertEqual(sunat.convertir_sin_cambio(pd.DataFrame()).shape[0], 0)
+        self.assertEqual(sc.cambios_presentados(presentado())["usd"], 3.56)
+
+
+class Causa(unittest.TestCase):
+    def test_sin_el_xml(self):
+        c = sc.causa_documento
+        self.assertEqual(c("Solo SUNAT", [1, 0, 1], [None] * 3)[0], "falta")
+        self.assertEqual(c("Coincide", [1, 0, 1], [1, 0, 1])[0], "ok")
+        self.assertEqual(c("Diferencia", [100, 18, 118], [100.4, 18, 118.4])[0], "centimos")
+        self.assertEqual(c("Diferencia", [1216.01, 218.89, 1434.9], [1434.9, 258.28, 1693.18])[0], "igv_adentro")
+        self.assertEqual(c("Diferencia", [36.19, 6.51, 42.7], [2937.63, 528.77, 3466.4])[0], "otro_doc")
+        self.assertEqual(c("Diferencia", [1329.42, 230.56, 1559.98], [1322.02, 237.96, 1559.98])[0], "igv_parejo")
+        self.assertEqual(c("Diferencia", [1674.2, 293.8, 1968], [1669.63, 298.37, 1968])[0], "reparto")
+        self.assertEqual(c("Diferencia", [393.52, 41.32, 434.84], [411.86, 74.14, 486])[0], "tasa")
+        self.assertEqual(c("Diferencia", [237.29, 42.71, 280], [220.34, 39.66, 260])[0], "monto")
+
+    def test_con_el_xml_la_frase_dice_cuanto(self):
+        c = sc.causa_documento
+        lineas = [dict(importe=417.62, igv=79.99, isc=26.79, igv_porcentaje=18)]
+        self.assertEqual(c("Diferencia", [444.41, 79.99, 524.4], [417.62, 75.17, 492.79], lineas)[0], "isc")
+        exon = [dict(importe=230, igv=0, isc=0, igv_porcentaje=0), dict(importe=1000, igv=180, isc=0, igv_porcentaje=18)]
+        ck, frase = c("Diferencia", [1230, 180, 1410], [1194.92, 215.08, 1410], exon)
+        self.assertEqual(ck, "igv_parejo")
+        self.assertIn("S/ 230.00 sin IGV", frase)
+        self.assertIn("Sin la factura", c("Diferencia", [1329.42, 230.56, 1559.98], [1322.02, 237.96, 1559.98], [])[1])
+
+    def test_mezcla_con_exonerados_no_es_otra_tasa(self):
+        self.assertEqual(sc.causa_documento("Diferencia", [100, 14, 114], [120, 21.6, 141.6])[0], "monto")
+
+
 class Cruce(unittest.TestCase):
     def test_cada_documento_en_su_estado(self):
         d = sc.clasificar_presentado(presentado(), registro()).set_index("car")
