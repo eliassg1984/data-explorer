@@ -3408,6 +3408,11 @@ CSS = """    /* ================================================================
        de los widgets de antes quedaron sin a quién estilar: comparten
        grupos de selectores con Meseros, Control y Platos y se dejaron. */
     .st-key-ajuste_graf_card_izq_ventas_resumen { position: relative; }
+    /* Los montajes chicos de la pieza sólo traen datos (reglas #714 y #758):
+       en el flujo, la tarjeta les pagaba un gap y se deslizaba. */
+    .st-key-vt_periodo_lineas, .st-key-vt_periodo_historia {
+        position: absolute !important; width: 0 !important; height: 0 !important; overflow: hidden !important;
+    }
     .st-key-vt_periodo_fecha {
         position: absolute !important;
         top: var(--vp-fecha-arriba, 25px);

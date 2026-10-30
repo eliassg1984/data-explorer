@@ -293,8 +293,10 @@ cabecera 32 + bordes 2, filas de `compras_volatilidad.ALTO_FILA` = 27): 34 +
 `SEMANAL_TABLA − FRANJA_MODO_SEMANAL` (191), que da cinco. Las 59 que suma
 se pagan en parte con la fila de filtros más delgada (regla #519)."""
 
-VENTAS_RESUMEN_FIG = 196
-"""Alto de la figura de Ventas › Resumen ejecutivo con la tabla debajo
+VENTAS_RESUMEN_FIG = 236
+"""Alto de la figura de Ventas › Venta por Periodo con la tabla debajo: 236
+desde la regla #758, para que figura + cabecera midan lo que el panel de al
+costado (270). La tabla toma lo que quede de la pantalla. Antes,
 (2026-09-24, regla #520). Era `COMPACTO` (240) con la leyenda de Plotly al
 pie, que se comía 38px de la figura (medido: área de trazo 140 de 240, la
 leyenda de 201 a 230). La leyenda pasó a una pastilla flotante arriba

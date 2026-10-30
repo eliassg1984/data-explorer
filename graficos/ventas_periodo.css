@@ -6,7 +6,9 @@
    Python que estilos/_80_cards.py pone arriba a la derecha de la tarjeta:
    la fila de controles le deja `--vp-fecha` de lugar. */
 .vp { --vp-fecha: 210px;
-  position: relative; display: flex; flex-direction: column; gap: 8px; color: var(--text-primary); font-size: 12.5px; line-height: 1.4;
+  /* UNA pantalla (regla #758): la tabla toma lo que queda y desliza adentro. */
+  height: calc(var(--alto-util, 620px) - 31px);
+  position: relative; display: flex; flex-direction: column; gap: 6px; color: var(--text-primary); font-size: 12.5px; line-height: 1.4;
   font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-variant-numeric: tabular-nums; min-width: 0; }
 .vp * { box-sizing: border-box; }
 .vp button, .vp input { font: inherit; color: inherit; }
@@ -17,15 +19,19 @@
   background: var(--accent-tint); border-radius: 4px; padding: 1px 4px; margin-left: 4px; white-space: nowrap; }
 
 /* Controles */
-.vp .ctl { display: flex; align-items: center; gap: 10px; }
+.vp .ctl { display: flex; align-items: center; gap: 6px; flex: none; }
 .vp .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex: 0 0 auto; background: var(--bg-card); }
 .vp .seg button { border: 0; border-left: 1px solid var(--border); background: transparent; padding: 5px 12px; cursor: pointer; white-space: nowrap; color: var(--text-primary); }
 .vp .seg button:first-child { border-left: 0; }
 .vp .seg button.on { background: var(--accent-tint); color: var(--accent-deep); box-shadow: inset 0 0 0 1px var(--accent); }
-.vp .fils { display: flex; gap: 10px; flex: 1; justify-content: center; min-width: 0; }
+.vp .seg.chico button { padding: 3px 9px; font-size: 11.5px; }
+.vp .fils { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; min-width: 0; }
+.vp .cn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+.vp .cn select { font: inherit; font-size: 12.5px; height: 30px; color: var(--accent-deep); font-weight: 600; background: var(--bg-card); border: 1px solid var(--border-lavender); border-radius: 8px; padding: 0 4px; cursor: pointer; }
+.vp .cn select:disabled { color: var(--text-secondary); border-color: var(--border); cursor: default; }
 .vp .ms { position: relative; }
-.vp .ms-b { height: 30px; min-width: 130px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); padding: 0 10px;
-  color: var(--text-secondary); cursor: pointer; white-space: nowrap; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.vp .ms-b { height: 30px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); padding: 0 8px;
+  color: var(--text-secondary); cursor: pointer; white-space: nowrap; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .vp .ms-b.on { color: var(--accent-deep); border-color: var(--border-lavender); background: var(--accent-tint); }
 .vp .ms-b i, .vp .ley-b i { font-style: normal; color: var(--text-secondary); }
 .vp .ms-l { position: absolute; top: 34px; left: 0; z-index: 6; width: 230px; max-height: 280px; overflow-y: auto; overscroll-behavior: contain; background: var(--bg-card);
@@ -36,26 +42,73 @@
 .vp .lugar-fecha { flex: 0 0 var(--vp-fecha); }
 .vp td.cargando { color: var(--text-secondary); font-style: italic; }
 
-/* Título, KPI y la pastilla «Detalle» */
-.vp .cab { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; position: relative; }
-.vp .kp { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
+/* Los indicadores: eligen qué mide el gráfico (regla #758) */
+.vp .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; flex: none; }
+.vp .kpi { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card);
+  padding: 5px 12px; text-align: left; cursor: pointer; min-width: 0; }
+.vp .kpi:hover { border-color: var(--focus-lavender); }
+.vp .kpi.on { border-color: var(--accent); background: var(--accent-tint); box-shadow: inset 0 0 0 1px var(--accent); }
+.vp .kt { min-width: 0; display: block; }
+.vp .kr, .vp .kv, .vp .kn { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp .kr { font-size: 11.5px; color: var(--text-secondary); }
+.vp .kv { font-size: 18px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+.vp .kpi.on .kv { color: var(--accent-deep); }
+.vp .kpi.alerta .kv { color: var(--warning-text); }
+.vp .kn { font-size: 11px; color: var(--text-secondary); }
+.vp .kn .n { margin-left: 0; font-size: 11px; font-weight: 600; }
+.vp .ks { flex: 0 0 72px; width: 72px; height: 30px; overflow: visible; }
+.vp .ks polyline { fill: none; stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.vp .kc { flex: none; width: 124px; text-align: right; font-size: 11px; line-height: 1.3; color: var(--text-secondary); }
+.vp .kc b { display: block; font-size: 12px; color: var(--text-primary); font-weight: 700; white-space: nowrap; }
+.vp .prog { display: block; height: 5px; border-radius: 3px; background: var(--accent-light); margin-top: 3px; overflow: hidden; }
+.vp .prog i { display: block; height: 100%; background: var(--accent); }
+
+/* El gráfico y el panel de al costado */
+.vp .cuerpo { display: flex; gap: 14px; flex: none; min-width: 0; }
+.vp .graf { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.vp .cab { display: flex; align-items: center; gap: 8px; min-height: 30px; position: relative; }
+.vp .esp { flex: 1; }
 .vp .tit { color: var(--accent-deep); font-weight: 600; font-size: 13px; white-space: nowrap; }
 /* Si lo que se ve es toda la venta del rango o una parte (regla #755). */
 .vp .caja { flex: 0 0 auto; font-size: 11px; font-weight: 600; border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
 .vp .caja.ok { background: var(--success-bg); color: var(--success-text); }
 .vp .caja.no { background: var(--warning-bg); color: var(--warning-text); }
-.vp .kpis { display: flex; gap: 0; overflow: hidden; min-width: 0; }
-.vp.m .kpis { flex-wrap: wrap; row-gap: 2px; overflow: visible; }
-.vp .kpi { display: flex; align-items: baseline; gap: 5px; padding: 0 10px; border-left: 1px solid var(--border); white-space: nowrap; }
-.vp .kpi:first-child { border-left: 0; padding-left: 0; }
-.vp .kpi .kr { font-size: 10.5px; color: var(--text-secondary); }
-.vp .kpi[style] .kr::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--kc); margin-right: 4px; }
-.vp .kpi .kv { font-weight: 700; font-size: 13px; }
-.vp .kpi.tot .kv { color: var(--accent-deep); }
-.vp .kpi .ks { font-weight: 400; font-size: 10.5px; color: var(--text-secondary); margin-left: 4px; }
-.vp .kpi.alerta .kv { color: var(--warning-text); }
+.vp .lg { display: flex; gap: 8px; font-size: 11.5px; color: var(--text-secondary); align-items: center; white-space: nowrap; overflow: hidden; min-width: 0; }
+.vp .lg i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.vp .lg i.g { width: 14px; height: 0; border-radius: 0; border-top: 2px dashed var(--text-secondary); vertical-align: 3px; }
+.vp .lg i.f { background: var(--accent-tint); border: 1px dashed var(--accent); }
+.vp .amp { height: 26px; flex: none; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border-lavender); border-radius: 8px; background: var(--bg-card); color: var(--accent-deep); padding: 0 9px; font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.vp .amp:hover, .vp .amp[aria-pressed="true"] { background: var(--accent-tint); }
+.vp .amp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.vp .pn { flex: 0 0 286px; min-width: 0; border-left: 1px solid var(--line-soft); padding-left: 14px; font-size: 12px; display: flex; flex-direction: column; gap: 1px; }
+.vp .pn-t { min-height: 28px; margin-bottom: 2px; }
+.vp .pn-f { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; min-width: 0; }
+.vp .pn-f b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.vp .qt { flex: none; border: 1px solid var(--border); background: var(--bg-card); border-radius: 6px; width: 20px; height: 20px; padding: 0; line-height: 1; cursor: pointer; color: var(--text-secondary); }
+.vp .lnk { flex: none; margin-left: auto; border: 0; background: transparent; padding: 0; color: var(--accent-deep); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.vp .pr { display: grid; grid-template-columns: minmax(0, 1fr) auto 62px; gap: 8px; padding: 1px 0; align-items: baseline; line-height: 1.3; }
+.vp .pr span { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp .pr b { font-weight: 500; }
+.vp .pr i { font-style: normal; font-size: 11px; color: var(--text-secondary); text-align: right; white-space: nowrap; }
+.vp .pr i.bien { color: var(--success); font-weight: 600; } .vp .pr i.mal { color: var(--danger); font-weight: 600; }
+.vp .pr.tot { border-top: 1px solid var(--border); margin-top: 2px; padding-top: 3px; }
+.vp .pr.tot span, .vp .pr.tot b { font-weight: 700; color: var(--text-primary); }
+.vp .pr.sub span { padding-left: 10px; }
+.vp .pr.alerta b { color: var(--warning-text); }
+.vp .pr.sep { display: block; font-size: 11px; color: var(--text-secondary); margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--line-soft); }
+.vp .frase { margin: 0 0 5px; line-height: 1.35; }
+.vp .ef { padding: 3px 0; }
+.vp .ef .a { display: flex; justify-content: space-between; gap: 8px; }
+.vp .ef .a span { font-weight: 600; }
+.vp .ef .a b.bien { color: var(--success); } .vp .ef .a b.mal { color: var(--danger); }
+.vp .ef .efd { display: block; color: var(--text-secondary); font-size: 11px; margin: 1px 0 2px; }
+.vp .eb { position: relative; display: block; height: 6px; background: var(--line-soft); border-radius: 3px; }
+.vp .eb i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.vp .eb i.bien { background: var(--success); } .vp .eb i.mal { background: var(--danger); }
+.vp .eb::after { content: ''; position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px; background: var(--text-muted); }
+.vp .notita { font-size: 11px; color: var(--text-secondary); line-height: 1.3; margin: 4px 0 0; }
 .vp .ley { position: relative; flex: 0 0 auto; }
-.vp .ley-b { height: 26px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); padding: 0 12px; cursor: pointer; white-space: nowrap; min-width: 230px; text-align: left; }
+.vp .ley-b { height: 26px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); padding: 0 9px; cursor: pointer; white-space: nowrap; font-size: 11.5px; }
 .vp .ley-p { position: absolute; right: 0; top: 30px; z-index: 5; width: 260px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-md); padding: 6px 8px; }
 .vp .ley-f { display: grid; grid-template-columns: 22px 14px 1fr auto; gap: 6px; align-items: center; padding: 3px 0; cursor: pointer; }
 .vp .ley-f .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
@@ -68,6 +121,10 @@
 .vp .gr .tt { font-size: 11px; fill: var(--text-secondary); }
 .vp .gr .tx { font-size: 10px; fill: var(--text-secondary); }
 .vp .gr .et { font-size: 10px; fill: var(--text-primary); }
+.vp .gr .e0 { font-size: 11px; font-weight: 600; paint-order: stroke; stroke: var(--bg-card); stroke-width: 3px; }
+.vp .gr .fut { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 1px; stroke-dasharray: 3 2; }
+.vp .gr .ln-b { fill: none; stroke: var(--text-secondary); stroke-width: 1.5px; stroke-dasharray: 4 3; pointer-events: none; }
+.vp .gr .pt-b { fill: var(--bg-card); stroke: var(--text-secondary); stroke-width: 1px; pointer-events: none; }
 .vp .gr .fer { font-size: 10px; fill: var(--warning-text); }
 .vp .gr .tk { font-size: 10px; fill: var(--warning); }
 .vp .gr .hit { fill: transparent; cursor: pointer; pointer-events: all; }
@@ -78,20 +135,20 @@
 .vp .tip .tg { margin-top: 3px; color: var(--text-secondary); }
 
 /* La fila de abajo del gráfico y el contexto */
-.vp .pie { display: flex; align-items: center; gap: 10px; }
+.vp .pie { display: flex; align-items: center; gap: 8px; flex: none; border-top: 1px solid var(--line-soft); padding-top: 6px; }
 .vp .pie .pt { flex: 1; min-width: 0; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vp .pie .pt b { color: var(--text-primary); font-weight: 600; }
 .vp .excel { height: 28px; border: 1px solid var(--border-lavender); border-radius: 8px; background: var(--bg-card); color: var(--accent-deep); padding: 0 10px; cursor: pointer; white-space: nowrap; }
-.vp .ctx { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--text-secondary); font-size: 12px; position: relative; }
-.vp .como { border: 1px solid var(--border); border-radius: 16px; background: var(--bg-card); padding: 4px 12px; cursor: pointer; white-space: nowrap; }
-.vp .como-p { position: absolute; right: 0; top: 30px; z-index: 6; width: 520px; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; background: var(--bg-card);
-  border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md); padding: 10px 14px; color: var(--text-primary); }
+.vp .como-w { position: relative; flex: none; }
+.vp .como { height: 28px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); padding: 0 10px; cursor: pointer; white-space: nowrap; }
+.vp .como-p { position: absolute; right: 0; bottom: 34px; z-index: 6; width: 520px; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md); padding: 10px 14px; color: var(--text-primary); white-space: normal; }
 .vp .como-p p { margin: 2px 0 8px; }
 .vp .aviso { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); background: var(--text-primary); color: var(--bg-card);
   padding: 8px 14px; border-radius: 8px; font-size: 12px; max-width: 80%; z-index: 7; }
 
 /* Las tablas */
-.vp .zr { overflow: auto; border-top: 1px solid var(--border); overscroll-behavior: contain; }
+.vp .zr { flex: 1 1 0; min-height: 0; overflow: auto; border-top: 1px solid var(--border); overscroll-behavior: contain; }
 .vp table { border-collapse: separate; border-spacing: 0; width: 100%; }
 .vp th { position: sticky; top: 0; z-index: 2; background: var(--rail-fondo, var(--accent-tint)); color: var(--accent-deep); font-weight: 500; font-size: 12px; text-align: left;
   padding: 0 10px; height: 34px; white-space: nowrap; cursor: pointer; }
@@ -111,6 +168,8 @@
 .vp .cv.alto { color: var(--warning-text); }
 .vp .cv.roto { color: var(--danger-text); font-weight: 600; }
 .vp .n { font-size: 10.5px; margin-left: 5px; }
+/* Las variaciones de cada celda, sólo con la tabla ampliada (regla #758). */
+.vp:not(.tabla-amp) .zr td.r .n { display: none; }
 .vp .n.bien { color: var(--success); } .vp .n.mal { color: var(--danger); } .vp .n.neutro { color: var(--text-secondary); } .vp .n.alto { color: var(--warning-text); }
 .vp .band { font-size: 10px; font-weight: 700; color: var(--danger-text); background: var(--danger-bg); border-radius: 4px; padding: 0 4px; margin-left: 5px; }
 .vp tr.fr td { background: var(--bg-primary); height: auto; white-space: normal; max-width: none; padding: 8px 10px; cursor: default; }
@@ -135,3 +194,28 @@
 .vp table.td td { max-width: none; }
 .vp .busca { display: flex; align-items: center; gap: 6px; }
 .vp .busca input { flex: 0 1 420px; height: 28px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; background: var(--bg-primary); }
+
+/* Una columna en pantallas chicas: una tabla con `flex: 1 1 0` en una caja sin
+   alto mediría 0 (regla #746). */
+@media (max-width: 900px) {
+  .vp { height: auto; }
+  .vp .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vp .ks, .vp .kc { display: none; }
+  .vp .ctl, .vp .cab, .vp .pie, .vp .seg { flex-wrap: wrap; }
+  .vp .seg { max-width: 100%; }
+  .vp .cuerpo { flex-direction: column; }
+  .vp .pn { flex: none; border-left: 0; padding-left: 0; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+  .vp .zr { flex: none; height: 250px; }
+  .vp .como-p { width: min(520px, 86vw); }
+}
+/* Una pantalla baja (1323×619): el panel no le puede cobrar el alto a la tabla. */
+@media (min-width: 901px) and (max-height: 660px) {
+  .vp .pn { font-size: 11.5px; }
+  .vp .pr { padding: 0; line-height: 1.22; }
+  .vp .pr.tot { margin-top: 1px; padding-top: 2px; }
+  .vp .pr.sep { margin-top: 2px; padding-top: 2px; }
+  .vp .pn-t { min-height: 26px; }
+  .vp .frase { margin-bottom: 2px; line-height: 1.25; }
+  .vp .ef { padding: 1px 0; }
+  .vp .notita { display: none; }
+}

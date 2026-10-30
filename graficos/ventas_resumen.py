@@ -24,6 +24,13 @@ por comprobante, el mensaje entero es ~3,4 MB. Un período más viejo pide sus l
 trigger `lineas` y las recibe en un segundo montaje chico
 (`parte: "lineas"`), para que el mensaje grande no se vuelva a mandar.
 
+LA COMPARACIÓN Y EL CIERRE (regla #758): la pieza compara lo que se ve contra
+el año pasado, contra el período anterior o contra lo normal, y proyecta el
+cierre del mes. Esos días no están en el `d` del rango, así que los pide con
+el trigger `historia` y le llegan en otro montaje chico (`armar_historia`,
+`parte: "historia"`), con la misma forma de comprobante y grupo: los filtros
+de la tarjeta y los clientes por pedido salen igual que los de `calcular`.
+
 Lo que sigue en este módulo además de eso son las cuentas puras que la pieza
 rehace en el navegador —el IGV, lo vendido sin costo, las formas de pago,
 las subvistas, los indicadores, los comprobantes, los grupos del Detalle—:
@@ -32,6 +39,7 @@ Si se toca una, se toca la otra.
 """
 
 from graficos.movil import css_movil, js_movil
+import hashlib
 import re
 from pathlib import Path
 
@@ -46,6 +54,7 @@ from graficos.base import _resolver, preservar_widgets, selector_fecha_tarjeta
 from graficos.compras._comun import _periodo_serie
 from graficos import alturas, ventas_alcance
 from graficos.recetas_comun import TASA_RECARGO
+import presupuesto_ventas
 from utils import fmt_k
 
 MAX_DIAS = 30    # tope de barras legibles en Día. Mismo espíritu que
@@ -968,6 +977,62 @@ def armar_periodo(t, sello, alto_fig, alto_fig_solo, alto_tabla):
     }
 
 
+def armar_historia(t, ctx, ventanas, error=False):
+    """Lo que la pieza pidió para comparar (regla #758): [día, clase, pedido,
+    canal, servicio, documento, adultos, niños] de cada comprobante y [doc,
+    grupo, venta, venta a precio carta, neto, descuento, costo] por grupo.
+    Sólo lo que es venta. `ventanas` vuelve tal cual: la pieza da esos días por
+    cubiertos, con venta o sin ella. Pura: la lee el test."""
+    vacio = {"parte": "historia", "ctx": ctx, "ventanas": ventanas, "error": bool(error), "base": None,
+             "grupos": [], "canales": [], "servs": [], "tdocs": [], "docs": [], "unidades": []}
+    if t is None or t.empty:
+        return vacio
+    t = t[t["clase"].isin(dv.CLASES_VENTA)]
+    if t.empty:
+        return vacio
+    t = t.astype({c: object for c in ("ldoc", "ped", "grupo", "canal", "serv", "tdoc")})
+    base = t["fecha"].min().normalize()
+
+    def dic(serie):
+        vals = sorted(pd.unique(serie.to_numpy()))
+        return vals, {v: i for i, v in enumerate(vals)}
+
+    grupos, ig = dic(t["grupo"])
+    canales, ic = dic(t["canal"])
+    servs, isv = dic(t["serv"])
+    tdocs, it = dic(t["tdoc"])
+    _peds, iped = dic(t["ped"])
+    clase = t["clase"].map({c: i for i, c in enumerate(_CLASES)}).astype(int)
+    docs = t.assign(_cl=clase).drop_duplicates("ldoc").reset_index(drop=True)
+    idoc = {k: i for i, k in enumerate(docs["ldoc"])}
+    dias = (docs["fecha"].dt.normalize() - base).dt.days
+    u = t.assign(_d=t["ldoc"].map(idoc), _g=t["grupo"].map(ig), carta=t["po"] * t["cant"], costo=t["pc"] * t["cant"])
+    ug = (u.groupby(["_d", "_g"], as_index=False, sort=True)
+          .agg(venta=("venta", "sum"), carta=("carta", "sum"), neto=("neto", "sum"),
+               desc=("desc", "sum"), costo=("costo", "sum")))
+    return {**vacio, "base": f"{base:%Y-%m-%d}", "grupos": grupos, "canales": canales, "servs": servs, "tdocs": tdocs,
+            "docs": [[int(f), int(cl), iped[pe], ic[ca], isv[sv], it[td], float(px), float(ni)]
+                     for f, cl, pe, ca, sv, td, px, ni in zip(
+                         dias, docs["_cl"], docs["ped"], docs["canal"], docs["serv"], docs["tdoc"],
+                         docs["pax"], docs["ninos"])],
+            "unidades": [[int(a), int(b), round(v, 4), round(c, 4), round(ne, 4), round(de, 4), round(co, 4)]
+                         for a, b, v, c, ne, de, co in zip(
+                             ug["_d"], ug["_g"], ug["venta"], ug["carta"], ug["neto"], ug["desc"], ug["costo"])]}
+
+
+def presupuesto_meses(tabla):
+    """`{"2026-10": {"ALMUERZO": bruta, "CENA": bruta}}`: la venta de la
+    tarjeta lleva impuestos, como la columna «bruta» (y como Comparativo, regla
+    #758). Por servicio, porque la tarjeta los filtra en el navegador."""
+    if tabla is None or len(tabla) == 0:
+        return {}
+    out = {}
+    for a, m, s, v in zip(tabla["anio"], tabla["mes"], tabla["servicio"], tabla["bruta"]):
+        if v:
+            out.setdefault(f"{int(a):04d}-{int(m):02d}", {})[str(s)] = round(float(v), 2)
+    return out
+
+
 def lineas_de(t, idoc, ip, ig):
     """[doc, plato, grupo, cantidad, venta] de las líneas de `t`."""
     return [[idoc[a], ip[b], ig[g], round(q, 3), round(v, 2)]
@@ -1025,6 +1090,9 @@ de la última corrida: armarlo para doce meses son ~2 s, y sólo cambia con el
 rango, los chips de la franja o el parquet. La firma reconoce el MISMO `d`
 cuando el fragment se vuelve a correr con sus argumentos (al pedir líneas)."""
 _K_PEDIDO = "_vt_periodo_pedido"
+_K_HISTORIA = "vt_periodo_historia"
+_K_PED_HIST = "_vt_periodo_ped_hist"
+_K_MEMO_HIST = "_vt_periodo_memo_hist"
 
 
 def _al_pedir_lineas():
@@ -1036,10 +1104,33 @@ def _al_pedir_lineas():
         st.session_state[_K_PEDIDO] = v
 
 
+def _al_pedir_historia():
+    """La comparación de la tarjeta pide días que el rango no trae (`historia`:
+    {ctx, ventanas: [[desde, hasta], …], n}). Regla #758."""
+    v = (st.session_state.get(_K_PIEZA) or {}).get("historia")
+    if v:
+        st.session_state[_K_PED_HIST] = v
+
+
+def _cargar_historia(ventanas, cols, filtrar_cb):
+    """Las ventanas pedidas, con los mismos chips que el `d` de la vista."""
+    from graficos.ventas_comparativo import _cargar_tramo
+    from data import REPORTES
+
+    cfg = REPORTES.get("Ventas", {})
+    partes = []
+    for desde, hasta in ventanas:
+        df = _cargar_tramo(cfg.get("archivo", "ventas.parquet"), cfg.get("carga_por_rango", "FEC REG DOCUMENTO"),
+                           pd.Timestamp(desde).date(), pd.Timestamp(hasta).date(), filtrar_cb)
+        if df is not None and not df.empty:
+            partes.append(lineas_normalizadas(df, cols))
+    return pd.concat(partes, ignore_index=True) if partes else None
+
+
 @st.fragment
 def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                     col_cant, col_fam=None, col_serv=None, col_canal=None,
-                    col_mesero=None, d_pagos=None):
+                    col_mesero=None, d_pagos=None, filtrar_cb=None):
     """«Venta por Periodo»: la fecha (Python) y la pieza. Ver el docstring
     del módulo y `arquitectura.md` regla #714.
 
@@ -1104,7 +1195,38 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         datos["alcance"] = ventas_alcance.datos(datos["grupos"], abre=ventas_alcance.TODA,
                                                 extra=extra)
         datos["alcance_pedido"] = pedido
-        _PIEZA(key=_K_PIEZA, data=datos, on_lineas_change=_al_pedir_lineas, width="stretch")
+        # La comparación y el cierre (regla #758): sin `filtrar_cb` (un test,
+        # una herramienta) o sin fechas del parquet, la tarjeta no compara.
+        ctx_hist = None
+        if filtrar_cb is not None:
+            from data import REPORTES, rango_fechas, sello_datos, venta_por_turno
+            cfg = REPORTES.get("Ventas", {})
+            archivo = cfg.get("archivo", "ventas.parquet")
+            rf = rango_fechas(archivo, cfg.get("carga_por_rango", "FEC REG DOCUMENTO"))
+            if rf and rf[0] is not None:
+                ctx_hist = hashlib.sha256(repr((
+                    sello_datos(archivo), venta_por_turno(), datos["franja"])).encode()).hexdigest()[:16]
+                datos["hist_ctx"] = ctx_hist
+                datos["datos_desde"], datos["ultimo_dato"] = str(rf[0]), str(rf[1])
+                canales_franja = ss.get("ventas_graf_filtro_canal")
+                datos["ppto"] = (presupuesto_meses(presupuesto_ventas.leer())
+                                 if presupuesto_ventas.aplica({"Canal": canales_franja}) else {})
+        _PIEZA(key=_K_PIEZA, data=datos, on_lineas_change=_al_pedir_lineas,
+               on_historia_change=_al_pedir_historia, width="stretch")
+        ped_h = st.session_state.get(_K_PED_HIST)
+        if ctx_hist and ped_h and ped_h.get("ctx") == ctx_hist and ped_h.get("ventanas"):
+            clave_h = (ctx_hist, repr(ped_h["ventanas"]))
+            memo = st.session_state.get(_K_MEMO_HIST)
+            if memo is None or memo[0] != clave_h:
+                try:
+                    hist = armar_historia(_cargar_historia(ped_h["ventanas"], cols, filtrar_cb),
+                                          ctx_hist, ped_h["ventanas"])
+                except Exception:
+                    # Un fallo de R2 no tumba la tarjeta: se ve sin comparar.
+                    hist = armar_historia(None, ctx_hist, ped_h["ventanas"], error=True)
+                memo = (clave_h, hist)
+                st.session_state[_K_MEMO_HIST] = memo
+            _PIEZA(key=_K_HISTORIA, data=memo[1], width="stretch")
         pedido = st.session_state.get(_K_PEDIDO)
         if pedido and pedido.get("sello") == sello:
             _s, t, idoc, datos0, _firma = cache

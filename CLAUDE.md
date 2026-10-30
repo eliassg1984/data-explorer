@@ -212,7 +212,11 @@ lo que recibe —la venta sumada por comprobante y grupo, las líneas del rango
 o de sus últimos días— y, en Chromium, que `calcular` del navegador dé las
 ventas, los clientes, los comprobantes, el ticket y las formas de pago de
 `definicion_venta` y de Python, con el canje, la cuenta dividida, Rappi, la
-cortesía y el anulado. Ver `arquitectura.md` regla #714.
+cortesía y el anulado. Ver `arquitectura.md` regla #714. Desde la #758 cubre
+además las tres bases contra pandas, con filtros y sin datos previos, que
+«Qué movió» sume la diferencia, lo normal y el cierre, el presupuesto, y en
+Chromium la tarjeta entera: pedir una vez, indicadores, Clave | Todas, panel,
+Contra, Ampliar y celular.
 
 `test_proveedor_pieza.py` vigila Compras › Proveedor como pieza propia
 (`graficos/compras/proveedor.py` y `proveedor.js`): lo que recibe —el
@@ -1278,6 +1282,17 @@ Python, puesto encima de la pieza— pide una corrida. Lo que muerde:
 - **Lo elegido vive en `window.__vtPeriodo`** (dos montajes, un estado, como
   «Análisis por hora»), y la pieza llamada con la misma `sello` no se
   redibuja.
+- **Desde la #758 no se aprieta**: cuatro indicadores eligen qué mide el
+  gráfico, el resto va al panel de al costado (Desglose | Qué movió | Cierre)
+  y las barras llevan cifra sólo en lo clave («Clave | Todas»). Clientes y
+  ticket encima de la venta, en «Capas». Elegir una barra ya no salta a los
+  pedidos: los abre «Ver sus pedidos». «Ampliar» deja el gráfico o la tabla.
+- **Las bases («Contra») son días fuera del rango**: la pieza los pide (trigger
+  `historia`) y llegan en otro montaje chico, por comprobante y grupo
+  (`armar_historia`), para filtrar y contar clientes igual que `calcular`.
+  «Qué movió» es la cuenta de `puenteC` de Comparativo; el presupuesto del
+  Cierre, la columna «bruta». El último dato tiene un día de margen: el
+  parquet llega por registro y la venta por turno.
 
 ## Ventas: cada tarjeta filtra sus grupos
 

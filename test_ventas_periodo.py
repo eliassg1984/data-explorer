@@ -5,8 +5,9 @@ Lo que recibe la pieza (`lineas_normalizadas`, `armar_periodo`,
 `calcular` de `ventas_periodo.js` contra `definicion_venta` (clientes,
 comprobantes, ticket) y contra los ayudantes puros de `ventas_resumen.py`
 (formas de pago, IGV, lo vendido sin costo), en Chromium, día por día y
-semana por semana. Sin secrets ni red; la parte de Chromium se salta si
-Playwright no está (es de requirements-dev.txt).
+semana por semana. Desde la regla #758, la comparación («Contra»), «Qué movió»,
+el cierre y la tarjeta entera. Sin secrets ni red; la parte de Chromium se
+salta si Playwright no está (es de requirements-dev.txt).
 
     python test_ventas_periodo.py
 """
@@ -221,6 +222,337 @@ class LasCuentasEnElNavegador(unittest.TestCase):
         self.assertEqual(out["filtro"]["claves"], ["2026-10-05"])
         self.assertAlmostEqual(out["filtro"]["total"][0], 10.0)
         self.assertEqual(out["filtro"]["pax"], [2])
+
+
+# ── La comparación y el cierre (regla #758) ───────────────────────────────
+def _corridas(dias, sufijo=""):
+    """Las mismas ventas, `dias` después, con otros comprobantes y pedidos."""
+    d = _ventas()
+    d["FEC REG DOCUMENTO"] = d["FEC REG DOCUMENTO"] + pd.Timedelta(days=dias)
+    for c in ("LLAVE LOCAL DOCUMENTO", "LLAVE LOCAL PEDIDO"):
+        d[c] = d[c] + sufijo
+    return d
+
+
+def _pieza(dias=0, ultimo=None):
+    t = vr.lineas_normalizadas(_corridas(dias), _CLAVES)
+    P = vr.armar_periodo(t, vr.sello_periodo(t), 236, 380, 250)
+    idoc = {k: i for i, k in enumerate(t.drop_duplicates("ldoc")["ldoc"])}
+    P["pagos"], P["formas"] = vr.pagos_periodo(_pagos(), "FEC REG DOCUMENTO", idoc)
+    P.update(turno=True, franja=[], hist_ctx="c", datos_desde="2025-01-01",
+             ultimo_dato=ultimo or str(t["fecha"].max().date()),
+             ppto={"2026-10": {"ALMUERZO": 1000.0, "CENA": 3000.0}})
+    return t, P
+
+
+def _historia(dias, ventanas, sufijo="h"):
+    t = vr.lineas_normalizadas(_corridas(dias, sufijo), _CLAVES)
+    return vr.armar_historia(t, "c", ventanas)
+
+
+class LaHistoria(unittest.TestCase):
+    def test_lleva_lo_que_es_venta_por_comprobante_y_grupo(self):
+        H = _historia(-364, [["2025-10-06", "2025-10-14"]])
+        self.assertEqual(H["parte"], "historia")
+        self.assertEqual(H["base"], "2025-10-06")
+        # Fuera la cortesía y el anulado; adentro la nota, con su pax negativo.
+        self.assertEqual(len(H["docs"]), 9)
+        self.assertEqual(sorted(d[6] for d in H["docs"] if d[1] == vr._CLASES.index(NC)), [-2.0])
+        self.assertAlmostEqual(sum(u[2] for u in H["unidades"]), 59 + 10 + 160 + 59 + 80 + 59 + 59 - 59 + 59 + 118)
+        json.dumps(H)
+
+    def test_sin_datos_o_con_error_igual_cubre_lo_pedido(self):
+        H = vr.armar_historia(None, "c", [["2025-01-01", "2025-01-02"]], error=True)
+        self.assertEqual((H["ventanas"], H["error"], H["docs"]), ([["2025-01-01", "2025-01-02"]], True, []))
+
+    def test_el_js_lee_las_mismas_posiciones(self):
+        self.assertIn("dia: base + d[0], clase: d[1], ped: off + d[2], canal: D.canales[d[3]], serv: D.servs[d[4]], tdoc: D.tdocs[d[5]], pax: d[6], ninos: d[7]", _JS)
+        self.assertIn("grupo: D.grupos[u[1]], venta: u[2], carta: u[3], neto: u[4], desc: u[5], costo: u[6]", _JS)
+
+    def test_el_presupuesto_es_la_columna_bruta_por_servicio(self):
+        t = pd.DataFrame({"anio": [2026, 2026], "mes": [10, 10], "servicio": ["ALMUERZO", "CENA"],
+                          "bruta": [100.0, 200.0], "neta": [80.0, 160.0]})
+        self.assertEqual(vr.presupuesto_meses(t), {"2026-10": {"ALMUERZO": 100.0, "CENA": 200.0}})
+        self.assertEqual(vr.presupuesto_meses(t.iloc[0:0]), {})
+
+    def test_el_puente_es_la_cuenta_de_comparativo(self):
+        comp = (Path(vr.__file__).parent / "ventas_comparativo.js").read_text(encoding="utf-8")
+        self.assertIn("clientes:(a.pax - p.pax) * tp", comp)
+        self.assertIn("clientes: (a.pax - p.pax) * tp, ticket: (ta - tp) * a.pax", _JS)
+
+
+@unittest.skipIf(_chromium() is None, "sin Playwright (requirements-dev.txt)")
+class LaComparacionEnElNavegador(unittest.TestCase):
+    def _pagina(self, p, ancho=1300, alto=800):
+        try:
+            b = p.chromium.launch()
+        except Exception as e:  # Chromium no instalado
+            self.skipTest(f"sin Chromium: {e}")
+        xlsx = (Path(vr.__file__).parent / "_xlsx.js").read_text(encoding="utf-8")
+        js = xlsx + _JS.replace("export default function (component)", "window.__montar = function (component)")
+        css = (Path(vr.__file__).parent / "ventas_periodo.css").read_text(encoding="utf-8")
+        pg = b.new_page(viewport={"width": ancho, "height": alto})
+        pg.set_content(f"<style>:root{{--alto-util:620px}}{css}</style><div id='r'></div>")
+        pg.add_script_tag(content=js)
+        return b, pg
+
+    def test_cada_base_contra_pandas(self):
+        t, P = _pieza()
+        # Hace un año, con Lomo Saltado de menos: el puente tiene que sumar.
+        H = _historia(-364, [["2025-10-06", "2025-10-14"]])
+        with _chromium()() as p:
+            b, pg = self._pagina(p)
+            out = pg.evaluate("""([P, H]) => {
+              const V = window.VentasPeriodo, B = V.preparar(P), fil = { grupo: [], serv: [], canal: [], tdoc: [] };
+              const st = { gran: 'Día', fil, contra: 'anio' }, R = V.calcular(B, st), out = {};
+              B.hist = V.historiaNueva('c');
+              out.falta0 = V.faltantes(B, V.ventanasDe(B, R, st)).length;
+              V.agregarHistoria(B.hist, H);
+              out.falta1 = V.faltantes(B, V.ventanasDe(B, R, st)).length;
+              const Bs = V.calcularBase(B, R, st);
+              out.venta = Bs.barras.map((x) => x && x.venta); out.total = Bs.total;
+              out.actual = R.g.total;
+              out.puenteIgual = V.puente(V.totalPeriodos(R, R.claves.map((_, i) => i)), Bs.total);
+              const stF = { gran: 'Día', fil: Object.assign({}, fil, { grupo: ['Bebidas'] }), contra: 'anio' }, RF = V.calcular(B, stF);
+              const F = V.calcularBase(B, RF, stF);
+              out.filtrado = { venta: F.total.venta, pax: F.total.pax };
+              out.opc = V.opcionesBase(R).map((x) => x[0]);
+              out.opcMes = V.opcionesBase(V.calcular(B, { gran: 'Mes', fil })).map((x) => x[0]);
+              const stA = { gran: 'Día', fil, contra: 'anio' }, RA = V.calcular(B, stA);
+              const B0 = V.preparar(Object.assign({}, P, { datos_desde: '2026-01-01' }));
+              B0.hist = V.historiaNueva('c');
+              out.sinDatos = V.calcularBase(B0, RA, stA).total;
+              return out;
+            }""", [P, H])
+            b.close()
+        self.assertEqual(out["falta0"], 1)
+        self.assertEqual(out["falta1"], 0)
+        # Las mismas ventas 364 días antes: cada barra contra sí misma.
+        self.assertEqual([x for x in out["venta"] if x is not None], out["actual"])
+        tabla = t[t["clase"].isin(dv.CLASES_VENTA)]
+        self.assertAlmostEqual(out["total"]["venta"], tabla["venta"].sum())
+        self.assertEqual(out["total"]["pax"], dv.pax_por(tabla.assign(k=1), "ped", "pax", doc="ldoc", por="k").iloc[0])
+        self.assertAlmostEqual(out["puenteIgual"]["d"], 0)
+        # Con un filtro, la base sale filtrada: el agua de L1 y su mesa.
+        self.assertAlmostEqual(out["filtrado"]["venta"], 10.0)
+        self.assertEqual(out["filtrado"]["pax"], 2)
+        self.assertEqual(out["opc"], ["anio", "ant", "normal"])
+        self.assertEqual(out["opcMes"], ["anio"])
+        # Antes de que empiecen los datos no hay base: no es «cero ventas» (#660).
+        self.assertIsNone(out["sinDatos"])
+
+    def test_el_puente_suma_la_diferencia(self):
+        _t, P = _pieza()
+        d = _corridas(-364, "h")
+        d = d[d["LLAVE LOCAL DOCUMENTO"] != "L3h"]
+        H = vr.armar_historia(vr.lineas_normalizadas(d, _CLAVES), "c", [["2025-10-06", "2025-10-14"]])
+        with _chromium()() as p:
+            b, pg = self._pagina(p)
+            u = pg.evaluate("""([P, H]) => {
+              const V = window.VentasPeriodo, B = V.preparar(P), st = { gran: 'Semana', fil: { grupo: [], serv: [], canal: [], tdoc: [] }, contra: 'anio' };
+              const R = V.calcular(B, st); B.hist = V.historiaNueva('c'); V.agregarHistoria(B.hist, H);
+              const Bs = V.calcularBase(B, R, st);
+              return V.puente(V.totalPeriodos(R, R.claves.map((_, i) => i)), Bs.total);
+            }""", [P, H])
+            b.close()
+        self.assertAlmostEqual(u["clientes"] + u["ticket"] + u["sin_clientes"], u["d"])
+        self.assertAlmostEqual(u["d"], 59.0)
+
+    def test_lo_normal_y_el_cierre_contra_pandas(self):
+        import statistics
+        t, P = _pieza(-4)
+        semanas = list(range(1, 9))
+        ventanas, hists = [], []
+        for k in semanas:
+            ini = pd.Timestamp("2026-10-01") - pd.Timedelta(days=7 * k)
+            ventanas.append([str(ini.date()), str((ini + pd.Timedelta(days=8)).date())])
+            hists.append(_corridas(-4 - 7 * k, f"h{k}"))
+        todo = pd.concat(hists + [_corridas(-4)], ignore_index=True)
+        n = vr.lineas_normalizadas(todo, _CLAVES)
+        n = n[n["clase"].isin(dv.CLASES_VENTA)]
+        por_dia = n.groupby(n["fecha"].dt.normalize())["venta"].sum()
+        ultimo = t[t["clase"].isin(dv.CLASES_VENTA)]["fecha"].max().normalize()
+        fut = pd.date_range(ultimo + pd.Timedelta(days=1), "2026-10-31")
+
+        def normal(f):
+            v = [por_dia.get(f - pd.Timedelta(days=7 * k), 0) for k in semanas]
+            v = [x for x in v if x > 0]
+            return statistics.median(v) if v else 0.0
+
+        hist = [vr.armar_historia(vr.lineas_normalizadas(h, _CLAVES), "c", [w]) for h, w in zip(hists, ventanas)]
+        P["ultimo_dato"] = str(ultimo.date())
+        with _chromium()() as p:
+            b, pg = self._pagina(p)
+            out = pg.evaluate("""([P, Hs]) => {
+              const V = window.VentasPeriodo, B = V.preparar(P), st = { gran: 'Día', fil: { grupo: [], serv: [], canal: [], tdoc: [] }, contra: 'normal' };
+              const R = V.calcular(B, st); B.hist = V.historiaNueva('c'); Hs.forEach((H) => V.agregarHistoria(B.hist, H));
+              const c = V.calcularCierre(B, R, st), Bs = V.calcularBase(B, R, st);
+              const stS = { gran: 'Día', fil: { grupo: [], serv: ['Cena'], canal: [], tdoc: [] } };
+              const stC = { gran: 'Día', fil: { grupo: [], serv: [], canal: ['Rappi'], tdoc: [] } };
+              const conServ = V.calcularCierre(B, V.calcular(B, st), Object.assign({}, st, { fil: stS.fil }));
+              const conCanal = V.calcularCierre(B, V.calcular(B, stC), stC);
+              const P2 = Object.assign({}, P, { ultimo_dato: '2026-10-20' });
+              const B2 = V.preparar(P2); B2.hist = B.hist;
+              return { cierre: c.cierre, falta: c.falta, tot: c.tot, dias: c.dias.map((e) => e.t.venta), n: c.dias.length, ppto: c.ppto, pct: c.pct, porDia: c.porDia,
+                base: Bs.barras.map((x) => x && x.venta), conServ: conServ.ppto, conCanal: conCanal.ppto, viejo: V.calcularCierre(B2, V.calcular(B2, st), st),
+                semana: V.calcularCierre(B, V.calcular(B, { gran: 'Semana', fil: st.fil }), st) };
+            }""", [P, hist])
+            b.close()
+        self.assertEqual(out["n"], len(fut))
+        esperado = [normal(f) for f in fut]
+        for a, e in zip(out["dias"], esperado):
+            self.assertAlmostEqual(a, e, places=3)
+        tot = t[t["clase"].isin(dv.CLASES_VENTA)]["venta"].sum()
+        self.assertAlmostEqual(out["tot"], tot)
+        self.assertAlmostEqual(out["cierre"], tot + sum(esperado), places=3)
+        self.assertEqual(out["ppto"], 4000.0)
+        self.assertAlmostEqual(out["pct"], (tot + sum(esperado)) / 4000)
+        self.assertAlmostEqual(out["porDia"], (4000 - tot) / len(fut))
+        # Lo normal de cada barra: el mismo día de la semana, ocho semanas atrás.
+        dias = sorted(t[t["clase"].isin(dv.CLASES_VENTA)]["fecha"].dt.normalize().unique())
+        for a, f in zip(out["base"], dias):
+            self.assertAlmostEqual(a, normal(pd.Timestamp(f)), places=3)
+        # El presupuesto no separa un canal; y sí un servicio.
+        self.assertIsNone(out["conCanal"])
+        self.assertEqual(out["conServ"], 3000.0)
+        # Con datos más nuevos en el parquet, o por semana, no hay cierre.
+        self.assertIsNone(out["viejo"])
+        self.assertIsNone(out["semana"])
+
+    def test_la_tarjeta(self):
+        _t, P = _pieza(-4)
+        hists = [_historia(-364 - 4, [["2025-10-01", "2025-10-31"]])]
+        ventanas8 = [["2026-08-14", "2026-09-30"]]
+        hists.append(_historia(-4 - 21, ventanas8, "s"))
+        with _chromium()() as p:
+            b, pg = self._pagina(p)
+            r = pg.evaluate("""([P, Hs]) => {
+              const parent = document.getElementById('r'), pedidos = [], out = {};
+              const montar = (data) => window.__montar({ data, parentElement: parent, setTriggerValue: (k, v) => pedidos.push([k, v]) });
+              montar(P);
+              const raiz = parent.querySelector('.vp'), $ = (s) => raiz.querySelector(s), $$ = (s) => [...raiz.querySelectorAll(s)];
+              const dd = () => document.body.scrollWidth - document.documentElement.clientWidth;
+              out.trayendo = $('.kpi .kn').textContent; out.pedidos = pedidos.length; out.pedido = pedidos[0];
+              // Pedir dos veces lo mismo no vuelve a mandar nada.
+              $('[data-acc="med"][data-v="clientes"]').click();
+              $('[data-acc="med"][data-v="venta"]').click();
+              out.pedidos2 = pedidos.length;
+              Hs.forEach((H) => { H.ctx = 'c'; montar(H); });
+              out.tiles = $$('.kpi').map((k) => k.textContent);
+              out.cierreTile = $('.kpi .kc') && $('.kpi .kc').textContent;
+              out.futuros = $$('.gr .fut').length; out.zonasFuturas = $$('[data-acc="fut"]').length;
+              out.base = $$('.gr .pt-b').length;
+              out.etiquetasClave = $$('.gr .et').length;
+              out.alto = raiz.clientHeight; out.altoTabla = $('.zr').clientHeight;
+              out.desborde = dd();
+              $('[data-acc="cifras"][data-v="Todas"]').click(); out.etiquetasTodas = $$('.gr .et').length;
+              $('[data-acc="cifras"][data-v="Clave"]').click();
+              // Un indicador elige qué mide el gráfico.
+              $('[data-acc="med"][data-v="ticket"]').click();
+              out.tit = $('.tit').textContent; out.ticketOn = $('.kpi.on .kr').textContent; out.capas = !!$('.ley');
+              $('[data-acc="med"][data-v="venta"]').click();
+              // Elegir un día no salta a los pedidos: lo cuenta el panel y marca su fila.
+              $$('[data-acc="barra"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+              out.modo = raiz.__vp.st.modo; out.foco = $('.pn-f b').textContent; out.filaSel = $$('tbody tr.sel').length;
+              $('[data-acc="pan"][data-v="Qué movió"]').click(); out.movio = $('.pn').textContent;
+              $('[data-acc="quitar"]').click(); out.sinFoco = !$('.pn-f');
+              $('[data-acc="pan"][data-v="Qué movió"]').click(); out.movioTodo = $('.pn').textContent;
+              $('[data-acc="pan"][data-v="Cierre"]').click(); out.cierre = $('.pn').textContent;
+              $('[data-acc="pan"][data-v="Desglose"]').click(); out.desglose = $('.pn').textContent;
+              // Un clic en la barra proyectada abre el Cierre.
+              $$('[data-acc="fut"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+              out.panFut = raiz.__vp.st.pan; $('[data-acc="pan"][data-v="Desglose"]').click();
+              // Comparar con.
+              const sel = $('.cn select'); out.opciones = [...sel.options].map((o) => o.textContent);
+              sel.value = 'normal'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+              out.contra = raiz.__vp.st.contra; out.tileNormal = $('.kpi .kn').textContent;
+              const s2 = $('.cn select'); s2.value = 'anio'; s2.dispatchEvent(new Event('change', { bubbles: true }));
+              // Ampliar: una cosa o la otra, y se vuelve con todo igual.
+              $$('.amp')[0].click(); out.amplGraf = { tabla: !!$('.zr'), pie: !!$('.pie'), panel: !!$('.pn'), alto: $('.gr svg').getAttribute('height'), volver: $$('.amp')[0].textContent };
+              $$('.amp')[0].click();
+              $('.pie .amp').click(); out.amplTabla = { graf: !!$('.gr'), tabla: $('.zr').clientHeight, volver: $('.pie .amp').textContent };
+              $('.pie .amp').click(); out.vuelve = !!$('.gr') && !!$('.zr');
+              // «Ver sus pedidos» y Capas siguen.
+              $$('[data-acc="barra"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+              $('[data-acc="verped"]').click(); out.detalle = raiz.__vp.st.modo;
+              $('[data-acc="ley"]').click(); out.capasP = $('.ley-p').textContent;
+              return out;
+            }""", [P, hists])
+            b.close()
+        self.assertIn("Trayendo", r["trayendo"])
+        self.assertEqual(r["pedidos"], 1)
+        self.assertEqual(r["pedido"][0], "historia")
+        self.assertEqual(r["pedido"][1]["ctx"], "c")
+        self.assertEqual(r["pedidos2"], 1)
+        self.assertIn("vs año pasado", r["tiles"][0])
+        self.assertIn("Cierre ≈", r["cierreTile"])
+        self.assertIn("del presupuesto", r["cierreTile"])
+        self.assertEqual(r["zonasFuturas"], 22)
+        self.assertGreater(r["futuros"], 0)
+        self.assertGreater(r["base"], 0)
+        self.assertLess(r["etiquetasClave"], r["etiquetasTodas"])
+        self.assertEqual(r["alto"], 589)
+        self.assertGreater(r["altoTabla"], 60)
+        self.assertLessEqual(r["desborde"], 0)
+        self.assertEqual(r["tit"], "Ticket por día")
+        self.assertEqual(r["ticketOn"], "Ticket")
+        self.assertFalse(r["capas"])
+        self.assertEqual(r["modo"], "Resumen")
+        self.assertTrue(r["foco"])
+        self.assertEqual(r["filaSel"], 1)
+        self.assertIn("Clientes", r["movio"])
+        self.assertTrue(r["sinFoco"])
+        self.assertIn("Esta vista", r["movioTodo"])
+        self.assertIn("Canales sin clientes", r["movioTodo"])
+        self.assertIn("Cierre proyectado", r["cierre"])
+        self.assertIn("Presupuesto", r["cierre"])
+        self.assertIn("Para llegar", r["cierre"])
+        for rotulo_ in ("Precio de carta", "Rappi", "Notas de crédito", "Neto sin IGV", "Costo histórico", "Propinas", "Cortesías", "Anulados"):
+            self.assertIn(rotulo_, r["desglose"])
+        self.assertEqual(r["panFut"], "Cierre")
+        self.assertEqual(r["opciones"][0], "Año pasado")
+        self.assertEqual(r["opciones"][2], "Lo normal")
+        self.assertEqual(r["contra"], "normal")
+        self.assertFalse(r["amplGraf"]["tabla"])
+        self.assertTrue(r["amplGraf"]["panel"])
+        self.assertGreater(int(r["amplGraf"]["alto"]), 236)
+        self.assertIn("Volver", r["amplGraf"]["volver"])
+        self.assertFalse(r["amplTabla"]["graf"])
+        self.assertGreater(r["amplTabla"]["tabla"], 300)
+        self.assertTrue(r["vuelve"])
+        self.assertEqual(r["detalle"], "Detalle")
+        for capa in ("Clientes", "Ticket", "Descuento"):
+            self.assertIn(capa, r["capasP"])
+
+    def test_sin_historia_la_tarjeta_sigue_sin_comparar(self):
+        _t, P = _armar()
+        with _chromium()() as p:
+            b, pg = self._pagina(p)
+            r = pg.evaluate("""(P) => {
+              const parent = document.getElementById('r'), pedidos = [];
+              window.__montar({ data: P, parentElement: parent, setTriggerValue: (k) => pedidos.push(k) });
+              const raiz = parent.querySelector('.vp');
+              return { pedidos: pedidos.length, cn: !!raiz.querySelector('.cn'), tabs: [...raiz.querySelectorAll('.pn-t button')].map((x) => x.textContent), kpis: raiz.querySelectorAll('.kpi').length };
+            }""", P)
+            b.close()
+        self.assertEqual(r, {"pedidos": 0, "cn": False, "tabs": ["Desglose"], "kpis": 4})
+
+    def test_en_el_celular_no_se_desborda(self):
+        _t, P = _pieza(-4)
+        hists = [_historia(-368, [["2025-10-01", "2025-10-31"]]), _historia(-25, [["2026-08-14", "2026-09-30"]], "s")]
+        with _chromium()() as p:
+            b, pg = self._pagina(p, 390, 844)
+            r = pg.evaluate("""([P, Hs]) => {
+              const parent = document.getElementById('r');
+              const montar = (data) => window.__montar({ data, parentElement: parent, setTriggerValue: () => {} });
+              montar(P); Hs.forEach((H) => { H.ctx = 'c'; montar(H); });
+              const raiz = parent.querySelector('.vp');
+              return { ancho: raiz.scrollWidth - raiz.clientWidth, tabla: raiz.querySelector('.zr').clientHeight, kpi: raiz.querySelector('.kpi').getBoundingClientRect().width };
+            }""", [P, hists])
+            b.close()
+        self.assertLessEqual(r["ancho"], 1)
+        self.assertGreater(r["tabla"], 100)
+        self.assertGreater(r["kpi"], 100)
 
 
 if __name__ == "__main__":

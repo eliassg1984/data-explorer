@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-757 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+758 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (248)
 
@@ -316,7 +316,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#749** — Compras › «Vs año pasado» abre en el TOTAL, pone la venta al lado y parte la diferencia en…
 - **#755** — Ventas: el filtro de grupo es de CADA TARJETA, no de la franja
 
-**Layout y alturas** (106)
+**Layout y alturas** (107)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -424,6 +424,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#729** — Costo por unidad útil como pieza propia: atribución intacta, comparación explicable
 - **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
+- **#758** — Venta por Periodo no se aprieta: indicadores que eligen, comparación elegible y cierre
 
 **Plotly y figuras** (129)
 
@@ -1119,7 +1120,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (231)
+**Decisiones de diseño y UX** (232)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1352,6 +1353,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#754** — Costos cuenta el cierre FÍSICO: las notas digitadas hasta la apertura del conteo restan en el…
 - **#755** — Ventas: el filtro de grupo es de CADA TARJETA, no de la franja
 - **#757** — Costos dice qué es su venta y qué queda fuera, con su monto
+- **#758** — Venta por Periodo no se aprieta: indicadores que eligen, comparación elegible y cierre
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57431,6 +57433,49 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        S/ 2.196 y S/ 346 (y Eventos S/ 51.860 al desmarcarlo).
      Lo vigila `test_costo_ventas.py`. (2026-10-29.)
 
+758. **Venta por Periodo no se aprieta: indicadores que eligen, comparación elegible y cierre**
+     La vista traía once cifras en tres renglones, 56 rótulos sobre 28 barras
+     y dos líneas encima («apretado como un mapa», a pedido). Es divulgación
+     progresiva: lo que se ve al abrir es lo que decide, y nada se perdió.
+     · **Cuatro indicadores eligen qué mide el gráfico** (`st.med`); las demás
+       cifras van al panel de al costado, «Desglose». Las barras llevan cifra
+       sólo en el máximo, el mínimo, el feriado y el último: «Clave | Todas»
+       devuelve una por barra. Clientes y ticket encima de la venta siguen en
+       «Capas», apagados; la tapa del descuento, igual.
+     · **Elegir una barra ya no salta a los pedidos**: el panel cuenta ese
+       período y «Ver sus pedidos» baja al Detalle. Arrastrar sigue yendo ahí.
+     · **«Contra»: año pasado, N semanas antes, lo normal** (Mes y Año, sólo
+       año pasado). Una base es la MISMA cuenta sobre otros días, con los
+       filtros de la tarjeta. Esos días no están en el rango cargado: la pieza
+       los pide (trigger `historia`) y llegan en un montaje chico
+       (`armar_historia`), por comprobante y grupo; sumados por día romperían
+       los clientes de un canje o de una cuenta dividida. Un período anterior
+       al primer dato queda fuera del total (#660); un hueco de hasta 7 días no
+       vale otra consulta (`faltantes`).
+     · **«Qué movió» es la cuenta de `puenteC` de Comparativo**: clientes ×
+       ticket de la base, cambio de ticket × clientes de hoy, y los canales sin
+       clientes. Las tres suman la diferencia; si se toca una, se toca la otra.
+     · **«Cierre»** sólo con el grano Día en el mes en curso, abierto desde su
+       comienzo y con el último dato: cada día que falta es la mediana de los
+       mismos 8 días de la semana anteriores con venta. **El último dato tiene
+       un día de margen**: `rango_fechas` mide por el registro y la venta por
+       el turno, así que el parquet llega al 29 y la venta al 28 (exigirlos
+       iguales apagaba el cierre siempre, y sólo se vio con datos reales).
+     · **El presupuesto es la columna «bruta»**, contra la venta con impuestos,
+       como Comparativo; la portada de Inicio compara neta contra neto. Sólo
+       con la venta entera de uno o todos los servicios
+       (`presupuesto_ventas.aplica`), y en el navegador, porque ahí se filtra.
+     · **Una pantalla**: `.vp` mide `--alto-util` y la tabla toma lo que queda;
+       en una pantalla baja cede primero el gráfico (`altoTotal - 348`). Las
+       variaciones de cada celda se ven sólo con la tabla ampliada. «Ampliar»
+       no pone nada encima: deja una de las dos partes.
+     · **Una clase de la pieza puede pisar a otra**: `.ef .det` heredó el
+       `height: 100%` de la grilla del Detalle (`.vp .det`) y las barras de
+       «Qué movió» se montaban unas sobre otras. Los montajes chicos van con
+       `position: absolute` (`_80_cards.py`): en el flujo, la tarjeta les
+       pagaba un gap.
+     Lo vigila `test_ventas_periodo.py`. (2026-10-30.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57443,7 +57488,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#757**; la próxima toma el número siguiente.
+> última regla es la **#758**; la próxima toma el número siguiente.
 
 >
 

@@ -281,7 +281,8 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
             _ventas_resumen(d_todo, col_venta, col_fecha, col_pax, col_pedido,
                             col_prod, col_cant, col_fam=col_fam,
                             col_serv=col_serv, col_canal=col_canal,
-                            col_mesero=col_mesero, d_pagos=d_pagos)
+                            col_mesero=col_mesero, d_pagos=d_pagos,
+                            filtrar_cb=_filtrar_items)
 
         # ── 1) Mix de carta: la venta por período partida por Grupo ›
         # Sub Grupo › Producto (graficos/ventas_mix.py, regla #527). Le pasa
