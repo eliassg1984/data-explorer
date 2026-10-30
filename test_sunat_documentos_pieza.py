@@ -91,7 +91,7 @@ class Contrato(unittest.TestCase):
         fake=SimpleNamespace(session_state=ss,markdown=Mock(),caption=Mock(),info=Mock(),error=Mock(),container=lambda **kw:nullcontext(),columns=lambda *a,**kw:[nullcontext() for _ in range(4)],empty=lambda:nullcontext(),button=lambda *a,**kw:False,selectbox=lambda *a,**kw:mes,spinner=lambda *a,**kw:nullcontext())
         with ExitStack() as stack:
             for contexto in [
-                patch.object(pieza,'st',fake),patch.object(ds,'st',fake),
+                patch.object(pieza,'st',fake),patch.object(ds,'st',fake),patch.object(pieza.cab,'st',fake),patch.object(pieza.cab,'_aviso'),
                 patch.object(ds,'_rango_vigente',return_value=('2026-01-01','2026-01-31')),
                 patch.object(ds.sunat,'comprobantes_rango',return_value=(s,'parquet')),
                 patch.object(ds,'_parquet_agrupado_por_documento',return_value=c),

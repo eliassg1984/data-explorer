@@ -279,6 +279,34 @@ class Aviso(unittest.TestCase):
         self.assertIsNone(p.texto_aviso(None))
         self.assertTrue(p.texto_aviso(c | dict(resumen={}), ahora)[0].startswith("✓"))
 
+    def test_la_cabecera_es_la_misma_en_las_cuatro_vistas(self):
+        from types import SimpleNamespace
+        from contextlib import nullcontext
+        from unittest.mock import Mock
+        from graficos.compras import sunat_cabecera as cab
+        from graficos.compras import _sunat_vistas as sv
+        for vista in sv.VISTAS:
+            boton = Mock()
+            fake = SimpleNamespace(session_state={}, container=lambda **k: nullcontext(), button=boton)
+            with patch.object(cab, "st", fake), patch.object(cab, "_aviso"):
+                cab.fila_vistas(vista)
+                on = boton.call_args_list[0].kwargs
+                on["on_click"](*on["args"])
+            pestanas = {c.args[0]: c.kwargs["type"] for c in boton.call_args_list}
+            self.assertEqual(set(pestanas), set(sv.VISTAS))
+            self.assertEqual([v for v, t in pestanas.items() if t == "primary"], [vista])
+            self.assertEqual(fake.session_state[sv.K_VISTA], sv.VISTA_CRUCE)
+
+    def test_filtros_dicen_que_son(self):
+        from unittest.mock import Mock
+        from types import SimpleNamespace
+        from graficos.compras import sunat_cabecera as cab
+        sel = Mock(return_value="Todos")
+        with patch.object(cab, "st", SimpleNamespace(selectbox=sel)):
+            cab.selector_mes(["Todos", "Mes abierto"], "ayuda")
+        fmt = sel.call_args.kwargs["format_func"]
+        self.assertEqual((fmt("Todos"), fmt("Mes abierto")), ("Mes en SUNAT: todos", "Mes en SUNAT: abierto"))
+
     def test_motivos_del_lote_por_car(self):
         from graficos.compras import documentos_sunat as ds
         doc = pd.DataFrame([dict(car="b1", ruc_proveedor="1", serie="F1", numero="1", documento="F1-1",

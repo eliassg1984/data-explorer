@@ -24,6 +24,7 @@ import sunat_control as sc
 from graficos.base import una_vez_por_corrida
 from graficos.movil import css_movil, js_movil
 from . import _sunat_vistas as sv
+from . import sunat_cabecera as cab
 from . import documentos_sunat as ds
 
 _DIR = Path(__file__).parent
@@ -167,40 +168,39 @@ def datos(control, verif=None, zip_listo=None, aviso=""):
 
 @una_vez_por_corrida
 @st.fragment
-def _tarjeta():
-    with st.container(border=True, key="sunat_card_ctl"):
-        control = sc.leer_control()
-        reg = sunat._registro_de_parquet()
-        if control is None or reg is None or reg.empty:
-            st.info("Todavía no hay control: lo arma la actualización de cada madrugada.")
-            return
-        ss = st.session_state
-        z = ss.get(K_ZIP)
-        # El contenedor va SIEMPRE, aunque esté vacío: si apareciera recién con
-        # el ZIP, la pieza cambiaría de lugar, se volvería a montar y perdería
-        # la pestaña y lo elegido.
-        fila = st.container(horizontal=True, vertical_alignment="center", gap="small",
-                            key="sunat_ctl_zip_fila")
-        if z and z.get("bytes"):
-            with fila:
-                st.download_button(f"⬇ Bajar el ZIP ({z['n']} XML + faltantes.xlsx)",
-                                   data=z["bytes"], file_name=f"sunat_xml_{z['mes']}.zip",
-                                   mime="application/zip", key="sunat_ctl_zip_btn",
-                                   on_click="ignore", type="primary")
-        _PIEZA(key=_KEY, data=datos(control, ss.get(K_VERIF), z, ss.get(K_AVISO, "")),
-               on_verificar_change=_al_verificar, on_zip_change=_al_zip,
-               on_pedir_change=_al_pedir, width="stretch")
+def _cuerpo():
+    control = sc.leer_control()
+    reg = sunat._registro_de_parquet()
+    if control is None or reg is None or reg.empty:
+        st.info("Todavía no hay control: lo arma la actualización de cada madrugada.")
+        return
+    ss = st.session_state
+    z = ss.get(K_ZIP)
+    # El contenedor va SIEMPRE, aunque esté vacío: si apareciera recién con
+    # el ZIP, la pieza cambiaría de lugar, se volvería a montar y perdería
+    # la pestaña y lo elegido.
+    fila = st.container(horizontal=True, vertical_alignment="center", gap="small",
+                        key="sunat_ctl_zip_fila")
+    if z and z.get("bytes"):
+        with fila:
+            st.download_button(f"⬇ Bajar el ZIP ({z['n']} XML + faltantes.xlsx)",
+                               data=z["bytes"], file_name=f"sunat_xml_{z['mes']}.zip",
+                               mime="application/zip", key="sunat_ctl_zip_btn",
+                               on_click="ignore", type="primary")
+    _PIEZA(key=_KEY, data=datos(control, ss.get(K_VERIF), z, ss.get(K_AVISO, "")),
+           on_verificar_change=_al_verificar, on_zip_change=_al_zip,
+           on_pedir_change=_al_pedir, width="stretch")
 
 
 def renderizar():
-    _tarjeta()
+    # Las pestañas, afuera del fragment: adentro, un clic corría sólo el fragment
+    # y la vista no cambiaba nunca.
+    with st.container(border=True, key="sunat_card_ctl"):
+        cab.fila_vistas(sv.VISTA_CONTROL)
+        _cuerpo()
 
 
 # ── el aviso de las otras tres vistas ─────────────────────────────────────
-
-def _ir_a_control():
-    st.session_state[sv.K_VISTA] = sv.VISTA_CONTROL
-
 
 def texto_aviso(control, ahora=None):
     """`(texto, grave)` del renglón de arriba, o None sin control. `grave` es lo
@@ -225,15 +225,3 @@ def texto_aviso(control, ahora=None):
     if res.get("rev"):
         partes.append(f"{res['rev']} meses con cifras distintas")
     return " · ".join(partes) or "✓ La app tiene lo mismo que SUNAT", bool(fallidos or horas > 36)
-
-
-def aviso():
-    """El renglón de arriba: quien mira un total se entera de lo que le falta."""
-    t = texto_aviso(sc.leer_control())
-    if not t:
-        return
-    with st.container(horizontal=True, vertical_alignment="center", gap="small",
-                      key="sunat_sello_control"):
-        st.markdown(f'<span class="sunat-sello{" grave" if t[1] else ""}">Control con SUNAT: {t[0]}</span>',
-                    unsafe_allow_html=True)
-        st.button("Ver el control →", key="sunat_sello_ir", type="tertiary", on_click=_ir_a_control)

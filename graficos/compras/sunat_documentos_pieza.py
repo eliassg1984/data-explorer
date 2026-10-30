@@ -10,6 +10,7 @@ from graficos.base import una_vez_por_corrida
 import tipo_compra
 from . import documentos_sunat as ds
 from . import _sunat_vistas as sv
+from . import sunat_cabecera as cab
 from . import sunat_documentos_datos as datos
 
 _DIR=Path(__file__).parent
@@ -102,15 +103,12 @@ _montar=una_vez_por_corrida(st.fragment(_montar_cuerpo))
 
 def renderizar(d,col_fecha):
     ss=st.session_state;ini,fin=ds._rango_vigente();doc=None
-    st.markdown('<style>.st-key-sunat_cabecera_nativa{height:36px;min-height:36px;margin:0!important}@media(max-width:750px){.st-key-sunat_cabecera_nativa{height:auto!important}}</style>',unsafe_allow_html=True)
     with st.container(border=True,key='sunat_card_izq'):
-        with st.container(key='sunat_cabecera_nativa'):
-            cf,cm,cp,cr=st.columns([1.7,1.0,2.2,.4],vertical_alignment='center')
-            with cf:ds.selector_fecha_tarjeta('sunat_f','sunat_fecha_flag')
-            with cm:mes=st.selectbox('Mes en SUNAT',list(ds._MES_SUNAT),key='sunat_mes_sunat',label_visibility='collapsed',help='Estado del período tributario; se aplica antes de cruzar las fuentes.')
-            with cp:slot=st.empty()
-            with cr:
-                if st.button('⟳',key='sunat_actualizar',help='Volver a consultar a SUNAT',use_container_width=True):_refrescar();st.rerun()
+        cab.fila_vistas(sv.VISTA_DOCS,lambda:ds.selector_fecha_tarjeta('sunat_f','sunat_fecha_flag'))
+        with st.container(horizontal=True,vertical_alignment='center',gap='small',key='sunat_cab_filtros'):
+            mes=cab.selector_mes(ds._MES_SUNAT,'Estado del período tributario; se aplica antes de cruzar las fuentes.')
+            slot=st.empty()
+            if st.button('⟳',key='sunat_actualizar',help='Volver a consultar a SUNAT'):_refrescar();st.rerun()
         if ini is None:st.info('Elegí una fecha en el calendario.');return None
         with st.spinner('Cargando el registro de compras de SUNAT…'):
             try:sire,origen=ds.sunat.comprobantes_rango(ini,fin)

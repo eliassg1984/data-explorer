@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-761 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+762 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (248)
+**CSS y estilos** (249)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -315,6 +315,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#748** — Ajuste › «Diferencias del cierre» abre con TODAS las familias y los insumos de operación…
 - **#749** — Compras › «Vs año pasado» abre en el TOTAL, pone la venta al lado y parte la diferencia en…
 - **#755** — Ventas: el filtro de grupo es de CADA TARJETA, no de la franja
+- **#762** — Documentos SUNAT: una cabecera, la misma en las cuatro vistas, y «Falta cargar» en naranja
 
 **Layout y alturas** (107)
 
@@ -1123,7 +1124,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (234)
+**Decisiones de diseño y UX** (235)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1359,6 +1360,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#758** — Venta por Periodo no se aprieta: indicadores que eligen, comparación elegible y cierre
 - **#760** — Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían sin convertir
 - **#761** — Lo «Sin descargo» del POS suma en la venta y no se observa como «sin costo»
+- **#762** — Documentos SUNAT: una cabecera, la misma en las cuatro vistas, y «Falta cargar» en naranja
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57601,6 +57603,37 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      como «sin costo cargado» entre los que no clasifica: ahí es el motivo de
      dejarlos fuera de la matriz, no un dato a corregir. (2026-10-30.)
 
+762. **Documentos SUNAT: una cabecera, la misma en las cuatro vistas, y «Falta
+     cargar» en naranja.** A pedido, comparando con el boceto: «se ve mejor ordenado».
+     La tarjeta abría con selectores anchos y sin rótulo («Todos»), las vistas sólo
+     aparecían al pasar el cursor por el menú y el aviso del Control quedaba afuera.
+     `graficos/compras/sunat_cabecera.py`: las pestañas, el aviso y la fecha en una
+     fila; los filtros con su nombre («Mes en SUNAT: todos», con `format_func`, así que
+     el valor del widget y lo que lo lee no cambian), debajo.
+
+     Las pestañas repiten el menú a propósito, y es la única área que lo hace: con
+     cuatro vistas, verlas evita buscarlas. Escriben el `state_key` del rail, así que no
+     hay un segundo estado. Un `st.empty()` y un contenedor con key nacen a todo el ancho
+     en una fila horizontal: el CSS los lleva a `auto`, y por eso la fecha se empuja con
+     `margin-left: auto`. El alto de cada pieza descuenta las dos filas (`--alto-util`
+     menos 120 px).
+
+     El naranja contradice el «menos pintoresco» de la #694 sólo acá: en lavanda muy
+     claro, lo que falta cargar parecía un espacio vacío, y es lo primero que hay que
+     mirar.
+
+     **Un botón que cambia de vista no puede estar adentro de un fragment.** En Control
+     la tarjeta entera era un fragment: el clic en una pestaña corría sólo el fragment,
+     el callback escribía la vista y la página seguía en Control, sin error. Salió al
+     recorrer las cuatro vistas de ida y vuelta, no al mirar cada una. Ahora la tarjeta y
+     la cabecera van afuera y el fragment es `_cuerpo`.
+
+     En el celular las pestañas no se dibujan (`display: none` por CSS, el widget sigue):
+     están en la barra de abajo, y apiladas se comían media pantalla. Un `selectbox`
+     recorre DOS alturas en esta tarjeta —la del grupo y la del `input` de la regla de
+     los selectores como texto—: subir una sola deja el texto arriba y las cajas
+     montadas. (2026-10-30.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57613,7 +57646,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#761**; la próxima toma el número siguiente.
+> última regla es la **#762**; la próxima toma el número siguiente.
 
 >
 

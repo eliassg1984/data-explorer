@@ -1171,7 +1171,7 @@ en la app. Lo que muerde:
 - **Un mes que falla ya no desaparece**: `herramientas/sunat_registro_sync.py`
   reintenta y, si no sale, conserva las filas de ayer
   (`sunat_control.rellenar_fallidos`) y la app lo dice en el aviso de arriba
-  de cada vista (`sunat_control_pieza.aviso`). Sale con código 2; un fallo del
+  de cada vista (`sunat_cabecera._aviso`). Sale con código 2; un fallo del
   control, con 3, sin tocar el registro.
 - **«Aún no llegan» se consulta en vivo**: la pieza pide el mes abierto
   (trigger `verificar`) después de dibujar, una vez por sesión.
@@ -1190,6 +1190,14 @@ comprobante, ingresar, el lote) sí pide una corrida completa, y el trigger no
 sobrevive a ella: se deja en `_K_ACCION`. La causa sale de los montos
 (`sunat_control.causa_documento`) y se afina con el XML. Los dólares con cambio 1
 se convierten al subir el registro (`sunat.convertir_sin_cambio`).
+
+**La cabecera es UNA desde la #762** (`graficos/compras/sunat_cabecera.py`): las
+vistas, el aviso del Control y la fecha arriba; los filtros debajo, cada uno
+diciendo qué es. Las pestañas escriben el `state_key` del rail. «Falta cargar» va
+en naranja sólo en estas vistas: el «menos pintoresco» de la #694 sigue en las demás.
+En el celular las pestañas no van: ya están en la barra de abajo. **Un botón que
+cambia de vista no puede estar adentro de un fragment**: correría sólo el fragment
+y la vista no cambiaría; por eso en Control el fragment es sólo lo de debajo.
 
 `test_sunat_vistas_pieza.py` vigila Cruce y Proveedores en Chromium.
 `test_sunat_control.py` vigila la lectura de los dos archivos de SUNAT, el

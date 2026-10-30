@@ -15,11 +15,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  height: calc(var(--alto-util, 620px) - 30px);
+  height: calc(var(--alto-util, 620px) - 94px);
   min-height: 420px;
   box-sizing: border-box;
 }
-.sc.conzip { height: calc(var(--alto-util, 620px) - 78px); }
+.sc.conzip { height: calc(var(--alto-util, 620px) - 142px); }
 .sc * { box-sizing: border-box; }
 /* :where para no ganarle al color de cada botón. */
 :where(.sc) button, :where(.sc) input, :where(.sc) select { font: inherit; color: inherit; }

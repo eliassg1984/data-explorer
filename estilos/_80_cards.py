@@ -4668,29 +4668,5 @@ CSS = """    /* ================================================================
             --persp-alto: 44px;
             --alto-util: calc(var(--alto-util-base) - var(--persp-alto));
         }
-        /* El renglón del Control encima de las vistas de Documentos SUNAT le
-           cede a la tarjeta lo que ocupa (regla #759). */
-        .st-key-compras_sunat_drill_wrap:has(.st-key-sunat_sello_control) {
-            --alto-util: calc(var(--alto-util-base) - 34px);
-        }
-    }
-    .st-key-sunat_sello_control {
-        min-height: 24px;
-        gap: 6px !important;
-    }
-    .st-key-sunat_sello_control button {
-        min-height: 22px !important;
-        padding: 0 4px !important;
-    }
-    .st-key-sunat_sello_control button p {
-        font-size: 12px !important;
-    }
-    .sunat-sello {
-        font-size: 12px;
-        color: var(--text-secondary);
-    }
-    .sunat-sello.grave {
-        color: var(--warning-text);
-        font-weight: 600;
     }
 """

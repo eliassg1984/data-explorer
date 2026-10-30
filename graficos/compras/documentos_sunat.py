@@ -777,6 +777,7 @@ def _filtro_proveedor(slot, df_cruce, claves):
     with slot:
         sel = st.selectbox(
             "Proveedor", etiquetas, key=k_w, label_visibility="collapsed",
+            format_func=lambda x: "Proveedor: todos" if x == _TODOS_PROV else x,
             help="Filtra la tabla, los KPIs, el Excel y los gráficos de "
                  "abajo por un proveedor. La lista sale de los DOS lados "
                  "del cruce, así que incluye a los que sólo están cargados "
@@ -4281,7 +4282,6 @@ def renderizar_documentos_sunat(d, col_fecha, vista=None):
     vista = vista or sv.VISTA_DOCS
     if vista == sv.VISTA_CONTROL:
         return sunat_control_pieza.renderizar()
-    sunat_control_pieza.aviso()
     es_docs = vista == sv.VISTA_DOCS
     if es_docs:
         from .sunat_documentos_pieza import renderizar
@@ -4327,49 +4327,18 @@ def renderizar_documentos_sunat(d, col_fecha, vista=None):
         # columnas-internas: la cabecera de la tarjeta — los cuatro filtros
         # y la botonera. No es una fila de un drill, así que no va con
         # `COLUMNAS_DRILL`.
-        c_fecha, c_mes, c_prov, c_est, c_act = st.columns(
-            [1.5, 1.0, 2.1, 1.35, 0.95])
-        with c_fecha:
-            # La fecha, DENTRO de la tarjeta: acá no es contexto global,
-            # es EL filtro de la tabla — el rango que se le consulta al
-            # SIRE. Hasta el 2026-10-11 era el pill viejo de la franja
-            # (`franja_fecha.render()`: atajos cortos + un `date_input`), el
-            # único que quedaba en la app; se reportó como «no es similar al
-            # de otros reportes». Ahora es el panel de las demás tarjetas
-            # (`selector_fecha_tarjeta`, regla #616) SIN `categoria`: escribe
-            # la clave canónica del reporte, que es la que lee
-            # `_rango_vigente`. Al no ser ya la key de un widget, Streamlit
-            # no la borra al salir del reporte; el espejo de
-            # `restaurar_eco` queda como red. Regla #633.
-            #
-            # El selector «Ver» que había acá bajó al panel del gráfico
-            # (`_panel_grafico`), que es lo único que controlaba.
-            selector_fecha_tarjeta("sunat_f", "sunat_fecha_flag")
-        with c_mes:
-            mes_sunat = st.selectbox(
-                "Mes en SUNAT", list(_MES_SUNAT), key="sunat_mes_sunat",
-                label_visibility="collapsed",
-                help="El estado del PERÍODO tributario en SUNAT, no del "
-                     "documento. «Mes abierto» = SUNAT ya ve la compra "
-                     "pero el registro de ese mes todavía no se "
-                     "presentó: es crédito fiscal sin tomar. Si está "
-                     "cargado o no en tu sistema lo dice «Está vs "
-                     "Sistema».",
-            )
-        with c_prov:
-            # Mismo truco que el botón de Excel de al lado: el hueco se
-            # reserva acá y lo rellena `_cuerpo`, que es quien tiene la
-            # lista de proveedores. Ver `_filtro_proveedor`.
+        from . import sunat_cabecera as cab
+        cab.fila_vistas(vista, lambda: selector_fecha_tarjeta("sunat_f", "sunat_fecha_flag"))
+        with st.container(horizontal=True, vertical_alignment="center", gap="small",
+                          key="sunat_cab_filtros"):
+            mes_sunat = cab.selector_mes(
+                _MES_SUNAT,
+                "El estado del PERÍODO tributario en SUNAT, no del documento. "
+                "«Mes abierto» = SUNAT ya ve la compra pero el registro de ese "
+                "mes todavía no se presentó: es crédito fiscal sin tomar. Si "
+                "está cargado o no en tu sistema lo dice «Está vs Sistema».")
             _slot_prov = st.empty()
-        with c_est:
-            # Y el de estado igual, por el mismo motivo: sus etiquetas
-            # llevan el conteo de cada estado, y eso sale del cruce, que
-            # se calcula abajo. Ver `_filtro_estado`.
             _slot_est = st.empty()
-        with c_act:
-            # columnas-internas: 3 iconos de accion
-            _c_ref, _c_lote, _c_xls = st.columns(3)
-        with _c_ref:
             _ayuda = "Volver a consultar a SUNAT"
             if not sunat.secrets_disponibles():
                 _ayuda += (". Sin credenciales configuradas: se muestran "
@@ -4377,11 +4346,7 @@ def renderizar_documentos_sunat(d, col_fecha, vista=None):
                            "SUNAT_USUARIO_SOL, SUNAT_CLAVE_SOL, "
                            "SUNAT_CLIENT_ID y SUNAT_CLIENT_SECRET a los "
                            "secrets).")
-            # Limpia TODAS las cachés de la cadena: la del parquet, la del
-            # rango y la de cada período. La del rango sola devolvería lo
-            # mismo, porque se apoya en las otras.
-            if st.button("⟳", key="sunat_actualizar", help=_ayuda,
-                         use_container_width=True):
+            if st.button("⟳", key="sunat_actualizar", help=_ayuda):
                 sunat._registro_de_parquet.clear()
                 sunat.obtener_comprobantes.clear()
                 sunat.obtener_comprobantes_rango.clear()
@@ -4390,16 +4355,7 @@ def renderizar_documentos_sunat(d, col_fecha, vista=None):
                 sunat._bytes_original.clear()
                 sunat.claves_xml_en_r2.clear()
                 st.rerun()
-        with _c_lote:
-            # Como el Excel: el hueco se reserva acá y lo rellena `_cuerpo`,
-            # que es quien sabe qué filas muestra la tabla. Regla #675.
             _slot_lote = st.empty()
-        with _c_xls:
-            # El botón de exportar vive ARRIBA (a pedido) pero los datos
-            # que exporta se calculan MÁS ABAJO. `st.empty()` reserva el
-            # sitio ahora y se rellena cuando el df existe: es la única
-            # forma de tener un control arriba que dependa de algo de
-            # abajo sin partir el flujo en dos reruns.
             _slot_excel = st.empty()
 
         # (Acá iba un SEGUNDO RENGLÓN con la tira de KPIs del cruce —docs,

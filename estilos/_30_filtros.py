@@ -43,6 +43,162 @@ CSS = """    /* ================================================================
         box-shadow: none !important;
         min-height: 0 !important;
     }
+
+    /* LA CABECERA DE DOCUMENTOS SUNAT (regla #762): dos filas de controles del
+       tamaño de su texto, que envuelven si no entran. Los bloques de Streamlit
+       nacen a todo el ancho: acá van `auto`, con la fecha empujada a la derecha.
+       Los dos filtros llevan su caja (`role="group"` en la 1.64 de Cloud,
+       `data-baseweb` en la 1.59 de la laptop). */
+    .st-key-sunat_cab_fila1, .st-key-sunat_cab_filtros {
+        flex-wrap: wrap !important;
+        gap: 6px 8px !important;
+        width: 100% !important;
+        align-items: center !important;
+    }
+    .st-key-sunat_cab_fila1 > *, .st-key-sunat_cab_filtros > *,
+    .st-key-sunat_cab_vistas > * {
+        width: auto !important;
+        flex: 0 0 auto !important;
+        min-width: 0 !important;
+    }
+    /* Un contenedor con key va envuelto en otro nodo: el que se empuja es ése. */
+    .st-key-sunat_cab_fila1 > :has(.st-key-sunat_cab_fecha),
+    .st-key-sunat_cab_fila1 > .st-key-sunat_cab_fecha {
+        margin-left: auto !important;
+    }
+    .st-key-sunat_cab_fecha {
+        width: auto !important;
+        flex: 0 0 auto !important;
+    }
+    .st-key-sunat_cab_vistas {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        flex-wrap: nowrap !important;
+        gap: 0 !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+        background: var(--bg-card) !important;
+    }
+    .st-key-sunat_cab_vistas button {
+        border: 0 !important;
+        border-right: 1px solid var(--border) !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        min-height: 30px !important;
+        height: 30px !important;
+        padding: 0 12px !important;
+    }
+    .st-key-sunat_cab_vistas button p {
+        font-size: 13px !important;
+        color: var(--text-secondary) !important;
+        white-space: nowrap !important;
+    }
+    .st-key-sunat_cab_vistas > *:last-child button { border-right: 0 !important; }
+    .st-key-sunat_cab_vistas button:hover { background: var(--accent-tint) !important; }
+    .st-key-sunat_cab_vistas button[kind="primary"],
+    .st-key-sunat_cab_vistas button[data-testid="stBaseButton-primary"] {
+        background: var(--accent-tint) !important;
+    }
+    .st-key-sunat_cab_vistas button[kind="primary"] p,
+    .st-key-sunat_cab_vistas button[data-testid="stBaseButton-primary"] p {
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
+    .st-key-sunat_sello_ojo button, .st-key-sunat_sello_grave button, .st-key-sunat_sello_ok button {
+        border-radius: 8px !important;
+        min-height: 30px !important;
+        height: 30px !important;
+        padding: 0 10px !important;
+    }
+    .st-key-sunat_sello_ojo button, .st-key-sunat_sello_grave button {
+        border: 1px solid var(--warning-border) !important;
+        background: var(--warning-bg) !important;
+    }
+    .st-key-sunat_sello_ok button {
+        border: 1px solid var(--success-text) !important;
+        background: var(--success-bg) !important;
+    }
+    .st-key-sunat_sello_ojo button p, .st-key-sunat_sello_grave button p {
+        color: var(--warning-text) !important;
+        font-size: 12px !important;
+        white-space: nowrap !important;
+    }
+    .st-key-sunat_sello_grave button p { font-weight: 700 !important; }
+    .st-key-sunat_sello_ok button p {
+        color: var(--success-text) !important;
+        font-size: 12px !important;
+        white-space: nowrap !important;
+    }
+    .st-key-sunat_mes_sunat { width: 205px !important; }
+    .st-key-sunat_prov { width: 290px !important; max-width: 100% !important; }
+    .st-key-sunat_card_izq .st-key-sunat_mes_sunat [data-testid="stSelectbox"] div[role="group"],
+    .st-key-sunat_card_izq .st-key-sunat_prov [data-testid="stSelectbox"] div[role="group"],
+    .st-key-sunat_card_izq .st-key-sunat_mes_sunat [data-baseweb="select"] > div,
+    .st-key-sunat_card_izq .st-key-sunat_prov [data-baseweb="select"] > div {
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        background: var(--bg-card) !important;
+        min-height: 30px !important;
+        height: 30px !important;
+        padding-left: 6px !important;
+    }
+    .st-key-sunat_actualizar, .st-key-sunat_dl_xlsx { width: 34px !important; }
+    .st-key-sunat_actualizar button, .st-key-sunat_dl_xlsx button {
+        min-height: 30px !important;
+        height: 30px !important;
+        width: 34px !important;
+        padding: 0 !important;
+    }
+    /* En el celular las vistas ya están en la barra de abajo, y apiladas se comían
+       media pantalla: la cabecera deja el aviso y un control por renglón, con los dos
+       botones juntos al final. */
+    @media (max-width: 768px) {
+        .st-key-sunat_cab_fila1 > :has(.st-key-sunat_cab_vistas),
+        .st-key-sunat_cab_vistas {
+            display: none !important;
+        }
+        .st-key-sunat_cab_fila1, .st-key-sunat_cab_filtros {
+            flex-direction: row !important;
+            justify-content: flex-start !important;
+        }
+        .st-key-sunat_cab_fila1 > *,
+        .st-key-sunat_cab_fecha,
+        .st-key-sunat_cab_filtros > :has(.st-key-sunat_mes_sunat),
+        .st-key-sunat_cab_filtros > :has(.st-key-sunat_prov),
+        .st-key-sunat_cab_filtros > .st-key-sunat_mes_sunat,
+        .st-key-sunat_cab_filtros > .st-key-sunat_prov,
+        .st-key-sunat_mes_sunat, .st-key-sunat_prov {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            margin-left: 0 !important;
+        }
+        .st-key-sunat_mes_sunat, .st-key-sunat_prov,
+        .st-key-sunat_card_izq .st-key-sunat_mes_sunat [data-testid="stSelectbox"] input,
+        .st-key-sunat_card_izq .st-key-sunat_prov [data-testid="stSelectbox"] input,
+        .st-key-sunat_card_izq .st-key-sunat_mes_sunat [data-testid="stSelectbox"] .react-aria-ComboBox,
+        .st-key-sunat_card_izq .st-key-sunat_prov [data-testid="stSelectbox"] .react-aria-ComboBox {
+            height: 38px !important;
+        }
+        .st-key-sunat_card_izq .st-key-sunat_mes_sunat [data-testid="stSelectbox"] div[role="group"],
+        .st-key-sunat_card_izq .st-key-sunat_prov [data-testid="stSelectbox"] div[role="group"],
+        .st-key-sunat_card_izq .st-key-sunat_mes_sunat [data-baseweb="select"] > div,
+        .st-key-sunat_card_izq .st-key-sunat_prov [data-baseweb="select"] > div {
+            height: 40px !important;
+            min-height: 40px !important;
+        }
+        .st-key-sunat_sello_ojo button, .st-key-sunat_sello_grave button, .st-key-sunat_sello_ok button {
+            width: 100% !important;
+            height: auto !important;
+            padding: 6px 10px !important;
+        }
+        .st-key-sunat_sello_ojo button p, .st-key-sunat_sello_grave button p, .st-key-sunat_sello_ok button p {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+        }
+    }
     .st-key-sunat_card_izq [data-testid="stSelectbox"] input {
         padding: 0 !important;
         height: auto !important;
@@ -59,97 +215,6 @@ CSS = """    /* ================================================================
     .st-key-sunat_card_izq [data-testid="stSelectbox"] .react-aria-ComboBox {
         height: 26px !important;
     }
-    /* ACÁ VIVIÓ el `gap: 2px` que juntaba los DOS renglones de filtros
-       —fecha arriba, los selectores debajo— cuando el bloque vertical de
-       Streamlit los separaba 1rem como si fueran dos secciones distintas.
-       Se retiró el 2026-09-18: los cuatro filtros pasaron a compartir UN
-       renglón (regla #464), así que ya no hay dos bloques que juntar y ese
-       `:has()` sólo alcanzaba a bloques de un hijo, donde el gap no pinta
-       nada. Lo que sí hace falta ahora está tres reglas más abajo, sobre
-       la tarjeta: apretar el renglón de filtros contra la tira y la tira
-       contra la tabla. Se anota en vez de borrarse en silencio porque el
-       CSS huérfano es la regla #49. */
-
-    /* LOS CINCO CONTROLES DE LA CABECERA, EN UN RENGLÓN — Y SU PISO
-       ────────────────────────────────────────────────────────────────
-       Desde el 2026-09-18 el pill de fecha y los tres filtros comparten
-       fila (regla #464). En 1358 y en 1280 entran de sobra; medido en
-       **1024**, que es el ancho útil de la laptop objetivo, NO entraban y
-       el fallo no era cosmético: el pill se plantaba en sus 210px dentro
-       de una columna de 176 y se montaba 18px SOBRE el filtro de al lado,
-       y «Todos los estados (4,619)» salía cortado.
-
-       Se arregla con un PISO por columna, no apretando: `stHorizontalBlock`
-       ya viene con `flex-wrap: wrap` de fábrica y las columnas con
-       `min-width: auto`, así que basta darle a cada una lo que de verdad
-       necesita para que, cuando no quepan, BAJEN en vez de pisarse.
-
-       Los cinco números salen de medir el peor contenido de cada control,
-       no de repartir el ancho: el pill 200 (16 del ícono + 151 de
-       «17 sep 2025 – 16 sep 2026» + 16 del chevron + los gaps), «Mes en
-       SUNAT» 135 («Mes presentado» + 32 de cromo del selectbox), el de
-       proveedor 195 (su piso histórico, ver `_opciones_proveedor`), el de
-       estado 192 («Todos los estados (4,646)» + cromo) y la botonera 78.
-       Suman 800.
-
-       Y EL GAP DE LA FILA BAJA A 10 (de los 16 de fábrica): 24px menos de
-       aire entre cuatro filtros de la MISMA tabla, que no son cuatro
-       secciones. Ayuda al reparto y de paso se leen como un grupo.
-
-       DÓNDE ENVUELVE, medido y no deducido: a 1366 y a 1280 va en UN
-       renglón, con los cuatro controles a 275/187/380/249 y 75px de holgura
-       sobre el pill. A **1024 envuelve** —pill/mes/proveedor arriba, estado
-       y la botonera debajo— y ahí está bien: nada se corta y nada se pisa,
-       que era el bug. No se persiguió el renglón único a 1024 porque el
-       corte NO lo decide el piso sino la BASE: Streamlit le da a cada
-       columna `flex: 1 1 calc(<su %> - 16px)`, el % sale de los números de
-       `st.columns`, y flexbox rompe la línea con la base ya clampeada por
-       el `min-width` pero ANTES de encoger a nadie. Con el reparto de
-       Python el de proveedor pide 245 de base —más que sus 195 de piso—,
-       así que la suma hipotética da 890 contra 857 y el último ítem baja.
-       Forzarlo sería fijarle `flex-basis` a las cuatro columnas, y con eso
-       los números de `st.columns` dejarían de significar nada: el ancho lo
-       decidiría entero este fichero y el `.py` mentiría. Ver regla #464. */
-    .st-key-sunat_card_izq
-    [data-testid="stHorizontalBlock"]:has(.st-key-sunat_f_fila) {
-        gap: 8px 10px !important;
-    }
-    .st-key-sunat_card_izq [data-testid="stColumn"]:has(.st-key-sunat_f_fila) {
-        /* 260 y no 200: el botón dice el atajo Y sus fechas («Últimos 12
-           meses · 12 oct 2025 – 11 oct 2026», 262px medidos a 1323 de ancho). */
-        min-width: 270px !important;
-    }
-    .st-key-sunat_card_izq [data-testid="stColumn"]:has(.st-key-sunat_mes_sunat) {
-        min-width: 135px !important;
-    }
-    .st-key-sunat_card_izq [data-testid="stColumn"]:has(.st-key-sunat_prov) {
-        min-width: 195px !important;
-    }
-    .st-key-sunat_card_izq [data-testid="stColumn"]:has(.st-key-sunat_estado) {
-        min-width: 192px !important;
-    }
-    /* La BOTONERA no compite por ancho: 78px fijos (dos glifos de 31 y su
-       gap) y sin `flex-grow`. Dos motivos: son dos íconos y no necesitan
-       los 61px que les daba el reparto proporcional, y siendo el ÚLTIMO
-       ítem de la fila es el primero que envolvería — estirado al ancho de
-       una línea entera quedaría como un error, y clavado en 78 baja como lo
-       que es, una botonera.
-
-       LOS DOS `:has()` SON OBLIGATORIOS, y el primer intento llevaba uno.
-       Adentro de esta columna hay OTRO `st.columns(2)` —un ícono cada uno—
-       y sus columnas también contienen `st-key-sunat_actualizar`, así que
-       un solo `:has()` les clavaba los 78px a ellas: el par se quedaba sin
-       sitio, envolvía, y los iconos salían UNO DEBAJO DEL OTRO con la fila
-       de la cabecera en 76px de alto en vez de 30 (medido). Pidiendo las
-       DOS keys a la vez sólo matchea la columna de afuera, que es la única
-       que tiene los dos botones adentro. */
-    .st-key-sunat_card_izq [data-testid="stColumn"]:has(.st-key-sunat_actualizar):has(.st-key-sunat_dl_xlsx) {
-        flex: 0 0 125px !important;
-        min-width: 125px !important;
-    }
-    /* 125 y no 78 desde el 2026-10-19: un TERCER ícono, el pedido en lote
-       de los XML que faltan (`sunat_lote_btn`, regla #675). Tres glifos de 31
-       y dos gaps de 16. */
     /* El GAP de la tarjeta: 6px y no el 1rem de Streamlit. Sus hijos son
        tres —el renglón de filtros, la tira de KPIs y la tabla— y los tres
        hablan de lo mismo, así que un rem entre cada par son 32px de aire
