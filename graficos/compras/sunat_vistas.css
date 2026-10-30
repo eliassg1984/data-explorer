@@ -73,6 +73,7 @@
 .cuerpo { display: flex; gap: 14px; flex: 1; min-height: 0; align-items: stretch; }
 .izq { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
 .lista { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 8px; }
+.lista.tipos { flex: 0 1 auto; min-height: 120px; }
 .cabf, .fila { display: grid; grid-template-columns: minmax(0, 1.5fr) 88px minmax(90px, 1fr) 62px 72px 106px; gap: 10px; align-items: center; padding: 0 12px; }
 .lista.prov .cabf, .lista.prov .fila { grid-template-columns: minmax(0, 1.8fr) 44px 88px minmax(70px, .8fr) 106px 62px; }
 .cabf { position: sticky; top: 0; z-index: 1; background: var(--bg-primary); font-weight: 600; color: var(--text-secondary); font-size: 12px; padding-top: 5px; padding-bottom: 5px; }
@@ -97,8 +98,8 @@
 .barra i.n { background: repeating-linear-gradient(45deg, var(--c-nc), var(--c-nc) 2px, var(--c-falta) 2px, var(--c-falta) 4px); }
 .barra i.apagado { opacity: .3; }
 
-.mesg { display: flex; align-items: flex-end; gap: 3px; flex: none; height: 62px; }
-.mesc { flex: 1; min-width: 0; border: 0; background: none; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: stretch; gap: 2px; height: 100%; font-size: 10.5px; color: var(--text-secondary); }
+.mesg { display: flex; align-items: stretch; gap: 4px; flex: 1; min-height: 56px; }
+.mesc { flex: 1; min-width: 0; border: 0; background: none; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: stretch; gap: 2px; font-size: 10.5px; color: var(--text-secondary); }
 .mesc:hover .pila { box-shadow: 0 0 0 1px var(--accent); }
 .mesc .pila { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; border-radius: 2px; overflow: hidden; }
 .mesc .pila i { display: block; width: 100%; }
@@ -156,7 +157,8 @@ button.pp:hover { background: var(--accent-tint); }
   .sv { height: auto; min-height: 0; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cuerpo { flex-wrap: wrap; }
-  .lista { flex: none; max-height: 420px; }
+  .lista, .lista.tipos { flex: none; max-height: 420px; }
+  .mesg { flex: none; height: 90px; }
   .cabf, .fila, .lista.prov .cabf, .lista.prov .fila { grid-template-columns: minmax(0, 1fr) 92px 74px; }
   .ocu { display: none; }
   .panel { max-width: none; border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 10px; flex-basis: 100%; overflow: visible; }
