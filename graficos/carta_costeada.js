@@ -66,6 +66,8 @@ function enCanal(d, f, c) {
   const v = vendidoCanal(f, c);
   return {
     precio, neto, costo, sinCosto: !(costo > 0), seVende: precio > 0,
+    // «Sin descargo» en el POS: su costo ES cero, no se observa (regla #761).
+    sinDescargo: f[F.tipo] === 'No aplica',
     pct: precio && costo > 0 ? costo / neto * 100 : null,
     margen: precio && costo > 0 ? neto - costo : null,
     u: v.u, vneto: v.neto, vcosto: v.costo,
@@ -105,7 +107,7 @@ function filtrar(d, st, filas) {
     if (st.ver === 'vieja' && !vieja(f)) return false;
     if (st.alerta === 'ex' && !(exceso(d, x) > 0)) return false;
     if (st.alerta === 'sobre' && !(x.pct > d.umbrales[1])) return false;
-    if (st.alerta === 'datos' && !(x.sinCosto || f[F.sinc] > 0 || x.pct > 60)) return false;
+    if (st.alerta === 'datos' && !((x.sinCosto && !x.sinDescargo) || f[F.sinc] > 0 || x.pct > 60)) return false;
     return true;
   });
 }
@@ -133,7 +135,7 @@ function htmlKpis(d, st, filas) {
     if (!x.sinCosto && x.u > 0) { costoU += x.costo * x.u; netoU += x.vneto; }
     vc += x.vcosto; vn += x.vneto;
     if (x.pct > u1) { sobre++; if (x.u > 0) sobreV++; } else if (x.pct > u0) entre++;
-    if (x.sinCosto) sinC++;
+    if (x.sinCosto && !x.sinDescargo) sinC++;
     if (x.pct > 60) raros++;
     sinCN += f[F.sinc];
     const e = exceso(d, x);
@@ -203,7 +205,7 @@ function cabeza(st, cols) {
 }
 function chipFila(d, f, x) {
   if (x.pct > 60) return '<span class="cc-tag rojo" title="El costo de hoy pasa el 60 % del neto: casi seguro un error de receta o de factor.">revisar costo</span>';
-  if (x.sinCosto) return '<span class="cc-tag ambar" title="El POS no le tiene costo: lo vendido entra al FoodCost a costo 0.">sin costo</span>';
+  if (x.sinCosto && !x.sinDescargo) return '<span class="cc-tag ambar" title="El POS no le tiene costo: lo vendido entra al FoodCost a costo 0.">sin costo</span>';
   if (!f[F.activo]) return '<span class="cc-tag">inactivo</span>';
   if (f[F.tipo] !== 'Receta') return `<span class="cc-tag" title="${esc(f[F.desc] || '')}">${esc(f[F.tipo].toLowerCase())}</span>`;
   return '';
@@ -272,6 +274,7 @@ const cargando = (txt = 'Armando la receta y la evolución…') => `<div class="
 function aviso(d, st, f, x, fd) {
   const c = st.canal;
   if (!x.seVende) return ['', `No tiene precio en «${esc(d.canales[c][0])}»: no se vende por ese canal.`];
+  if (x.sinDescargo) return ['', 'Está «Sin descargo» en el POS: no baja nada del almacén y su costo es cero. Lo vendido suma en la venta.'];
   if (x.sinCosto) return ['ambar', `El POS no le tiene costo: ${dinero(f[F.sinc], 0)} de lo vendido en el rango entraron al FoodCost a costo 0, y así quedan guardados.`];
   if (x.pct > 60) return ['rojo', `Hoy cuesta el ${pct(x.pct)} del neto${x.pctV != null ? ` y se vendió al ${pct(x.pctV)}` : ''}: deja ${dinero(x.margen)} por unidad. Revisar la receta o el factor de su insumo principal antes de tocar el precio.`];
   if (x.pctV != null && Math.abs(x.pctV - x.pct) >= 3) {
@@ -292,7 +295,7 @@ function htmlResumen(d, st, f, fd) {
   const mm = cf && cf.mm;
   const celdas = [
     cel('Precio', x.precio ? dinero(x.precio) : '—', x.precio ? `neto ${dinero(x.neto)} (÷ ${+d.divisor.toFixed(3)})` : 'no se vende por este canal'),
-    cel('Costo de hoy', x.sinCosto ? 'sin costo' : dinero(x.costo), x.sinCosto ? 'el POS no le tiene costo' : `${pct(x.pct)} del neto`, nivel(d, x.pct)),
+    cel('Costo de hoy', x.sinCosto ? 'sin costo' : dinero(x.costo), x.sinDescargo ? 'sin descargo en el POS' : x.sinCosto ? 'el POS no le tiene costo' : `${pct(x.pct)} del neto`, nivel(d, x.pct)),
     cel('Margen por plato', x.margen == null ? '—' : dinero(x.margen), 'neto − costo de hoy', x.margen != null && x.margen < 10 ? 'rojo' : ''),
     cel('Vendidos en el rango', x.u ? num(x.u) : '0', x.u ? `al ${pct(x.pctV)} al vender` : 'no se vendió por este canal', nivel(d, x.pctV)),
     cel('Al vender, mes a mes', mm ? `${dinero(mm.a)} → ${dinero(mm.b)}` : fd ? '—' : '…',

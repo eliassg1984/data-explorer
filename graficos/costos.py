@@ -67,7 +67,8 @@ _COSTOS_RAIL_CATEGORIAS = rail_sin_tablas((
 _PILA = pila_sin_tablas(())
 
 _ARCHIVOS = ("compras.parquet", "salidas.parquet", "ventas.parquet",
-             "notascreditocompras.parquet", "inventariovalorizado.parquet", kardex.ARCHIVO)
+             "notascreditocompras.parquet", "inventariovalorizado.parquet", kardex.ARCHIVO,
+             "cartacosteada.parquet")
 
 K_MES_DESDE_RESUMEN = "_costos_mes_desde_resumen"
 """El mes con que abre «Costo de ventas» al llegar desde la portada de

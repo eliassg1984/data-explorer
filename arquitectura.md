@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-760 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+761 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (248)
 
@@ -832,7 +832,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 
-**Datos, R2 y DuckDB** (129)
+**Datos, R2 y DuckDB** (130)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -963,6 +963,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#750** — El borde de un cierre lo ponen las áreas que CONTARON STOCK, y Destino cuenta sólo de conteo…
 - **#752** — El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre después; lo digitado hasta la…
 - **#753** — Las compras del mes nuevo procesadas antes de la apertura van a su mes: compras.parquet trae…
+- **#761** — Lo «Sin descargo» del POS suma en la venta y no se observa como «sin costo»
 
 **SUNAT y SIRE** (77)
 
@@ -1122,7 +1123,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (233)
+**Decisiones de diseño y UX** (234)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1357,6 +1358,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#757** — Costos dice qué es su venta y qué queda fuera, con su monto
 - **#758** — Venta por Periodo no se aprieta: indicadores que eligen, comparación elegible y cierre
 - **#760** — Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían sin convertir
+- **#761** — Lo «Sin descargo» del POS suma en la venta y no se observa como «sin costo»
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57564,6 +57566,41 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      marca `cambio_estimado`. Es idempotente. Corre al subir el registro y sobre la cola en
      vivo. No afecta Compras, que sale del Almacén. (2026-10-30.)
 
+761. **Lo «Sin descargo» del POS suma en la venta y no se observa como «sin
+     costo».** A pedido, con una captura de Venta por Periodo › Costo: las aguas
+     Munay y «Menu Eventmovil Oct2026.(Contabilidad=)» salían día por día en «Qué se
+     vendió sin costo», una lista hecha para corregir en el POS, y ahí no hay nada que
+     corregir. `TPRODUCTO.tDescargo = 'N'` (en `cartacosteada.parquet`, `TIPO DESC` =
+     «NO APLICA») no baja nada del almacén: su costo ES cero, no falta.
+
+     **Qué cambia, en todas las vistas que lo decían.** Venta por Periodo («Sin costo»,
+     «% venta sin costo», «Qué se vendió sin costo» y el pie del panel), Costos (las
+     observaciones, `lineas_sin_costo` de `por_grupo_dia`), Inicio («Vendido sin costo en
+     el POS», `ventas_del_rango`), Mix de carta («Sin costo cargado») y Costo de Carta
+     («Datos para revisar», la etiqueta y el aviso de la ficha). Con una sola, Inicio
+     seguiría acusando lo que Ventas ya no dice. Medido en octubre 2026 (1-29): de
+     S/ 11.948 a S/ 993, con el neto (S/ 303.395) y el costo (S/ 102.983) idénticos.
+
+     **El monto sigue contando.** Neto, venta y % de costo no se tocan. En el Mix eso
+     SÍ mueve un número: la regla #666 saca lo vendido sin costo de la base del % porque
+     «no saberlo no es costar cero», y acá se sabe, así que su venta vuelve a la base.
+
+     **El `tDescargo` vacío («SIN ENLACE») se sigue observando**: es una receta sin
+     cargar (Sour y Chilcano Santa Maria Magdalena), o un error de la carta. Igual un
+     combo (`M`) sin costo. «Propina» viene vacío y por eso sigue saliendo: se corrige
+     en el POS o se suma a la regla.
+
+     Una pieza: `data.platos_sin_descargo` (los códigos, con el sello de la carta) y
+     `definicion_venta.es_sin_descargo` (la máscara). Es la marca de HOY, también para
+     lo vendido antes: el parquet de ventas no guarda cuál tenía. Si la carta no se puede
+     leer vuelve vacío y se observa todo: un error no esconde nada. Los códigos van en
+     la clave de las cachés de disco de `por_grupo_dia` y `ventas_por_mes`, y el sello
+     de la carta en la de Costos y la portada, así que no hizo falta subir
+     `definicion_venta.VERSION` (que vaciaría toda la venta). «Consistencia de datos»
+     ya los excluía (`vende_sin_descargo`). La Ingeniería de menú los sigue listando
+     como «sin costo cargado» entre los que no clasifica: ahí es el motivo de
+     dejarlos fuera de la matriz, no un dato a corregir. (2026-10-30.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57576,7 +57613,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#760**; la próxima toma el número siguiente.
+> última regla es la **#761**; la próxima toma el número siguiente.
 
 >
 

@@ -846,7 +846,7 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
       ['costo_cort', 'Costaron', 'soles0', S, 'Costo de receta de las cortesías']], 'A precio carta; no suman a la venta.'];
     out.Costo = [[['neto', 'Neto', 'soles0', S, 'Venta sin IGV ni recargo'], ['costo_v', 'Costo histórico', 'celda', 142, 'Costo histórico de lo vendido, incluidos combos y propiedades, y su variación'],
       ['pcosto', '% costo', 'celda', 176, 'Costo ÷ Neto, y su cambio en pp. «revisar»: un plato con costo mayor a su precio infla el período'],
-      ['sin_costo', 'Sin costo', 'soles0', S, 'Venta de platos SIN costo cargado: baja el % de costo'], ['psin', '% venta sin costo', 'celda', 132, 'Qué parte de la venta no tiene costo cargado'],
+      ['sin_costo', 'Sin costo', 'soles0', S, 'Venta de platos SIN costo cargado: baja el % de costo. Lo «Sin descargo» del POS no se observa: su venta sí está en el Neto'], ['psin', '% venta sin costo', 'celda', 132, 'Qué parte de la venta no tiene costo cargado'],
       ['sin_que', 'Qué se vendió sin costo', 'texto', 220, 'Lo vendido sin costo cargado, de mayor a menor venta: lo que hay que corregir en el POS. Con el cursor, los montos'],
       ['revisar', 'A revisar', 'texto', 180, 'El plato con mayor exceso de costo sobre su precio, en los períodos marcados «revisar»']], 'Costo sobre neto; «sin costo» baja el %.'];
     out.Cuadre = [[['docs_v', 'Facturas y boletas', 'celda', 150, 'Facturas y boletas pagadas o por cobrar: lo mismo que registra el sistema de caja'],

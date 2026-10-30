@@ -110,6 +110,24 @@ class LoQueRecibe(unittest.TestCase):
         self.assertEqual({P["prods"][x[1]] for x in P["sinc"]}, {"Agua"})
         self.assertEqual({P["prods"][x[1]] for x in P["culp"]}, {"Pato"})
 
+    def test_lo_sin_descargo_suma_en_la_venta_y_no_se_observa(self):
+        # Regla #761: el agua está «Sin descargo» en el POS (costo cero de verdad).
+        d = _ventas()
+        d[dv.PRODUCTO] = d["NOMB ITEM VENTA"].map({"Agua": "0000153"}).fillna("0000001")
+        t = vr.lineas_normalizadas(d, {**_CLAVES, "sin_descargo": ("0000153",)})
+        P = vr.armar_periodo(t, vr.sello_periodo(t), 196, 380, 250)
+        self.assertEqual(P["sinc"], [])
+        self.assertEqual(sum(u[7] for u in P["unidades"]), 0)
+        self.assertEqual(vr.productos_sin_costo(t.assign(clave="x")), ({}, []))
+        # La venta y el neto no cambian: sólo deja de observarse.
+        self.assertAlmostEqual(sum(u[2] for u in P["unidades"]), self.t["venta"].sum())
+        self.assertAlmostEqual(sum(u[4] for u in P["unidades"]), self.t["neto"].sum())
+        # Otra marca es otra pieza: no se reusa la de antes.
+        self.assertNotEqual(vr.sello_periodo(t), vr.sello_periodo(vr.lineas_normalizadas(d, _CLAVES)))
+        # Sin los códigos, el agua se sigue observando.
+        P0 = vr.armar_periodo(vr.lineas_normalizadas(d, _CLAVES), "x", 196, 380, 250)
+        self.assertEqual({P0["prods"][x[1]] for x in P0["sinc"]}, {"Agua"})
+
     def test_un_rango_corto_lleva_todas_sus_lineas(self):
         self.assertEqual(self.P["lineas_desde"], 0)
         self.assertEqual(len(self.P["lineas"]), len(self.t))

@@ -10533,6 +10533,14 @@ def _pruebas_pieza_mix(check, d, cols, _m, js):
           and _m.METRICAS == ("venta", "cant", "costo", "base_costo",
                               "neto_carta", "venta_sin_costo", "igv", "rec",
                               "desc", "devol"), True)
+    # Regla #761: «Sin descargo» no se separa como sin costo; su venta entra.
+    _cero = d.assign(**{cols["costo"]: 0.0, "COD ITEM VENTA DDOCUMENTO": "0000153"})
+    _sin = _m.base(_cero, cols)
+    _con = _m.base(_cero, cols, sin_descargo=("0000153",))
+    check("pieza · sin costo cargado se separa de la base del % de costo",
+          (_sin["venta_sin_costo"].sum() > 0, _sin["base_costo"].sum()), (True, 0.0))
+    check("pieza · lo «Sin descargo» queda en la base y no se observa",
+          (_con["venta_sin_costo"].sum(), round(_con["base_costo"].sum(), 6) > 0), (0.0, True))
     check("pieza · sin «Año pasado» pedido, no viaja", x["ap"], None)
     # El año pasado: las filas de hace 364 días caen en SU semana de hoy.
     ap = d.assign(**{"FEC REG DOCUMENTO": pd.to_datetime(
@@ -11675,9 +11683,13 @@ def _pruebas_carta_costeada():
     check("vendidos: sólo lo de la ventana", fv.loc["0000010", "Vendidos"], 5.0)
     check("el % al que se vendió es costo ÷ neto de lo vendido",
           round(fv.loc["0000010", "PctVendido"], 6), 40.0)
+    _f20 = fv.loc["0000020"]
+    check("lo «Sin descargo» (No aplica) vendió sin costo y no se observa (#761)",
+          (_f20["Tipo"], _f20["VendidoNeto"], _f20["SinCostoNeto"], _f20["PctVendido"]),
+          ("No aplica", 290.0, 0.0, 0.0))
+    _f20r = cc.con_ventas(t.assign(Tipo="Receta"), agg)[0].set_index("Cod").loc["0000020"]
     check("lo vendido sin costo viaja aparte (y su % es «—»)",
-          (fv.loc["0000020", "SinCostoNeto"], fv.loc["0000020", "PctVendido"]),
-          (290.0, 0.0))
+          (_f20r["SinCostoNeto"], _f20r["PctVendido"]), (290.0, 0.0))
     check("un producto sin ventas, 0", fv.loc["0000030", "Vendidos"], 0.0)
     check("«Sin costo» se ordena por lo vendido",
           list(cc.filtrar(tv, tipo="Sin costo")["Cod"]), ["0000020", "0000060"])

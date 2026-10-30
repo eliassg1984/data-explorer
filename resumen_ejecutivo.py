@@ -17,7 +17,7 @@ import definicion_venta as dv
 import pendientes
 from cortes import MESES_ABR_ES, MESES_LARGOS_ES
 
-VERSION = 4
+VERSION = 5
 PEDIDO = "LLAVE LOCAL PEDIDO"
 NOMBRE = "NOMB ITEM VENTA"
 
@@ -62,12 +62,13 @@ def rango_del_enlace(params):
     return (ini, fin) if ini <= fin else None
 
 
-def ventas_del_rango(df, ini, fin):
+def ventas_del_rango(df, ini, fin, sin_descargo=()):
     """Venta neta y pedidos netos, sin duplicar ítems por forma de pago.
 
     Pedidos usa la misma conciliación por pedido/comprobante de pax_por:
     una cuenta dividida cuenta una vez, el canje no suma otro pedido y una
     devolución resta. La venta incluye todos los grupos del reporte Ventas.
+    Lo de `sin_descargo` suma en la venta y no en lo vendido sin costo (#761).
     """
     if df is None:
         return None
@@ -105,7 +106,8 @@ def ventas_del_rango(df, ini, fin):
     costo = dv.columna(d, dv.COSTO)
     sin_costo, sin_costo_top, sin_costo_n = None, [], 0
     if costo:
-        cero = pd.to_numeric(d[costo], errors="coerce").fillna(0).eq(0)
+        cero = (pd.to_numeric(d[costo], errors="coerce").fillna(0).eq(0)
+                & ~dv.es_sin_descargo(d, sin_descargo))
         sin_costo = float(valores[cero].sum())
         nombre = dv.columna(d, NOMBRE)
         if nombre:
@@ -225,7 +227,7 @@ ROJO, AMBAR, VERDE = pendientes.ROJO, pendientes.AMBAR, pendientes.VERDE
 _ORDEN = {ROJO: 0, AMBAR: 1, VERDE: 2}
 
 
-def ventas_por_mes(df):
+def ventas_por_mes(df, sin_descargo=()):
     """`{mes: cifras}` de cada mes del df PREPARADO, con `ventas_del_rango`
     —la misma cuenta que la portada—. Cada mes se filtra por máscara: un
     ítem, un comprobante y su nota caen enteros en su mes."""
@@ -237,7 +239,8 @@ def ventas_por_mes(df):
     meses = pd.to_datetime(df[fecha], errors="coerce").dt.to_period("M")
     out = {}
     for p in sorted(meses.dropna().unique()):
-        r = ventas_del_rango(df[meses == p], p.start_time.date(), p.end_time.date())
+        r = ventas_del_rango(df[meses == p], p.start_time.date(), p.end_time.date(),
+                             sin_descargo)
         out[str(p)] = {k: r.get(k) for k in CIFRAS}
     return out
 

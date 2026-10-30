@@ -147,6 +147,20 @@ def _mes(k, venta, ppto=None, ap=None, parcial=False, costo=None, **otros):
 class PortadaDoceMesesTest(unittest.TestCase):
     """La portada de la regla #745: doce meses, presupuesto, frase y lista."""
 
+    def test_lo_sin_descargo_suma_y_no_se_observa(self):
+        # Regla #761: el agua está «Sin descargo»; el pisco, sin costo de verdad.
+        filas = [("2026-09-01", "P1", "B1", "I1", dv.VENTA, 100, 0, "Agua", "0000153"),
+                 ("2026-09-01", "P1", "B1", "I2", dv.VENTA, 50, 0, "Pisco", "0000200"),
+                 ("2026-09-01", "P1", "B1", "I3", dv.VENTA, 50, 9, "Lomo", "0000300")]
+        d = pd.DataFrame(filas, columns=[dv.FECHA, re.PEDIDO, dv.LLAVE_DOC, dv.LLAVE_ITEM, dv.CLASE,
+                                        dv.NETO_ITEM, dv.COSTO, re.NOMBRE, dv.PRODUCTO])
+        r = re.ventas_del_rango(d, *re.rango_mes("2026-09"), ("0000153",))
+        self.assertEqual(r["venta"], 200)
+        self.assertEqual(r["sin_costo"], 50)
+        self.assertEqual([x["plato"] for x in r["sin_costo_top"]], ["Pisco"])
+        self.assertEqual(re.ventas_por_mes(d, ("0000153",))["2026-09"]["sin_costo"], 50)
+        self.assertEqual(re.ventas_del_rango(d, *re.rango_mes("2026-09"))["sin_costo"], 150)
+
     def test_meses_con_la_misma_cuenta_que_el_rango(self):
         filas = [("2026-08-31", "P1", "B1", "I1", dv.VENTA, 100),
                  ("2026-09-01", "P2", "B2", "I2", dv.VENTA, 50),

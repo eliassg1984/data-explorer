@@ -104,6 +104,14 @@ class LoQueRecibeLaPieza(unittest.TestCase):
         self.assertEqual(f[17], {"3": [2.0, 144.1, 56.7]})
         self.assertIsNone(f[16])
 
+    def test_lo_sin_descargo_no_se_observa(self):
+        # Regla #761: el agua («No aplica») vendió sin costo y no queda como dato a revisar.
+        f = self.filas["0000002"]
+        self.assertEqual((f[4], f[13], f[15]), ("No aplica", 178.0, 0.0))
+        js = Path(cc.__file__).with_name("carta_costeada.js").read_text(encoding="utf-8")
+        self.assertIn("sinDescargo: f[F.tipo] === 'No aplica'", js)
+        self.assertIn("if (x.sinCosto && !x.sinDescargo) sinC++;", js)
+
     def test_lo_vendido_por_canal_suma_el_total(self):
         # «En el Local» = el total menos los otros: 15 + 20 − 2 − 4.
         canales = dict(self.d["canales"])

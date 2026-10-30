@@ -736,12 +736,30 @@ def unidades_por_clase_dia(df):
         g[c] = g[c].astype(object)
     return g[list(POR_CLASE_DIA)]
 
+TIPO_SIN_DESCARGO = "NO APLICA"
+"""El `TIPO DESC` de `cartacosteada.parquet` para lo que el POS marca «Sin
+descargo» (`TPRODUCTO.tDescargo = 'N'`): aguas Munay, anticipos, vales, el
+descorche. No baja nada del almacén, así que su costo ES cero y no es un dato
+que falte: su venta suma, pero no se observa como «sin costo» (regla #761).
+El `tDescargo` vacío («SIN ENLACE») sí se observa: es una receta sin cargar."""
+
+
+def es_sin_descargo(df, codigos):
+    """Qué líneas son de un producto «Sin descargo». `codigos` sale de
+    `data.platos_sin_descargo`; sin ellos o sin la columna, ninguna: lo vendido
+    sin costo se sigue observando. Pura."""
+    c = columna(df, PRODUCTO)
+    if c is None or not len(codigos):
+        return pd.Series(False, index=df.index)
+    return df[c].astype("string").str.strip().isin(set(codigos)).astype(bool)
+
+
 POR_GRUPO_DIA = ("dia", "grupo", "clase", "cod_desc", "neto", "costo",
                  "costo_descuento", "lineas_sin_costo", "venta_sin_costo")
 """Las columnas de `por_grupo_dia`, con nombre fijo (regla #481)."""
 
 
-def por_grupo_dia(df):
+def por_grupo_dia(df, sin_descargo=()):
     """La venta y la cortesía de cada grupo de carta, día por día, sobre el
     df PREPARADO: una fila por (día, grupo, clase) con el neto y el costo.
 
@@ -762,7 +780,10 @@ def por_grupo_dia(df):
     `cod_desc` es el código del descuento del POS («015»; vacío sin
     descuento): con él el reporte resta lo que el banco devuelve de un
     convenio (`convenios_descuento`, regla #665) sin rehacer esta cuenta
-    cuando cambia la tabla de convenios."""
+    cuando cambia la tabla de convenios.
+
+    `sin_descargo`, los códigos de `es_sin_descargo`: suman en `neto` y no en
+    lo vendido sin costo (regla #761)."""
     vacio = pd.DataFrame(columns=list(POR_GRUPO_DIA))
     if df is None or df.empty:
         return vacio
@@ -800,7 +821,8 @@ def por_grupo_dia(df):
     # Calidad del costo de lo vendido: antes de agrupar se conserva cuántos
     # ítems con venta/cantidad positivas carecen de costo. No es costo estimado.
     sin_costo = ((b["clase"] != CORTESIA) & (b["neto"] > .005)
-                 & (_num(CANTIDAD) > 0) & (b["costo"].abs() < 1e-9))
+                 & (_num(CANTIDAD) > 0) & (b["costo"].abs() < 1e-9)
+                 & ~es_sin_descargo(d, sin_descargo))
     b["lineas_sin_costo"] = sin_costo.astype(int)
     b["venta_sin_costo"] = b["neto"].where(sin_costo, 0.0)
     b = b.dropna(subset=["dia", "grupo"])

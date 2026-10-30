@@ -42,8 +42,9 @@ import pandas as pd
 import streamlit as st
 
 import convenios_descuento
+import definicion_venta as dv
 from cortes import MESES_ABR_ES
-from data import REPORTES
+from data import REPORTES, platos_sin_descargo
 from tema import ADVERTENCIA_TEXTO, ERROR, PALETA_SERIES, SCROLL_THUMB
 from graficos import ventas_alcance
 from graficos.base import _resolver, selector_fecha_tarjeta
@@ -136,7 +137,7 @@ def columnas(d):
     }
 
 
-def base(d, cols, eje=_EJE_CARTA, convenios=None):
+def base(d, cols, eje=_EJE_CARTA, convenios=None, sin_descargo=()):
     """Una fila por ítem vendido con los tres niveles de la carta y sus
     sumas, con nombres FIJOS: todo lo de abajo agrupa por columna de verdad
     y renombra por nombre (regla #481, pandas 2 contra pandas 3). `igv` va
@@ -186,8 +187,10 @@ def base(d, cols, eje=_EJE_CARTA, convenios=None):
     b["devol"] = b["desc"] * b["dev_pct"] * _tasa_neta(b)
     # Lo vendido SIN COSTO CARGADO no entra en ningún % de costo (#666): no
     # saberlo no es costar cero (#524), y su venta en el divisor bajaba el
-    # % de todo su grupo. Una nota de crédito (venta negativa) sí entra.
-    sin_costo = (b["venta"] > 0.005) & (b["costo"] <= 0)
+    # % de todo su grupo. Una nota de crédito (venta negativa) sí entra. Lo
+    # «Sin descargo» del POS tampoco se separa: su costo ES cero (#761).
+    sin_costo = ((b["venta"] > 0.005) & (b["costo"] <= 0)
+                 & ~dv.es_sin_descargo(d, sin_descargo))
     b["venta_sin_costo"] = b["venta"].where(sin_costo, 0.0)
     b["base_costo"] = (b["neto"] + b["devol"]).where(~sin_costo, 0.0)
     b["neto_carta"] = b["neto_carta"].where(~sin_costo, 0.0)
@@ -585,7 +588,8 @@ def _cargar_ano_pasado(claves, gran, rango, filtrar_cb, convenios):
                        filtrar_cb)
     if df is None:
         return None, [None] * len(claves)
-    return ano_pasado(base(df, columnas(df), convenios=convenios),
+    return ano_pasado(base(df, columnas(df), convenios=convenios,
+                           sin_descargo=platos_sin_descargo()),
                       claves, gran, rango)
 
 
@@ -668,7 +672,7 @@ def _ventas_mix(d, filtrar_cb=None):
         st.info("Faltan columnas (Fecha, Venta, Grupo) para el mix de carta.")
         return
     convenios = convenios_descuento.leer()
-    b = base(d, cols, convenios=convenios)
+    b = base(d, cols, convenios=convenios, sin_descargo=platos_sin_descargo())
     if b.empty:
         st.info("Sin ventas en el rango cargado.")
         return

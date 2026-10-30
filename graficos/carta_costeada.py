@@ -334,6 +334,9 @@ def con_ventas(t, agg, dias=DIAS_VENDIDOS, rango=None):
     t["Vendidos"] = cod.map(s["unidades"]).fillna(0.0).astype(float)
     t["VendidoNeto"] = cod.map(s["neto"]).fillna(0.0).astype(float)
     t["SinCostoNeto"] = cod.map(s["neto_sin_costo"]).fillna(0.0).astype(float)
+    # «Sin descargo» en el POS: su costo ES cero, no es un dato que falte (#761).
+    if "Tipo" in t.columns:
+        t.loc[t["Tipo"] == "No aplica", "SinCostoNeto"] = 0.0
     t["CostoVendido"] = cod.map(s["costo"]).fillna(0.0).astype(float)
     # `pct_costo` del Mix: NaN sin costo o con un neto de centavos (#547).
     pv = pct_costo(cod.map(s["costo"]).fillna(0.0), t["VendidoNeto"]) * 100

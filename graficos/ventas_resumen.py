@@ -292,10 +292,13 @@ def productos_sin_costo(tabla):
 
     El mismo criterio que la columna «Sin costo» (`pc <= 0`, venta con
     impuestos); una nota de crédito resta de su producto y lo que queda en
-    cero o menos no se nombra. Pura."""
+    cero o menos no se nombra. Lo «Sin descargo» (`sdesc`) no se observa
+    (regla #761). Pura."""
     if not {"pc", "prod", "clave", "venta"} <= set(tabla.columns):
         return {}, []
     sc = tabla[tabla["pc"] <= 0]
+    if "sdesc" in sc.columns:
+        sc = sc[~sc["sdesc"]]
     if sc.empty:
         return {}, []
     g = sc.groupby(["clave", "prod"], as_index=False)["venta"].sum()
@@ -564,7 +567,8 @@ def _subvistas(vol_label, canales, hay, formas=(), otras=()):
                  "costo mayor a su precio infla el período")]
         if "psin" in hay:
             cols += [("sin_costo", "Sin costo", "soles0", S,
-                      "Venta de platos SIN costo cargado: baja el % de costo"),
+                      "Venta de platos SIN costo cargado: baja el % de costo. Lo "
+                      "«Sin descargo» del POS no se observa: su venta sí está en el Neto"),
                      ("psin", "% venta sin costo", "celda", 132,
                       "Qué parte de la venta no tiene costo cargado")]
         if "sin_que" in hay:
@@ -808,9 +812,9 @@ _TEXTOS = ("ldoc", "ped", "prod", "grupo", "canal", "serv", "mesero", "tdoc", "n
 
 def lineas_normalizadas(d, cols):
     """Las ventas con nombres FIJOS, una fila por ítem: lo que la pieza
-    cuenta. `cols` son las columnas ya resueltas por `ventas.py`. Las
-    opcionales que falten (el demo, un parquet viejo) quedan en cero o
-    vacías. Pura."""
+    cuenta. `cols` son las columnas ya resueltas por `ventas.py`, y su
+    `sin_descargo`, los códigos de `data.platos_sin_descargo`. Las opcionales
+    que falten (el demo, un parquet viejo) quedan en cero o vacías. Pura."""
     idx = d.index
 
     def col(*nombres):
@@ -846,6 +850,7 @@ def lineas_normalizadas(d, cols):
         "neto": num(col("Neto Total Item Ddocumento")),
         "desc": num(col("Descuento Item Ddocumento")),
         "pc": num(col("Precio Costo")),
+        "sdesc": dv.es_sin_descargo(d, cols.get("sin_descargo", ())),
         "igv": num(col("Igv Item Ddocumento")),
         "fecha": fecha,
         "emision": pd.to_datetime(d[c_em], errors="coerce") if c_em else fecha,
@@ -871,7 +876,7 @@ def sello_periodo(t):
     chips de la franja u otro parquet."""
     if t.empty:
         return "0"
-    h = pd.util.hash_pandas_object(t[["ldoc", "prod", "venta", "fecha"]], index=False)
+    h = pd.util.hash_pandas_object(t[["ldoc", "prod", "venta", "fecha", "sdesc"]], index=False)
     return f"{len(t)}-{int(h.sum()) & 0xFFFFFFFFFFFF:x}"
 
 
@@ -894,7 +899,8 @@ def armar_periodo(t, sello, alto_fig, alto_fig_solo, alto_tabla):
       cuentas menos la tabla de platos.
     · `lineas` — [doc, plato, grupo, cantidad, venta], de los días desde
       `lineas_desde` (todo el rango si cabe en `_DIAS_LINEAS`).
-    · `sinc` — lo vendido sin costo: [doc, plato, grupo, venta]; `culp` —
+    · `sinc` — lo vendido sin costo, sin lo «Sin descargo» (regla #761), que
+      tampoco cuenta en esa columna de `unidades`: [doc, plato, grupo, venta]; `culp` —
       lo vendido a un costo mayor que su precio: [doc, plato, grupo, costo
       unitario, precio carta, cantidad]; `igv` — los cambios de tasa
       (`cambios_de_igv`): [día, antes, después].
@@ -924,8 +930,9 @@ def armar_periodo(t, sello, alto_fig, alto_fig_solo, alto_tabla):
     d_i = t["ldoc"].map(idoc)
 
     # Lo de cada comprobante por grupo.
+    sin_costo = (t["pc"] <= 0) & ~t["sdesc"]
     u = t.assign(_d=d_i, _g=t["grupo"].map(ig), carta=t["po"] * t["cant"],
-                 costo=t["pc"] * t["cant"], sin=t["venta"].where(t["pc"] <= 0, 0.0),
+                 costo=t["pc"] * t["cant"], sin=t["venta"].where(sin_costo, 0.0),
                  tdesc=(t["desc"] != 0).astype(int))
     ug = (u.groupby(["_d", "_g"], as_index=False, sort=True)
           .agg(venta=("venta", "sum"), carta=("carta", "sum"), neto=("neto", "sum"),
@@ -946,7 +953,7 @@ def armar_periodo(t, sello, alto_fig, alto_fig_solo, alto_tabla):
     ventana = t[(dia >= desde)]
     lineas = lineas_de(ventana, idoc, ip, ig)
 
-    sc = t[es_venta & (t["pc"] <= 0)]
+    sc = t[es_venta & sin_costo]
     cu = t[es_venta & (t["po"] > 0) & (t["pc"] > t["po"])]
     cambios = cambios_de_igv(t.loc[es_venta, "fecha"], t.loc[es_venta, "igv"],
                              t.loc[es_venta, "neto"])
@@ -1152,14 +1159,16 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         if d is None or d.empty:
             st.info("Sin ventas en el rango cargado.")
             return
+        from data import platos_sin_descargo
         cols = {"venta": col_venta, "fecha": col_fecha, "pax": col_pax, "pedido": col_pedido,
                 "prod": col_prod, "cant": col_cant, "fam": col_fam, "serv": col_serv,
-                "canal": col_canal, "mesero": col_mesero}
+                "canal": col_canal, "mesero": col_mesero,
+                "sin_descargo": platos_sin_descargo()}
         # El MISMO `d` de la corrida anterior (el fragment se vuelve a correr
         # con sus argumentos, p. ej. al pedir líneas): no se vuelve a
         # normalizar ni a sellar —con doce meses es ~1 s—.
         cache = st.session_state.get(_K_CACHE)
-        firma_d = (id(d), d.shape, id(d_pagos))
+        firma_d = (id(d), d.shape, id(d_pagos), cols["sin_descargo"])
         if cache is not None and cache[4] == firma_d:
             sello, t = cache[0], cache[1]
         else:

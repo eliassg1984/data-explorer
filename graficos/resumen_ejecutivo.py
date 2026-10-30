@@ -44,7 +44,7 @@ _PILA = pila_sin_tablas((
     ("res_sec_pendientes", "Pendientes del período"),
 ))
 _ARCHIVOS = ("ajusteinventario.parquet", "compras.parquet", "salidas.parquet",
-             "ventas.parquet", "notascreditocompras.parquet")
+             "ventas.parquet", "notascreditocompras.parquet", "cartacosteada.parquet")
 _AQUI = Path(__file__).parent
 _COMPONENTE = st.components.v2.component(
     "resumen_ejecutivo",
@@ -243,8 +243,9 @@ def _portada(df_f, nombre_reporte, ajuste):
         anterior_df = (data.cargar_rango("ventas.parquet", dv.FECHA, ant_ini, ant_fin,
                                          turno=True) if cubre_anterior else None)
     try:
-        actual = resumen.ventas_del_rango(actual_df, ini, fin)
-        anterior = resumen.ventas_del_rango(anterior_df, ant_ini, ant_fin)
+        sin_descargo = data.platos_sin_descargo()
+        actual = resumen.ventas_del_rango(actual_df, ini, fin, sin_descargo)
+        anterior = resumen.ventas_del_rango(anterior_df, ant_ini, ant_fin, sin_descargo)
     except ValueError as e:
         st.warning(str(e))
         return

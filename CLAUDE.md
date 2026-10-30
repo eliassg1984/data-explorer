@@ -1216,6 +1216,12 @@ sumaba POR UNIDAD (FoodCost 24 % donde era 29 %).
   que suma venta filtra con `solo_venta`; una que cuenta clientes o
   comprobantes usa `pax_por` / `documentos_por`. **Nunca comparar contra
   "CORTESIA" o "ANULADO" en una vista**: lo ataja el test.
+- **Lo «Sin descargo» del POS suma y no se observa** (regla #761):
+  `tDescargo = 'N'` («NO APLICA» en `cartacosteada.parquet`: aguas Munay,
+  anticipos, vales) no baja nada del almacén, así que su costo ES cero y no
+  entra en lo «vendido sin costo» de ninguna vista
+  (`data.platos_sin_descargo` + `definicion_venta.es_sin_descargo`). Sí en el
+  neto y en el % de costo. El `tDescargo` vacío («SIN ENLACE») sí se observa.
 - **El estado 03 del POS es POR COBRAR, no anulado.** Y las notas de
   crédito no están en `MDOCUMENTO` (están en `MNOTACREDITO`): cuadrar sólo
   contra `MDOCUMENTO` cuadra una venta que cuenta los canjes dos veces.

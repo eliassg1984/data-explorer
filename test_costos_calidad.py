@@ -77,6 +77,20 @@ class CalidadCostos(unittest.TestCase):
         self.assertEqual(agrupado["venta_sin_costo"].sum(), 20)
         self.assertEqual(calidad.ventas(agrupado, [pd.Period("2024-01")])["2024-01"][0]["sin_costo"], 1)
 
+    def test_lo_sin_descargo_suma_en_la_venta_y_no_se_observa(self):
+        # El agua está «Sin descargo» en el POS; el pisco, sin costo de verdad.
+        d = pd.DataFrame({dv.FECHA: pd.to_datetime(["2024-01-10"] * 3), dv.GRUPO: ["Bebidas"] * 3,
+                          dv.CLASE: [dv.VENTA] * 3, dv.LLAVE_ITEM: ["I1", "I2", "I3"],
+                          dv.PRODUCTO: [" 0000153 ", "0000200", "0000300"],
+                          dv.NETO_ITEM: [20, 30, 50], dv.COSTO: [0, 0, 10], dv.CANTIDAD: [1, 1, 1]})
+        con = dv.por_grupo_dia(d, ("0000153",))
+        self.assertEqual(con["neto"].sum(), 100)
+        self.assertEqual(con["lineas_sin_costo"].sum(), 1)
+        self.assertEqual(con["venta_sin_costo"].sum(), 30)
+        # Sin los códigos (el parquet de la carta no se pudo leer), se observa todo.
+        self.assertEqual(dv.por_grupo_dia(d)["venta_sin_costo"].sum(), 50)
+        self.assertFalse(dv.es_sin_descargo(d.drop(columns=dv.PRODUCTO), ("0000153",)).any())
+
     def test_enlace_documental_conserva_mes_y_valida_destino(self):
         enlace = costos_enlaces.enlaces({"mes": {"periodos": [{"k": "2024-02"}], "salidas": {}}})["mes"]["2024-02"]["documental"]
         params = {k: v[0] for k, v in parse_qs(enlace["url"][1:]).items()}

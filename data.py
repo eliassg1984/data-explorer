@@ -1473,6 +1473,7 @@ def limpiar_cache(archivo):
     _venta_por_producto_dia_cacheable.clear()
     _venta_por_canal_dia_cacheable.clear()
     _venta_por_grupo_dia_cacheable.clear()
+    _sin_descargo_cacheable.clear()
     _ventas_por_mes_cacheable.clear()
     _consumo_recetas_cacheable.clear()
     _demanda_nivel1_cacheable.clear()
@@ -1994,7 +1995,32 @@ def venta_por_producto_dia(archivo="ventas.parquet"):
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
-def _venta_por_grupo_dia_cacheable(archivo, sello, definicion=None):
+def _sin_descargo_cacheable(archivo, sello):
+    """Los códigos que el POS marca «Sin descargo» en la carta (regla #761).
+    Si falla, LANZA: no se cachea."""
+    if not secrets_disponibles():
+        return ()
+    url = f"s3://{st.secrets['R2_BUCKET']}/{archivo}"
+    filas = get_conn().execute(
+        f"""SELECT DISTINCT trim("COD PLATO") FROM read_parquet('{url}')
+            WHERE upper(trim("TIPO DESC")) = ?""",
+        [definicion_venta.TIPO_SIN_DESCARGO]).fetchall()
+    return tuple(sorted(r[0] for r in filas if r[0]))
+
+
+def platos_sin_descargo(archivo="cartacosteada.parquet"):
+    """Los códigos de lo que se vende «Sin descargo»: su costo ES cero, así
+    que no se observa como vendido sin costo (`definicion_venta.es_sin_descargo`).
+    Es la marca de HOY, también para lo vendido antes. Vacío si no se pudo leer:
+    se sigue observando todo, no se esconde nada."""
+    try:
+        return _sin_descargo_cacheable(archivo, sello_datos(archivo))
+    except Exception:
+        return ()
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _venta_por_grupo_dia_cacheable(archivo, sello, definicion=None, sin_descargo=()):
     """La venta y la cortesía de cada grupo de carta por día, sobre TODO el
     parquet (`definicion_venta.por_grupo_dia`), fechada por el día del TURNO
     de caja, el default de Ventas (regla #593). Si falla, LANZA: no se cachea.
@@ -2004,7 +2030,8 @@ def _venta_por_grupo_dia_cacheable(archivo, sello, definicion=None):
     (#524). Lo que se guarda son unas 7.000 filas por año."""
     prep = _PREPARAR[archivo]
     if not secrets_disponibles():
-        return prep.por_grupo_dia(prep.preparar(_datos_demo(archivo), turno=True))
+        return prep.por_grupo_dia(prep.preparar(_datos_demo(archivo), turno=True),
+                                  sin_descargo)
     con = get_conn()
     bucket = st.secrets["R2_BUCKET"]
     url = f"s3://{bucket}/{archivo}"
@@ -2016,7 +2043,7 @@ def _venta_por_grupo_dia_cacheable(archivo, sello, definicion=None):
         if c))
     lista = ", ".join(f'"{c}"' for c in reales)
     df = con.execute(f"SELECT {lista} FROM read_parquet('{url}')").df()
-    return prep.por_grupo_dia(prep.preparar(df, turno=True))
+    return prep.por_grupo_dia(prep.preparar(df, turno=True), sin_descargo)
 
 
 def venta_por_grupo_dia(archivo="ventas.parquet"):
@@ -2029,13 +2056,13 @@ def venta_por_grupo_dia(archivo="ventas.parquet"):
     try:
         return _venta_por_grupo_dia_cacheable(
             archivo, sello_datos(archivo),
-            definicion=_version_preparar(archivo))
+            definicion=_version_preparar(archivo), sin_descargo=platos_sin_descargo())
     except Exception:
         return None
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
-def _ventas_por_mes_cacheable(archivo, sello, definicion=None, cuenta=None):
+def _ventas_por_mes_cacheable(archivo, sello, definicion=None, cuenta=None, sin_descargo=()):
     """Las cifras de la portada de Inicio para CADA mes del parquet
     (`resumen_ejecutivo.ventas_por_mes`): venta, pedidos, clientes, ticket,
     descuentos y lo vendido sin costo, por día del turno. Si falla, LANZA:
@@ -2049,7 +2076,7 @@ def _ventas_por_mes_cacheable(archivo, sello, definicion=None, cuenta=None):
     prep = _PREPARAR[archivo]
     if not secrets_disponibles():
         return resumen_ejecutivo.ventas_por_mes(
-            prep.preparar(_datos_demo(archivo), turno=True))
+            prep.preparar(_datos_demo(archivo), turno=True), sin_descargo)
     con = get_conn()
     bucket = st.secrets["R2_BUCKET"]
     url = f"s3://{bucket}/{archivo}"
@@ -2060,7 +2087,7 @@ def _ventas_por_mes_cacheable(archivo, sello, definicion=None, cuenta=None):
     reales = list(dict.fromkeys(c for c in (prep.columna(vacio, q) for q in pide) if c))
     lista = ", ".join(f'"{c}"' for c in reales)
     df = con.execute(f"SELECT {lista} FROM read_parquet('{url}')").df()
-    return resumen_ejecutivo.ventas_por_mes(prep.preparar(df, turno=True))
+    return resumen_ejecutivo.ventas_por_mes(prep.preparar(df, turno=True), sin_descargo)
 
 
 def ventas_por_mes(archivo="ventas.parquet"):
@@ -2071,7 +2098,8 @@ def ventas_por_mes(archivo="ventas.parquet"):
         import resumen_ejecutivo
         return _ventas_por_mes_cacheable(
             archivo, sello_datos(archivo),
-            definicion=_version_preparar(archivo), cuenta=resumen_ejecutivo.VERSION)
+            definicion=_version_preparar(archivo), cuenta=resumen_ejecutivo.VERSION,
+            sin_descargo=platos_sin_descargo())
     except Exception:
         return None
 
