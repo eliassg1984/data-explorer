@@ -38,7 +38,12 @@ def inject_error_overlay():
              || t.indexOf('chrome-extension') !== -1
              || t.indexOf('givefreely') !== -1
              || t.indexOf('receiving end does not exist') !== -1
-             || t.indexOf('extension context') !== -1);
+             || t.indexOf('extension context') !== -1
+             // Aviso benigno del navegador, no un error: una pieza que se
+             // re-mide al acomodarse (Plotly, AgGrid, los SVG de Costos)
+             // deja el segundo aviso para el cuadro siguiente. Con el panel
+             // visible para todos, se leia como una falla de la app.
+             || t.indexOf('resizeobserver loop') !== -1);
       }
 
       function render(){
