@@ -1355,6 +1355,8 @@ CSS = """    /* ================================================================
         > div:has(> .st-key-compras_prov_card_docs, > .st-key-compras_prov_card_ficha, > .st-key-compras_prov_card_ranking, > .st-key-compras_prov_card_vacio),
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-sunat_card_izq),
+        .stColumn > .stVerticalBlock
+        > div:has(> .st-key-sunat_card_ctl),
         /* `compras_prod_card_` entró el 2026-09-02, cuando el Ranking de   */
         /* Productos partió su tarjeta única en dos (tabla | gráfico) y     */
         /* pasó a tener, por primera vez, una FILA de dos tarjetas. Sin el  */
@@ -4666,5 +4668,29 @@ CSS = """    /* ================================================================
             --persp-alto: 44px;
             --alto-util: calc(var(--alto-util-base) - var(--persp-alto));
         }
+        /* El renglón del Control encima de las vistas de Documentos SUNAT le
+           cede a la tarjeta lo que ocupa (regla #759). */
+        .st-key-compras_sunat_drill_wrap:has(.st-key-sunat_sello_control) {
+            --alto-util: calc(var(--alto-util-base) - 34px);
+        }
+    }
+    .st-key-sunat_sello_control {
+        min-height: 24px;
+        gap: 6px !important;
+    }
+    .st-key-sunat_sello_control button {
+        min-height: 22px !important;
+        padding: 0 4px !important;
+    }
+    .st-key-sunat_sello_control button p {
+        font-size: 12px !important;
+    }
+    .sunat-sello {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    .sunat-sello.grave {
+        color: var(--warning-text);
+        font-weight: 600;
     }
 """

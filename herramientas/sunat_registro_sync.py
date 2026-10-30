@@ -43,11 +43,27 @@ está despierta a las 3 AM, y traer todo cierra una clase entera de bugs
 silenciosos: que un mes viejo cambie por una rectificatoria y el parquet
 quede con el dato viejo, sin que nada avise. Es el mismo criterio de
 "reescribir el archivo entero" que ya usa el extractor de SQL Server.
+
+SI UN MES FALLA, QUEDA EL DE AYER (regla #759)
+-----------------------------------------------
+Hasta ese día el archivo se subía sin ese mes: desaparecía de la app con un
+total creíble, y el único aviso era un correo de GitHub. Ahora cada mes se
+intenta tres veces y, si no sale, conserva las filas de la corrida anterior y
+la app lo dice en pantalla. La corrida sale igual con código 2.
+
+EL CONTROL (regla #759)
+-----------------------
+Después del registro deja `sunat_control.json` y `sunat_presentado.parquet`:
+qué dice SUNAT de cada mes y qué se presentó. Ver `sunat_control.py`. Un fallo
+acá no toca el registro, que ya subió: sale con código 3.
+
+    python herramientas/sunat_registro_sync.py --solo-control
 """
 from __future__ import annotations
 
 import argparse
 import io
+import json
 import pathlib
 import sys
 import time
@@ -66,14 +82,36 @@ import streamlit as st         # noqa: E402  — st.secrets vive sin server
 
 import data                    # noqa: E402
 import sunat                   # noqa: E402
+import sunat_control           # noqa: E402
 
 
 def _log(msg):
     print(msg, flush=True)
 
 
-def construir_registro(progreso=None):
+_INTENTOS_MES = 3
+_ESPERA_MES = 20    # segundos: SUNAT corta si se la golpea seguido
+
+
+def _mes_con_reintentos(per):
+    """Los comprobantes de un mes; lanza sólo si fallan todos los intentos."""
+    for intento in range(1, _INTENTOS_MES + 1):
+        try:
+            return sunat.obtener_comprobantes(per)
+        except Exception as e:
+            if intento == _INTENTOS_MES:
+                raise
+            _log(f"  {per}: intento {intento} — {str(e)[:80]}; reintento en {_ESPERA_MES} s")
+            time.sleep(_ESPERA_MES)
+
+
+def construir_registro(progreso=None, detalle=None):
     """Todos los períodos habilitados → (DataFrame canónico, períodos fallidos).
+
+    `detalle` (opcional) recibe cuántos comprobantes dio SUNAT por mes. Los
+    fallidos vuelven con las filas de la corrida anterior
+    (`sunat_control.rellenar_fallidos`); un mes que antes tenía comprobantes y
+    ahora llega vacío cuenta como fallido, no como «sin comprobantes».
 
     Misma forma que devuelve `sunat.obtener_comprobantes_rango`, para que
     la webapp no note la diferencia entre leer esto del parquet o
@@ -91,10 +129,16 @@ def construir_registro(progreso=None):
     periodos = sorted(estados, reverse=True)
     _log(f"{len(periodos)} periodos habilitados: {periodos[-1]} … {periodos[0]}")
 
+    previo = sunat._registro_de_parquet()
     partes, fallidos = [], []
     for i, per in enumerate(periodos, 1):
         try:
-            d = sunat.obtener_comprobantes(per)
+            d = _mes_con_reintentos(per)
+            if detalle is not None:
+                detalle[per] = 0 if d is None else len(d)
+            if ((d is None or d.empty) and previo is not None
+                    and (previo["periodo"].astype(str) == per).any()):
+                raise RuntimeError("llegó vacío y la corrida anterior tenía comprobantes")
         except Exception as e:
             # Un período que falla no puede tumbar la corrida entera: se
             # anota y se sigue. Mejor un parquet con 37 de 38 meses que
@@ -120,10 +164,41 @@ def construir_registro(progreso=None):
     crudo = len(df)
     df = (df.sort_values("situacion")           # "Pendiente" < "Registrado"
             .drop_duplicates(subset="car", keep="last"))
+    df = sunat_control.rellenar_fallidos(df, previo, [p for p, _ in fallidos])
     if crudo != len(df):
         _log(f"Deduplicado por CAR: {crudo} -> {len(df)} "
              f"({crudo - len(df)} repetidos entre periodos).")
     return df.sort_values("fecha_emision").reset_index(drop=True), fallidos
+
+
+def _subir_control(df, detalle, fallidos, dry_run=False):
+    """El control y lo presentado, a R2. `True` si salió."""
+    try:
+        estados = {p: cod for p, cod, _ in sunat.periodos_con_estado()}
+        previo = sunat_control.leer_presentado()
+        control, presentado = sunat_control.construir_control(
+            df, estados, detalle, [p for p, _ in fallidos], previo,
+            sunat_control.leer_control(), log=_log)
+    except Exception as e:
+        _log(f"El control no se pudo armar: {str(e)[:160]}")
+        return False
+    res = control["resumen"]
+    _log(f"Control: {res['presentados']:,} presentados · {res['falta']} no están en la app "
+         f"(S/ {res['falta_s']:,.2f}) · {res['rev']} meses con cifras distintas")
+    if dry_run:
+        return True
+    buf = io.BytesIO()
+    presentado.to_parquet(buf, index=False)
+    s3 = data.get_s3_cliente()
+    bucket = st.secrets["R2_BUCKET"]
+    # Primero lo presentado: la vista cachea por la fecha del control.
+    s3.put_object(Bucket=bucket, Key=sunat_control.ARCHIVO_PRESENTADO,
+                  Body=buf.getvalue(), ContentType="application/vnd.apache.parquet")
+    s3.put_object(Bucket=bucket, Key=sunat_control.ARCHIVO_CONTROL,
+                  Body=json.dumps(control, ensure_ascii=False).encode("utf-8"),
+                  ContentType="application/json")
+    _log(f"Subido a R2: {sunat_control.ARCHIVO_CONTROL}, {sunat_control.ARCHIVO_PRESENTADO}")
+    return True
 
 
 def main():
@@ -135,6 +210,8 @@ def main():
                     help="Ademas, guardar una copia en este archivo local")
     ap.add_argument("--dry-run", action="store_true",
                     help="Construir y reportar, pero NO subir a R2")
+    ap.add_argument("--solo-control", action="store_true",
+                    help="Rehacer el control con el registro que ya está en R2")
     args = ap.parse_args()
 
     if not sunat.secrets_disponibles():
@@ -145,7 +222,16 @@ def main():
         sys.exit(1)
 
     t0 = time.time()
-    df, fallidos = construir_registro()
+    if args.solo_control:
+        reg = sunat._registro_de_parquet()
+        if reg is None or reg.empty:
+            _log("No hay registro en R2.")
+            sys.exit(1)
+        conteo = reg.groupby(reg["periodo"].astype(str)).size().to_dict()
+        sys.exit(0 if _subir_control(reg, conteo, [], args.dry_run) else 3)
+
+    detalle = {}
+    df, fallidos = construir_registro(detalle=detalle)
     if df.empty:
         _log("No se obtuvo ningun comprobante. No se sube nada "
              "(mejor dejar el parquet anterior que pisarlo con vacio).")
@@ -175,16 +261,19 @@ def main():
             Body=contenido, ContentType="application/vnd.apache.parquet")
         _log(f"Subido a R2: {args.salida}")
 
+    control_ok = _subir_control(df, detalle, fallidos, args.dry_run)
     _log(f"Total: {time.time() - t0:.0f} seg.")
 
     if fallidos:
         # Se informa al final y con exit != 0 para que el Task Scheduler
         # pueda distinguir "salio todo bien" de "salio, pero incompleto".
         _log("")
-        _log(f"{len(fallidos)} periodo(s) fallaron y NO estan en el parquet:")
+        _log(f"{len(fallidos)} periodo(s) fallaron y quedan con los datos de ayer:")
         for per, err in fallidos:
             _log(f"   · {per}: {err}")
         sys.exit(2)
+    if not control_ok:
+        sys.exit(3)
 
 
 if __name__ == "__main__":

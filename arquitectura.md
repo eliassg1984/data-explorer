@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-758 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+759 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (248)
 
@@ -964,7 +964,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#752** — El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre después; lo digitado hasta la…
 - **#753** — Las compras del mes nuevo procesadas antes de la apertura van a su mes: compras.parquet trae…
 
-**SUNAT y SIRE** (75)
+**SUNAT y SIRE** (76)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1041,6 +1041,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#712** — Las perspectivas son una pieza común (base.dibujar_perspectiva), y Stock, Ajuste y Producción…
 - **#741** — Documentos SUNAT también necesita una pieza para su tabla, además de las dos vistas de resumen
 - **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
+- **#759** — ¿La app tiene todo lo de SUNAT? Una vista para contestarlo, y un mes que falla ya no desaparece
 
 **Fechas, rangos y cortes** (24)
 
@@ -57476,6 +57477,55 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        pagaba un gap.
      Lo vigila `test_ventas_periodo.py`. (2026-10-30.)
 
+759. **¿La app tiene todo lo de SUNAT? Una vista para contestarlo, y un mes
+     que falla ya no desaparece.** A pedido («el usuario no va a saber que ese
+     documento sí existe en la web de SUNAT»). Documentos SUNAT › «Control»
+     (`sunat_control.py`, `graficos/compras/sunat_control_pieza.py`, `.js`,
+     `.css`).
+
+     **Lo medido el 2026-10-30.** Contra el detalle de la propuesta, los 40
+     meses coinciden documento por documento; sólo faltaban los que llegaron
+     después de la última subida. Contra lo PRESENTADO, en 20 meses: 6.601
+     documentos, 6.339 iguales; 90 no están en la app (S/ 323.949: Luz del Sur
+     19, Gas Natural 20, WIN 18, boletos, un Form. 617); 17 están en otro mes
+     (S/ 106.917, algunos un año después); 17 con otra anotación; 129 con otro
+     monto; y 9 en dólares sin convertir, S/ 26.337 de menos en jul-ago 2025,
+     porque la propuesta los trae con tipo de cambio 1. Nada de lo que tiene la
+     app quedó sin presentar. La cuenta de totales daba «124»: el neto de
+     90 + 17 + 17, sin decir cuáles.
+
+     **Por dónde se trae.** Todo con GET: el resumen por mes (§5.35; sin
+     `codLibro` responde 422, por eso `URL_RESUMEN` llevaba meses sin usarse) y
+     la exportación de lo presentado (§5.40: ticket, estado, ZIP con un TXT). Las
+     20 exportaciones dieron lo mismo que su resumen. A diferencia de la de la
+     propuesta, ésta sí escribe el archivo. No hizo falta entrar al portal.
+
+     **`mtoTotalCP` nunca existió.** SUNAT lo manda como `mtoTotalCp`, igual que
+     `mtoIcbp` y `mtoOtrosTrib`, así que `total` siempre fue la suma de las
+     partes y sin otros tributos (S/ 80-450 al mes desde 2025). Se dejó así a
+     propósito: en los 30 documentos de Diners (tipo 42) el total de SUNAT es
+     treinta veces la comisión —2,85 % + IGV en todos— y se parece, mes a mes, a
+     lo vendido con esa tarjeta. Como costo inflaría S/ 137.130. El de SUNAT va en
+     `total_cp`. Con él, las diferencias de soles se reducen a 38 documentos: los
+     30 de Diners, 5 facturas con sus partes en cero y 3 notas (la E001-21 son
+     los S/ 4.095 de enero de 2025). Mayo y junio de 2024 son otra cosa: el
+     resumen de SUNAT no coincide con su propio detalle.
+
+     **El hueco del sync.** Un mes que fallaba quedaba fuera del parquet, que se
+     subía igual: desaparecía de la app con un total creíble. Ahora se reintenta
+     tres veces, un mes que llega vacío y ayer tenía filas cuenta como fallido, y
+     se conservan las filas de ayer con un aviso en cada vista
+     (`rellenar_fallidos`, `texto_aviso`). El aviso le cede a la tarjeta su alto
+     (`--alto-util`, `estilos/_80_cards.py`).
+
+     **Lo que no resuelve.** Las 9 facturas en dólares siguen sin convertir en
+     Compras y en el cruce: el Control las marca, y corregirlas es otra decisión.
+     Lo presentado se vuelve a pedir sólo si su resumen cambió: cada exportación
+     es un ticket en SUNAT. El ZIP es por mes: 300 XML son 8 MB y 30 s, y un año no
+     cabe en la memoria de Community Cloud. Un `None` de pandas llega como NaN, y
+     en `data` de una pieza revienta `JSON.parse` a toda pantalla. Lo vigila
+     `test_sunat_control.py`. (2026-10-30.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57488,7 +57538,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#758**; la próxima toma el número siguiente.
+> última regla es la **#759**; la próxima toma el número siguiente.
 
 >
 

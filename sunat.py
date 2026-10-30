@@ -230,6 +230,13 @@ def _normalizar_registro(reg):
     XML suman 499.66 — los 33.73 de diferencia son el ISC. Ver la regla
     #314, que es sobre esa diferencia y no sobre esta suma.
 
+    Y **el `mtoTotalCP` de abajo nunca aparece**: SUNAT lo manda como
+    `mtoTotalCp`, con «p», igual que `mtoIcbp` y `mtoOtrosTrib`. Por eso `total`
+    es siempre la suma de las partes, sin otros tributos, y conviene que siga
+    así: en los documentos de Diners el total de SUNAT es lo vendido con la
+    tarjeta (S/ 1.462,92) y la suma, la comisión que se pagó (S/ 49,48). El total
+    de SUNAT va aparte, en `total_cp`, y lo mira el control (regla #759).
+
     Función pura, para poder testear el aplanado sin red.
     """
     m = reg.get("montos") or {}
@@ -277,6 +284,8 @@ def _normalizar_registro(reg):
         "tipo_cambio": _num(tc.get("mtoTipoCambio")) or 1.0,
         "estado": str(reg.get("desEstadoComprobante") or ""),
         "detraccion": str(reg.get("indDetraccion") or ""),
+        "total_cp": _num(m.get("mtoTotalCp")) if "mtoTotalCp" in m else None,
+        "otros_sunat": _num(m.get("mtoOtrosTrib")) + _num(m.get("mtoIcbp")),
     }
 
 
@@ -284,7 +293,7 @@ _COLUMNAS = ("periodo", "car", "fecha_emision", "fecha_vencimiento",
              "tipo_cdp", "tipo_nombre", "serie", "numero", "documento",
              "ruc_proveedor", "proveedor", "base_imponible", "igv",
              "no_gravado", "total", "moneda", "tipo_cambio", "estado",
-             "detraccion")
+             "detraccion", "total_cp", "otros_sunat")
 
 
 def registros_a_df(registros):
@@ -424,6 +433,8 @@ def _datos_demo(periodo, filas=48):
         "tipo_cambio": 1.0,
         "estado": "Activo",
         "detraccion": "",
+        "total_cp": np.round(base + igv, 2),
+        "otros_sunat": 0.0,
     })
     df["fecha_vencimiento"] = df["fecha_emision"] + pd.Timedelta(days=30)
     return df.sort_values("fecha_emision").reset_index(drop=True)

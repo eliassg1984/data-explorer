@@ -45,7 +45,8 @@ _PIEZA = st.components.v2.component(
 VISTA_CRUCE = "Cruce con SUNAT"
 VISTA_PROV = "Proveedores y fechas"
 VISTA_DOCS = "Documentos"
-VISTAS = (VISTA_CRUCE, VISTA_PROV, VISTA_DOCS)
+VISTA_CONTROL = "Control"
+VISTAS = (VISTA_CRUCE, VISTA_PROV, VISTA_DOCS, VISTA_CONTROL)
 """Las vistas del reporte, en el orden del rail. La primera es la que abre."""
 
 K_VISTA = "sunat_graf_tipo"

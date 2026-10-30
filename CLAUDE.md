@@ -65,7 +65,7 @@ a escritorio y cabeceras nativas sin solapes). El detalle vive en
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py && python test_sunat_documentos_pieza.py && python test_ficha_plato.py && python test_ventas_alcance.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py && python test_sunat_documentos_pieza.py && python test_sunat_control.py && python test_ficha_plato.py && python test_ventas_alcance.py
 python test_navegacion_retorno.py && python test_movil.py
 ```
 
@@ -1151,6 +1151,39 @@ vez), y lo que la vista trae APARTE de R2 pasa por `_filtrar_items`. La
 propina y los montos de pago son del PAGO (x11 por fila): Meseros y el
 asistente IA reciben las filas por pago y cuentan cada `LLAVE LOCAL
 DOCUMENTO CORRELATIVO PAGO` una vez. El parquet no se toca. Regla #517.
+
+## ¿La app tiene todo lo de SUNAT? La vista «Control»
+
+Desde el 2026-10-30 (regla #759), Documentos SUNAT › «Control». El registro
+de la app sale de la PROPUESTA (la lista que SUNAT reúne sola); lo PRESENTADO
+es esa lista con lo que se agregó o corrigió. Medido en 20 meses: 6.601
+presentados, 90 de ellos (S/ 323.949: luz, gas, internet, boletos) no están
+en la app. Lo que muerde:
+
+- **El detalle de lo presentado baja por API, sin portal**
+  (`sunat_control.exportar_presentado`, §5.40 del manual, sólo GET). Los
+  servicios que registran, reemplazan o eliminan son otros: NO se llaman, y
+  `test_sunat_control.py` lo vigila.
+- **`total` NO es el total de SUNAT**: es la suma de las partes, y conviene.
+  En Diners (tipo 42), SUNAT dice S/ 1.462,92 —parece lo vendido con esa
+  tarjeta— y la comisión que se pagó es S/ 49,48. El de SUNAT va aparte, en
+  `total_cp`; usarlo como costo infla Compras.
+- **Un mes que falla ya no desaparece**: `herramientas/sunat_registro_sync.py`
+  reintenta y, si no sale, conserva las filas de ayer
+  (`sunat_control.rellenar_fallidos`) y la app lo dice en el aviso de arriba
+  de cada vista (`sunat_control_pieza.aviso`). Sale con código 2; un fallo del
+  control, con 3, sin tocar el registro.
+- **«Aún no llegan» se consulta en vivo**: la pieza pide el mes abierto
+  (trigger `verificar`) después de dibujar, una vez por sesión.
+- **9 facturas en dólares están sin convertir** (jul-ago 2025): la propuesta
+  las trae con tipo de cambio 1 y la app las suma como soles. El Control las
+  marca; las cifras de Compras y del cruce no se tocaron.
+- **Un `None` de pandas viaja como NaN y `JSON.parse` revienta la pieza** con
+  un SyntaxError a toda pantalla: lo que va en `data` sale limpio.
+
+`test_sunat_control.py` vigila la lectura de los dos archivos de SUNAT, el
+estado de cada documento y de cada mes, el mes que falla, el ZIP con su lista
+de faltantes y, en Chromium, la pieza entera.
 
 ## La venta tiene UNA definición: `definicion_venta.py`
 

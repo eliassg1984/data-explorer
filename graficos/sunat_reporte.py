@@ -45,7 +45,8 @@ from graficos.base import (
 
 
 # TRES VISTAS desde el 2026-10-21 (regla #683; hasta ese día, una sola con
-# una tarjeta debajo de la tabla que alternaba seis modos). La primera es la
+# una tarjeta debajo de la tabla que alternaba seis modos), y «Control» desde
+# el 2026-10-30 (regla #759). La primera es la
 # que abre. Los ids son los nombres de `_sunat_vistas.VISTAS`, escritos
 # literales: `test_graficos.py` lee los rails con `ast`. El rail se declara
 # con `rail_sin_tablas`, como todos (regla #507), porque de él salen el
@@ -56,6 +57,7 @@ _SUNAT_RAIL_CATEGORIAS = rail_sin_tablas((
         ("Cruce con SUNAT", "Cruce con SUNAT", ":material/fact_check:"),
         ("Proveedores y fechas", "Proveedores y fechas", ":material/storefront:"),
         ("Documentos", "Documentos", ":material/receipt_long:"),
+        ("Control", "Control", ":material/verified:"),
     )),
 ))
 
@@ -105,9 +107,19 @@ def _kpi_de_la_vista():
     faltan hasta la primera vez que se abre. Mejor sin número que con uno
     inventado. Ámbar si hay algo que revisar: es lo único accionable acá.
     """
+    import sunat_control
+
+    kpis, estados = {}, {}
+    _ctl = sunat_control.leer_control()
+    if _ctl:
+        from graficos.compras import sunat_control_pieza as _scp
+        _av = _scp.texto_aviso(_ctl)
+        kpis["Control"] = f"**Control con SUNAT:** {_av[0]}"
+        if _av[1]:
+            estados["Control"] = "warning"
     _cruce = st.session_state.get("_cp_docs_cruce") or {}
     if _cruce.get("sunat") is None:
-        return None, None
+        return kpis or None, estados or None
     _fmt = lambda n: f"{n:,}".replace(",", ".")  # noqa: E731
     # Con SUNAT como referencia (regla #630): la fidelidad primero, después
     # lo que hay que revisar contra SUNAT y, aparte, lo cargado sin
@@ -116,15 +128,15 @@ def _kpi_de_la_vista():
     if _cruce.get("fidelidad"):
         txt = (f"**Fidelidad respecto de SUNAT:** {_cruce['fidelidad']} · "
                f"{_fmt(_cruce['sunat'])} documentos en SUNAT")
-    estados = None
     if _cruce.get("revisar"):
         txt += (f" · {_fmt(_cruce['revisar'])} a revisar (con diferencia o "
                 f"sin cargar)")
-        estados = {"Cruce con SUNAT": "warning"}
+        estados["Cruce con SUNAT"] = "warning"
     if _cruce.get("fuera"):
         txt += (f" · {_fmt(_cruce['fuera'])} cargados sin comprobante en "
                 f"SUNAT")
-    return {"Cruce con SUNAT": txt}, estados
+    kpis["Cruce con SUNAT"] = txt
+    return kpis, estados or None
 
 
 def renderizar_graficos_sunat(df_f, nombre_reporte, df_full=None, tabla_cb=None):

@@ -3655,7 +3655,7 @@ _LOTE_TOPE_S = 15 * 60
 `maxCachedMessageAge` = 100 de `.streamlit/config.toml` (#474)."""
 
 
-def _candidatos_lote(df_cruce, vis):
+def _candidatos_lote(df_cruce, vis, motivos=None):
     """`(pedibles, descartes)`: los documentos de la tabla (`df_cruce` ya
     filtrado) sin XML en R2 que tiene sentido pedir, del más reciente al más
     viejo, como dicts del SIRE; y `{motivo: cuántos}` de los que no.
@@ -3665,7 +3665,8 @@ def _candidatos_lote(df_cruce, vis):
     Fuera quedan las entidades financieras (los bancos no publican sus
     originales), los emisores que el portal nunca sirvió —el mismo criterio
     que `sunat.emisor_sin_originales`, contado sobre el listado—, lo que ya
-    está pedido y lo que ya falló (se reintenta desde su ficha)."""
+    está pedido y lo que ya falló (se reintenta desde su ficha). `motivos`
+    (opcional) recibe el motivo de cada uno, por `car`: lo lista el Control."""
     if (df_cruce is None or df_cruce.empty or vis is None or vis.empty
             or "car" not in df_cruce.columns or "car" not in vis.columns):
         return [], {}
@@ -3682,8 +3683,10 @@ def _candidatos_lote(df_cruce, vis):
 
     pedibles, descartes = [], {}
 
-    def _fuera(motivo):
+    def _fuera(motivo, r):
         descartes[motivo] = descartes.get(motivo, 0) + 1
+        if motivos is not None:
+            motivos[str(r.get("car") or "")] = motivo
 
     for r in docs:
         if sunat.claves_original(r)[1] in xml_en_r2:
@@ -3692,14 +3695,14 @@ def _candidatos_lote(df_cruce, vis):
         cdp = str(r.get("tipo_cdp") or "").strip().zfill(2)
         if (cdp in tipo_compra.TIPOS_CDP_FINANCIEROS
                 or tipo_compra.es_entidad_financiera(r.get("proveedor"))):
-            _fuera("de bancos y financieras")
+            _fuera("de bancos y financieras", r)
         elif (ruc not in rucs_con_xml
               and por_ruc.get(ruc, 0) >= sunat.MINIMO_INTENTOS_EMISOR):
-            _fuera("de proveedores que SUNAT nunca entrega")
+            _fuera("de proveedores que SUNAT nunca entrega", r)
         elif sunat.clave_fallo(r) in solicitudes:
-            _fuera("que ya fallaron (se reintentan desde su ficha)")
+            _fuera("que ya fallaron (se reintentan desde su ficha)", r)
         elif sunat.clave_solicitud(r) in solicitudes:
-            _fuera("ya pedidos")
+            _fuera("ya pedidos", r)
         else:
             pedibles.append(r)
     pedibles.sort(key=lambda r: str(r.get("fecha_emision") or ""), reverse=True)
@@ -4273,7 +4276,11 @@ def renderizar_documentos_sunat(d, col_fecha, vista=None):
     inferior quedaba en 990 con un viewport de 900.
     """
     from graficos.compras import _sunat_vistas as sv
+    from . import sunat_control_pieza
     vista = vista or sv.VISTA_DOCS
+    if vista == sv.VISTA_CONTROL:
+        return sunat_control_pieza.renderizar()
+    sunat_control_pieza.aviso()
     es_docs = vista == sv.VISTA_DOCS
     if es_docs:
         from .sunat_documentos_pieza import renderizar

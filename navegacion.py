@@ -479,6 +479,7 @@ ROTULO_PESTANA = {
     ("Documentos SUNAT", "Cruce con SUNAT"): "Cruce",
     ("Documentos SUNAT", "Proveedores y fechas"): "Fechas",
     ("Documentos SUNAT", "Documentos"): "Documentos",
+    ("Documentos SUNAT", "Control"): "Control",
     ("Inventario Valorizado", "Stock"): "Stock",
     ("Inventario Valorizado", "Movimientos"): "Por tipo",
     ("Ajuste de Inventario", "Ajuste del cierre"): "Diferencias",
