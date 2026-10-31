@@ -187,7 +187,7 @@ fórmulas que Python. Ver `arquitectura.md` regla #699. Y la Ingeniería de
 menú (`ventas_menu.armar_menu` y `ventas_menu.js`, regla #700): que cada
 plato llegue con la clase de `clasificar` y que el `.js` no reclasifique. Desde
 la #767, en Chromium: a 1240×650 entran los controles, diez filas y la ficha, y
-el corte, los períodos y la categoría vuelven por `cromo`.
+el corte, los períodos y la categoría vuelven por `cromo`. Desde la #769, «Ampliar».
 
 `test_historial_recetas.py` vigila la FOTO de las recetas de venta
 (`historial_recetas.py`): contra un R2 de mentira, que se nombre por el
@@ -243,7 +243,8 @@ cuentas anteriores de Python, neto y exclusión, clientes por pedido con
 canje y cuenta dividida, calendario, bisiesto y grupo actual del plato. En
 Chromium recorre las cinco mejoras y abre las hojas del Excel. Regla #717. Desde la
 #768, la pantalla: «Por qué» a la vista, las cinco pestañas, los grupos de platos
-(mismos, carta nueva, ya no están) y el período elegido contado en el panel.
+(mismos, carta nueva, ya no están) y el período elegido contado en el panel. Desde
+la #769, «Ampliar» redibuja el gráfico al ancho nuevo.
 
 `test_volatilidad_pieza.py` vigila Compras > Volatilidad como pieza propia:
 las cinco ventanas contra las cuentas anteriores, cierres y compras del
@@ -267,7 +268,10 @@ Pruebas de Chromium sin red. Ver regla #720. Desde la #748 abre con todas
 las familias y los insumos de operación aparte; el test cubre además
 «dentro de ±S/ 5», los últimos 12 cierres con la tabla de parciales y el
 salto «¿Por qué? →» a «Análisis de diferencias» (`_cierre.al_porque`, el
-único trigger).
+único trigger). Desde la #769 la vista es una pantalla: «Qué faltó» abre con
+faltantes y sobrantes lado a lado, cada uno con su suma; lectura o ficha al
+costado, «Ampliar» y lo demás en pestañas. El test cubre las sumas con el
+buscador, que los cuatro tipos de faltante sumen el total, la ficha y «Ampliar».
 
 `test_stock_producto_pieza.py` vigila Stock por Producto como pieza propia
 (`inventario_productos.js` y `.css`, `inventario_productos_datos.py` y
@@ -1407,6 +1411,20 @@ muerde:
 `test_ventas_mix_pieza.py` vigila la base, los indicadores y los % contra pandas,
 los niveles de la tabla, «Volver», el año pasado pedido una vez, el Excel y el
 celular, en Chromium.
+
+## «Diferencias del cierre»: una pantalla, las dos listas en paralelo
+
+Desde el 2026-10-31 (regla #769; pieza propia desde la #720). Abre en «Qué faltó»
+con faltantes y sobrantes lado a lado, al costado la lectura del cierre o la ficha
+del producto, y lo demás en pestañas. Lo que muerde:
+
+- **Hay dos «faltó» y no son el mismo número**: el indicador son alimentos y bebidas
+  por línea (−S/ 27.014 en setiembre de 2026); la lista, todas las familias por
+  producto, con las áreas compensadas (−S/ 37.546). El pie dice lo compensado.
+- **Las sumas salen de todas las filas, no de las dibujadas**, y siguen al buscador.
+- **Los tipos de faltante suman el faltante** (`ctipo`): si se agrega uno, se reparte
+  de lo que hay.
+- **La pieza se pone su propio aire** (`.ajc-main`): no tiene tarjeta que se lo dé (#764).
 
 ## Stock: una pantalla, lista y ficha
 

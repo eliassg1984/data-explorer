@@ -202,7 +202,7 @@ const DEF_C = {'Día':14,'Semana':8,'Mes':6};
 const UNIDAD_C = {'Día':'días','Semana':'semanas','Mes':'meses'};
 const TABS_C = [['Montos','Montos'],['Variacion','Variación %'],['Acumulado','Acumulado'],['Semana','Día de semana'],['Platos','Platos']];
 const DIAS_C = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
-function inicialC() { return {gran:'Día', ventana:14, modo:'semana', neto:false, excluir:false, tab:'Montos', med:'venta', cifras:'Clave', clase:'todos', menu:null,
+function inicialC() { return {gran:'Día', ventana:14, modo:'semana', neto:false, excluir:false, tab:'Montos', med:'venta', cifras:'Clave', clase:'todos', ampl:false, menu:null,
   sel:null, grupo:null, canal:null, q:'', resto:false, orden:null, ayuda:false,
   series:{venta:true,pax:true,ticket:true}, limite:150}; }
 const botonC = (a, v, t, on=false, titulo='') => `<button type="button" data-acc="${a}" data-v="${escC(v)}" class="${on?'on':''}" aria-pressed="${on}" title="${escC(titulo)}">${escC(t)}</button>`;
@@ -260,7 +260,8 @@ function filaTabsC(G) {
   const tabs=`<div class="vcc-tabs" role="tablist" aria-label="Qué se ve">${TABS_C.map(([v,t])=>`<button type="button" role="tab" aria-selected="${st.tab===v}" class="${st.tab===v?'on':''}" data-acc="tab" data-v="${v}">${t}</button>`).join('')}</div>`;
   const busca=st.tab==='Platos'?`<div class="vcc-search"><input type="search" data-acc="buscar" aria-label="Buscar platos" placeholder="Buscar plato, grupo o qué cambió…" value="${escC(st.q)}">${st.grupo!=null?botonC('grupo',st.grupo,`${B.P.grupos[st.grupo]} ×`,true):''}${st.canal!=null?botonC('canal',st.canal,`${B.P.canales[st.canal]} ×`,true):''}${st.resto?botonC('resto','','Sólo principales'):''}</div>`:'';
   const cifras=grafico?segmentoC('cifras',[['Clave','Clave'],['Todas','Todas']],st.cifras,'Cifras sobre las barras'):'';
-  return `<div class="vcc-fila">${tabs}${leyendaC(G)}${busca}<div class="vcc-push"></div>${cifras}</div>`;
+  const ampliar=`<button type="button" class="vcc-amp" data-acc="ampl" aria-pressed="${st.ampl}" title="${st.ampl ? 'Volver a poner el panel al costado' : 'Esconder el panel y usar todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${st.ampl ? 'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6' : 'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg>${st.ampl ? 'Con panel' : 'Ampliar'}</button>`;
+  return `<div class="vcc-fila">${tabs}${leyendaC(G)}${busca}<div class="vcc-push"></div>${cifras}${ampliar}</div>`;
 }
 // ── «Por qué», siempre al costado ───────────────────────────────────────
 function filasPanelC(filas, acc) {
@@ -319,7 +320,7 @@ function renderC(G) {
   const graf=['Montos','Variacion','Acumulado'].includes(st.tab);
   const zona=graf?'<div class="vcc-plot" aria-label="Actual y año pasado por período"></div>':st.tab==='Semana'?semanaC_(G):platosHtmlC(G);
   root.innerHTML=`<section class="vcc-main" aria-label="Comparación con el año pasado">${filaControlesC(G)}${indicadoresC(G)}${filaTabsC(G)}
-    <div class="vcc-cuerpo"><div class="vcc-zona">${zona}</div><aside class="vcc-pn" aria-label="Por qué">${panelC(G)}</aside></div>
+    <div class="vcc-cuerpo"><div class="vcc-zona">${zona}</div>${st.ampl?'':`<aside class="vcc-pn" aria-label="Por qué">${panelC(G)}</aside>`}</div>
     ${!V.plan.ok.every(Boolean)?`<div class="vcc-notice">Sin histórico equivalente: ${escC(V.plan.sin_dato)}. Fuera de ambos totales; no se considera una venta de cero.</div>`:''}</section>`;
   if(graf)graficoC(G);
   if(st.tab==='Platos'&&V.indices.length)tablaC(G); else {G.rows=[];G.tableCols=[];}
@@ -526,6 +527,7 @@ function enlazarC(G){
     else if(a==='tab')st.tab=v;
     else if(a==='med')st.med=v;
     else if(a==='cifras')st.cifras=v;
+    else if(a==='ampl')st.ampl=!st.ampl;
     else if(a==='clase'){st.clase=v;st.resto=false;}
     else if(a==='soltar'){st.sel=null;st.grupo=null;st.canal=null;}
     else if(a==='grupo'||a==='canal'){st[a]=st[a]===+v?null:+v;st.resto=false;if(st[a]!=null)st.tab='Platos';}

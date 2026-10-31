@@ -37,6 +37,11 @@
 
 /* La zona y la ficha. */
 .vp-cuerpo { flex: 1 1 0; min-height: 0; display: flex; gap: 16px; align-items: stretch; }
+/* «Ampliar»: la zona con todo el ancho, sin la ficha (regla #769). */
+.vp .amp { height: 28px; flex: none; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 7px; background: var(--rail-fondo); color: var(--text-primary); padding: 0 9px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.vp .amp:hover, .vp .amp[aria-pressed="true"] { background: var(--accent-tint); }
+.vp .amp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.vp.ampliada .vp-ficha { display: none; }
 .vp-zona { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .vp-z { flex: 1 1 0; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
 .vp-z.puestos { display: block; overflow: auto; overscroll-behavior: contain; }
@@ -102,6 +107,8 @@
 /* En una columna, una zona con `flex: 1 1 0` en una caja sin alto mediría 0 (#746). */
 @media (max-width: 900px) {
   .vp { height: auto; }
+  .vp .amp { display: none; }
+  .vp.ampliada .vp-ficha { display: flex; }
   .vp-ctrl, .vp-fila { flex-wrap: wrap; }
   .vp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vp-cuerpo { flex: none; flex-direction: column; }

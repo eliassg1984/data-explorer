@@ -1,6 +1,8 @@
 """Cierre nativo: mismas cuentas y comparación conservadora, sin red (#720).
 Desde la #748: la operación aparte, los últimos 12 cierres, «dentro de
-±S/ 5» y el salto «¿Por qué?» a «Análisis de diferencias»."""
+±S/ 5» y el salto «¿Por qué?» a «Análisis de diferencias». Desde la #769:
+una pantalla, con faltantes y sobrantes lado a lado, la lectura o la ficha al
+costado y «Ampliar»."""
 import io
 import json
 import re
@@ -241,18 +243,23 @@ class Navegador(unittest.TestCase):
     def test_ui_filtros_independientes_celdas_comparacion_y_remontaje(self):
         self.mount();pg=self.pg;root=pg.locator('.ajc')
         self.assertEqual(pg.evaluate('__ajCierre.st.fams'),[])
+        root.locator('[data-act="tab"][data-v="familias"]').click()
         root.locator('[data-act="familia"][data-v="ALIMENTOS"]').first.click()
         self.assertEqual(pg.evaluate('__ajCierre.st.fam'),'ALIMENTOS')
+        # Elegir una familia lleva a sus productos.
+        self.assertEqual(pg.evaluate('__ajCierre.st.tab'),'listas')
         root.locator('[data-act="tab"][data-v="comparar"]').click()
         self.assertEqual(pg.evaluate('__ajCierre.st.status'),'Recurrente')
         root.locator('[data-act="estado"][data-v="Resuelta"]').click()
         self.assertTrue(pg.evaluate('__ajCierre.comp.every(r=>r.estado==="Resuelta")'))
         root.locator('[data-act="elegido"]').first.click()
         self.assertEqual(root.locator('.ajc-history').count(),1)
+        root.locator('[data-act="tab"][data-v="familias"]').click()
         root.locator('[data-act="vf"][data-v="cruce"]').click()
         self.assertEqual(pg.evaluate('__ajCierre.st.vf'),'cruce')
         root.locator('[data-act="celda"]').first.click()
         self.assertIsNotNone(pg.evaluate('__ajCierre.st.area'))
+        root.locator('[data-act="tab"][data-v="familias"]').click()
         root.locator('[data-act="vf"][data-v="lista"]').click()
         pg.evaluate('P=>__montarCierre({data:P,parentElement:document.querySelector("#montar")})',self.P)
         self.assertEqual(pg.evaluate('__ajCierre.st.status'),'Resuelta')
@@ -268,8 +275,8 @@ class Navegador(unittest.TestCase):
         self.assertNotIn('Carne',root.locator('.ajc-detail').inner_text())
         root.locator('.ajc-search').fill('')
         root.locator('[data-act="tab"][data-v="listas"]').click()
-        root.locator('[data-act="abrirlista"]').first.click()
-        self.assertGreater(root.locator('.ajc-areas-de').count(),0)
+        root.locator('[data-act="prod"]').first.click()
+        self.assertGreater(root.locator('.ajc-areas-de span').count(),0)
         root.locator('[data-act="orden"][data-v="pareto"]').click()
         self.assertIn('acum.',root.locator('.ajc-lists').inner_text())
         self.assertEqual(pg.evaluate('Math.round(document.querySelector(".ajc-main").getBoundingClientRect().height)'),575)
@@ -289,7 +296,9 @@ class Navegador(unittest.TestCase):
         self.assertEqual(D['m']['tol'],int((contada&(ds['AJUSTE VALORIZADO'].abs()<=5)).sum()))
         self.assertEqual(root.locator('.ajc-aparte').count(),1)
         self.assertIn('insumos de operación',root.locator('.ajc-frase').inner_text())
+        root.locator('[data-act="tab"][data-v="familias"]').click()
         self.assertIn('Todo el cierre',root.locator('.ajc-familias').inner_text())
+        root.locator('[data-act="tab"][data-v="cierres"]').click()
         S=pg.evaluate('__ajCierreUI.serie(__ajCierre)')
         cierres=[j for j,s in enumerate(p['sesiones']) if s['tipo']=='cierre' and j<=i]
         self.assertEqual([r['i'] for r in S['cierres']],cierres[-12:])
@@ -302,8 +311,62 @@ class Navegador(unittest.TestCase):
         root.locator('[data-act="mover"][data-v="1"]').click()
         self.assertEqual(pg.evaluate('__ajCierre.st.c'),S['cierres'][0]['i']+1)
 
+    def test_lado_a_lado_con_sus_sumas_clases_ficha_y_ampliar(self):
+        self.mount();pg=self.pg;root=pg.locator('.ajc')
+        d=self.d[self.d.FECHA==pd.Timestamp('2026-03-02')]
+        por=d.groupby(d['NOMBRE PRODUCTO'].str.strip())['AJUSTE VALORIZADO'].sum()
+        por=por[por.abs()>1e-9]
+        sol=lambda v:('−' if round(v)<0 else '')+f'S/ {abs(v):,.0f}'
+        # Abre con las dos listas, cada una con su suma.
+        self.assertEqual(pg.evaluate('__ajCierre.st.lado'),'ambos')
+        self.assertEqual(root.locator('.ajc-lists.dos .ajc-col').count(),2)
+        self.assertIn(sol(por[por<0].sum()),root.locator('.ajc-col.neg h4').inner_text())
+        self.assertIn(sol(por[por>0].sum()),root.locator('.ajc-col.pos h4').inner_text())
+        self.assertEqual(root.locator('.ajc-col.neg [data-act="prod"]').count(),int((por<0).sum()))
+        self.assertEqual(root.locator('.ajc-col.pos [data-act="prod"]').count(),int((por>0).sum()))
+        # Las sumas siguen al buscador, por nombre.
+        root.locator('.ajc-search').fill('Arroz')
+        self.assertIn('Arroz',root.locator('.ajc-lists').inner_text())
+        self.assertNotIn('Carne',root.locator('.ajc-lists').inner_text())
+        v=por['Arroz'];self.assertIn(sol(v),root.locator('.ajc-col.neg h4' if v<0 else '.ajc-col.pos h4').inner_text())
+        self.assertIn(sol(v),root.locator('[data-act="lado"][data-v="%s"]'%('f' if v<0 else 's')).inner_text())
+        root.locator('.ajc-search').fill('')
+        # Una lista sola: con su área y su cantidad.
+        root.locator('[data-act="lado"][data-v="s"]').click()
+        self.assertEqual(root.locator('.ajc-lists.una').count(),1)
+        self.assertEqual(root.locator('.ajc-cl').count(),0)
+        root.locator('[data-act="lado"][data-v="f"]').click()
+        # Los tipos de faltante suman el faltante entero.
+        cl=pg.evaluate('__ajCierre.lista.cl')
+        self.assertAlmostEqual(sum(c['v'] for c in cl.values()),por[por<0].sum(),places=6)
+        self.assertEqual(sum(c['n'] for c in cl.values()),int((por<0).sum()))
+        root.locator('[data-act="clase"][data-v="una"]').first.click()
+        self.assertEqual(root.locator('.ajc-lists [data-act="prod"]').count(),cl['una']['n'])
+        root.locator('[data-act="clase"][data-v="todos"]').click()
+        # La ficha reemplaza a la lectura y vuelve con «Ver el cierre».
+        root.locator('[data-act="lado"][data-v="ambos"]').click()
+        self.assertEqual(root.locator('.ajc-pn .ajc-frase').count(),1)
+        root.locator('.ajc-col.neg [data-act="prod"]').first.click()
+        self.assertEqual(root.locator('.ajc-pn .ajc-frase').count(),0)
+        self.assertEqual(root.locator('.ajc-pn .ajc-fn').count(),1)
+        root.locator('[data-act="soltar"]').click()
+        self.assertEqual(root.locator('.ajc-pn .ajc-frase').count(),1)
+        # «Ampliar» esconde el panel y le da el ancho a la zona.
+        antes=root.locator('.ajc-zona').bounding_box()['width']
+        root.locator('[data-act="ampl"]').click()
+        self.assertEqual(root.locator('.ajc-pn').count(),0)
+        self.assertGreater(root.locator('.ajc-zona').bounding_box()['width'],antes+200)
+        self.assertEqual(root.locator('.ajc-lists.dos .ajc-col').count(),2)
+        root.locator('[data-act="ampl"]').click()
+        self.assertEqual(root.locator('.ajc-pn').count(),1)
+        self.assertEqual(pg.evaluate('Math.round(document.querySelector(".ajc-main").getBoundingClientRect().height)'),575)
+
     def test_porque_manda_la_linea_de_mas_peso(self):
         self.mount();pg=self.pg;root=pg.locator('.ajc')
+        # El de más peso no tiene código: su ficha no lleva a ninguna línea.
+        root.locator('[data-act="prod"]').first.click()
+        self.assertEqual(root.locator('[data-act="porque"]').count(),0)
+        root.locator('[data-act="prod"]',has_text='Nombre nuevo').click()
         b=root.locator('[data-act="porque"]').first;dest=json.loads(b.get_attribute('data-v'));b.click()
         env=pg.evaluate('__envios');self.assertEqual(len(env),1);k,v=env[0]
         self.assertEqual(k,'porque');self.assertEqual(v['ses'],self.P['sesiones'][self.P['inicial']]['clave'])
@@ -327,11 +390,13 @@ class Navegador(unittest.TestCase):
 
     def test_excel_contexto_filas_completas_y_seis_decimales(self):
         self.mount();pg=self.pg;root=pg.locator('.ajc')
+        root.locator('.ajc-excel summary').click()
         with pg.expect_download() as dl:root.locator('[data-act="excel"][data-v="resumen"]').click()
         with zipfile.ZipFile(dl.value.path()) as z:
             self.assertIn('Cortes',z.read('xl/workbook.xml').decode())
         root.locator('[data-act="tab"][data-v="comparar"]').click()
         root.locator('[data-act="estado"][data-v="Sin base"]').click()
+        root.locator('.ajc-excel summary').click()
         with pg.expect_download() as dl:root.locator('[data-act="excel"][data-v="detalle"]').click()
         with tempfile.TemporaryDirectory() as temp:
             f=Path(temp)/'cierre.xlsx';dl.value.save_as(str(f))

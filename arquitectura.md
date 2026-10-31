@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-768 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+769 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (253)
 
@@ -1132,7 +1132,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (237)
+**Decisiones de diseño y UX** (238)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1371,6 +1371,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#762** — Documentos SUNAT: una cabecera, la misma en las cuatro vistas, y «Falta cargar» en naranja
 - **#763** — Mix de carta no se aprieta, y la nota de crédito de una venta sin costo no resta de la base
 - **#768** — La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte
+- **#769** — Diferencias del cierre en una pantalla: faltantes y sobrantes lado a lado, y lo demás espera
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57814,6 +57815,44 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        platos» o una búsqueda, baja lo que se ve.
      (2026-10-31.)
 
+769. **Diferencias del cierre en una pantalla: faltantes y sobrantes lado a lado, y lo demás
+     espera.** Eran dos tarjetas de una pantalla cada una: arriba el resumen y, más abajo, lo que
+     se venía a buscar, qué productos. Divulgación progresiva, sobre las cuentas de siempre
+     (`cdatos` y las funciones de `__ajCierreDatos` no se tocaron, y el test las sigue comparando
+     contra Python). Boceto: https://claude.ai/artifact/JKeLmmTjg1yU1g9HYFyqeF. Lo que queda:
+     - **Una fila de control, cuatro indicadores, cinco pestañas y una zona**, con la lectura del
+       cierre o la ficha al costado (`ajc-pn`) y «Ampliar» para darle ese ancho a la zona. Las
+       pestañas: Qué faltó, Familias y áreas, 12 cierres, Contra el anterior y Líneas.
+     - **«Qué faltó» abre con las dos listas en paralelo, cada una con su suma** (a pedido: era lo
+       que la vista de antes sí hacía bien), con «Faltantes» y «Sobrantes» como alternativa. Las
+       sumas salen de todas las filas, no de las dibujadas, y siguen al buscador.
+     - **Lo que faltó se parte en cuatro, y las partes suman el faltante** (`ctipo`): operación,
+       «se repite» (3 o más de los últimos 6 cierres), «sólo este cierre» (1 o ninguno) y el resto.
+       Setiembre 2026: de −S/ 37.546, 42 % se repite, 37 % es operación y sólo 10 % es de este
+       cierre. Es la lectura que no se veía: casi todo el faltante del mes es el de siempre.
+     - **Hay dos «faltó», y no son el mismo número**: el indicador (−S/ 27.014) son alimentos y
+       bebidas por LÍNEA; la lista (−S/ 37.546), todas las familias por PRODUCTO, con lo que falta
+       en un área compensado con lo que sobra en otra. −27.014 − 14.001 (operación) + 3.468
+       (compensado) = −37.547. El pie dice lo compensado; no unificarlos sin decidirlo: uno es el
+       resultado del cierre y el otro, la lista de qué revisar.
+     - **Un clic en una familia, un área o una celda lleva a sus productos**, con el foco en un chip
+       que se quita; antes filtraba abajo, una pantalla más allá.
+     - **Nada se perdió**: Pareto (pie de la lista), las áreas de un producto (ficha; se fue
+       `abrirlista`), tabla con parciales, Stock del cruce con sus productos, «Contra», el historial
+       de una línea (al costado), «Áreas juntas», orden por columna, «Sólo las cinco de antes», el
+       «¿Por qué?» (ahora en la ficha) y el Excel de resumen o de lo que se ve.
+     - **La vista no tiene quien le dé aire**: desde la #764 lo pone cada tarjeta, y esta pieza no
+       tiene tarjeta. Es el `padding` de `.ajc-main`; sin él pegaba contra el borde de la hoja. Y
+       una clase de color en un contenedor (`.ajc-col.neg`) tiñe todo lo de adentro: los nombres de
+       los faltantes salían en rojo.
+     - **En un flex, un `footer > span` también agarra al `.ajc-seg`**, que es un `span`: se estiraba
+       y dejaba sin lugar a la frase. Y la capa del celular busca los filtros por su nombre
+       (`graficos/movil.js`, `.ajc-filters`): sin esa clase no los pliega, y no da error.
+     **«Ampliar» se suma a Análisis de platos y a la comparación con el año pasado**, como en Venta
+     por Periodo (#766): a 1366 px la zona pasa de 940 a 1242 y el gráfico se redibuja a ese ancho.
+     Debajo de 900 px no va: ahí el panel ya está debajo. En Platos es Tabla y Puestos; la Ingeniería
+     de menú no tiene ficha. (2026-10-31.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57826,7 +57865,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#768**; la próxima toma el número siguiente.
+> última regla es la **#769**; la próxima toma el número siguiente.
 
 >
 

@@ -113,7 +113,8 @@ function htmlTabs(d, st) {
   const tops = TOPES.map(([id, r]) => `<button type="button" class="${st.mostrar === id ? 'on' : ''}" data-acc="mostrar" data-id="${id}">${id === 'elegidos' && st.elegidos_p.length ? `${r} · ${st.elegidos_p.length}` : r}</button>`).join('');
   return `${d.cromo ? htmlPestanas(st.tab) : `<div class="pl-tabs" role="tablist">${['Tabla', 'Puestos'].map((t) => `<button type="button" role="tab" aria-selected="${st.tab === t}" class="${st.tab === t ? 'on' : ''}" data-acc="tab" data-id="${t}">${t}</button>`).join('')}</div>`}
     ${st.tab === 'Tabla' ? `<input type="search" data-acc="buscar" value="${esc(st.q)}" placeholder="Buscar un plato" aria-label="Buscar un plato">` : ''}
-    <span class="vp-esp"></span><span class="vp-rot">Mostrar</span><div class="pl-seg" role="group" aria-label="Mostrar">${tops}</div>`;
+    <span class="vp-esp"></span><span class="vp-rot">Mostrar</span><div class="pl-seg" role="group" aria-label="Mostrar">${tops}</div>
+    <button type="button" class="amp" data-acc="ampl" aria-pressed="${st.ampl}" title="${st.ampl ? 'Volver a poner el panel al costado' : 'Esconder el panel y usar todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${st.ampl ? 'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6' : 'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg>${st.ampl ? 'Con panel' : 'Ampliar'}</button>`;
 }
 
 // ── El gráfico de puestos ────────────────────────────────────────────────
@@ -236,6 +237,7 @@ function pintarTabla(raiz, c) {
 }
 function dibujar(raiz, solo) {
   const { data: d, st } = raiz.__d;
+  raiz.classList.toggle('ampliada', !!st.ampl);
   if (!raiz.querySelector('.vp-cuerpo')) {
     raiz.innerHTML = `<div class="vp-ctrl" data-zona="ctrl"></div><div class="vp-kpis" data-zona="kpis"></div><div class="vp-fila" data-zona="tabs"></div>
       <div class="vp-cuerpo"><div class="vp-zona"><div class="vp-z" data-zona="zona"></div><div class="vp-pie"></div></div><div class="vp-ficha" data-zona="ficha"></div></div>`;
@@ -291,6 +293,7 @@ function enlazar(raiz) {
     } else if (acc === 'ambito') { st.ambito = b.dataset.tipo ? [b.dataset.tipo, id] : null; st.menu = null; }
     else if (acc === 'medida') st.medida = id;
     else if (acc === 'mostrar') st.mostrar = id;
+    else if (acc === 'ampl') st.ampl = !st.ampl;
     else return;
     recordar(st);
     dibujar(raiz, 'foco');

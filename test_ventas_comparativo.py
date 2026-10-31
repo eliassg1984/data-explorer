@@ -296,6 +296,14 @@ class Navegador(unittest.TestCase):
         # Un clic en una barra: el panel cuenta ese período.
         root.locator('[data-bar]').nth(3).click()
         self.assertIn('Ver todo',root.locator('.vcc-pn').inner_text())
+        # «Ampliar» esconde el panel y el gráfico se dibuja al ancho nuevo.
+        antes = pg.evaluate("document.querySelector('.vcc-plot svg').getBoundingClientRect().width")
+        root.locator('[data-acc="ampl"]').click()
+        self.assertEqual(root.locator('.vcc-pn').count(),0)
+        self.assertGreater(pg.evaluate("document.querySelector('.vcc-plot svg').getBoundingClientRect().width"),antes+200)
+        self.assertIn('Con panel',root.locator('[data-acc="ampl"]').inner_text())
+        root.locator('[data-acc="ampl"]').click()
+        self.assertEqual(root.locator('.vcc-pn').count(),1)
 
 
 if __name__ == '__main__':

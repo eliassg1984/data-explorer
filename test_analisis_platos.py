@@ -140,6 +140,13 @@ class UnaPantallaEnElNavegador(unittest.TestCase):
           out.botones = $$('.vp-fbot button').map((x) => x.textContent.trim());
           out.kpis = $$('.vp-kpi').length;
           out.comparar = $('[data-id="comparar"]').textContent.trim();
+          // «Ampliar» esconde la ficha y le da su ancho a la zona; Puestos se redibuja a él.
+          const ancho0 = $('.vp-zona').clientWidth; $('.amp').click();
+          out.ampl = { ficha: $('.vp-ficha').offsetWidth, mas: $('.vp-zona').clientWidth - ancho0, volver: $('.amp').textContent.trim() };
+          $('[data-acc="tab"][data-id="Puestos"]').click();
+          out.ampl.puestos = +$('.vp-z svg').getAttribute('width') > ancho0;
+          $('[data-acc="tab"][data-id="Tabla"]').click(); $('.amp').click();
+          out.ampl.ficha2 = $('.vp-ficha').offsetWidth;
           // Puestos: la zona cambia sin una corrida.
           $('[data-acc="tab"][data-id="Puestos"]').click();
           out.puestos = !!$('.vp-z svg') && !$('.vp-tabla'); out.alEnviar0 = window.__enviados.length;
@@ -170,6 +177,11 @@ class UnaPantallaEnElNavegador(unittest.TestCase):
         self.assertLessEqual(r["ficha"][0], r["ficha"][1])
         self.assertEqual(r["botones"], ["☆ Elegir", "A qué hora →", "Su costo →"])
         self.assertEqual(r["kpis"], 4)
+        self.assertEqual(r["ampl"]["ficha"], 0)
+        self.assertGreater(r["ampl"]["mas"], 200)
+        self.assertEqual(r["ampl"]["volver"], "Con panel")
+        self.assertTrue(r["ampl"]["puestos"])
+        self.assertGreater(r["ampl"]["ficha2"], 200)
         self.assertIn("Ago · Sep · Oct 26", r["comparar"])
         self.assertTrue(r["puestos"])
         self.assertEqual(r["alEnviar0"], 0)

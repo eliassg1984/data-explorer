@@ -58,6 +58,10 @@
 .vcc label.vcc-ticket input {accent-color:var(--serie-5);}
 /* La zona y «Por qué». */
 .vcc .vcc-cuerpo {flex:1 1 0;min-height:0;display:flex;gap:16px;min-width:0;}
+/* «Ampliar»: la zona con todo el ancho, sin el panel (regla #769). */
+.vcc .vcc-amp {height:28px;flex:none;display:inline-flex;align-items:center;gap:5px;border:0;border-radius:7px;background:var(--rail-fondo);color:var(--text-primary);padding:0 9px;font-size:12px;cursor:pointer;white-space:nowrap;}
+.vcc .vcc-amp:hover,.vcc .vcc-amp[aria-pressed="true"] {background:var(--accent-tint);}
+.vcc .vcc-amp svg {width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 .vcc .vcc-zona {flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column;gap:8px;}
 .vcc .vcc-pn {flex:0 0 286px;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;border-left:1px solid var(--line-soft);padding-left:16px;display:flex;flex-direction:column;gap:1px;}
 .vcc .vcc-pn-t {flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:20px;}
@@ -123,6 +127,7 @@
 .vcc .vcc-table-foot {flex:none;font-size:11.5px;color:var(--text-secondary);display:flex;justify-content:space-between;gap:12px;white-space:nowrap;overflow:hidden;}
 /* En una columna, una zona con `flex: 1 1 0` en una caja sin alto mediría 0 (#746). */
 @media(max-width:900px){
+  .vcc .vcc-amp {display:none;}
   .vcc .vcc-main {height:auto;}
   .vcc .vcc-fila {flex-wrap:wrap;}
   .vcc .vcc-kpis,.vcc .vcc-cls {grid-template-columns:repeat(2,minmax(0,1fr));}
