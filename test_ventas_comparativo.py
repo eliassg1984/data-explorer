@@ -135,7 +135,7 @@ class Navegador(unittest.TestCase):
         cls.pg.set_content('<div id="montar"></div>')
         cls.pg.add_style_tag(content=':root{--alto-util:575px;--text-primary:rgb(40,40,50);--text-secondary:rgb(100,100,110);--accent:rgb(108,92,231);--accent-deep:rgb(80,65,180);--accent-tint:rgb(245,243,255);--bg-card:white;--border:rgb(220,220,230);--border-lavender:rgb(190,180,235);--success:green;--danger:crimson;--warning:orange;--warning-text:brown;--serie-2:teal;--serie-5:orange;}body{margin:0}')
         cls.pg.add_style_tag(content=_CSS)
-        xlsx = (_AQUI / "graficos/_xlsx.js").read_text(encoding="utf-8")
+        xlsx = (_AQUI / "graficos/_xlsx.js").read_text(encoding="utf-8") + (_AQUI / "graficos/ventas_sin_fecha.js").read_text(encoding="utf-8")
         cls.pg.add_script_tag(content=xlsx + _JS.replace('export default function(component)', 'window.__montarComparativo = function(component)'))
 
     @classmethod
@@ -230,6 +230,7 @@ class Navegador(unittest.TestCase):
         pg.evaluate('''P=>{window.__vtComparativo=undefined;document.querySelector('#montar').innerHTML='';__montarComparativo({data:P,parentElement:document.querySelector('#montar')});}''',self.P)
         root = pg.locator('.vcc')
         root.locator('[data-acc="gran"][data-v="Mes"]').click()
+        root.locator('[data-acc="menu"][data-v="ventana"]').click()
         root.locator('[data-acc="ventana"][data-v="12"]').click()
         hits = root.locator('[data-bar]')
         a,b = hits.nth(8).bounding_box(),hits.nth(11).bounding_box()
@@ -238,19 +239,22 @@ class Navegador(unittest.TestCase):
         pg.mouse.move(b['x']+b['width']/2,b['y']+b['height']/2,steps=10)
         pg.mouse.up()
         self.assertEqual(pg.evaluate('__vtComparativo.st.sel'),[8,11])
-        self.assertEqual(root.locator('.vcc-bridge-plot svg').count(),1)
-        self.assertGreater(root.locator('.vcc-detail [data-acc="grupo"]').count(),0)
-        root.locator('.vcc-detail .vcc-break [data-acc="grupo"]').first.click()
+        self.assertIn('Clientes',root.locator('.vcc-pn').inner_text())
+        self.assertGreater(root.locator('.vcc-pn [data-acc="grupo"]').count(),0)
+        # Un grupo del panel lleva a Platos con ese grupo.
+        root.locator('.vcc-pn .vcc-break [data-acc="grupo"]').first.click()
         self.assertIsNotNone(pg.evaluate('__vtComparativo.st.grupo'))
+        self.assertEqual(pg.evaluate('__vtComparativo.st.tab'),'Platos')
         root.locator('.vcc-search [data-acc="grupo"]').click()
         root.locator('[data-acc="buscar"]').fill('Plato 01')
         self.assertEqual(pg.evaluate('__vtComparativo.rows.map(r=>r.prod)'),['Plato 01'])
         self.assertIn('1 producto · búsqueda aplicada',root.locator('.vcc-table-foot').inner_text())
+        root.locator('[data-acc="menu"][data-v="alcance"]').click()
         root.locator('[data-acc="excluir"]').check()
         self.assertTrue(pg.evaluate('__vtComparativo.st.excluir'))
         self.assertEqual(pg.evaluate('__vtComparativo.V.ta.raro'),0)
         with pg.expect_download() as dl:
-            root.locator('.vcc-detail [data-acc="excel"]').click()
+            root.locator('[data-acc="excel"]').click()
         with tempfile.TemporaryDirectory() as temp:
             path=Path(temp)/'comparativo.xlsx'
             dl.value.save_as(str(path))
@@ -263,6 +267,35 @@ class Navegador(unittest.TestCase):
         self.assertEqual(pg.evaluate('__vtComparativo.st.sel'),[8,11])
         pg.evaluate('''P=>__montarComparativo({data:{...P,sello:'otra'},parentElement:document.querySelector('#montar')})''',self.P)
         self.assertIsNone(pg.evaluate('__vtComparativo.st.sel'))
+
+    def test_una_pantalla_con_el_por_que_a_la_vista(self):
+        pg = self.pg
+        pg.set_viewport_size({'width': 1240, 'height': 650})
+        pg.evaluate('''P=>{window.__vtComparativo=undefined;document.documentElement.style.setProperty('--alto-util','620px');document.querySelector('#montar').innerHTML='';__montarComparativo({data:P,parentElement:document.querySelector('#montar')});}''',self.P)
+        root = pg.locator('.vcc')
+        r = pg.evaluate('''()=>{const m=document.querySelector('.vcc-main');return {alto:m.scrollHeight-m.clientHeight,panel:document.querySelector('.vcc-pn').textContent,kpis:document.querySelectorAll('.vcc-kpi').length,barras:document.querySelectorAll('[data-bar]').length};}''')
+        self.assertLessEqual(r['alto'],0)
+        self.assertIn('que el año pasado',r['panel'])
+        self.assertIn('Por grupo',r['panel'])
+        self.assertEqual(r['kpis'],4)
+        self.assertEqual(r['barras'],14)
+        # Cada pestaña es una zona, sin una corrida y sin perder lo elegido.
+        for tab, marca in (('Variacion','[data-bar]'),('Acumulado','[data-bar]'),('Semana','.vcc-sem-f b'),('Platos','.vcc-cl')):
+            root.locator(f'[data-acc="tab"][data-v="{tab}"]').click()
+            self.assertGreater(root.locator(marca).count(),0,tab)
+        # Los tres grupos de platos suman lo que dicen, y filtran la tabla.
+        root.locator('[data-acc="clase"][data-v="ambos"]').click()
+        filas = pg.evaluate('__vtComparativo.rows.filter(r=>!r.resto).map(r=>__vcCalc.clase(r))')
+        self.assertTrue(filas and all(c=='ambos' for c in filas))
+        s = pg.evaluate('__vcCalc.porSemana(__vtComparativo.V)')
+        self.assertEqual(len(s),7)
+        # Un indicador elige qué mide el gráfico.
+        root.locator('[data-acc="tab"][data-v="Montos"]').click()
+        root.locator('[data-acc="med"][data-v="pax"]').click()
+        self.assertEqual(pg.evaluate('__vtComparativo.st.med'),'pax')
+        # Un clic en una barra: el panel cuenta ese período.
+        root.locator('[data-bar]').nth(3).click()
+        self.assertIn('Ver todo',root.locator('.vcc-pn').inner_text())
 
 
 if __name__ == '__main__':

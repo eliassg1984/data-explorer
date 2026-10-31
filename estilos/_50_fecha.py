@@ -71,6 +71,10 @@ CSS = """    /* ================================================================
    variable vale 0 y estas cuentas vuelven solas a los valores de siempre.
    Sus `left` bajaron 90px en la misma vuelta — es el ancho que el rail
    izquierdo reservaba y que ya no existe. */
+/* En las vistas de Ventas que eligen sus propios períodos, esta fecha no manda:
+   la pieza lo avisa en `<html>` (`graficos/ventas_sin_fecha.js`, regla #768) y se
+   esconde sin correr lo que tiene al lado. */
+html[data-vt-sin-fecha] .st-key-fecha_ajuste_pill { visibility: hidden !important; }
 .st-key-fecha_ajuste_pill {
     position: fixed !important;
     /* La fila 1 dejo de existir: su banda la ocupa ahora la franja de

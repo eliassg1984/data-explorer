@@ -201,6 +201,7 @@ export default function (component) {
     raiz.__d = { st: Object.assign({ forma: 'cuadros', clase: null, orden: 'mtot', asc: false, menu: null, elegidos: [], cats: [] }, leer(CLAVE, {})) };
     enlazar(raiz);
   }
+  sinFechaFranja(raiz);
   raiz.__d.data = data;
   raiz.__d.enviar = setTriggerValue;
   recibirCromo(raiz, data);

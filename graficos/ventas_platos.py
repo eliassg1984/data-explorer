@@ -400,7 +400,8 @@ _PIEZA = st.components.v2.component(
     "ventas_platos",
     css=css_movil((_AQUI / "ventas_platos_cromo.css").read_text(encoding="utf-8")
                   + (_AQUI / "ventas_platos.css").read_text(encoding="utf-8")),
-    js=js_movil((_AQUI / "ventas_platos_cromo.js").read_text(encoding="utf-8")
+    js=js_movil((_AQUI / "ventas_sin_fecha.js").read_text(encoding="utf-8")
+                + (_AQUI / "ventas_platos_cromo.js").read_text(encoding="utf-8")
                 + (_AQUI / "ventas_platos.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "vt_pl_pieza"

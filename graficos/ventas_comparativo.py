@@ -981,6 +981,7 @@ _PIEZA = st.components.v2.component(
     "ventas_comparativo",
     css=css_movil((_AQUI / "ventas_comparativo.css").read_text(encoding="utf-8")),
     js=js_movil((_AQUI / "_xlsx.js").read_text(encoding="utf-8")
+    + (_AQUI / "ventas_sin_fecha.js").read_text(encoding="utf-8")
     + (_AQUI / "ventas_comparativo.js").read_text(encoding="utf-8")),
 )
 _K_CACHE = "_vt_comparativo_cache"

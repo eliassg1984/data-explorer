@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-766 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+767 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (252)
 
@@ -430,7 +430,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 - **#758** — Venta por Periodo no se aprieta: indicadores que eligen, comparación elegible y cierre
 
-**Plotly y figuras** (129)
+**Plotly y figuras** (130)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -561,6 +561,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#738** — Movimientos por Tipo de Stock es una pieza propia, con filtros y contribuciones locales sin…
 - **#744** — La ficha del plato de «Costo de Carta» es una pieza propia: dice qué mueve el costo de hoy y…
 - **#751** — Producción › «Consumo según ventas» dice la cuenta de cada porcionamiento, deja elegir el…
+- **#768** — La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte
 
 **AgGrid y tablas** (98)
 
@@ -1129,7 +1130,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (236)
+**Decisiones de diseño y UX** (237)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1367,6 +1368,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#761** — Lo «Sin descargo» del POS suma en la venta y no se observa como «sin costo»
 - **#762** — Documentos SUNAT: una cabecera, la misma en las cuatro vistas, y «Falta cargar» en naranja
 - **#763** — Mix de carta no se aprieta, y la nota de crédito de una venta sin costo no resta de la base
+- **#768** — La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57738,6 +57740,38 @@ base nula, año bisiesto, conciliación y validación de enlaces).
        que tiene lo mismo) queda por hacer. El boceto la dibuja sin ella.
      (2026-10-31.)
 
+768. **La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte.** Cabía
+     en una pantalla pero contaba sólo cuánto: lo que explica la diferencia estaba en una
+     segunda tarjeta, detrás de un botón o de elegir un tramo, con 13 columnas, y «Año a la
+     fecha: −21 %» en letra chica al pie. Boceto:
+     https://claude.ai/artifact/JKeLmmTjg1yU1g9HYFyqeF. Las cuentas no se tocaron (`__vcCalc` y
+     su test contra Python siguen iguales). Lo que queda:
+     - **Una zona por pestaña** —Montos, Variación %, Acumulado, Día de semana, Platos— con
+       **«Por qué» siempre al costado**: una frase armada con lo que más pesa, la cascada de
+       clientes, ticket y canales sin clientes, los grupos y los canales. Un clic en un grupo o
+       canal lleva a Platos con ese filtro; un clic en una barra hace que el panel cuente ese
+       período, y arrastrar, ese tramo.
+     - **Lo que dice «ya no se vende» es casi todo cambio de carta.** La Entraña 350 g «se fue»
+       (−S/ 9.411) y la Entraña Americana 300 g es «nueva» (+S/ 11.067). En 14 días a oct 2026:
+       carta nueva +93.501, ya no están −98.903, mismos platos −3.110; lo que falta para el
+       total (−13.158) son sobre todo notas de crédito, filas con venta negativa. `claseC` separa por NOMBRE: un
+       plato renombrado cuenta en las dos, y lo dice la ayuda. Por cantidad y por precio sólo se
+       muestran en los que se vendieron en los dos períodos; en los demás dan lo mismo que Δ.
+     - **Cuatro indicadores que eligen la medida** (`st.med`: venta, clientes, ticket; Montos los
+       dibuja) y «A la fecha»: año, mes y presupuesto, que estaban al pie.
+     - **Día de semana y Acumulado son nuevos, y sólo leen lo que ya había**: `porSemanaC` promedia
+       `dias` de cada período comparable, y Acumulado suma la diferencia barra por barra.
+     - **El presupuesto va DETRÁS de las barras** y las cifras, con «Clave | Todas» y un borde del
+       color del fondo: encima tachaba «11k» y «+36 %».
+     - **La fecha de la franja se esconde donde no manda**, aquí y en Análisis de platos (lo que la
+       #767 dejó por hacer). La franja se dibuja fuera de la pila y no sabe qué vista está en
+       pantalla: la pieza lo sube con un `IntersectionObserver` a `<html data-vt-sin-fecha>`
+       (`graficos/ventas_sin_fecha.js`) y `estilos/_50_fecha.py` usa `visibility: hidden`, para no
+       correr lo que tiene al lado. Sale sola al dejar la pantalla o quitarse la pieza.
+     - **El Excel trae siempre los productos**: antes, sólo con un tramo elegido. Con «Mismos
+       platos» o una búsqueda, baja lo que se ve.
+     (2026-10-31.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57750,7 +57784,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#767**; la próxima toma el número siguiente.
+> última regla es la **#768**; la próxima toma el número siguiente.
 
 >
 

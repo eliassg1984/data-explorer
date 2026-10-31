@@ -1,4 +1,5 @@
-// Ventas › Comparativo, pieza propia (regla #717). `_xlsx.js` va antepuesto.
+// Ventas › Comparativo, pieza propia (reglas #717 y #768). `_xlsx.js` y
+// `ventas_sin_fecha.js` van antepuestos.
 // Fechas y ventanas: ayudantes originales de Python. Cuentas: las mismas
 // de _series_por_rangos, _por_que y _explica_diferencia. Ningún control
 // devuelve un trigger: ni el tramo, ni el detalle, ni sus filtros.
@@ -191,22 +192,113 @@ function calcularC(B, st) {
   return {...B._resultado, detalle:st.sel ? detalleC(B, ra, rp, st) : null};
 }
 window.__vcCalc = {leer:leerC, calcular:calcularC, lado:ladoC, clientes:clientesC, puente:puenteC, efectos:efectosC,
-  detalle:detalleC, visibles:visiblesC, calendario:calendarioC};
+  detalle:detalleC, visibles:visiblesC, calendario:calendarioC, clase:r=>claseC(r), porSemana:V=>porSemanaC(V)};
 
-// ── Interfaz ────────────────────────────────────────────────────────────
+// ── Interfaz (regla #768) ───────────────────────────────────────────────
+// Una fila de controles, cuatro indicadores y UNA zona por pestaña, con «Por qué»
+// siempre al costado: lo que explica la diferencia ya no espera a un botón.
 const VENTANAS_C = {'Día':[7,14,30], 'Semana':[4,8,13], 'Mes':[3,6,12]};
 const DEF_C = {'Día':14,'Semana':8,'Mes':6};
 const UNIDAD_C = {'Día':'días','Semana':'semanas','Mes':'meses'};
-function inicialC() { return {gran:'Día', ventana:14, modo:'semana', neto:false, vista:'Montos', excluir:false,
-  sel:null, grupo:null, canal:null, q:'', resto:false, orden:null, ayuda:false, leyenda:false,
+const TABS_C = [['Montos','Montos'],['Variacion','Variación %'],['Acumulado','Acumulado'],['Semana','Día de semana'],['Platos','Platos']];
+const DIAS_C = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+function inicialC() { return {gran:'Día', ventana:14, modo:'semana', neto:false, excluir:false, tab:'Montos', med:'venta', cifras:'Clave', clase:'todos', menu:null,
+  sel:null, grupo:null, canal:null, q:'', resto:false, orden:null, ayuda:false,
   series:{venta:true,pax:true,ticket:true}, limite:150}; }
 const botonC = (a, v, t, on=false, titulo='') => `<button type="button" data-acc="${a}" data-v="${escC(v)}" class="${on?'on':''}" aria-pressed="${on}" title="${escC(titulo)}">${escC(t)}</button>`;
 const segmentoC = (a, opciones, valor, rotulo) => `<div class="vcc-seg" role="group" aria-label="${rotulo}">${opciones.map(([v,t])=>botonC(a,v,t,v===valor)).join('')}</div>`;
 function rangosTxtC(rs) { return rs.length ? `${fechaC(rs[0][0])} – ${fechaC(rs[rs.length-1][1])}` : 'sin período comparable'; }
-function kpiC(rot, val, sub='', color='') { return `<div class="vcc-kpi"><span>${escC(rot)}</span><strong${color?` style="color:${color}"`:''}>${escC(val)}</strong>${sub?`<small>${escC(sub)}</small>`:''}</div>`; }
+const medC = (t, m) => !t ? null : m==='venta' ? t.venta : m==='pax' ? t.pax : t.pax ? t.cli/t.pax : null;
+const fmtMedC = (v, m) => m==='pax' ? numeroC(v) : m==='ticket' ? solesC(v,2) : solesC(v);
+const claseC = r => r.venta_ap<=0&&r.venta>0 ? 'nuevo' : r.venta<=0&&r.venta_ap>0 ? 'dejado' : r.venta>0&&r.venta_ap>0 ? 'ambos' : 'otro';
+function chispaC(vals) {
+  const v=vals.map(x=>finC(x)?x:0), lo=Math.min(...v), hi=Math.max(...v), n=v.length;
+  return v.map((y,i)=>`${(n>1?i/(n-1)*100:50).toFixed(1)},${(28-(y-lo)/((hi-lo)||1)*26).toFixed(1)}`).join(' ');
+}
+function menuC(id, texto, st, contenido, activo=false) {
+  return `<div class="vcc-m"><button type="button" class="vcc-mb${activo?' on':''}" aria-expanded="${st.menu===id}" data-acc="menu" data-v="${id}">${escC(texto)} <i>▾</i></button>${st.menu===id?`<div class="vcc-pop">${contenido}</div>`:''}</div>`;
+}
+function filaControlesC(G) {
+  const {B,st}=G, opcion=(a,v,t,on)=>`<button type="button" class="${on?'on':''}" data-acc="${a}" data-v="${escC(v)}">${escC(t)}</button>`;
+  const ventanas=VENTANAS_C[st.gran].map(v=>opcion('ventana',v,`Últimos ${v} ${UNIDAD_C[st.gran]}`,v===st.ventana)).join('');
+  const contra=st.gran==='Día'?menuC('contra',`Contra: ${st.modo==='calendario'?'Misma fecha':'Mismo día de semana'}`,st,opcion('modo','semana','Mismo día de semana',st.modo==='semana')+opcion('modo','calendario','Misma fecha',st.modo==='calendario'))
+    :`<span class="vcc-fijo" title="${st.gran==='Mes'?'Mismo mes del año anterior':'Mismos días de semana, 364 días antes'}">Contra: Año pasado</span>`;
+  const alcance=menuC('alcance',`Venta: ${st.excluir?'sin eventos':'toda'}`,st,`<label><input type="checkbox" data-acc="excluir" ${st.excluir?'checked':''}> Excluir Eventos y Venta interna</label>`,st.excluir);
+  const ayuda=st.ayuda?`<div class="vcc-help"><b>Comparación justa</b><p>${st.gran==='Día'&&st.modo==='calendario'?'Misma fecha del calendario; el día de semana puede cambiar.':st.gran==='Mes'?'Mismo mes del año anterior. El calendario estima el efecto de tener más o menos días de cada día de semana.':'Mismos días de semana, 364 días antes (52 semanas).'} El período en curso se compara con la misma cantidad de días. El ticket usa la venta de los canales que registran clientes. Las notas de crédito restan y las cuentas divididas cuentan una mesa.</p><p>«Por qué» reparte la diferencia en clientes, ticket y canales sin clientes. El calendario es una referencia aparte: no se vuelve a restar. Las bandas grises son fines de semana y las ámbar, feriados de Perú.</p><p>«Carta nueva» y «Ya no están» se separan por el nombre del plato: uno renombrado cuenta en las dos.</p></div>`:'';
+  return `<div class="vcc-fila">${segmentoC('gran',['Día','Semana','Mes'].map(v=>[v,v]),st.gran,'Granularidad')}${menuC('ventana',`Últimos ${st.ventana} ${UNIDAD_C[st.gran]}`,st,ventanas,true)}${contra}${alcance}<div class="vcc-push"></div>
+    ${B.P.hay_neto?`<span class="vcc-rot">Medir</span>${segmentoC('neto',[[false,'Venta'],[true,'Neto']],st.neto,'Monto')}`:''}
+    <span class="vcc-rel">${botonC('ayuda','','Cálculo',st.ayuda,'Cómo se compara')}${ayuda}</span>${botonC('excel','','Excel')}</div>`;
+}
+function presupuestoC(V) {
+  const ids=V.indices.filter(i=>V.ppto[i]!=null);
+  if(!ids.length)return null;
+  const p=ids.reduce((s,i)=>s+V.ppto[i],0), a=ids.reduce((s,i)=>s+V.a[i].venta,0);
+  return {pct:p>0?a/p*100:null, tip:`Venta ${solesC(a,2)} / presupuesto ${solesC(p,2)}. ${ids.length} de ${V.indices.length} períodos con presupuesto.`};
+}
+function indicadoresC(G) {
+  const {B,st,V}=G, comparable=V.indices.length>0, a=V.ta, p=V.tp;
+  const kpi=(id,rot,m)=>{
+    const va=comparable?medC(a,m):null, vp=comparable?medC(p,m):null, pct=pctC(va,vp), on=st.med===m;
+    return `<button type="button" class="vcc-kpi${on?' on':''}" data-acc="med" data-v="${m}" aria-pressed="${on}"><span class="vcc-kt"><span class="vcc-kr">${rot}</span><strong>${escC(fmtMedC(va,m))}</strong><small><b style="color:${colorC(pct)}">${escC(cambioC(pct))}</b> ${m==='venta'?`· ${escC(solesC(vp))} el año pasado`:'vs año pasado'}</small></span>
+      <svg class="vcc-ks" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polyline points="${chispaC(V.a.map(t=>medC(t,m)))}"/></svg></button>`;
+  };
+  const anio=V.acum.find(x=>x.nombre.startsWith('Año')), mes=V.acum.find(x=>x.nombre.startsWith('Mes')), pp=presupuestoC(V);
+  const tipA=x=>x?`${rangosTxtC([x.rango[0]])} contra ${rangosTxtC([x.rango[1]])} · ${solesC(x.actual,2)} / ${solesC(x.ap,2)}`:'';
+  const fecha=`<div class="vcc-kpi fijo"><span class="vcc-kt"><span class="vcc-kr">A la fecha</span><strong title="${escC(tipA(anio))}">${anio?`Año <span style="color:${colorC(anio.var)}">${escC(cambioC(anio.var))}</span>`:'—'}</strong><small title="${escC(tipA(mes))}">${mes?`Mes <b style="color:${colorC(mes.var)}">${escC(cambioC(mes.var))}</b> vs año pasado`:''}</small></span>
+    ${pp&&pp.pct!=null?`<span class="vcc-kc" title="${escC(pp.tip)}">Presupuesto <b>${numeroC(pp.pct)}%</b><span class="vcc-prog"><i style="width:${Math.min(100,pp.pct).toFixed(1)}%"></i></span></span>`:''}</div>`;
+  return `<div class="vcc-kpis">${kpi('v',st.neto?'Neto':'Venta','venta')}${B.P.hay_pax?kpi('c','Clientes','pax')+kpi('t','Ticket','ticket'):''}${fecha}</div>`;
+}
+function leyendaC(G) {
+  const {B,st}=G;
+  if(st.tab==='Montos')return `<span class="vcc-key vcc-ap">Año pasado</span><span class="vcc-key vcc-actual">Actual</span>${st.med==='venta'&&G.V.ppto.some(finC)?'<span class="vcc-key vcc-ppto">Presupuesto</span>':''}`;
+  if(st.tab==='Variacion')return ['venta',...(B.P.hay_pax?['pax','ticket']:[])].map(k=>`<label class="vcc-key vcc-${k}"><input type="checkbox" data-acc="serie" data-v="${k}" ${st.series[k]?'checked':''}>${{venta:'Venta',pax:'Clientes',ticket:'Ticket'}[k]}</label>`).join('');
+  if(st.tab==='Acumulado')return '<span class="vcc-key vcc-dif">Diferencia del período</span><span class="vcc-key vcc-acum">Brecha acumulada</span>';
+  return '';
+}
+function filaTabsC(G) {
+  const {B,st}=G, grafico=['Montos','Variacion','Acumulado'].includes(st.tab);
+  const tabs=`<div class="vcc-tabs" role="tablist" aria-label="Qué se ve">${TABS_C.map(([v,t])=>`<button type="button" role="tab" aria-selected="${st.tab===v}" class="${st.tab===v?'on':''}" data-acc="tab" data-v="${v}">${t}</button>`).join('')}</div>`;
+  const busca=st.tab==='Platos'?`<div class="vcc-search"><input type="search" data-acc="buscar" aria-label="Buscar platos" placeholder="Buscar plato, grupo o qué cambió…" value="${escC(st.q)}">${st.grupo!=null?botonC('grupo',st.grupo,`${B.P.grupos[st.grupo]} ×`,true):''}${st.canal!=null?botonC('canal',st.canal,`${B.P.canales[st.canal]} ×`,true):''}${st.resto?botonC('resto','','Sólo principales'):''}</div>`:'';
+  const cifras=grafico?segmentoC('cifras',[['Clave','Clave'],['Todas','Todas']],st.cifras,'Cifras sobre las barras'):'';
+  return `<div class="vcc-fila">${tabs}${leyendaC(G)}${busca}<div class="vcc-push"></div>${cifras}</div>`;
+}
+// ── «Por qué», siempre al costado ───────────────────────────────────────
+function filasPanelC(filas, acc) {
+  const mx=Math.max(1,...filas.map(f=>Math.abs(f.d)));
+  return filas.map(f=>{
+    const cuerpo=`<span class="vcc-pn-n">${escC(f.n)}</span><span class="vcc-pn-b"><i style="width:${(Math.abs(f.d)/mx*100).toFixed(0)}%;background:${colorC(f.d)}"></i></span><strong style="color:${colorC(f.d)}">${escC(signoC(f.d))}</strong>`;
+    return acc?`<button type="button" class="vcc-pn-f${f.on?' on':''}" data-acc="${acc}" data-v="${f.id}" title="${escC(f.tip||f.n)}">${cuerpo}</button>`:`<div class="vcc-pn-f" title="${escC(f.tip||f.n)}">${cuerpo}</div>`;
+  }).join('');
+}
+function panelC(G) {
+  const {B,st,V}=G, unaVez=st.sel&&st.sel[0]===st.sel[1];
+  const titulo=st.sel?(unaVez?V.plan.etiquetas[st.sel[0]]:`${V.plan.etiquetas[st.sel[0]]} a ${V.plan.etiquetas[st.sel[1]]}`):'';
+  const quitar=st.sel?`<button type="button" class="vcc-lnk" data-acc="soltar">Ver todo ✕</button>`:'';
+  if(!V.indices.length){
+    const actual=st.sel?V.a.filter((_,i)=>i>=st.sel[0]&&i<=st.sel[1]).reduce((s,a)=>s+a.venta,0):V.a.reduce((s,a)=>s+a.venta,0);
+    return `<div class="vcc-pn-t"><b>${escC(titulo||'Sin histórico comparable')}</b>${quitar}</div><p class="vcc-frase">La venta actual de este tramo es ${solesC(actual,2)}. No hay histórico equivalente para calcular su diferencia; no se considera una venta de cero.</p>`;
+  }
+  const a=V.ta,p=V.tp,d=a.venta-p.venta,pu=V.puente,gen=detalleC(B,V.ra,V.rp,{...st,grupo:null,canal:null});
+  const cas=pu?[{n:'Clientes',l:'clientes',d:pu.clientes},{n:'Ticket',l:'ticket',d:pu.ticket},{n:'Rappi y otros',l:'Rappi y otros canales sin clientes',d:pu.sin_clientes,tip:'Canales que no registran clientes'}]:[];
+  const orden=cas.slice().sort((x,y)=>Math.abs(y.d)-Math.abs(x.d));
+  const pesa=orden.length?` Lo que más pesa: ${orden[0].l} (${signoC(orden[0].d)})${orden[1]?`; después, ${orden[1].l} (${signoC(orden[1].d)})`:''}.`:' Sin clientes comparables: no se puede repartir en clientes y ticket.';
+  const frase=`${st.neto?'El neto fue':'Se vendió'} ${solesC(Math.abs(d))} ${d<0?'menos':'más'} que el año pasado (${cambioC(pctC(a.venta,p.venta))}).${pesa}`;
+  const notas=lecturaC(V,st);
+  let h=`<div class="vcc-pn-t"><b>${escC(titulo||`Por qué: ${signoC(d)}`)}</b>${quitar}</div><p class="vcc-frase">${escC(frase)}</p>${notas.length?`<div class="vcc-notas" title="${escC(notas.join(' · '))}">${escC(notas.join(' · '))}</div>`:''}`;
+  if(cas.length)h+=`<div class="vcc-pn-s">De ${escC(solesC(p.venta))} a ${escC(solesC(a.venta))}</div>${filasPanelC(cas)}`;
+  const grupos=gen.grupos.map(g=>({id:g.id,n:B.P.grupos[g.id]||'Sin grupo',d:g.d,on:st.grupo===g.id,tip:`${B.P.grupos[g.id]} · actual ${solesC(g.venta,2)} / AP ${solesC(g.venta_ap,2)}`}));
+  h+=`<div class="vcc-pn-s">Por grupo</div><div class="vcc-break">${filasPanelC(grupos.slice(0,3),'grupo')}</div>`;
+  if(st.sel){
+    const bajan=gen.rows.filter(r=>r.d<0).slice(0,3).map(r=>({n:r.prod,d:r.d,tip:`${r.prod}: ${r.que}`}));
+    if(bajan.length)h+=`<div class="vcc-pn-s">Platos que más bajan</div>${filasPanelC(bajan)}`;
+  } else {
+    const canales=gen.canales.map(g=>({id:g.id,n:B.P.canales[g.id],d:g.d,on:st.canal===g.id,tip:`${B.P.canales[g.id]} · actual ${solesC(g.venta,2)} / AP ${solesC(g.venta_ap,2)}`}));
+    h+=`<div class="vcc-pn-s">Por canal</div><div class="vcc-break">${filasPanelC(canales.slice(0,3),'canal')}</div>`;
+  }
+  return h;
+}
 function lecturaC(V, st) {
   const a=V.ta, p=V.tp, out=[];
-  if (V.puente) out.push(`Clientes ${signoC(V.puente.clientes)} · ticket ${signoC(V.puente.ticket)} · canales sin clientes ${signoC(V.puente.sin_clientes)}`);
   if (!st.neto && p.neto > 0 && p.venta > 0 && Math.abs((a.neto/p.neto)/(a.venta/p.venta)-1)>=.005)
     out.push(`Sin IGV ni recargo: ${cambioC(pctC(a.neto,p.neto))}`);
   if (Math.abs(V.calTotal || 0)>=.5) out.push(`Calendario: ${cambioC(V.calTotal)}`);
@@ -216,181 +308,200 @@ function lecturaC(V, st) {
     const va=a.canales[c]||0, vp=p.canales[c]||0;
     if ((va>=1)!==(vp>=1)) out.push(`${c}: sólo ${va>=1?'actual':'año pasado'} (${solesC(Math.max(va,vp))})`);
   }
-  return out.map(t=>`<span>${escC(t)}</span>`).join('');
-}
-function presupuestoC(V, st) {
-  if (st.vista!=='Montos') return '';
-  const ids=V.indices.filter(i=>V.ppto[i]!=null);
-  if (!ids.length) return '';
-  const p=ids.reduce((s,i)=>s+V.ppto[i],0), a=ids.reduce((s,i)=>s+V.a[i].venta,0);
-  return `<span title="${escC(`Venta ${solesC(a,2)} / presupuesto ${solesC(p,2)}. Sólo ${ids.length} períodos con presupuesto.`)}">Presupuesto: <b>${p>0?numeroC(a/p*100,1)+'%':'—'}</b> · ${ids.length}/${V.indices.length} períodos</span>`;
+  return out;
 }
 function renderC(G) {
   if (!G.root?.isConnected) return;
   const root=G.root, B=G.B, st=G.st, V=calcularC(B,st); G.V=V;
-  const hayDesc=B.P.hay_pax&&V.a.some(a=>a.pax>0)&&V.p.some(p=>p.pax>0);
-  if(!hayDesc)st.vista='Montos';
+  if(!B.P.hay_pax)st.med='venta';
   const focus=root.shadowRoot?.activeElement || root.getRootNode().activeElement;
   const buscando=focus?.matches?.('[data-acc="buscar"]'), cursor=buscando?focus.selectionStart:0;
-  const comparable=V.indices.length>0, a=V.ta, p=V.tp, cambio=comparable?pctC(a.venta,p.venta):null;
-  const paxPct=pctC(a.pax,p.pax), ticket=a.pax?a.cli/a.pax:null, ticketP=p.pax?p.cli/p.pax:null;
-  root.innerHTML=`<section class="vcc-card vcc-main" aria-label="Comparativo de ventas">
-    <header class="vcc-head"><h3>Comparativo de ventas</h3><span class="vcc-muted">Hasta ${fechaC(diaC(B.P.ancla))}</span><div class="vcc-push"></div>${botonC('ayuda','', 'Cómo comparar',st.ayuda)}${botonC('excel','','↓ Excel')}</header>
-    <div class="vcc-controls">
-      ${segmentoC('gran',['Día','Semana','Mes'].map(v=>[v,v]),st.gran,'Granularidad')}
-      ${segmentoC('ventana',VENTANAS_C[st.gran].map(v=>[v,`${v} ${UNIDAD_C[st.gran]}`]),st.ventana,'Ventana')}
-      ${st.gran==='Día'?segmentoC('modo',[['semana','Mismo día de semana'],['calendario','Misma fecha']],st.modo,'Alineación'):''}
-      <div class="vcc-push"></div>${B.P.hay_neto?segmentoC('neto',[[false,'Venta'],[true,'Neto']],st.neto,'Monto'):''}
-      ${hayDesc?segmentoC('vista',[['Montos','Montos'],['Descomposición','Descomposición']],st.vista,'Vista'):''}
-    </div>
-    <div class="vcc-context"><label><input type="checkbox" data-acc="excluir" ${st.excluir?'checked':''}> Excluir Eventos y Venta interna</label>
-      <span>${st.sel?'Tramo elegido':'Ventana completa'} · ${V.indices.length}/${V.plan.actual.length} períodos comparables</span>${st.sel?botonC('soltar','','Ver ventana completa'):''}
-      <div class="vcc-push"></div>${st.vista==='Montos'?'<span class="vcc-key vcc-ap">Año pasado</span><span class="vcc-key vcc-actual">Actual</span>':
-        ['venta','pax','ticket'].map(k=>`<label class="vcc-key vcc-${k}"><input type="checkbox" data-acc="serie" data-v="${k}" ${st.series[k]?'checked':''}>${{venta:'Venta',pax:'Clientes',ticket:'Ticket'}[k]}</label>`).join('')}
-    </div>
-    <div class="vcc-kpis">${kpiC('Actual',solesC(comparable?a.venta:null),st.sel?rangosTxtC(V.ra):'Períodos comparables','var(--accent-deep)')}
-      ${kpiC('Año pasado',solesC(comparable?p.venta:null),st.sel?rangosTxtC(V.rp):'Mismos tramos')}
-      ${kpiC('Diferencia',solesC(comparable?a.venta-p.venta:null),cambioC(cambio),colorC(cambio))}
-      ${B.P.hay_pax?kpiC('Clientes',numeroC(comparable?a.pax:null),cambioC(paxPct))+kpiC('Ticket',solesC(comparable?ticket:null,2),cambioC(pctC(ticket,ticketP))):''}</div>
-    <div class="vcc-reading">${lecturaC(V,st)}</div>
-    <div class="vcc-plot" aria-label="Actual y año pasado por período"></div>
-    <div class="vcc-bottom"><span class="vcc-muted">Clic: un período · arrastrar: un tramo${V.plan.parciales.length?' · «en curso»: mismos días del período anterior':''}</span>
-      <div class="vcc-push"></div>${botonC('detalle','','Qué explica la diferencia ↓')}</div>
-    <div class="vcc-extra">${presupuestoC(V,st)}${V.acum.map(x=>`<span title="${escC(`${rangosTxtC([x.rango[0]])} contra ${rangosTxtC([x.rango[1]])} · ${solesC(x.actual,2)} / ${solesC(x.ap,2)}`)}">${x.nombre}: <b style="color:${colorC(x.var)}">${cambioC(x.var)}</b></span>`).join('')}</div>
-    ${!V.plan.ok.every(Boolean)?`<div class="vcc-notice">Sin histórico equivalente: ${escC(V.plan.sin_dato)}. Fuera de ambos totales; no se considera una venta de cero.</div>`:''}
-    ${st.ayuda?`<div class="vcc-help"><b>Comparación justa</b><p>${st.gran==='Día'&&st.modo==='calendario'?'Misma fecha del calendario; el día de semana puede cambiar.':st.gran==='Mes'?'Mismo mes del año anterior. «cal.» estima el efecto de tener más o menos días de cada día de semana.':'Mismos días de semana, 364 días antes (52 semanas).'} El período en curso se compara con la misma cantidad de días. El ticket usa la venta de los canales que registran clientes. Las notas de crédito restan y las cuentas divididas cuentan una mesa.</p><p>La cascada reparte la diferencia en clientes, ticket y canales sin clientes. Calendario es una referencia aparte; no se vuelve a restar de la cascada. Las bandas grises son fines de semana y las ámbar, feriados de Perú.</p></div>`:''}
-  </section>${st.sel?detalleHtmlC(G):''}`;
-  graficoC(G);
-  if (st.sel&&V.indices.length) { puenteSvgC(G); tablaC(G); }
-  else {G.rows=[];G.tableCols=[];}
+  const graf=['Montos','Variacion','Acumulado'].includes(st.tab);
+  const zona=graf?'<div class="vcc-plot" aria-label="Actual y año pasado por período"></div>':st.tab==='Semana'?semanaC_(G):platosHtmlC(G);
+  root.innerHTML=`<section class="vcc-main" aria-label="Comparación con el año pasado">${filaControlesC(G)}${indicadoresC(G)}${filaTabsC(G)}
+    <div class="vcc-cuerpo"><div class="vcc-zona">${zona}</div><aside class="vcc-pn" aria-label="Por qué">${panelC(G)}</aside></div>
+    ${!V.plan.ok.every(Boolean)?`<div class="vcc-notice">Sin histórico equivalente: ${escC(V.plan.sin_dato)}. Fuera de ambos totales; no se considera una venta de cero.</div>`:''}</section>`;
+  if(graf)graficoC(G);
+  if(st.tab==='Platos'&&V.indices.length)tablaC(G); else {G.rows=[];G.tableCols=[];}
   if (buscando) { const input=root.querySelector('[data-acc="buscar"]'); input?.focus({preventScroll:true}); input?.setSelectionRange(cursor,cursor); }
 }
-function graficoC(G) {
-  const {B,st,V,root}=G, plot=root.querySelector('.vcc-plot');
-  const w=Math.max(280,plot.clientWidth), h=Math.max(150,plot.clientHeight), l=45,r=10,t=43,b=43, pw=w-l-r, ph=h-t-b, n=V.a.length, step=pw/n;
-  const desc=st.vista==='Descomposición';
-  const series=V.a.map((a,i)=>({venta:V.plan.ok[i]?pctC(a.venta,V.p[i].venta):null, pax:V.plan.ok[i]?pctC(a.pax,V.p[i].pax):null,
-    ticket:V.plan.ok[i]?pctC(a.pax?a.cli/a.pax:null,V.p[i].pax?V.p[i].cli/V.p[i].pax:null):null}));
-  const vals=desc?series.flatMap(s=>Object.keys(s).filter(k=>st.series[k]).map(k=>s[k]).filter(finC)):
-    [...V.a.map(a=>a.venta),...V.p.filter((_,i)=>V.plan.ok[i]).map(a=>a.venta),...V.ppto.filter(finC)];
+// ── La zona: el gráfico ─────────────────────────────────────────────────
+function graficoC(G){
+  const {B,st,V,root}=G, plot=root.querySelector('.vcc-plot'); if(!plot)return;
+  const w=Math.max(280,plot.clientWidth), h=Math.max(150,plot.clientHeight), l=54,r=10,t=30,b=36, pw=w-l-r, ph=h-t-b, n=V.a.length, step=pw/n, tab=st.tab;
+  const okV=i=>V.plan.ok[i];
+  const series=V.a.map((a,i)=>({venta:okV(i)?pctC(a.venta,V.p[i].venta):null, pax:okV(i)?pctC(a.pax,V.p[i].pax):null,
+    ticket:okV(i)?pctC(medC(a,'ticket'),medC(V.p[i],'ticket')):null}));
+  const dif=V.a.map((a,i)=>okV(i)?a.venta-V.p[i].venta:null);
+  let acc=0; const acum=dif.map(d=>{if(d==null)return null;acc+=d;return acc;});
+  const med=st.med, vA=V.a.map(a=>medC(a,med)), vP=V.p.map((a,i)=>okV(i)?medC(a,med):null);
+  let vals;
+  if(tab==='Montos')vals=[...vA,...vP,...(med==='venta'?V.ppto:[])];
+  else if(tab==='Variacion')vals=series.flatMap(s=>Object.keys(s).filter(k=>st.series[k]).map(k=>s[k]));
+  else vals=[...dif,...acum];
+  vals=vals.filter(finC);
   let max=Math.max(0,...vals), min=Math.min(0,...vals); if(max===min) max=min+1;
-  const span=max-min; max+=span*.08; if(min<0) min-=span*.08;
+  const span=max-min; max+=span*.1; if(min<0) min-=span*.1;
   const y=v=>t+(max-v)/(max-min)*ph, x=i=>l+(i+.5)*step, zero=y(0);
+  const ejeY=v=>tab==='Variacion'?numeroC(v)+'%':tab==='Acumulado'?`${v<0?'−':''}S/ ${compactoC(Math.abs(v))}`:med==='pax'?numeroC(v):`S/ ${compactoC(v)}`;
   G.geom={l,step,n,w,plot};
-  let svg=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${desc?'Variación de venta, clientes y ticket':'Venta actual frente al año pasado'}"><defs><pattern id="vcc-parcial" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M-1 1L1-1M0 6L6 0M5 7L7 5" stroke="var(--accent-deep)" stroke-opacity=".35"/></pattern></defs>`;
-  for(let i=0;i<4;i++){const v=min+(max-min)*i/3, yy=y(v);svg+=`<line x1="${l}" x2="${w-r}" y1="${yy}" y2="${yy}" class="vcc-grid"/><text x="${l-6}" y="${yy+3}" text-anchor="end" class="vcc-axis">${desc?numeroC(v)+'%':compactoC(v)}</text>`;}
-  svg+=`<line x1="${l}" x2="${w-r}" y1="${zero}" y2="${zero}" class="vcc-zero"/>`;
-  const ancho=Math.min(32,step*.29), labels=n<=14&&step>=48, pasoTick=Math.max(1,Math.ceil(55/step));
+  let svg=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${tab==='Variacion'?'Variación de venta, clientes y ticket':tab==='Acumulado'?'Diferencia y brecha acumulada':'Actual frente al año pasado'}">`;
+  for(let i=0;i<4;i++){const v=min+(max-min)*i/3, yy=y(v);svg+=`<line x1="${l}" x2="${w-r}" y1="${yy}" y2="${yy}" class="vcc-grid"/><text x="${l-6}" y="${yy+3}" text-anchor="end" class="vcc-axis">${ejeY(v)}</text>`;}
+  if(min<0)svg+=`<line x1="${l}" x2="${w-r}" y1="${zero}" y2="${zero}" class="vcc-zero"/>`;
+  // Las bandas y, DETRÁS de las barras, el presupuesto: encima pisaba las cifras.
+  for(let i=0;i<n;i++){const ferA=contarFerC(B,V.plan.actual[i]),[da]=V.plan.actual[i],xx=x(i);
+    if(st.gran==='Día'&&(semanaC(da)>=5||ferA))svg+=`<rect x="${xx-step/2}" y="${t}" width="${step}" height="${ph}" fill="${ferA?'var(--warning)':'var(--text-secondary)'}" fill-opacity=".075"/>`;
+    if(tab==='Montos'&&med==='venta'&&V.ppto[i]!=null)svg+=`<line x1="${xx-step*.42}" x2="${xx+step*.42}" y1="${y(V.ppto[i])}" y2="${y(V.ppto[i])}" class="vcc-ppto-l"/>`;}
+  const ancho=Math.min(36,step*.34), tope=[];
   for(let i=0;i<n;i++){
-    const xx=x(i), [da]=V.plan.actual[i], selected=!st.sel||i>=st.sel[0]&&i<=st.sel[1], parcial=V.plan.parciales.includes(i), ferA=contarFerC(B,V.plan.actual[i]),ferP=contarFerC(B,V.plan.ap[i]);
-    if(st.gran==='Día' && (semanaC(da)>=5||ferA)) svg+=`<rect x="${xx-step/2}" y="${t-8}" width="${step}" height="${ph+8}" fill="${ferA?'var(--warning)':'var(--text-secondary)'}" fill-opacity=".075"/>`;
-    svg+=`<g opacity="${selected?1:.28}">`;
-    if(desc){const v=series[i].venta;if(st.series.venta&&finC(v))svg+=rectC(xx-ancho/2,y(Math.max(0,v)),ancho,Math.abs(y(v)-zero),colorC(v));}
-    else {
-      if(V.plan.ok[i])svg+=rectC(xx-ancho-1,y(Math.max(0,V.p[i].venta)),ancho,Math.abs(y(V.p[i].venta)-zero),'var(--border-lavender)');
-      svg+=rectC(xx+1,y(Math.max(0,V.a[i].venta)),ancho,Math.abs(y(V.a[i].venta)-zero),'var(--accent)');
-      if(parcial)svg+=rectC(xx+1,y(Math.max(0,V.a[i].venta)),ancho,Math.abs(y(V.a[i].venta)-zero),'url(#vcc-parcial)');
-      if(labels) svg+=`<text x="${xx}" y="${Math.min(y(V.a[i].venta),y(V.plan.ok[i]?V.p[i].venta:0))-17}" text-anchor="middle" class="vcc-value">${compactoC(V.a[i].venta)}</text>`;
+    const xx=x(i), elegida=!st.sel||i>=st.sel[0]&&i<=st.sel[1], parcial=V.plan.parciales.includes(i), ferA=contarFerC(B,V.plan.actual[i]),ferP=contarFerC(B,V.plan.ap[i]);
+    svg+=`<g opacity="${elegida?1:.3}">`;
+    if(tab==='Montos'){
+      if(finC(vP[i]))svg+=rectC(xx-ancho-1,y(Math.max(0,vP[i])),ancho,Math.abs(y(vP[i])-zero),'var(--border-lavender)');
+      if(finC(vA[i])){svg+=rectC(xx+1,y(Math.max(0,vA[i])),ancho,Math.abs(y(vA[i])-zero),'var(--accent)');
+        if(parcial)svg+=`<rect x="${xx+1}" y="${y(Math.max(0,vA[i]))}" width="${ancho}" height="${Math.max(.5,Math.abs(y(vA[i])-zero))}" rx="2" class="vcc-parc"/>`;}
+      tope[i]=Math.min(finC(vA[i])?y(vA[i]):h,finC(vP[i])?y(vP[i]):h);
+    } else {
+      const v=tab==='Variacion'?(st.series.venta?series[i].venta:null):dif[i], bw=Math.min(40,step*.56);
+      if(finC(v))svg+=rectC(xx-bw/2,y(Math.max(0,v)),bw,Math.abs(y(v)-zero),`color-mix(in srgb,var(--${v<0?'danger':'success'}) ${tab==='Acumulado'?30:60}%,transparent)`);
+      tope[i]=finC(v)?y(Math.max(0,v)):zero;
     }
-    if(labels&&(!desc||st.series.venta)&&finC(series[i].venta)) svg+=`<text x="${xx}" y="${desc?Math.max(13,y(Math.max(0,series[i].venta))-9):Math.min(y(V.a[i].venta),y(V.p[i].venta))-4}" text-anchor="middle" style="fill:${colorC(series[i].venta)}" class="vcc-value">${cambioC(series[i].venta)}</text>`;
-    if(!V.plan.ok[i])svg+=`<text x="${xx}" y="${t-21}" text-anchor="middle" class="vcc-axis">sin AP</text>`;
+    if(!okV(i))svg+=`<text x="${xx}" y="${t-6}" text-anchor="middle" class="vcc-axis">sin AP</text>`;
     if(step>=45&&st.gran!=='Día'&&ferA!==ferP)svg+=`<text x="${xx}" y="${h-4}" text-anchor="middle" class="vcc-warning">${ferA>ferP?'+':''}${ferA-ferP} fer.</text>`;
-    else if(step>=45&&st.gran==='Día'&&(ferA||ferP))svg+=`<text x="${xx}" y="${h-4}" text-anchor="middle" class="vcc-warning">${ferA?'feriado':'feriado AP'}</text>`;
-    if(i===n-1||(i%pasoTick===0&&(i===0||(n-1-i)*step>=50)))svg+=`<text x="${xx}" y="${h-26}" text-anchor="middle" class="vcc-axis">${escC(V.plan.etiquetas[i])}</text>`;
-    if(parcial)svg+=`<text x="${xx}" y="${h-14}" text-anchor="middle" class="vcc-axis">en curso</text>`;
-    if(step>=55&&!desc&&Math.abs(V.cal[i]||0)>=.5)svg+=`<text x="${xx}" y="${t-31}" text-anchor="middle" class="vcc-axis">cal. ${cambioC(V.cal[i])}</text>`;
+    else if(step>=40&&st.gran==='Día'&&(ferA||ferP))svg+=`<text x="${xx}" y="${h-4}" text-anchor="middle" class="vcc-warning">${ferA?'feriado':'feriado AP'}</text>`;
+    if(parcial)svg+=`<text x="${xx}" y="${h-4}" text-anchor="middle" class="vcc-axis">en curso</text>`;
     svg+='</g>';
   }
-  if(desc) for(const [k,c] of [['pax','var(--serie-2)'],['ticket','var(--serie-5)']]) if(st.series[k]){
-    let path=''; for(let i=0;i<n;i++){const v=series[i][k]; if(!finC(v)){path='';continue;} const xx=x(i),yy=y(v); if(path)svg+=`<line x1="${path[0]}" y1="${path[1]}" x2="${xx}" y2="${yy}" stroke="${c}" stroke-width="2"/>`;svg+=`<circle cx="${xx}" cy="${yy}" r="3" fill="${c}"/>`;path=[xx,yy];}
+  // Las líneas.
+  if(tab==='Variacion') for(const [k,c] of [['pax','var(--serie-2)'],['ticket','var(--serie-5)']]) if(st.series[k]&&B.P.hay_pax){
+    const pts=series.map((s,i)=>finC(s[k])?[x(i),y(s[k])]:null).filter(Boolean);
+    svg+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${c}" stroke-width="2"/>`+pts.map(([a,b_])=>`<circle cx="${a}" cy="${b_}" r="3" fill="${c}"/>`).join('');
   }
-  if(!desc) for(let i=0;i<n;i++) if(V.ppto[i]!=null)svg+=`<line x1="${x(i)-step*.4}" x2="${x(i)+step*.4}" y1="${y(V.ppto[i])}" y2="${y(V.ppto[i])}" stroke="var(--text-primary)" stroke-width="2" stroke-dasharray="4 3"/>`;
-  for(let i=0;i<n;i++)svg+=`<rect class="vcc-hit${st.sel&&i>=st.sel[0]&&i<=st.sel[1]?' chosen':''}" data-bar="${i}" role="button" tabindex="0" aria-label="${escC(V.plan.etiquetas[i])}, actual ${solesC(V.a[i].venta,2)}, año pasado ${V.plan.ok[i]?solesC(V.p[i].venta,2):'sin dato'}" x="${l+i*step}" y="0" width="${step}" height="${h}"/>`;
+  if(tab==='Acumulado'){
+    const pts=acum.map((v,i)=>finC(v)?[x(i),y(v)]:null).filter(Boolean);
+    svg+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="var(--accent-deep)" stroke-width="2.4" stroke-linejoin="round"/>`;
+  }
+  // Las cifras: sólo las que dicen algo («Todas» vuelve a una por barra).
+  const base=tab==='Montos'?vA:tab==='Variacion'?series.map(s=>s.venta):dif;
+  const lejos=Math.max(1,Math.ceil(70/step)), hay=base.map((v,i)=>finC(v)?i:-1).filter(i=>i>=0);
+  let etq=[];
+  if(st.cifras==='Todas') etq=step>=46?hay:hay.filter(i=>(n-1-i)%Math.ceil(46/step)===0);
+  else if(hay.length){
+    const mx=hay.reduce((a_,i)=>base[i]>base[a_]?i:a_,hay[0]), mn=hay.reduce((a_,i)=>base[i]<base[a_]?i:a_,hay[0]);
+    [hay[hay.length-1],mx,mn,...(st.sel?[st.sel[0],st.sel[1]]:[])].forEach(i=>{if(etq.every(u=>Math.abs(u-i)>=lejos))etq.push(i);});
+  }
+  etq.forEach(i=>{
+    const xx=Math.min(Math.max(x(i),l+26),w-r-26); let uno,dos='',col='';
+    if(tab==='Montos'){uno=med==='ticket'?`S/ ${numeroC(vA[i])}`:med==='pax'?numeroC(vA[i]):`S/ ${compactoC(vA[i])}`;dos=med==='venta'?cambioC(series[i].venta):cambioC(pctC(vA[i],vP[i]));col=colorC(pctC(vA[i],vP[i]));}
+    else if(tab==='Variacion'){uno=cambioC(series[i].venta);}
+    else {uno=`${dif[i]<0?'−':'+'}S/ ${compactoC(Math.abs(dif[i]))}`;}
+    const yy=tope[i]-4;
+    if(dos&&dos!=='—')svg+=`<text x="${xx}" y="${yy-12}" text-anchor="middle" class="vcc-et">${escC(uno)}</text><text x="${xx}" y="${yy}" text-anchor="middle" class="vcc-et" style="fill:${col}">${escC(dos)}</text>`;
+    else svg+=`<text x="${xx}" y="${yy}" text-anchor="middle" class="vcc-et">${escC(uno)}</text>`;
+  });
+  if(tab==='Acumulado'&&acum.some(finC)){
+    const u=acum.map((v,i)=>finC(v)?i:-1).filter(i=>i>=0).pop();
+    svg+=`<text x="${Math.min(x(u),w-r-40)}" y="${y(acum[u])+15}" text-anchor="middle" class="vcc-et" style="fill:var(--accent-deep)">acum. ${acum[u]<0?'−':'+'}S/ ${compactoC(Math.abs(acum[u]))}</text>`;
+  }
+  const pasoTick=Math.max(1,Math.ceil(58/step));
+  const rotulo=e=>n>14&&st.gran==='Día'?String(e).split(' ').pop():e;
+  for(let i=0;i<n;i++) if((n-1-i)%pasoTick===0) svg+=`<text x="${x(i)}" y="${h-19}" text-anchor="middle" class="vcc-axis">${escC(rotulo(V.plan.etiquetas[i]))}</text>`;
+  for(let i=0;i<n;i++)svg+=`<rect class="vcc-hit${st.sel&&i>=st.sel[0]&&i<=st.sel[1]?' chosen':''}" data-bar="${i}" role="button" tabindex="0" aria-label="${escC(V.plan.etiquetas[i])}, actual ${solesC(V.a[i].venta,2)}, año pasado ${okV(i)?solesC(V.p[i].venta,2):'sin dato'}" x="${l+i*step}" y="0" width="${step}" height="${h}"/>`;
   plot.innerHTML=svg+'</svg><div class="vcc-tip" hidden></div>';
-  if(desc){
-    const last=n-1,a=V.a[last],p=V.p[last];
-    const values={venta:[a.venta,p.venta,'Venta'],pax:[a.pax,p.pax,'Clientes'],ticket:[a.pax?a.cli/a.pax:null,p.pax?p.cli/p.pax:null,'Ticket promedio']};
-    plot.insertAdjacentHTML('beforeend',`<div class="vcc-last">${botonC('leyenda','',`Detalle · ${V.plan.etiquetas[last]}`,st.leyenda)}${st.leyenda?`<div class="vcc-last-panel">${Object.entries(values).map(([k,[va,vp,nombre]])=>`<label><input type="checkbox" data-acc="serie" data-v="${k}" ${st.series[k]?'checked':''}><span>${nombre}</span><b>${k==='pax'?numeroC(va):solesC(va,k==='ticket'?2:0)}</b><small style="color:${colorC(pctC(va,vp))}">${cambioC(pctC(va,vp))}</small></label>`).join('')}</div>`:''}</div>`);
-  }
 }
 const rectC=(x,y,w,h,c)=>`<rect x="${x}" y="${y}" width="${w}" height="${Math.max(.5,h)}" rx="2" fill="${c}"/>`;
 function contarFerC(B,[a,b]){let n=0;for(let d=a;d<=b;d++)if(B.feriados.has(d))n++;return n;}
 function tipC(G,i){
-  const plot=G.root.querySelector('.vcc-plot'), tip=plot.querySelector('.vcc-tip');
+  const plot=G.root.querySelector('.vcc-plot'); if(!plot)return;
+  const tip=plot.querySelector('.vcc-tip');
   if(i==null){tip.hidden=true;return;}
   const {V,st}=G,a=V.a[i],p=V.p[i], ok=V.plan.ok[i];
   tip.innerHTML=`<b>${escC(V.plan.etiquetas[i])}${V.plan.parciales.includes(i)?' · en curso':''}</b><div>Actual · ${rangosTxtC([V.plan.actual[i]])}<strong>${solesC(a.venta,2)}</strong></div>
     <div>Año pasado · ${rangosTxtC([V.plan.ap[i]])}<strong>${ok?solesC(p.venta,2):'sin datos comparables'}</strong></div>
     ${ok?`<div>Diferencia <strong style="color:${colorC(a.venta-p.venta)}">${signoC(a.venta-p.venta)} · ${cambioC(pctC(a.venta,p.venta))}</strong></div>`:''}
     ${G.B.P.hay_pax?`<div>Clientes ${numeroC(a.pax)} / ${ok?numeroC(p.pax):'—'} · ticket ${solesC(a.pax?a.cli/a.pax:null,2)} / ${ok?solesC(p.pax?p.cli/p.pax:null,2):'—'}</div>`:''}
-    ${V.ppto[i]!=null&&st.vista==='Montos'?`<div>Presupuesto ${solesC(V.ppto[i],2)}</div>`:''}${Math.abs(V.cal[i]||0)>=.5?`<div>Referencia de calendario: ${cambioC(V.cal[i])}</div>`:''}
+    ${V.ppto[i]!=null&&st.tab==='Montos'?`<div>Presupuesto ${solesC(V.ppto[i],2)}</div>`:''}${Math.abs(V.cal[i]||0)>=.5?`<div>Referencia de calendario: ${cambioC(V.cal[i])}</div>`:''}
     ${contarFerC(G.B,V.plan.actual[i])||contarFerC(G.B,V.plan.ap[i])?`<div>Feriados: ${contarFerC(G.B,V.plan.actual[i])} actual / ${contarFerC(G.B,V.plan.ap[i])} año pasado</div>`:''}`;
   tip.style.left=`${Math.max(0,Math.min(plot.clientWidth-285,G.geom.l+(i+.5)*G.geom.step-140))}px`;tip.hidden=false;
 }
-function detalleHtmlC(G){
-  const {B,st,V}=G;
-  if(!V.indices.length){
-    const actual=V.a.filter((_,i)=>i>=st.sel[0]&&i<=st.sel[1]).reduce((s,a)=>s+a.venta,0);
-    return `<section class="vcc-card" aria-label="Sin histórico comparable"><header class="vcc-head"><h3>Sin histórico comparable</h3><div class="vcc-push"></div>${botonC('soltar','','Cerrar ×')}</header><p>La venta actual de este tramo es ${solesC(actual,2)}. No hay histórico equivalente para calcular su diferencia; no se considera una venta de cero.</p></section>`;
+// ── La zona: día de semana ──────────────────────────────────────────────
+function porSemanaC(V){
+  const s=Array.from({length:7},()=>({a:0,p:0,na:0,np:0}));
+  for(const i of V.indices){
+    const [a0,a1]=V.plan.actual[i],[p0,p1]=V.plan.ap[i];
+    for(let d=a0;d<=a1;d++){const w=semanaC(d);s[w].a+=V.a[i].dias[d]||0;s[w].na++;}
+    for(let d=p0;d<=p1;d++){const w=semanaC(d);s[w].p+=V.p[i].dias[d]||0;s[w].np++;}
   }
-  const overview=detalleC(B,V.ra,V.rp,{...st,grupo:null,canal:null});
-  const barras=(titulo,key,rows,names)=>`<div class="vcc-break"><b>${titulo} · Δ S/</b>${rows.slice(0,5).map(r=>`<button type="button" data-acc="${key}" data-v="${r.id}" class="${st[key]===r.id?'on':''}" title="${escC(`${names[r.id]} · actual ${solesC(r.venta,2)} / AP ${solesC(r.venta_ap,2)}`)}"><span>${escC(names[r.id]||'Sin grupo')}</span><strong style="color:${colorC(r.d)}">${signoC(r.d)}</strong></button>`).join('')}</div>`;
-  return `<section class="vcc-card vcc-detail" aria-label="Qué explica la diferencia"><header class="vcc-head"><h3>Qué explica la diferencia</h3><span>${rangosTxtC(V.ra)}</span><div class="vcc-push"></div>${botonC('soltar','','Cerrar ×')}</header>
-    <div class="vcc-detail-context">Año pasado ${rangosTxtC(V.rp)} · ${solesC(V.tp.venta)} → ${solesC(V.ta.venta)} · <b style="color:${colorC(V.ta.venta-V.tp.venta)}">${signoC(V.ta.venta-V.tp.venta)}</b></div>
-    <div class="vcc-analysis"><div class="vcc-bridge"><b>De año pasado a actual</b><div class="vcc-bridge-plot"></div></div>${barras('Por grupo','grupo',overview.grupos,B.P.grupos)}${barras('Por canal','canal',overview.canales,B.P.canales)}</div>
-    <div class="vcc-search"><input type="search" data-acc="buscar" aria-label="Buscar platos" placeholder="Buscar plato, grupo o qué cambió…" value="${escC(st.q)}">
-      ${st.grupo!=null?botonC('grupo',st.grupo,`${B.P.grupos[st.grupo]} ×`,true):''}${st.canal!=null?botonC('canal',st.canal,`${B.P.canales[st.canal]} ×`,true):''}
-      ${st.resto?botonC('resto','','Sólo principales'):''}<div class="vcc-push"></div>${botonC('excel','','↓ Excel')}</div>
-    <div class="vcc-table-scroll" tabindex="0" aria-label="Productos que explican la diferencia"></div><div class="vcc-table-foot"></div></section>`;
+  return s.map(x=>({prom:x.na?x.a/x.na:0,promAp:x.np?x.p/x.np:0,n:x.na,nAp:x.np}));
+}
+function semanaC_(G){
+  const s=porSemanaC(G.V), mx=Math.max(1,...s.flatMap(x=>[x.prom,x.promAp]));
+  const hay=s.map((x,i)=>({i,v:pctC(x.prom,x.promAp)})).filter(x=>finC(x.v)).sort((a,b)=>a.v-b.v);
+  const nota=hay.length>1?`Lo más flojo: ${DIAS_C[hay[0].i].toLowerCase()} (${cambioC(hay[0].v)}); lo mejor: ${DIAS_C[hay[hay.length-1].i].toLowerCase()} (${cambioC(hay[hay.length-1].v)}).`:'';
+  return `<div class="vcc-sem"><div class="vcc-sem-f cab"><span>Día</span><span>Promedio por día: año pasado y actual</span><span class="vcc-num">Promedio actual</span><span class="vcc-num">Δ S/</span><span class="vcc-num">Var.</span></div>
+    ${s.map((x,i)=>{const v=pctC(x.prom,x.promAp);return `<div class="vcc-sem-f" title="${x.n} ${DIAS_C[i].toLowerCase()}(s) actuales, ${x.nAp} del año pasado"><b>${DIAS_C[i]}</b><span class="vcc-sem-b"><i class="ap" style="width:${(x.promAp/mx*100).toFixed(1)}%"></i><i style="width:${(x.prom/mx*100).toFixed(1)}%"></i></span><span class="vcc-num">${solesC(x.prom)}</span><span class="vcc-num" style="color:${colorC(v)}">${signoC(x.prom-x.promAp)}</span><b class="vcc-num" style="color:${colorC(v)}">${cambioC(v)}</b></div>`;}).join('')}
+    <div class="vcc-sem-n">Promedio de cada día en lo que se compara. ${nota}</div></div>`;
+}
+// ── La zona: los platos ─────────────────────────────────────────────────
+function detalleZonaC(G){ const {B,st,V}=G; return detalleC(B,V.ra,V.rp,st); }
+function platosHtmlC(G){
+  const {st,V}=G;
+  if(!V.indices.length)return '<div class="vcc-vacio">Sin período comparable: no hay platos que comparar.</div>';
+  const rows=detalleZonaC(G).rows, suma=(l,k)=>l.reduce((s,r)=>s+r[k],0), de=c=>rows.filter(r=>claseC(r)===c);
+  const am=de('ambos'),nu=de('nuevo'),dj=de('dejado');
+  const c=(id,rot,v,col,tip)=>`<button type="button" class="vcc-cl${st.clase===id?' on':''}" data-acc="clase" data-v="${id}" aria-pressed="${st.clase===id}" title="${escC(tip)}"><span>${escC(rot)}</span><strong style="color:${col}">${escC(signoC(v))}</strong></button>`;
+  return `<div class="vcc-cls">${c('todos','Toda la diferencia',suma(rows,'d'),colorC(suma(rows,'d')),`${rows.length} platos`)}
+      ${c('ambos',`Mismos platos · ${am.length}`,suma(am,'d'),colorC(suma(am,'d')),`Se vendieron en los dos períodos. Por cantidad ${signoC(suma(am,'ef_cant'))}; por precio ${signoC(suma(am,'ef_precio'))}`)}
+      ${c('nuevo',`Carta nueva · ${nu.length}`,suma(nu,'venta'),'var(--success)','Se vendieron ahora y no el año pasado, por nombre: un plato renombrado cuenta como nuevo')}
+      ${c('dejado',`Ya no están · ${dj.length}`,-suma(dj,'venta_ap'),'var(--danger)','Se vendieron el año pasado y no ahora, por nombre')}</div>
+    <div class="vcc-table-scroll" tabindex="0" aria-label="Platos que explican la diferencia"></div><div class="vcc-table-foot"></div>`;
 }
 const COLS_C=[['fam','Grupo'],['prod','Producto'],['que','Qué cambió'],['d','Δ S/'],['var','%Var'],['ef_cant','Por cantidad'],['ef_precio','Por precio'],['venta_ap','Venta AP'],['venta','Venta actual'],['cant_ap','Cant AP'],['cant','Cant actual'],['precio_ap','Precio AP'],['precio','Precio actual']];
+const VER_C=[['prod','Plato'],['que','Qué cambió'],['venta_ap','Año pasado'],['venta','Actual'],['d','Δ S/'],['ef_cant','Por cantidad'],['ef_precio','Por precio']];
 const AYUDA_C={que:'Lo que más pesó: unidades o precio promedio.',ef_cant:'Unidades de más o de menos al precio del año pasado.',ef_precio:'Cambio de precio promedio sobre las unidades actuales. Por cantidad + por precio = Δ S/.'};
+const SIN_CANT_C=['cant','cant_ap','precio','precio_ap','ef_cant','ef_precio','que'];
 function valorCeldaC(r,k){
   if(k==='var')return r.venta_ap<=0&&r.venta>0?'nuevo':r.venta_ap<=0?'—':cambioC(r.var);
   if(k==='cant'||k==='cant_ap')return numeroC(r[k],2);
   if(k==='precio'||k==='precio_ap')return r[k]?solesC(r[k],2):'—';
+  if((k==='ef_cant'||k==='ef_precio')&&!r.resto&&claseC(r)!=='ambos')return '—';
   if(['d','ef_cant','ef_precio'].includes(k))return signoC(r[k]);
-  if(k==='venta'||k==='venta_ap')return solesC(r[k]);
+  if(k==='venta'||k==='venta_ap')return r[k]?solesC(r[k]):'—';
   return r[k]||'';
 }
+function filasPlatosC(G){
+  const {st}=G, rows=detalleZonaC(G).rows;
+  return st.clase==='todos'?rows:rows.filter(r=>claseC(r)===st.clase);
+}
 function tablaC(G){
-  const rs=visiblesC(G.V.detalle.rows,G.st); G.rows=rs;
+  const base=filasPlatosC(G), rs=visiblesC(base,G.st); G.rows=rs;
+  const conCant=([k])=>G.B.P.hay_cant||!SIN_CANT_C.includes(k);
+  G.tableCols=COLS_C.filter(conCant); G.verCols=VER_C.filter(conCant);
   const wrap=G.root.querySelector('.vcc-table-scroll'), old=wrap.scrollTop;
-  wrap.innerHTML=`<table><thead><tr>${COLS_C.filter(([k])=>G.B.P.hay_cant||!['cant','cant_ap','precio','precio_ap','ef_cant','ef_precio','que'].includes(k)).map(([k,t])=>`<th><button type="button" data-acc="orden" data-v="${k}" title="${escC(AYUDA_C[k]||`Ordenar por ${t}`)}">${t}${G.st.orden?.col===k?(G.st.orden.dir>0?' ↑':' ↓'):''}</button></th>`).join('')}</tr></thead><tbody></tbody></table>`;
-  G.tableCols=COLS_C.filter(([k])=>G.B.P.hay_cant||!['cant','cant_ap','precio','precio_ap','ef_cant','ef_precio','que'].includes(k));
+  wrap.innerHTML=`<table><thead><tr>${G.verCols.map(([k,t])=>`<th class="${['prod','que'].includes(k)?'':'vcc-num'}"><button type="button" data-acc="orden" data-v="${k}" title="${escC(AYUDA_C[k]||`Ordenar por ${t}`)}">${t}${G.st.orden?.col===k?(G.st.orden.dir>0?' ↑':' ↓'):''}</button></th>`).join('')}</tr></thead><tbody></tbody></table>`;
   G.tableN=0; agregarFilasC(G);
   wrap.scrollTop=old;
   wrap.addEventListener('scroll',()=>{if(wrap.scrollTop+wrap.clientHeight>=wrap.scrollHeight-100)agregarFilasC(G);},{passive:true});
-  const total=rs.reduce((s,r)=>s+r.d,0);
-  const cuantos=buscarC(G.V.detalle.rows,G.st.q).length;
+  const total=rs.reduce((s,r)=>s+r.d,0), cuantos=buscarC(base,G.st.q).length;
   G.root.querySelector('.vcc-table-foot').innerHTML=`<span>${cuantos} producto${cuantos===1?'':'s'}${G.st.q?' · búsqueda aplicada':''}${G.st.grupo!=null||G.st.canal!=null?' · tabla filtrada':''} · Δ de las filas: <b style="color:${colorC(total)}">${signoC(total)}</b></span><span>${G.st.resto?'Todos los resultados':G.st.orden?'Orden elegido; «Resto» abre los demás':'Principales por |Δ S/|; «Resto» abre los demás'}</span>`;
 }
 function agregarFilasC(G){
   const tbody=G.root.querySelector('.vcc-table-scroll tbody');if(!tbody)return;
   const end=Math.min(G.rows.length,G.tableN+150);
-  tbody.insertAdjacentHTML('beforeend',G.rows.slice(G.tableN,end).map(r=>`<tr class="${r.resto?'vcc-rest':''}">${G.tableCols.map(([k])=>`<td class="${typeof r[k]==='number'||['var','precio','precio_ap'].includes(k)?'vcc-num':''}"${['d','var','ef_cant','ef_precio'].includes(k)?` style="color:${colorC(r[k])}"`:''}>${k==='prod'&&r.resto?botonC('resto','',r.prod):escC(valorCeldaC(r,k))}</td>`).join('')}</tr>`).join(''));
+  tbody.insertAdjacentHTML('beforeend',G.rows.slice(G.tableN,end).map(r=>`<tr class="${r.resto?'vcc-rest':''}" title="${r.resto?'':escC(`${r.fam} › ${r.sub} · ${numeroC(r.cant_ap,1)} → ${numeroC(r.cant,1)} unid. · ${r.precio_ap?solesC(r.precio_ap,2):'—'} → ${r.precio?solesC(r.precio,2):'—'}`)}">${G.verCols.map(([k])=>`<td class="${['prod','que'].includes(k)?'':'vcc-num'}"${['d','ef_cant','ef_precio'].includes(k)&&valorCeldaC(r,k)!=='—'?` style="color:${colorC(r[k])}"`:''}>${k==='prod'&&r.resto?botonC('resto','',r.prod):escC(valorCeldaC(r,k))}</td>`).join('')}</tr>`).join(''));
   G.tableN=end;
-}
-function puenteSvgC(G){
-  const plot=G.root.querySelector('.vcc-bridge-plot'), {V}=G;
-  if(!V.puente){plot.innerHTML='<p class="vcc-muted">Sin clientes comparables: no se puede descomponer en clientes y ticket.</p>';return;}
-  const w=Math.max(250,plot.clientWidth), h=122, left=8,top=25,bottom=29;
-  const steps=[['Año pasado',V.tp.venta,true],['Clientes',V.puente.clientes,false],['Ticket',V.puente.ticket,false],['Sin clientes',V.puente.sin_clientes,false],['Actual',V.ta.venta,true]];
-  let acc=0;const bars=steps.map(([name,v,total])=>{const a=total?0:acc,b=total?v:acc+v;acc=b;return {name,v,a,b,total};});
-  let lo=Math.min(0,...bars.flatMap(b=>[b.a,b.b])),hi=Math.max(1,...bars.flatMap(b=>[b.a,b.b]));
-  const y=v=>top+(hi-v)/(hi-lo)*(h-top-bottom), step=(w-left*2)/5,bw=step*.64;
-  plot.innerHTML=`<svg width="${w}" height="${h}" role="img" aria-label="Cascada de año pasado a actual">${bars.map((b,i)=>{
-    const x=left+(i+.5)*step,c=b.total?'var(--accent)':colorC(b.v);
-    return `${i&&i<4?`<line x1="${x-step+bw/2}" x2="${x-bw/2}" y1="${y(b.a)}" y2="${y(b.a)}" class="vcc-grid"/>`:''}${rectC(x-bw/2,y(Math.max(b.a,b.b)),bw,Math.abs(y(b.a)-y(b.b)),c)}<text x="${x}" y="${y(Math.max(b.a,b.b))-6}" text-anchor="middle" class="vcc-value">${b.total?'':b.v>0?'+':''}${compactoC(b.v)}</text><text x="${x}" y="${h-11}" text-anchor="middle" class="vcc-axis">${b.name}</text>`;
-  }).join('')}</svg>`;
 }
 function excelC(G){
   const {B,st,V}=G, ids=st.sel?V.plan.actual.map((_,i)=>i).filter(i=>i>=st.sel[0]&&i<=st.sel[1]):V.plan.actual.map((_,i)=>i);
   const head=['Período','Desde actual','Hasta actual','Desde AP','Hasta AP','Comparable','En curso','Venta AP','Venta actual','Δ S/','%Var','Clientes AP','Clientes actual','Ticket AP','Ticket actual','Presupuesto','Calendario %'];
   const data=ids.map(i=>{const a=V.a[i],p=V.p[i],ok=V.plan.ok[i];return [V.plan.etiquetas[i],...V.plan.actual[i].map(isoC),...V.plan.ap[i].map(isoC),ok?'Sí':'Sin histórico',V.plan.parciales.includes(i)?'Sí':'No',ok?p.venta:null,a.venta,ok?a.venta-p.venta:null,ok?pctC(a.venta,p.venta):null,ok?p.pax:null,a.pax,ok&&p.pax?p.cli/p.pax:null,a.pax?a.cli/a.pax:null,V.ppto[i],V.cal[i]];});
   const hojas=[{nombre:'Comparativo',cabeza:head,filas:data}];
-  if(st.sel&&V.indices.length)hojas.push({nombre:'Productos',cabeza:G.tableCols.map(c=>c[1]),filas:G.rows.map(r=>G.tableCols.map(([k])=>k==='var'&&r.venta_ap<=0?r.venta>0?'nuevo':null:['precio','precio_ap'].includes(k)&&!r[k]?null:r[k]??null))});
-  const contexto=[['Hasta',B.P.ancla],['Granularidad',st.gran],['Ventana',st.ventana],['Alineación',st.gran==='Mes'?'Mismo mes':st.modo==='calendario'?'Misma fecha':'364 días antes'],['Monto',st.neto?'Neto sin IGV ni recargo':'Venta'],['Vista',st.vista],['Excluir Eventos y Venta interna',st.excluir?'Sí':'No'],['Rango actual',rangosTxtC(V.ra)],['Rango AP',rangosTxtC(V.rp)],['Grupo de la tabla',st.grupo==null?'Todos':B.P.grupos[st.grupo]],['Canal de la tabla',st.canal==null?'Todos':B.P.canales[st.canal]],['Buscar',st.q],...Object.entries(B.P.filtros).map(([k,v])=>[k,Array.isArray(v)?v.join(', '):String(v)])];
+  if(V.indices.length){
+    const cols=COLS_C.filter(([k])=>B.P.hay_cant||!SIN_CANT_C.includes(k));
+    const rows=visiblesC(filasPlatosC(G),{...st,resto:true});
+    hojas.push({nombre:'Productos',cabeza:cols.map(c=>c[1]),filas:rows.map(r=>cols.map(([k])=>k==='var'&&r.venta_ap<=0?r.venta>0?'nuevo':null:['precio','precio_ap'].includes(k)&&!r[k]?null:r[k]??null))});
+  }
+  const contexto=[['Hasta',B.P.ancla],['Granularidad',st.gran],['Ventana',st.ventana],['Alineación',st.gran==='Mes'?'Mismo mes':st.modo==='calendario'?'Misma fecha':'364 días antes'],['Monto',st.neto?'Neto sin IGV ni recargo':'Venta'],['Vista',st.tab],['Excluir Eventos y Venta interna',st.excluir?'Sí':'No'],['Rango actual',rangosTxtC(V.ra)],['Rango AP',rangosTxtC(V.rp)],['Platos',st.clase],['Grupo de la tabla',st.grupo==null?'Todos':B.P.grupos[st.grupo]],['Canal de la tabla',st.canal==null?'Todos':B.P.canales[st.canal]],['Buscar',st.q],...Object.entries(B.P.filtros).map(([k,v])=>[k,Array.isArray(v)?v.join(', '):String(v)])];
   hojas.push({nombre:'Contexto',cabeza:['Ajuste','Valor'],filas:contexto});
   bajar(archivo(`Comparativo_${B.P.ancla}_${st.gran}`)+'.xlsx',libro(hojas));
 }
@@ -403,20 +514,24 @@ function elegirC(G,a,b){
 function enlazarC(G){
   const root=G.root;
   root.addEventListener('click',ev=>{
-    const el=ev.target.closest('[data-acc]');if(!el||el.tagName==='INPUT')return;
-    const a=el.dataset.acc,v=el.dataset.v,st=G.st;
-    if(a==='gran'){st.gran=v;st.ventana=DEF_C[v];st.sel=null;}
-    else if(a==='ventana'){st.ventana=+v;st.sel=null;}
-    else if(a==='modo'){st.modo=v;st.sel=null;}
+    const el=ev.target.closest('[data-acc]'), st=G.st;
+    if(st.menu&&!ev.target.closest('.vcc-pop')&&!(el&&el.dataset.acc==='menu')){st.menu=null;if(!el){renderC(G);return;}}
+    if(!el||el.tagName==='INPUT')return;
+    const a=el.dataset.acc,v=el.dataset.v;
+    if(a==='menu')st.menu=st.menu===v?null:v;
+    else if(a==='gran'){st.gran=v;st.ventana=DEF_C[v];st.sel=null;}
+    else if(a==='ventana'){st.ventana=+v;st.sel=null;st.menu=null;}
+    else if(a==='modo'){st.modo=v;st.sel=null;st.menu=null;}
     else if(a==='neto')st.neto=v==='true';
-    else if(a==='vista')st.vista=v;
+    else if(a==='tab')st.tab=v;
+    else if(a==='med')st.med=v;
+    else if(a==='cifras')st.cifras=v;
+    else if(a==='clase'){st.clase=v;st.resto=false;}
     else if(a==='soltar'){st.sel=null;st.grupo=null;st.canal=null;}
-    else if(a==='grupo'||a==='canal'){st[a]=st[a]===+v?null:+v;st.resto=false;}
+    else if(a==='grupo'||a==='canal'){st[a]=st[a]===+v?null:+v;st.resto=false;if(st[a]!=null)st.tab='Platos';}
     else if(a==='orden'){const prev=st.orden,dir=['fam','prod','que'].includes(v)?1:-1;st.orden=!prev||prev.col!==v?{col:v,dir}:prev.dir===dir?{col:v,dir:-dir}:null;}
     else if(a==='resto')st.resto=!st.resto;
     else if(a==='ayuda')st.ayuda=!st.ayuda;
-    else if(a==='leyenda')st.leyenda=!st.leyenda;
-    else if(a==='detalle'){if(!st.sel)st.sel=[0,G.V.a.length-1];renderC(G);root.querySelector('.vcc-detail')?.scrollIntoView({block:'start',behavior:'smooth'});return;}
     else if(a==='excel'){excelC(G);return;}
     else return;
     renderC(G);
@@ -428,7 +543,7 @@ function enlazarC(G){
   root.addEventListener('input',ev=>{if(ev.target.dataset.acc==='buscar'){G.st.q=ev.target.value;renderC(G);}});
   root.addEventListener('pointerover',ev=>{const b=ev.target.closest('[data-bar]');if(b)tipC(G,+b.dataset.bar);});
   root.addEventListener('pointerout',ev=>{if(ev.target.closest('[data-bar]')&&!ev.relatedTarget?.closest?.('[data-bar]'))tipC(G,null);});
-  root.addEventListener('keydown',ev=>{const b=ev.target.closest('[data-bar]');if(b&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();elegirC(G,+b.dataset.bar,+b.dataset.bar);}if(ev.key==='Escape'&&G.st.ayuda){G.st.ayuda=false;renderC(G);}});
+  root.addEventListener('keydown',ev=>{const b=ev.target.closest('[data-bar]');if(b&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();elegirC(G,+b.dataset.bar,+b.dataset.bar);}if(ev.key==='Escape'&&(G.st.ayuda||G.st.menu)){G.st.ayuda=false;G.st.menu=null;renderC(G);}});
   root.addEventListener('pointerdown',ev=>{const b=ev.target.closest('[data-bar]');if(b&&ev.button===0){G.drag={a:+b.dataset.bar,b:+b.dataset.bar};ev.preventDefault();}});
   G.abort?.abort();G.abort=new AbortController();
   window.addEventListener('pointermove',ev=>{
@@ -440,7 +555,7 @@ function enlazarC(G){
   window.addEventListener('pointerup',()=>{if(G.drag){const d=G.drag;G.drag=null;elegirC(G,d.a,d.b);}},{signal:G.abort.signal});
   window.addEventListener('pointercancel',()=>{G.drag=null;},{signal:G.abort.signal});
   G.observer?.disconnect();let width=0,height=0;
-  G.observer=new ResizeObserver(()=>{if(!G.root.isConnected)return;const w=root.clientWidth,h=root.querySelector('.vcc-plot')?.clientHeight||0;if(Math.abs(w-width)>2||Math.abs(h-height)>2){width=w;height=h;if(G.B){graficoC(G);if(G.st.sel&&G.V.indices.length)puenteSvgC(G);}}});
+  G.observer=new ResizeObserver(()=>{if(!G.root.isConnected)return;const w=root.clientWidth,h=root.querySelector('.vcc-plot')?.clientHeight||0;if(Math.abs(w-width)>2||Math.abs(h-height)>2){width=w;height=h;if(G.B)graficoC(G);}});
   G.observer.observe(root);
 }
 window.__vcUI={inicial:inicialC,render:renderC,excel:excelC};
@@ -449,6 +564,7 @@ export default function(component){
   const G=window.__vtComparativo||(window.__vtComparativo={st:inicialC()});
   let root=parentElement.querySelector('.vcc'),nuevo=!root;
   if(nuevo){root=document.createElement('div');root.className='vcc';parentElement.appendChild(root);G.root=root;enlazarC(G);}else G.root=root;
+  sinFechaFranja(root);
   if(G.sello!==data.sello){G.B=leerC(data);G.sello=data.sello;G.st.sel=null;G.st.grupo=null;G.st.canal=null;G.st.q='';G.st.resto=false;G.st.orden=null;}
   else if(!nuevo)return;
   if(!data.hay_neto)G.st.neto=false;

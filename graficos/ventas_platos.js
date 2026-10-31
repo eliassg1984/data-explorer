@@ -318,6 +318,7 @@ export default function (component) {
       elegidos_p: guardado.elegidos || [], tab: guardado.tab === 'Puestos' ? 'Puestos' : 'Tabla', q: '', foco: null, menu: null, elegidos: [] } };
     enlazar(raiz);
   }
+  sinFechaFranja(raiz);
   const st = raiz.__d.st;
   raiz.__d.enviar = setTriggerValue;
   raiz.__d.data = data;

@@ -241,7 +241,9 @@ grano, con Documento, Montos y los filtros. Ver `arquitectura.md` regla
 (`ventas_comparativo_datos.py` y `.js`): todas las ventanas contra las
 cuentas anteriores de Python, neto y exclusión, clientes por pedido con
 canje y cuenta dividida, calendario, bisiesto y grupo actual del plato. En
-Chromium recorre las cinco mejoras y abre las hojas del Excel. Regla #717.
+Chromium recorre las cinco mejoras y abre las hojas del Excel. Regla #717. Desde la
+#768, la pantalla: «Por qué» a la vista, las cinco pestañas, los grupos de platos
+(mismos, carta nueva, ya no están) y el período elegido contado en el panel.
 
 `test_volatilidad_pieza.py` vigila Compras > Volatilidad como pieza propia:
 las cinco ventanas contra las cuentas anteriores, cierres y compras del
@@ -1374,8 +1376,9 @@ ranking y a la Ingeniería): no hay widgets de Streamlit en la tarjeta. Lo que m
   una corrida, y la pestaña se recuerda en `localStorage` porque la pieza nace de cero.
 - **Nada de `st.spinner` antes de la pieza**: la movería. La zona se apaga mientras
   espera (`.cargando`).
-- **La fecha de la franja no manda en esta vista** (ni en Comparativo): sigue a la
-  vista porque es de todo Ventas. Pendiente.
+- **La fecha de la franja no manda en esta vista** (ni en Comparativo): la pieza la
+  esconde con `graficos/ventas_sin_fecha.js`, que `estilos/_50_fecha.py` lee en
+  `<html data-vt-sin-fecha>`. Regla #768.
 
 ## «Mix de carta»: una zona grande y la lista al costado
 

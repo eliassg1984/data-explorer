@@ -92,7 +92,7 @@ def _pieza_en_chromium(pw, nombre, data, alto=650):
     b = pw.chromium.launch()
     pg = b.new_page(viewport={"width": 1240, "height": alto})
     pg.set_content(f"<style>:root{{--alto-util:{alto}px}}{leer('ventas_platos_cromo.css')}{leer(nombre + '.css')}</style><div id='r'></div>")
-    js = (leer("ventas_platos_cromo.js") + leer(nombre + ".js")).replace(
+    js = (leer("ventas_sin_fecha.js") + leer("ventas_platos_cromo.js") + leer(nombre + ".js")).replace(
         "export default function (component)", "window.__montar = function (component)")
     pg.add_script_tag(content=js)
     pg.evaluate("(d) => { window.__enviados = []; window.__montar({ data: d, parentElement: document.getElementById('r'), "
