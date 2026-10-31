@@ -16,7 +16,7 @@ from test_stock_producto_pieza import COLS, armar as muestra
 
 ROOT=Path(__file__).parent
 JS=(ROOT/'graficos/inventario_base.js').read_text(encoding='utf-8')+(ROOT/'graficos/inventario_areas.js').read_text(encoding='utf-8')
-CSS=(ROOT/'graficos/inventario_areas.css').read_text(encoding='utf-8')
+CSS=(ROOT/'graficos/inventario_base.css').read_text(encoding='utf-8')+(ROOT/'graficos/inventario_areas.css').read_text(encoding='utf-8')
 
 
 def payload(analisis=True):
@@ -63,7 +63,7 @@ class Navegador(unittest.TestCase):
         except Exception as e:cls.pw.stop();raise unittest.SkipTest(str(e))
         cls.pg=cls.br.new_page(viewport={'width':1323,'height':619},accept_downloads=True);cls.pg.set_default_timeout(8000)
         cls.pg.set_content('<div id="montar"></div>')
-        cls.pg.add_style_tag(content=':root{--alto-util:531px;--alto-util-base:575px;--text-primary:rgb(40,40,50);--text-secondary:rgb(100,100,110);--accent:rgb(108,92,231);--accent-deep:rgb(80,65,180);--accent-tint:rgb(245,243,255);--bg-card:white;--border:rgb(220,220,230);--success:green;--danger:crimson;}body{margin:0}')
+        cls.pg.add_style_tag(content=':root{--alto-util:531px;--alto-util-base:575px;--text-primary:rgb(40,40,50);--text-secondary:rgb(100,100,110);--accent:rgb(108,92,231);--accent-deep:rgb(80,65,180);--accent-tint:rgb(245,243,255);--bg-card:white;--border:rgb(220,220,230);--success:green;--danger:crimson;--danger-text:crimson;--rail-fondo:rgb(247,246,251);--bg-hover:rgb(240,237,254);--shadow:none;}body{margin:48px 0 0}')
         cls.pg.add_style_tag(content=CSS)
         cls.pg.add_script_tag(content=(ROOT/'graficos/_xlsx.js').read_text(encoding='utf-8')+JS.replace('export default function(component)','window.__montarAreas=function(component)'))
 
@@ -139,8 +139,7 @@ class Navegador(unittest.TestCase):
         root=self.mount();pg=self.pg
         root.locator('[data-a=modo][data-v=Excluidos]').click()
         a=pg.evaluate('__inventarioAreas.D');self.assertEqual(len(a['excluidos']),2)
-        root.locator('[data-select=motivo]').select_option('Servicio');self.assertEqual(pg.evaluate('__inventarioAreas.D.exfilas.length'),1)
-        self.assertEqual(root.locator('[data-a=ir]').count(),0)
+        root.locator('[data-a=motivo][data-v=Servicio]').click();self.assertEqual(pg.evaluate('__inventarioAreas.D.exfilas.length'),1)
         root=self.mount(payload(False)[0]);self.assertIn('Sin historia',root.inner_text());self.assertIn('Sin datos',root.inner_text())
         self.assertTrue(root.locator('[data-a=ir][data-v=neg]').is_disabled())
 
@@ -161,7 +160,7 @@ class Navegador(unittest.TestCase):
         self.assertEqual(pg.evaluate('__inventarioAreas.s.area'),'COCINA')
         pg.evaluate('()=>__montarAreas({data:__inventarioAreas.P,parentElement:document.querySelector("#montar"),setTriggerValue:()=>{}})')
         self.assertEqual(pg.evaluate('__inventarioAreas.s.area'),'COCINA')
-        for selector,h in [('.iar-main',531),('.iar-analisis',575)]:self.assertEqual(root.locator(selector).evaluate('e=>Math.round(e.getBoundingClientRect().height)'),h)
+        self.assertEqual(root.evaluate('e=>Math.round(e.getBoundingClientRect().height)'),531)
         pg.set_viewport_size({'width':390,'height':844});self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'),390)
         pg.set_viewport_size({'width':1323,'height':619})
 
@@ -171,6 +170,7 @@ class Navegador(unittest.TestCase):
         pg.evaluate('window.__calculado=__inventarioAreas.cache.datos')
         root.locator('[data-input=q]').fill('pollo')
         self.assertTrue(pg.evaluate('__calculado===__inventarioAreas.cache.datos'))
+        root.locator('[data-a=modo][data-v=Lista]').click()
         root.locator('[data-select=ref]').select_option('1')
         P=json.loads(json.dumps(self.P));P['sello']='nueva';P['meses']=P['meses'][1:];P['momentos']=P['momentos'][1:]
         for r in P['filas']:r[12]=r[12][1:]
@@ -185,6 +185,28 @@ class Navegador(unittest.TestCase):
         self.assertEqual(len([r for r in a['comparacion'] if r['cod']=='001']),2)
         self.assertEqual(set(r['um'] for r in a['comparacion'] if r['cod']=='001'),{'KILOGRAMO','UNIDAD'})
         self.assertGreater(len(d),0)
+
+    def test_lista_con_niveles_ficha_al_costado_y_abre_en_todas(self):
+        root=self.mount();pg=self.pg
+        self.assertEqual(pg.evaluate('__inventarioAreas.s.area'),'__todas__')
+        self.assertEqual(root.locator('.ist-ficha h3').inner_text(),'Todas las áreas')
+        ref=self.d.groupby('AREA').V.sum().sort_values(ascending=False)
+        self.assertEqual(root.locator('tr.ist-n0 .nm').all_inner_texts(),['Todas las áreas',*ref.index])
+        root.locator('[data-a=prof][data-v=Subfamilia]').click()
+        fam=self.d[(self.d.AREA=='COCINA')&(self.d.FAM=='ALIMENTOS')]
+        fila=root.locator('tr.ist-n1',has=root.page.locator('[data-area=COCINA][data-fam=ALIMENTOS]'))
+        self.assertEqual(fila.locator('td.val').inner_text(),('−' if fam.V.sum()<-.5 else '')+f'{abs(fam.V.sum()):,.0f}')
+        self.assertEqual(int(fila.locator('td').nth(3).inner_text()),fam.loc[(fam.Q!=0)|(fam.V!=0),'COD'].nunique())
+        fila.locator('[data-a=nodo]').click()
+        self.assertEqual(pg.evaluate('[__inventarioAreas.s.area,__inventarioAreas.s.fam]'),['COCINA','ALIMENTOS'])
+        kp=root.locator('.ist-kpi').first.inner_text();self.assertIn(f'S/ {abs(fam.V.sum()):,.0f}',kp)
+        root.locator('[data-a=ir][data-v=todos]').first.click()
+        self.assertEqual(pg.evaluate('__pedidos.at(-1)[1].fams'),['ALIMENTOS'])
+        root.locator('[data-a=soltar]').click();self.assertEqual(pg.evaluate('__inventarioAreas.s.area'),'__todas__')
+        root.locator('[data-a=modo][data-v=Matriz]').click()
+        self.assertEqual(root.locator('.ist-ficha').count(),0)
+        root.locator('[data-a=celda][data-area=COCINA][data-fam=ALIMENTOS]').click()
+        self.assertEqual(pg.evaluate('__inventarioAreas.s.modo'),'Lista');self.assertEqual(root.locator('.ist-ficha h3').inner_text(),'Alimentos')
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

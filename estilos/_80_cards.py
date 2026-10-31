@@ -4663,6 +4663,68 @@ CSS = """    /* ================================================================
     [class*="st-key-persp_"] [data-testid="stButtonGroup"] button p {
         font-size: 13px !important;
     }
+    /* Stock (regla #765): la franja es la cabecera de la vista, con el lenguaje
+       de sus controles de abajo. */
+    .persp-tit {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--accent-deep);
+        margin-right: 6px;
+    }
+    .st-key-persp_stock [data-testid="stMarkdownContainer"],
+    .st-key-persp_stock [data-testid="stMarkdownContainer"] p {
+        margin: 0 !important;
+    }
+    .st-key-persp_stock [data-testid="stElementContainer"] {
+        height: 32px;
+        display: flex;
+        align-items: center;
+    }
+    .st-key-persp_stock.st-key-persp_stock {
+        align-items: center !important;
+        justify-content: flex-start !important;
+        min-height: 32px;
+    }
+    @media screen and (min-width: 901px) {
+        /* El `gap` de Streamlit que la separa de la pieza es de más: la pieza
+           sube sus controles a este renglón y abre con los indicadores. */
+        .st-key-persp_stock.st-key-persp_stock {
+            max-height: 32px;
+            margin: 6px 0 -8px !important;
+        }
+        .st-key-inv_sec_persp_stock.st-key-inv_sec_persp_stock {
+            --persp-alto: 40px;
+        }
+    }
+    .st-key-persp_stock [data-testid="stButtonGroup"] {
+        gap: 2px !important;
+        background: var(--rail-fondo);
+        border-radius: 8px;
+        padding: 2px;
+        width: fit-content;
+    }
+    .st-key-persp_stock [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 10px !important;
+        border: 0 !important;
+        border-radius: 6px !important;
+        background: transparent !important;
+    }
+    .st-key-persp_stock [data-testid="stButtonGroup"] button p {
+        font-size: 12.5px !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-persp_stock [data-testid="stButtonGroup"] button[kind="segmented_controlActive"],
+    .st-key-persp_stock [data-testid="stButtonGroup"] button[aria-checked="true"] {
+        background: var(--bg-card) !important;
+        box-shadow: var(--shadow);
+    }
+    .st-key-persp_stock [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p,
+    .st-key-persp_stock [data-testid="stButtonGroup"] button[aria-checked="true"] p {
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
     @media screen and (min-width: 769px) {
         [class*="st-key-"][class*="_sec_persp_"] {
             --persp-alto: 44px;

@@ -419,7 +419,7 @@ def eleccion_compartida(clave, rotulo, opciones, defecto, wprefijo,
     return actual
 
 
-def dibujar_perspectiva(clave, ejes, perspectivas, dibujantes):
+def dibujar_perspectiva(clave, ejes, perspectivas, dibujantes, titulo=None):
     """UNA vista con PERSPECTIVAS (regla #710, generalizada en la #712): una
     franja «Ver [A | B] …» arriba de la tarjeta y, debajo, la vista de
     siempre de la combinación elegida, con su fecha y todo lo suyo.
@@ -436,10 +436,14 @@ def dibujar_perspectiva(clave, ejes, perspectivas, dibujantes):
     (de ahí cuelga su CSS, `estilos/_80_cards.py`); la SECCIÓN de la pila
     que la contiene se llama `<algo>_sec_persp_<algo>`, y por esa marca le
     cede a su tarjeta el alto de la franja. Cambiar de perspectiva corre
-    sólo el fragment de la sección."""
+    sólo el fragment de la sección.
+
+    `titulo` (regla #765): la franja hace de cabecera de la vista, con el título
+    en vez de «Ver»; la pieza de abajo sube sus controles a ese renglón."""
     with st.container(key=f"persp_{clave}", horizontal=True,
                       vertical_alignment="center", gap="small"):
-        st.markdown('<span class="persp-rot">Ver</span>', unsafe_allow_html=True)
+        st.markdown(f'<span class="persp-tit">{titulo}</span>' if titulo else
+                    '<span class="persp-rot">Ver</span>', unsafe_allow_html=True)
         valores = tuple(
             eleccion_compartida(k, rotulo, opciones, opciones[0],
                                 f"pspw_{clave}_{i}")

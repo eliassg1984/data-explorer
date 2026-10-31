@@ -4,11 +4,11 @@ const AREAS=(()=>{
   const lab=(B,k,v)=>v==null?'':(k==='area'?v:B.P.rotulos[k==='sub'?'subfam':k]?.[v])||v||`Sin ${k==='fam'?'familia':k==='sub'?'subfamilia':'área'}`;
   function rank(rows,k,B){
     const rs=[...sgroup(rows,r=>r[k])].map(([nombre,g])=>({nombre,rotulo:lab(B,k,nombre),v:ssum(g,'v'),
-      h:B.P.meses.map((_,i)=>g.reduce((a,r)=>a+(r.h[i]||0),0)),productos:new Set(g.map(r=>r.cod)).size,
+      h:B.P.meses.map((_,i)=>g.reduce((a,r)=>a+(r.h[i]||0),0)),productos:new Set(g.map(r=>r.cod)).size,conStock:new Set(g.filter(r=>Math.abs(r.q)>SEPS||Math.abs(r.v)>SEPS).map(r=>r.cod)).size,
       neg:new Set(g.filter(r=>r.q<0).map(r=>r.cod)).size})).sort((a,b)=>b.v-a.v||scmp(a.nombre,b.nombre));
     const pos=ssum(rs.filter(r=>r.v>0),'v');return rs.map(r=>({...r,pct:r.v>=0&&pos>0?r.v/pos*100:null}));
   }
-  function inicial(P,B){const areas=rank(B.rows,'area',B);return {modo:'Explorar',area:P.default_area??areas[0]?.nombre??TODO,fam:null,sub:null,
+  function inicial(P,B){const areas=rank(B.rows,'area',B);return {modo:'Lista',area:TODO,fam:null,sub:null,prof:'Área',abiertos:{},
     ref:P.ref_default,metrica:'Valor',a:P.default_area??areas[0]?.nombre??null,b:areas.find(r=>r.nombre!==(P.default_area??areas[0]?.nombre))?.nombre??null,
     comparar:'Familias',q:'',exArea:null,motivo:null,exq:'',orden:{}};}
   function scope(B,s,areas=null){return B.rows.filter(r=>(areas?areas.includes(r.area):s.area===TODO||r.area===s.area)
@@ -63,49 +63,62 @@ const AREAS=(()=>{
       excluidos:ex,exfilas,exTotal:ssum(ex,'v')};
   }
   const btn=(a,v,t,on=false)=>`<button data-a="${a}" data-v="${se(v)}" class="${on?'on':''}" aria-pressed="${on}">${se(t)}</button>`;
-  const seg=(ops,v,a)=>`<div class="iar-seg">${ops.map(op=>btn(a,op,op,v===op)).join('')}</div>`;
-  function curva(h,mini=false,labels=[]){if(!h.length)return 'Sin historia';const w=mini?72:650,H=mini?20:110,mn=Math.min(0,...h),mx=Math.max(0,...h),dif=mx-mn||1;
-    return `<svg viewBox="0 0 ${w} ${H}" class="${mini?'iar-mini':'iar-curva'}" role="img" aria-label="Valorizado según kardex"><polyline points="${h.map((v,i)=>`${2+i*(w-4)/Math.max(1,h.length-1)},${H-(mini?3:20)-(v-mn)/dif*(H-(mini?6:26))}`).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="${mini?1.3:2}" vector-effect="non-scaling-stroke"/>${mini?'':labels.map((m,i)=>i===0||i===Math.floor(labels.length/2)||i===labels.length-1?`<text x="${2+i*(w-4)/Math.max(1,h.length-1)}" y="${H-2}" text-anchor="${i===0?'start':i===labels.length-1?'end':'middle'}">${se(m)}</text>`:'').join('')}<title>${se(h.map((v,i)=>(labels[i]||'')+': '+ss(v)).join(' → '))}</title></svg>`;}
-  function ranking(G,k,rs,titulo,elegido,todas=false){const total=ssum(rs,'v'),max=Math.max(1,...rs.map(r=>Math.abs(r.v)));return`<div class="iar-panel"><h4>${titulo}</h4><div class="iar-scroll"><table class="iar-rank"><thead><tr><th>Nombre</th><th>Valorizado</th><th>% positivo</th>${G.P.meses.length?'<th>Historia</th>':''}</tr></thead><tbody>${todas?`<tr data-a="area" data-v="${TODO}" class="${elegido===TODO?'on':''}" tabindex="0"><td>Todas las áreas</td><td class="num">${ss(total,0)}</td><td>—</td>${G.P.meses.length?'<td></td>':''}</tr>`:''}${rs.map(r=>`<tr data-a="${k}" data-v="${se(r.nombre)}" class="${r.nombre===elegido?'on':''}" tabindex="0"><td title="${se(r.rotulo)}">${se(r.rotulo)}</td><td class="num ${r.v<0?'neg':''}" style="background-image:linear-gradient(to right,var(--accent-tint) ${Math.abs(r.v)/max*45}%,transparent ${Math.abs(r.v)/max*45}%)" title="${ss(r.v)}">${ss(r.v,0)}</td><td class="num">${r.pct==null?'—':sn(r.pct,1)+'%'}</td>${G.P.meses.length?`<td>${curva(r.h,true,G.P.meses)}</td>`:''}</tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td class="num">${ss(total,0)}</td><td></td>${G.P.meses.length?'<td></td>':''}</tr></tfoot></table>${rs.length?'':'<p class="iar-vacio">Sin filas para el recorte.</p>'}</div></div>`;}
+  const seg=(ops,v,a)=>`<div class="ist-seg" role="group">${ops.map(op=>btn(a,op,op,v===op)).join('')}</div>`;
   function ruta(G){const s=G.s,B=G.B;return[s.modo==='Comparar'?`${s.a??'—'} / ${s.b??'—'}`:s.area===TODO?'Todas las áreas':lab(B,'area',s.area),
     s.fam!=null?lab(B,'fam',s.fam):null,s.sub!=null?lab(B,'sub',s.sub):null].filter(v=>v!=null).join(' › ');}
-  function matrizHTML(G){const M=G.D.matriz,s=G.s,max=Math.max(1,...M.filas.flatMap(r=>r.cells.map(c=>s.metrica==='Negativos'?c.neg:Math.abs(c.v))));
-    return`<div class="iar-scroll"><table class="iar-matriz"><thead><tr><th>Familia / Área</th>${M.areas.map(a=>`<th>${se(lab(G.B,'area',a))}</th>`).join('')}</tr></thead><tbody>${M.filas.map(r=>`<tr><td>${se(r.rotulo)}</td>${r.cells.map((c,i)=>`<td><button data-a="celda" data-area="${se(M.areas[i])}" data-fam="${se(r.nombre)}" style="--nivel:${(s.metrica==='Negativos'?c.neg:Math.abs(c.v))/max}" class="${c.v<0?'neg':''} ${s.area===M.areas[i]&&s.fam===r.nombre?'on':''}" title="${se(r.rotulo+' · '+M.areas[i])}: ${ss(c.v)} · ${c.neg} productos con cantidad negativa, por ${ss(c.negV)}">${s.metrica==='Negativos'?sn(c.neg):ss(c.v,0)}</button></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  function matrizHTML(G){const M=G.D.matriz,s=G.s,mide=c=>s.metrica==='Negativos'?c.neg:Math.abs(c.v),cols=M.areas.map((a,i)=>[a,i]).filter(([,i])=>M.filas.some(r=>Math.abs(r.cells[i].v)>=.5||r.cells[i].neg)),max=Math.max(1,...M.filas.flatMap(r=>r.cells.map(mide)));
+    return`<div class="ist-wrap iar-matriz ${s.metrica==='Negativos'?'neg':''}"><table><thead><tr><th>Familia / Área</th>${cols.map(([a])=>`<th title="${se(a)}">${se(G.B.P.rotulos.area?.[a]||a)}</th>`).join('')}</tr></thead><tbody>${M.filas.map(r=>`<tr><td title="${se(r.rotulo)}">${se(r.rotulo)}</td>${cols.map(([a,i])=>{const c=r.cells[i],vacio=Math.abs(c.v)<.5&&!c.neg;return`<td><button data-a="celda" data-area="${se(a)}" data-fam="${se(r.nombre)}" style="--nivel:${vacio?0:(.1+Math.sqrt(mide(c)/max)*.9).toFixed(3)}" class="${c.v<0?'neg':''} ${s.area===a&&s.fam===r.nombre?'on':''}" title="${se(r.rotulo+' · '+a)}: ${ss(c.v)} · ${c.neg} productos con cantidad negativa, por ${ss(c.negV)}">${vacio?'—':s.metrica==='Negativos'?sn(c.neg):se(sv0(c.v))}</button></td>`;}).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
+  function arbol(G){const {s,B}=G,hayH=B.P.meses.length>0,niv={'Área':0,Familia:1,Subfamilia:2}[s.prof],out=[];
+    const pct=r=>r.pct==null?'—':`${Math.round(r.pct)} %`,con=rs=>rs.filter(r=>r.conStock>0||Math.abs(r.v)>=.5);
+    const fila=(r,n,key,ind,attrs,on,hoja=false)=>{const ab=!hoja&&(s.abiertos[key]??niv>n);
+      out.push(`<tr class="ist-n${n} ${on?'chosen':''}"><td class="i" title="${se(r.rotulo)}"><span class="ist-fila" style="padding-left:${ind}px">${hoja?'<span class="ist-mk0"></span>':`<button class="ist-mk" data-a="abrir" data-v="${se(key)}" data-ab="${ab?1:0}" aria-expanded="${ab}" aria-label="Abrir o cerrar">${ab?'▾':'▸'}</button>`}<button class="ist-tn" ${attrs} aria-pressed="${on}"><span class="nm">${se(r.rotulo)}</span></button></span></td><td class="val ${r.v<0?'rojo':''}">${se(sv0(r.v))}</td><td>${pct(r)}</td><td>${sn(r.conStock)}</td><td class="${r.neg?'rojo':''}">${r.neg?sn(r.neg):'—'}</td>${hayH?`<td class="t">${smini(r.h)}</td>`:''}</tr>`);return ab;};
+    const nodo=(a,f,u)=>`data-a="nodo" data-area="${se(a)}" data-fam="${se(f)}" data-sub="${se(u??'')}" data-tiene-sub="${u==null?0:1}"`;
+    for(const a of con(rank(B.rows,'area',B))){const rowsA=B.rows.filter(r=>r.area===a.nombre);
+      if(fila(a,0,a.nombre,2,`data-a="area" data-v="${se(a.nombre)}"`,s.area===a.nombre&&s.fam==null))
+        for(const f of con(rank(rowsA,'fam',B))){const rowsF=rowsA.filter(r=>r.fam===f.nombre),k=a.nombre+'|'+f.nombre;
+          if(fila(f,1,k,16,nodo(a.nombre,f.nombre),s.area===a.nombre&&s.fam===f.nombre&&s.sub==null))
+            for(const u of con(rank(rowsF,'sub',B)))fila(u,2,k+'|'+u.nombre,32,nodo(a.nombre,f.nombre,u.nombre),s.area===a.nombre&&s.fam===f.nombre&&s.sub===u.nombre,true);}}
+    const t=rank(B.rows.map(r=>({...r,__t:1})),'__t',B)[0]||{v:0,conStock:0,neg:0,h:[]};
+    return`<div class="ist-wrap ist-arbol"><table><thead><tr><th class="i">Área › Familia › Subfamilia</th><th class="w-v">Valor S/</th><th class="w-p" title="Entre sus vecinos con valor positivo; un negativo no es participación">%</th><th class="w-n">Productos</th><th class="w-n">Negativos</th>${hayH?`<th class="w-t">${B.P.meses.length} meses</th>`:''}</tr></thead><tbody><tr class="tot ist-n0 ${s.area===TODO&&s.fam==null?'chosen':''}"><td class="i" style="padding:0"><span class="ist-fila" style="padding-left:2px"><span class="ist-mk0"></span><button class="ist-tn" data-a="area" data-v="${TODO}" aria-pressed="${s.area===TODO}"><span class="nm">Todas las áreas</span></button></span></td><td class="val">${se(sv0(t.v))}</td><td>—</td><td>${sn(t.conStock)}</td><td class="${t.neg?'rojo':''}">${t.neg?sn(t.neg):'—'}</td>${hayH?`<td class="t">${smini(t.h)}</td>`:''}</tr>${out.join('')}</tbody></table></div>`;
+  }
+  function kpis(G){const {D,P,s}=G,n=P.meses.length,de=k=>D.prods.filter(r=>r.estado===k),oper=rs=>ssum(rs.filter(r=>soperacion(r,P)),'v'),dis=!P.analisis||!D.rs.length;
+    const quien=s.modo==='Comparar'?'las dos áreas':s.area!==TODO||s.fam!=null?'lo elegido':'todas las áreas',txt=rs=>`${sn(rs.length)} productos${oper(rs)>.5?` · ${ss(oper(rs),0)} son de operación`:''}`;
+    const kp=(k,o)=>skpiBtn({attrs:`data-a="ir" data-v="${k}"`,dis,tip:'Ver esos productos en «Por producto»',...o});
+    return skpiBtn({attrs:'data-a="ir" data-v="todos"',dis:!D.rs.length,tip:'Ver sus productos en «Por producto»',rot:`Valorizado · ${quien}`,val:ss(D.total,0),sub:`${sn(D.stock)} productos${P.analisis?` · ${sdiasTxt(D.dias)} días de inventario`:''}`,h:n?D.h:null})
+      +(P.analisis?kp('sin',{rot:'Sin consumo en 90 días',val:ss(ssum(de('sin'),'v'),0),sub:txt(de('sin')),h:sserie(de('sin'),n)})+kp('alto',{rot:`Más de ${P.umbral} días de stock`,val:ss(ssum(de('alto'),'v'),0),sub:txt(de('alto')),h:sserie(de('alto'),n)})+kp('neg',{rot:'En negativo',val:ss(ssum(de('neg'),'v'),0),sub:`${sn(de('neg').length)} productos · ver cuáles →`,h:sserie(de('neg'),n),neg:true})
+        :['Sin consumo en 90 días',`Más de ${P.umbral} días de stock`,'En negativo'].map((rot,i)=>kp(['sin','alto','neg'][i],{rot,val:'Sin datos',sub:'Falta historia o consumo'})).join(''));
+  }
+  function ficha(G){const {D,P,s,B}=G,ru=ruta(G),partes=ru.split(' › '),sel=s.area!==TODO||s.fam!=null,n=P.meses.length,ref=Math.min(s.ref,Math.max(0,n-1));
+    const cab=`<div class="ist-fcab"><div class="ist-ftit"><span class="ist-miga">${se(partes.length>1?partes.slice(0,-1).join(' › '):sel?'Área':'Stock')}</span><h3 title="${se(ru)}">${se(partes.at(-1))}</h3><span class="ist-fsub">${sn(D.stock)} productos con stock · ${se(ss(D.total,0))}</span></div>${sel?'<button class="ist-mini-btn" data-a="soltar">Soltar</button>':''}</div>`;
+    if(!n)return`${cab}<p class="ist-aviso">Sin historia disponible.</p>`;
+    return`${cab}<div class="ist-evcab"><select class="ist-men" data-select="ref" aria-label="Contra qué mes">${P.meses.slice(0,-1).map((m,i)=>`<option value="${i}" ${i===ref?'selected':''}>Contra ${se(m)}</option>`).join('')}</select><span class="ist-dif">${se(sd0(D.cambios.total))} de cambio</span><span class="ist-esp"></span><button class="ist-mini-btn" data-a="ir" data-v="todos" ${!D.rs.length?'disabled':''}>Ver sus productos →</button></div>${scurvaFicha(D.h,P.meses,ref)}<div class="ist-lista">${D.cambios.top.map(r=>`<div class="ist-tp"><span class="n" title="${se(r.prod)}">${se(r.prod)}</span><small>${sn(r.antes)} → ${sn(r.ahora)}</small><b>${se(sd0(r.delta))}</b></div>`).join('')}</div><p class="ist-nota">${sn(D.cambios.n)} productos cambiaron al menos S/ 1; el resto explica ${se(sd0(D.cambios.resto))}. Incluye los que se vaciaron. Precios del kardex, después de cada cierre.</p>`;
   }
   function lista(G,id,cols,filas){const o=G.s.orden[id];let fs=filas.slice();if(o)fs.sort((a,b)=>{const x=a[o.k],y=b[o.k];if(x==null)return y==null?0:1;if(y==null)return-1;return(typeof x==='number'&&typeof y==='number'?x-y:scmp(String(x),String(y)))*o.d;});G.tablas[id]={cols,filas:fs,n:150};
-    return`<div class="iar-scroll" data-tabla="${id}" tabindex="0"><table><thead><tr>${cols.map(c=>`<th><button data-a="orden" data-id="${id}" data-v="${c[0]}">${se(c[1])}${o?.k===c[0]?o.d===1?' ↑':' ↓':''}</button></th>`).join('')}</tr></thead><tbody>${listRows(G,id,0,150)}</tbody></table>${fs.length?'':'<p class="iar-vacio">Sin filas con esta selección.</p>'}</div>`;
+    return`<div class="ist-wrap iar-tabla" data-tabla="${id}" tabindex="0"><table><thead><tr>${cols.map(c=>`<th class="${c[2]?'num':''}"><button data-a="orden" data-id="${id}" data-v="${c[0]}">${se(c[1])}${o?.k===c[0]?o.d===1?' ↑':' ↓':''}</button></th>`).join('')}</tr></thead><tbody>${listRows(G,id,0,150)}</tbody></table>${fs.length?'':'<p class="ist-aviso">Sin filas con esta selección.</p>'}</div>`;
   }
   function form(v,t){return t==='v'?ss(v):t==='q'?sv(v):v??'';}
   function listRows(G,id,a,b){const t=G.tablas[id];return t.filas.slice(a,b).map(r=>`<tr>${t.cols.map(c=>`<td class="${c[2]?'num':''}" title="${se(form(r[c[0]],c[2]))}">${se(form(r[c[0]],c[2]))}</td>`).join('')}</tr>`).join('');}
   function select(G,k,ops,v,label){const offered=[...ops];if(v!=null&&!offered.includes(v))offered.push(v);return`<label>${label}<select data-select="${k}"><option value="__sin__">${k==='a'||k==='b'?'Elegir área':'Todos'}</option>${offered.map(x=>`<option value="${se(x)}" ${x===v?'selected':''}>${se(x||'Sin dato')}</option>`).join('')}</select></label>`;}
   function dibujar(G){const {root,s,P,B}=G;G.D=calcular(B,s,G.E,G.cache);const D=G.D;G.tablas={};
     const active=root.querySelector('input:focus'),f=active?[active.dataset.input,active.selectionStart,active.selectionEnd]:null;
-    const scroll=[...root.querySelectorAll('[data-tabla]')].map(e=>[e.dataset.tabla,e.scrollTop,e.scrollLeft]);
-    let html=`<section class="iar-card iar-main"><header><h3>Stock por área y familia</h3><span>${se(Object.entries(P.contexto).filter(([,v])=>v.length).map(([k,v])=>k+': '+v.join(', ')).join(' · '))}</span><button data-a="excel">Excel de esta vista ↓</button></header>`
-      +`<div class="iar-barra">${seg(['Explorar','Matriz','Comparar',...(D.excluidos.length?['Excluidos']:[])],s.modo,'modo')}<span>${s.modo==='Excluidos'?'No suman al stock':se(s.modo==='Matriz'?'Matriz de los filtros de la página':ruta(G))}</span>${s.fam!=null||s.sub!=null?'<button data-a="soltar">Todas las familias</button>':''}</div>`;
-    if(s.modo==='Explorar')html+=`<div class="iar-rankings">${ranking(G,'area',D.areas,'Área',s.area,true)}${ranking(G,'fam',D.familias,'Familia',s.fam)}${ranking(G,'sub',D.subfamilias,'Subfamilia',s.sub)}</div><p class="iar-nota">Porcentajes sobre las categorías con valor positivo; un negativo no es participación. Elegí una fila para profundizar.</p>`;
-    else if(s.modo==='Matriz')html+=`<div class="iar-controles">${seg(['Valor','Negativos'],s.metrica,'metrica')}<input type="search" data-input="q" aria-label="Buscar familia" placeholder="Buscar familia…" value="${se(s.q)}"></div>${matrizHTML(G)}<p class="iar-nota">${s.metrica==='Negativos'?'Productos distintos con cantidad negativa en cada celda; el tooltip conserva su valorizado.':'Valorizado neto por familia y área. Los negativos se muestran con su signo.'} La matriz conserva los filtros de la página; tocá una celda para acotar sólo el análisis de abajo.</p>`;
+    const scroll=[...root.querySelectorAll('.ist-wrap')].map((e,i)=>[e.dataset.tabla||i,e.scrollTop,e.scrollLeft]);
+    const zonas=seg(['Lista','Matriz','Comparar',...(D.excluidos.length?['Excluidos']:[])],s.modo,'modo');
+    const busca=s.modo==='Matriz'?['q','Buscar familia…',s.q]:s.modo==='Comparar'?['q','Buscar…',s.q]:s.modo==='Excluidos'?['exq','Buscar código o motivo…',s.exq]:null;
+    let html=`<div class="ist-cab iar-cab">${s.modo==='Excluidos'?select(G,'exArea',[...new Set(D.excluidos.map(r=>r.area))].sort(),s.exArea,'Área'):''}${busca?`<input type="search" class="ist-busca" data-input="${busca[0]}" aria-label="${se(busca[1])}" placeholder="${se(busca[1])}" value="${se(busca[2])}">`:''}<button class="ist-pil" data-a="excel" title="Baja lo que se ve">Excel ↓</button></div><div class="ist-kpis">${kpis(G)}</div>`;
+    if(s.modo==='Lista')html+=`<div class="ist-cuerpo"><section class="ist-izq iar-main"><div class="ist-fl">${zonas}<span class="ist-esp"></span><span class="ist-lb">Abrir hasta ${seg(['Área','Familia','Subfamilia'],s.prof,'prof')}</span></div>${arbol(G)}</section><aside class="ist-ficha iar-analisis" aria-label="Ficha">${ficha(G)}</aside></div>`;
+    else if(s.modo==='Matriz')html+=`<div class="ist-ancho"><div class="ist-fl">${zonas}${seg(['Valor','Negativos'],s.metrica,'metrica')}</div>${matrizHTML(G)}<p class="ist-nota">${s.metrica==='Negativos'?'Productos distintos con cantidad negativa en cada celda; el tooltip conserva su valorizado.':'Valorizado neto por familia y área; los negativos llevan su signo.'} Un clic en una celda abre esa familia en la lista, con su ficha.</p></div>`;
     else if(s.modo==='Comparar'){
-      html+=`<div class="iar-controles">${select(G,'a',D.areas.map(r=>r.nombre),s.a,'Área A')}${select(G,'b',D.areas.map(r=>r.nombre),s.b,'Área B')}${seg(['Familias','Productos'],s.comparar,'comparar')}<input type="search" data-input="q" aria-label="Buscar comparación" placeholder="Buscar…" value="${se(s.q)}"></div>`;
       const cols=s.comparar==='Productos'?[['cod','Código'],['nombre','Producto'],['um','Unidad'],['qa','Cantidad A','q'],['qb','Cantidad B','q']]:[['nombre','Familia'],['na','Con stock A','q'],['nb','Con stock B','q']];
       G.compCols=[...cols,['a','Valor A','v'],['b','Valor B','v'],['delta','B − A','v']];
-      html+=s.a==null||s.b==null||s.a===s.b?'<p class="iar-vacio">Elegí dos áreas distintas disponibles en los filtros de la página.</p>':lista(G,'comparar',G.compCols,D.comparacion);
-      html+='<p class="iar-nota">B − A compara existencias; no es una recomendación de transferencia. Cantidades separadas por código y unidad; no se suman unidades distintas.</p>';
+      html+=`<div class="ist-ancho"><div class="ist-fl">${zonas}${select(G,'a',D.areas.map(r=>r.nombre),s.a,'Área A')}${select(G,'b',D.areas.map(r=>r.nombre),s.b,'Área B')}${seg(['Familias','Productos'],s.comparar,'comparar')}</div>${s.a==null||s.b==null||s.a===s.b?'<p class="ist-aviso">Elegí dos áreas distintas disponibles en los filtros de la página.</p>':lista(G,'comparar',G.compCols,D.comparacion)}<p class="ist-nota">B − A compara existencias; no es una recomendación de transferencia. Cantidades separadas por código y unidad; no se suman unidades distintas.</p></div>`;
     }else{
-      html+=`<div class="iar-controles">${select(G,'exArea',[...new Set(D.excluidos.map(r=>r.area))].sort(),s.exArea,'Área')}${select(G,'motivo',[...new Set(D.excluidos.map(r=>r.motivo))].sort(),s.motivo,'Motivo')}<input type="search" data-input="exq" aria-label="Buscar excluidos" placeholder="Buscar código, nombre o motivo…" value="${se(s.exq)}"></div><p class="iar-nota">Inactivos, servicios y artículos o áreas no habilitados; sólo filas con stock o valorizado. Total excluido: ${ss(D.exTotal)}.</p>`;
-      G.exCols=[['cod','Código'],['prod','Producto'],['area','Área'],['motivo','Por qué'],['um','Unidad'],['q','Cantidad','q'],['precio','Precio','v'],['v','Valorizado','v']];html+=lista(G,'excluidos',G.exCols,D.exfilas);
-    }
-    html+='</section>';
-    if(s.modo!=='Excluidos'){
-      const states=[['neg','Negativos'],['sin','Sin consumo 90 d'],['alto','Más de 60 días']];
-      html+=`<section class="iar-card iar-analisis"><header><div><h3>${se(ruta(G))}</h3><p>${D.stock} productos con stock · ${ss(D.total)} en el maestro actual</p></div><button data-a="ir" data-v="todos" ${!D.rs.length?'disabled':''}>Ver sus productos ↑</button></header><div class="iar-controles"><label>Comparar historia desde<select data-select="ref">${P.meses.map((m,i)=>`<option value="${i}" ${s.ref===i?'selected':''}>${se(m)}</option>`).join('')}</select></label><span>Histórico del kardex después de cada cierre; el último punto es su foto más reciente.</span></div>`
-        +`<div class="iar-analisis-cuerpo"><div class="iar-cambios"><h4>Qué más cambió · ${P.meses.length?ss(D.cambios.total):'Sin historia'}</h4>${P.meses.length?curva(D.h,false,P.meses):'<p class="iar-vacio">Sin historia disponible.</p>'}`
-        +lista(G,'cambios',[['prod','Producto'],['antes','Antes','v'],['ahora','Última foto','v'],['delta','Cambio','v']],P.meses.length?D.cambios.top:[])
-        +`<p class="iar-nota">${P.meses.length?`${D.cambios.n} productos cambiaron al menos S/ 1. El resto explica ${ss(D.cambios.resto)}. Se incluyen los que se vaciaron.`:'No hay fotos históricas disponibles para comparar.'}</p></div><div class="iar-alertas"><h4>Dónde mirar</h4><div class="iar-alerta"><small>Días de inventario del recorte</small><b>${D.dias==null?'Sin base':D.dias>365?'Más de 365':sn(D.dias)}</b><p>Al ritmo de consumo del restaurante entero en 90 días.</p></div>`
-        +states.map(([k,n])=>`<button class="iar-alerta" data-a="ir" data-v="${k}" ${!P.analisis||!D.rs.length?'disabled':''}><small>${n}</small><b>${P.analisis?sn(D.estados[k]):'Sin datos'}</b><p>${P.analisis?ss(ssum(D.prods.filter(r=>r.estado===k),'v')):'Falta historia o consumo para este análisis.'} · Ver productos ↑</p></button>`).join('')+'</div></div></section>';
+      G.exCols=[['cod','Código'],['prod','Producto'],['area','Área'],['motivo','Por qué'],['um','Unidad'],['q','Cantidad','q'],['precio','Precio','v'],['v','Valorizado','v']];
+      const exf=[...D.exfilas].sort((a,b)=>Math.abs(b.v)-Math.abs(a.v)),por=[...sgroup(D.excluidos,r=>r.motivo)].map(([m,g])=>[m,ssum(g,'v')]).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+      html+=`<div class="ist-ancho"><div class="ist-fl">${zonas}<div class="ist-seg" role="group" aria-label="Motivo">${btn('motivo','',`Todos · ${ss(D.exTotal,0)}`,s.motivo==null)}${por.map(([m,v])=>btn('motivo',m,`${m} · ${ss(v,0)}`,s.motivo===m)).join('')}</div></div>${lista(G,'excluidos',G.exCols,exf)}<p class="ist-nota">No suman al stock: inactivos, servicios y artículos o áreas no habilitados; sólo filas con stock o valorizado. Total excluido: ${ss(D.exTotal)}.</p></div>`;
     }
     root.innerHTML=html;
-    scroll.forEach(([id,top,left])=>{const e=root.querySelector(`[data-tabla="${id}"]`);if(e){e.scrollTop=top;e.scrollLeft=left;}});
+    const nuevas=[...root.querySelectorAll('.ist-wrap')];scroll.forEach(([id,top,left],i)=>{const e=nuevas.find(x=>x.dataset.tabla===id)||nuevas[i];if(e&&(!e.dataset.tabla||e.dataset.tabla===id)){e.scrollTop=top;e.scrollLeft=left;}});
     if(f){const e=root.querySelector(`[data-input="${f[0]}"]`);if(e){e.focus({preventScroll:true});e.setSelectionRange(f[1],f[2]);}}
   }
   function exportar(G){const {P,s,D}=G,hoja=(nombre,cols,filas)=>({nombre,cabeza:cols.map(c=>c[1]),decimales:6,filas:filas.map(r=>cols.map(c=>r[c[0]]??''))});
@@ -120,16 +133,19 @@ const AREAS=(()=>{
       {nombre:'Contexto',cabeza:['Dato','Selección'],filas:[...contexto,['Métrica matriz',s.metrica],['Días del conjunto',D.dias??'Sin base']]});return out;
   }
   function montar({data:P,parentElement,setTriggerValue}){
-    const old=window.__inventarioAreas;old?.abort.abort();let root=parentElement.querySelector('.iar');if(!root){root=document.createElement('div');root.className='iar';parentElement.appendChild(root);}
+    const old=window.__inventarioAreas;old?.abort.abort();let root=parentElement.querySelector('.iar');if(!root){root=document.createElement('div');root.className='iar ist';parentElement.appendChild(root);}
     const B=sleer(P),E=P.excluidos?sleer(P.excluidos):null,s=old?.s||inicial(P,B);
     if(old&&old.P.sello!==P.sello){const etiqueta=old.P.meses[old.s.ref],i=P.meses.indexOf(etiqueta);s.ref=i>=0?i:P.ref_default;}
     if(!(s.ref>=0&&s.ref<P.meses.length))s.ref=P.ref_default;
     const G={P,B,E,s,root,enviar:setTriggerValue,tablas:{},cache:{},abort:new AbortController()};window.__inventarioAreas=G;
     const signal=G.abort.signal;
     root.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)return;const{a,v,id}=b.dataset;
-      if(a==='modo')s.modo=v;else if(a==='area'){s.area=s.area===v&&v!==TODO?(P.default_area??TODO):v;s.fam=null;s.sub=null;}
+      if(a==='modo')s.modo=v;else if(a==='area'){s.area=s.area===v&&v!==TODO&&s.fam==null?TODO:v;s.fam=null;s.sub=null;}
+      else if(a==='nodo'){const u=b.dataset.tieneSub==='1'?b.dataset.sub:null,igual=s.area===b.dataset.area&&s.fam===b.dataset.fam&&s.sub===u;s.area=igual?TODO:b.dataset.area;s.fam=igual?null:b.dataset.fam;s.sub=igual?null:u;}
+      else if(a==='abrir')s.abiertos={...s.abiertos,[v]:b.dataset.ab!=='1'};else if(a==='prof'){s.prof=v;s.abiertos={};}
+      else if(a==='motivo')s.motivo=v||null;
       else if(a==='fam'){s.fam=s.fam===v?null:v;s.sub=null;}else if(a==='sub')s.sub=s.sub===v?null:v;
-      else if(a==='soltar'){s.fam=null;s.sub=null;}else if(a==='celda'){s.area=b.dataset.area;s.fam=b.dataset.fam;s.sub=null;}
+      else if(a==='soltar'){s.area=TODO;s.fam=null;s.sub=null;}else if(a==='celda'){s.area=b.dataset.area;s.fam=b.dataset.fam;s.sub=null;s.abiertos={...s.abiertos,[b.dataset.area]:true};s.modo='Lista';}
       else if(a==='comparar')s.comparar=v;else if(a==='metrica')s.metrica=v;
       else if(a==='orden'){const o=s.orden[id];s.orden[id]={k:v,d:o?.k===v?-o.d:1};}
       else if(a==='excel'){bajar('Stock_por_area.xlsx',libro(exportar(G)));return;}
@@ -138,7 +154,6 @@ const AREAS=(()=>{
     },{signal});
     root.addEventListener('change',e=>{const k=e.target.dataset.select;if(!k)return;s[k]=k==='ref'?Number(e.target.value):e.target.value==='__sin__'?null:e.target.value;dibujar(G);},{signal});
     root.addEventListener('input',e=>{const k=e.target.dataset.input;if(k){s[k]=e.target.value;dibujar(G);}},{signal});
-    root.addEventListener('keydown',e=>{const tr=e.target.closest('tr[data-a]');if(tr&&(e.key==='Enter'||e.key===' ')){e.preventDefault();tr.click();}},{signal});
     root.addEventListener('scroll',e=>{const el=e.target,t=G.tablas[el.dataset?.tabla];if(t&&el.scrollTop+el.clientHeight>=el.scrollHeight-180&&t.n<t.filas.length){el.querySelector('tbody').insertAdjacentHTML('beforeend',listRows(G,el.dataset.tabla,t.n,t.n+150));t.n+=150;}},{signal,capture:true});
     dibujar(G);return()=>G.abort.abort();
   }

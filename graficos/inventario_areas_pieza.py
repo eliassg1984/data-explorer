@@ -9,7 +9,8 @@ from . import inventario_areas_datos as datos
 
 _DIR=Path(__file__).parent
 _PIEZA=st.components.v2.component(
-    'inventario_areas',css=css_movil((_DIR/'inventario_areas.css').read_text(encoding='utf-8')),
+    'inventario_areas',css=css_movil((_DIR/'inventario_base.css').read_text(encoding='utf-8')
+                                 +(_DIR/'inventario_areas.css').read_text(encoding='utf-8')),
     js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')
        +(_DIR/'inventario_base.js').read_text(encoding='utf-8')
        +(_DIR/'inventario_areas.js').read_text(encoding='utf-8')))

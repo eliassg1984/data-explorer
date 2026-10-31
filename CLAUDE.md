@@ -275,7 +275,9 @@ salto «¿Por qué? →» a «Análisis de diferencias» (`_cierre.al_porque`, e
 ABC previo al buscador, cobertura y series contra las funciones anteriores;
 redondeo de unidades como Python, fotos y fallo de consulta, negativos por
 área, escenario, Excel con seis decimales, salto desde la otra perspectiva,
-estado, búsqueda, orden y móvil en Chromium. Ver regla #721.
+estado, búsqueda, orden y móvil en Chromium. Ver regla #721. Desde la #765
+cubre además los indicadores, la lista con niveles y la ficha al costado
+contra pandas, lo que sobra, «Fuera de esta cuenta» y el cursor del buscador.
 
 `test_movimientos_periodo_pieza.py` vigila Requerimientos y Salidas por
 período como piezas propias (`movimientos_periodo.js` y `.css`,
@@ -304,10 +306,11 @@ sigue nativa y las demás interacciones son locales. Ver regla #723.
 historia y cambios contra las funciones anteriores; matriz con negativos
 por celda, comparación por producto/unidad, excluidos separados, Excel,
 estado, caché, referencia histórica, teclado y móvil. Ambas perspectivas
-de Stock comparten los cálculos de `inventario_base.js`; se antepone al JS
-de cada pieza en Python. `test_stock_producto_pieza.py` comprueba también
-esa composición. La única acción propia que pide Python es el salto a
-Por producto, con sello y selección validados. Ver regla #724.
+de Stock comparten los cálculos de `inventario_base.js` y la presentación de
+`inventario_base.css`; se anteponen a lo de cada pieza en Python.
+`test_stock_producto_pieza.py` comprueba también esa composición. La única
+acción propia que pide Python es el salto a Por producto, con sello y
+selección validados. Ver reglas #724 y #765.
 
 `test_compras_ano_pieza.py` vigila Compras › Vs año pasado como pieza propia
 (`compras/vs_ano.js` y `.css`, `vs_ano_datos.py` y `vs_ano_pieza.py`): las
@@ -1404,6 +1407,24 @@ muerde:
 `test_ventas_mix_pieza.py` vigila la base, los indicadores y los % contra pandas,
 los niveles de la tabla, «Volver», el año pasado pedido una vez, el Excel y el
 celular, en Chromium.
+
+## Stock: una pantalla, lista y ficha
+
+Desde el 2026-10-31 (regla #765) las dos perspectivas de Inventario › Stock van
+como Mix: cuatro indicadores que filtran, la lista con niveles por valor y la
+ficha al costado. Boceto: https://claude.ai/artifact/Y3GqA14rhFvWmKvgVp5JEC. Lo
+que muerde:
+
+- **El renglón de arriba son dos dueños**: título y «Ver», de Python
+  (`dibujar_perspectiva(..., titulo="Stock")`); los controles, de la pieza, con
+  `top: -40px`. Desde 1040px de ancho de la pieza (`@container`, porque la columna
+  fijada no la ve un `@media`) bajan a un renglón propio.
+- **«Son de operación»** sale de `sin_plato.FAMILIA_OPERACION`: su «sin consumo» no
+  dice lo mismo que el de la comida, porque ninguna receta los descarga.
+- **«Por producto» cuenta 6 áreas y «Por área» todas**: S/ 70.251 contra S/ 79.795
+  el 2026-10-30. Lo dice «Fuera de esta cuenta», en la ficha.
+- **Sin punto de encaje propio en la tarjeta**: es lo que hacía caer la rueda en
+  cualquier parte. Encaja la sección, y lo de adentro scrollea en su caja.
 
 ## Ventas: cada tarjeta filtra sus grupos
 

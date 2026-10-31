@@ -94,7 +94,7 @@ class PresentacionEnNavegador(unittest.TestCase):
 
         casos = [
             ('Ventas', ventas._armar()[1], ['ventas_periodo.js'], ['ventas_periodo.css'], '.vp'),
-            ('Stock', stock.armar()[0], ['inventario_base.js', 'inventario_productos.js'], ['inventario_productos.css'], '.isp'),
+            ('Stock', stock.armar()[0], ['inventario_base.js', 'inventario_productos.js'], ['inventario_base.css', 'inventario_productos.css'], '.isp'),
             ('Movimientos', movimientos.payload()[0], ['movimientos_periodo.js'], ['movimientos_periodo.css'], '.mv'),
             ('Documentos', documentos.payload(documentos.muestra()), ['compras/documentos.js'], ['compras/documentos.css'], '.dc'),
             ('Ajuste', pivote.payload(), ['ajuste/pivote.js'], ['ajuste/pivote.css'], '.apv'),

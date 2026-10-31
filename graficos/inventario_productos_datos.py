@@ -11,6 +11,7 @@ import pandas as pd
 
 from graficos.compras._comun import unidad_corta
 from graficos.compras._etiquetas_proveedor import nombre_propio
+from sin_plato import FAMILIA_OPERACION
 from . import inventario_productos as ip
 
 TEXTO = ("cod", "prod", "fam", "subfam", "area", "unidad", "usal", "cod_area")
@@ -65,7 +66,9 @@ def armar(d, cols, historia=None, consumo=None, rango=None):
          "hay_fecha": bool(cols.get("cod") and cols.get("cod_area") and cols.get("cant") and rango),
          "rango": [str(v) for v in rango] if rango else None,
          "areas_iniciales": [a for a in ip.AREAS_DE_ENTRADA if a in dic["area"]],
-         "ventana": 90, "umbral": 60}
+         "ventana": 90, "umbral": 60,
+         # Ninguna receta los descarga: su «sin consumo» se dice aparte (#765).
+         "fam_operacion": next((f for f in dic["fam"] if f.upper() == FAMILIA_OPERACION), None)}
     p["sello"] = hashlib.sha256(json.dumps(p, ensure_ascii=False, allow_nan=False, sort_keys=True,
                             separators=(",", ":")).encode()).hexdigest()[:20]
     return p

@@ -76,8 +76,8 @@ function sfiltrar(B,st){
   const palabras=splano(st.q).split(/\s+/).filter(Boolean);
   const buscados=base.productos.filter(r=>palabras.every(p=>splano(r.prod+' '+r.cod).includes(p)));
   const sin=buscados.filter(r=>!r.areas.length).length,stock=buscados.filter(r=>st.sin||r.areas.length);
-  const counts=sestados(stock),visibles=stock.filter(r=>st.chip==='todos'||(st.chip==='A'?r.abc==='A':st.chip==='areaNeg'?r.negArea:r.estado===st.chip));
-  const serie=st.chip==='todos'&&!st.q.trim()?base.serie:B.P.meses.map((_,i)=>visibles.reduce((s,r)=>s+(r.h[i]||0),0));
+  const clase=st.clase||'todos',counts=sestados(stock),visibles=stock.filter(r=>(st.chip==='todos'||(st.chip==='A'?r.abc==='A':st.chip==='areaNeg'?r.negArea:r.estado===st.chip))&&(clase==='todos'||(clase==='areaNeg'?r.negArea:r.abc===clase)));
+  const serie=st.chip==='todos'&&clase==='todos'&&!st.q.trim()?base.serie:B.P.meses.map((_,i)=>visibles.reduce((s,r)=>s+(r.h[i]||0),0));
   return {...base,counts,sin,stock,visibles,serie,total:ssum(visibles,'v'),dias:sdiasConjunto(visibles,B.P.ventana),
     sinCons:ssum(visibles.filter(r=>r.estado==='sin'),'v'),analisis:B.P.analisis&&!st.af};
 }
@@ -86,3 +86,29 @@ function sescenario(r,dias,ventana=90){
   const equivalente=r.consumo/ventana*dias,diferencia=r.q-equivalente;
   return {dias,equivalente,diferencia,valor:r.precio>0?diferencia*r.precio:null};
 }
+
+// ── Lo común a las dos perspectivas desde la #765: indicadores, líneas y ficha.
+const sv0=n=>`${n<-.5?'−':''}${sn(Math.abs(n))}`;
+const sd0=n=>`${n>.5?'+':n<-.5?'−':''}S/ ${sn(Math.abs(n))}`;
+const sdiasTxt=d=>d==null?'—':d>365?'más de 365':sn(d);
+function sserie(rs,n){const h=new Array(n).fill(0);for(const r of rs)for(let i=0;i<n;i++)h[i]+=r.h[i]||0;return h;}
+function smini(h,hist=''){if(!h?.length)return '';const mn=Math.min(...h),mx=Math.max(...h),rg=mx-mn,y=v=>rg?18-(v-mn)/rg*16:10,n=Math.max(1,h.length-1);
+  return `<svg class="ist-mini" viewBox="0 0 68 20" role="img" aria-label="${se(hist||'Valor después de cada cierre')}"><polyline points="${h.map((v,i)=>`${(2+i*64/n).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}"/><circle cx="66" cy="${y(h.at(-1)).toFixed(1)}" r="2" class="${h.at(-1)<0?'neg':''}"/></svg>`;}
+function skpiCurva(h){if(!h?.length)return '';const mn=Math.min(...h),mx=Math.max(...h),rg=mx-mn||1,n=Math.max(1,h.length-1);
+  return `<svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><polyline points="${h.map((v,i)=>`${(i*100/n).toFixed(1)},${(31-(v-mn)/rg*28).toFixed(1)}`).join(' ')}"/></svg>`;}
+// `attrs` es lo que lo hace reaccionar: `data-act` en una pieza, `data-a` en la otra.
+const skpiBtn=({attrs,on=false,rot,val,sub='',h=null,neg=false,tip='',dis=false})=>`<button type="button" class="ist-kpi ${on?'on':''} ${neg?'neg':''}" ${attrs} title="${se(tip)}" aria-pressed="${on}" ${dis?'disabled':''}>${skpiCurva(h)}<span class="r">${se(rot)}</span><span class="v">${se(val)}</span><span class="d">${se(sub)}</span></button>`;
+function scurvaFicha(h,meses,ref){if(!h?.length)return '';const mn=Math.min(0,...h),mx=Math.max(0,...h),rg=mx-mn||1,n=Math.max(1,h.length-1),X=i=>i*100/n,Y=v=>94-(v-mn)/rg*86;
+  const L=h.map((v,i)=>`${X(i).toFixed(2)},${Y(v).toFixed(2)}`).join(' ');
+  const rot=meses.map((t,i)=>[t,i]).filter(([,i])=>i===0||i===n||i===ref||(i%3===0&&i<n-1&&Math.abs(i-ref)>1));
+  return `<div class="ist-curva"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,${Y(0).toFixed(2)} ${L} 100,${Y(0).toFixed(2)}"/><polyline points="${L}"/></svg>${h.map((v,i)=>`<span class="ist-pto ${i===ref?'ref':v<0?'neg':''}" style="left:${X(i).toFixed(2)}%;top:${Y(v).toFixed(2)}%" title="${se(`${meses[i]}: ${ss(v,0)}`)}"></span>`).join('')}</div><div class="ist-cm">${rot.map(([t,i])=>`<span style="left:${X(i).toFixed(2)}%;transform:${i===0?'none':i===n?'translateX(-100%)':'translateX(-50%)'}">${se(t)}</span>`).join('')}</div>`;}
+// Insumos de operación: ninguna receta los descarga, así que «sin consumo» no quiere decir lo mismo que en la comida (regla #645).
+const soperacion=(r,P)=>!!P.fam_operacion&&r.fam===P.fam_operacion;
+function sparado(rs,P){const pos=rs.reduce((s,r)=>s+Math.max(0,r.v),0),neg=rs.reduce((s,r)=>s+Math.min(0,r.v),0),pa=rs.filter(r=>r.estado==='sin'||r.estado==='alto'),parado=pa.reduce((s,r)=>s+Math.max(0,r.v),0),oper=pa.filter(r=>soperacion(r,P)).reduce((s,r)=>s+Math.max(0,r.v),0);return {pos,neg,parado,oper};}
+function sfrase(rs,P,chip){const a=sparado(rs,P);if(chip==='neg')return `Se descargaron antes de que entrara lo que los cubre: restan ${ss(-a.neg,0)} al total sin ser mercadería que falta.`;
+  if(!(a.parado>.5))return '';const todo=a.parado/(a.pos||1)>.995,soloOper=!rs.some(r=>r.v>.5&&!soperacion(r,P));
+  if(soloOper)return 'Son insumos de operación: ninguna receta los descarga, así que sólo salen al contar.';
+  const oper=a.oper>.5?`${ss(a.oper,0)} ${todo?'de esto':'de eso'} son insumos de operación (menaje, limpieza, leña), que ninguna receta descarga.`:'';
+  return (todo?(a.oper>.5?`${oper} Lo demás, ${ss(a.parado-a.oper,0)}, es comida, bebida y envases.`:''):`De ${ss(a.pos,0)} en positivo, ${ss(a.parado,0)} (${sn(a.parado/(a.pos||1)*100)} %) no tuvo consumo en 90 días o tiene más de ${P.umbral} días de stock. ${oper}`).trim();}
+// Lo que sobra por encima de `dias` de cobertura; cálculo propio, al ritmo de los últimos 90 días.
+const ssobra=(r,dias)=>r.q>0&&r.dias!=null&&r.dias>dias&&r.v>0?r.v*(1-dias/r.dias):0;

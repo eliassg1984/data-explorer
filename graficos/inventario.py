@@ -1409,7 +1409,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
 
     _DIBUJANTES = {
         "inv_sec_persp_stock": lambda: dibujar_perspectiva(
-            "stock", EJES_STOCK, PERSPECTIVAS_STOCK, _DIBUJANTES),
+            "stock", EJES_STOCK, PERSPECTIVAS_STOCK, _DIBUJANTES, titulo="Stock"),
         "inv_sec_area":    _dib_area,
         "inv_sec_productos": _dib_productos,
         "inv_sec_movimientos": _dib_movimientos,

@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-767 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+768 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (252)
+**CSS y estilos** (253)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -317,10 +317,11 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#755** — Ventas: el filtro de grupo es de CADA TARJETA, no de la franja
 - **#762** — Documentos SUNAT: una cabecera, la misma en las cuatro vistas, y «Falta cargar» en naranja
 - **#764** — El marco de la app: una hoja blanca sobre lavanda, con la franja siempre a la vista
+- **#765** — Stock en una pantalla: lista con niveles y ficha al costado, en las dos perspectivas
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 
-**Layout y alturas** (107)
+**Layout y alturas** (108)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -429,6 +430,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#732** — Para revisar como pieza propia: cada caso cuenta una vez y cada peso mira sólo hacia atrás
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 - **#758** — Venta por Periodo no se aprieta: indicadores que eligen, comparación elegible y cierre
+- **#765** — Stock en una pantalla: lista con niveles y ficha al costado, en las dos perspectivas
 
 **Plotly y figuras** (130)
 
@@ -57691,6 +57693,46 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      son de contenido. Las tarjetas no llevan caja, así que las de una misma fila dependen de
      su hueco. Documentos SUNAT tenía sus vistas también en la cabecera de la tarjeta
      (#762), porque la franja no se veía: desde 901px se esconden. (2026-10-30.)
+
+765. **Stock en una pantalla: lista con niveles y ficha al costado, en las dos
+     perspectivas.** Cada una medía 1.272 px: la franja «Ver», una tarjeta de una pantalla y
+     la ficha debajo, que empezaba justo donde terminaba la ventana —un clic en un producto
+     sólo marcaba la fila—, y sus tarjetas tenían punto de encaje propio, así que la rueda
+     caía en cualquier parte. Boceto elegido:
+     https://claude.ai/artifact/Y3GqA14rhFvWmKvgVp5JEC.
+
+     Lo común vive en `inventario_base.css` y al final de `inventario_base.js`, y las dos
+     piezas lo anteponen; `sfiltrar`, `sagrupar` y las cuentas de Por área no cambian, los
+     tests las siguen comparando contra `armar_listado` y `analisis_stock`. El estilo es el
+     de Mix (#763): cuatro indicadores que filtran, menús rellenos, DM Sans —el `--font` y
+     el `--font-family` que pedía el CSS de antes no existen— y 13 px en vez de 10,5. El
+     verde de los valores normales se fue: sólo el rojo decía algo.
+
+     **El renglón de arriba son dos dueños:** el título y «Ver» son de Python
+     (`dibujar_perspectiva(..., titulo="Stock")`) y los controles, de la pieza, subidos con
+     `top: -40px`, como en Mix. Por eso tres cosas muerden: **(a)** un bloque de Streamlit
+     no obedece a `height` (#101) y el contenedor del markdown medía 41 px y corría los
+     controles: va `max-height` y el `stElementContainer` a 32 px. **(b)** Con la columna
+     fijada no entran: `@container (max-width: 1040px)` los baja a un renglón propio, y por
+     eso `.ist` lleva `container-type`; un `@media` no se entera de la columna. **(c)** El
+     botón activo de un segmented_control se marca con `kind` en la 1.59 y con
+     `aria-checked` en la 1.64: van los dos.
+
+     **Lo que abre distinto:** la lista por valor y no por el alfabeto (la primera fila era
+     Aceite de Ajonjolí, S/ 22, con 187 productos de clase A repartidos), en Familia ›
+     Subfamilia, y Por área en «Todas las áreas» en vez de Almacén Central (#405): aquello
+     era para que los tres cuadros no abrieran vacíos, y hoy la lista muestra todas. Un clic
+     selecciona; ▸ abre; «Soltar» vuelve. «Ampliar» esconde la ficha y suma código, precio y
+     consumo, y ahí ▸ en un producto abre sus áreas. La ficha es la misma para un producto,
+     un grupo o todo: Por área | Evolución | Cobertura.
+
+     **Tres cuentas nuevas**, en `inventario_base.js`: «son de operación»
+     (`soperacion`, `sin_plato.FAMILIA_OPERACION`, que llega en `fam_operacion`: ninguna
+     receta los descarga, así que su «sin consumo» no significa lo mismo; 2026-10-30:
+     S/ 12.382 de S/ 20.658), el dinero parado de la frase (`sparado`: sin consumo + más de
+     60 días, S/ 41.997 de S/ 77.261) y lo que sobra de un grupo (`ssobra`, valor × (1 − N ÷
+     días), cálculo propio). Y «Fuera de esta cuenta» explica por qué Por área dice S/ 79.795
+     y Por producto S/ 70.251: 6 áreas contra todas. (2026-10-31.)
 
 766. **Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la
      fecha es la de la franja.** En la pantalla real (1366×650) la tabla mostraba 3 filas y

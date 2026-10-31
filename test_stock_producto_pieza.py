@@ -18,7 +18,7 @@ from graficos.inventario import separar_activos
 
 ROOT=Path(__file__).parent
 JS=(ROOT/'graficos/inventario_base.js').read_text(encoding='utf-8')+(ROOT/'graficos/inventario_productos.js').read_text(encoding='utf-8')
-CSS=(ROOT/'graficos/inventario_productos.css').read_text(encoding='utf-8')
+CSS=(ROOT/'graficos/inventario_base.css').read_text(encoding='utf-8')+(ROOT/'graficos/inventario_productos.css').read_text(encoding='utf-8')
 COLS=dict(cod='COD',prod='PROD',fam='FAM',subfam='SUB',area='AREA',unidad='UM',
           punit='PRECIO',cant='Q',val='V',factor='FACTOR',usal='USAL',cod_area='ACOD')
 RANGO=(dt.date(2025,1,1),dt.date(2026,10,24))
@@ -46,6 +46,7 @@ def inventario():
     r('011','Sin consumo positivo','COCINA',2,10)
     r('012','Con valor sin cantidad','COCINA',0,10)
     filas[-1]['V']=1.12345678
+    r('013','Cuchillos','ALMACEN CENTRAL',4,25,fam='COSTOS PRODUCCION',sub='MENAJE SALON',um='UNIDAD',f=1,us='UNIDAD')
     return pd.DataFrame(filas)
 
 
@@ -142,7 +143,7 @@ class Navegador(unittest.TestCase):
         except Exception as e:cls.pw.stop();raise unittest.SkipTest(str(e))
         cls.pg=cls.b.new_page(viewport={'width':1323,'height':619},accept_downloads=True)
         cls.pg.set_content('<div id="montar"></div><div id="foto"></div>')
-        cls.pg.add_style_tag(content=':root{--alto-util:531px;--alto-util-base:575px;--text-primary:rgb(40,40,50);--text-secondary:rgb(100,100,110);--accent:rgb(108,92,231);--accent-deep:rgb(80,65,180);--accent-tint:rgb(245,243,255);--bg-card:white;--border:rgb(220,220,230);--success:green;--danger:crimson;}body{margin:0}')
+        cls.pg.add_style_tag(content=':root{--alto-util:531px;--alto-util-base:575px;--text-primary:rgb(40,40,50);--text-secondary:rgb(100,100,110);--accent:rgb(108,92,231);--accent-deep:rgb(80,65,180);--accent-tint:rgb(245,243,255);--bg-card:white;--border:rgb(220,220,230);--success:green;--danger:crimson;--danger-text:crimson;--rail-fondo:rgb(247,246,251);--bg-hover:rgb(240,237,254);--shadow:none;}body{margin:48px 0 0}')
         cls.pg.add_style_tag(content=CSS)
         cls.pg.add_script_tag(content=(ROOT/'graficos/_xlsx.js').read_text(encoding='utf-8')+JS.replace('export default function(component)','window.__montarStock=function(component)'))
 
@@ -151,6 +152,10 @@ class Navegador(unittest.TestCase):
 
     def calc(self,st=None,p=None):
         return self.pg.evaluate('''([P,st])=>{const F=__stockDatos,B=F.leer(P),s={...__stockUI.inicial(P),...st};return F.filtrar(B,s)}''',[p or self.P,st or {}])
+
+    def menu(self,m):self.pg.locator(f'[data-menu={m}] summary').click()
+
+    def lista(self):self.pg.locator('[data-act=prof][data-v=Lista]').click()
 
     def mount(self,p=None):self.pg.evaluate('P=>{window.__stockProd=undefined;window.__requests=[];__montarStock({data:P,parentElement:document.querySelector("#montar"),setTriggerValue:(k,v)=>__requests.push([k,v])})}',p or self.P)
 
@@ -203,7 +208,7 @@ class Navegador(unittest.TestCase):
             for dec in [0,1,2,3]:self.assertEqual(self.pg.evaluate('([x,d])=>__stockDatos.round(x,d)',[q,dec]),round(q,dec))
 
     def test_foto_historica_comparacion_y_fallo_sin_base(self):
-        self.mount();pg=self.pg;root=pg.locator('.isp')
+        self.mount();pg=self.pg;root=pg.locator('.isp');self.menu('fecha')
         root.locator('[data-toggle=af]').check()
         self.assertEqual(len(pg.evaluate('__requests')),1);self.assertTrue(pg.evaluate('__stockProd.D.pending'))
         req=pg.evaluate('__requests[0][1]');raw=self.d[['ACOD','COD','Q','PRECIO']].rename(columns={'ACOD':'area','COD':'cod','Q':'stock','PRECIO':'precio'})
@@ -226,7 +231,7 @@ class Navegador(unittest.TestCase):
 
     def test_areas_negativas_ficha_escenario_y_excel(self):
         self.mount();pg=self.pg;root=pg.locator('.isp')
-        root.locator('[data-act=chip][data-v=areaNeg]').click()
+        root.locator('[data-change=clase]').select_option('areaNeg');self.lista()
         self.assertIn('001',pg.evaluate('__stockProd.D.visibles.map(r=>r.cod)'))
         r=next(r for r in pg.evaluate('__stockProd.D.visibles') if r['cod']=='001');self.assertGreater(r['q'],0)
         root.locator('[data-act=foco][data-v="001"]').click()
@@ -250,10 +255,11 @@ class Navegador(unittest.TestCase):
                 self.assertIn('restaurante entero',z.read('xl/worksheets/sheet5.xml').decode().lower())
 
     def test_orden_busqueda_despliegue_remontaje_y_salto(self):
-        self.mount();pg=self.pg;root=pg.locator('.isp')
-        root.locator('[data-act=abrir][data-v="001"]').click();self.assertGreater(root.locator('.isp-child').count(),0)
+        self.mount();pg=self.pg;root=pg.locator('.isp');self.lista();root.locator('[data-act=amp]').click()
+        self.assertTrue(root.locator('.isp-ficha').is_hidden())
+        root.locator('[data-act=abrir][data-v="001"]').click();self.assertGreater(root.locator('.ist-area').count(),0)
         root.locator('[data-act=orden][data-v=v]').click();self.assertEqual(pg.evaluate('__stockProd.st.orden'),[{'k':'v','d':1}])
-        root.locator('[data-act=orden][data-v=v]').click();root.locator('[data-act=orden][data-v=v]').click();self.assertEqual(pg.evaluate('__stockProd.st.orden'),[])
+        root.locator('[data-act=orden][data-v=v]').click();self.assertEqual(pg.evaluate('__stockProd.st.orden'),[{'k':'v','d':-1}])
         root.locator('.isp-search').fill('Aoz');root.locator('.isp-search').evaluate('e=>e.setSelectionRange(1,1)');root.locator('.isp-search').type('rr',delay=20)
         self.assertEqual(root.locator('.isp-search').input_value(),'Arroz')
         self.assertEqual(pg.evaluate('__stockProd.D.visibles.map(r=>r.cod)'),['002'])
@@ -266,7 +272,7 @@ class Navegador(unittest.TestCase):
     def test_sin_consumo_historico_unidades_distintas_y_movil(self):
         p,d,_,_=armar(analisis=False);self.mount(p)
         self.assertFalse(self.pg.evaluate('__stockProd.D.analisis'))
-        self.assertEqual(self.pg.locator('.isp-chips').count(),0)
+        self.assertEqual(self.pg.locator('[data-act=chip]').count(),0)
         p['inicial']={'chip':'A'};self.mount(p)
         self.assertGreater(self.pg.evaluate('__stockProd.D.visibles.length'),0)
         d=d.iloc[:2].copy();d['UM']=['KILOGRAMO','UNIDAD'];p,_,_,_=armar(d);self.mount(p)
@@ -274,14 +280,13 @@ class Navegador(unittest.TestCase):
         self.assertIsNone(self.pg.evaluate('__stockDatos.escenario(__stockProd.D.visibles[0],60)'))
         self.mount();pg=self.pg;pg.set_viewport_size({'width':390,'height':844})
         self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'),390)
-        pg.locator('.isp-filter').nth(2).locator('summary').click()
+        pg.locator('.ist-filtro').nth(1).locator('summary').click()
         self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'),390)
         pg.set_viewport_size({'width':1323,'height':619});pg.keyboard.press('Escape')
-        self.assertEqual(pg.evaluate('Math.round(document.querySelector(".isp-main").getBoundingClientRect().height)'),531)
-        self.assertEqual(pg.evaluate('Math.round(document.querySelector(".isp-ficha").getBoundingClientRect().height)'),575)
+        self.assertEqual(pg.evaluate('Math.round(document.querySelector(".isp").getBoundingClientRect().height)'),531)
 
     def test_respuesta_antigua_y_nuevo_sello_piden_su_propia_foto(self):
-        self.mount();pg=self.pg;root=pg.locator('.isp');root.locator('[data-toggle=af]').check()
+        self.mount();pg=self.pg;root=pg.locator('.isp');self.menu('fecha');root.locator('[data-toggle=af]').check()
         d=self.d.copy();d.loc[0,'Q']+=1;p,_,_,_=armar(d)
         pg.evaluate('P=>__montarStock({data:P,parentElement:document.querySelector("#montar"),setTriggerValue:(k,v)=>__requests.push([k,v])})',p)
         self.assertEqual(pg.evaluate('__requests.length'),2)
@@ -289,6 +294,64 @@ class Navegador(unittest.TestCase):
         old=datos.foto(self.d,COLS,None,None,'2026-09-30',23,self.P['sello'])
         pg.evaluate('P=>__montarStock({data:P,parentElement:document.querySelector("#foto")})',old)
         self.assertTrue(pg.evaluate('__stockProd.D.pending'))
+
+    def _estados_pandas(self,st=None):
+        st=st or {'areas':[],'fams':[],'subs':[],'sin':False,'q':'','chip':'todos'}
+        return referencia(self.d,self.h,self.cons,st)[0].productos
+
+    def test_una_pantalla_indicadores_arbol_y_ficha_contra_pandas(self):
+        self.mount();pg=self.pg;root=pg.locator('.isp')
+        pg.evaluate('()=>{const s=__stockProd.st;s.areas=[];__stockUI.pintar(__stockProd)}')
+        p=self._estados_pandas();con=p[p.index.isin(pg.evaluate('__stockProd.D.stock.map(r=>r.cod)'))]
+        kp=[t.split('\n') for t in pg.evaluate('[...document.querySelectorAll(".ist-kpi")].map(e=>e.innerText)')]
+        fmt=lambda v:f"{'−' if v<0 else ''}S/ {abs(v):,.0f}"
+        self.assertEqual(kp[0][1],fmt(con.valorizado.sum()))
+        for i,e in ((1,'sin'),(2,'alto'),(3,'neg')):
+            self.assertEqual(kp[i][1],fmt(con.loc[con.estado==e,'valorizado'].sum()),e)
+            self.assertIn(f"{(con.estado==e).sum():,} productos",kp[i][2])
+        # La operación se dice aparte: los cuchillos no son comida parada.
+        self.assertEqual(con.loc['013','estado'],'sin');self.assertIn('S/ 100 son de operación',kp[1][2])
+        # Abre por valor, con la familia y sus subfamilias; la suma de cada familia cierra.
+        filas=pg.evaluate('[...document.querySelectorAll(".isp-table tbody tr.ist-n0")].map(t=>[t.querySelector(".nm").textContent,t.querySelector("td.val").textContent])')
+        por=con.groupby(con.index.map(self.d.drop_duplicates('COD').set_index('COD').FAM)).valorizado.sum().sort_values(ascending=False)
+        self.assertEqual([f[1] for f in filas],[('−' if v<-.5 else '')+f'{abs(v):,.0f}' for v in por])
+        self.assertEqual(root.locator('.isp-table tbody tr.ist-n2').count(),0)
+        # Elegir una fila no mueve la tabla y la ficha cambia al costado.
+        cuerpo=pg.evaluate('document.querySelector(".ist-cuerpo").getBoundingClientRect().height')
+        root.locator('tr.ist-n0 [data-act=grupo]').first.click()
+        self.assertEqual(root.locator('.ist-ficha h3').inner_text(),filas[0][0])
+        self.assertEqual(root.locator('tr.chosen').count(),1)
+        root.locator('[data-act=soltar]').click();self.assertEqual(root.locator('.ist-ficha h3').inner_text(),'Todo el stock')
+        self.assertEqual(root.locator('tr.chosen').count(),0)
+        self.assertEqual(pg.evaluate('document.querySelector(".ist-cuerpo").getBoundingClientRect().height'),cuerpo)
+        f=pg.evaluate('document.querySelector(".ist-ficha").getBoundingClientRect()');t=pg.evaluate('document.querySelector(".ist-izq").getBoundingClientRect()')
+        self.assertGreater(f['left'],t['right']-1);self.assertAlmostEqual(f['top'],t['top'],delta=1)
+        # El filtro de un indicador; un segundo clic lo suelta.
+        root.locator('[data-act=chip][data-v=sin]').click();self.assertEqual(pg.evaluate('__stockProd.st.chip'),'sin')
+        self.assertIn('insumos de operación',root.locator('.ist-frase').inner_text())
+        root.locator('.ist-kpi[data-v=sin]').click();self.assertEqual(pg.evaluate('__stockProd.st.chip'),'todos')
+
+    def test_lo_que_sobra_contra_pandas_y_total_fuera_de_las_areas(self):
+        self.mount();pg=self.pg;root=pg.locator('.isp')
+        out=pg.evaluate('()=>__stockProd.D.visibles.map(r=>[r.cod,__stockDatos.sobra(r,30)])')
+        p=self._estados_pandas({'areas':pg.evaluate('__stockProd.st.areas'),'fams':[],'subs':[],'sin':False,'q':'','chip':'todos'})
+        for cod,s in out:
+            r=p.loc[cod];esp=r.valorizado*(1-30/r.dias) if pd.notna(r.dias) and r.dias>30 and r.valorizado>0 and r.cantidad>0 else 0
+            self.assertAlmostEqual(s,esp,places=7,msg=cod)
+        # Las áreas que quedan afuera se dicen, y sumarlas da el total de todas.
+        pg.evaluate('()=>{__stockProd.st.areas=["COCINA"];__stockUI.pintar(__stockProd)}')
+        afuera=self.d[self.d.AREA!='COCINA'].V.sum();self.assertIn(f'S/ {afuera:,.0f}',root.locator('.ist-fuera').inner_text())
+        root.locator('.ist-fuera [data-act=todos]').click()
+        self.assertEqual(pg.evaluate('__stockProd.st.areas'),[]);self.assertAlmostEqual(pg.evaluate('__stockProd.D.total'),self.d.V.sum(),places=7)
+
+    def test_buscar_no_pierde_el_cursor_y_la_fila_mide_lo_mismo(self):
+        self.mount();pg=self.pg;root=pg.locator('.isp')
+        buscar=root.locator('.isp-search');buscar.click();pg.keyboard.type('arroz',delay=15)
+        self.assertEqual(buscar.input_value(),'arroz');self.assertEqual(pg.evaluate('__stockProd.D.visibles.map(r=>r.cod)'),['002'])
+        self.assertEqual(root.locator('tr.ist-n2').count(),1)
+        c=pg.evaluate('()=>{const n=document.querySelector("tr.ist-n2 .nm").getBoundingClientRect(),v=document.querySelector("tr.ist-n2 td.val").getBoundingClientRect();return [n.top+n.height/2,v.top+v.height/2]}')
+        self.assertAlmostEqual(c[0],c[1],delta=2)
+        self.assertEqual(pg.evaluate('getComputedStyle(document.querySelector(".ist")).fontFamily'),pg.evaluate('getComputedStyle(document.body).fontFamily'))
 
 
 if __name__=='__main__':unittest.main(verbosity=2)
