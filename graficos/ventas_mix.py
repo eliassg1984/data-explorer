@@ -187,10 +187,13 @@ def base(d, cols, eje=_EJE_CARTA, convenios=None, sin_descargo=()):
     b["devol"] = b["desc"] * b["dev_pct"] * _tasa_neta(b)
     # Lo vendido SIN COSTO CARGADO no entra en ningún % de costo (#666): no
     # saberlo no es costar cero (#524), y su venta en el divisor bajaba el
-    # % de todo su grupo. Una nota de crédito (venta negativa) sí entra. Lo
-    # «Sin descargo» del POS tampoco se separa: su costo ES cero (#761).
-    sin_costo = ((b["venta"] > 0.005) & (b["costo"] <= 0)
-                 & ~dv.es_sin_descargo(d, sin_descargo))
+    # % de todo su grupo. Una nota de crédito con su costo sí entra; la de una
+    # venta sin costo, no (#763): la venta quedó fuera de la base y la nota la
+    # dejaba en negativo. Lo «Sin descargo» del POS tampoco se separa: su costo
+    # ES cero (#761).
+    sin_costo = (((b["venta"] > 0.005) & (b["costo"] <= 0))
+                 | ((b["venta"] < -0.005) & (b["costo"] >= 0))) \
+        & ~dv.es_sin_descargo(d, sin_descargo)
     b["venta_sin_costo"] = b["venta"].where(sin_costo, 0.0)
     b["base_costo"] = (b["neto"] + b["devol"]).where(~sin_costo, 0.0)
     b["neto_carta"] = b["neto_carta"].where(~sin_costo, 0.0)
@@ -444,13 +447,15 @@ _PIEZA = st.components.v2.component(
                   + ventas_alcance.css()),
     # El filtro «Venta» de la tarjeta (regla #755) se antepone: es un módulo.
     js=js_movil(ventas_alcance.js()
+                + (Path(__file__).parent / "_xlsx.js").read_text(encoding="utf-8")
                 + (Path(__file__).parent / "ventas_mix.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "vt_mix_pieza"
 _K_GRAN = "vt_mix_gran"
 _K_AP = "vt_mix_con_ap"
-"""Pedido una vez «Año pasado», la vista lo sigue trayendo en la sesión: la
-carga de R2 queda en la caché de `cargar_rango`."""
+"""La pieza pide el año pasado después de dibujar (#763), una vez por sesión: de
+ahí en más viaja con cada corrida, y la carga de R2 queda en la caché de
+`cargar_rango`."""
 _K_LINEAS = "vt_mix_lineas"
 _MAX_LINEAS = 400
 """Ventas de un producto que viajan al Cálculo. Un plato de todos los días
@@ -695,9 +700,10 @@ def _ventas_mix(d, filtrar_cb=None):
 
     b_ap, ap_nombres = None, None
     if ss.get(_K_AP):
-        with st.spinner("Trayendo el año pasado…"):
-            b_ap, ap_nombres = _cargar_ano_pasado(claves, gran, rango,
-                                                  filtrar_cb, convenios)
+        # Sin `st.spinner`: un elemento de más antes de la pieza la movería de
+        # lugar, y se volvería a montar. Avisa ella, en cada indicador.
+        b_ap, ap_nombres = _cargar_ano_pasado(claves, gran, rango,
+                                              filtrar_cb, convenios)
         if b_ap is None:
             b_ap = b.iloc[0:0].assign(j=0)
 

@@ -65,7 +65,7 @@ a escritorio y cabeceras nativas sin solapes). El detalle vive en
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py && python test_sunat_documentos_pieza.py && python test_sunat_vistas_pieza.py && python test_sunat_control.py && python test_ficha_plato.py && python test_ventas_alcance.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py && python test_sunat_documentos_pieza.py && python test_sunat_vistas_pieza.py && python test_sunat_control.py && python test_ficha_plato.py && python test_ventas_alcance.py && python test_ventas_mix_pieza.py
 python test_navegacion_retorno.py && python test_movil.py
 ```
 
@@ -1351,6 +1351,31 @@ Python, puesto encima de la pieza— pide una corrida. Lo que muerde:
   «Qué movió» es la cuenta de `puenteC` de Comparativo; el presupuesto del
   Cierre, la columna «bruta». El último dato tiene un día de margen: el
   parquet llega por registro y la venta por turno.
+
+## «Mix de carta»: una zona grande y la lista al costado
+
+Desde el 2026-10-30 (regla #763) Mix no se aprieta: cuatro indicadores eligen
+qué se mide, una sola zona por pestaña (Gráfico, Tabla, Qué movió, Mapa, Mix y
+costo, Cálculo) y, al costado, la lista con la ficha. Boceto elegido entre seis
+marcos y seis estilos: https://claude.ai/artifact/TdTgy73p7FFQPWHspUs8LR (el
+marco de toda la app todavía no se aplicó). Lo que muerde:
+
+- **El año pasado se pide después de dibujar** (trigger `ap`): la tarjeta no lo
+  espera. Sin `st.spinner` antes de la pieza: la movería de lugar y se volvería a
+  montar.
+- **En la Tabla, elegir no achica**: un plato cambia la ficha (`st.fiT`) y la tabla
+  sigue; `▸`, «Abrir hasta» y «‹ Volver a…» son la salida. Achicarla al elegir fue
+  el reclamo: no había por dónde volver.
+- **«% dentro» es sobre la fila de arriba; «% del total», sobre lo que entra en el
+  filtro «Venta»** (`totLocal`), no sobre toda la venta del local.
+- **La nota de crédito de una venta sin costo tampoco entra en la base**
+  (`ventas_mix.base`): la venta quedaba fuera y la nota la dejaba en negativo.
+  Octubre de 2026: 33,3 % → 32,9 % de costo, y «Sin costo cargado» S/ 5,1k → S/ 455.
+  Una nota con su costo sí resta.
+
+`test_ventas_mix_pieza.py` vigila la base, los indicadores y los % contra pandas,
+los niveles de la tabla, «Volver», el año pasado pedido una vez, el Excel y el
+celular, en Chromium.
 
 ## Ventas: cada tarjeta filtra sus grupos
 

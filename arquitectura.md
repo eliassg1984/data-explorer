@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-762 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+763 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (249)
 
@@ -1124,7 +1124,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (235)
+**Decisiones de diseño y UX** (236)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1361,6 +1361,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#760** — Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían sin convertir
 - **#761** — Lo «Sin descargo» del POS suma en la venta y no se observa como «sin costo»
 - **#762** — Documentos SUNAT: una cabecera, la misma en las cuatro vistas, y «Falta cargar» en naranja
+- **#763** — Mix de carta no se aprieta, y la nota de crédito de una venta sin costo no resta de la base
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57634,6 +57635,29 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      los selectores como texto—: subir una sola deja el texto arriba y las cajas
      montadas. (2026-10-30.)
 
+763. **Mix de carta no se aprieta, y la nota de crédito de una venta sin costo no
+     resta de la base.** La pantalla tenía 8 indicadores, 5 selectores, gráfico, leyenda,
+     ficha y una tabla cortada abajo. Ahora: cuatro indicadores que eligen la medida, una
+     zona por pestaña y la lista con la ficha al costado (`graficos/ventas_mix.js`).
+
+     La Tabla abre grupo › subgrupo › plato en una sola (`filasArbol`), con «% dentro»
+     (sobre la fila de arriba) y «% del total» (sobre lo que entra en el filtro «Venta»,
+     `totLocal`). Elegir una fila no la achica: en el primer boceto un clic en un plato la
+     dejaba sólo con su subgrupo y el usuario no tenía por dónde volver. Por eso la ficha
+     lee `st.fiT`, y al entrar por la lista o el buscador aparece «‹ Volver a…».
+
+     El año pasado se pide después de dibujar (trigger `ap`), y la llamada va sin
+     `st.spinner`: un elemento de más antes de la pieza la cambia de lugar y se vuelve a
+     montar, con lo que pierde lo elegido.
+
+     `ventas_mix.base` dejaba fuera de la base la VENTA sin costo, pero restaba su NOTA de
+     crédito. El «Menu Eventmovil Oct2026» se vendió el 7 de octubre, se anuló el 20: la
+     base quedaba S/ 3.761,54 más baja y «Sin costo cargado» S/ 4.645,50 más alto. Octubre:
+     33,3 % → 32,9 % de costo y S/ 5,1k → S/ 455. Ahora una nota sin costo tampoco entra, y
+     resta de «sin costo»; una nota con su costo sí resta de la base, y lo «Sin descargo»
+     (#761) sigue en la base. Si la venta cae en un mes y la nota en otro, ese mes puede
+     mostrar «sin costo» negativo: es el dato. (2026-10-30.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57646,7 +57670,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#762**; la próxima toma el número siguiente.
+> última regla es la **#763**; la próxima toma el número siguiente.
 
 >
 

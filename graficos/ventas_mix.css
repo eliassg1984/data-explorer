@@ -1,136 +1,148 @@
-/* Ventas › «Mix de carta» (regla #702).
+/* Ventas › «Mix de carta» (reglas #702 y #763).
    Vive en el shadow root del componente (graficos/ventas_mix.py): ninguna
    regla de acá sale de la pieza, y ninguna de estilos/ entra. Los colores
-   son las variables de estilos/_00_base.py, que SÍ cruzan el shadow root
-   (los tramos, `--serie-0…6`). Ningún selector :has, por la regla #469.
+   son las variables de estilos/_00_base.py, que SÍ cruzan el shadow root.
+   Ningún selector :has, por la regla #469.
 
-   Arriba los indicadores y los controles; en el medio la barra con su
-   leyenda y la ficha; abajo las pestañas. El alto sale de --alto-util
-   para que la tarjeta entre en UNA pantalla: 196 px son el título con la
-   fecha, los indicadores, los controles, la fila de pestañas, los huecos
-   y el padding de la tarjeta (medido a 1323×619: --alto-util 575, quedan
-   379); lo que queda se reparte 55/45 entre el cuerpo y la pestaña, cada
-   caja con su scroll. */
+   Una pantalla: arriba los cuatro indicadores y las pestañas; debajo UNA zona
+   grande y, al costado, la lista con la ficha. Cada caja scrollea por dentro.
+   Los tonos de las barras salen del acento, en el orden de la lista. */
 
-.vm { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; position: relative;
+.vm { display: flex; flex-direction: column; gap: 8px; min-width: 0; position: relative;
   color: var(--text-primary); font-size: 13px; line-height: 1.4;
-  --vm-resto: calc(var(--alto-util, 720px) - 196px); }
-.vm button, .vm input { font: inherit; color: inherit; }
-.vm button:focus-visible, .vm input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  height: calc(var(--alto-util, 720px) - 58px); min-height: 460px;
+  --vm-t0: var(--accent);
+  --vm-t1: color-mix(in srgb, var(--accent) 76%, var(--bg-card));
+  --vm-t2: color-mix(in srgb, var(--accent) 58%, var(--bg-card));
+  --vm-t3: color-mix(in srgb, var(--accent) 40%, var(--bg-card));
+  --vm-t4: color-mix(in srgb, var(--accent) 26%, var(--bg-card));
+  --vm-t5: color-mix(in srgb, var(--accent) 15%, var(--bg-card));
+  --vm-t6: color-mix(in srgb, var(--accent) 9%, var(--bg-card));
+  --vm-apagado: color-mix(in srgb, var(--text-muted) 22%, var(--bg-card));
+  --vm-ap: color-mix(in srgb, var(--text-muted) 32%, var(--bg-card)); }
+.vm button, .vm input, .vm select { font: inherit; color: inherit; }
+.vm button:focus-visible, .vm input:focus-visible, .vm select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .num { font-variant-numeric: tabular-nums; }
 .verde { color: var(--success-text); } .rojo { color: var(--danger-text); } .ambar { color: var(--warning-text); } .gris { color: var(--text-secondary); }
+.vm-esp { flex: 1; }
 
-/* Indicadores, UNA tira. */
-.vm-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 6px; }
-.vm-kpi { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 5px 10px; min-width: 0; display: grid; gap: 0; }
-.vm-kpi.alerta { border-color: var(--warning-border); background: var(--warning-bg); }
-.vm-kpi-rot { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vm-kpi-val { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-.vm-kpi-sub { font-size: 11px; color: var(--text-secondary); margin-left: 6px; font-weight: 500; }
+/* A la altura del título: la pieza se sube al renglón de la fecha. */
+.vm-top { position: absolute; top: -40px; right: 0; display: flex; align-items: center; gap: 6px; z-index: 5; }
+.vm-buscar { height: 30px; width: 200px; max-width: 100%; border: 0; border-radius: 8px; padding: 0 10px; font-size: 12.5px; background: var(--rail-fondo); box-sizing: border-box; }
+.vm-excel, .vm-volver { height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--rail-fondo); cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+.vm-excel:hover { background: var(--bg-hover); }
+.vm-volver { background: var(--accent-tint); color: var(--accent-deep) !important; font-weight: 600; }
+.vm-ojo { height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--warning-bg); color: var(--warning-text) !important; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.vm-quita { border: 0; background: var(--accent-tint); color: var(--accent-deep) !important; border-radius: 6px; font-size: 11.5px; padding: 2px 8px; cursor: pointer; }
 
-/* Controles. */
-.vm-ctrl, .vm-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
-.vm-grupo { display: flex; align-items: center; gap: 6px; }
-.vm-rot { font-size: 11px; color: var(--text-secondary); }
+/* Los indicadores eligen qué se mide; sin caja, separados por una línea. */
+.vm-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); flex: none; }
+.vm-kpi { position: relative; display: block; border: 0; border-left: 1px solid var(--border); background: none; padding: 4px 14px; text-align: left; cursor: pointer; min-width: 0; overflow: hidden; }
+.vm-kpi:first-child { border-left: 0; }
+.vm-kpi:hover { background: var(--bg-hover); }
+.vm-kpi.on { background: var(--accent-tint); border-radius: 10px; border-left-color: transparent; }
+.vm-kpi span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+.vm-kpi-rot { font-size: 12px; color: var(--text-secondary); }
+.vm-kpi-val { font-size: 20px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.vm-kpi-var { font-size: 11.5px; color: var(--text-secondary); }
+.vm-kpi-var span { display: inline; font-weight: 600; }
+.vm-kpi-c { position: absolute; right: 10px; top: 10px; width: 34%; height: 34px; }
+.vm-kpi-c path { fill: none; stroke: var(--vm-t2); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+
+/* Las pestañas y los tres menús. */
+.vm-pie, .vm-zcab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; flex: none; }
+.vm-rot { font-size: 12px; color: var(--text-secondary); }
 .vm-seg { display: flex; flex-wrap: wrap; max-width: 100%; gap: 2px; background: var(--rail-fondo); border-radius: 8px; padding: 2px; }
-.vm-seg button { height: 24px; padding: 0 9px; border-radius: 6px; border: 0; cursor: pointer; font-size: 12px; background: transparent; color: var(--text-secondary) !important; white-space: nowrap; }
+.vm-seg button { height: 26px; padding: 0 10px; border-radius: 6px; border: 0; cursor: pointer; font-size: 12.5px; background: transparent; color: var(--text-secondary) !important; white-space: nowrap; }
+.vm-seg button:hover { color: var(--accent-deep) !important; }
 .vm-seg button.on { background: var(--bg-card); color: var(--accent-deep) !important; font-weight: 600; box-shadow: var(--shadow); }
 .vm-seg button:disabled { opacity: .45; cursor: not-allowed; }
-.vm-der { margin-left: auto; }
-.vm-buscar { height: 28px; width: 220px; max-width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-size: 12.5px; background: var(--bg-card); box-sizing: border-box; }
+.vm-men { height: 30px; border: 0; border-radius: 8px; background: var(--rail-fondo); padding: 0 6px; font-size: 12.5px; cursor: pointer; }
+.vm-men:hover { background: var(--bg-hover); }
 
-/* Cuerpo: barra + ficha. */
-.vm-cuerpo { display: flex; gap: 8px; align-items: stretch; min-width: 0; height: max(200px, calc(var(--vm-resto) * 0.55)); }
-.vm-caja { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); min-width: 0; }
-.vm-graf { flex: 1 1 0; display: flex; flex-direction: column; padding: 6px 10px 4px; min-height: 0; }
-.vm-ficha { flex: 0 0 280px; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; overflow: auto; overscroll-behavior: contain; box-sizing: border-box; }
-.vm-ficha > * { flex: none; }
-.vm-ruta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12.5px; min-height: 24px; }
-.vm-ruta button { border: 0; background: none; cursor: pointer; padding: 1px 4px; border-radius: 6px; color: var(--accent-deep) !important; }
+/* Una zona grande y, al costado, la lista con la ficha. */
+.vm-cuerpo { display: flex; gap: 14px; align-items: stretch; min-width: 0; flex: 1 1 0; min-height: 0; }
+.vm-izq { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.vm-zona { flex: 1 1 0; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.vm-zona > * { min-height: 0; }
+.vm-cap { flex: none; font-size: 11.5px; color: var(--text-secondary); line-height: 1.3; }
+.vm-panel { flex: 1 1 290px; min-width: 260px; max-width: 320px; border-left: 1px solid var(--border); padding-left: 14px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.vm-ruta { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; font-size: 12px; flex: none; }
+.vm-ruta button { border: 0; background: none; cursor: pointer; padding: 0 2px; border-radius: 6px; color: var(--accent-deep) !important; font-weight: 600; }
 .vm-ruta button:hover { background: var(--bg-hover); }
-.vm-ruta b { padding: 1px 4px; }
 .vm-ruta .sep { color: var(--text-muted); }
-.vm-ruta .pista { margin-left: auto; font-size: 11px; color: var(--text-secondary); }
-.vm-gfila { display: flex; gap: 10px; min-width: 0; flex: 1 1 0; min-height: 0; }
-.vm-svg { flex: 1 1 0; min-width: 0; min-height: 0; }
-.vm-svg svg { display: block; width: 100%; }
-.vm-ley { flex: 0 0 210px; display: flex; flex-direction: column; gap: 1px; border-left: 1px solid var(--line-soft); padding-left: 8px; min-width: 0; overflow: auto; overscroll-behavior: contain; }
-.vm-ley-cab { font-size: 11px; color: var(--text-secondary); padding: 1px 4px 3px; display: flex; justify-content: space-between; gap: 6px; }
-.vm-li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 22px; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
-.vm-li:hover { background: var(--bg-hover); }
-.vm-li.sel { background: var(--accent-tint); border-color: var(--border-lavender); }
-.vm-li i { width: 10px; height: 10px; border-radius: 3px; }
-.vm-li .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; }
-.vm-li .val { font-size: 11.5px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; line-height: 1.2; }
-.vm-li .val small { display: block; color: var(--text-secondary); font-size: 10.5px; }
-.vm-bajar { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); cursor: pointer; color: var(--accent-deep) !important; font-size: 13px; line-height: 1; padding: 0; }
-.vm-bajar:hover { border-color: var(--accent); }
-.vm-li.resto { cursor: default; color: var(--text-secondary); }
+.vm-lista { flex: 1 1 0; min-height: 90px; overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
+.vm-li { display: flex; align-items: stretch; border-top: 1px solid var(--line-soft); flex: none; }
+.vm-li.sel { background: var(--accent-tint); }
+.vm-lib { flex: 1; min-width: 0; border: 0; background: none; padding: 5px 4px; text-align: left; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; }
+.vm-lib:hover { background: var(--bg-hover); }
+.vm-li.sel .vm-lib:hover { background: var(--accent-tint); }
+.vm-lib .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vm-lib i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+.vm-lib b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vm-lib small { grid-column: 1 / span 2; font-size: 11.5px; color: var(--text-secondary); padding-left: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vm-bajar { flex: none; width: 26px; border: 0; background: none; cursor: pointer; color: var(--accent-deep) !important; font-size: 15px; padding: 0; }
+.vm-bajar:hover { background: var(--accent-light); }
 
-/* La barra. */
-.g-eje { font-size: 11px; fill: var(--text-secondary); }
+/* La ficha. */
+.vm-ficha { flex: none; border-top: 1px solid var(--border); padding-top: 6px; display: flex; flex-direction: column; gap: 2px; max-height: 45%; overflow: auto; overscroll-behavior: contain; }
+.vm-ficha h3 { margin: 0 0 2px; font-size: 13px; font-weight: 700; line-height: 1.25; }
+.fi-f { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 12.5px; }
+.fi-f span { color: var(--text-secondary); }
+.fi-f b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: pre; }
+.fi-acc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.fi-btn { height: 26px; padding: 0 10px; border-radius: 8px; border: 0; background: var(--accent-tint); color: var(--accent-deep) !important; cursor: pointer; font-size: 12px; font-weight: 600; }
+.fi-btn.sec { background: var(--rail-fondo); color: var(--text-primary) !important; font-weight: 400; }
+
+/* El gráfico. */
+.vm-gtit { font-size: 12px; color: var(--text-secondary); min-width: 0; }
+.vm-gtit b { color: var(--text-primary); font-weight: 600; }
+.vm-ley-ap { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
+.vm-ley-ap i { width: 11px; height: 11px; border-radius: 3px; background: var(--vm-ap); }
+.vm-svg { flex: 1 1 0; min-width: 0; min-height: 150px; overflow: hidden; }
+.vm-svg svg { display: block; width: 100%; }
+.g-eje { font-size: 11.5px; fill: var(--text-secondary); }
 .g-eje.on { fill: var(--text-primary); font-weight: 700; }
-.g-tot { font-size: 11px; fill: var(--text-primary); font-weight: 600; }
-.g-var { font-size: 10.5px; font-weight: 600; fill: var(--text-muted); }
-.g-var.verde { fill: var(--success-text); } .g-var.rojo { fill: var(--danger-text); }
+.g-tot { font-size: 11.5px; fill: var(--text-primary); font-weight: 600; }
 .g-guia { stroke: var(--line-soft); stroke-width: 1; }
 .g-base { stroke: var(--border); stroke-width: 1; }
 .g-col { cursor: pointer; }
-.g-col.apagada rect.t { opacity: .3; }
+.g-col rect.parcial { opacity: .72; }
+.g-col.apagada rect.t, .g-col.apagada rect.g-ap { opacity: .3; }
 .g-hit { fill: transparent; }
 .g-foco { fill: var(--accent-tint); }
-
-/* La ficha. */
-.fi-cab { display: grid; gap: 1px; }
-.fi-nivel { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); font-weight: 600; }
-.fi-nom { font-size: 15px; font-weight: 700; line-height: 1.25; }
-.fi-ruta { font-size: 11.5px; color: var(--text-secondary); }
-.fi-cifras { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.fi-cifra { background: var(--bg-card-tenue); border: 1px solid var(--line-soft); border-radius: 8px; padding: 5px 8px; min-width: 0; }
-.fi-cifra span { display: block; font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fi-cifra b { font-size: 14px; font-variant-numeric: tabular-nums; }
-.fi-cifra small { display: block; font-size: 11px; font-variant-numeric: tabular-nums; }
-.fi-bloque { display: grid; gap: 3px; }
-.fi-tit { font-size: 11.5px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
-.fi-tit span { font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.fi-spark { display: block; width: 100%; height: 40px; }
-.fi-hijo { display: grid; grid-template-columns: minmax(0, 1fr) 54px 36px; gap: 6px; align-items: center; font-size: 12px; }
-.fi-hijo .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fi-hijo .b { height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
-.fi-hijo .b i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-.fi-hijo .p { text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.fi-acc { display: flex; flex-wrap: wrap; gap: 6px; }
-.fi-btn { height: 26px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-lavender); background: var(--accent-tint); color: var(--accent-deep) !important; cursor: pointer; font-size: 12px; }
-.fi-btn.sec { background: var(--bg-card); border-color: var(--border); color: var(--text-primary) !important; }
-.fi-nota { font-size: 11.5px; color: var(--text-secondary); background: var(--bg-card-tenue); border-radius: 8px; padding: 6px 8px; }
-.fi-link { border: 0; background: none; padding: 0; cursor: pointer; color: var(--accent-deep) !important; font-size: 11px; text-decoration: underline; }
+.g-ap { fill: var(--vm-ap); }
 
 /* Las pestañas. */
-.vm-cap { font-size: 12px; color: var(--text-secondary); flex: 1 1 240px; min-width: 0; }
-.vm-zona { min-width: 0; height: max(160px, calc(var(--vm-resto) * 0.45)); display: flex; flex-direction: column; }
-.vm-zona > * { min-height: 0; }
 .vm-vacio { padding: 10px 12px; font-size: 12.5px; color: var(--accent-deep); background: var(--accent-tint); border-radius: 8px; }
 .vm-tabla { flex: 1 1 0; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 10px; }
 .vm-tabla table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12.5px; }
-.vm-tabla th { position: sticky; top: 0; z-index: 2; background: var(--bg-card-tenue); text-align: right; font-size: 11px; font-weight: 600; color: var(--text-secondary);
-  padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.vm-tabla th:first-child, .vm-tabla td:first-child { text-align: left; position: sticky; left: 0; z-index: 1; background: var(--bg-card); }
+.vm-tabla th { position: sticky; top: 0; z-index: 2; background: var(--bg-card-tenue); text-align: right; font-size: 11.5px; font-weight: 600; color: var(--text-secondary);
+  padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: bottom; min-width: 50px; }
+.vm-tabla th:first-child, .vm-tabla td:first-child { text-align: left; position: sticky; left: 0; z-index: 1; background: var(--bg-card); max-width: 205px; }
 .vm-tabla th:first-child { z-index: 3; background: var(--bg-card-tenue); }
 .vm-tabla th.foco { color: var(--accent-deep); background: var(--accent-light); }
 .vm-tabla th[title] { cursor: help; }
-.vm-tabla td { padding: 4px 8px; border-bottom: 1px solid var(--line-soft); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vm-tabla td { padding: 4px 6px; border-bottom: 1px solid var(--line-soft); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .vm-tabla td.izq { text-align: left; }
 .vm-tabla tr.f { cursor: pointer; }
 .vm-tabla tr.f:hover td { background-color: var(--bg-hover); }
-.vm-tabla tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.vm-tabla tr.sel td:first-child { background: var(--accent-tint); }
+.vm-tabla tr.sel .tn { color: var(--accent-deep); font-weight: 600; }
 .vm-tabla tr.tot td { font-weight: 700; background: var(--bg-card-tenue); }
-.vm-tabla .nomc { display: flex; align-items: center; gap: 7px; max-width: 240px; }
-.vm-tabla .nomc i { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.vm-tabla tr.n1 td { font-size: 12px; }
+.vm-tabla tr.n2 td { font-size: 11.5px; color: var(--text-secondary); }
+.vm-tabla td:first-child { padding: 0; }
+.tn { border: 0; background: none; width: 100%; min-height: 28px; padding: 0 8px 0 6px; text-align: left; cursor: pointer; display: flex; align-items: center; white-space: nowrap; overflow: hidden; }
+.tn:hover { background: var(--bg-hover); }
+.tn i { width: 9px; height: 9px; border-radius: 2px; flex: none; margin-right: 6px; }
+.mk { width: 16px; flex: none; color: var(--accent-deep); font-size: 13px; }
+.nm { overflow: hidden; text-overflow: ellipsis; }
+.vm-tabla .nomc { display: flex; align-items: center; gap: 7px; max-width: 240px; padding: 0 8px; min-height: 26px; }
 .vm-tabla .nomc span { overflow: hidden; text-overflow: ellipsis; }
 .vm-tabla td.c-alto { color: var(--warning-text); font-weight: 600; }
 .vm-tabla td.c-roto { color: var(--danger-text); font-weight: 700; }
 .vm-tabla td.foco { box-shadow: inset 1px 0 0 var(--border-lavender), inset -1px 0 0 var(--border-lavender); }
-.vm-tend { display: block; width: 72px; height: 18px; }
 
 .mv { flex: 1 1 0; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 8px; min-height: 0; }
 .mv-caja { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow: auto; overscroll-behavior: contain; }
@@ -172,11 +184,6 @@
 .mc > * { flex: none; }
 .mc-frase { font-size: 13.5px; line-height: 1.5; }
 .mc-frase b { font-variant-numeric: tabular-nums; }
-.mc-cuatro { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 6px; }
-.mc-c { border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; display: grid; gap: 1px; }
-.mc-c span { font-size: 11px; color: var(--text-secondary); }
-.mc-c b { font-size: 16px; font-variant-numeric: tabular-nums; }
-.mc-c small { font-size: 11px; color: var(--text-secondary); }
 .mc-dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .chip { display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 9px; background: var(--rail-fondo); color: var(--text-secondary); white-space: nowrap; }
 .chip.mix { background: var(--accent-tint); color: var(--accent-deep); }
@@ -190,18 +197,27 @@
 .vm-tip b { display: block; margin-bottom: 2px; }
 
 @media (max-width: 1100px) {
-  .vm-cuerpo { flex-direction: column; height: auto; }
-  .vm-graf { height: 300px; flex: none; }
-  .vm-ficha { flex: none; max-height: 360px; }
+  .vm-top { position: static; flex-wrap: wrap; }
+  .vm { height: calc(var(--alto-util, 720px) - 58px + 40px); }
   .mv, .mc-dos { grid-template-columns: 1fr; }
-  .vm-zona { height: auto; max-height: 520px; }
-  .mapa { flex: none; height: 340px; }
+}
+@media (max-width: 900px) {
+  .vm { height: auto; min-height: 0; }
+  .vm-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vm-kpi-c { display: none; }
+  .vm-cuerpo { flex-wrap: wrap; flex: none; }
+  .vm-izq { flex-basis: 100%; }
+  .vm-zona { flex: none; }
+  .vm-svg { flex: none; height: 240px; }
+  .vm-tabla { flex: none; max-height: 420px; }
+  .mapa { flex: none; height: 320px; }
+  .vm-panel { max-width: none; flex-basis: 100%; border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 8px; }
+  .vm-lista { flex: none; max-height: 320px; }
+  .vm-ficha { max-height: none; }
+  .vm-buscar { flex: 1 1 100%; width: 100%; }
+  .vm-esp { display: none; }
+  .vm-seg { overflow-x: auto; flex-wrap: nowrap; }
 }
 @media (max-width: 640px) {
-  .vm-gfila { flex-direction: column; }
-  .vm-graf { height: auto; }
-  .vm-svg { height: 240px; flex: none; }
-  .vm-ley { flex: none; border-left: 0; padding-left: 0; border-top: 1px solid var(--line-soft); padding-top: 6px; max-height: 220px; }
-  .vm-der { margin-left: 0; }
   .mv-f { grid-template-columns: minmax(70px, 110px) minmax(0, 1fr) 100px; }
 }

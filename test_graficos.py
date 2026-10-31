@@ -10541,6 +10541,17 @@ def _pruebas_pieza_mix(check, d, cols, _m, js):
           (_sin["venta_sin_costo"].sum() > 0, _sin["base_costo"].sum()), (True, 0.0))
     check("pieza · lo «Sin descargo» queda en la base y no se observa",
           (_con["venta_sin_costo"].sum(), round(_con["base_costo"].sum(), 6) > 0), (0.0, True))
+    # Regla #763: la nota de una venta sin costo no deja la base en negativo.
+    _nota = d.iloc[:2].assign(**{cols["costo"]: 0.0, cols["venta"]: [100.0, -100.0],
+                                 cols["neto"]: [81.0, -81.0]})
+    _bn = _m.base(_nota, cols)
+    check("pieza · venta sin costo y su nota: fuera de la base y netas en «sin costo»",
+          (round(_bn["base_costo"].sum(), 6), round(_bn["venta_sin_costo"].sum(), 6)), (0.0, 0.0))
+    _nota_c = d.iloc[:2].assign(**{cols["costo"]: [30.0, -30.0], cols["venta"]: [100.0, -100.0],
+                                   cols["neto"]: [81.0, -81.0]})
+    _bc = _m.base(_nota_c, cols)
+    check("pieza · una nota con su costo sí resta de la base",
+          round(_bc["base_costo"].iloc[1], 6), -81.0)
     check("pieza · sin «Año pasado» pedido, no viaja", x["ap"], None)
     # El año pasado: las filas de hace 364 días caen en SU semana de hoy.
     ap = d.assign(**{"FEC REG DOCUMENTO": pd.to_datetime(
@@ -10715,7 +10726,7 @@ def _pruebas_ventas_mix():
     check("el % costo de Mix se mide sobre la base (la pieza la recibe y "
           "divide por ella)",
           ("base_costo" in _m.METRICAS,
-           "pctCosto(en(a, i, C), en(a, i, B))" in _js_mix,
+           "pctCosto(sumT(a, T, C), sumT(a, T, B))" in _js_mix,
            "convenios_descuento.leer()" in _src_mix), (True, True, True))
     # ── Lo vendido sin costo cargado no entra en el % (#666) ─────────────
     _d_sc = d.assign(**{"COSTO VENTA": [35.0, 0.0, 9.0, 1.0, 21.0]})
@@ -10746,9 +10757,9 @@ def _pruebas_ventas_mix():
     check("Cálculo de un producto: una fila por venta, la más nueva arriba",
           (list(_cl.columns), len(_cl), _cl.iloc[1]["Fecha"][:10]),
           (list(_m.CALCULO_LINEAS), 3, "12/08/2026"))
-    check("las cinco pestañas de la pieza, Cálculo incluido (regla #702)",
+    check("las seis pestañas de la pieza, Cálculo incluido (reglas #702 y #763)",
           all(f"['{z}', " in _js_mix for z in
-              ("Resumen", "Movio", "Mapa", "Mix", "Calculo")), True)
+              ("Graf", "Tabla", "Movio", "Mapa", "Mix", "Calculo")), True)
     check("sin el precio de carta, cero (que se escribe «—»)",
           float(_m.base(d, {k: v for k, v in cols.items() if k != "carta"})
                 ["neto_carta"].sum()), 0.0)
@@ -10765,9 +10776,9 @@ def _pruebas_ventas_mix():
           + ["700" in _m._estilo_costo(_r._COSTO_ROTO + 0.01),
              _m._estilo_costo(float("nan")) == ""],
           [False, True, True, True])
-    check("lo elegido en la pieza (celdas, árbol, ruta) sobrevive a la "
+    check("lo elegido en la pieza (medida, árbol, ruta) sobrevive a la "
           "recarga de fecha: lo guarda el navegador",
-          all(f"{k}: st.{k}" in _js_mix for k in ("celdas", "eje", "ruta")),
+          all(f"{k}: st.{k}" in _js_mix for k in ("kpi", "eje", "ruta")),
           True)
 
     check("alcance de un subgrupo",
