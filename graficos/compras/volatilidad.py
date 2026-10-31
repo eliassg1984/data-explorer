@@ -1,9 +1,9 @@
-"""Compras > Volatilidad como pieza propia (regla #718).
+"""Compras > Precios, la vieja Volatilidad (reglas #718 y #770; el id no cambia).
 
-Ranking y cierres de cinco semanas, búsqueda fuera del ranking, velas por
-semana y puntos por compra. El navegador añade selección de tramos,
-proveedores, prioridad por impacto y puente precio/cantidad; sólo la fecha
-vuelve a Python. Los ayudantes originales siguen como referencia de tests.
+Cuatro indicadores, la lista por impacto en soles y la ficha al costado, con la
+curva por compra, los tramos, los proveedores, las semanas y el puente
+precio/cantidad. A Python vuelven sólo la fecha y el filtro de familias de la
+página. Los ayudantes originales siguen como referencia de tests.
 """
 
 from graficos.movil import css_movil, js_movil
@@ -22,7 +22,7 @@ from graficos.base import (
     preservar_widgets, selector_fecha_tarjeta,
 )
 from graficos.compras._etiquetas_proveedor import nombre_propio
-from graficos.compras._comun import CATEGORIA_SEC
+from graficos.compras._comun import CATEGORIA_SEC, cambiar_familias
 from graficos import periodo
 from graficos import alturas
 
@@ -840,38 +840,42 @@ _K_CACHE = "_cp_vol_pieza_cache"
 @st.fragment
 def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                                col_valor, col_cant, col_um, col_moneda=None,
-                               d_full=None, col_docu=None):
-    """Firma conservada (#357); sólo la fecha pide otra corrida (#718)."""
+                               d_full=None, col_docu=None, col_fam=None,
+                               col_subfam=None, familias=None):
+    """Firma conservada (#357); sólo la fecha y las familias piden otra corrida
+    (#718, #770). Es la pantalla «Precios»: abre en el rango de la tarjeta."""
     from graficos.compras import volatilidad_datos as datos
 
     if not (col_prod and col_punit and col_fecha and col_valor):
         st.info("Faltan columnas (Producto, Precio unitario, Fecha o Valor) para calcular volatilidad.")
         return
     if st.session_state.pop("_cp_vol_atajo_pendiente", False):
-        st.session_state[_K_VENTANA] = periodo.HEREDA
         preservar_widgets(_KEYS_WIDGET)
         st.rerun(scope="app")
     with st.container(key="cp_vol_pieza_wrap"):
         with st.container(key="cp_vol_fecha"):
             ctx = selector_fecha_tarjeta(
-                "cp_vol", "_cp_vol_atajo_pendiente", label="Elegir fechas",
+                "cp_vol", "_cp_vol_atajo_pendiente",
                 categoria=CATEGORIA_SEC["compras_sec_volatilidad"])
         rango = rango_tarjeta(CATEGORIA_SEC["compras_sec_volatilidad"], ctx) if ctx else None
         cols = dict(prod=col_prod, prov=col_prov, precio=col_punit, fecha=col_fecha,
-                    valor=col_valor, cant=col_cant, um=col_um, moneda=col_moneda, doc=col_docu)
+                    valor=col_valor, cant=col_cant, um=col_um, moneda=col_moneda, doc=col_docu,
+                    fam=col_fam, sub=col_subfam)
         filtros = {rot: [str(v) for v in (st.session_state.get(k) or [])]
                    for rot, k in (("Familia", "compras_graf_filtro_fam"),
                                   ("Subfamilia", "compras_graf_filtro_sub"))}
         firma = (id(d), d.shape, id(d_full), None if d_full is None else d_full.shape,
-                 str(rango), tuple(cols.items()), repr(filtros),
-                 st.session_state.get(_K_VENTANA, "12m"))
+                 str(rango), tuple(cols.items()), repr(filtros), repr(familias))
         cache = st.session_state.get(_K_CACHE)
         if cache is None or cache[0] != firma:
-            mensaje = datos.armar(d, d_full, cols, rango, firma[-1], filtros=filtros)
+            mensaje = datos.armar(d, d_full, cols, rango, periodo.HEREDA, filtros=filtros,
+                                  familias=familias)
             st.session_state[_K_CACHE] = (firma, mensaje)
         else:
             mensaje = cache[1]
         if mensaje is None:
             st.info("Sin fechas válidas para comparar precios.")
             return
-        _PIEZA(key="cp_vol_pieza", data=mensaje, width="stretch")
+        _PIEZA(key="cp_vol_pieza", data=mensaje, width="stretch",
+               on_familias_change=lambda: cambiar_familias(
+                   "cp_vol_pieza", "_cp_vol_atajo_pendiente", familias))

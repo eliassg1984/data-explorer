@@ -1,11 +1,14 @@
-"""Volatilidad como pieza propia (#718): cuentas originales y recorrido UI.
+"""Precios, la vieja Volatilidad (#718, #770): cuentas y recorrido UI.
 
 Sin red ni credenciales. Cierres, puntaje, dispersión y sobrecosto contra
 Python, ventanas y fechas con hora, compras duplicadas en un día, moneda,
-unidades, base ausente y el puente exacto precio/cantidad. Chromium prueba
-arrastre, búsqueda, proveedores, exportación y remontaje de la pieza.
+unidades, base ausente y el puente exacto precio/cantidad. El precio, el
+contra, el impacto y la marca «revisar» contra `producto._resumen`; en Chromium,
+los indicadores, la lista, la ficha, la curva por compra con su detalle al
+cursor, el tramo, Ampliar, las familias de la página, el Excel y el celular.
 """
 import json
+import re
 import tempfile
 import unittest
 import zipfile
@@ -13,8 +16,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from graficos import periodo
 from graficos.compras import volatilidad as vol
 from graficos.compras import volatilidad_datos as datos
+from graficos.compras.producto import _con_referencia, _normalizar, _resumen
 
 ROOT = Path(__file__).parent
 JS = (ROOT / 'graficos/compras/volatilidad.js').read_text(encoding='utf-8')
@@ -41,6 +46,23 @@ def compras():
         (pd.Timestamp('2026-10-19 20:00'), 'Insumo 0', 'PROVEEDOR 0', 99999, 5, 499995, 'KG', 'USD', '02'),
     ])
     return pd.DataFrame(rows, columns=['fecha', 'prod', 'prov', 'precio', 'cant', 'valor', 'um', 'doc', 'moneda'])
+
+
+COLS_F = {**COLS, 'fam': 'fam', 'sub': 'sub'}
+
+
+def con_familias():
+    """Las compras con familia y subfamilia y una compra a diez veces el precio,
+    para «Para revisar»."""
+    d = compras()
+    d = d[d['doc'] != 'USD'].copy()
+    n = d['prod'].str.extract(r'(\d)', expand=False).fillna('9').astype(int)
+    d['fam'] = n.map(lambda x: 'UNO' if x < 4 else 'DOS')
+    d['sub'] = n.map(lambda x: f'SUB {x % 3}')
+    raro = d[(d['prod'] == 'Insumo 2') & (d['fecha'] >= '2026-09-01')].index[0]
+    d.loc[raro, 'valor'] = d.loc[raro, 'valor'] * 10
+    d.loc[raro, 'precio'] = d.loc[raro, 'precio'] * 10
+    return d
 
 
 def armar(d=None, rango=None):
@@ -73,7 +95,8 @@ class Contrato(unittest.TestCase):
         self.assertAlmostEqual(sum(r[8] for r in P['lineas']), d[d.moneda!='02']['valor'].sum(), places=4)
         self.assertEqual(len({r[1] for r in P['lineas']}), 4)
         self.assertIn('const VL = { dia:0, hora:1, prod:2, prov:3, doc:4, um:5, precio:6, cant:7, valor:8 };', JS)
-        self.assertNotIn('setTriggerValue', JS)
+        # A Python sólo vuelve la fecha y el filtro de familias de la página.
+        self.assertEqual(re.findall(r"enviar\?\.\('(\w+)'", JS), ['familias'])
         self.assertNotRegex(JS + CSS, r'#[0-9a-fA-F]{6}\b')
         d.loc[0, 'precio'] += .01
         self.assertNotEqual(P['sello'], armar(d)['sello'])
@@ -121,7 +144,7 @@ class Navegador(unittest.TestCase):
           if(st.prod==null)st.prod=R.visibles[0]?.id;return {R,D:R.sems.length>=4?__cvCalc.detalle(B,R,st):null}}''',[P or self.P,s or {}])
 
     def mount(self, P=None):
-        self.pg.evaluate('''P=>{window.__cpVol=undefined;document.querySelector('#montar').innerHTML='';__montarVol({data:P,parentElement:document.querySelector('#montar')})}''',P or self.P)
+        self.pg.evaluate('''P=>{window.__cpVol=undefined;window.__avisos=[];document.querySelector('#montar').innerHTML='';__montarVol({data:P,parentElement:document.querySelector('#montar'),setTriggerValue:(k,v)=>window.__avisos.push([k,v])})}''',P or self.P)
 
     def test_todas_las_ventanas_contra_cuentas_originales(self):
         for op,rango in self.P['planes'].items():
@@ -204,55 +227,150 @@ class Navegador(unittest.TestCase):
         corto=self.d[self.d.fecha>='2026-10-12']
         P=armar(corto)
         self.mount(P)
-        self.assertIn('al menos cuatro semanas',self.pg.locator('.cvol').inner_text())
+        self.assertEqual(self.pg.locator('.cvol .cp-kpi').count(),4)
         self.assertEqual(self.pg.locator('.cv-lower').count(),0)
 
-    def test_ui_arrastre_proveedores_impacto_excel_y_remontaje(self):
-        self.mount()
+    def test_precios_contra_el_resumen_de_producto(self):
+        d=con_familias()
+        r0,r1=pd.Timestamp('2026-08-01'),pd.Timestamp('2026-10-19')
+        P=datos.armar(d,d,COLS_F,(r0,r1),periodo.HEREDA)
+        json.dumps(P,allow_nan=False)
+        h=_con_referencia(_normalizar(d,'prod','fam','sub','valor','cant','um','fecha','prov','doc'))
+        rng=h[h.fecha.between(r0,r1)]
+        res=_resumen(rng,['prod'],rng.iloc[0:0],[])
+        C=self.pg.evaluate('''P=>{const B=__cvCalc.leer(P),st=__cvUI.inicial(P.inicial);const C=__cvCalc.precios(B,st);return {rows:C.rows.map(r=>({n:r.n,pp:r.pp,ref:r.ref,im:r.im,pct:r.pct,val:r.val,nfl:r.nfl})),n80:C.n80,up:C.up,dn:C.dn,rev:C.rev.length}}''',P)
+        self.assertEqual({r['n'] for r in C['rows']},set(res.index))
+        for r in C['rows']:
+            x=res.loc[r['n']]
+            self.assertAlmostEqual(r['val'],x['valor'],places=1)
+            self.assertEqual(r['nfl'],int(x['nflag']))
+            if x['c_ok']>0:
+                self.assertAlmostEqual(r['pp'],x['pp'],places=2)
+            if x['ppv']==x['ppv']:
+                self.assertAlmostEqual(r['im'],x['ppv'],places=0)
+                self.assertAlmostEqual(r['pct']*100,x['hab'],places=1)
+            else:
+                self.assertIsNone(r['im'])
+        self.assertEqual(C['rev'],int((res['nflag']>0).sum()))
+        self.assertGreater(C['rev'],0)
+        self.assertAlmostEqual(C['up'],res.loc[res.ppv>=1,'ppv'].sum(),places=0)
+        self.assertAlmostEqual(C['dn'],res.loc[res.ppv<=-1,'ppv'].sum(),places=0)
+
+    def test_contra_periodo_anterior_y_ano_pasado(self):
+        d=con_familias()
+        r0,r1=pd.Timestamp('2026-09-01'),pd.Timestamp('2026-09-30')
+        P=datos.armar(d,d,COLS_F,(r0,r1),periodo.HEREDA)
+        h=_con_referencia(_normalizar(d,'prod','fam','sub','valor','cant','um','fecha','prov','doc'))
+        ok=h[(h.flag=='')&(h.cant>0)]
+        def ponderado(a,b):
+            return ok[ok.fecha.between(a,b)].groupby('prod').agg(v=('valor','sum'),c=('cant','sum'))
+        ahora=ponderado(r0,r1)
+        for contra,(a,b) in {'ant':(pd.Timestamp('2026-08-02'),pd.Timestamp('2026-08-31')),'ano':(pd.Timestamp('2025-09-01'),pd.Timestamp('2025-09-30'))}.items():
+            with self.subTest(contra=contra):
+                base=ponderado(a,b)
+                C=self.pg.evaluate('''([P,c])=>{const B=__cvCalc.leer(P),st={...__cvUI.inicial(P.inicial),contra:c};return __cvCalc.precios(B,st).rows.map(r=>({n:r.n,im:r.im,ref:r.ref}))}''',[P,contra])
+                for r in C:
+                    if r['n'] in base.index and r['n'] in ahora.index and base.loc[r['n'],'c']>0:
+                        ref_=base.loc[r['n'],'v']/base.loc[r['n'],'c']
+                        self.assertAlmostEqual(r['ref'],ref_,places=2)
+                        esperado=(ahora.loc[r['n'],'v']/ahora.loc[r['n'],'c']-ref_)*ahora.loc[r['n'],'c']
+                        self.assertAlmostEqual(r['im'],esperado,places=0)
+                    else:
+                        self.assertIsNone(r['im'])
+        # Sin datos tan viejos, no se inventa la base.
+        reciente=d[d.fecha>='2026-07-01']
+        P2=datos.armar(reciente,reciente,COLS_F,(r0,r1),periodo.HEREDA)
+        C=self.pg.evaluate('''P=>{const B=__cvCalc.leer(P),st={...__cvUI.inicial(P.inicial),contra:'ano'};return __cvCalc.precios(B,st).rows.map(r=>r.im)}''',P2)
+        self.assertTrue(all(x is None for x in C))
+
+    def test_ui_ficha_curva_tramo_pestanas_excel_y_remontaje(self):
+        d=con_familias()
+        R=(pd.Timestamp('2026-08-01'),pd.Timestamp('2026-10-19'))
+        P=datos.armar(d,d,COLS_F,R,periodo.HEREDA,familias={'todas':[['UNO',10.0],['DOS',5.0]],'elegidas':['UNO']})
+        self.mount(P)
         pg=self.pg;root=pg.locator('.cvol')
-        root.locator('.cv-detail').scroll_into_view_if_needed()
-        hs=root.locator('[data-hit]');a,b=hs.first.bounding_box(),hs.last.bounding_box()
-        pg.mouse.move(a['x']+a['width']/2,a['y']+a['height']/2);pg.mouse.down()
-        pg.mouse.move(b['x']+b['width']/2,b['y']+b['height']/2,steps=8);pg.mouse.up()
-        self.assertIsNotNone(pg.evaluate('__cpVol.st.sel'))
-        self.assertEqual(pg.evaluate('__cpVol.st.modo'),'Tramo')
-        root.locator('[data-acc="tab"][data-v="Proveedores"]').click()
-        root.locator('tr[data-acc="prov"]').first.click()
-        self.assertIsNotNone(pg.evaluate('__cpVol.st.prov'))
-        root.locator('[data-acc="tab"][data-v="Cambio del gasto"]').click()
+        # Abre sin elegir: la ficha cuenta qué pasó y la lista los que hacen el 80 %.
+        self.assertIn('Qué pasó con los precios',root.locator('.cp-ficha').inner_text())
+        self.assertEqual(root.locator('.cp-izq thead th').count(),7)
+        root.locator('.cp-kpis [data-v="rev"]').click()
+        self.assertEqual(pg.evaluate('__cpVol.st.kpi'),'rev')
+        self.assertIn('Para revisar',root.locator('.cp-ficha h3').inner_text())
+        root.locator('.cp-kpis [data-v="rev"]').click()
+        root.locator('[data-acc="pver"][data-v="todos"]').click()
+        root.locator('[data-acc="pord"][data-v="mv"]').click()
+        root.locator('.cp-izq [data-acc="pamp"]').click()
+        self.assertFalse(root.locator('.cp-ficha').is_visible())
+        self.assertEqual(root.locator('.cp-izq thead th').count(),12)
+        root.locator('.cp-izq [data-acc="pamp"]').click()
+        root.locator('tr').filter(has_text='Insumo 3').locator('[data-acc="pprod"]').click()
+        self.assertEqual(root.locator('.cp-ficha h3').inner_text(),'Insumo 3')
+        self.assertIn('en semanas',root.locator('.cp-cifras').inner_text())
+        # Vista por compra: un punto por compra, con el detalle al pasar el cursor.
+        self.assertGreater(root.locator('.cp-bola').count(),3)
+        c=root.locator('.cp-curva').bounding_box()
+        pg.mouse.move(c['x']+c['width']*.5,c['y']+c['height']/2)
+        tip=root.locator('.cp-tip')
+        self.assertTrue(tip.is_visible())
+        for t in ('Proveedor','Documento','Vs. compra anterior','Vs. su habitual'):
+            self.assertIn(t,tip.inner_text())
+        # La leyenda apaga un proveedor.
+        antes=root.locator('.cp-bola').count()
+        root.locator('.cp-ley button').first.click()
+        self.assertLess(root.locator('.cp-bola').count(),antes)
+        root.locator('.cp-ley button').first.click()
+        # Arrastrar elige un tramo con su sobrecosto.
+        pg.mouse.move(c['x']+c['width']*.2,c['y']+c['height']/2);pg.mouse.down()
+        pg.mouse.move(c['x']+c['width']*.7,c['y']+c['height']/2,steps=6);pg.mouse.up()
+        self.assertIsNotNone(pg.evaluate('__cpVol.st.tr'))
+        self.assertIn('Sobrecosto',root.locator('.cp-cifras.borde').inner_text())
+        root.locator('[data-acc="ptramo"]').click()
+        self.assertIsNone(pg.evaluate('__cpVol.st.tr'))
+        for g in ('Semana','Mes'):
+            root.locator(f'[data-acc="pgran"][data-v="{g}"]').click()
+            self.assertGreater(root.locator('.cp-pto').count(),0)
+        root.locator('[data-acc="pgran"][data-v="Compra"]').click()
+        root.locator('[data-acc="ptab"][data-v="prov"]').click()
+        self.assertIn('más barato',root.locator('.cp-tabla').inner_text())
+        self.assertIn('Cálculo propio',root.locator('.cp-nota').inner_text())
+        root.locator('[data-acc="ptab"][data-v="comp"]').click()
+        self.assertGreater(root.locator('.cp-tabla tbody tr').count(),3)
+        root.locator('[data-acc="ptab"][data-v="sem"]').click()
+        self.assertIn('Primera',root.locator('.cp-tabla').inner_text())
+        root.locator('[data-acc="ptab"][data-v="gasto"]').click()
         self.assertEqual(root.locator('.cv-bridge-plot svg').count(),1)
-        root.locator('[data-acc="orden"]').select_option('impacto')
-        self.assertTrue(pg.evaluate('__cpVol.st.verImpacto'))
+        root.locator('[data-acc="ptab"][data-v="curva"]').click()
+        root.locator('.cp-ficha [data-acc="pamp"]').click()
+        self.assertFalse(root.locator('.cp-izq').is_visible())
+        self.assertTrue(pg.evaluate("__cpVol.root.querySelector('.cp-curva').classList.contains('grande')"))
+        root.locator('.cp-ficha [data-acc="pamp"]').click()
+        root.locator('[data-acc="pcontra"]').select_option('ant')
+        self.assertEqual(pg.evaluate('__cpVol.st.contra'),'ant')
         with pg.expect_download() as dl:
-            root.locator('.cv-analysis [data-acc="excel"]').click()
+            root.locator('[data-acc="excel"]').click()
         with tempfile.TemporaryDirectory() as temp:
-            path=Path(temp)/'volatilidad.xlsx';dl.value.save_as(str(path))
+            path=Path(temp)/'precios.xlsx';dl.value.save_as(str(path))
             with zipfile.ZipFile(path) as z:
-                self.assertIn('Cambio gasto',z.read('xl/workbook.xml').decode())
-                ctx=z.read('xl/worksheets/sheet3.xml').decode()
-                self.assertIn('Tramo anterior',ctx)
-                self.assertIn('Proveedor',ctx)
-        sel=pg.evaluate('__cpVol.st.sel')
-        pg.evaluate('P=>__montarVol({data:P,parentElement:document.querySelector("#montar")})',self.P)
-        self.assertEqual(pg.evaluate('__cpVol.st.sel'),sel)
-        root.locator('[data-acc="q"]').fill('Esporádico')
-        self.assertEqual(root.locator('.cv-ranking-scroll tbody tr').count(),1)
-        self.assertIn('Fuera del ranking',root.inner_text())
+                libro=z.read('xl/workbook.xml').decode()
+                for hoja in ('Precios','Compras','Contexto'):
+                    self.assertIn(hoja,libro)
+        # La misma corrida no borra lo elegido; un filtro nuevo sigue al producto por su nombre.
+        pg.evaluate('P=>__montarVol({data:P,parentElement:document.querySelector("#montar")})',P)
+        self.assertEqual(root.locator('.cp-ficha h3').inner_text(),'Insumo 3')
+        filtrado=d[d['prod'].isin(['Insumo 2','Insumo 3','Insumo 5'])]
+        P2=datos.armar(filtrado,filtrado,COLS_F,R,periodo.HEREDA)
+        pg.evaluate('P=>__montarVol({data:P,parentElement:document.querySelector("#montar")})',P2)
+        self.assertEqual(root.locator('.cp-ficha h3').inner_text(),'Insumo 3')
+        # El menú de familias avisa a Python al cerrarse, una sola vez.
+        self.mount(P)
+        root.locator('[data-acc="pmenu"]').click()
+        root.locator('[data-acc="pfam"][value="DOS"]').check()
+        self.assertEqual(pg.evaluate('window.__avisos.length'),0)
+        pg.keyboard.press('Escape')
+        self.assertEqual(pg.evaluate('window.__avisos'),[['familias',['UNO','DOS']]])
         pg.set_viewport_size({'width':390,'height':844})
         pg.wait_for_function('document.documentElement.scrollWidth<=390')
         self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'),390)
         pg.set_viewport_size({'width':1323,'height':619})
-        pg.evaluate('P=>__montarVol({data:{...P,sello:"nuevo",planes:{...P.planes,Rango:["2026-09-01","2026-10-19"]}},parentElement:document.querySelector("#montar")})',self.P)
-        self.assertEqual(pg.evaluate('__cpVol.st.op'),'Rango')
-        self.assertIsNone(pg.evaluate('__cpVol.st.sel'))
-
-    def test_otro_filtro_conserva_el_nombre_del_insumo_no_su_posicion(self):
-        self.mount()
-        self.pg.locator('.cvol tr[data-acc="prod"]').filter(has_text='Insumo 4').click()
-        filtrado=self.d[self.d['prod'].isin(['Insumo 2','Insumo 4','Insumo 5'])]
-        P=armar(filtrado)
-        self.pg.evaluate('P=>__montarVol({data:P,parentElement:document.querySelector("#montar")})',P)
-        self.assertEqual(self.pg.evaluate('__cpVol.B.P.prods[__cpVol.st.prod]'),'Insumo 4')
 
 
 if __name__=='__main__':

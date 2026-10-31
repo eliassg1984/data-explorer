@@ -50,7 +50,7 @@ from graficos.compras._comun import (  # noqa: F401  (re-export)
     # quien arma los defaults publicados. Se reexporta para que `app.py`
     # hable con el paquete y no con un privado (`_comun`).
     CATEGORIA_SEC, SEC_ABRE_EN_EL_MES,
-    _es_movil, _first_point, _periodo_serie,
+    _es_movil, _first_point, _periodo_serie, familias_de_tarjeta,
 )
 from graficos.compras.proveedor import _compras_proveedor_drill
 from graficos.compras._documentos_proveedor import (
@@ -381,8 +381,8 @@ _COMPRAS_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Dimensión", (("Compras por período", "Por período",   ":material/calendar_view_week:"),
                    ("Proveedor",           "Por Proveedor", ":material/local_shipping:"),
                    ("Producto",            "Por Producto",  ":material/inventory_2:"))),
-    ("Precios",   (("Vs año pasado", "Comparación Año Pasado", ":material/compare_arrows:"),
-                   ("Volatilidad",   "Volatilidad de Precios", ":material/candlestick_chart:"))),
+    ("Análisis",  (("Volatilidad",   "Precios", ":material/price_change:"),
+                   ("Vs año pasado", "Comparación Año Pasado", ":material/compare_arrows:"))),
     ("Más",       (("Tabla",                     "Tabla",         ":material/table_rows:"),
                    # «Detalle docs.» (id «Documentos por proveedor») NO es
                    # «Documentos SUNAT», que desde el 2026-09-30 es otro
@@ -422,8 +422,8 @@ _PILA = pila_sin_tablas((
     ("compras_sec_semanal",       "Compras por período"),
     ("compras_sec_proveedor",     "Proveedor"),
     ("compras_sec_producto",      "Producto"),
-    ("compras_sec_vs_ano_pasado", "Vs año pasado"),
     ("compras_sec_volatilidad",   "Volatilidad"),
+    ("compras_sec_vs_ano_pasado", "Vs año pasado"),
     ("compras_sec_tabla",         "Tabla"),
     ("compras_sec_documentos",    "Documentos por proveedor"),
 ))
@@ -819,6 +819,13 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                              col_subfam=col_subfam, col_um=col_um,
                                              d_full=d_full)
 
+    def _familias_de(sec):
+        # El filtro de la página, con lo que suma cada familia en el rango de la
+        # tarjeta: `_ops_src` es el df sin ese filtro (regla #770).
+        return familias_de_tarjeta(
+            recortar_por_tarjeta(_ops_src, col_fecha, CATEGORIA_SEC[sec]),
+            col_fam, col_valor, fam_sel)
+
     def _dib_volatilidad():
             # Sin borde externo (2026-09-13, a pedido): sus TRES bloques
             # —ranking, velas, compras de la semana— son tarjetas propias
@@ -828,7 +835,9 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 _compras_volatilidad_drill(_d_sec("compras_sec_volatilidad"),
                                            col_prod, col_prov, col_punit, col_fecha,
                                            col_valor, col_cant, col_um, col_moneda,
-                                           d_full=d_full, col_docu=col_docu)
+                                           d_full=d_full, col_docu=col_docu,
+                                           col_fam=col_fam, col_subfam=col_subfam,
+                                           familias=_familias_de("compras_sec_volatilidad"))
 
     def _dib_semanal():
             # Drill "Semanal": una barra por período + el detalle del
@@ -865,7 +874,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                    col_valor, col_fam=col_fam,
                                    d_full=d_full, col_subfam=col_subfam,
                                    col_igv=col_igv, col_tipo_doc=col_tipo_doc,
-                                   col_moneda=col_moneda, d_nc=_nc)
+                                   col_moneda=col_moneda, d_nc=_nc, col_um=col_um,
+                                   familias=_familias_de("compras_sec_semanal"))
 
     def _dib_tabla():
             # Cierra la página con el detalle: el mismo AgGrid de la vista

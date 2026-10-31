@@ -235,7 +235,8 @@ las notas de crédito— y, en Chromium, que `calcular` dé lo mismo que las
 cuentas que siguen en `semanal.py` (variación, rótulos, «Partir por» con
 Precio, familias, el Detalle con las notas, el plan de etiquetas) en cada
 grano, con Documento, Montos y los filtros. Ver `arquitectura.md` regla
-#716.
+#716. Desde la #770, el efecto del precio y «Para revisar» contra Python, los
+doce meses, «Contra», las tablas anchas y las familias de la página.
 
 `test_ventas_comparativo.py` vigila Ventas › Comparativo como pieza propia
 (`ventas_comparativo_datos.py` y `.js`): todas las ventanas contra las
@@ -246,11 +247,13 @@ Chromium recorre las cinco mejoras y abre las hojas del Excel. Regla #717. Desde
 (mismos, carta nueva, ya no están) y el período elegido contado en el panel. Desde
 la #769, «Ampliar» redibuja el gráfico al ancho nuevo.
 
-`test_volatilidad_pieza.py` vigila Compras > Volatilidad como pieza propia:
-las cinco ventanas contra las cuentas anteriores, cierres y compras del
-mismo día, dispersión, sobrecosto, moneda y unidades, precio ponderado y
-puente precio/cantidad. Chromium recorre el tramo, proveedores, prioridad,
-Excel, móvil y remontaje. Ver `arquitectura.md` regla #718.
+`test_volatilidad_pieza.py` vigila Compras > Precios (id «Volatilidad») como
+pieza propia: las cinco ventanas contra las cuentas anteriores, cierres y compras
+del mismo día, dispersión, sobrecosto, moneda y unidades, precio ponderado y
+puente precio/cantidad; desde la #770, el precio, el contra y el impacto contra
+`producto._resumen`. Chromium recorre indicadores, lista, ficha, curva por compra
+con su detalle al cursor, tramo, Ampliar, familias, Excel, móvil y remontaje.
+Ver `arquitectura.md` reglas #718 y #770.
 
 `test_meseros_pieza.py` vigila Ventas > Meseros como pieza propia: los tres
 turnos y los dos repartos contra resumen, pozo, planilla, tramos, mensual
@@ -1009,6 +1012,14 @@ La vista de antes —la cabecera de global a local, la cascada de tres
 coordenadas, el foco sembrado— está en las reglas #443 a #449, y su código
 sigue en `vs_ano_pasado.py` como referencia de las cuentas.
 
+## Compras › Período y Precios: el efecto del precio a la vista
+
+Desde la regla #770 las dos son una pantalla: cuatro indicadores, una zona y lista o
+ficha al costado. «Volatilidad» se llama Precios (mismo id). El efecto del precio es
+el de Producto, sin las compras para revisar (`semanal.con_marca`,
+`volatilidad_datos.precios`). El menú de familias de la tarjeta escribe el filtro de la
+página (`_comun.cambiar_familias`) y pide una corrida completa.
+
 ## En Compras, cada tarjeta tiene SU rango de fecha
 
 Desde el 2026-09-08. Antes los cinco selectores de las cabeceras
@@ -1042,9 +1053,9 @@ rango compartido y el bug reaparece en una sola vista. Lo ataja
 **Con qué rango ABRE cada tarjeta es otra cosa.** El default del reporte
 son los últimos 12 meses; una categoría puede pedir otro sumándose a
 `SEC_ABRE_EN_EL_MES` (`graficos/compras/_comun.py`) — hoy Proveedores,
-Producto y Semanal, que abren en «Últimos 30 días» hasta el último día con
-compras («8 set – 7 oct»), no en «lo que va del mes»: a pedido, «como
-mínimo un mes» (Volatilidad sigue en los 12 meses). Hasta el 2026-10-08
+Producto, Semanal y Precios (#770), que abren en «Últimos 30 días» hasta el último
+día con compras («8 set – 7 oct»), no en «lo que va del mes»: a pedido, «como
+mínimo un mes». Hasta el 2026-10-08
 era el mes corrido («11 ago – 10 sep», 28 a 31 días); pasó a ser el atajo
 para que el botón diga cuál está puesto (regla #616). El rango lo calcula `app.py` y
 lo publica en `rango_default_cat`; quien elige es `base.py::rango_tarjeta`,

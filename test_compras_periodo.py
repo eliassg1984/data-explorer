@@ -20,6 +20,7 @@ import pandas as pd
 
 import definicion_compra
 from graficos.compras import semanal as sm
+from graficos.compras.producto import marcar_revisar
 from graficos.compras._comun import (CON_IGV, DOC_FACTURAS, DOC_TODOS,
                                      _periodo_serie, documento_legible,
                                      filtrar_documento)
@@ -85,6 +86,24 @@ def _armar():
 # ── La vista de antes, en pandas (el `dd` del drill) ───────────────────
 
 
+def _armar_una_pantalla(familias=None):
+    """Como `_compras_semanal_drill`: con los doce meses, lo de contra y la marca;
+    y una compra a diez veces su precio, para «Para revisar»."""
+    d_full = _compras()
+    raro = d_full[(d_full["PROD"] == "Lomo") & (d_full["FECHA"] >= "2026-10-01") & (d_full["VALOR"] > 50)].index[0]
+    d_full.loc[raro, "VALOR"] *= 10
+    d = d_full[(d_full["FECHA"] >= _RANGO[0]) & (d_full["FECHA"] <= _RANGO[1])]
+    hist = sm.con_marca(sm.lineas_pieza(d_full, _COLS))
+    b = sm.lineas_pieza(d, _COLS)
+    b["refT"], b["refS"] = sm.referencias(b, hist)
+    b["flag"] = marcar_revisar(b["cant"], b["neto"], b["refT"], b["um"])
+    nc = sm._lineas_nc(d.iloc[0:0], "FECHA", "PROD", "PROV", "DOC", "FAM", "SUB", "VALOR", "IGV", "TIPO",
+                       DOC_TODOS, col_cant="CANT", col_punit="PUNIT", col_moneda="MONEDA")
+    flags = {k: True for k in ("hay_fam", "hay_sub", "hay_prov", "hay_cant", "hay_doc", "hay_tipo", "hay_igv")}
+    return hist, sm.armar_pieza(b, hist, nc, _RANGO, flags, "sello", contra=sm.lineas_contra(hist, _RANGO),
+                                meses=sm.resumen_meses(hist, _RANGO[1]), familias=familias)
+
+
 def _dd_ref(d, d_full, gran, docu, con_igv, fam=(), prov=()):
     d = filtrar_documento(d, "TIPO", docu)
     d_full = filtrar_documento(d_full, "TIPO", docu)
@@ -113,7 +132,7 @@ class LoQueRecibe(unittest.TestCase):
 
     def test_el_js_lee_las_mismas_posiciones(self):
         self.assertIn("const RL = { dia: 0, prod: 1, prov: 2, doc: 3, fam: 4, sub: 5, cant: 6, neto: 7, igv: 8, tipo: 9, "
-                      "usd: 10, punit: 11, refT: 12, refS: 13 };", _JS)
+                      "usd: 10, punit: 11, refT: 12, refS: 13, fl: 14 };", _JS)
         self.assertIn("const RN = { nota: 12, diaNc: 13 };", _JS)
         self.assertIn("const TIPOS = ['F', 'G', 'O'];", _JS)
         self.assertEqual(sm._TIPOS, ("F", "G", "O"))
@@ -274,6 +293,81 @@ class LasCuentasEnElNavegador(unittest.TestCase):
                 self.assertEqual(js[0], ref[0])
                 self.assertEqual(js[1], ref[1])
                 self.assertAlmostEqual(js[2], ref[2], places=6)
+
+    def test_efecto_del_precio_y_revisar_contra_python(self):
+        # Lo mismo que Compras › Producto: lo pagado menos el habitual, sin las
+        # líneas marcadas; y las marcadas, por producto y por valor (regla #770).
+        h, P = _armar_una_pantalla()
+        t = h[h["fecha"].between(*_RANGO)]
+        ok = t[(t["flag"] == "") & (t["cant"] > 0) & t["ref"].notna()]
+        por = (ok["neto"] - ok["ref"] * ok["cant"]).groupby(ok["prod"]).sum()
+        V = self._calc_de(P, {})
+        self.assertAlmostEqual(V["e"]["up"], por[por >= 1].sum(), places=0)
+        self.assertAlmostEqual(V["e"]["dn"], por[por <= -1].sum(), places=0)
+        self.assertEqual(V["e"]["nUp"], int((por >= 1).sum()))
+        self.assertEqual(V["e"]["nDn"], int((por <= -1).sum()))
+        rev = t[t["flag"] != ""]
+        self.assertGreater(len(rev), 0)
+        self.assertEqual(V["revLin"], len(rev))
+        self.assertEqual(V["revProd"], rev["prod"].nunique())
+        self.assertAlmostEqual(V["revVal"], rev["neto"].sum(), places=0)
+
+    def test_doce_meses_y_contra(self):
+        h, P = _armar_una_pantalla()
+        m = P["meses"]
+        self.assertEqual(len(m), 13)
+        self.assertEqual(m[-1][0], "2026-10")
+        octubre = h[h["fecha"].dt.to_period("M") == pd.Period("2026-10")]
+        self.assertAlmostEqual(m[-1][1], octubre["neto"].sum(), places=1)
+        # El mes sin compras también cuenta: la curva no salta meses.
+        self.assertEqual(m[0][1], 0.0)
+        # Contra el año pasado no hay base; contra el período anterior, sí.
+        self.assertIsNone(self._calc_de(P, {"contra": "ano"})["contraTot"])
+        V = self._calc_de(P, {"contra": "ant"})
+        n = (_RANGO[1] - _RANGO[0]).days + 1
+        ant = h[h["fecha"].between(_RANGO[0] - pd.Timedelta(days=n), _RANGO[0] - pd.Timedelta(days=1))]
+        self.assertAlmostEqual(V["contraTot"], ant["neto"].sum(), places=0)
+        self.assertGreater(len([x for x in V["ghost"] if x is not None]), 0)
+
+    def _calc_de(self, P, st0):
+        return self.pg.evaluate("""([P, st0]) => { const C = window.__cpPerCalc, F = C.leer(P);
+          const V = C.calcular(F, { gran: 'Semana', fam: [], sub: [], prov: [], prod: [], docu: 'Todos', montos: 'Sin IGV', partir: 'Familia',
+            res: {}, modo: 'Resumen Total', foco: null, doc: null, provDet: null, contra: 'ano', ...st0 });
+          return { e: { up: V.efecto.up, dn: V.efecto.dn, nUp: V.efecto.nUp, nDn: V.efecto.nDn }, revProd: V.revProd, revLin: V.revLin, revVal: V.revVal,
+            contraTot: V.contraTot, ghost: V.ghost }; }""", [P, st0])
+
+    def test_una_pantalla_tablas_y_familias_de_la_pagina(self):
+        fam = {"todas": [["ALIMENTOS", 100.0], ["VINOS", 50.0], ["GASTOS", 9.0]], "elegidas": ["ALIMENTOS", "VINOS"]}
+        _h, P = _armar_una_pantalla(fam)
+        pg = self.b.new_page(viewport={"width": 1323, "height": 680})
+        try:
+            pg.set_content('<style>:root{--alto-util:612px}body{margin:0 16px}</style><div id="pieza"></div>')
+            pg.add_style_tag(content=(Path(sm.__file__).parent / "semanal.css").read_text(encoding="utf-8"))
+            pg.add_script_tag(content=_JS.replace("export default function (component)", "window.__montar = function (component)"))
+            pg.evaluate("""P => { window.__avisos = []; window.__montar({data: P, parentElement: document.querySelector('#pieza'), setTriggerValue: (k, v) => window.__avisos.push([k, v])}); }""", P)
+            pg.wait_for_selector(".kpi")
+            self.assertEqual(pg.locator(".kpi").count(), 4)
+            self.assertIn("Fuera de esta cuenta", pg.locator(".fuera").inner_text())
+            for m in ("docs", "precio", "revisar", "valor"):
+                pg.locator(f'.kpi[data-v="{m}"]').click()
+                self.assertEqual(pg.locator(f'.kpi[data-v="{m}"].on').count(), 1)
+                self.assertGreater(pg.locator(".graf svg").count(), 0)
+            # Una pantalla: la pieza no pide scroll.
+            self.assertLessEqual(pg.evaluate("document.querySelector('.cpp').getBoundingClientRect().bottom"), 680)
+            # Con una tabla ancha: se desliza en su zona y no se mete en el panel.
+            for z in ("tabla", "docs"):
+                pg.locator(f'.pie [data-v="{z}"]').click()
+                panel = pg.locator(".panel").bounding_box()
+                self.assertLessEqual(pg.evaluate("document.querySelector('.zona').getBoundingClientRect().right"), panel["x"])
+                self.assertEqual(pg.evaluate("getComputedStyle(document.querySelector('.zona')).overflowX"), "auto")
+                self.assertGreaterEqual(pg.evaluate("document.querySelector('.tb').offsetWidth"),
+                                        pg.evaluate("parseInt(document.querySelector('.tb').style.minWidth)"))
+            pg.locator('.pie [data-v="graf"]').click()
+            # Sumar lo de afuera escribe el filtro de la página, y eso pide una corrida.
+            pg.locator('[data-acc="pagina-todas"]').click()
+            self.assertEqual(pg.evaluate("window.__avisos"), [["familias", ["ALIMENTOS", "VINOS", "GASTOS"]]])
+        finally:
+            pg.close()
 
     def test_movil_filtros_y_documentos_al_tocar(self):
         """El panel conserva la selección y el toque permite llegar al detalle."""

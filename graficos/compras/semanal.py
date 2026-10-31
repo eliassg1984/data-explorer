@@ -109,7 +109,7 @@ from graficos.compras._comun import (
     _variaciones,  # noqa: F401 — la importa test_graficos.py como `semanal._variaciones`
 )
 from graficos.compras._comun import (
-    CATEGORIA_SEC, colores_estables,
+    CATEGORIA_SEC, cambiar_familias, colores_estables,
     documento_legible, selector_fecha_tarjeta,
 )
 # Documento y Montos (regla #621), propios de ESTA tarjeta desde el
@@ -1632,10 +1632,11 @@ _TIPOS = ("F", "G", "O")
 guía de remisión sin canjear, lo demás (`tipo_corto`)."""
 
 
-def lineas_pieza(d, cols):
+def lineas_pieza(d, cols, col_um=None):
     """Las líneas de compra con nombres FIJOS: `fecha` (el día), `prod`,
     `prov`, `docn` (crudo), `fam`, `sub`, `cant`, `neto` (sin IGV), `igv`,
-    `tipo` (F/G/O), `usd` y `punit`. Las categorías como texto, igual que el
+    `tipo` (F/G/O), `usd`, `punit` y `um` (la unidad, para la marca de
+    revisar). Las categorías como texto, igual que el
     `dd` de la vista de antes (un vacío es «nan»). Sin fecha no entran: no
     caen en ningún período. Pura."""
     (col_prod, col_fecha, col_cant, col_punit, col_prov, col_docu, col_valor,
@@ -1669,6 +1670,7 @@ def lineas_pieza(d, cols):
                       dtype=float, na_value=np.nan)
                   if col_punit and col_punit in d.columns
                   else np.full(n, np.nan)),
+        "um": _txt(col_um),
     })
     return b[b["fecha"].notna()].reset_index(drop=True)
 
@@ -1706,6 +1708,49 @@ def referencias(b, hist):
                            np.where(tipo == "G", ref_g, np.nan))
 
 
+def con_marca(h):
+    """`h` con el habitual de TODOS los documentos (`ref`) y la marca de revisar
+    (`flag`), las de Compras › Producto: el efecto del precio tiene que dar lo
+    mismo acá y allá (regla #770). Pura."""
+    from graficos.compras.producto import marcar_revisar
+    if h.empty:
+        return h.assign(ref=pd.Series(dtype=float), flag="")
+    ref = precio_habitual(h["prod"], h["fecha"], h["neto"], h["cant"]).to_numpy()
+    return h.assign(ref=ref, flag=marcar_revisar(h["cant"], h["neto"], ref, h["um"]))
+
+
+def resumen_meses(h, fin, n=13):
+    """Una fila por cada uno de los `n` meses hasta `fin`, para la curva de los
+    indicadores: [mes, valor, documentos, efecto del precio, líneas para
+    revisar]. `h` viene de `con_marca`. Pura."""
+    if h.empty:
+        return []
+    mes = h["fecha"].dt.to_period("M")
+    ultimo = pd.Timestamp(fin).to_period("M")
+    meses = pd.period_range(ultimo - (n - 1), ultimo, freq="M")
+    t = h[mes.isin(meses)].assign(_m=mes)
+    ok = t[(t["flag"] == "") & (t["cant"] > 0) & t["ref"].notna()]
+    ef = (ok["neto"] - ok["ref"] * ok["cant"]).groupby(ok["_m"]).sum()
+    val = t.groupby("_m")["neto"].sum()
+    docs = t.drop_duplicates(["_m", "fecha", "prov", "docn"]).groupby("_m").size()
+    rev = t[t["flag"] != ""].groupby("_m").size()
+    return [[str(m), round(float(val.get(m, 0.0)), 2), int(docs.get(m, 0)),
+             round(float(ef.get(m, 0.0)), 2), int(rev.get(m, 0))] for m in meses]
+
+
+def lineas_contra(h, rango):
+    """Lo que se compra para comparar: de un año antes del rango (y un período
+    antes, si es más largo) hasta su último día, sumado por día, producto,
+    proveedor, familia, subfamilia y tipo. Pura."""
+    if h.empty:
+        return h.iloc[0:0]
+    r0, r1 = (pd.Timestamp(x) for x in rango)
+    lo = min(r0 - pd.DateOffset(years=1), r0 - (r1 - r0)) - pd.Timedelta(days=40)
+    t = h[(h["fecha"] >= lo) & (h["fecha"] <= r1)]
+    return t.groupby(["fecha", "prod", "prov", "fam", "sub", "tipo"], as_index=False,
+                     sort=False)[["neto", "igv"]].sum()
+
+
 def _num_json(v, dec):
     return None if v != v else round(float(v), dec)
 
@@ -1713,8 +1758,13 @@ def _num_json(v, dec):
 _VACIO = ("", "nan", "None", "<NA>")
 
 
-def armar_pieza(b, hist_ops, nc, rango, flags, sello):
+def armar_pieza(b, hist_ops, nc, rango, flags, sello, contra=None, meses=None,
+                familias=None):
     """Lo que recibe la pieza. Pura.
+
+    `contra` (`lineas_contra`), `meses` (`resumen_meses`) y `familias` (las de la
+    página, con lo que suma cada una) son de la regla #770: sin ellos la pieza
+    no compara ni dice qué queda fuera.
 
     `b` son las líneas del rango (`lineas_pieza`, de TODOS los documentos:
     «Documento» lo aplica el navegador) con `refT` y `refS`; `hist_ops`, las
@@ -1726,7 +1776,7 @@ def armar_pieza(b, hist_ops, nc, rango, flags, sello):
     documento, familia, subfamilia (índices de sus listas), cantidad, neto,
     IGV, tipo (índice de `_TIPOS`), en dólares (0/1), precio unitario o
     None, habitual de todos los documentos o None, habitual de su tipo o
-    None]. La de una nota (`notas`): las doce primeras igual —el día es el
+    None, marca de revisar (0 no, 1 sí)]. La de una nota (`notas`): las doce primeras igual —el día es el
     de la FACTURA que corrige— y después [nota (índice de `nota_txt`), día
     de la nota].
 
@@ -1741,11 +1791,12 @@ def armar_pieza(b, hist_ops, nc, rango, flags, sello):
     documentos y sin IGV: el color sigue a la subfamilia o al proveedor
     aunque se cambie «Documento» o «Montos»."""
     hist = hist_ops if hist_ops is not None and not hist_ops.empty else b
-    provs = sorted(set(b["prov"]) | set(nc["prov"]))
-    prods = sorted(set(b["prod"]) | set(nc["prod"]))
+    cn = contra if contra is not None else b.iloc[0:0]
+    provs = sorted(set(b["prov"]) | set(nc["prov"]) | set(cn["prov"]))
+    prods = sorted(set(b["prod"]) | set(nc["prod"]) | set(cn["prod"]))
     docs = sorted(set(b["docn"]) | set(nc["docn"]))
-    fams = sorted(set(b["fam"]) | set(nc["fam"]) | set(hist["fam"]))
-    subs = sorted(set(b["sub"]) | set(nc["sub"]) | set(hist["sub"]))
+    fams = sorted(set(b["fam"]) | set(nc["fam"]) | set(hist["fam"]) | set(cn["fam"]))
+    subs = sorted(set(b["sub"]) | set(nc["sub"]) | set(hist["sub"]) | set(cn["sub"]))
     ip = {p: i for i, p in enumerate(provs)}
     ipr = {p: i for i, p in enumerate(prods)}
     idc = {x: i for i, x in enumerate(docs)}
@@ -1766,8 +1817,14 @@ def armar_pieza(b, hist_ops, nc, rango, flags, sello):
                     t["cant"].tolist(), t["neto"].tolist(), t["igv"].tolist(),
                     t["tipo"], t["usd"], t["punit"].tolist(), extra)]
 
-    lineas = _filas(b, [[_num_json(r, 6), _num_json(s, 6)]
-                        for r, s in zip(b["refT"].tolist(), b["refS"].tolist())])
+    _marca = b["flag"].ne("").astype(int).tolist() if "flag" in b else [0] * len(b)
+    lineas = _filas(b, [[_num_json(r, 6), _num_json(s, 6), m]
+                        for r, s, m in zip(b["refT"].tolist(), b["refS"].tolist(), _marca)])
+    fila_c = [[int((f - base).days), ipr[pr], ip[pv], ifa[fa], isu[su], it.get(tp, 2),
+               round(ne, 4), round(ig, 4)]
+              for f, pr, pv, fa, su, tp, ne, ig in zip(
+                  cn["fecha"], cn["prod"], cn["prov"], cn["fam"], cn["sub"], cn["tipo"],
+                  cn["neto"].tolist(), cn["igv"].tolist())]
     nota_txt = sorted(set(nc["nota"])) if len(nc) else []
     ino = {x: i for i, x in enumerate(nota_txt)}
     notas = (_filas(nc, [[ino[x], int((f - base).days)]
@@ -1788,7 +1845,8 @@ def armar_pieza(b, hist_ops, nc, rango, flags, sello):
         return (hist.groupby(col)["neto"].sum()
                 .sort_values(ascending=False, kind="stable").index.tolist())
 
-    o_sub, o_prov = _orden("sub"), _orden("prov")
+    o_sub, o_prov, o_fam = _orden("sub"), _orden("prov"), _orden("fam")
+    pos_fam = {f: i for i, f in enumerate(o_fam)}
     pos_sub = {s: i for i, s in enumerate(o_sub)}
     pos_prov = {p: i for i, p in enumerate(o_prov)}
     # Las opciones de Familia y Subfamilia, del histórico (regla #623), sin
@@ -1815,6 +1873,10 @@ def armar_pieza(b, hist_ops, nc, rango, flags, sello):
         "fam_subs": fam_subs,
         "ord_sub": [pos_sub.get(s) for s in subs], "n_ord_sub": len(o_sub),
         "ord_prov": [pos_prov.get(p) for p in provs], "n_ord_prov": len(o_prov),
+        "ord_fam": [pos_fam.get(f) for f in fams], "n_ord_fam": len(o_fam),
+        "contra": fila_c, "contra_desde": (f"{hist['fecha'].min():%Y-%m-%d}"
+                                           if len(fila_c) else None),
+        "meses": meses or [], "familias": familias,
         "lineas": lineas, "notas": notas, "nota_txt": nota_txt,
         "nota_doc": nota_doc, "etq_techo": _ETQ_TECHO,
     }
@@ -1849,7 +1911,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                            col_prov, col_docu, col_valor,
                            col_fam=None, d_full=None, col_subfam=None,
                            col_valor_neto=None, col_igv=None,
-                           col_tipo_doc=None, col_moneda=None, d_nc=None):
+                           col_tipo_doc=None, col_moneda=None, d_nc=None,
+                           col_um=None, familias=None):
     """«Compras por período»: la fecha (Python) y la pieza. Ver el docstring
     del módulo y `arquitectura.md` regla #716.
 
@@ -1880,18 +1943,20 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         rango = (rango_tarjeta(CATEGORIA_SEC["compras_sec_semanal"], _ctx_fecha)
                  if _ctx_fecha else None)
         firma = (id(d), d.shape, id(d_full), id(d_nc),
-                 None if d_nc is None else d_nc.shape, str(rango))
+                 None if d_nc is None else d_nc.shape, str(rango), repr(familias))
         cache = st.session_state.get(_K_CACHE)
         if cache is not None and cache[0] == firma:
             datos = cache[1]
         else:
-            b = lineas_pieza(d, cols)
+            b = lineas_pieza(d, cols, col_um)
             if b.empty:
                 st.info("Sin compras en el rango seleccionado. Ampliá el rango "
                         "desde la fecha de la tarjeta.")
                 return
-            hist = lineas_pieza(d_full, cols) if d_full is not None else b
+            hist = con_marca(lineas_pieza(d_full, cols, col_um) if d_full is not None else b)
             b["refT"], b["refS"] = referencias(b, hist)
+            from graficos.compras.producto import marcar_revisar
+            b["flag"] = marcar_revisar(b["cant"], b["neto"], b["refT"], b["um"])
             nc = _lineas_nc(d_nc, col_fecha, col_prod, col_prov, col_docu,
                             col_fam, col_subfam, col_valor, col_igv,
                             col_tipo_doc, DOC_TODOS, col_cant=col_cant,
@@ -1910,6 +1975,10 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 "hay_igv": bool(col_igv) and col_igv in d.columns,
             }
             datos = armar_pieza(b, hist, nc, rango, flags,
-                                sello_pieza(b, nc, hist))
+                                sello_pieza(b, nc, hist) + "-" + str(hash(repr(familias)) & 0xFFFF),
+                                contra=lineas_contra(hist, rango),
+                                meses=resumen_meses(hist, rango[1]), familias=familias)
             st.session_state[_K_CACHE] = (firma, datos)
-        _PIEZA(key=_K_PIEZA, data=datos, width="stretch")
+        _PIEZA(key=_K_PIEZA, data=datos, width="stretch",
+               on_familias_change=lambda: cambiar_familias(
+                   _K_PIEZA, "_cp_sem_atajo_pendiente", familias))

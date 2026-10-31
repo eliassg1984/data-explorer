@@ -474,7 +474,7 @@ ROTULO_PESTANA = {
     ("Compras", "Proveedor"): "Proveedor",
     ("Compras", "Producto"): "Producto",
     ("Compras", "Vs año pasado"): "Año pasado",
-    ("Compras", "Volatilidad"): "Volatilidad",
+    ("Compras", "Volatilidad"): "Precios",
     ("Compras", "Documentos por proveedor"): "Detalle docs.",
     ("Documentos SUNAT", "Cruce con SUNAT"): "Cruce",
     ("Documentos SUNAT", "Proveedores y fechas"): "Fechas",

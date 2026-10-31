@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-769 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+770 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (253)
 
@@ -1132,7 +1132,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (238)
+**Decisiones de diseño y UX** (239)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1372,6 +1372,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#763** — Mix de carta no se aprieta, y la nota de crédito de una venta sin costo no resta de la base
 - **#768** — La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte
 - **#769** — Diferencias del cierre en una pantalla: faltantes y sobrantes lado a lado, y lo demás espera
+- **#770** — Compras: Período y Precios en una pantalla, con el efecto del precio a la vista
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57852,6 +57853,30 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      por Periodo (#766): a 1366 px la zona pasa de 940 a 1242 y el gráfico se redibuja a ese ancho.
      Debajo de 900 px no va: ahí el panel ya está debajo. En Platos es Tabla y Puestos; la Ingeniería
      de menú no tiene ficha. (2026-10-31.)
+
+770. **Compras: Período y Precios en una pantalla, con el efecto del precio a la vista.**
+   Período tenía unos 15 controles antes del gráfico y no sumaba cuánto movió el precio;
+   Volatilidad medía dos pantallas, ordenaba por % y hablaba en velas. Comparado con Toast
+   xtraCHEF y Restaurant365 (recuadro → lista con impacto en soles → factura). Ahora las dos
+   son cuatro indicadores que eligen o filtran, una zona y una lista o ficha al costado.
+   La vista «Volatilidad» se llama **Precios** (el id no cambia) y va antes de Año pasado.
+   - **El efecto del precio es el de Producto**: lo pagado menos el habitual, sin las compras
+     marcadas para revisar (`semanal.con_marca`, `volatilidad_datos.precios`). `pfilas` de
+     `volatilidad.js` se compara con `producto._resumen`: si se toca una, se toca la otra.
+   - **Precios tiene dos bases a propósito**: precio e impacto, en soles desde `precios`;
+     «Se mueve» (dispersión) y «En semanas» (volatilidad), de las cuentas de siempre (#718),
+     sin dólares y en la unidad más comprada.
+   - **Las familias de la tarjeta son el filtro de la página** (`compras_graf_filtro_fam`):
+     `_comun.cambiar_familias` lo escribe y pide una corrida completa. Mueve todas las vistas
+     de Compras y el menú lo dice. Lo que queda fuera se muestra en «Fuera de esta cuenta».
+   - **Precios abre en «Últimos 30 días»** (`SEC_ABRE_EN_EL_MES`), y la fecha de Python reemplaza
+     a la ventana de 3/12/24 meses.
+   - **La fecha va fuera del flujo pero su envoltura cobra `gap`**: con 16 px de más la pieza
+     se salía de la pantalla. Desde 901 px, `gap: 0` en las dos tarjetas (`_80_cards.py`).
+   - **Una tabla ancha se desliza en su zona** (`min-width` en `tabla()` de `semanal.js`): sin
+     eso, al angostarse la columna, se metía debajo del panel.
+   - **`f"{m:%Y-%m}"` revienta con un `Period` de pandas**: se usa `str(m)`.
+   Lo vigilan `test_compras_periodo.py` y `test_volatilidad_pieza.py`.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

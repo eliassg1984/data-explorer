@@ -578,15 +578,6 @@ CSS = """    /* ================================================================
     .st-key-compras_vol_cuerpo {
         gap: 16px !important;
     }
-    /* Y 16px MÁS ARRIBA de toda la sección (2026-09-14, a pedido: «que
-       entre la tarjeta de Vs año pasado y la de volatilidad haya un poco
-       más de espacio, se ven muy pegadas»). Entre secciones de la pila
-       quedan los 16px de su `gap`; con esto, las dos quedan a 32. Sólo
-       este par, que es el que se pidió: si el aire tiene que crecer entre
-       TODAS las secciones, el lugar es el `gap` de la pila, no esto. */
-    .st-key-compras_vol_drill_wrap {
-        margin-top: 16px !important;
-    }
     .st-key-compras_vol_card_rank {
         gap: 10px !important;
     }
@@ -3426,19 +3417,23 @@ CSS = """    /* ================================================================
        propia (2026-10-24, regla #716): la fecha va arriba a la derecha, en
        el renglón del grano y los filtros (`--cp-fecha` en `semanal.css`). */
     .st-key-ajuste_graf_card_izq_sem { position: relative; }
+    /* La fecha va fuera del flujo: el `gap` que le paga su envoltura vacía
+       bajaría la pieza y la dejaría fuera de la pantalla (regla #770). */
+    @media (min-width: 901px) {
+        .st-key-ajuste_graf_card_izq_sem, .st-key-cp_vol_pieza_wrap { gap: 0 !important; }
+    }
     .st-key-cp_sem_fecha {
         position: absolute !important;
         top: var(--cp-fecha-arriba, 17px);
-        right: var(--cp-fecha-derecha, 18px);
+        left: 200px;   /* Al lado del título (regla #770): la pieza le deja su ancho. */
         z-index: 3;
         width: auto !important;
     }
-    /* Volatilidad como pieza propia (#718): fecha compartida sobre su
-       cabecera; se mantiene el hueco de 16 px del layout de Streamlit. */
+    /* Precios (reglas #718 y #770): la fecha va en la cabecera de la pieza. */
     .st-key-cp_vol_pieza_wrap { position: relative; }
     .st-key-cp_vol_fecha {
         position: absolute !important;
-        top: 28px; right: 16px;
+        top: 10px; left: 86px;   /* Al lado del título «Precios» (regla #770). */
         z-index: 3;
         width: auto !important;
     }

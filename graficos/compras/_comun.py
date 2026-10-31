@@ -20,7 +20,7 @@ import streamlit as st
 from tema import (
     ACENTO, ERROR, EXITO, GRIS_TEXTO, PALETA_SERIES, TEXTO_PRINCIPAL,
 )
-from graficos.base import _compras_truncar, _slug
+from graficos.base import _compras_truncar, _slug, poner_seleccion
 # REEXPORT, no import muerto: `_es_movil` vivía definida acá y se movió a
 # graficos/base.py (2026-08-07, ver su docstring) porque graficos/ajuste.py
 # la necesitó también. Este import la reexpone bajo el mismo nombre, así que
@@ -581,7 +581,7 @@ CATEGORIA_SEC = {
 # que se elija «Rango de las tablas». Un mes de ranking al lado de 3 meses
 # de evolución es a propósito: el ranking contesta "qué compré ahora", la
 # evolución "cómo viene el precio".
-SEC_ABRE_EN_EL_MES = ("sec_proveedor", "sec_producto", "sec_semanal")
+SEC_ABRE_EN_EL_MES = ("sec_proveedor", "sec_producto", "sec_semanal", "sec_volatilidad")
 
 
 # ===========================================================================
@@ -631,6 +631,31 @@ def tipo_corto(tipos):
     return pd.Series(np.where(t == "FACTURA", "F",
                               np.where(t.str.startswith("GU"), "G", "O")),
                      index=tipos.index)
+
+
+def familias_de_tarjeta(base, col_fam, col_valor, elegidas):
+    """Lo que dicen «Familias: 5 de 8» y «Fuera de esta cuenta» (regla #770): cada
+    familia de la página con lo que suma en el rango de la tarjeta, y cuáles
+    entran. `base` es el df SIN el filtro de familias, ya recortado. Pura."""
+    if not col_fam or col_fam not in base.columns or not col_valor:
+        return None
+    val = pd.to_numeric(base[col_valor], errors="coerce").fillna(0)
+    por = val.groupby(base[col_fam].astype(str).str.strip()).sum().sort_values(ascending=False)
+    todas = [[f, round(float(v), 2)] for f, v in por.items()
+             if f not in ("", "nan", "None", "<NA>")]
+    return {"todas": todas, "elegidas": [str(x) for x in (elegidas or [])]}
+
+
+def cambiar_familias(k_pieza, k_pendiente, familias):
+    """El menú de familias de una pieza escribe el filtro de la página, que es de
+    Python y manda sobre las demás vistas: pide una corrida completa con la misma
+    escalada de la fecha. Sólo lo que Python ofreció (regla #770)."""
+    v = (st.session_state.get(k_pieza) or {}).get("familias")
+    validas = {f for f, _ in ((familias or {}).get("todas") or [])}
+    if not isinstance(v, list) or not all(x in validas for x in v):
+        return
+    poner_seleccion("compras_graf_filtro_fam", v)
+    st.session_state[k_pendiente] = True
 
 
 def filtrar_documento(df, col_tipo, eleccion):
