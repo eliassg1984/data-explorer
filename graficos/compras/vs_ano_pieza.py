@@ -1,7 +1,8 @@
-"""Montaje de Vs año pasado. Sus controles trabajan en el navegador (#725, #749).
+"""Montaje de Vs año pasado. Sus controles trabajan en el navegador (#725, #749, #771).
 
-Vuelven a Python sólo dos cosas: la fecha, que es el panel de meses de las
-demás tarjetas, y el pedido de la venta. La venta se pide DESPUÉS de dibujar
+Vuelven a Python sólo tres cosas: la fecha, que es el panel de meses de las
+demás tarjetas, el filtro de familias de la página y el pedido de la venta. La
+venta se pide DESPUÉS de dibujar
 (trigger `venta`): sin caché son ~27 s de `ventas.parquet`, y la comparación
 de compras no tiene por qué esperarlos.
 """
@@ -14,11 +15,10 @@ import streamlit as st
 import data
 import franja_fecha
 from estado_rango import atajos_meses
-from graficos.base import rango_tarjeta
-from ._comun import selector_fecha_tarjeta
+from graficos.base import preservar_widgets, rango_tarjeta
+from ._comun import cambiar_familias, selector_fecha_tarjeta
 from ._etiquetas_proveedor import nombre_propio
 from . import vs_ano_datos as datos
-from . import vs_ano_pasado as vp
 
 _DIR = Path(__file__).parent
 _PIEZA = st.components.v2.component(
@@ -31,6 +31,9 @@ CATEGORIA = 'vs_ano'
 reporte antes de que esta tarjeta pida los suyos (regla #376), y esta vista
 no recibe su `d` recortado, empareja sobre el histórico entero."""
 K_VENTA = '_compras_vap_venta_pedida'
+K_PENDIENTE = '_cp_vap_pendiente'
+_KEYS_WIDGET = ()
+"""La pieza no tiene widgets propios que conservar al escalar la corrida."""
 
 
 def ctx_fecha(fechas):
@@ -53,12 +56,18 @@ def _pedir_venta():
     st.session_state[K_VENTA] = True
 
 
-def renderizar(d, cols, d_full=None):
+def renderizar(d, cols, d_full=None, familias=None, d_todas=None):
+    """`d_todas` es el histórico SIN el filtro de familias: viaja entero y el navegador
+    filtra, para decir lo que queda fuera y con cuánto se compara. `familias` es
+    lo de `_comun.familias_de_tarjeta`."""
     if not all(cols.get(k) for k in ['prod', 'fecha', 'valor', 'cant']):
         st.info('Faltan columnas (Producto, Fecha, Valor o Cantidad) para esta comparación.')
         return
     ss = st.session_state
-    fuente = d_full if d_full is not None else d
+    if ss.pop(K_PENDIENTE, False):
+        preservar_widgets(_KEYS_WIDGET)
+        st.rerun(scope='app')
+    fuente = d_todas if d_todas is not None else d_full if d_full is not None else d
     contexto = {'Familias de la página': [nombre_propio(x) for x in ss.get('compras_graf_filtro_fam') or []],
                 'Subfamilias de la página': [nombre_propio(x) for x in ss.get('compras_graf_filtro_sub') or []]}
     firma = (datos.huella(fuente, cols), tuple(cols.items()), str(contexto))
@@ -73,14 +82,12 @@ def renderizar(d, cols, d_full=None):
         P['venta'] = datos.venta_por_mes(data.ventas_por_mes())
     else:
         P['venta'], P['venta_pendiente'] = None, True
+    if familias:
+        P['pagina'] = dict(todas=[[f, nombre_propio(f)] for f, _ in familias['todas']], elegidas=list(familias['elegidas']))
     P['sello'] = datos.sellar(P)
-    fam = ss.get('compras_vap_familia', vp._FAM_TODAS)
-    P['inicial'] = dict(fam=datos.TODAS if fam == vp._FAM_TODAS else fam,
-                        agrupar=ss.get('compras_vap_agrupar', 'Producto'), q=ss.get('compras_vap_q') or '',
-                        modo=ss.get('compras_vap_modo_sel', 'Valor'), foco=ss.get('compras_vap_foco'),
-                        corte=ss.get(vp._K_CORTE, 'Por qué'), vista=ss.get(vp._K_VISTA, 'Cascada'))
     with st.container(key='cp_vap_nativa'):
         if ctx:
             with st.container(key='cp_vap_nativa_fecha'):
                 selector_fecha_tarjeta('cp_vap_f', None, categoria=CATEGORIA, ctx=ctx)
-        _PIEZA(key='compras_ano_pieza', data=P, width='stretch', on_venta_change=_pedir_venta)
+        _PIEZA(key='compras_ano_pieza', data=P, width='stretch', on_venta_change=_pedir_venta,
+               on_familias_change=lambda: cambiar_familias('compras_ano_pieza', K_PENDIENTE, familias))

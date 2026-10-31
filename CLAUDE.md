@@ -328,8 +328,9 @@ parejas que arma el navegador contra `vs_ano_pasado._con_ano_pasado` en cada
 ventana y familia, con el mes parcial; el precio repartido parejo, dejados,
 nuevos y «Sin cantidad comparable» sumando el Δ; la venta pedida una sola
 vez y la compra por S/ 100 vendidos en meses completos; Cantidad y Precio
-sólo con foco; las cuatro pestañas, Excel numérico, alto y móvil. Reglas
-#725 y #749.
+sólo con foco; Excel numérico y móvil. Reglas #725 y #749. Desde la #771, la
+pantalla: los indicadores que suman la diferencia, las familias de la página con lo
+que queda fuera, trece meses contra Python, zonas, ficha, Ampliar y que no pida scroll.
 
 `test_compras_documentos_pieza.py` vigila Compras › Detalle docs. como
 pieza propia (`compras/documentos.js` y `.css`, `documentos_datos.py` y
@@ -1007,8 +1008,16 @@ muerde:
 - **La fecha es el panel de MESES** (`vs_ano_pieza.ctx_fecha`, categoría
   `vs_ano`), que NO va en `CATEGORIA_SEC`: el dispatcher sembraría la clave
   con los 12 meses del reporte antes que la tarjeta (#376).
-- **Cantidad y Precio sólo con algo enfocado**: sin foco «Cantidad» sumaba
-  kilos con unidades, y por eso saltaba al primer producto.
+
+**Desde la #771 es una pantalla:** Compra, Precio, Cantidad y Dejados y nuevos (las
+tres últimas suman la diferencia), Gráfico | Productos y, al costado, la cascada o la
+ficha. Lo que muerde:
+
+- **Viaja el histórico sin el filtro de familias** (`d_todas`) y filtra el navegador
+  (`pagSet`): «Fuera de esta cuenta» dice lo que queda afuera y su base.
+- **La pantalla llama a `calcular` sin foco y con `detalleMeses`.** Foco, Modo y Corte
+  quedaron sólo para el Excel y sus pruebas.
+- **Rojo y verde sólo para el precio**: comprar menos no es bueno ni malo.
 
 La vista de antes —la cabecera de global a local, la cascada de tres
 coordenadas, el foco sembrado— está en las reglas #443 a #449, y su código

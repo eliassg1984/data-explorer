@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-771 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+772 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (253)
 
@@ -1055,7 +1055,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#759** — ¿La app tiene todo lo de SUNAT? Una vista para contestarlo, y un mes que falla ya no desaparece
 - **#760** — Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían sin convertir
 
-**Fechas, rangos y cortes** (24)
+**Fechas, rangos y cortes** (25)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -1081,6 +1081,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
 - **#744** — La ficha del plato de «Costo de Carta» es una pieza propia: dice qué mueve el costo de hoy y…
 - **#747** — Stock › «Movimientos por Tipo» se lee con DOS relojes: abre «De conteo a conteo» y el…
+- **#771** — Compras › Año pasado en una pantalla: los indicadores son las partes de la diferencia
 
 **Asistente IA** (5)
 
@@ -1133,7 +1134,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (240)
+**Decisiones de diseño y UX** (241)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1374,6 +1375,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#768** — La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte
 - **#769** — Diferencias del cierre en una pantalla: faltantes y sobrantes lado a lado, y lo demás espera
 - **#770** — Compras: Período y Precios en una pantalla, con el efecto del precio a la vista
+- **#771** — Compras › Año pasado en una pantalla: los indicadores son las partes de la diferencia
 - **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
 
 **Mantenimiento y trampas del lenguaje** (17)
@@ -57879,6 +57881,29 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      eso, al angostarse la columna, se metía debajo del panel.
    - **`f"{m:%Y-%m}"` revienta con un `Period` de pandas**: se usa `str(m)`.
    Lo vigilan `test_compras_periodo.py` y `test_volatilidad_pieza.py`.
+
+771. **Compras › Año pasado en una pantalla: los indicadores son las partes de la diferencia.**
+   Medía 1.272 px, con frase, seis fichas de familia y cinco indicadores antes del gráfico.
+   Ahora Compra, Precio, Cantidad y Dejados y nuevos: las tres últimas suman la diferencia de la
+   primera y un clic deja sólo lo suyo. Al costado, la cascada y las familias o la ficha.
+   - **Las cuentas no se tocaron**: `calcular`, `emparejar`, `porProducto` y `totales` siguen, con sus
+     pruebas contra `_con_ano_pasado`. La pantalla los llama sin foco y con `detalleMeses`: elegir un
+     mes cambia todo. Se fueron Foco, Modo, Corte, «Registros» y «Aplicar meses elegidos» de la
+     interfaz; `calcular` los conserva porque de ahí sale el Excel.
+   - **Viaja el histórico SIN el filtro de familias** (`d_todas`) y el navegador filtra
+     (`pagSet`): así dice lo que queda fuera y con cuánto se compara. Medido ago–oct 2026: S/ 45.008
+     fuera, contra S/ 320.566 un año antes; con todas las familias la caída es −48 % y no −24 %. El
+     mes parcial sale ahora de ese histórico: una compra de una familia fuera del filtro
+     puede mover el día de corte, y a cambio no salta al tocar el filtro.
+   - **Rojo y verde sólo para el precio.** Comprar menos no es bueno ni malo: Cantidad y Dejados
+     y nuevos van neutros.
+   - **«Compra por S/ 100 vendidos» pasa de línea con escala propia a «Medir»**: barras contra las
+     del año pasado, sólo en meses completos. La venta se sigue pidiendo después de dibujar.
+   - **Mes a mes el precio no suma exacto lo del período**: cada mes se parte contra su espejo, el
+     período contra el suyo. Lo dice la nota del gráfico; no es un error.
+   - **La fecha va al lado del título y el título cambia con «Contra»**: la pieza mide su hueco
+     (`.vap-lugar`) y le escribe el `left` al botón de Python, sólo si cambió.
+   Lo vigila `test_compras_ano_pieza.py`.
 
 772. **Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con
      Destino adentro.** Cuatro perspectivas con fechas distintas, dos tarjetas por vista y un cambio de

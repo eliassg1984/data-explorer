@@ -810,14 +810,18 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # histórico entero aunque la franja esté en un rango corto. Ver el
             # docstring del módulo, decisiones 1 y 2.
             #
-            # Sin borde externo, como Proveedor, Producto y Volatilidad: sus
-            # cuatro bloques —cabecera, serie, puente y tabla— son tarjetas
-            # propias (`compras_vap_card_*`) desde el 2026-09-14. Regla #420.
+            # Viaja SIN el filtro de familias, que aplica el navegador: así dice
+            # lo que queda fuera y con cuánto se compara (regla #771). El de
+            # subfamilias sí se aplica acá.
+            _vap_todas = (_ops_src[_ops_src[col_subfam].isin(sub_sel)]
+                          if sub_sel and col_subfam in _ops_src.columns else _ops_src)
             with st.container(key="compras_vap_drill_wrap"):
                 _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha,
                                              col_valor, col_fam=col_fam,
                                              col_subfam=col_subfam, col_um=col_um,
-                                             d_full=d_full)
+                                             d_full=d_full, d_todas=_vap_todas,
+                                             familias=familias_de_tarjeta(
+                                                 _ops_src, col_fam, col_valor, fam_sel))
 
     def _familias_de(sec):
         # El filtro de la página, con lo que suma cada familia en el rango de la

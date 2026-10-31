@@ -1,5 +1,6 @@
 """Vs año pasado como pieza propia: parejas contra cualquier «Contra», precio
-repartido parejo, dejados y nuevos, venta y pestañas (#725, #749)."""
+repartido parejo, dejados y nuevos, venta y la pantalla: indicadores que suman la
+diferencia, Gráfico | Productos, ficha, familias de la página (#725, #749, #771)."""
 import datetime
 import inspect
 import json
@@ -104,7 +105,7 @@ class Contrato(unittest.TestCase):
         h = h.copy()
         h['VALOR_ANO_ANTERIOR'] = 0
         self.assertEqual(datos.sellar(P), datos.sellar(datos.armar(h, COLS)))
-        self.assertEqual(len(inspect.signature(vp._compras_vs_ano_pasado_drill).parameters), 9)
+        self.assertEqual(len(inspect.signature(vp._compras_vs_ano_pasado_drill).parameters), 11)
 
     def test_sin_historia_y_columnas_opcionales(self):
         h = muestra()
@@ -254,38 +255,120 @@ class Navegador(unittest.TestCase):
         self.mount(P2)
         self.pg.wait_for_timeout(300)
         self.assertEqual([r[0] for r in self.pg.evaluate('__requests')], ['venta'])
-        self.assertIn('cargando la venta', self.pg.locator('.vap-kpis').inner_text())
+        self.assertIn('Cargando la venta', self.pg.locator('.vap-frase').inner_text())
         self.pg.evaluate('P=>__montarVap({data:P,parentElement:document.querySelector("#montar"),setTriggerValue:(...v)=>__requests.push(v)})', P2)
         self.pg.wait_for_timeout(300)
         self.assertEqual(len(self.pg.evaluate('__requests')), 1)
 
-    def test_ui_fichas_meses_foco_y_remontaje(self):
-        root = self.mount(dict(self.P, rango=['2024-04', '2025-03']))
+    def test_indicadores_suman_la_diferencia_y_familias_de_la_pagina(self):
+        P = dict(self.P, rango=['2024-04', '2025-03'], pagina=dict(todas=[['ALIM', 'Alimentos'], ['BEB', 'Bebidas']], elegidas=['ALIM']))
+        a = self.calc({}, P)
+        self.assertTrue(all(P['mapas']['Familia'][str(r['p'])] == 'Alimentos' for r in a['g']))
+        b = self.calc({'fam': 'Alimentos'}, self.P | {'rango': P['rango']})
+        self.assertAlmostEqual(a['tot']['v'], b['tot']['v'], places=7)
+        self.assertEqual([f['fam'] for f in a['familias']], ['Alimentos'])
+        t = a['tot']
+        self.assertAlmostEqual(t['ep'] + t['ev'] + t['dej'] + t['nue'] + t['otr'], t['v'] - t['va'], places=6)
+        root = self.mount(P)
+        vs = root.locator('.vap-kpi .v').all_inner_texts()
+        num = lambda x: float(x.replace('−', '-').replace('+', '').replace('S/ ', '').replace(',', ''))
+        self.assertLessEqual(abs(sum(num(v) for v in vs[1:]) - round(t['delta'])), 3)
+        self.assertEqual(root.locator('.vap-kpi').count(), 4)
+        fuera = root.locator('.vap-fuera').inner_text()
+        self.assertIn('Bebidas', fuera)
+        self.assertIn('año pasado', fuera)
+        # El menú avisa al cerrarse, una vez; «Sumarlas», enseguida.
+        root.locator('[data-a=menu]').click()
+        root.locator('[data-a=pfam][value=BEB]').check()
+        self.assertEqual(self.pg.evaluate('__requests.length'), 0)
+        self.pg.keyboard.press('Escape')
+        self.assertEqual(self.pg.evaluate('__requests'), [['familias', ['ALIM', 'BEB']]])
+        P2 = dict(self.P, rango=P['rango'], pagina=dict(todas=[['ALIM', 'Alimentos'], ['BEB', 'Bebidas']], elegidas=['ALIM']))
+        root = self.mount(P2)
+        root.locator('[data-a=sumar]').click()
+        self.assertEqual(self.pg.evaluate('__requests'), [['familias', ['ALIM', 'BEB']]])
+
+    def test_trece_meses_contra_python(self):
+        P = dict(self.P, rango=['2025-01', '2025-03'])
+        T = self.pg.evaluate("""P=>{const c={},s=__vapDatos.inicial({}),D=__vapDatos.calcular(P,s,c),T=__vapDatos.trece(P,s,D,c);return {meses:T.meses,base:T.base,porMes:T.porMes}}""", P)
+        self.assertEqual(T['meses'][-1], '2025-03')
+        self.assertEqual(len(T['meses']), 13)
+        g = pares(self.h, 12)
+        for m in T['meses']:
+            x = g[g.mes.astype(str) == m]
+            self.assertAlmostEqual(T['porMes'][m]['v'], float(x.valor.sum()), places=6, msg=m)
+            self.assertAlmostEqual(T['porMes'][m]['va'], float(x.valor_aa.sum()), places=6, msg=m)
+            t = T['porMes'][m]
+            self.assertAlmostEqual(t['ep'] + t['ev'] + t['dej'] + t['nue'] + t['otr'], t['delta'], places=6)
+
+    def test_ui_zonas_lista_ficha_meses_y_remontaje(self):
+        venta = {f'{y}-{m:02d}': 1000.0 + m for y in (2023, 2024, 2025) for m in range(1, 13)}
+        root = self.mount(dict(self.P, rango=['2024-04', '2025-03'], venta=venta))
         pg = self.pg
-        self.assertIsNone(pg.evaluate('__comprasAno.D.foco'))
-        root.locator('.vap-fams [data-v="Bebidas"]').click()
-        self.assertEqual(pg.evaluate('__comprasAno.s.fam'), 'Bebidas')
-        root.locator('.vap-fams [data-v="__todas__"]').click()
+        # Abre en el total: gráfico, cascada y familias.
+        self.assertEqual(root.locator('.vap-col').count(), 12)
+        self.assertEqual(root.locator('.vap-cp').count(), 5)
+        self.assertIn('Qué explica la diferencia', root.locator('.vap-panel h3').inner_text())
+        # Detalle al cursor y venta como medida.
+        root.locator('.vap-col').nth(3).hover()
+        self.assertTrue(root.locator('[data-plot=mes] .vap-tip').is_visible())
+        self.assertIn('Dejados y nuevos', root.locator('[data-plot=mes] .vap-tip').inner_text())
+        root.locator('[data-select=medir]').select_option('venta')
+        self.assertIn('Compra por cada S/ 100', root.locator('.vap-sub').first.inner_text())
+        root.locator('[data-select=medir]').select_option('soles')
+        # Los meses: un clic, Mayús + clic, y el chip que los quita.
         root.locator('[data-a=mes][data-v="2025-01"]').click()
         root.locator('[data-a=mes][data-v="2025-03"]').click(modifiers=['Shift'])
         self.assertEqual(pg.evaluate('__comprasAno.s.meses'), ['2025-01', '2025-02', '2025-03'])
-        root.locator('[data-a=tab][data-v=todos]').click()
-        root.locator('[data-detallemeses]').check()
+        self.assertEqual(root.locator('[data-a=quita-mes]').count(), 3)
+        d = pg.evaluate('__comprasAno.D.totC.v')
+        self.assertAlmostEqual(d, pg.evaluate('__comprasAno.D.tabla.reduce((s,r)=>s+r.v,0)'), places=6)
+        pg.evaluate('__comprasAno.s.meses=[];__vapDatos.dibujar(__comprasAno)')
+        # Un indicador deja sólo lo suyo; el orden y Ver por son de la lista.
+        root.locator('.vap-kpi[data-v=precio]').click()
+        self.assertEqual(pg.evaluate('__comprasAno.s.zona'), 'prod')
+        filas = pg.evaluate('__comprasAno.D.precio.length')
+        self.assertEqual(root.locator('tbody tr:not(.tot)').count(), filas)
+        root.locator('[data-a=orden][data-v=item]').click()
+        root.locator('[data-select=agrupar]').select_option('Familia')
+        self.assertIn('grupo', root.locator('tr.tot').inner_text())
+        root.locator('[data-select=agrupar]').select_option('Producto')
+        # La ficha: cifras, 13 meses y Ampliar en los dos sentidos.
+        root.locator('.vap-kpi[data-v=compra]').click()
+        root.locator('[data-a=zona][data-v=prod]').click()
         root.locator('[data-input=q]').fill('Harina')
-        root.locator('tr[data-a=foco]').first.focus()
-        pg.keyboard.press('Enter')
-        self.assertEqual(pg.evaluate('__comprasAno.D.foco'), 'Harina')
-        self.assertTrue(root.locator('.vap-foco [data-a=modo][data-v=Cantidad]').is_visible())
+        self.assertEqual(root.locator('tbody .vap-tn').count(), 1)
+        self.assertEqual(root.locator('[data-input=q]').evaluate('e=>e.getRootNode().activeElement===e'), True)
+        root.locator('tbody .vap-tn').click()
+        self.assertEqual(root.locator('.vap-panel h3').inner_text(), 'Harina')
+        self.assertEqual(root.locator('.vap-cf').count(), 4)
+        self.assertEqual(root.locator('.vap-plot.chica .vap-col').count(), 13)
+        root.locator('.vap-plot.chica .vap-col').nth(5).hover()
+        self.assertTrue(root.locator('[data-plot=ficha] .vap-tip').is_visible())
+        root.locator('[data-a=magn][data-v=Precio]').click()
+        root.locator('.vap-panel [data-a=amp]').click()
+        self.assertEqual(root.locator('.vap-izq').count(), 0)
+        root.locator('.vap-panel [data-a=amp]').click()
+        # Remontar con los mismos datos no borra lo elegido.
+        pg.evaluate('()=>__montarVap({data:__comprasAno.P,parentElement:document.querySelector("#montar")})')
+        self.assertEqual(pg.evaluate('__comprasAno.s.sel'), 'Harina')
+        root.locator('[data-a=soltar]').click()
         root.locator('[data-input=q]').fill('')
-        root.locator('[data-a=tab][data-v=cambio]').click()
-        root.locator('.vap-items [data-v="Sólo anterior"]').click()
-        self.assertEqual(pg.evaluate('[__comprasAno.D.foco,__comprasAno.D.focoPor]'), ['Sólo anterior', 'Producto'])
-        root.locator('[data-a=todo]').click()
-        self.assertIsNone(pg.evaluate('__comprasAno.D.foco'))
+        root.locator('.vap-izq [data-a=amp]').click()
+        self.assertEqual(root.locator('.vap-panel').count(), 0)
+        self.assertIn('Motivo', root.locator('thead').inner_text())
+        root.locator('.vap-izq [data-a=amp]').click()
+        # Dejados y nuevos, con dónde se reemplazó; y la familia del panel filtra.
+        root.locator('.vap-kpi[data-v=carta]').click()
+        root.locator('[data-a=sent][data-v=nue]').click()
+        self.assertIn('Sólo actual', root.locator('tbody').inner_text())
+        root.locator('.vap-fi[data-a=fam][data-v=Bebidas]').click()
+        self.assertEqual(pg.evaluate('__comprasAno.s.fam'), 'Bebidas')
+        root.locator('[data-a=quita-fam]').click()
         root.locator('[data-select=contra]').select_option('aa2')
         self.assertEqual(pg.evaluate('__comprasAno.D.V.k'), 24)
+        self.assertIn('hace dos años', root.locator('.vap-tit').inner_text())
         pg.evaluate('()=>__montarVap({data:__comprasAno.P,parentElement:document.querySelector("#montar")})')
-        self.assertEqual(pg.evaluate('__comprasAno.s.tab'), 'cambio')
         self.assertEqual(pg.evaluate('__comprasAno.s.contra'), 'aa2')
         self.assertEqual(pg.evaluate('__requests.length'), 0)
 
@@ -307,7 +390,7 @@ class Navegador(unittest.TestCase):
 
     def test_remontaje_valida_familia_y_vacio(self):
         root = self.mount()
-        root.locator('.vap-fams [data-v="Bebidas"]').click()
+        root.locator('.vap-fi[data-a=fam][data-v=Bebidas]').click()
         self.pg.evaluate('''()=>{const P=structuredClone(__comprasAno.P);P.familias=P.familias.filter(f=>f!=='Bebidas');
           __montarVap({data:P,parentElement:document.querySelector('#montar')})}''')
         self.assertEqual(self.pg.evaluate('__comprasAno.s.fam'), datos.TODAS)
@@ -317,13 +400,18 @@ class Navegador(unittest.TestCase):
         self.assertIn('No hay meses para comparar', root.inner_text())
         self.assertTrue(root.locator('[data-a=excel]').is_disabled())
 
-    def test_alto_y_movil(self):
-        self.mount(dict(self.P, rango=['2024-04', '2025-03']))
+    def test_una_pantalla_y_movil(self):
+        root = self.mount(dict(self.P, rango=['2024-04', '2025-03']))
         pg = self.pg
-        for sel in ['.vap-top', '.vap-detalle']:
-            self.assertEqual(pg.locator(sel).evaluate('e=>Math.round(e.getBoundingClientRect().height)'), 575, sel)
+        self.assertEqual(pg.locator('.vap').evaluate('e=>Math.round(e.getBoundingClientRect().height)'), 575)
+        self.assertLessEqual(pg.locator('.vap').evaluate('e=>e.scrollHeight-e.clientHeight'), 1)
+        for kpi in ('precio', 'cantidad', 'carta', 'compra'):
+            root.locator(f'.vap-kpi[data-v={kpi}]').click()
+            self.assertLessEqual(pg.locator('.vap').evaluate('e=>e.scrollHeight-e.clientHeight'), 1, kpi)
         pg.set_viewport_size({'width': 390, 'height': 844})
         try:
+            self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'), 390)
+            pg.locator('.vap-kpi[data-v=precio]').click()
             self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'), 390)
         finally:
             pg.set_viewport_size({'width': 1323, 'height': 619})

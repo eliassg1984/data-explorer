@@ -1898,10 +1898,10 @@ CSS = """    /* ================================================================
     .st-key-stock_mov_f_escala button > div > div:last-child:not(:first-child) {
         display: none !important;
     }
-    /* Compras › Vs año pasado (regla #749): el panel de meses de Python
-       flota sobre la derecha de la cabecera de la pieza, como el de
-       «Detalle docs.». La pieza le reserva el ancho (`.vap-cab`). Por
-       debajo de 901px lo baja a su renglón `_99_movil.py` (`_nativa_fecha`). */
+    /* Compras › Vs año pasado (reglas #749 y #771): el panel de meses de Python
+       va al lado del título. La pieza le deja el hueco `.vap-lugar` y le escribe
+       el `left`, porque el título cambia con «Contra». Por debajo de 901px lo
+       baja a su renglón `_99_movil.py` (`_nativa_fecha`). */
     .st-key-cp_vap_nativa {
         position: relative;
         gap: 0 !important;
@@ -1911,8 +1911,8 @@ CSS = """    /* ================================================================
     }
     .st-key-cp_vap_nativa_fecha {
         position: absolute;
-        right: 16px;
-        top: 12px;
+        left: 214px;
+        top: 8px;
         z-index: 5;
         width: auto !important;
     }
@@ -1926,18 +1926,21 @@ CSS = """    /* ================================================================
         min-width: 0 !important;
         height: 30px !important;
         min-height: 30px !important;
-        padding: 0 12px !important;
+        padding: 0 10px !important;
         border-radius: 8px !important;
-        border: 1px solid var(--border-lavender) !important;
-        background: var(--bg-card) !important;
-        color: var(--accent-deep) !important;
-        font-size: 13px !important;
-        font-weight: 600 !important;
+        border: 0 !important;
+        background: var(--rail-fondo) !important;
+        color: var(--text-primary) !important;
+        font-size: 12.5px !important;
+        font-weight: 400 !important;
         line-height: 1 !important;
         white-space: nowrap !important;
     }
     .st-key-cp_vap_f_escala button:hover {
-        background: var(--accent-tint) !important;
+        background: var(--bg-hover) !important;
+    }
+    .st-key-cp_vap_f_escala button p {
+        font-size: 12.5px !important;
     }
     .st-key-cp_vap_f_escala button > div > div:last-child:not(:first-child) {
         display: none !important;
@@ -4674,12 +4677,6 @@ CSS = """    /* ================================================================
         height: 32px;
         display: flex;
         align-items: center;
-    }
-    .st-key-persp_mov.st-key-persp_mov,
-    .st-key-persp_sin.st-key-persp_sin {
-        min-height: 32px;
-        max-height: 32px;
-        margin: 6px 0 -12px !important;
     }
     .st-key-persp_stock.st-key-persp_stock {
         align-items: center !important;
