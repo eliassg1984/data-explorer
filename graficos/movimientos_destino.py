@@ -51,6 +51,9 @@ from tema import (
 
 VISTA_CIERRE = "Sin plato por cierre"
 VISTA_PRODUCTO = "En qué se fue cada producto"
+K_VISTA_SIN = "_mov_persp_sin"
+"""«Cierres» o «Productos»: desde la regla #772 las dos vistas son una pestaña con
+perspectivas. El salto a un producto la escribe."""
 """Los ids de las dos vistas en el rail y la pila (`graficos/movimientos.py`)."""
 
 CARD_CIERRE = "ajuste_graf_card_izq_mov_sinplato"
@@ -403,7 +406,8 @@ def _ir_al_producto(key, codigos, clave_cierre):
     st.session_state[K_FILTRO] = FILTROS[0]
     st.session_state[K_BUSCAR] = ""
     st.session_state[_K_SALTO] = st.session_state.get(_K_SALTO, 0) + 1
-    st.session_state[navegacion.CLAVE_SALTO_VISTA] = VISTA_PRODUCTO
+    st.session_state[K_VISTA_SIN] = "Productos"
+    st.session_state[navegacion.CLAVE_SALTO_VISTA] = VISTA_CIERRE
     st.session_state[_K_IR] = True
 
 

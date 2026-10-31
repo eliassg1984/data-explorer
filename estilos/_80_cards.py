@@ -4675,6 +4675,12 @@ CSS = """    /* ================================================================
         display: flex;
         align-items: center;
     }
+    .st-key-persp_mov.st-key-persp_mov,
+    .st-key-persp_sin.st-key-persp_sin {
+        min-height: 32px;
+        max-height: 32px;
+        margin: 6px 0 -12px !important;
+    }
     .st-key-persp_stock.st-key-persp_stock {
         align-items: center !important;
         justify-content: flex-start !important;

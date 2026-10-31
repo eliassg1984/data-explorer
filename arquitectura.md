@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-770 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+771 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (253)
 
@@ -321,7 +321,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 
-**Layout y alturas** (108)
+**Layout y alturas** (109)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -431,6 +431,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#736** — Sin plato por cierre es una pieza propia: lista completa, cierres locales y comparación con…
 - **#758** — Venta por Periodo no se aprieta: indicadores que eligen, comparación elegible y cierre
 - **#765** — Stock en una pantalla: lista con niveles y ficha al costado, en las dos perspectivas
+- **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
 
 **Plotly y figuras** (130)
 
@@ -1132,7 +1133,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (239)
+**Decisiones de diseño y UX** (240)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1373,6 +1374,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#768** — La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte
 - **#769** — Diferencias del cierre en una pantalla: faltantes y sobrantes lado a lado, y lo demás espera
 - **#770** — Compras: Período y Precios en una pantalla, con el efecto del precio a la vista
+- **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57878,6 +57880,41 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - **`f"{m:%Y-%m}"` revienta con un `Period` de pandas**: se usa `str(m)`.
    Lo vigilan `test_compras_periodo.py` y `test_volatilidad_pieza.py`.
 
+772. **Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con
+     Destino adentro.** Cuatro perspectivas con fechas distintas, dos tarjetas por vista y un cambio de
+     perspectiva que tardaba de 11 a 40 s (con la laptop ocupada). Boceto:
+     https://claude.ai/artifact/JKeLmmTjg1yU1g9HYFyqeF. Las cuentas no se tocaron. Lo que queda:
+     - **«Contar por: Cierre | Registro | Proceso», no una vista nueva.** Cada línea viaja con sus tres
+       fechas (`armar(relojes=)`, vía `cols["relojes"]`: las firmas no cambian) y cambia en el navegador.
+       «Cierre» sólo existe mes a mes y mueve sólo los bordes (`fecha_al_cierre`): lo procesado del día 1
+       a la apertura es del mes que cerró. Con la apertura de la MAYORÍA de las áreas: setiembre 2026 da
+       S/ 7.041,94, igual que bajas + otras de Sin plato; algún mes difiere unas decenas de soles, porque
+       Sin plato corta por área. Medido en doce meses: salidas ±S/ 2.199 al mes (14 %) contra registro;
+       requerimientos ±0,7 %.
+     - **El calendario va por fecha de REGISTRO, siempre**: su pregunta es cuándo se digitó. Es lo que
+       deja ver que **desde julio de 2026 se registra mucho menos**: de ~248 notas al mes a 83, de 23 días
+       con nota a 9. La pieza lo dice sola (`caida`). Un mes con pocas notas no es un mes con poca merma.
+       Pero no afirmar que lo no registrado es el faltante: por producto, la nota cae S/ 12.137 y el
+       faltante de esos productos sube sólo S/ 4.388; el Despacho Mayta dejó de existir, y eso puede ser operación.
+     - **«Pedido» no es gasto**: S/ 2,6M pedidos contra S/ 1,84M comprados, porque Producción pide el insumo
+       y Cocina lo producido. Por eso el indicador «Cocina, por S/ 100 servidos»: lo vendido y lo comprado
+       salen de la cuenta de Sin plato, que en frío tarda, así que la pieza dibuja primero y los pide (trigger
+       `refs`, un segundo montaje chico, `parte: "refs"`).
+     - **Una pantalla y una zona**, en las cuatro pieza que usan `movimientos_periodo.js` (también Órdenes de
+       producción y Porcionamientos): indicadores, pestañas, panel y «Ampliar». Elegir una barra ya no salta a
+       los documentos: lo cuenta el panel y «Ver…» los abre. En la fila con «Ver», la fecha nativa sube con
+       `top: -40px`. Abre en Salidas, Mes y Cierre, con meses enteros (sin un primer mes de un día).
+     - **«Por área» es una pestaña; la cadena completa, «Análisis por área»**: la perspectiva de antes, con su
+       fecha y su ajuste Registro | Proceso. Sigue abriendo en el mes en curso: no se unificó.
+     - **Sin plato y Destino son perspectivas de una pestaña** («Cierres | Productos», `PERSPECTIVAS_SIN`),
+       porque son la misma cuenta. El cierre elegido viaja con `window.__sinClave`, que lleva quién lo
+       escribió: si no, una pieza se pisaría a sí misma al volver a montarse. **«Con documento»** (bajas y notas ÷
+       sin plato, cálculo propio: 36 % de oct a jun, 11 % de jul a set) va en el indicador y debajo de cada mes.
+       La tarjeta nativa ya trae relleno: la pieza no suma otro, o se pasa de la pantalla.
+     - **Dos «sin plato» para el mismo mes, a propósito**: Cierres S/ 57.264 y el flujo de Productos S/ 54.623,
+       porque el flujo es neto por producto (#743).
+     (2026-10-31.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57890,7 +57927,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#769**; la próxima toma el número siguiente.
+> última regla es la **#772**; la próxima toma el número siguiente.
 
 >
 

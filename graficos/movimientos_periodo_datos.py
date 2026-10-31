@@ -27,8 +27,27 @@ def _numero(v):
     return float(v) if pd.notna(v) and math.isfinite(float(v)) else None
 
 
+def fecha_al_cierre(f, periodos):
+    """La fecha con que `f` (el proceso de cada línea) cuenta AL CIERRE (regla
+    #772): lo procesado entre el día 1 y la apertura del conteo es del mes que
+    cerró, y lo de antes del día 1 con la apertura ya hecha, del mes nuevo. Con
+    la apertura de la mayoría de las áreas (`t1`, de
+    `sin_plato.periodos_operativos`). Sólo mueve las de esos bordes. Pura."""
+    out = pd.to_datetime(f, errors="coerce").copy()
+    for p in periodos or ():
+        c1, t1 = p.get("c1"), p.get("t1")
+        if c1 is None or t1 is None or p.get("en_curso"):
+            continue
+        out[(out >= c1) & (out < t1)] = c1 - pd.Timedelta(minutes=1)
+        out[(out >= t1) & (out < c1)] = c1
+    return out
+
+
 def armar(d, lado, cols, *, hist=None, anios=0, rango=None, rot_fecha="",
-          faltante=None, marcas=None, contexto=None, hoy=None):
+          faltante=None, marcas=None, contexto=None, hoy=None, relojes=None):
+    """`relojes` (regla #772): `{"reg", "pro", "cie", "sub"}`, columnas de `d`
+    con cada fecha de la línea y su subfamilia; más `"ap"` (`{mes: soles}` un
+    año antes) y `"aperturas"`. Con ellas, «Contar por» cambia en el navegador."""
     base = mp.lineas_documentos(d, **cols)
     if marcas is not None:
         base = base.join(marcas[[c for c in mp.COLS_MARCA if c in marcas]])
@@ -63,7 +82,16 @@ def armar(d, lado, cols, *, hist=None, anios=0, rango=None, rot_fecha="",
             out.append(fila)
         return out
 
-    dias = pd.Series(sorted(base.fecha.dt.normalize().unique()), dtype="datetime64[ns]")
+    fechas_reloj = {}
+    subs = None
+    if relojes:
+        for c in ("reg", "pro", "cie"):
+            if relojes.get(c) and relojes[c] in d.columns:
+                fechas_reloj[c] = pd.to_datetime(d[relojes[c]], errors="coerce").reindex(base.index)
+        if relojes.get("sub") and relojes["sub"] in d.columns:
+            subs = d[relojes["sub"]].fillna("").astype(str).str.strip().reindex(base.index).fillna("")
+    todas = pd.concat([base.fecha, *fechas_reloj.values()]) if fechas_reloj else base.fecha
+    dias = pd.Series(sorted(todas.dropna().dt.normalize().unique()), dtype="datetime64[ns]")
     dias_h = pd.Series(sorted(bh.fecha.dt.normalize().unique()), dtype="datetime64[ns]")
     feriados = set()
     for y in set(dias.dt.year):
@@ -111,6 +139,19 @@ def armar(d, lado, cols, *, hist=None, anios=0, rango=None, rot_fecha="",
                    causa=bool(cols.get("causa")), registro=registro,
                    poco=[dict(mes=str(p), docs=int(n), referencia=float(ref)) for p, n, ref in poco],
                    contexto=contexto or {})
+    if fechas_reloj:
+        dic_sub = sorted(set(subs)) if subs is not None else []
+        id_sub = {v: i for i, v in enumerate(dic_sub)}
+        for i, fila in enumerate(payload["filas"]):
+            for c in ("reg", "pro", "cie"):
+                v = fechas_reloj[c].iloc[i] if c in fechas_reloj else pd.NaT
+                fila.append(None if pd.isna(v) else _ms(v))
+            fila.append(id_sub[subs.iloc[i]] if subs is not None else None)
+        payload["relojes"] = dict(
+            disponibles=[c for c in ("cie", "reg", "pro") if c in fechas_reloj],
+            ap={str(k): float(v) for k, v in (relojes.get("ap") or {}).items()},
+            aperturas=[str(a) for a in relojes.get("aperturas") or ()],
+            subs=dic_sub, pedir_refs=bool(relojes.get("pedir_refs")))
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, allow_nan=False, separators=(",", ":"))
     payload["sello"] = hashlib.sha256(raw.encode()).hexdigest()
     return payload

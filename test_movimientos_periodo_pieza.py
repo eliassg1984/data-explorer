@@ -121,6 +121,88 @@ class Navegador(unittest.TestCase):
         self.pg.evaluate('p=>{window.__movPeriodoEstados={};window.__requests=[];__montarMov({data:p,parentElement:document.querySelector("#montar"),setTriggerValue:(...args)=>__requests.push(args)})}',p)
         return self.pg.locator('.mv')
 
+    def relojes(self,lado=mp.SALIDAS):
+        """Una línea por mes en los bordes del cierre: la del día 1 antes de abrir es del mes que cerró."""
+        d,h,_=muestra()
+        d=d.copy();d['FP']=d.F+pd.Timedelta(days=1)
+        per=[{'c0':pd.Timestamp('2025-02-01'),'c1':pd.Timestamp('2025-03-01'),'t1':pd.Timestamp('2025-03-02 18:00')}]
+        d['FC']=datos.fecha_al_cierre(d.FP,per);d['S']='Sub '+d.FM
+        rel=dict(reg='F',pro='FP',cie='FC',sub='S',ap={'2025-02':123.5},aperturas=['2025-03-02'])
+        return datos.armar(d,lado,COLS,hist=h,anios=1,rango=RANGO,relojes=rel,rot_fecha='x',hoy=dt.date(2025,5,1)),d,per
+
+    def test_fecha_al_cierre_mueve_solo_los_bordes(self):
+        per=[{'c1':pd.Timestamp('2025-03-01'),'t1':pd.Timestamp('2025-03-02 18:00')},{'c1':pd.Timestamp('2025-04-01'),'t1':pd.Timestamp('2025-03-31 12:00')},{'c1':None,'t1':pd.Timestamp('2025-05-01'),'en_curso':True}]
+        f=pd.to_datetime(['2025-02-15 00:00','2025-03-01 09:00','2025-03-02 17:59','2025-03-02 18:00','2025-03-31 13:00',None])
+        out=datos.fecha_al_cierre(pd.Series(f),per)
+        self.assertEqual(out[0],f[0]);self.assertEqual(out[1].month,2);self.assertEqual(out[2].month,2);self.assertEqual(out[3],f[3])
+        self.assertEqual(out[4],pd.Timestamp('2025-04-01'));self.assertTrue(pd.isna(out[5]))
+
+    def test_contar_por_rehace_las_cuentas_contra_pandas(self):
+        p,d,per=self.relojes();base=mp.lineas_documentos(d,**COLS)
+        ok=(base.estado!='ANULADO')&(base['prod']!='')&(base.estado!='X')
+        for reloj,col in [('reg','F'),('pro','FP'),('cie','FC')]:
+            a=self.calc(p,{'gran':'Mes','reloj':reloj})
+            f=pd.to_datetime(d.loc[base.index,col]);en=(f>=RANGO[0])&(f<RANGO[1])
+            ref=base[ok&en].valor.groupby(f[ok&en].dt.strftime('%Y-%m')).sum()
+            self.assertEqual(a['claves'],sorted(ref.index),reloj)
+            for r in a['series']:self.assertAlmostEqual(r['valor'],ref[r['clave']],places=7,msg=reloj)
+            self.assertAlmostEqual(a['total'],ref.sum(),places=7)
+        # Por semana no existe el cierre: cuenta por registro. Y por registro, lo de siempre.
+        self.assertAlmostEqual(self.calc(p,{'gran':'Semana','reloj':'cie'})['total'],self.calc(p,{'gran':'Semana','reloj':'reg'})['total'],places=7)
+
+    def test_pantalla_contar_por_calendario_panel_y_ampliar(self):
+        p,d,_=self.relojes();root=self.mount(p);pg=self.pg
+        self.assertEqual(root.locator('.mv-kpi').count(),4)
+        self.assertEqual(pg.evaluate('document.querySelector(".mv-main").scrollHeight-document.querySelector(".mv-main").clientHeight'),0)
+        root.locator('[data-a=gran][data-v=Mes]').click()
+        self.assertEqual(root.locator('[data-a=reloj][data-v=cie]').get_attribute('aria-pressed'),'true')
+        self.assertIn('Al cierre',root.locator('.mv-pn').inner_text())
+        barras='__movPeriodo.D.series.map(r=>r.valor)';tot=pg.evaluate(barras)
+        root.locator('[data-a=reloj][data-v=reg]').click();self.assertNotEqual(pg.evaluate(barras),tot)
+        root.locator('[data-a=gran][data-v=Semana]').click();self.assertTrue(root.locator('[data-a=reloj][data-v=cie]').is_disabled())
+        root.locator('[data-a=gran][data-v=Mes]').click();root.locator('[data-a=reloj][data-v=cie]').click()
+        # La tabla trae los tres relojes.
+        root.locator('[data-a=modo][data-v=Resumen]').click()
+        for t in ['Al cierre','Registro','Proceso','Cierre − registro']:self.assertIn(t,root.locator('[data-tabla=resumen] thead').inner_text())
+        # El calendario: un día con notas, por registro, abre sus notas en el panel.
+        root.locator('.mv-tabs [data-a=modo][data-v=Calendario]').click()
+        n=d[d.E!='ANULADO'];n=n[n.P!=''];dias=n.F.dt.normalize().nunique()
+        self.assertEqual(root.locator('.mv-cal button.mv-d').count(),dias)
+        self.assertEqual(root.locator('.mv-d.abre').count(),1)
+        root.locator('.mv-cal button.mv-d').first.click()
+        ref=n[n.F.dt.normalize()==n.F.dt.normalize().min()].V.sum()
+        self.assertAlmostEqual(pg.evaluate('__movPeriodo.D.total'),ref,places=7)
+        root.locator('.mv-chip').click()
+        # Por área: tres cuadros de lo mismo.
+        root.locator('[data-a=modo]',has_text='Por área').click()
+        self.assertEqual(root.locator('.mv-cuadros section').count(),3)
+        # «Ampliar» esconde el panel.
+        a=root.locator('.mv-zona').bounding_box()['width'];root.locator('[data-a=ampl]').click()
+        self.assertEqual(root.locator('.mv-pn').count(),0);self.assertGreater(root.locator('.mv-zona').bounding_box()['width'],a+200)
+        root.locator('[data-a=ampl]').click()
+        pg.set_viewport_size({'width':390,'height':844});self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'),390)
+        pg.set_viewport_size({'width':1323,'height':619})
+
+    def test_caida_de_notas_y_referencias_llegan_aparte(self):
+        d,h,_=muestra();d=h[(h.F>=pd.Timestamp('2024-01-01'))].copy();d['FP']=d.F;d['S']=''
+        # Nueve meses llenos y tres con muy pocas notas.
+        filas=[]
+        for m in pd.date_range('2024-01-01',periods=12,freq='MS'):
+            for i in range(30 if m.month<=9 else 3):
+                filas.append(dict(F=m+pd.Timedelta(days=i%27,hours=9),FP=m+pd.Timedelta(days=i%27,hours=10),D=f'{m:%y%m}-{i}',A='Cocina',E='PROCESADO',FM='Comida',P='Arroz',Q=1.,V=10.,T='Bajas',U='KILOS',C='',S=''))
+        d=pd.DataFrame(filas);rng=(pd.Timestamp('2024-01-01'),pd.Timestamp('2025-01-01'))
+        p=datos.armar(d,mp.SALIDAS,COLS,rango=rng,relojes=dict(reg='F',pro='FP',sub='S',aperturas=[]),hoy=dt.date(2025,2,1))
+        root=self.mount(p);self.pg.locator('[data-a=gran][data-v=Mes]').first.click()
+        self.assertIn('mucho menos',root.locator('.mv-pn').inner_text());self.assertIn('Notas',root.locator('.mv-kpis').inner_text())
+        # Requerimientos: la pieza pide lo vendido una vez y lo recibe en un montaje chico.
+        q=datos.armar(d,mp.REQUERIMIENTOS,COLS,rango=rng,relojes=dict(reg='F',pro='FP',sub='S',aperturas=[],pedir_refs=True,ap={'2024-03':50.}),hoy=dt.date(2025,2,1))
+        root=self.mount(q);pg=self.pg
+        self.assertEqual(pg.evaluate('__requests'),[['refs',1]])
+        self.assertIn('…',root.locator('.mv-kpis').inner_text())
+        pg.evaluate('k=>__montarMov({data:{parte:"refs",k,refs:{"2024-03":{plato:100,compras:40}}},parentElement:document.querySelector("#montar")})',q['k'])
+        self.assertIn('S/ 40',root.locator('.mv-kpis').inner_text().replace(',',''))
+        self.assertEqual(pg.evaluate('__requests.length'),1)
+
     def test_cuentas_originales_en_ambos_lados_y_todos_los_granos(self):
         for lado in [mp.REQUERIMIENTOS,mp.SALIDAS]:
             p,d,h,m=payload(lado);base=mp.lineas_documentos(d,**COLS);bh=mp.lineas_documentos(h,**COLS)
@@ -203,7 +285,10 @@ class Navegador(unittest.TestCase):
     def test_click_y_arrastre_del_tramo(self):
         root=self.mount();pg=self.pg
         root.locator('[data-a=gran][data-v=Mes]').click();root.locator('[data-bar="1"]').click()
-        self.assertEqual(pg.evaluate('__movPeriodo.s.modo'),'Detalle');self.assertEqual(len(pg.evaluate('__movPeriodo.D.seleccion')),1)
+        # Elegir no salta de pestaña: lo cuenta el panel (regla #772).
+        self.assertEqual(pg.evaluate('__movPeriodo.s.modo'),'Gráfico');self.assertEqual(len(pg.evaluate('__movPeriodo.D.seleccion')),1)
+        root.locator('.mv-ver').click();self.assertEqual(pg.evaluate('__movPeriodo.s.modo'),'Detalle')
+        root.locator('[data-a=modo][data-v=Gráfico]').click()
         root.locator('[data-a=rango]').click()
         a=root.locator('[data-bar="0"]').bounding_box();b=root.locator('[data-bar="2"]').bounding_box()
         pg.mouse.move(a['x']+a['width']/2,a['y']+20);pg.mouse.down();pg.mouse.move(b['x']+b['width']/2,b['y']+20,steps=6);pg.mouse.up()
@@ -224,8 +309,9 @@ class Navegador(unittest.TestCase):
                 text=' '.join(z.read(n).decode() for n in z.namelist() if n.endswith('.xml'))
                 self.assertIn('Fecha usada',text);self.assertIn('2023',text);self.assertIn('Comparación',text)
                 self.assertFalse(any(t.findall('.//s:f',ns) for t in sheets))
+        root.locator('[data-a=modo][data-v=Gráfico]').click()
         root.locator('[data-bar="0"]').focus();pg.keyboard.press('Enter')
-        self.assertEqual(pg.evaluate('__movPeriodo.s.modo'),'Detalle')
+        self.assertIsNotNone(pg.evaluate('__movPeriodo.s.foco'))
 
     def test_documento_completo_sin_perder_el_ambito(self):
         p,_,_,_=payload()
@@ -262,7 +348,6 @@ class Navegador(unittest.TestCase):
         sc=root.locator('[data-tabla=docs]');sc.evaluate('e=>{e.scrollTop=e.scrollHeight;e.dispatchEvent(new Event("scroll"))}')
         self.assertGreater(root.locator('[data-tabla=docs] tbody tr').count(),150)
         self.assertEqual(pg.evaluate('Math.round(document.querySelector(".mv-main").getBoundingClientRect().height)'),531)
-        self.assertEqual(pg.evaluate('Math.round(document.querySelector(".mv-detalle").getBoundingClientRect().height)'),575)
         pg.set_viewport_size({'width':390,'height':844})
         self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'),390)
         pg.set_viewport_size({'width':1323,'height':619});self.assertEqual(len(p['filas']),n+450)

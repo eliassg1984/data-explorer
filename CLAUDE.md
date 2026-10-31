@@ -296,7 +296,9 @@ remontaje y móvil en Chromium sin red. Las firmas de las cuatro tarjetas
 se conservan; Producción usa la misma pieza desde la regla #727.
 Porcionamientos tiene su montaje propio desde la regla #728; comparte el
 navegador y conserva sus cálculos de cabecera/cortes.
-La fecha y sus ajustes permanecen nativos. Ver regla #722.
+La fecha y sus ajustes permanecen nativos. Ver regla #722. Desde la #772 cubre
+además «Contar por» contra pandas en los tres relojes, los bordes del cierre, el
+calendario, los tres cuadros, «Ampliar», la caída de notas y lo que se pide aparte.
 
 `test_control_pieza.py` vigila Ventas › Control de pedidos como pieza propia
 (`ventas_control.js` y `.css`, `ventas_control_datos.py` y
@@ -560,7 +562,7 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   cuerpo y los dibujantes de `graficos/movimientos.py` (`renderizar`),
   con las mismas keys `mov_sec_*`. Y en Movimientos, requerimientos y
   salidas por período y por área son UNA vista con **perspectivas**
-  (regla #710): «Ver [Requerimientos | Salidas] [Por período | Por área]»
+  (regla #710): «Ver [Salidas | Requerimientos] [Resumen | Análisis por área]»
   en una franja sobre la tarjeta, que dibuja la vista de siempre de esa
   combinación (`movimientos.PERSPECTIVAS`). Desde la regla #712 es una
   pieza común, `graficos/base.py::dibujar_perspectiva`, que usan también
@@ -1436,6 +1438,27 @@ del producto, y lo demás en pestañas. Lo que muerde:
 - **Los tipos de faltante suman el faltante** (`ctipo`): si se agrega uno, se reparte
   de lo que hay.
 - **La pieza se pone su propio aire** (`.ajc-main`): no tiene tarjeta que se lo dé (#764).
+
+## Movimientos: «Contar por», calendario y Sin plato con Destino adentro
+
+Desde el 2026-10-31 (regla #772). Inventario › Movimientos son dos pestañas: Req. y
+salidas abre en Salidas, por mes y al cierre; Sin plato trae «Cierres | Productos».
+Boceto: https://claude.ai/artifact/JKeLmmTjg1yU1g9HYFyqeF. Lo que muerde:
+
+- **«Contar por» cambia en el navegador**: cada línea viaja con registro, proceso y
+  cierre, por `cols["relojes"]`, que `movimientos_periodo_pieza` saca antes de armar:
+  las firmas de las tarjetas no cambian. Sin eso `lineas_documentos` revienta.
+- **«Cierre» sólo mueve los bordes y sólo mes a mes** (`fecha_al_cierre`), con la
+  apertura de la mayoría; Sin plato corta por área, así que algún mes difiere en
+  decenas de soles. El calendario va SIEMPRE por registro.
+- **La pieza es de cuatro**: también Órdenes de producción y Porcionamientos. Lo que
+  se toque en `movimientos_periodo.js` se ve en las cuatro, y `P.relojes` separa.
+- **«Por área» (pestaña) y «Análisis por área» (perspectiva) son dos cosas**: la
+  segunda conserva su fecha, que abre en el mes en curso, y su Registro | Proceso.
+- **`window.__sinClave` lleva quién lo escribió** (`de`): sin eso, una pieza que se
+  vuelve a montar se pisa con su propio cierre.
+- **No decir que lo no registrado es el faltante**: la caída de notas desde julio es
+  sólida; que explique el faltante, no (por producto, sólo en parte).
 
 ## Stock: una pantalla, lista y ficha
 
@@ -2565,7 +2588,7 @@ de bugs reales, no de teoría.
 `test_sin_plato_cierre_pieza.py` vigila Sin plato por cierre como pieza
 propia: transporte completo, totales canónicos, cierres locales, lista sin
 tope de 40, búsqueda y sobrantes, comparación por día, salto al producto,
-Excel y móvil. `destino_datos.py` transporta la cuenta existente sin
+Excel y móvil; desde la #772, los indicadores, «Con documento» y la lectura. `destino_datos.py` transporta la cuenta existente sin
 recalcularla; la firma y los helpers de referencia siguen en
 `movimientos_destino.py`. Regla #736.
 

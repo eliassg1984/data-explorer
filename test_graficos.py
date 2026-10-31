@@ -4357,7 +4357,7 @@ def _pruebas_fecha_por_vista():
     # Sin categoría: las dos de merma traen su ventana, y las dos de cierre
     # a cierre (regla #645) eligen un CIERRE de inventario, no un rango.
     con_ventana = {"mov_sec_merma_rend", "mov_sec_merma_prov",
-                   "mov_sec_sinplato", "mov_sec_destino"}
+                   "mov_sec_sinplato", "mov_sec_destino", "mov_sec_persp_sin"}
     # Las de Producción también: son las mismas secciones, en otra pila
     # desde la regla #709.
     import graficos.produccion as prod
@@ -4550,7 +4550,8 @@ def _pruebas_ajustes_compartidos():
                  - set(mov._AJUSTES)), [])
     for ajuste in mov._AJUSTES:
         check(f"«{mov._AJUSTES[ajuste][1]}» se ve en dos vistas o más",
-              len(mov.vistas_con_ajuste(ajuste)) >= 2, True)
+              # La fecha de «Por período» se elige en la pieza («Contar por», #772).
+              len(mov.vistas_con_ajuste(ajuste)) >= (1 if ajuste in ("req_fecha", "sal_fecha") else 2), True)
     check("las salidas comparan en su vista y en la de área",
           mov.vistas_con_ajuste("comparar", salvo="sal_periodo"),
           ["Salidas por Área"])
@@ -5236,9 +5237,9 @@ def _pruebas_perspectivas_movimientos():
           [mov._rotulo_rail(p[3]) for p in mov.PERSPECTIVAS],
           ["Requerimientos por Período", "Requerimientos por Área",
            "Salidas por Período", "Salidas por Área"])
-    check("la fecha de los requerimientos cambia en sus dos perspectivas",
+    check("la fecha de los requerimientos cambia en «Análisis por área»; «Resumen» cuenta con su «Contar por»",
           mov.vistas_con_ajuste("req_fecha"),
-          ["Requerimientos por Período", "Requerimientos por Área"])
+          ["Requerimientos por Área"])
     fuente = inspect.getsource(mov.renderizar)
     check("el dibujante elige con los dos ejes y dibuja la vista de siempre",
           ('dibujar_perspectiva("mov", EJES_LADOS, PERSPECTIVAS, _DIBUJANTES)'
@@ -8428,10 +8429,13 @@ def _pruebas_sin_plato():
     nuevas = ("Sin plato por cierre", "En qué se fue cada producto")
     check("los ids escritos son los del salto entre las dos",
           (md.VISTA_CIERRE, md.VISTA_PRODUCTO), nuevas)
-    check("las dos vistas en el rail", [x in ids for x in nuevas],
-          [True, True])
-    check("y en la pila, una tras otra",
-          [v for _c, v in mov._PILA if v in nuevas], list(nuevas))
+    # Desde la regla #772, una pestaña con dos perspectivas.
+    check("una sola vista en el rail", [x in ids for x in nuevas],
+          [True, False])
+    check("y en la pila, con su sección de perspectivas",
+          [c for c, v in mov._PILA if v in nuevas], [mov.SEC_SIN])
+    check("las dos son perspectivas",
+          [p[2] for p in mov.PERSPECTIVAS_SIN], list(nuevas))
     check("la vieja en ninguno",
           "Destino de lo que entra" in ids
           or any(v == "Destino de lo que entra" for _c, v in mov._PILA), False)
@@ -10109,7 +10113,7 @@ def _pruebas_detalle_salidas():
     check("«Detalle de salidas» es la perspectiva Salidas · Por área",
           [(p[0], p[1], p[2]) for p in mov.PERSPECTIVAS
            if p[3] == "Detalle de salidas"],
-          [("Salidas", "Por área", "mov_sec_detalle_sal")])
+          [("Salidas", "Análisis por área", "mov_sec_detalle_sal")])
     check("«Top productos · salidas» ya no está",
           ("Top productos · salidas" in ids_rail
            or "Top productos · salidas" in ids_pila), False)

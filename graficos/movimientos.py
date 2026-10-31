@@ -151,11 +151,13 @@ Punto de entrada público: renderizar_graficos_movimientos().
 import re
 import unicodedata
 
+import datetime as dt
+
 import pandas as pd
 import streamlit as st
 
 import franja_fecha
-from data import cargar as _cargar_reporte, secrets_disponibles, sello_datos
+from data import cargar as _cargar_reporte, periodos_conteo as _periodos_conteo, secrets_disponibles, sello_datos
 from estado_rango import atajos_tarjeta
 from estilos import TAM_FUENTE
 from tablas import renderizar_aggrid_desktop
@@ -171,6 +173,7 @@ from graficos.movimientos_comun import K_RECARGA, recargar_si_cambio
 # período»: el «Detalle de salidas» y la cadena de requerimientos suman lo
 # mismo que ellas (reglas #511 y #641), y dos copias de «qué es un documento
 # anulado» —o de cómo se escribe «3 anuladas»— se separan al primer retoque.
+from graficos.movimientos_periodo_datos import fecha_al_cierre
 from graficos.movimientos_periodo import (
     _ANULADO, REQUERIMIENTOS, SALIDAS, aviso_poco_registro,
     aviso_rango_poco_registro,
@@ -189,7 +192,7 @@ from graficos.movimientos_requerimientos import (
     lineas_req, marcas_de, pedido_y_salida, seccion_productos as productos_req,
     ventana_meses,
 )
-from graficos.movimientos_destino import tarjeta_por_producto, tarjeta_sin_plato
+from graficos.movimientos_destino import K_VISTA_SIN, tarjeta_por_producto, tarjeta_sin_plato
 from graficos.movimientos_merma import (
     VALOR_HOY, control_valorizacion, precios_hoy, tarjeta_proveedores,
     tarjeta_rendimiento, tarjeta_revisar, unidades_kardex, valorizacion,
@@ -246,8 +249,9 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # ids van escritos (los lee con `ast` `test_graficos.py`) y son los de
     # `movimientos_destino.VISTA_CIERRE` y `VISTA_PRODUCTO`, que usa el salto
     # de una a otra: lo vigila `_pruebas_sin_plato`.
+    # Desde la regla #772 son una pestaña: «Cierres | Productos», perspectivas de
+    # la misma cuenta. El id del rail es el del primero, el del salto.
     ("Salidas", (("Sin plato por cierre", "Sin plato, cierre por cierre", ":material/no_meals:"),
-                 ("En qué se fue cada producto", "En qué se fue cada producto", ":material/alt_route:"),
                  ("Tabla · salidas",     "Tabla · sal.",        ":material/table_view:"))),
 ))
 
@@ -266,16 +270,18 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
 # sub almacén», el de la Evolución y el ranking de Sub Almacén desde el
 # 2026-09-13; las dos «por período», el del Top de requerimientos y el de
 # «Tipo de descargo» desde el 2026-09-23.
-LADOS = ("Requerimientos", "Salidas")
-CORTES = ("Por período", "Por área")
+# Desde la regla #772 abre en Salidas, y el segundo eje es «Resumen» (la pieza,
+# que ya trae su pestaña «Por área») o «Análisis por área» (los cuadros en cadena).
+LADOS = ("Salidas", "Requerimientos")
+CORTES = ("Resumen", "Análisis por área")
 PERSPECTIVAS = (
-    ("Requerimientos", "Por período", "mov_sec_periodo",
+    ("Requerimientos", "Resumen", "mov_sec_periodo",
      "Requerimientos por período", "Requerimientos por Período"),
-    ("Requerimientos", "Por área", "mov_sec_cadena",
+    ("Requerimientos", "Análisis por área", "mov_sec_cadena",
      "Por sub almacén", "Requerimientos por Área"),
-    ("Salidas", "Por período", "mov_sec_sal_periodo",
+    ("Salidas", "Resumen", "mov_sec_sal_periodo",
      "Salidas por período", "Salidas por Período"),
-    ("Salidas", "Por área", "mov_sec_detalle_sal",
+    ("Salidas", "Análisis por área", "mov_sec_detalle_sal",
      "Detalle de salidas", "Salidas por Área"),
 )
 SEC_LADOS = "mov_sec_persp_lados"
@@ -286,6 +292,14 @@ K_LADO, K_CORTE = "_mov_persp_lado", "_mov_persp_corte"
 widgets, para que sobrevivan a que la sección no se dibuje (otro reporte,
 el esqueleto) — `base.eleccion_compartida`."""
 EJES_LADOS = ((K_LADO, "Lado", LADOS), (K_CORTE, "Corte", CORTES))
+# Sin plato y En qué se fue cada producto (regla #772): la misma cuenta, de lo
+# general a lo particular. La sección de cada una sigue siendo la suya.
+PERSPECTIVAS_SIN = (
+    ("Cierres", "mov_sec_sinplato", "Sin plato por cierre", "Sin plato, cierre por cierre"),
+    ("Productos", "mov_sec_destino", "En qué se fue cada producto", "En qué se fue cada producto"),
+)
+SEC_SIN = "mov_sec_persp_sin"
+EJES_SIN = ((K_VISTA_SIN, "Vista", ("Cierres", "Productos")),)
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA tupla
 # (el porqué, en `graficos/compras/__init__.py::_PILA`).
@@ -303,8 +317,7 @@ EJES_LADOS = ((K_LADO, "Lado", LADOS), (K_CORTE, "Corte", CORTES))
 _PILA = pila_sin_tablas((
     ("mov_sec_persp_lados", "Requerimientos y salidas"),
     ("mov_sec_tabla_req",   "Tabla · requerim."),
-    ("mov_sec_sinplato",    "Sin plato por cierre"),
-    ("mov_sec_destino",     "En qué se fue cada producto"),
+    ("mov_sec_persp_sin",   "Sin plato por cierre"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
 ))
 
@@ -359,6 +372,12 @@ def ctx_de_vista(categoria, fechas=None):
     pedido = "m12" if categoria in VISTAS_EN_12_MESES else "d30"
     defecto = next((r for c, _n, _g, r in atajos_tarjeta(ancla, (fmin, fmax))
                     if c == pedido), None)
+    # Req. y salidas abren en Mes (regla #772): doce barras enteras, sin un
+    # primer mes de un solo día.
+    if defecto and categoria in ("req_periodo", "sal_periodo") and defecto[0].day != 1:
+        ini = defecto[0]
+        ini = (ini.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
+        defecto = (ini, defecto[1])
     return {**ctx, "fecha_min": fmin, "fecha_max": fmax,
             "rango_default_cat": {categoria: defecto} if defecto else {}}
 
@@ -616,10 +635,10 @@ AJUSTES_PIE = {
     # categoría de la vista (`CATEGORIA_VISTA`): los ajustes de su pie.
     # Las dos de cierre a cierre (regla #645) no tienen panel de fecha: eligen
     # un cierre y comparan contra los seis anteriores.
-    "req_periodo": ("req_fecha",),
+    # «Por período» elige su fecha en la pieza, con «Contar por» (regla #772).
     "req_area":    ("req_fecha",),
     "req_tabla":   ("req_fecha",),
-    "sal_periodo": ("sal_fecha", "comparar"),
+    "sal_periodo": ("comparar",),
     "sal_area":    ("sal_fecha", "comparar"),
     "sal_tabla":   ("sal_fecha",),
 }
@@ -823,6 +842,47 @@ def nota_salidas_ia(fecha):
         "motivo escrito y sólo se lee en las Bajas (desde octubre de 2025). "
         "Un mes con muchas menos notas que los anteriores puede ser falta "
         "de registro y no menos merma: si lo ves, dilo.")
+
+
+def _con_relojes(d, col_reg, cols_fecha, rng, *, col_fam_sub=None, col_val=None,
+                 col_est=None, col_prod=None):
+    """`(d, relojes)`: las líneas de `d` cuya fecha de registro, de proceso o al
+    cierre cae en `rng`, con las tres en columnas, para que «Contar por» cambie
+    en el navegador (regla #772). Sin los períodos del kardex (un blip, el demo)
+    no hay «Cierre» y siguen las otras dos. Con `col_val`, también lo de un año
+    antes por mes: Salidas ya lo trae en su comparación."""
+    col_pro = _resolver(d, cols_fecha[FECHA_PROCESO])
+    reg = pd.to_datetime(d[col_reg], errors="coerce") if col_reg else None
+    pro = pd.to_datetime(d[col_pro], errors="coerce") if col_pro else None
+    conteo = _periodos_conteo() or {}
+    periodos = conteo.get("periodos") or []
+    extra = {}
+    if reg is not None:
+        extra["__f_reg"] = reg
+    if pro is not None:
+        extra["__f_pro"] = pro
+        if periodos:
+            extra["__f_cie"] = fecha_al_cierre(pro, periodos)
+    out = d.assign(**extra)
+    if rng is not None and extra:
+        en = pd.Series(False, index=d.index)
+        for f in extra.values():
+            en |= (f >= rng[0]) & (f < rng[1])
+        out = out[en]
+    ap = {}
+    if col_val and reg is not None:
+        vale = pd.Series(True, index=d.index)
+        if col_est:
+            vale &= d[col_est].fillna("").astype(str).str.strip().str.upper() != _ANULADO
+        if col_prod:
+            vale &= d[col_prod].notna()
+        mes = (reg + pd.DateOffset(years=1)).dt.strftime("%Y-%m")
+        ap = pd.to_numeric(d[col_val], errors="coerce")[vale].groupby(mes[vale]).sum().to_dict()
+    return out, {"reg": "__f_reg" if reg is not None else None,
+                 "pro": "__f_pro" if pro is not None else None,
+                 "cie": "__f_cie" if "__f_cie" in extra else None,
+                 "sub": col_fam_sub, "ap": ap,
+                 "aperturas": [p["t1"].date() for p in periodos if not p.get("en_curso")]}
 
 
 def _cargar_salidas(col_fam_sal, fam_sel, sub_sel=(), fecha=FECHA_REGISTRO):
@@ -1301,7 +1361,10 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
         # Compras. La fecha es la SUYA (regla #617): se recorta acá y el
         # botón lo dibuja la tarjeta.
         rng, fecha = _rango_y_boton("mov_sec_periodo", fechas_req)
-        _d_rng = _req_de(rng)
+        _d_rng, _rel = _con_relojes(d, col_fecha_reg, _COLS_FECHA_REQ, rng,
+                                    col_fam_sub=_resolver(d, ["NOMBRE SUBFAMILIA", "Nombre Subfamilia"]),
+                                    col_val=col_val, col_est=col_estado, col_prod=col_prod)
+        _rel["pedir_refs"] = True
         # La cantidad del detalle lleva su unidad del maestro, como Salidas.
         # Es una copia: las marcas conservan el índice del requerimiento.
         _col_um = None
@@ -1317,10 +1380,10 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
             marcas=marcas_de(_d_rng, fecha=col_fecha_reg, doc=col_req,
                              sub=col_sub, cod=col_cod_req, cant=col_cant,
                              valor=col_val, estado=col_estado),
-            cols=dict(fecha=col_fecha, doc=col_req, area=col_sub,
+            cols=dict(fecha=col_fecha_reg or col_fecha, doc=col_req, area=col_sub,
                       estado=col_estado, fam=col_fam, prod=col_prod,
                       cant=col_cant, punit=col_punit, val=col_val,
-                      unid=_col_um))
+                      unid=_col_um, relojes=_rel))
 
     def _dib_sal_periodo():
         # La MISMA tarjeta sobre salidas (2026-09-23, en lugar de la dona de
@@ -1333,11 +1396,14 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
                 _sin_salidas()
             return
         rng, fecha = _rango_y_boton("mov_sec_sal_periodo", fechas_sal)
+        _reg_sal = _col_sal(*_COLS_FECHA_SAL[FECHA_REGISTRO]) or col_fecha_sal
+        _d_sal, _rel = _con_relojes(hist_sal, _reg_sal, _COLS_FECHA_SAL, rng,
+                                    col_fam_sub=_col_sal("NOMBRE SUBFAMILIA", "Nombre Subfamilia"))
         tarjeta_salidas_periodo(
-            recortar_vista(hist_sal, rng), orden=orden, hist=hist_sal,
+            _d_sal, orden=orden, hist=hist_sal,
             anios=anios_comp, rot_fecha=_ROT_FECHA[fecha_sal],
             rango=rng, fecha=fecha,
-            cols=dict(fecha=col_fecha_sal,
+            cols=dict(fecha=_reg_sal,
                       doc=_col_sal("Cod Salida", "COD SALIDA"),
                       area=_col_sal(*_COLS_AREA_SALIDAS),
                       estado=_col_sal("Nombre Estado Salida",
@@ -1347,7 +1413,7 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
                       cant=_col_sal("Cant Salida", "CANT SALIDA"),
                       val=col_val_sal, tipo=col_tipo,
                       unid=_col_sal(COL_UNIDAD_SAL),
-                      causa=_col_sal(COL_CAUSA_DET)),
+                      causa=_col_sal(COL_CAUSA_DET), relojes=_rel),
             faltante=faltante_cierres())
 
     def _dib_tabla_req():
@@ -1627,6 +1693,7 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
         "mov_sec_tabla_req":   _dib_tabla_req,
         "mov_sec_sal_periodo": _dib_sal_periodo,
         "mov_sec_detalle_sal": _dib_detalle_sal,
+        "mov_sec_persp_sin":   lambda: dibujar_perspectiva("sin", EJES_SIN, PERSPECTIVAS_SIN, _DIBUJANTES),
         "mov_sec_sinplato":    _dib_sin_plato,
         "mov_sec_destino":     _dib_producto,
         "mov_sec_tabla_sal":   _dib_tabla_sal,

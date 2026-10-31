@@ -120,6 +120,7 @@ class Navegador(unittest.TestCase):
         root.locator('[data-input=q]').fill('OP-05');self.assertEqual(self.pg.evaluate('__movPeriodo.D.docs.length'),1)
         self.assertEqual(self.pg.evaluate('__movPeriodo.D.total'),total);self.assertEqual(self.pg.evaluate('__requests.length'),0)
         self.assertIn('Usuario',root.inner_text())
+        root.locator('[data-a=modo][data-v=Gráfico]').click()
         self.assertIn('Por usuario',root.inner_text())
 
     def test_seleccion_tramo_y_documento_completo(self):

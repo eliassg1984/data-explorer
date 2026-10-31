@@ -142,7 +142,7 @@ class Navegador(unittest.TestCase):
     def tearDownClass(cls):cls.br.close();cls.pw.stop()
 
     def mount(self,P=None,ui=None):
-        self.pg.set_viewport_size({'width':1323,'height':619});self.pg.evaluate('([P,ui])=>{sessionStorage.setItem("destino_producto_737",JSON.stringify(ui||{}));window.triggers=[];montarProducto({data:P,parentElement:mount,setTriggerValue:(k,v)=>triggers.push([k,v])})}',[P or payload()[0],ui]);return self.pg.locator('.dst-producto')
+        self.pg.set_viewport_size({'width':1323,'height':619});self.pg.evaluate('([P,ui])=>{window.__sinClave=undefined;sessionStorage.setItem("destino_producto_737",JSON.stringify(ui||{}));window.triggers=[];montarProducto({data:P,parentElement:mount,setTriggerValue:(k,v)=>triggers.push([k,v])})}',[P or payload()[0],ui]);return self.pg.locator('.dst-producto')
 
     def test_tabla_filtros_contra_helpers(self):
         P,f=payload();self.mount(P)
@@ -208,6 +208,16 @@ class Navegador(unittest.TestCase):
         with self.pg.expect_download() as dl:root.locator('[data-a=excel]').click()
         with zipfile.ZipFile(dl.value.path()) as z:
             self.assertEqual(len([n for n in z.namelist() if n.startswith('xl/worksheets/')]),7);self.assertIn('0000001',z.read('xl/worksheets/sheet1.xml').decode());self.assertIn('0000002',z.read('xl/worksheets/sheet3.xml').decode())
+
+    def test_ampliar_trae_todas_las_columnas_y_esconde_la_ficha(self):
+        root=self.mount();cab=lambda:root.locator('thead[data-k=cab]').inner_text()
+        self.assertIn('Con nota',cab());self.assertNotIn('En prep.',cab());self.assertNotIn('vs 6 cierres',cab())
+        root.locator('[data-a=ampl]').click()
+        self.assertFalse(root.locator('.dst-ficha').is_visible())
+        for t in ['En prep.','Bajas','Otras','vs 6 cierres']:self.assertIn(t,cab())
+        root.locator('[data-a=ampl]').click();self.assertTrue(root.locator('.dst-ficha').is_visible())
+        # La fila dice en su título lo que abajo del nombre ya no entra.
+        self.assertIn('·',root.locator('tr[data-a=producto]').first.get_attribute('title'))
 
     def test_movil_y_eventos_duplicados(self):
         root=self.mount();self.mount();self.pg.set_viewport_size({'width':390,'height':844});self.assertLessEqual(root.evaluate('e=>e.getBoundingClientRect().right'),390);root.locator('[data-a=anterior]').click();self.assertEqual(self.pg.evaluate('__destinoProducto.s.k'),0)

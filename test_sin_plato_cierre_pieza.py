@@ -65,7 +65,7 @@ class Contrato(unittest.TestCase):
         import navegacion
         P=payload();ss={'_sin_plato_cierre_cache':('',P),'sin_plato_cierre_pieza':{'abrir':dict(sello=P['sello'],k=1,cod='0000000')}};fake=SimpleNamespace(session_state=ss)
         with patch.object(pieza,'st',fake),patch.object(md,'st',fake):
-            pieza._abrir();self.assertEqual(ss[md.K_CIERRE_2],'cierre_1');self.assertEqual(ss[md._K_FOCO],'0000000');self.assertEqual(ss[navegacion.CLAVE_SALTO_VISTA],md.VISTA_PRODUCTO);self.assertNotIn('_sin_plato_cierre_salto',ss)
+            pieza._abrir();self.assertEqual(ss[md.K_CIERRE_2],'cierre_1');self.assertEqual(ss[md._K_FOCO],'0000000');self.assertEqual(ss[navegacion.CLAVE_SALTO_VISTA],md.VISTA_CIERRE);self.assertEqual(ss[md.K_VISTA_SIN],'Productos');self.assertNotIn('_sin_plato_cierre_salto',ss)
             for v in [dict(sello='viejo',k=1,cod='0000000'),dict(sello=P['sello'],k=True,cod='0000000'),dict(sello=P['sello'],k=1,cod='0000002'),dict(sello=P['sello'],k=-1,cod='0000000')]:
                 ss['sin_plato_cierre_pieza']['abrir']=v;before=ss[md._K_SALTO];pieza._abrir();self.assertEqual(ss[md._K_SALTO],before)
 
@@ -96,7 +96,7 @@ class Navegador(unittest.TestCase):
     def tearDownClass(cls):cls.br.close();cls.pw.stop()
 
     def mount(self,P=None,ui=None):
-        self.pg.set_viewport_size({'width':1323,'height':619});self.pg.evaluate('([P,ui])=>{sessionStorage.setItem("sin_plato_cierre_736",JSON.stringify(ui||{}));window.triggers=[];montarDestino({data:P,parentElement:mount,setTriggerValue:(k,v)=>triggers.push([k,v])})}',[P or payload(),ui]);return self.pg.locator('.dst-cierre')
+        self.pg.set_viewport_size({'width':1323,'height':619});self.pg.evaluate('([P,ui])=>{window.__sinClave=undefined;sessionStorage.setItem("sin_plato_cierre_736",JSON.stringify(ui||{vista:"lista"}));window.triggers=[];montarDestino({data:P,parentElement:mount,setTriggerValue:(k,v)=>triggers.push([k,v])})}',[P or payload(),ui]);return self.pg.locator('.dst-cierre')
 
     def test_rank_contra_cuenta_sin_tope_40_y_empates(self):
         P=payload(170);root=self.mount(P);d=self.pg.evaluate('__sinPlatoCierre.D');self.assertEqual(len(d['todos']),173);self.assertEqual(root.locator('tbody[data-k=ranking] tr').count(),150)
@@ -117,15 +117,15 @@ class Navegador(unittest.TestCase):
         q.fill('');root.locator('[data-k=min]').select_option('100');self.assertEqual(len(self.pg.evaluate('__sinPlatoCierre.D.visibles')),0)
 
     def test_cierre_grafico_y_sobrantes_son_locales(self):
-        root=self.mount();root.locator('[data-a=anterior]').click();self.assertEqual(self.pg.evaluate('__sinPlatoCierre.s.k'),0);root.locator('svg [data-a=cierre][data-v="1"]').click();self.assertEqual(self.pg.evaluate('__sinPlatoCierre.s.k'),1)
-        root.locator('[data-k=modo]').select_option('sobr');self.assertTrue(all(r['valor']==5 for r in self.pg.evaluate('__sinPlatoCierre.D.todos')));self.assertEqual(self.pg.evaluate('triggers.length'),0)
+        root=self.mount(ui={'vista':'graf'});root.locator('[data-a=anterior]').click();self.assertEqual(self.pg.evaluate('__sinPlatoCierre.s.k'),0);root.locator('svg [data-a=cierre][data-v="1"]').click();self.assertEqual(self.pg.evaluate('__sinPlatoCierre.s.k'),1)
+        root.locator('[data-a=vista][data-v=lista]').click();root.locator('[data-k=modo]').select_option('sobr');self.assertTrue(all(r['valor']==5 for r in self.pg.evaluate('__sinPlatoCierre.D.todos')));self.assertEqual(self.pg.evaluate('triggers.length'),0)
 
     def test_comparacion_usa_totales_completos_y_dias_reales(self):
         self.mount();js=self.pg.evaluate('__destinoDatos.comparar(__sinPlatoCierre.B,1)');per,f,t=muestra();tk=t.set_index('k');self.assertEqual(js[0]['actual'],tk.loc[1,['baja','otras','falt']].sum());self.assertEqual(js[0]['por_dia'],js[0]['actual']/30)
         self.assertTrue(all(r['antes'] is None for r in self.pg.evaluate('__destinoDatos.comparar(__sinPlatoCierre.B,0)')))
 
     def test_grafico_contra_plotly_incluye_negativos(self):
-        per,f,t=muestra();t.loc[0,'otras']=-50;P=datos.armar(per,f,t)|dict(inicial=1,parte='cierre');self.mount(P);js=self.pg.evaluate('__destinoDatos.grafico(__sinPlatoCierre.B,1)');fig,ks=md._fig_cierres(t,per,1)
+        per,f,t=muestra();t.loc[0,'otras']=-50;P=datos.armar(per,f,t)|dict(inicial=1,parte='cierre');self.mount(P,ui={'vista':'graf'});js=self.pg.evaluate('__destinoDatos.grafico(__sinPlatoCierre.B,1)');fig,ks=md._fig_cierres(t,per,1)
         for i,k in enumerate(ks):
             for j,tr in enumerate(fig.data):self.assertEqual(js[i]['partes'][j]['v'],tr.y[i])
         rects=self.pg.locator('.dst-chart rect').evaluate_all('rs=>rs.map(r=>Number(r.getAttribute("height")))');self.assertTrue(all(v>=0 for v in rects))
@@ -141,6 +141,21 @@ class Navegador(unittest.TestCase):
             self.assertEqual(len([n for n in z.namelist() if n.startswith('xl/worksheets/')]),8)
             xml=z.read('xl/worksheets/sheet1.xml').decode();self.assertIn('0000001',xml);self.assertIn('<v>6</v>',xml)
             fuente=z.read('xl/worksheets/sheet3.xml').decode();self.assertIn('0000002',fuente);self.assertEqual(fuente.count('<row '),5)
+
+    def test_una_pantalla_indicadores_con_documento_y_lectura(self):
+        P=payload();root=self.mount(P,ui={'vista':'graf'});per,f,t=muestra();tk=t.set_index('k');tt=tk.loc[1]
+        self.assertEqual(root.locator('.dst-kpi').count(),4)
+        d=(tt.baja+tt.otras)/(tt.baja+tt.otras+tt.falt)*100
+        self.assertAlmostEqual(self.pg.evaluate('__destinoDatos.conDoc(__sinPlatoCierre.B.tot.get(1))'),d,places=7)
+        self.assertIn(f'{round(d)} %',root.locator('.dst-kpis').inner_text())
+        self.assertIn('Lectura de',root.locator('.dst-pn').inner_text())
+        # El producto de más peso abre desde la lectura, sin pasar por la lista.
+        root.locator('.dst-pn [data-a=abrir]').first.click();self.assertEqual(self.pg.evaluate('triggers.length'),1)
+        # Cada pestaña muestra su zona.
+        for v,k in [('lista','tbody[data-k=ranking]'),('compara','tbody[data-k=comparar]'),('cuenta','[data-k=ecuacion]')]:
+            root.locator(f'[data-a=vista][data-v={v}]').click();self.assertTrue(root.locator(k).is_visible());self.assertFalse(root.locator('[data-k=chart]').is_visible())
+        # El cierre elegido viaja a la otra perspectiva, sin pisar el suyo al volver.
+        self.assertEqual(self.pg.evaluate('window.__sinClave.de'),'cierre')
 
     def test_movil_no_desborda_y_no_duplica_eventos(self):
         root=self.mount();self.mount();self.pg.set_viewport_size({'width':390,'height':844});self.assertLessEqual(root.evaluate('e=>e.getBoundingClientRect().right'),390)
