@@ -185,7 +185,9 @@ saltar a Costo de Carta, y que el navegador rehaga los puestos (empates),
 el movimiento, la variación POR DÍA y el % de costo con las mismas
 fórmulas que Python. Ver `arquitectura.md` regla #699. Y la Ingeniería de
 menú (`ventas_menu.armar_menu` y `ventas_menu.js`, regla #700): que cada
-plato llegue con la clase de `clasificar` y que el `.js` no reclasifique.
+plato llegue con la clase de `clasificar` y que el `.js` no reclasifique. Desde
+la #767, en Chromium: a 1240×650 entran los controles, diez filas y la ficha, y
+el corte, los períodos y la categoría vuelven por `cromo`.
 
 `test_historial_recetas.py` vigila la FOTO de las recetas de venta
 (`historial_recetas.py`): contra un R2 de mentira, que se nombre por el
@@ -1331,8 +1333,8 @@ corrida. Lo que muerde:
 Desde el 2026-10-23 (regla #714) Ventas › «Venta por Periodo» es una pieza
 propia (`graficos/ventas_resumen.py` + `ventas_periodo.js` + `.css`): el
 grano, los filtros, las barras, el tramo arrastrado, el Resumen, el Detalle,
-el buscador y el Excel los resuelve el navegador; sólo la fecha —el botón de
-Python, puesto encima de la pieza— pide una corrida. Lo que muerde:
+el buscador y el Excel los resuelve el navegador; sólo la fecha —la de la
+franja, desde la #766— pide una corrida. Lo que muerde:
 
 - **Python manda la venta SUMADA POR COMPROBANTE Y GRUPO** (`armar_periodo`),
   con 4 decimales: redondeada a céntimos corría el neto del mes. Las líneas
@@ -1350,13 +1352,30 @@ Python, puesto encima de la pieza— pide una corrida. Lo que muerde:
   gráfico, el resto va al panel de al costado (Desglose | Qué movió | Cierre)
   y las barras llevan cifra sólo en lo clave («Clave | Todas»). Clientes y
   ticket encima de la venta, en «Capas». Elegir una barra ya no salta a los
-  pedidos: los abre «Ver sus pedidos». «Ampliar» deja el gráfico o la tabla.
+  pedidos: los abre «Ver sus pedidos». Desde la #766 el gráfico y la tabla son UNA zona
+  («Gráfico | Tabla», `st.zona`), «Ampliar» esconde el panel y la columna de
+  variación sigue a «Contra» (`celdaContra`).
 - **Las bases («Contra») son días fuera del rango**: la pieza los pide (trigger
   `historia`) y llegan en otro montaje chico, por comprobante y grupo
   (`armar_historia`), para filtrar y contar clientes igual que `calcular`.
   «Qué movió» es la cuenta de `puenteC` de Comparativo; el presupuesto del
   Cierre, la columna «bruta». El último dato tiene un día de margen: el
   parquet llega por registro y la venta por turno.
+
+## «Análisis de platos»: una fila de controles, una zona por pestaña
+
+Desde el 2026-10-31 (regla #767; pieza propia desde la #699). El corte, «Comparar»
+y la categoría son de las piezas (`ventas_platos_cromo.js` + `.css`, antepuestos al
+ranking y a la Ingeniería): no hay widgets de Streamlit en la tarjeta. Lo que muerde:
+
+- **Lo que carga datos vuelve por el trigger `cromo`** (`ventas_platos._al_cromo`) y
+  espera 1,2 s si son meses o subgrupos: tres clics, un recálculo.
+- **Tabla y Puestos son una pieza; Ingeniería de menú, otra**: pasar de una a otra es
+  una corrida, y la pestaña se recuerda en `localStorage` porque la pieza nace de cero.
+- **Nada de `st.spinner` antes de la pieza**: la movería. La zona se apaga mientras
+  espera (`.cargando`).
+- **La fecha de la franja no manda en esta vista** (ni en Comparativo): sigue a la
+  vista porque es de todo Ventas. Pendiente.
 
 ## «Mix de carta»: una zona grande y la lista al costado
 

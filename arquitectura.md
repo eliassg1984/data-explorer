@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-764 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+766 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (250)
+**CSS y estilos** (252)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -317,6 +317,8 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#755** — Ventas: el filtro de grupo es de CADA TARJETA, no de la franja
 - **#762** — Documentos SUNAT: una cabecera, la misma en las cuatro vistas, y «Falta cargar» en naranja
 - **#764** — El marco de la app: una hoja blanca sobre lavanda, con la franja siempre a la vista
+- **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
+- **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 
 **Layout y alturas** (107)
 
@@ -560,7 +562,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#744** — La ficha del plato de «Costo de Carta» es una pieza propia: dice qué mueve el costo de hoy y…
 - **#751** — Producción › «Consumo según ventas» dice la cuenta de cada porcionamiento, deja elegir el…
 
-**AgGrid y tablas** (97)
+**AgGrid y tablas** (98)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -659,8 +661,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#667** — «Ver por» en el Detalle de Venta por Período: Pedido, Mesero, Servicio o Comprobante
 - **#724** — Stock › Por área y familia es una PIEZA PROPIA con matriz y comparación entre áreas
 - **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
+- **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 
-**Streamlit** (171)
+**Streamlit** (172)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -833,6 +836,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#714** — Ventas › «Venta por Periodo» es una PIEZA PROPIA (ventas_periodo.js + .css), con las cinco…
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
+- **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 
 **Datos, R2 y DuckDB** (130)
 
@@ -57686,6 +57690,54 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      su hueco. Documentos SUNAT tenía sus vistas también en la cabecera de la tarjeta
      (#762), porque la franja no se veía: desde 901px se esconden. (2026-10-30.)
 
+766. **Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la
+     fecha es la de la franja.** En la pantalla real (1366×650) la tabla mostraba 3 filas y
+     media de 31 días, con 14 controles encima. Boceto:
+     https://claude.ai/artifact/JKeLmmTjg1yU1g9HYFyqeF. Lo que queda:
+     - **`st.zona` (`graf` | `tabla`) reemplaza a `ampl`**: la pestaña elige cuál toma el alto
+       que queda (12 filas) y el panel de al costado sigue. «Ampliar» sólo esconde el panel;
+       con la tabla, además, vuelven las variaciones de cada celda (`.tabla-amp`). Lo que antes
+       saltaba a la tabla sigue saltando: «Ver sus pedidos», arrastrar un tramo y un enlace que
+       pide una subvista (Costos) escriben `st.zona`.
+     - **La columna de variación decía otra cosa que la barra.** Con «Contra: Año pasado» medía
+       contra el día anterior: el viernes 2 de octubre, +17 % en verde en la tabla y −16 %
+       contra el año pasado. Con una base es `celdaContra` y su rótulo es «vs año pasado»; sin
+       base, la de siempre. Las otras variaciones (`.n`, sólo con «Ampliar») siguen contra la
+       barra anterior y lo dicen en su ayuda.
+     - **El Excel multiplicaba la variación por 100**: `val` trataba «+17%» como un ratio.
+     - **Se fue el botón de fecha de la tarjeta** (`vt_periodo_fecha`): escribía la misma clave
+       que la fecha de la franja. Con él se fue `--vp-fecha`. Las reglas de esa key en `estilos/`
+       quedaron sin nadie a quien estilar.
+     - **Las barritas de una celda son una línea de 2 px debajo de la cifra**: de fondo entero
+       se leían como texto seleccionado.
+     (2026-10-31.)
+
+767. **Análisis de platos: una fila de controles y una zona por pestaña.** Medido a 1366×650:
+     32 controles antes de la tabla, que arrancaba a 307 px; 6 de 15 filas; la tarjeta medía
+     más que la pantalla y los botones de la ficha quedaban bajo su scroll. Ahora 16 controles,
+     la tabla a ~222 px y 12 de 15 filas de un renglón. Mismo boceto de la #766. Lo que muerde:
+     - **El corte, los períodos y la categoría son de la pieza, no widgets de Streamlit**
+       (`ventas_platos_cromo.js` + `.css`, antepuestos a las DOS piezas). Vuelven a Python por
+       el trigger `cromo` y `_al_cromo` los escribe en sus claves de siempre (`vt_pl_vista`,
+       `vt_pl_corte`, `vt_pl_per_<corte>`, `vt_ing_subs`), que `_cuerpo` valida antes de usar.
+       Los meses y la categoría esperan 1,2 s (o a que se cierre el menú), como el panel de
+       fecha (#616): tres meses recalculan una vez.
+     - **Sin `st.spinner` arriba de la pieza**: la movería. Mientras espera lo que pidió, la
+       zona se apaga (`.cargando`) hasta la corrida siguiente, que lo quita en `recibirCromo`.
+     - **Tabla | Puestos | Ingeniería de menú parecen tres pestañas de lo mismo y son dos
+       piezas**: pasar a la Ingeniería cambia de componente, con una corrida. La pestaña del
+       ranking se recuerda en `localStorage` (`vt_pl_est`), o volver desde la Ingeniería la
+       perdería: la pieza nueva nace sin estado.
+     - **Ingeniería en cuatro columnas, cada una debajo de su indicador**, en vez de dos filas
+       de dos: entran los 20 platos de Fondos, y el 2×2 sigue en «Matriz». La ayuda del método
+       va en el `title` de la línea de abajo; sólo «Fuera» ocupa un renglón.
+     - **Dos indicadores menos**: «Platos con venta» y «Entran al top» están en la línea de
+       abajo de la tabla. «Sube más» y «Baja más» son botones: eligen el plato.
+     - **La fecha de la franja se sigue viendo y acá no manda**: los períodos salen del corte y
+       el último día con dato. Es de todo Ventas; esconderla sólo en esta vista (y en Comparativo,
+       que tiene lo mismo) queda por hacer. El boceto la dibuja sin ella.
+     (2026-10-31.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57698,7 +57750,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#764**; la próxima toma el número siguiente.
+> última regla es la **#767**; la próxima toma el número siguiente.
 
 >
 

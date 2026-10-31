@@ -8,13 +8,12 @@ período; éste compara hasta cuatro —de un corte que abre en Mes y puede ser
 Día, Semana o Año—, dentro de toda la carta, un grupo o un subgrupo, con el
 top, todos los platos o los que el usuario elige a mano.
 
-UNA TARJETA, DOS VISTAS (2026-09-29, regla #569): el interruptor del renglón
-del título alterna este ranking y la Ingeniería de menú (popularidad ×
-margen, `ventas_menu.py`, regla #550), que hasta ese día era una segunda
-tarjeta debajo. Las dos comparten la fila del Corte y las pastillas de los
-períodos —la Ingeniería clasifica el último elegido—, que no se mueven al
-cambiar de vista; lo demás es de cada una y se dibuja sólo con la suya, con
-`persist_state="page"` para que vuelva como quedó.
+UNA TARJETA, DOS VISTAS (2026-09-29, regla #569): este ranking y la Ingeniería
+de menú (popularidad × margen, `ventas_menu.py`, regla #550), que hasta ese día
+era una segunda tarjeta debajo. Las dos comparten el corte y los períodos —la
+Ingeniería clasifica el último elegido—. Desde la regla #767 esos controles son
+de la pieza (`ventas_platos_cromo.js`): UNA fila en vez de cuatro, y a Python
+vuelve sólo lo que carga datos, por el trigger `cromo` (`_al_cromo`).
 
 DE DÓNDE SALEN LOS DATOS: como en «Año Pasado», cada período se trae con
 `data.cargar_rango` y pasa por `filtrar_cb` (el `_filtrar_items` de
@@ -81,28 +80,10 @@ _TOPE_GRAFICO = 20
 """Con «Todos» la tabla lista cada plato del ámbito; el gráfico de puestos se
 queda con los 20 primeros: 300 líneas no se leen."""
 
-FILA_RANKING = (2.0, 1.35, 3.15, 2.3)
-FILA_MENU = (2.0, 1.9, 4.85, 0.05)
-"""La fila de controles de cada vista: el Corte y, a su derecha, Medida ·
-Mostrar · Ámbito en el ranking, Forma · Categoría en la Ingeniería. Suman lo
-mismo y abren con el mismo número a propósito: el Corte, que es de las dos,
-no cambia de ancho ni de lugar al cambiar de vista (lo que se toca no se
-mueve, regla #465). Las proporciones son los anchos medidos a 1366 (199,
-133, 313 y ~230 px), para que cada control entre en su columna.
-
-Y las dos tienen CUATRO columnas, aunque la Ingeniería use tres: la cuarta
-va con un `st.empty()`. Con tres, el desplegable del Ámbito quedaba en la
-Ingeniería como un resto a lo ancho de la tarjeta (visto una vez de tres):
-Streamlit borra lo que una corrida no volvió a dibujar SÓLO si la corrida
-termina limpia (`clearStaleNodes`, con FINISHED_SUCCESSFULLY), y si otra
-corrida la corta —la precarga de las secciones vecinas— el resto se queda
-hasta el próximo clic en la tarjeta. Escribir la posición la reemplaza
-siempre (regla #569)."""
-
-_KEYS_WIDGET_PL = ("vt_pl_vista", "vt_pl_corte", "vt_pl_per_*") + _KEYS_WIDGET_MENU
-"""Los controles de la tarjeta —también los de la Ingeniería de menú, que se
-dibuja en este mismo fragment—, para que el salto a «Por hora»
-(`st.rerun(scope="app")`) no se los lleve (regla #373)."""
+_KEYS_WIDGET_PL = _KEYS_WIDGET_MENU
+"""Los widgets de la tarjeta, para que el salto a «Por hora» (`st.rerun(scope="app")`)
+no se los lleve (regla #373). Desde la regla #767 no queda ninguno: el corte, los
+períodos y la categoría son claves propias que escribe `_al_cromo`."""
 
 _COLORES_ELEGIDOS = tuple(PALETA_SERIES)
 MAX_ELEGIDOS = len(_COLORES_ELEGIDOS)
@@ -329,53 +310,40 @@ def _ventas_platos(d, filtrar_cb=None):
         _cuerpo(d, filtrar_cb, cols_d, primer, ancla)
 
 
-def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
-    """Lo de la tarjeta, en el orden en que se lee: el interruptor de la
-    vista con sus KPI, la fila del Corte, los períodos y la vista elegida."""
+def _al_cromo(key):
+    """Lo que la pieza pide a Python: otra vista, otro corte, otros períodos u
+    otra categoría (trigger `cromo`, regla #767). `_cuerpo` valida cada valor
+    contra sus opciones antes de usarlo."""
     ss = st.session_state
-    # ── El renglón del título: el interruptor y, a su derecha, los KPI de
-    # la vista, que se escriben al final (hacen falta los períodos) ───────
-    cab = st.container(horizontal=True, gap="medium",
-                       vertical_alignment="center", key="vt_pl_cabfila")
-    with cab:
-        vista = st.segmented_control(
-            "Vista", VISTAS, default=_VISTA_DEFAULT, required=True,
-            key="vt_pl_vista", label_visibility="collapsed") or _VISTA_DEFAULT
+    v = (ss.get(key) or {}).get("cromo") or {}
+    if v.get("vista") in VISTAS:
+        ss["vt_pl_vista"] = v["vista"]
+    if v.get("corte") in CORTES:
+        ss["vt_pl_corte"] = v["corte"]
+    corte = ss.get("vt_pl_corte") if ss.get("vt_pl_corte") in CORTES else _CORTE_DEFAULT
+    if isinstance(v.get("elegidos"), list):
+        ss[f"vt_pl_per_{corte}"] = [str(x) for x in v["elegidos"]]
+    if isinstance(v.get("subs"), list):
+        ss["vt_ing_subs"] = [str(x) for x in v["subs"]]
+
+
+def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
+    """Lo de la tarjeta: la vista y el corte elegidos, sus períodos y la pieza,
+    que dibuja también los controles (regla #767)."""
+    ss = st.session_state
+    vista = ss.get("vt_pl_vista") if ss.get("vt_pl_vista") in VISTAS else _VISTA_DEFAULT
+    corte = ss.get("vt_pl_corte") if ss.get("vt_pl_corte") in CORTES else _CORTE_DEFAULT
     ranking = vista == VISTAS[0]
+    # Por atributo y no importadas por nombre (regla #357, como el `getattr`
+    # de `_render_rail`): si Cloud recarga este módulo con el `ventas_menu` de
+    # antes de la #569 en memoria, la Ingeniería pide reiniciar en vez de
+    # tumbar Ventas entero con un ImportError.
+    if not ranking and not hasattr(_menu, "vista_ingenieria"):
+        st.info("La Ingeniería de menú se actualizó: hace falta "
+                "reiniciar la app («Manage app» → «Reboot app»).")
+        return
 
-    # ── La fila de controles: el Corte, en el mismo lugar en las dos
-    # vistas, y a su derecha los de la vista en pantalla. Los que dependen
-    # de los datos —el Ámbito, la Categoría— se llenan después de cargar.
-    # columnas-internas: la fila de controles de la tarjeta (FILA_RANKING)
-    fila = st.columns(FILA_RANKING if ranking else FILA_MENU,
-                      vertical_alignment="center")
-    with fila[0]:
-        corte = st.segmented_control(
-            "Corte", CORTES, default=_CORTE_DEFAULT, required=True,
-            key="vt_pl_corte", label_visibility="collapsed") or _CORTE_DEFAULT
-    forma = None
-    if ranking:
-        # Medida, Mostrar y el Ámbito son de la pieza desde la regla #699:
-        # las columnas se escriben vacías (ver FILA_MENU).
-        for c in fila[1:]:
-            with c:
-                st.empty()
-    else:
-        # Por atributo y no importadas por nombre (regla #357, como el
-        # `getattr` de `_render_rail`): si Cloud recarga este módulo con el
-        # `ventas_menu` de antes de la #569 en memoria, la Ingeniería pide
-        # reiniciar en vez de tumbar Ventas entero con un ImportError.
-        if not hasattr(_menu, "vista_ingenieria"):
-            st.info("La Ingeniería de menú se actualizó: hace falta "
-                    "reiniciar la app («Manage app» → «Reboot app»).")
-            return
-        # «Cuadros | Matriz | Tabla» es de la pieza desde la regla #700.
-        with fila[1]:
-            st.empty()
-        with fila[3]:
-            st.empty()      # la columna del Ámbito, vacía: ver FILA_MENU
-
-    # ── Los períodos del corte: una pastilla por período, hasta 4 ────────
+    # ── Los períodos del corte: hasta 4 ──────────────────────────────────
     lista = periodos(corte, ancla, primer)
     etq = {k: _etiqueta(k, corte) for k in lista}
     k_per = f"vt_pl_per_{corte}"
@@ -384,21 +352,14 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
     _validas = [x for x in (ss.get(k_per) or []) if x in etq.values()]
     ss[k_per] = _validas or [etq[k] for k in
                              lista[-min(_N_DEFECTO, len(lista)):]]
-    elegidas = st.pills(
-        "Comparar", [etq[k] for k in lista], selection_mode="multi",
-        key=k_per, label_visibility="collapsed",
-        help="Hasta 4, y no tienen que ser seguidos. Con más de 4 se usan "
-             "los 4 más recientes. La Ingeniería de menú clasifica el "
-             "último.") or []
-    sel = [k for k in lista if etq[k] in elegidas][-MAX_PERIODOS:]
-    if not sel:
-        st.info("Elegí al menos un período para comparar.")
-        return
+    sel = [k for k in lista if etq[k] in ss[k_per]][-MAX_PERIODOS:]
 
-    with st.spinner("Cargando los períodos…" if len(sel) > 1
-                    else "Cargando el período…"):
-        datos = {k: _cargar_periodo(k, corte, ancla, filtrar_cb, d)
-                 for k in sel}
+    # Sin `st.spinner`: arriba de la pieza la movería de lugar. La pieza se
+    # apaga sola mientras espera lo que pidió.
+    datos = {k: _cargar_periodo(k, corte, ancla, filtrar_cb, d) for k in sel}
+    cromo = {"vista": "Ranking" if ranking else "Menu", "cortes": list(CORTES), "corte": corte,
+             "periodos": [etq[k] for k in lista], "elegidos": [etq[k] for k in sel],
+             "max": MAX_PERIODOS}
     ult = sel[-1]
     if not ranking:
         # La Ingeniería de menú del ÚLTIMO período, el mismo del puesto «#»
@@ -407,9 +368,9 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
         _menu.vista_ingenieria(datos[ult][0], etq[ult], datos[ult][1],
                                datos[ant][0] if ant else None,
                                etq[ant] if ant else None,
-                               forma=forma, cab=cab, c_cat=fila[2])
+                               cromo=cromo, al_cromo=_al_cromo)
         return
-    _pieza_ranking(datos, sel, etq, corte, lista, ancla, filtrar_cb, d)
+    _pieza_ranking(datos, sel, etq, corte, lista, ancla, filtrar_cb, d, cromo)
 
 
 # ===========================================================================
@@ -423,7 +384,9 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
 # Desde el 2026-10-22 el ranking —los indicadores, «Dentro de», Venta |
 # Unidades, el top, el gráfico de puestos, la tabla y la ficha del plato—
 # es `ventas_platos.js` + `.css` (`st.components.v2`), sobre el boceto
-# aprobado (https://claude.ai/artifact/Lzua6AASjVigJ8GJktVwM8). Python
+# aprobado (https://claude.ai/artifact/Lzua6AASjVigJ8GJktVwM8); desde la
+# #767, con una zona por pestaña, como el boceto
+# https://claude.ai/artifact/JKeLmmTjg1yU1g9HYFyqeF. Python
 # carga los períodos elegidos y los manda enteros: el ámbito, la medida, el
 # top y los elegidos los resuelve el navegador sin una corrida. Vuelven a
 # Python el plato en foco (`foco`: su evolución en TODO el corte se carga
@@ -432,10 +395,13 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
 # `var_por_dia`) siguen siendo la referencia: el `.js` las rehace igual, y
 # el test busca las fórmulas escritas igual.
 
+_AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "ventas_platos",
-    css=css_movil((Path(__file__).parent / "ventas_platos.css").read_text(encoding="utf-8")),
-    js=js_movil((Path(__file__).parent / "ventas_platos.js").read_text(encoding="utf-8")),
+    css=css_movil((_AQUI / "ventas_platos_cromo.css").read_text(encoding="utf-8")
+                  + (_AQUI / "ventas_platos.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "ventas_platos_cromo.js").read_text(encoding="utf-8")
+                + (_AQUI / "ventas_platos.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "vt_pl_pieza"
 
@@ -518,7 +484,7 @@ def _ir_a_carta(cod):
         return
 
 
-def _pieza_ranking(datos, sel, etq, corte, lista, ancla, filtrar_cb, d):
+def _pieza_ranking(datos, sel, etq, corte, lista, ancla, filtrar_cb, d, cromo=None):
     """El ranking en la pieza, con la evolución del plato en foco."""
     ss = st.session_state
     nombres = set()
@@ -533,8 +499,7 @@ def _pieza_ranking(datos, sel, etq, corte, lista, ancla, filtrar_cb, d):
                 if ult is not None and not ult.empty else None)
     evo = None
     if foco:
-        with st.spinner("Cargando la evolución…"):
-            evo = _evolucion_de(foco, corte, lista, etq, sel, ancla, filtrar_cb, d)
+        evo = _evolucion_de(foco, corte, lista, etq, sel, ancla, filtrar_cb, d)
 
     def _al_foco():
         v = (ss.get(_K_PIEZA) or {}).get("foco")
@@ -556,6 +521,8 @@ def _pieza_ranking(datos, sel, etq, corte, lista, ancla, filtrar_cb, d):
         codigos = _codigos_carta(sello_datos("cartacosteada.parquet"))
     except Exception:
         codigos = {}
-    _PIEZA(key=_K_PIEZA, data=armar_ranking(datos, sel, etq, foco, evo, codigos),
-           on_foco_change=_al_foco, on_hora_change=_a_la_hora,
-           on_carta_change=_a_la_carta, width="stretch")
+    data = armar_ranking(datos, sel, etq, foco, evo, codigos)
+    data["cromo"] = cromo
+    _PIEZA(key=_K_PIEZA, data=data, on_foco_change=_al_foco, on_hora_change=_a_la_hora,
+           on_carta_change=_a_la_carta, on_cromo_change=lambda: _al_cromo(_K_PIEZA),
+           width="stretch")

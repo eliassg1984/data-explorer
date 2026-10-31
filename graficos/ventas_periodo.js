@@ -522,7 +522,7 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
   function estadoInicial() {
     return { gran: 'Día', fil: { grupo: [], serv: [], canal: [], tdoc: [] }, modo: 'Resumen', sub: 'Venta', ver: 'Pedido', foco: null,
       tramo: null, ped: null, apag: { pax: true, ticket: true, desc: true }, ley: false, menu: null, abierta: null, orden: null, ordenDet: null, como: false, q: '', aviso: '',
-      med: 'venta', contra: 'anio', pan: 'Desglose', cifras: 'Clave', ampl: null };
+      med: 'venta', contra: 'anio', pan: 'Desglose', cifras: 'Clave', zona: 'graf', ampl: false };
   }
 
   // ── Lo que se mira: el período en foco (o el tramo, con mejoras) ────────
@@ -632,7 +632,7 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     const pan = tabs.includes(st.pan) ? st.pan : 'Desglose';
     const fx = focoClaves(R, st);
     return `<div class="pn-t"><div class="seg chico">${tabs.map((t) => `<button class="${t === pan ? 'on' : ''}" data-acc="pan" data-v="${t}">${t}</button>`).join('')}</div></div>`
-      + (fx && pan !== 'Cierre' ? `<div class="pn-f"><b title="${esc(nombreFoco(R, st))}">${esc(nombreFoco(R, st))}</b><button class="qt" data-acc="quitar" aria-label="Volver a todo el período">✕</button>${st.modo === 'Resumen' && st.foco ? `<button class="lnk" data-acc="verped" data-v="${esc(st.foco)}">Ver sus pedidos →</button>` : ''}</div>` : '')
+      + (fx && pan !== 'Cierre' ? `<div class="pn-f"><b title="${esc(nombreFoco(R, st))}">${esc(nombreFoco(R, st))}</b><button class="qt" data-acc="quitar" aria-label="Volver a todo el período">✕</button>${(st.modo === 'Resumen' || st.zona === 'graf') && st.foco ? `<button class="lnk" data-acc="verped" data-v="${esc(st.foco)}">Ver sus pedidos →</button>` : ''}</div>` : '')
       + (pan === 'Qué movió' ? panelMovio(R, st, S) : pan === 'Cierre' ? panelCierre(S) : panelDesglose(R, st));
   }
 
@@ -800,17 +800,17 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
   }
 
   // ── El Resumen: una fila por período (`_zona_resumen`) ─────────────────
-  function subvistas(R) {
-    const g = R.g, hay = (a) => a.some((x) => x), S = 104, out = {};
-    const venta = [['carta', 'Carta', 'soles0', S, 'Venta a precio de CARTA: lo que se habría cobrado sin descuentos'],
-      ['valor', 'Venta', 'celda', 118, 'Venta documentada, con IGV y recargo. Sin cortesías ni anulados'],
-      ['neto', 'Neto', 'soles0', S, 'Venta sin IGV ni recargo: la base del % de costo'],
-      ['costo', 'Costo histórico', 'soles0', 132, 'Costo histórico de lo vendido, incluidos combos y propiedades'],
-      ['pcosto', '% costo', 'celda', 176, 'Costo ÷ Neto, y su cambio en pp contra la barra anterior'],
-      ['pax', 'Pax', 'entero', 72, 'Clientes del período'],
-      ['ticket', 'Ticket', 'celda', 132, 'Venta ÷ clientes, sin la venta de los canales que no registran clientes (Rappi). Y su variación'],
-      ['ticket_neto', 'Ticket neto', 'celda', 132, 'Neto (sin IGV ni recargo) ÷ clientes: el «Ticket Pro.» de la Liquidación de Cajero del POS'],
-      ['variacion', 'Var. venta', 'var', S, 'Variación de la venta contra la barra anterior']];
+  function subvistas(R, Sv) {
+    const g = R.g, hay = (a) => a.some((x) => x), S = 104, out = {}, Bv = Sv && Sv.base;
+    const venta = [['carta', 'Carta', 'soles0', 116, 'Venta a precio de CARTA: lo que se habría cobrado sin descuentos'],
+      ['valor', 'Venta', 'celda', 124, 'Venta documentada, con IGV y recargo. Sin cortesías ni anulados'],
+      ['neto', 'Neto', 'soles0', 116, 'Venta sin IGV ni recargo: la base del % de costo'],
+      ['costo', 'Costo histórico', 'soles0', 124, 'Costo histórico de lo vendido, incluidos combos y propiedades'],
+      ['pcosto', '% costo', 'celda', 120, 'Costo ÷ Neto, y su cambio en pp contra la barra anterior'],
+      ['pax', 'Pax', 'entero', 64, 'Clientes del período'],
+      ['ticket', 'Ticket', 'celda', 120, 'Venta ÷ clientes, sin la venta de los canales que no registran clientes (Rappi). Y su variación'],
+      ['ticket_neto', 'Ticket neto', 'celda', 120, 'Neto (sin IGV ni recargo) ÷ clientes: el «Ticket Pro.» de la Liquidación de Cajero del POS'],
+      ['variacion', Bv ? `vs ${Bv.nombre.toLowerCase()}` : 'Var. venta', 'var', Bv ? 136 : S, Bv ? `Variación de la venta contra ${Bv.nombre.toLowerCase()}: lo que diga «Contra»` : 'Variación de la venta contra la barra anterior']];
     out.Venta = [venta, 'Precios, % de costo, clientes, ticket y variación.'];
     const cli = [['valor', 'Venta', 'celda', 118, 'Venta documentada: pagados y por cobrar, menos notas de crédito'],
       ['sin_cli', 'Fuera del ticket', 'celda', 128, 'Venta de los canales que no registran clientes (Rappi): no entra en ningún ticket'],
@@ -856,7 +856,7 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     return out;
   }
   // Una fila por período, con su texto, su nota, su barrita y su bandera.
-  function filasResumen(R) {
+  function filasResumen(R, Sv) {
     const g = R.g, n = R.n, tot = g.total, mx = (a) => Math.max(0, ...a.filter(fin));
     const rat = (a, b) => a.map((x, i) => (b[i] ? x / b[i] : null));
     const pdesc = rat(g.desc, g.carta), pcort = rat(g.cort_s, g.carta), pprop = rat(g.propina, tot), psin = rat(g.venta_sin_costo, tot), ptrx = rat(g.n_desc, g.n_docs);
@@ -904,13 +904,22 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
       [['docs_v', g.docs_v, null], ['nc_v', g.nc_v, g.n_nc], ['cort_c', g.cort_s, g.n_cort], ['anul', g.anul_s, g.n_anul]].forEach(([c, a, nn]) => {
         const x = Math.round(a[i] * 100) / 100, cu = nn ? nn[i] : 0; cel(c, x, x ? s0(x) : '—', cu ? [`${cu} comp.`, 'neutro'] : ['', '']);
       });
-      const v = R.vars[i];
-      r.variacion = { v: v[0] === 'ok' ? v[1] : null, t: v[0] === 'ok' ? varVenta(v[1])[0] : v[0] === 'parcial' ? 'parcial' : '—', color: v[0] === 'ok' ? varVenta(v[1])[1] : C.gris };
+      const v = R.vars[i], Bv = Sv && Sv.base;
+      // Con una base, la columna dice lo mismo que la barra y el indicador: un
+      // domingo contra el sábado anterior no es una caída (regla #766).
+      if (Bv) r.variacion = celdaContra(Bv.barras ? V.totalPeriodos(R, [i]) : null, Bv.barras ? Bv.barras[i] : null, !Bv.barras);
+      else r.variacion = { v: v[0] === 'ok' ? v[1] : null, t: v[0] === 'ok' ? varVenta(v[1])[0] : v[0] === 'parcial' ? 'parcial' : '—', color: v[0] === 'ok' ? varVenta(v[1])[1] : C.gris };
       out.push(r);
     }
     return out;
   }
-  function totalResumen(R) {
+  function celdaContra(a, b, pendiente) {
+    const x = a ? V.medida('venta', a) : null, y = b ? V.medida('venta', b) : null;
+    if (!fin(x) || !fin(y) || !y) return { v: null, t: pendiente ? '…' : '—', color: C.gris };
+    const pct = (x - y) / y * 100, [t, color] = varVenta(pct);
+    return { v: pct, t, color };
+  }
+  function totalResumen(R, Sv) {
     const g = R.g, s = (a) => a.reduce((x, y) => x + (y || 0), 0), tv = s(g.total), t = {};
     t.periodo = `Total · ${ent(R.n)} ${K.UNIDAD[R.gran][R.n === 1 ? 0 : 1]}`;
     t.valor = s0(tv); t.carta = s0(s(g.carta)); t.neto = s0(s(g.neto)); t.costo = s0(s(g.costo)); t.costo_v = t.costo;
@@ -927,7 +936,12 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     t.desc = s0(s(g.desc)); t.pdesc = s(g.carta) ? p1(s(g.desc) / s(g.carta)) : ''; t.n_desc = `${ent(s(g.n_desc))} / ${ent(s(g.n_docs))}`; t.ptrx = s(g.n_docs) ? p0(s(g.n_desc) / s(g.n_docs)) : '';
     [['docs_v', g.docs_v], ['nc_v', g.nc_v], ['cort_c', g.cort_s], ['anul', g.anul_s]].forEach(([c, a]) => { const x = s(a); t[c] = x ? s0(x) : '—'; });
     t.cort = s0(s(g.cort_s)); t.pcort = s(g.carta) ? p1(s(g.cort_s) / s(g.carta)) : ''; t.n_cort = ent(s(g.n_cort)); t.costo_cort = s0(s(g.costo_cort));
+    const Bv = Sv && Sv.base;
     t.variacion = '';
+    if (Bv && Bv.barras && Bv.total) {
+      const ix = R.claves.map((_, i) => i).filter((i) => Bv.barras[i]);
+      t.variacion = celdaContra(V.totalPeriodos(R, ix), Bv.total).t;
+    }
     return t;
   }
   // La franja que se despliega debajo de un período (`_franja`).
@@ -973,11 +987,11 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     return `<td class="r"><span class="cv ${c.cls || ''}${bar ? ' bar ' + (c.bar.tono || '') : ''}"${bar}>${esc(c.t)}</span>`
       + `${c.nota && c.nota[0] ? `<span class="n ${c.nota[1]}">${esc(c.nota[0])}</span>` : ''}${c.band ? '<span class="band">revisar</span>' : ''}</td>`;
   }
-  function tablaResumen(R, st) {
-    const subs = subvistas(R), sub = subs[st.sub] ? st.sub : 'Venta', [cols] = subs[sub];
-    let filas = filasResumen(R);
+  function tablaResumen(R, st, Sv) {
+    const subs = subvistas(R, Sv), sub = subs[st.sub] ? st.sub : 'Venta', [cols] = subs[sub];
+    let filas = filasResumen(R, Sv);
     if (st.orden) { const { col, dir } = st.orden; filas = filas.slice().sort((a, b) => { const x = a[col]?.v ?? -1e18, y = b[col]?.v ?? -1e18; return (x < y ? -1 : x > y ? 1 : 0) * dir; }); }
-    const tot = totalResumen(R), rotP = { Día: 'Día', Semana: 'Semana', Mes: 'Mes', Año: 'Año' }[R.gran];
+    const tot = totalResumen(R, Sv), rotP = { Día: 'Día', Semana: 'Semana', Mes: 'Mes', Año: 'Año' }[R.gran];
     const th = (campo, rot, _ancho, tip, der) => `<th class="${der ? 'r' : ''}" title="${esc(tip)}" data-acc="orden" data-v="${campo}">${esc(rot)}${st.orden && st.orden.col === campo ? (st.orden.dir > 0 ? ' ↑' : ' ↓') : ''}</th>`;
     // Como AG Grid (sizeColumnsToFit): los anchos declarados son PROPORCIONES y la tabla llena la tarjeta.
     const suma = 132 + cols.reduce((x, c) => x + c[3], 0), pc = (w) => `${(w / suma * 100).toFixed(2)}%`;
@@ -1107,14 +1121,16 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     const rango = `${U.iso(R.rngDatos[0])}_${U.iso(R.rngDatos[1])}`;
     let hojas, nombre;
     if (st.modo === 'Resumen') {
-      const subs = subvistas(R), sub = subs[st.sub] ? st.sub : 'Venta', [cols] = subs[sub];
+      const subs = subvistas(R, S), sub = subs[st.sub] ? st.sub : 'Venta', [cols] = subs[sub];
       const val = (c, tipo) => {
         if (!c) return null;
         if (tipo === 'texto') return c.t;
+        // La variación ya viene en puntos porcentuales.
+        if (tipo === 'var') return fin(c.v) ? Math.round(c.v * 100) / 100 : null;
         if (!fin(c.v)) return c.t === '—' ? null : c.t;
         return String(c.t).endsWith('%') ? Math.round(c.v * 10000) / 100 : c.v;
       };
-      const filas = filasResumen(R).map((r) => [r.periodo.t, ...cols.map((c) => val(r[c[0]], c[2]))]);
+      const filas = filasResumen(R, S).map((r) => [r.periodo.t, ...cols.map((c) => val(r[c[0]], c[2]))]);
       hojas = [{ nombre: `Resumen ${sub}`, cabeza: [R.gran, ...cols.map((c) => c[1] + (c[2] === 'celda' && /%/.test(c[1]) ? '' : ''))], filas }];
       nombre = `venta_por_periodo_${archivo(sub)}_${rango}.xlsx`;
     } else if (S.det && focoClaves(R, st)) {
@@ -1132,11 +1148,10 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     const R = V.calcular(B, st);
     S.R = R;
     raiz.classList.toggle('m', !!M);
-    raiz.classList.toggle('tabla-amp', st.ampl === 'tabla');
+    raiz.classList.toggle('tabla-amp', st.zona === 'tabla' && st.ampl);
     if (!R) { raiz.innerHTML = '<div class="vacio">No hay ventas para los filtros elegidos.</div>'; return; }
     if (st.foco && !R.claves.includes(st.foco)) st.foco = null;
     if (st.tramo && (st.tramo[1] >= R.n)) st.tramo = null;
-    const conTabla = st.modo === 'Resumen' || !!focoClaves(R, st);
     // La comparación: con lo que ya hay, o se pide lo que falta (regla #758).
     B.hist = S.hist || null;
     const conHist = !!(B.histCtx && B.datosDesde != null && B.hist);
@@ -1147,14 +1162,12 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     S.base = S.conBase && !S.pendiente ? V.calcularBase(B, R, st) : (S.conBase ? { nombre: V.baseElegida(R, st)[1], modo: V.baseElegida(R, st)[0] } : null);
     S.cierre = S.conBase && !S.pendiente ? V.calcularCierre(B, R, st) : null;
     const pedirH = faltan.map(([a, b]) => [U.iso(a), U.iso(b)]);
-    const ampl = conTabla ? st.ampl : 'graf';
     const movil = window.matchMedia('(max-width: 900px)').matches;
-    const ancho = (raiz.clientWidth || 1159) - (movil ? 0 : 300);
-    // Con la tabla debajo, el gráfico cede en una pantalla baja: la tabla
-    // conserva su cabecera, cuatro filas y el total.
+    const ancho = (raiz.clientWidth || 1159) - (movil || st.ampl ? 0 : 300);
+    // Una zona: el gráfico o la tabla, cada uno con todo el alto que queda
+    // debajo de los controles, los indicadores y su propia fila (regla #766).
     const altoTotal = raiz.clientHeight || 620;
-    const alto = ampl === 'graf' ? (movil ? B.alto.figSolo : Math.max(B.alto.fig, altoTotal - 142))
-      : movil ? B.alto.fig : Math.max(150, Math.min(B.alto.fig, altoTotal - 348));
+    const alto = movil ? B.alto.figSolo : Math.max(B.alto.fig, altoTotal - 142);
     const gr = grafico(R, st, ancho, alto, S);
     S.X = gr.X; S.W = gr.W;
     const tit = st.med !== 'venta' ? `${NOMBRE_MED[st.med]} por ${K.UNIDAD[R.gran][0]}` : { Día: 'Tendencia diaria de venta', Semana: 'Venta por semana', Mes: 'Venta por mes', Año: 'Venta por año' }[R.gran];
@@ -1168,22 +1181,25 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     let zona = '', pie = '', ctrl2 = '';
     let ayuda = '';
     if (st.modo === 'Resumen') {
-      const t = tablaResumen(R, st);
+      const t = tablaResumen(R, st, S);
       if (!t.subs.includes(st.sub)) st.sub = 'Venta';
-      ctrl2 = `<div class="seg">${t.subs.map((x) => `<button class="${x === st.sub ? 'on' : ''}" data-acc="sub" data-v="${x}">${x}</button>`).join('')}</div>`;
+      ctrl2 = `<div class="seg chico">${t.subs.map((x) => `<button class="${x === st.sub ? 'on' : ''}" data-acc="sub" data-v="${x}">${x}</button>`).join('')}</div>`;
       zona = `<div class="zr">${t.html}</div>`;
       ayuda = t.ayuda;
       // El rango ya lo dice su botón, y lo que mide cada columna, «Cómo se calcula».
       pie = esc(R.nota.trim());
     } else {
-      ctrl2 = `<div class="seg">${K.VER_POR.map((x) => `<button class="${x === st.ver ? 'on' : ''}" data-acc="ver" data-v="${x}">${x}</button>`).join('')}</div>`;
+      ctrl2 = `<div class="seg chico">${K.VER_POR.map((x) => `<button class="${x === st.ver ? 'on' : ''}" data-acc="ver" data-v="${x}">${x}</button>`).join('')}</div>`;
       if (focoClaves(R, st)) {
         const d = detalle(B, R, st, M);
         zona = (M ? `<div class="busca"><input id="vp-busca" data-acc="buscar" placeholder="Buscar un pedido, mesero, comprobante o plato…" value="${esc(st.q)}">${NUEVO}</div>` : '')
           + `<div class="zr det-w">${d.html}</div>`;
         pie = d.pie;
         S.det = d;
-      } else pie = M ? 'Tocá una barra —o arrastrá sobre varias— para ver sus pedidos.' : 'Tocá una barra —o una fila del Resumen— para ver sus pedidos.';
+      } else {
+        pie = M ? 'Tocá una barra —o arrastrá sobre varias— para ver sus pedidos.' : 'Tocá una barra —o una fila del Resumen— para ver sus pedidos.';
+        zona = `<div class="vacio">${pie}</div>`;
+      }
     }
     const nombres = { Venta: 'Venta documentada', Costo: 'Costo histórico de lo vendido', Pagos: 'Pagos registrados de comprobantes', Cuadre: 'Conciliación de venta documentada', 'Cortesías': 'Cortesías y su costo histórico', Descuentos: 'Descuentos sobre precio de carta', Propinas: 'Propinas de los comprobantes seleccionados' };
     const sub = st.modo === 'Resumen' ? st.sub : 'Detalle';
@@ -1200,21 +1216,26 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     const ops = S.conBase ? V.opcionesBase(R) : null;
     const elegida = ops ? V.baseElegida(R, st)[0] : '';
     const contra = ops ? `<label class="cn" title="${esc(ops.length > 1 ? 'Contra qué se miden las variaciones y la línea punteada' : 'En meses y años se compara contra el año pasado')}">Contra <select data-cambio="contra"${ops.length > 1 ? '' : ' disabled'}>${ops.map(([v, t]) => `<option value="${v}"${v === elegida ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>` : '';
-    const ampliar = (cual) => { const on = st.ampl === cual; return `<button class="amp" data-acc="ampl" data-v="${cual}" aria-pressed="${on}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${on ? 'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6' : 'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg>${on ? 'Volver' : 'Ampliar'}</button>`; };
+    const ampliar = `<button class="amp" data-acc="ampl" aria-pressed="${st.ampl}" title="${st.ampl ? 'Volver a poner el panel al costado' : 'Esconder el panel y usar todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${st.ampl ? 'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6' : 'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg>${st.ampl ? 'Con panel' : 'Ampliar'}</button>`;
     const nomB = S.base ? S.base.nombre : '';
     const leyCanales = st.med === 'venta' && R.canales.length > 1 ? R.canales.filter((c) => !st.apag[`canal_${slug(c)}`]).map((c) => `<span><i style="background:${colores(R.canales.length)[R.canales.indexOf(c)]}"></i>${esc(c)}</span>`).join('') : '';
-    const verGraf = !conTabla || st.ampl !== 'tabla', verTabla = conTabla ? st.ampl !== 'graf' : true;
+    const verGraf = st.zona !== 'tabla';
+    const zonas = `<div class="seg zonas" role="tablist" aria-label="Qué se ve">${[['graf', 'Gráfico'], ['tabla', 'Tabla']].map(([v, t]) => `<button role="tab" aria-selected="${st.zona === v}" class="${st.zona === v ? 'on' : ''}" data-acc="zona" data-v="${v}">${t}</button>`).join('')}</div>`;
     const cifras = `<div class="seg chico" role="group" aria-label="Cifras sobre las barras">${[['Clave', 'Sólo el máximo, el mínimo, el feriado y el último'], ['Todas', 'Una cifra por barra']].map(([v, t]) => `<button class="${st.cifras === v ? 'on' : ''}" data-acc="cifras" data-v="${v}" title="${t}">${v}</button>`).join('')}</div>`;
     raiz.innerHTML = `<div class="ctl"><div class="seg">${K.GRANOS.map((x) => `<button class="${x === st.gran ? 'on' : ''}" data-acc="gran" data-v="${x}">${x}</button>`).join('')}</div>`
-      + `<div class="fils">${fil}</div>${contra}<span class="lugar-fecha" aria-hidden="true"></span></div>`
+      + `<div class="fils">${fil}</div>${contra}</div>`
       + `<div class="kpis">${indicadores(R, st, S)}</div>`
-      + (verGraf ? `<div class="cuerpo"><div class="graf"><div class="cab"><span class="tit">${esc(tit)}</span>${caja}<span class="lg">${leyCanales}${nomB && !S.pendiente ? `<span><i class="g"></i>${esc(nomB)}</span>` : ''}${S.cierre ? '<span><i class="f"></i>Proyección</span>' : ''}</span><span class="esp"></span>`
-        + (st.med === 'venta' ? `<div class="ley">${leyenda(R, st)}</div>` : '') + cifras + (conTabla ? ampliar('graf') : '') + '</div>'
-        + `<div class="gr" style="height:${alto}px">${gr.svg}<div class="tip" hidden></div></div></div>`
-        + `<div class="pn" aria-label="Desglose">${panel(R, st, S)}</div></div>` : '')
-      + (verTabla ? `<div class="pie"><div class="seg">${['Resumen', 'Detalle'].map((x) => `<button class="${x === st.modo ? 'on' : ''}" data-acc="modo" data-v="${x}">${x}</button>`).join('')}</div>${ctrl2}<span class="pt" title="${esc(plano(pie))}">${pie}</span>`
-        + `<span class="como-w"><button class="como" data-acc="como">ⓘ Cómo se calcula</button>${st.como ? `<div class="como-p"><p><b>${esc(U.delAl(R.rngDatos[0], R.rngDatos[1]))}</b> · ${esc(nombres[sub] || 'Venta documentada')} · ${esc(baseF)} · ${esc(valores)} · ${esc(ambito)}.${ayuda ? ` ${esc(ayuda)}` : ''}</p>${COMO.replace('día del turno del comprobante', baseF.toLowerCase())}</div>` : ''}</span>`
-        + (M ? `<button class="excel" data-acc="excel">Excel ${NUEVO}</button>` : '') + (conTabla ? ampliar('tabla') : '') + '</div>' + zona : '')
+      + `<div class="cab">${zonas}`
+      + (verGraf ? `<span class="tit">${esc(tit)}</span>${caja}<span class="lg">${leyCanales}${nomB && !S.pendiente ? `<span><i class="g"></i>${esc(nomB)}</span>` : ''}${S.cierre ? '<span><i class="f"></i>Proyección</span>' : ''}</span><span class="esp"></span>`
+        + (st.med === 'venta' ? `<div class="ley">${leyenda(R, st)}</div>` : '') + cifras
+        : `${caja}<div class="seg chico">${['Resumen', 'Detalle'].map((x) => `<button class="${x === st.modo ? 'on' : ''}" data-acc="modo" data-v="${x}">${x}</button>`).join('')}</div>${ctrl2}<span class="pt" title="${esc(plano(pie))}">${pie}</span>`
+        + `<span class="como-w"><button class="como" data-acc="como" title="Cómo se calcula">ⓘ Cálculo</button>${st.como ? `<div class="como-p"><p><b>${esc(U.delAl(R.rngDatos[0], R.rngDatos[1]))}</b> · ${esc(nombres[sub] || 'Venta documentada')} · ${esc(baseF)} · ${esc(valores)} · ${esc(ambito)}.${ayuda ? ` ${esc(ayuda)}` : ''}</p>${COMO.replace('día del turno del comprobante', baseF.toLowerCase())}</div>` : ''}</span>`
+        + (M ? `<button class="excel" data-acc="excel">Excel ${NUEVO}</button>` : ''))
+      + `${ampliar}</div>`
+      + `<div class="cuerpo"><div class="graf">`
+      + (verGraf ? `<div class="gr" style="height:${alto}px">${gr.svg}<div class="tip" hidden></div></div>` : zona)
+      + '</div>'
+      + (st.ampl ? '' : `<div class="pn" aria-label="Desglose">${panel(R, st, S)}</div>`) + '</div>'
       + (st.aviso ? `<div class="aviso">${esc(st.aviso)}</div>` : '');
     if (pedirH.length) pedirHistoria(S, pedirH);
     const b = raiz.querySelector('#vp-busca');
@@ -1274,7 +1295,8 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     else if (acc === 'med') st.med = v;
     else if (acc === 'pan') st.pan = v;
     else if (acc === 'cifras') st.cifras = v;
-    else if (acc === 'ampl') st.ampl = st.ampl === v ? null : v;
+    else if (acc === 'zona') st.zona = v;
+    else if (acc === 'ampl') st.ampl = !st.ampl;
     else if (acc === 'quitar') { st.foco = null; st.tramo = null; st.ped = null; }
     else if (acc === 'modo') { st.modo = v; st.aviso = ''; }
     else if (acc === 'sub') st.sub = v;
@@ -1282,7 +1304,7 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
     else if (acc === 'orden') { const o = st.orden; st.orden = !o || o.col !== v ? { col: v, dir: v === 'periodo' ? 1 : -1 } : o.dir === (v === 'periodo' ? 1 : -1) ? { col: v, dir: -o.dir } : null; st.abierta = null; }
     else if (acc === 'ordendet') { const o = st.ordenDet; st.ordenDet = !o || o.col !== v ? { col: v, dir: -1 } : o.dir < 0 ? { col: v, dir: 1 } : null; }
     else if (acc === 'fila') { if (ev.target.closest('.franja')) return; st.abierta = st.abierta === v ? null : v; st.foco = st.abierta; }
-    else if (acc === 'verped') { st.foco = v; st.tramo = null; st.ped = null; st.modo = 'Detalle'; }
+    else if (acc === 'verped') { st.foco = v; st.tramo = null; st.ped = null; st.modo = 'Detalle'; st.zona = 'tabla'; }
     else if (acc === 'ped') { st.ped = st.ped === v && st.pedVer === st.ver ? null : v; st.pedVer = st.ver; }
     else if (acc === 'como') st.como = !st.como;
     else if (acc === 'excel') { excel(raiz); return; }
@@ -1328,7 +1350,7 @@ window.VentasPeriodo = { preparar, calcular, paxPor, documentosPor, pasaFiltros,
       if (!d) return;
       S.drag = null;
       if (d.a !== d.b) {
-        S.st.tramo = [Math.min(d.a, d.b), Math.max(d.a, d.b)]; S.st.foco = null; S.st.ped = null; S.st.modo = 'Detalle';
+        S.st.tramo = [Math.min(d.a, d.b), Math.max(d.a, d.b)]; S.st.foco = null; S.st.ped = null; S.st.modo = 'Detalle'; S.st.zona = 'tabla';
         S.arrastre = true; render(raiz); setTimeout(() => { S.arrastre = false; }, 0);
       }
     });
@@ -1384,10 +1406,6 @@ export default function (component) {
   raiz.__vp = G;
   G.raiz = raiz;
   G.enviar = setTriggerValue;
-  // La fecha es un botón de Python en la misma página (sin iframe): la fila de
-  // controles le deja exactamente su ancho, que cambia con el atajo elegido.
-  const fb = document.querySelector('.st-key-vt_periodo_fecha');
-  if (fb && fb.offsetWidth) raiz.style.setProperty('--vp-fecha', `${fb.offsetWidth + 12}px`);
   G.mejoras = true;
   if (!G.st) G.st = UI.estadoInicial();
   const ctx = JSON.stringify([data.sello, data.turno, data.franja, data.alcance, data.alcance_pedido, data.hist_ctx, data.ppto]);
@@ -1420,7 +1438,7 @@ export default function (component) {
     if (ped && ped.n !== G.vaN) {
       G.vaN = ped.n;
       G.st.va = VA.normalizar(G.A, VA.desdeLista(ped.lista));
-      if (ped.sub) { G.st.modo = 'Resumen'; G.st.sub = ped.sub; }
+      if (ped.sub) { G.st.modo = 'Resumen'; G.st.sub = ped.sub; G.st.zona = 'tabla'; }
     }
     G.st.fil.grupo = VA.listaGrupos(G.A, G.st.va);
   }

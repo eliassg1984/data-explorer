@@ -50,7 +50,7 @@ import streamlit as st
 import cortes
 import definicion_venta as dv
 from tema import ERROR, EXITO, GRIS_TEXTO
-from graficos.base import _resolver, preservar_widgets, selector_fecha_tarjeta
+from graficos.base import _resolver
 from graficos.compras._comun import _periodo_serie
 from graficos import alturas, ventas_alcance
 from graficos.recetas_comun import TASA_RECARGO
@@ -1144,18 +1144,12 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     La firma es la de antes: en Cloud un commit que le cambia la firma a algo
     ya importado deja el `app.py` nuevo hablando con el paquete viejo (regla
     #357)."""
-    # La fecha escribe la clave canónica del rango, que es la que lee
-    # `carga_por_rango` en `app.py`: el `d` de acá ya está materializado con
-    # el rango VIEJO, así que hay que escalar a una corrida completa.
-    if st.session_state.pop("vt_resumen_fecha_flag", False):
-        preservar_widgets(_KEYS_WIDGET_RESUMEN)
-        st.rerun(scope="app")
     if not (col_venta and col_fecha):
         st.info("Faltan columnas (Venta, Fecha) para el resumen ejecutivo.")
         return
     with st.container(border=True, key="ajuste_graf_card_izq_ventas_resumen"):
-        with st.container(key="vt_periodo_fecha"):
-            selector_fecha_tarjeta("vt_resumen", "vt_resumen_fecha_flag", categoria=None)
+        # La fecha es la de la franja (regla #766): un segundo botón escribía
+        # la misma clave y decía lo mismo.
         if d is None or d.empty:
             st.info("Sin ventas en el rango cargado.")
             return

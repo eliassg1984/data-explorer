@@ -2,11 +2,10 @@
    Vive en el shadow root del componente (graficos/ventas_resumen.py):
    ninguna regla de acá sale de la pieza, y ninguna de estilos/ entra. Los
    colores son las variables de estilos/_00_base.py, que SÍ cruzan el shadow
-   root. Ningún selector :has, por la regla #469. La fecha es un botón de
-   Python que estilos/_80_cards.py pone arriba a la derecha de la tarjeta:
-   la fila de controles le deja `--vp-fecha` de lugar. */
-.vp { --vp-fecha: 210px;
-  /* UNA pantalla (regla #758): la tabla toma lo que queda y desliza adentro. */
+   root. Ningún selector :has, por la regla #469. La fecha es la de la franja
+   (regla #766): esta tarjeta ya no trae la suya. */
+.vp {
+  /* UNA pantalla (regla #758): la zona toma lo que queda y la tabla desliza adentro. */
   height: calc(var(--alto-util, 620px) - 31px);
   position: relative; display: flex; flex-direction: column; gap: 6px; color: var(--text-primary); font-size: 12.5px; line-height: 1.4;
   font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-variant-numeric: tabular-nums; min-width: 0; }
@@ -20,26 +19,24 @@
 
 /* Controles */
 .vp .ctl { display: flex; align-items: center; gap: 6px; flex: none; }
-.vp .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex: 0 0 auto; background: var(--bg-card); }
-.vp .seg button { border: 0; border-left: 1px solid var(--border); background: transparent; padding: 5px 12px; cursor: pointer; white-space: nowrap; color: var(--text-primary); }
-.vp .seg button:first-child { border-left: 0; }
-.vp .seg button.on { background: var(--accent-tint); color: var(--accent-deep); box-shadow: inset 0 0 0 1px var(--accent); }
-.vp .seg.chico button { padding: 3px 9px; font-size: 11.5px; }
+.vp .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; flex: 0 0 auto; background: var(--rail-fondo); }
+.vp .seg button { border: 0; border-radius: 6px; background: transparent; padding: 4px 12px; cursor: pointer; white-space: nowrap; color: var(--text-secondary); }
+.vp .seg button.on { background: var(--accent-tint); color: var(--accent-deep); font-weight: 600; }
+.vp .seg.chico button { padding: 3px 7px; font-size: 12px; }
 .vp .fils { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; min-width: 0; }
 .vp .cn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
-.vp .cn select { font: inherit; font-size: 12.5px; height: 30px; color: var(--accent-deep); font-weight: 600; background: var(--bg-card); border: 1px solid var(--border-lavender); border-radius: 8px; padding: 0 4px; cursor: pointer; }
-.vp .cn select:disabled { color: var(--text-secondary); border-color: var(--border); cursor: default; }
+.vp .cn select { font: inherit; font-size: 12.5px; height: 30px; color: var(--accent-deep); font-weight: 500; background: var(--accent-tint); border: 0; border-radius: 8px; padding: 0 4px; cursor: pointer; }
+.vp .cn select:disabled { color: var(--text-secondary); background: var(--rail-fondo); cursor: default; }
 .vp .ms { position: relative; }
-.vp .ms-b { height: 30px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); padding: 0 8px;
+.vp .ms-b { height: 30px; border: 0; border-radius: 8px; background: var(--rail-fondo); padding: 0 10px;
   color: var(--text-secondary); cursor: pointer; white-space: nowrap; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
-.vp .ms-b.on { color: var(--accent-deep); border-color: var(--border-lavender); background: var(--accent-tint); }
+.vp .ms-b.on { color: var(--accent-deep); background: var(--accent-tint); }
 .vp .ms-b i, .vp .ley-b i { font-style: normal; color: var(--text-secondary); }
 .vp .ms-l { position: absolute; top: 34px; left: 0; z-index: 6; width: 230px; max-height: 280px; overflow-y: auto; overscroll-behavior: contain; background: var(--bg-card);
   border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-md); padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 .vp .ms-l label { display: flex; gap: 6px; align-items: center; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
 .vp .ms-l label:hover { background: var(--accent-tint); }
 .vp .ms-x { border: 0; background: transparent; color: var(--accent-deep); text-align: left; padding: 6px; cursor: pointer; }
-.vp .lugar-fecha { flex: 0 0 var(--vp-fecha); }
 .vp td.cargando { color: var(--text-secondary); font-style: italic; }
 
 /* Los indicadores: eligen qué mide el gráfico (regla #758) */
@@ -64,9 +61,14 @@
 .vp .prog i { display: block; height: 100%; background: var(--accent); }
 
 /* El gráfico y el panel de al costado */
-.vp .cuerpo { display: flex; gap: 14px; flex: none; min-width: 0; }
-.vp .graf { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.vp .cab { display: flex; align-items: center; gap: 8px; min-height: 30px; position: relative; }
+.vp .cuerpo { display: flex; gap: 14px; flex: 1 1 0; min-width: 0; min-height: 0; }
+.vp .graf { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+.vp .cab { display: flex; align-items: center; gap: 8px; min-height: 30px; position: relative; flex: none; }
+/* Gráfico | Tabla: una zona, con todo el alto que queda (regla #766). */
+.vp .zonas button { padding: 5px 16px; }
+.vp .zonas button.on { background: var(--bg-card); box-shadow: var(--shadow); }
+.vp .cab .pt { flex: 1; min-width: 0; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp .cab .pt b { color: var(--text-primary); font-weight: 600; }
 .vp .esp { flex: 1; }
 .vp .tit { color: var(--accent-deep); font-weight: 600; font-size: 13px; white-space: nowrap; }
 /* Si lo que se ve es toda la venta del rango o una parte (regla #755). */
@@ -77,10 +79,10 @@
 .vp .lg i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .vp .lg i.g { width: 14px; height: 0; border-radius: 0; border-top: 2px dashed var(--text-secondary); vertical-align: 3px; }
 .vp .lg i.f { background: var(--accent-tint); border: 1px dashed var(--accent); }
-.vp .amp { height: 26px; flex: none; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border-lavender); border-radius: 8px; background: var(--bg-card); color: var(--accent-deep); padding: 0 9px; font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.vp .amp { height: 28px; flex: none; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 7px; background: var(--rail-fondo); color: var(--text-primary); padding: 0 9px; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .vp .amp:hover, .vp .amp[aria-pressed="true"] { background: var(--accent-tint); }
 .vp .amp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.vp .pn { flex: 0 0 286px; min-width: 0; border-left: 1px solid var(--line-soft); padding-left: 14px; font-size: 12px; display: flex; flex-direction: column; gap: 1px; }
+.vp .pn { flex: 0 0 286px; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-left: 1px solid var(--line-soft); padding-left: 14px; font-size: 12px; display: flex; flex-direction: column; gap: 1px; }
 .vp .pn-t { min-height: 28px; margin-bottom: 2px; }
 .vp .pn-f { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; min-width: 0; }
 .vp .pn-f b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -108,7 +110,7 @@
 .vp .eb::after { content: ''; position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px; background: var(--text-muted); }
 .vp .notita { font-size: 11px; color: var(--text-secondary); line-height: 1.3; margin: 4px 0 0; }
 .vp .ley { position: relative; flex: 0 0 auto; }
-.vp .ley-b { height: 26px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); padding: 0 9px; cursor: pointer; white-space: nowrap; font-size: 11.5px; }
+.vp .ley-b { height: 28px; border: 0; border-radius: 7px; background: var(--rail-fondo); padding: 0 9px; cursor: pointer; white-space: nowrap; font-size: 12px; }
 .vp .ley-p { position: absolute; right: 0; top: 30px; z-index: 5; width: 260px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-md); padding: 6px 8px; }
 .vp .ley-f { display: grid; grid-template-columns: 22px 14px 1fr auto; gap: 6px; align-items: center; padding: 3px 0; cursor: pointer; }
 .vp .ley-f .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
@@ -134,14 +136,11 @@
   box-shadow: var(--shadow-md); padding: 7px 9px; font-size: 11.5px; line-height: 1.45; pointer-events: none; z-index: 4; }
 .vp .tip .tg { margin-top: 3px; color: var(--text-secondary); }
 
-/* La fila de abajo del gráfico y el contexto */
-.vp .pie { display: flex; align-items: center; gap: 8px; flex: none; border-top: 1px solid var(--line-soft); padding-top: 6px; }
-.vp .pie .pt { flex: 1; min-width: 0; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vp .pie .pt b { color: var(--text-primary); font-weight: 600; }
-.vp .excel { height: 28px; border: 1px solid var(--border-lavender); border-radius: 8px; background: var(--bg-card); color: var(--accent-deep); padding: 0 10px; cursor: pointer; white-space: nowrap; }
+/* Los controles de la tabla, en la fila de la zona */
+.vp .excel { height: 28px; flex: none; border: 0; border-radius: 7px; background: var(--rail-fondo); color: var(--text-primary); padding: 0 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .vp .como-w { position: relative; flex: none; }
-.vp .como { height: 28px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); padding: 0 10px; cursor: pointer; white-space: nowrap; }
-.vp .como-p { position: absolute; right: 0; bottom: 34px; z-index: 6; width: 520px; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; background: var(--bg-card);
+.vp .como { height: 28px; border: 0; border-radius: 7px; background: var(--rail-fondo); padding: 0 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.vp .como-p { position: absolute; right: 0; top: 34px; z-index: 6; width: 520px; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; background: var(--bg-card);
   border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md); padding: 10px 14px; color: var(--text-primary); white-space: normal; }
 .vp .como-p p { margin: 2px 0 8px; }
 .vp .aviso { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); background: var(--text-primary); color: var(--bg-card);
@@ -154,22 +153,25 @@
   padding: 0 10px; height: 34px; white-space: nowrap; cursor: pointer; }
 .vp th.r { text-align: right; }
 .vp td { padding: 0 10px; height: 27px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; }
-.vp table.tr { table-layout: fixed; }
+.vp table.tr { table-layout: fixed; min-width: 820px; }
+.vp table.tr td, .vp table.tr th { padding: 0 6px; }
 .vp tbody tr { cursor: pointer; }
 .vp tbody tr:hover td { background: var(--accent-tint); }
 .vp tbody tr.sel td, .vp tbody tr.ab td { background: var(--accent-tint); }
-.vp tfoot td { position: sticky; bottom: 0; background: var(--accent-light); color: var(--accent-deep); font-weight: 700; border-top: 1px solid var(--border-lavender); }
+.vp tfoot td { position: sticky; bottom: 0; background: var(--accent-light); color: var(--accent-deep); font-size: 12px; font-weight: 700; border-top: 1px solid var(--border-lavender); }
 .vp td.tx { color: var(--text-secondary); }
 .vp .cv { display: inline-block; padding: 0 2px; }
-.vp .cv.bar { background: linear-gradient(90deg, transparent calc(100% - var(--w)), var(--border-lavender) calc(100% - var(--w))); }
-.vp .cv.bar.cian { background: linear-gradient(90deg, transparent calc(100% - var(--w)), color-mix(in srgb, var(--serie-1) 30%, transparent) calc(100% - var(--w))); }
-.vp .cv.bar.ambar { background: linear-gradient(90deg, transparent calc(100% - var(--w)), color-mix(in srgb, var(--warning) 28%, transparent) calc(100% - var(--w))); }
-.vp .cv.bar.roja { background: linear-gradient(90deg, transparent calc(100% - var(--w)), color-mix(in srgb, var(--danger) 30%, transparent) calc(100% - var(--w))); }
+/* Una línea fina debajo de la cifra: el fondo entero se leía como texto seleccionado. */
+.vp .cv.bar { background-size: 100% 2px; background-repeat: no-repeat; background-position: 0 100%; padding-bottom: 1px;
+  background-image: linear-gradient(90deg, transparent calc(100% - var(--w)), var(--focus-lavender) calc(100% - var(--w))); }
+.vp .cv.bar.cian { background-image: linear-gradient(90deg, transparent calc(100% - var(--w)), color-mix(in srgb, var(--serie-1) 70%, transparent) calc(100% - var(--w))); }
+.vp .cv.bar.ambar { background-image: linear-gradient(90deg, transparent calc(100% - var(--w)), color-mix(in srgb, var(--warning) 70%, transparent) calc(100% - var(--w))); }
+.vp .cv.bar.roja { background-image: linear-gradient(90deg, transparent calc(100% - var(--w)), color-mix(in srgb, var(--danger) 70%, transparent) calc(100% - var(--w))); }
 .vp .cv.alto { color: var(--warning-text); }
 .vp .cv.roto { color: var(--danger-text); font-weight: 600; }
 .vp .n { font-size: 10.5px; margin-left: 5px; }
 /* Las variaciones de cada celda, sólo con la tabla ampliada (regla #758). */
-.vp:not(.tabla-amp) .zr td.r .n { display: none; }
+.vp:not(.tabla-amp) .zr td .n { display: none; }
 .vp .n.bien { color: var(--success); } .vp .n.mal { color: var(--danger); } .vp .n.neutro { color: var(--text-secondary); } .vp .n.alto { color: var(--warning-text); }
 .vp .band { font-size: 10px; font-weight: 700; color: var(--danger-text); background: var(--danger-bg); border-radius: 4px; padding: 0 4px; margin-left: 5px; }
 .vp tr.fr td { background: var(--bg-primary); height: auto; white-space: normal; max-width: none; padding: 8px 10px; cursor: default; }
@@ -201,10 +203,12 @@
   .vp { height: auto; }
   .vp .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vp .ks, .vp .kc { display: none; }
-  .vp .ctl, .vp .cab, .vp .pie, .vp .seg { flex-wrap: wrap; }
+  .vp .ctl, .vp .cab, .vp .seg { flex-wrap: wrap; }
+  .vp .cab .pt { flex-basis: 100%; }
   .vp .seg { max-width: 100%; }
-  .vp .cuerpo { flex-direction: column; }
-  .vp .pn { flex: none; border-left: 0; padding-left: 0; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+  .vp .cuerpo { flex: none; flex-direction: column; }
+  .vp .graf { flex: none; }
+  .vp .pn { flex: none; overflow: visible; border-left: 0; padding-left: 0; border-top: 1px solid var(--line-soft); padding-top: 8px; }
   .vp .zr { flex: none; height: 250px; }
   .vp .como-p { width: min(520px, 86vw); }
 }

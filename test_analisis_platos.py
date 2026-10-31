@@ -86,5 +86,134 @@ class IngenieriaDeMenu(unittest.TestCase):
         self.assertIn("p[F.clase] === k", js)
 
 
+def _pieza_en_chromium(pw, nombre, data, alto=650):
+    aqui = Path(vp.__file__).parent
+    leer = lambda n: (aqui / n).read_text(encoding="utf-8")
+    b = pw.chromium.launch()
+    pg = b.new_page(viewport={"width": 1240, "height": alto})
+    pg.set_content(f"<style>:root{{--alto-util:{alto}px}}{leer('ventas_platos_cromo.css')}{leer(nombre + '.css')}</style><div id='r'></div>")
+    js = (leer("ventas_platos_cromo.js") + leer(nombre + ".js")).replace(
+        "export default function (component)", "window.__montar = function (component)")
+    pg.add_script_tag(content=js)
+    pg.evaluate("(d) => { window.__enviados = []; window.__montar({ data: d, parentElement: document.getElementById('r'), "
+                "setTriggerValue: (k, v) => window.__enviados.push([k, v]) }); }", data)
+    return b, pg
+
+
+class UnaPantallaEnElNavegador(unittest.TestCase):
+    """Una fila de controles y una zona por pestaña (regla #767), en Chromium:
+    a 1240×650 la tabla muestra lo que antes pedía deslizar, la ficha entra
+    entera y lo que carga datos vuelve a Python por `cromo`."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            from playwright.sync_api import sync_playwright
+            cls.pw = sync_playwright().start()
+        except Exception:
+            raise unittest.SkipTest("sin Playwright")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.pw.stop()
+
+    def _datos(self):
+        filas = [[f"Plato {i:02d}", "Alimentos" if i % 2 else "Bebidas", f"Sub {i % 3}", 3000.0 - i * 90, 40.0 - i, 900.0, 2400.0 - i * 70]
+                 for i in range(30)]
+        datos = {"ago": periodo([f[:3] + [f[3] * 0.8] + f[4:] for f in filas], 31),
+                 "sep": periodo(filas[::-1], 30), "oct": periodo(filas, 30)}
+        d = vp.armar_ranking(datos, ["ago", "sep", "oct"], {"ago": "Ago 26", "sep": "Sep 26", "oct": "Oct 26"}, "Plato 00",
+                             {"nombre": "Plato 00", "corte": "mes", "serie": [["Ago 26", 80.0, 1.0, True], ["Sep 26", 90.0, 1.0, True], ["Oct 26", 100.0, 1.0, True]]},
+                             {"plato 00": "0000001"})
+        d["cromo"] = {"vista": "Ranking", "cortes": list(vp.CORTES), "corte": "Mes",
+                      "periodos": ["Jul 26", "Ago 26", "Sep 26", "Oct 26", "Nov 26"], "elegidos": ["Ago 26", "Sep 26", "Oct 26"], "max": vp.MAX_PERIODOS}
+        return d
+
+    def test_ranking(self):
+        b, pg = _pieza_en_chromium(self.pw, "ventas_platos", self._datos())
+        r = pg.evaluate("""async () => {
+          const raiz = document.querySelector('.vp'), $ = (s) => raiz.querySelector(s), $$ = (s) => [...raiz.querySelectorAll(s)], out = {};
+          const t = $('.vp-tabla').getBoundingClientRect();
+          out.filas = $$('tr.vp-f').filter((f) => f.getBoundingClientRect().bottom <= t.bottom + 1).length;
+          out.altoPieza = raiz.clientHeight; out.desborde = raiz.scrollHeight - raiz.clientHeight;
+          out.ficha = [$('.vp-ficha').scrollHeight, $('.vp-ficha').clientHeight];
+          out.botones = $$('.vp-fbot button').map((x) => x.textContent.trim());
+          out.kpis = $$('.vp-kpi').length;
+          out.comparar = $('[data-id="comparar"]').textContent.trim();
+          // Puestos: la zona cambia sin una corrida.
+          $('[data-acc="tab"][data-id="Puestos"]').click();
+          out.puestos = !!$('.vp-z svg') && !$('.vp-tabla'); out.alEnviar0 = window.__enviados.length;
+          $('[data-acc="tab"][data-id="Tabla"]').click();
+          // «Dentro de» filtra sin una corrida.
+          $('[data-id="ambito"]').click();
+          $('[data-acc="ambito"][data-tipo="g"][data-id="Bebidas"]').click();
+          out.dentro = $('[data-id="ambito"]').textContent.trim();
+          $('[data-id="ambito"]').click(); $('[data-acc="ambito"][data-tipo=""]').click();
+          // Los meses esperan: dos clics, un pedido, y el menú al cerrarse lo suelta.
+          $('[data-id="comparar"]').click();
+          $('[data-acc="mes"][data-id="Jul 26"]').click();
+          $('[data-acc="mes"][data-id="Nov 26"]').click();
+          out.antes = window.__enviados.length;
+          $('[data-id="comparar"]').click();
+          out.pedido = window.__enviados.at(-1);
+          out.apagada = raiz.classList.contains('cargando');
+          // Otro corte y la Ingeniería también vuelven a Python.
+          $('[data-acc="corte"][data-id="Semana"]').click(); out.corte = window.__enviados.at(-1)[1].corte;
+          $('[data-acc="tab"][data-id="Menu"]').click(); out.vista = window.__enviados.at(-1)[1].vista;
+          // Elegir un plato pide su evolución.
+          $$('tr.vp-f')[3].click(); out.foco = window.__enviados.at(-1);
+          return out;
+        }""")
+        b.close()
+        self.assertGreaterEqual(r["filas"], 10)
+        self.assertLessEqual(r["desborde"], 0)
+        self.assertLessEqual(r["ficha"][0], r["ficha"][1])
+        self.assertEqual(r["botones"], ["☆ Elegir", "A qué hora →", "Su costo →"])
+        self.assertEqual(r["kpis"], 4)
+        self.assertIn("Ago · Sep · Oct 26", r["comparar"])
+        self.assertTrue(r["puestos"])
+        self.assertEqual(r["alEnviar0"], 0)
+        self.assertIn("Bebidas", r["dentro"])
+        self.assertEqual(r["antes"], 0)
+        self.assertEqual(r["pedido"][0], "cromo")
+        self.assertEqual(r["pedido"][1]["elegidos"], ["Ago 26", "Sep 26", "Oct 26", "Nov 26"])
+        self.assertTrue(r["apagada"])
+        self.assertEqual(r["corte"], "Semana")
+        self.assertEqual(r["vista"], "Ingeniería de menú")
+        self.assertEqual(r["foco"][0], "foco")
+
+    def test_ingenieria_en_columnas(self):
+        from graficos import ventas_menu as vm
+        a = pd.DataFrame([{"prod": f"Plato {i:02d}", "grupo": "Alimentos", "sub": "Fondos", "venta": 100.0 + i, "cant": 200.0 - i * 9,
+                           "costo": (200.0 - i * 9) * (10 + i), "neto": (200.0 - i * 9) * 60.0, "pedidos": 100.0} for i in range(20)])
+        m, fuera, res = vm.clasificar(a, [("Alimentos", "Fondos")])
+        d = vm.armar_menu(m, fuera, res, {}, "Oct 26", "Sep 26", 30)
+        d["cromo"] = {"vista": "Menu", "cortes": list(vp.CORTES), "corte": "Mes", "periodos": ["Sep 26", "Oct 26"], "elegidos": ["Sep 26", "Oct 26"], "max": vp.MAX_PERIODOS}
+        d["categorias"] = [{"r": "Fondos · Alimentos", "on": True}, {"r": "Entradas · Alimentos", "on": False}]
+        b, pg = _pieza_en_chromium(self.pw, "ventas_menu", d)
+        r = pg.evaluate("""() => {
+          const raiz = document.querySelector('.ig'), $ = (s) => raiz.querySelector(s), $$ = (s) => [...raiz.querySelectorAll(s)], out = {};
+          const kx = $$('.ig-kpi').map((k) => Math.round(k.getBoundingClientRect().left)), cx = $$('.ig-cuadro').map((k) => Math.round(k.getBoundingClientRect().left));
+          out.alineados = kx.join() === cx.join();
+          out.platos = $$('.ig-filas li:not(.ig-cols)').length;
+          out.desborde = raiz.scrollHeight - raiz.clientHeight;
+          $('[data-id="cat"]').click();
+          out.cats = $$('[data-cat]').length;
+          const nueva = $('[data-cat="Entradas · Alimentos"]'); nueva.click();
+          $('[data-id="cat"]').click();
+          out.subs = window.__enviados.at(-1);
+          $('[data-acc="tab"][data-id="Puestos"]').click();
+          out.vista = window.__enviados.at(-1)[1].vista;
+          return out;
+        }""")
+        b.close()
+        self.assertTrue(r["alineados"])
+        self.assertEqual(r["platos"], 20)
+        self.assertLessEqual(r["desborde"], 0)
+        self.assertEqual(r["cats"], 2)
+        self.assertEqual(r["subs"][1]["subs"], ["Fondos · Alimentos", "Entradas · Alimentos"])
+        self.assertEqual(r["vista"], "Ranking")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,12 +1,10 @@
-// Ventas › «Análisis de platos» › Ingeniería de menú (regla #700).
+// Ventas › «Análisis de platos» › Ingeniería de menú (reglas #700 y #767).
 //
-// La monta graficos/ventas_menu.py::vista_ingenieria con st.components.v2.
-// Es la forma del boceto aprobado
-// (https://claude.ai/artifact/Lzua6AASjVigJ8GJktVwM8): las cifras por clase
-// y los cuatro cuadros, ubicados como en la matriz —arriba lo que deja más,
-// a la derecha lo que se pide más—, más la matriz y la tabla, que se eligen
-// acá sin una corrida. LA CUENTA NO ESTÁ ACÁ: `clasificar` corre en Python y
-// cada plato llega con su clase; esto sólo la muestra.
+// La monta graficos/ventas_menu.py::vista_ingenieria con st.components.v2, con
+// `ventas_platos_cromo.js` antepuesto. Las cifras por clase y, debajo de cada
+// una, su columna de platos (entran todos en la pantalla), más la matriz y la
+// tabla, que se eligen acá sin una corrida. LA CUENTA NO ESTÁ ACÁ: `clasificar`
+// corre en Python y cada plato llega con su clase; esto sólo la muestra.
 //
 // Python manda en `data`: `platos` ([nombre, subgrupo, clase, unidades,
 // % unidades, pedidos, % pedidos, precio neto, costo, % costo, margen/plato,
@@ -15,10 +13,10 @@
 // umbrales del % de costo.
 
 const CLAVE = 'vt_ing_est';
-const ORDEN = ['rompecabezas', 'estrella', 'perro', 'caballo'];
+const ORDEN = ['estrella', 'caballo', 'rompecabezas', 'perro'];
 const COLOR = { estrella: 'var(--success)', caballo: 'var(--warning)', rompecabezas: 'var(--accent)', perro: 'var(--danger)' };
 const F = { nom: 0, sub: 1, clase: 2, u: 3, mm: 4, ped: 5, mmped: 6, precio: 7, costo: 8, pct: 9, margen: 10, mtot: 11, limite: 12, cped: 13, antes: 14 };
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const esc = escPl;
 function leer(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (_) { return def; } }
 function guardar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* sin almacenamiento */ } }
 const soles = (v, dec = 2) => (v == null ? '—' : `S/ ${Number(v).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })}`);
@@ -46,9 +44,7 @@ function htmlKpis(d, st) {
 
 function htmlTexto(d) {
   const r = d.resumen;
-  return `Se clasifica <b>${esc(d.etq)}</b>, el último período elegido${d.etq_ant ? ` (y «antes» es ${esc(d.etq_ant)})` : ''} ·
-    ${d.dias} días con venta · ${r.n} platos, ${num(r.u)} unidades, ${soles(r.margen, 0)} de margen.
-    <b>Popular</b>: ${pct(r.umbral)} o más de las unidades (70 % × 1/${r.n}). <b>Deja mucho</b>: ${soles(r.acm)} o más por plato.`;
+  return `<b>${esc(d.etq)}</b>${d.etq_ant ? ` (antes: ${esc(d.etq_ant)})` : ''} · ${d.dias} días con venta · ${r.n} platos · ${num(r.u)} unidades · ${soles(r.margen, 0)} de margen · <b>Popular</b>: ${pct(r.umbral)} o más de las unidades (70 % × 1/${r.n}) · <b>Deja mucho</b>: ${soles(r.acm)} o más por plato.`;
 }
 
 // ── Cuadros ──────────────────────────────────────────────────────────────
@@ -56,19 +52,18 @@ function htmlCuadros(d) {
   const r = d.resumen, conPed = r.pedidos != null;
   const cuadro = (k) => {
     const ps = d.platos.filter((p) => p[F.clase] === k), c = r.clases[k];
-    const filas = ps.map((p) => `<li><span class="ig-nom"><b title="${esc(p[F.nom])} · ${esc(p[F.sub])}">${esc(p[F.nom])}</b>${chips(d, p)}</span>
-        <span class="num">${soles(p[F.margen])}</span><span class="num suave">${num(p[F.u])} u</span>${conPed ? `<span class="num suave">${num(p[F.ped])} ped.</span>` : ''}</li>`).join('');
-    return `<div class="ig-cuadro ${k}"><div class="ig-ctit"><b>${esc(d.nombres[k])}</b><span>${c.n} ${c.n === 1 ? 'plato' : 'platos'} · ${pct(r.margen ? c.margen / r.margen : 0, 0)} del margen</span></div>
-      <div class="ig-acc"><b>${esc(d.accion[k])}</b> · ${esc(d.detalle[k])}</div>
-      ${ps.length ? `<ul class="ig-filas${conPed ? ' ped' : ''}"><li class="ig-cols"><span></span><span>margen/plato</span><span>unid.</span>${conPed ? '<span>pedidos</span>' : ''}</li>${filas}</ul>` : '<div class="ig-vacio">Ninguno en este período.</div>'}</div>`;
+    const filas = ps.map((p) => `<li><span class="ig-nom"><b title="${esc(p[F.nom])} · ${esc(p[F.sub])}">${esc(p[F.nom])}</b>${chips(d, p) ? `<span class="ig-marcas">${chips(d, p)}</span>` : ''}</span>
+        <span class="num">${soles(p[F.margen])}</span><span class="num suave">${num(p[F.u])}</span>${conPed ? `<span class="num suave">${num(p[F.ped])}</span>` : ''}</li>`).join('');
+    return `<div class="ig-cuadro ${k}"><div class="ig-acc"><b>${esc(d.accion[k])}</b><span>${esc(d.detalle[k])}</span></div>
+      ${ps.length ? `<ul class="ig-filas${conPed ? ' ped' : ''}"><li class="ig-cols"><span>Plato</span><span>Margen</span><span>Unid.</span>${conPed ? '<span>Ped.</span>' : ''}</li>${filas}</ul>` : '<div class="ig-vacio">Ninguno en este período.</div>'}</div>`;
   };
-  return `<div class="ig-cuadros"><span class="ig-eje-y">deja más por plato ↑</span>${ORDEN.map(cuadro).join('')}<span class="ig-eje-x">se pide más →</span></div>`;
+  return `<div class="ig-cuadros">${ORDEN.map(cuadro).join('')}</div>`;
 }
 
 // ── Matriz ───────────────────────────────────────────────────────────────
-function htmlMatriz(d, ancho) {
+function htmlMatriz(d, ancho, alto) {
   const r = d.resumen, ps = d.platos;
-  const W = Math.max(420, ancho || 800), H = 420, L = 54, R = 16, T = 14, B = 34;
+  const W = Math.max(420, ancho || 800), H = Math.max(300, alto || 420), L = 54, R = 16, T = 14, B = 34;
   const xMax = Math.max(r.umbral * 1.6, ...ps.map((p) => p[F.mm])) * 1.08;
   const yMax = Math.max(r.acm * 1.6, ...ps.map((p) => p[F.margen])) * 1.08;
   const x = (v) => L + v / xMax * (W - L - R), y = (v) => T + (1 - v / yMax) * (H - T - B);
@@ -100,7 +95,7 @@ function htmlMatriz(d, ancho) {
       break;
     }
   });
-  return `<svg role="img" aria-label="Matriz de popularidad y margen" viewBox="0 0 ${W} ${H}" width="100%">${svg}</svg>`;
+  return `<svg role="img" aria-label="Matriz de popularidad y margen" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${svg}</svg>`;
 }
 
 // ── Tabla ────────────────────────────────────────────────────────────────
@@ -119,29 +114,71 @@ function htmlTabla(d, st) {
     <tbody>${filas}</tbody></table></div>${st.clase ? `<div class="ig-filtro">Sólo ${esc(d.nombres[st.clase].toLowerCase())} · <button type="button" data-acc="clase" data-id="${st.clase}">ver todas</button></div>` : ''}`;
 }
 
+// La categoría: los subgrupos que compiten entre sí.
+function textoCategoria(st) {
+  return st.cats.length === 1 ? st.cats[0] : `${st.cats.length} subgrupos`;
+}
+function htmlTabs(d, st) {
+  const lista = d.categorias || [];
+  const pop = st.menu === 'cat' ? `<div class="pl-pop pl-lista der"><span class="pl-sep">Los platos que compiten por la misma elección: juntá los subgrupos que van juntos en la carta.</span>${lista.map((x) => `<label><input type="checkbox" data-cat="${esc(x.r)}" ${st.cats.includes(x.r) ? 'checked' : ''}> ${esc(x.r)}</label>`).join('')}</div>` : '';
+  return `${d.cromo ? htmlPestanas('Menu') : ''}<span class="ig-esp"></span>
+    ${lista.length ? `<div class="pl-m"><button type="button" class="pl-mb" aria-expanded="${st.menu === 'cat'}" data-acc="menu" data-id="cat">Categoría: ${esc(textoCategoria(st))} <i>▾</i></button>${pop}</div>` : ''}
+    <div class="pl-seg" role="tablist" aria-label="Forma">${[['cuadros', 'Cuadros'], ['matriz', 'Matriz'], ['tabla', 'Tabla']].map(([id, r]) => `<button type="button" role="tab" aria-selected="${st.forma === id}" class="${st.forma === id ? 'on' : ''}" data-acc="forma" data-id="${id}">${r}</button>`).join('')}</div>`;
+}
 function dibujar(raiz) {
   const { data: d, st } = raiz.__d;
-  if (!raiz.querySelector('.ig-cab')) {
-    raiz.innerHTML = `<div class="ig-cab"><div class="ig-kpis" data-zona="kpis"></div><div class="ig-seg" role="tablist" aria-label="Forma" data-zona="formas"></div></div>
-      <div class="ig-texto" data-zona="texto"></div><div class="ig-cuerpo" data-zona="cuerpo"></div><div class="ig-pie" data-zona="pie"></div>`;
+  if (!raiz.querySelector('.ig-cuerpo')) {
+    raiz.innerHTML = `<div class="ig-ctrl" data-zona="ctrl"></div><div class="ig-kpis" data-zona="kpis"></div><div class="ig-ctrl" data-zona="tabs"></div>
+      <div class="ig-cuerpo" data-zona="cuerpo"></div><div class="ig-texto" data-zona="texto"></div><div class="ig-pie" data-zona="pie"></div>`;
   }
   const z = (n) => raiz.querySelector(`[data-zona="${n}"]`);
+  z('ctrl').innerHTML = htmlCromo(d.cromo, st);
   z('kpis').innerHTML = htmlKpis(d, st);
-  z('formas').innerHTML = [['cuadros', 'Cuadros'], ['matriz', 'Matriz'], ['tabla', 'Tabla']].map(([id, r]) =>
-    `<button type="button" role="tab" aria-selected="${st.forma === id}" class="${st.forma === id ? 'on' : ''}" data-acc="forma" data-id="${id}">${r}</button>`).join('');
+  z('tabs').innerHTML = htmlTabs(d, st);
   z('texto').innerHTML = htmlTexto(d);
   const c = z('cuerpo');
-  c.innerHTML = st.forma === 'matriz' ? htmlMatriz(d, c.clientWidth) : st.forma === 'tabla' ? htmlTabla(d, st) : htmlCuadros(d);
+  c.innerHTML = st.forma === 'matriz' ? htmlMatriz(d, c.clientWidth, c.clientHeight) : st.forma === 'tabla' ? htmlTabla(d, st) : htmlCuadros(d);
   const fuera = d.fuera.map(([p, mo, pr, co]) => `${esc(p)} (${esc(mo)}${mo.startsWith('cuesta') ? `: ${soles(co)} de costo contra ${soles(pr)}` : ''})`);
-  z('pie').innerHTML = (fuera.length ? `<b>Fuera</b>: ${fuera.join(' · ')}. ` : '')
-    + `<b>Al límite</b>: a menos de 5 % de un corte, en los platos que venden ${num(d.resumen.piso)} unidades o más. Método: Kasavana y Smith (1982), con las fórmulas de AHLEI; «al límite» y «con pedidos» son agregados nuestros.`;
+  // El método va en la ayuda de la línea: en la pantalla, sólo lo que quedó fuera.
+  const metodo = `Al límite: a menos de 5 % de un corte, en los platos que venden ${num(d.resumen.piso)} unidades o más. Método: Kasavana y Smith (1982), con las fórmulas de AHLEI; «al límite» y «con pedidos» son agregados nuestros.`;
+  z('texto').title = metodo;
+  z('pie').innerHTML = fuera.length ? `<b>Fuera</b>: ${fuera.join(' · ')}.` : '';
+  z('pie').title = fuera.join(' · ').replace(/<[^>]*>/g, '');
+  z('pie').hidden = !fuera.length;
 }
 
+function soltarCat(raiz) {
+  const D = raiz.__d;
+  if (!D.esperaCat) return;
+  clearTimeout(D.esperaCat);
+  D.esperaCat = null;
+  pedirCromo(raiz, { subs: D.st.cats.slice() });
+}
 function enlazar(raiz) {
+  raiz.addEventListener('change', (ev) => {
+    const cat = ev.target.dataset.cat;
+    if (!cat) return;
+    const D = raiz.__d, st = D.st;
+    const nueva = ev.target.checked ? st.cats.concat([cat]) : st.cats.filter((x) => x !== cat);
+    if (!nueva.length) { ev.target.checked = true; return; }
+    st.cats = nueva;
+    raiz.querySelector('[data-id="cat"]').firstChild.textContent = `Categoría: ${textoCategoria(st)} `;
+    clearTimeout(D.esperaCat);
+    D.esperaCat = setTimeout(() => soltarCat(raiz), 1200);
+  });
   raiz.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-acc]');
+    const st0 = raiz.__d.st;
+    if (st0.menu && !ev.target.closest('.pl-pop') && !(b && b.dataset.acc === 'menu')) { st0.menu = null; soltarMeses(raiz); soltarCat(raiz); if (!b) { dibujar(raiz); return; } }
     if (!b || !raiz.contains(b)) return;
     const st = raiz.__d.st, id = b.dataset.id;
+    if (accionCromo(raiz, b.dataset.acc, id, () => { raiz.querySelector('[data-zona="ctrl"]').innerHTML = htmlCromo(raiz.__d.data.cromo, st); raiz.querySelector('[data-zona="tabs"]').innerHTML = htmlTabs(raiz.__d.data, st); })) { if (!st.menu) soltarCat(raiz); return; }
+    if (b.dataset.acc === 'tab') {
+      if (id === 'Menu') return;
+      guardarPl({ tab: id });
+      pedirCromo(raiz, { vista: 'Ranking' });
+      return;
+    }
     if (b.dataset.acc === 'forma') st.forma = id;
     else if (b.dataset.acc === 'clase') { st.clase = st.clase === id ? null : id; if (st.clase) st.forma = 'tabla'; }
     else if (b.dataset.acc === 'orden') { if (st.orden === id) st.asc = !st.asc; else { st.orden = id; st.asc = id === 'nom' || id === 'clase'; } }
@@ -154,16 +191,19 @@ function enlazar(raiz) {
 }
 
 export default function (component) {
-  const { data, parentElement } = component;
+  const { data, parentElement, setTriggerValue } = component;
   if (!data || !data.platos) return;
   let raiz = parentElement.querySelector('.ig');
   if (!raiz) {
     raiz = document.createElement('div');
     raiz.className = 'ig';
     parentElement.appendChild(raiz);
-    raiz.__d = { st: Object.assign({ forma: 'cuadros', clase: null, orden: 'mtot', asc: false }, leer(CLAVE, {})) };
+    raiz.__d = { st: Object.assign({ forma: 'cuadros', clase: null, orden: 'mtot', asc: false, menu: null, elegidos: [], cats: [] }, leer(CLAVE, {})) };
     enlazar(raiz);
   }
   raiz.__d.data = data;
+  raiz.__d.enviar = setTriggerValue;
+  recibirCromo(raiz, data);
+  if (!raiz.__d.esperaCat) raiz.__d.st.cats = (data.categorias || []).filter((x) => x.on).map((x) => x.r);
   dibujar(raiz);
 }

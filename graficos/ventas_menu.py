@@ -99,13 +99,10 @@ _DETALLE = {
     "perro": "Ni se piden ni dejan.",
 }
 
-_KEYS_WIDGET_MENU = ("vt_ing_subs",)
+_KEYS_WIDGET_MENU = ()
 # «Cuadros | Matriz | Tabla» (`vt_ing_forma`) es de la pieza desde la regla #700.
-"""Los controles de la vista. Van también en
-`ventas_platos._KEYS_WIDGET_PL`: la vista se dibuja dentro de ese fragment,
-y su salto a «Por hora» lo corta con un `st.rerun` (regla #373). Y los dos
-llevan `persist_state="page"`: mientras se mira el ranking no se dibujan, y
-sin eso volverían a su default (regla #569)."""
+"""Los widgets de la vista: ninguno desde la regla #767. La categoría
+(`vt_ing_subs`) es una clave propia y su menú, de la pieza."""
 
 
 # ===========================================================================
@@ -260,11 +257,15 @@ def _soles(v, dec=2):
 # navegador sin una corrida; la categoría (qué subgrupos compiten) sigue en
 # Python, porque cambia la clasificación.
 
+_AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "ventas_menu",
-    css=css_movil((Path(__file__).parent / "ventas_menu.css").read_text(encoding="utf-8")),
-    js=js_movil((Path(__file__).parent / "ventas_menu.js").read_text(encoding="utf-8")),
+    css=css_movil((_AQUI / "ventas_platos_cromo.css").read_text(encoding="utf-8")
+                  + (_AQUI / "ventas_menu.css").read_text(encoding="utf-8")),
+    js=js_movil((_AQUI / "ventas_platos_cromo.js").read_text(encoding="utf-8")
+                + (_AQUI / "ventas_menu.js").read_text(encoding="utf-8")),
 )
+_K_PIEZA = "vt_ing_pieza"
 
 
 def _n(v, dec=4):
@@ -298,13 +299,12 @@ def armar_menu(m, fuera, res, antes, etq_ult, etq_ant, dias):
     }
 
 
-def vista_ingenieria(a_ult, etq_ult, dias, a_ant, etq_ant, *, forma, cab,
-                     c_cat):
+def vista_ingenieria(a_ult, etq_ult, dias, a_ant, etq_ant, *, cromo=None, al_cromo=None,
+                     forma=None, cab=None, c_cat=None):
     """La vista, dentro de la tarjeta de Análisis de platos (regla #569): la
-    categoría la arma quien mira —su desplegable va en `c_cat`, la columna de
-    la fila del Corte—, las cifras por clase van en `cab` —el renglón del
-    título, a la derecha del interruptor de la vista— y la clasificación, en
-    la forma elegida, en el contenedor desde el que se llama.
+    categoría la arma quien mira, en el menú de la pieza, que devuelve los
+    subgrupos por el trigger `cromo` igual que el corte y los períodos (regla
+    #767). `forma`, `cab` y `c_cat` ya no se usan: quedan por la regla #357.
 
     `a_ult` es el agregado por plato del último período de la comparación y
     `a_ant`, el del anterior (para «antes: …»), los dos de
@@ -318,20 +318,18 @@ def vista_ingenieria(a_ult, etq_ult, dias, a_ant, etq_ant, *, forma, cab,
     # Lo elegido que ya no existe en este período se descarta: un valor fuera
     # de las opciones es un error. Sin nada, el subgrupo que más vende.
     _validas = [x for x in (ss.get("vt_ing_subs") or []) if x in rot]
-    ss["vt_ing_subs"] = _validas or [_rotulo(ops[0])]
-    with c_cat:
-        elegidos = st.multiselect(
-            "Categoría", list(rot), key="vt_ing_subs",
-            label_visibility="collapsed", persist_state="page",
-            placeholder="Subgrupos que compiten entre sí…",
-            help="El método compara platos que compiten por la misma "
-                 "elección: juntá los subgrupos que van juntos en la "
-                 "carta, por ejemplo Fondos con las carnes.")
+    elegidos = ss["vt_ing_subs"] = _validas or [_rotulo(ops[0])]
     subs = [rot[x] for x in elegidos]
     m, fuera, res = clasificar(a_ult, subs)
     if res is None:
-        st.info("Elegí al menos un subgrupo con platos para clasificar.")
-        return
+        # La categoría elegida no tiene platos clasificables: vuelve a la
+        # que más vende, para que la pieza —que trae el menú— se dibuje.
+        elegidos = ss["vt_ing_subs"] = [_rotulo(ops[0])]
+        subs = [rot[x] for x in elegidos]
+        m, fuera, res = clasificar(a_ult, subs)
+        if res is None:
+            st.info("Sin platos con venta en el período para clasificar.")
+            return
     antes = {}
     if a_ant is not None:
         m_ant, _f, _r = clasificar(a_ant, subs)
@@ -339,5 +337,8 @@ def vista_ingenieria(a_ult, etq_ult, dias, a_ant, etq_ant, *, forma, cab,
             antes = dict(zip(m_ant["prod"], m_ant["clase"]))
     # Las cifras por clase, la explicación de los cortes, la forma elegida
     # y lo que quedó fuera los dibuja la pieza (regla #700).
-    _PIEZA(key="vt_ing_pieza", data=armar_menu(m, fuera, res, antes, etq_ult, etq_ant, dias),
-           width="stretch")
+    data = armar_menu(m, fuera, res, antes, etq_ult, etq_ant, dias)
+    data["cromo"] = cromo
+    data["categorias"] = [{"r": r, "on": r in elegidos} for r in rot]
+    _PIEZA(key=_K_PIEZA, data=data, width="stretch",
+           on_cromo_change=(lambda: al_cromo(_K_PIEZA)) if al_cromo else None)

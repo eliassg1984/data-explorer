@@ -461,7 +461,18 @@ class LaComparacionEnElNavegador(unittest.TestCase):
               out.futuros = $$('.gr .fut').length; out.zonasFuturas = $$('[data-acc="fut"]').length;
               out.base = $$('.gr .pt-b').length;
               out.etiquetasClave = $$('.gr .et').length;
-              out.alto = raiz.clientHeight; out.altoTabla = $('.zr').clientHeight;
+              out.alto = raiz.clientHeight;
+              // Una zona: abre en el gráfico, sin tabla, y la pestaña la cambia.
+              out.abreSinTabla = !$('.zr') && !!$('.gr');
+              $('[data-acc="zona"][data-v="tabla"]').click();
+              out.altoTabla = $('.zr').clientHeight; out.tablaSinGraf = !$('.gr'); out.panelEnTabla = !!$('.pn');
+              out.filasVisibles = Math.floor((out.altoTabla - 34 - 27) / 27);
+              // La columna de variación sigue a «Contra», no a la barra anterior.
+              { const V_ = window.VentasPeriodo, R_ = raiz.__vp.R, B_ = raiz.__vp.base, i_ = R_.claves.findIndex((_, j) => B_.barras[j]);
+                const a_ = V_.medida('venta', V_.totalPeriodos(R_, [i_])), b_ = V_.medida('venta', B_.barras[i_]);
+                out.varEsperada = V_.util.varVenta((a_ - b_) / b_ * 100)[0]; out.varCab = $$('.zr th').at(-1).textContent;
+                out.varCelda = $$('.zr tbody tr')[i_].querySelector('td:last-child').textContent; out.varTotal = $('.zr tfoot td:last-child').textContent; }
+              $('[data-acc="zona"][data-v="graf"]').click();
               out.desborde = dd();
               $('[data-acc="cifras"][data-v="Todas"]').click(); out.etiquetasTodas = $$('.gr .et').length;
               $('[data-acc="cifras"][data-v="Clave"]').click();
@@ -471,7 +482,8 @@ class LaComparacionEnElNavegador(unittest.TestCase):
               $('[data-acc="med"][data-v="venta"]').click();
               // Elegir un día no salta a los pedidos: lo cuenta el panel y marca su fila.
               $$('[data-acc="barra"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
-              out.modo = raiz.__vp.st.modo; out.foco = $('.pn-f b').textContent; out.filaSel = $$('tbody tr.sel').length;
+              out.modo = raiz.__vp.st.modo; out.foco = $('.pn-f b').textContent;
+              $('[data-acc="zona"][data-v="tabla"]').click(); out.filaSel = $$('tbody tr.sel').length; $('[data-acc="zona"][data-v="graf"]').click();
               $('[data-acc="pan"][data-v="Qué movió"]').click(); out.movio = $('.pn').textContent;
               $('[data-acc="quitar"]').click(); out.sinFoco = !$('.pn-f');
               $('[data-acc="pan"][data-v="Qué movió"]').click(); out.movioTodo = $('.pn').textContent;
@@ -485,14 +497,18 @@ class LaComparacionEnElNavegador(unittest.TestCase):
               sel.value = 'normal'; sel.dispatchEvent(new Event('change', { bubbles: true }));
               out.contra = raiz.__vp.st.contra; out.tileNormal = $('.kpi .kn').textContent;
               const s2 = $('.cn select'); s2.value = 'anio'; s2.dispatchEvent(new Event('change', { bubbles: true }));
-              // Ampliar: una cosa o la otra, y se vuelve con todo igual.
-              $$('.amp')[0].click(); out.amplGraf = { tabla: !!$('.zr'), pie: !!$('.pie'), panel: !!$('.pn'), alto: $('.gr svg').getAttribute('height'), volver: $$('.amp')[0].textContent };
-              $$('.amp')[0].click();
-              $('.pie .amp').click(); out.amplTabla = { graf: !!$('.gr'), tabla: $('.zr').clientHeight, volver: $('.pie .amp').textContent };
-              $('.pie .amp').click(); out.vuelve = !!$('.gr') && !!$('.zr');
+              // Ampliar esconde el panel, en el gráfico y en la tabla.
+              out.altoGraf = +$('.gr svg').getAttribute('height');
+              $('.amp').click(); out.amplGraf = { panel: !!$('.pn'), ancho: +$('.gr svg').getAttribute('width'), volver: $('.amp').textContent };
+              $('.amp').click();
+              $('[data-acc="zona"][data-v="tabla"]').click();
+              $('.amp').click(); out.amplTabla = { panel: !!$('.pn'), tablaAmp: raiz.classList.contains('tabla-amp'), volver: $('.amp').textContent };
+              $('.amp').click(); out.vuelve = !!$('.pn') && !!$('.zr');
+              $('[data-acc="zona"][data-v="graf"]').click();
               // «Ver sus pedidos» y Capas siguen.
               $$('[data-acc="barra"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
-              $('[data-acc="verped"]').click(); out.detalle = raiz.__vp.st.modo;
+              $('[data-acc="verped"]').click(); out.detalle = raiz.__vp.st.modo; out.detalleZona = raiz.__vp.st.zona;
+              $('[data-acc="zona"][data-v="graf"]').click();
               $('[data-acc="ley"]').click(); out.capasP = $('.ley-p').textContent;
               return out;
             }""", [P, hists])
@@ -510,7 +526,13 @@ class LaComparacionEnElNavegador(unittest.TestCase):
         self.assertGreater(r["base"], 0)
         self.assertLess(r["etiquetasClave"], r["etiquetasTodas"])
         self.assertEqual(r["alto"], 589)
-        self.assertGreater(r["altoTabla"], 60)
+        self.assertTrue(r["abreSinTabla"])
+        self.assertTrue(r["tablaSinGraf"])
+        self.assertTrue(r["panelEnTabla"])
+        self.assertGreaterEqual(r["filasVisibles"], 10)
+        self.assertEqual(r["varCab"], "vs año pasado")
+        self.assertEqual(r["varCelda"], r["varEsperada"])
+        self.assertTrue(r["varTotal"])
         self.assertLessEqual(r["desborde"], 0)
         self.assertEqual(r["tit"], "Ticket por día")
         self.assertEqual(r["ticketOn"], "Ticket")
@@ -531,14 +553,15 @@ class LaComparacionEnElNavegador(unittest.TestCase):
         self.assertEqual(r["opciones"][0], "Año pasado")
         self.assertEqual(r["opciones"][2], "Lo normal")
         self.assertEqual(r["contra"], "normal")
-        self.assertFalse(r["amplGraf"]["tabla"])
-        self.assertTrue(r["amplGraf"]["panel"])
-        self.assertGreater(int(r["amplGraf"]["alto"]), 236)
-        self.assertIn("Volver", r["amplGraf"]["volver"])
-        self.assertFalse(r["amplTabla"]["graf"])
-        self.assertGreater(r["amplTabla"]["tabla"], 300)
+        self.assertGreater(r["altoGraf"], 236)
+        self.assertFalse(r["amplGraf"]["panel"])
+        self.assertIn("Con panel", r["amplGraf"]["volver"])
+        self.assertFalse(r["amplTabla"]["panel"])
+        self.assertTrue(r["amplTabla"]["tablaAmp"])
+        self.assertIn("Con panel", r["amplTabla"]["volver"])
         self.assertTrue(r["vuelve"])
         self.assertEqual(r["detalle"], "Detalle")
+        self.assertEqual(r["detalleZona"], "tabla")
         for capa in ("Clientes", "Ticket", "Descuento"):
             self.assertIn(capa, r["capasP"])
 
@@ -565,6 +588,7 @@ class LaComparacionEnElNavegador(unittest.TestCase):
               const montar = (data) => window.__montar({ data, parentElement: parent, setTriggerValue: () => {} });
               montar(P); Hs.forEach((H) => { H.ctx = 'c'; montar(H); });
               const raiz = parent.querySelector('.vp');
+              raiz.querySelector('[data-acc="zona"][data-v="tabla"]').click();
               return { ancho: raiz.scrollWidth - raiz.clientWidth, tabla: raiz.querySelector('.zr').clientHeight, kpi: raiz.querySelector('.kpi').getBoundingClientRect().width };
             }""", [P, hists])
             b.close()
