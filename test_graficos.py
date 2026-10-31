@@ -4871,10 +4871,27 @@ def _pruebas_presupuesto_vertical():
           None not in (cab, aire, margen),
           f"cab={cab} aire={aire} margen={margen}")
     if None not in (cab, aire, margen):
-        suma_css = cab + aire + margen * 2
+        suma_css = cab + aire + margen * 2 + (_var("marco-hoja") or 0) * 2
         check("el cromo de CSS coincide con alturas.CROMO",
               suma_css == alturas.CROMO,
               f"CSS suma {suma_css}px y alturas.CROMO vale {alturas.CROMO}px")
+
+    import estilos
+    # La hoja blanca (regla #764): la franja reserva lo que mide, y el jalón de
+    # la fila de la fecha no vuelve a subir la primera tarjeta debajo de ella.
+    _marco = (pathlib.Path(__file__).parent / "estilos" / "_90_marco.py").read_text(
+        encoding="utf-8")
+    _desde_901 = css.split("@media (min-width: 901px)", 1)[1]
+    check("marco · desde 901px la franja reserva lo que mide",
+          (re.search(r"--franja-rep-alto:\s*(\d+)px", _desde_901).group(1),
+           re.search(r"--franja-rep-reserva:\s*(\d+)px", _desde_901).group(1)),
+          ("44", "44"))
+    check("marco · la fila de la fecha sólo devuelve su gap",
+          "margin-top: -16px" in _marco.split(".st-key-fila_ajuste_top", 1)[1][:90], True)
+    check("marco · el contenedor de la app no scrollea (`clip`, no `hidden`)",
+          "overflow: clip" in _marco, True)
+    check("marco · va antes del celular",
+          estilos._SECCIONES.index(estilos._CSS_MARCO) == len(estilos._SECCIONES) - 2, True)
 
     # ── 3) Los roles entran en el presupuesto ───────────────────────────
     check("PROTAGONISTA + padding entra en el presupuesto",

@@ -27,7 +27,9 @@
 .vm-esp { flex: 1; }
 
 /* A la altura del título: la pieza se sube al renglón de la fecha. */
-.vm-top { position: absolute; top: -40px; right: 0; display: flex; align-items: center; gap: 6px; z-index: 5; }
+.vm-top, .vm-cabi { position: absolute; top: -40px; display: flex; align-items: center; gap: 6px; z-index: 5; }
+.vm-top { right: 0; }
+.vm-cabi { left: 260px; }
 .vm-buscar { height: 30px; width: 200px; max-width: 100%; border: 0; border-radius: 8px; padding: 0 10px; font-size: 12.5px; background: var(--rail-fondo); box-sizing: border-box; }
 .vm-excel, .vm-volver { height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--rail-fondo); cursor: pointer; font-size: 12.5px; white-space: nowrap; }
 .vm-excel:hover { background: var(--bg-hover); }
@@ -90,6 +92,8 @@
 .fi-f { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 12.5px; }
 .fi-f span { color: var(--text-secondary); }
 .fi-f b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: pre; }
+.fi-tit { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fi-tit h3 { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fi-acc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .fi-btn { height: 26px; padding: 0 10px; border-radius: 8px; border: 0; background: var(--accent-tint); color: var(--accent-deep) !important; cursor: pointer; font-size: 12px; font-weight: 600; }
 .fi-btn.sec { background: var(--rail-fondo); color: var(--text-primary) !important; font-weight: 400; }
@@ -197,7 +201,7 @@
 .vm-tip b { display: block; margin-bottom: 2px; }
 
 @media (max-width: 1100px) {
-  .vm-top { position: static; flex-wrap: wrap; }
+  .vm-top, .vm-cabi { position: static; flex-wrap: wrap; }
   .vm { height: calc(var(--alto-util, 720px) - 58px + 40px); }
   .mv, .mc-dos { grid-template-columns: 1fr; }
 }

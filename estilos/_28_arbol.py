@@ -8,10 +8,9 @@ La «opción 5» del prototipo, elegida por el usuario, y la regla #472. Desde
     día colgaban de su reporte, ver abajo). No cambia de contenido al bajar.
   · ARRIBA, DÓNDE ESTÁS. Una franja de 44px con el reporte y la vista en
     pantalla (sin KPIs desde el 2026-10-03, regla #596), y a la derecha la
-    fecha, Filtros, la hora del dato y Actualizar. NO ESTÁ EN REPOSO (2026-09-19, a pedido): deja una tira de
-    `--franja-rep-reserva` (12px) contra el borde de arriba y aparece —con
-    sus controles— cuando el cursor la toca, igual que la columna. Por eso el
-    contenido arranca en 20px (`--cab-offset-contenido`) y no en 52.
+    fecha, Filtros, la hora del dato y Actualizar. Siempre a la vista desde la
+    regla #764, como borde de arriba de la hoja (`_90_marco.py`): del 2026-09-19
+    a ese día aparecía con el cursor sobre una tira de 12px.
 
 Hasta hoy las dos eran CAPAS que aparecían con el cursor (`_26_rails_scroll`),
 la columna alternaba Reportes/Vistas con el scroll, y la franja repetía los
@@ -1131,27 +1130,11 @@ CSS = """
         border-bottom: 1px solid var(--border) !important;
         overflow: hidden !important;
         z-index: 1000001 !important;
-        /* ── NO ESTÁ: APARECE CON EL CURSOR (2026-09-19, a pedido) ─────
-           Mismo mecanismo que tenía antes del árbol y el mismo motivo para
-           no usar `visibility: hidden`: un elemento que el navegador no
-           hit-testea no puede estar `:hover` NUNCA, así que no tendría cómo
-           volver. Se queda con `opacity: 0` y un `clip-path` que la recorta
-           a la tira de `--franja-rep-reserva` — el recorte recorta también
-           el hit-testing, así que en reposo sólo despiertan esos 12px de
-           arriba y lo que quedó debajo (la primera tarjeta, que subió 32px)
-           sigue recibiendo sus clics. El recorte se suelta AL INSTANTE al
-           abrir y vuelve al FINAL del fundido de salida. */
-        opacity: 0;
-        clip-path: inset(0 0 calc(100% - var(--franja-rep-reserva)) 0);
-        transition: opacity 160ms linear 220ms,
-                    clip-path 0s linear 380ms;
-    }
-    :root[data-capa-cab] .st-key-nav_franja_rep {
+        /* Siempre a la vista desde la regla #764. Hasta ese día aparecía con
+           el cursor sobre una tira de 12px (#473) y empujaba la página al
+           abrirse (#708). */
         opacity: 1;
-        clip-path: inset(0);
-        /* Al ENTRAR no hay espera: aparecer tarde se siente roto. */
-        transition: opacity 160ms linear,
-                    clip-path 0s linear 0s;
+        clip-path: none;
     }
     /* ── ABIERTA, EMPUJA LA PÁGINA EN VEZ DE TAPARLA (regla #708) ───────
        2026-10-23, la «D + E» del boceto: con la franja de índice abierta,
@@ -1192,16 +1175,8 @@ CSS = """
     .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill,
     .st-key-rail_refresh,
     #sello-actualizacion {
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 160ms linear 220ms;
-    }
-    :root[data-capa-cab] :is(.st-key-chips_ajuste_tabla,
-        .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill,
-        .st-key-rail_refresh, #sello-actualizacion) {
         opacity: 1;
         pointer-events: auto;
-        transition: opacity 160ms linear;
     }
     /* La botonera de reportes queda para 769-900px (ver el docstring de
        `navegacion.py`, «FRANJA DE REPORTES»). */

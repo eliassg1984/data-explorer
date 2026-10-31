@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-763 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+764 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (249)
+**CSS y estilos** (250)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -316,6 +316,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#749** — Compras › «Vs año pasado» abre en el TOTAL, pone la venta al lado y parte la diferencia en…
 - **#755** — Ventas: el filtro de grupo es de CADA TARJETA, no de la franja
 - **#762** — Documentos SUNAT: una cabecera, la misma en las cuatro vistas, y «Falta cargar» en naranja
+- **#764** — El marco de la app: una hoja blanca sobre lavanda, con la franja siempre a la vista
 
 **Layout y alturas** (107)
 
@@ -57658,6 +57659,33 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      (#761) sigue en la base. Si la venta cae en un mes y la nota en otro, ese mes puede
      mostrar «sin costo» negativo: es el dato. (2026-10-30.)
 
+764. **El marco de la app: una hoja blanca sobre lavanda, con la franja siempre a la
+     vista.** Elegido sobre el boceto de Mix (combinación C6, estilo S4, barras de S6:
+     https://claude.ai/artifact/TdTgy73p7FFQPWHspUs8LR). Mix se publicó primero sin él
+     (#763) y el usuario lo comparó con el boceto: «esto me ofreciste y esto tengo». Lo que
+     hace parecer un boceto es el marco, no la tarjeta; no se separan.
+
+     Vive en `estilos/_90_marco.py`, sólo desde 901px y con la columna dibujada. La hoja es
+     `.stMain` con margen: como es el que scrollea, sus esquinas recortan lo que pasa por
+     debajo. Lo fijo se ubica contra la ventana, así que la franja y sus controles suman
+     `--marco-hoja` a su `top` y a su `right`. La franja reserva lo que mide (44), y con eso
+     se apagan solos el empuje de la #708 y la tira de la #473.
+
+     Tres cosas se rompieron, las tres sin error: **(a)** al saltar a una vista, el navegador
+     scrolleó también a `stAppViewContainer`, que Streamlit deja en `overflow: hidden` —se
+     puede scrollear por código— y la hoja quedó 52px por encima de la ventana: va en
+     `overflow: clip`. **(b)** `fila_ajuste_top` llevaba `margin-top: calc(-1 *
+     var(--cab-offset-contenido))`: con 20 daba casi lo justo, con 44 subió 21px la primera
+     tarjeta de Inicio, Ventas, Inventario y Costos, debajo de la franja. **(c)** Filtros y
+     la fecha llevan la clase repetida (`.st-key-x.st-key-x`): una regla con la clase sola
+     no les gana.
+
+     El presupuesto de alto: `--cab-offset-contenido` 20 → 44 y `--marco-hoja` 8, y
+     `alturas.CROMO` los suma. `--margen-tarjeta` vale 0 desde 901px: en la hoja esos 16px
+     son de contenido. Las tarjetas no llevan caja, así que las de una misma fila dependen de
+     su hueco. Documentos SUNAT tenía sus vistas también en la cabecera de la tarjeta
+     (#762), porque la franja no se veía: desde 901px se esconden. (2026-10-30.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -57670,7 +57698,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#763**; la próxima toma el número siguiente.
+> última regla es la **#764**; la próxima toma el número siguiente.
 
 >
 

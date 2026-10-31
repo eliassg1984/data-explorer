@@ -48,7 +48,7 @@ const sinTilde = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
 const fk = (v) => { const a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) return `${s}S/ ${(a / 1e6).toFixed(2)}M`; if (a >= 1e3) return `${s}S/ ${(a / 1e3).toFixed(1)}k`; return `${s}S/ ${a.toFixed(0)}`; };
 const fs = (v) => `${v < -0.005 ? '−' : ''}${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fn = (v) => Math.round(v).toLocaleString('en-US');
-const pc = (v, d = 1) => (v == null || !isFinite(v) ? '—' : `${(v * 100).toFixed(d)}%`);
+const pc = (v, d = 1) => (v == null || !isFinite(v) ? '—' : `${(v * 100).toFixed(d)} %`);
 const conSigno = (v, txt) => (v > 1e-9 ? '+' : v < -1e-9 ? '−' : '') + txt;
 const pp = (v, d = 1) => conSigno(v, `${Math.abs(v * 100).toFixed(d)} pp`);
 const varPct = (a, b) => (b > 0 ? a / b - 1 : NaN);
@@ -215,11 +215,14 @@ function codigoDe(d, st, ruta, nombre) {
   const r = d.filas.find((f) => enRuta(d, st, f[0], ruta) && d.prods[f[0]][2] === nombre);
   return r ? d.codigos[r[0]] : '';
 }
+// «lun 19–dom 25 oct» → «19–25 oct»: en la cabecera de la tabla el día ocupaba tres renglones.
+const sinDiaDeSemana = (eje) => (eje.includes('–') ? eje.replace(/(^|–)(lun|mar|mié|jue|vie|sáb|dom) /g, '$1') : eje);
 function fichaDe(d, st, x, tit, a, aA, padre, nomPadre, ruta, esProd, botones) {
   const { T, TC, totLocal } = x;
   const v = sumT(a, T, V), vC = sumT(a, TC, V), vA = sumT(aA, TC, V), p = varPct(vC, vA);
   const cst = pctCosto(sumT(a, T, C), sumT(a, T, B)), gT = sumT(totLocal, T, V);
-  let h = `<h3 title="${esc(tit)}">${esc(tit)}</h3>`;
+  // «Soltar» va en el título: un renglón propio le quitaba una fila a la lista.
+  let h = `<div class="fi-tit"><h3 title="${esc(tit)}">${esc(tit)}</h3>${botones[botones.length - 1]}</div>`;
   h += filaFicha('Venta', fk(v) + (d.ap && TC.length && isFinite(p) ? `  ${conSigno(p, pc(Math.abs(p), 0))}` : ''));
   h += filaFicha(`Pesa en ${nomPadre}`, pc(sumT(padre, T, V) ? v / sumT(padre, T, V) : NaN));
   if (nomPadre !== 'el total') h += filaFicha('Pesa en el total', pc(gT ? v / gT : NaN));
@@ -228,7 +231,7 @@ function fichaDe(d, st, x, tit, a, aA, padre, nomPadre, ruta, esProd, botones) {
   const q = sumT(a, T, Q);
   h += filaFicha('Unidades', fn(q));
   if (esProd && q > 0) h += filaFicha('Precio cobrado por unidad', `S/ ${(v / q).toFixed(2)}`, '', 'Venta ÷ unidades, con impuestos y descuentos');
-  const acc = [...botones];
+  const acc = botones.slice(0, -1);
   if (esProd) { const cod = codigoDe(d, st, ruta, tit); if (cod) acc.unshift(`<button type="button" class="fi-btn" data-acc="carta" data-id="${esc(cod)}">Ver en Costo de Carta ›</button>`); }
   if (acc.length) h += `<div class="fi-acc">${acc.join('')}</div>`;
   return h;
@@ -371,7 +374,7 @@ function zonaTabla(d, st, x) {
     let r = '';
     todos.forEach((i) => { const c = celda(a, i); r += `<td class="${c.cls || ''}${foco === i ? ' foco' : ''}" style="${esTot ? '' : calor(c.v)}">${c.txt}</td>`; });
     const t = valor(a, todos, k);
-    r += `<td><b>${esc(costo ? pc(t) : unid(st) ? fn(t) : fk(t).replace('S/ ', ''))}</b></td><td>${pc(f.dentro)}</td><td>${pc(f.delTotal)}</td><td class="${nivelCosto(d, f.costo)}">${pc(f.costo)}</td><td>${pc(f.sinDesc)}</td>`;
+    r += `<td>${esc(costo ? pc(t) : unid(st) ? fn(t) : fk(t).replace('S/ ', ''))}</td><td>${pc(f.dentro)}</td><td>${pc(f.delTotal)}</td><td class="${nivelCosto(d, f.costo)}">${pc(f.costo)}</td><td>${pc(f.sinDesc)}</td>`;
     return r;
   };
   let h = '<div class="vm-zcab">';
@@ -380,7 +383,7 @@ function zonaTabla(d, st, x) {
   if (niveles.length > 1) h += `<span class="vm-rot">Abrir hasta</span>${seg(niveles.map((t, i) => [String(i), t]), String(st.prof), 'prof')}`;
   h += `<span class="vm-esp"></span>${costo ? '' : seg([['Monto', 'Monto'], ['%', '% del período']], st.escala, 'escala')}</div>`;
   h += `<div class="vm-tabla"><table><thead><tr><th>${esc(niv[0][lvl])}</th>`;
-  todos.forEach((i) => { const p = d.periodos[i], marca = costo && p.igv; h += `<th class="${foco === i ? 'foco' : ''}"${marca ? ` title="${esc(p.igv)}"` : ''}>${esc(p.eje)}${p.parcial ? '*' : ''}${marca ? ' · IGV' : ''}</th>`; });
+  todos.forEach((i) => { const p = d.periodos[i], marca = costo && p.igv; h += `<th class="${foco === i ? 'foco' : ''}"${marca ? ` title="${esc(p.igv)}"` : ''}>${esc(sinDiaDeSemana(p.eje))}${p.parcial ? '*' : ''}${marca ? ' · IGV' : ''}</th>`; });
   h += `<th>Total</th><th title="Sobre la fila de arriba: un subgrupo sobre su grupo, un plato sobre su subgrupo">% dentro</th><th title="Sobre todo lo que entra en el filtro «Venta»">% del total</th><th title="${esc(d.ayuda.costo)}">% costo</th><th title="${esc(d.ayuda.sin_desc)}">% sin desc.</th></tr></thead><tbody>`;
   h += `<tr class="tot"><td><button type="button" class="tn" data-acc="soltar"><span class="mk"></span><span class="nm">Total${ruta.length ? ` · ${esc(ruta[ruta.length - 1])}` : ''}</span></button></td>${celdas(tot, null, true)}</tr>`;
   for (const f of filasArbol(d, st, x, false)) {
@@ -638,7 +641,7 @@ function pedirAp(raiz) {
 function dibujar(raiz) {
   const { data: d, st } = raiz.__d;
   if (!raiz.querySelector('.vm-cuerpo')) {
-    raiz.innerHTML = `<div class="vm-top"><span data-zona="ojo"></span><span data-zona="va"></span><input class="vm-buscar" data-acc="buscar" list="vm-prods" placeholder="Buscar un producto…" autocomplete="off" aria-label="Buscar un producto"><button type="button" class="vm-excel" data-acc="excel" title="Baja la tabla entera, con sus tres niveles">Excel ↓</button></div>
+    raiz.innerHTML = `<div class="vm-cabi"><span data-zona="va"></span><span data-zona="ojo"></span></div><div class="vm-top"><input class="vm-buscar" data-acc="buscar" list="vm-prods" placeholder="Buscar un producto…" autocomplete="off" aria-label="Buscar un producto"><button type="button" class="vm-excel" data-acc="excel" title="Baja la tabla entera, con sus tres niveles">Excel ↓</button></div>
       <div class="vm-kpis" data-zona="kpis"></div><div class="vm-pie" data-zona="pie"></div>
       <div class="vm-cuerpo"><div class="vm-izq"><div class="vm-zona" data-zona="zona"></div><div class="vm-cap" data-zona="cap"></div></div>
       <aside class="vm-panel" aria-label="Lista y ficha"><div class="vm-ruta" data-zona="ruta"></div><div class="vm-lista" data-zona="lista"></div><div class="vm-ficha" data-zona="ficha"></div></aside></div>
@@ -664,6 +667,19 @@ function dibujar(raiz) {
   lista.scrollTop = yLista;
   z('ficha').innerHTML = htmlFicha(d, st, x);
   dibujarZona(raiz);
+  ubicarCabecera(raiz);
+}
+// Venta y «Sin costo» van después de la fecha, que es de Python y mide su texto.
+function ubicarCabecera(raiz) {
+  const fecha = document.querySelector('.st-key-vt_mix_cab_fecha');
+  const c = raiz.querySelector('.vm-cabi');
+  if (!fecha || !c) return;
+  const poner = () => { c.style.left = `${Math.round(fecha.getBoundingClientRect().right - raiz.getBoundingClientRect().left + 8)}px`; };
+  poner();
+  if (raiz.__fechaObs !== fecha) {
+    raiz.__fechaObs = fecha;
+    new ResizeObserver(poner).observe(fecha);
+  }
 }
 function dibujarZona(raiz) {
   const { data: d, st } = raiz.__d;

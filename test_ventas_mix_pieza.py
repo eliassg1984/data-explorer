@@ -171,7 +171,7 @@ class EnElNavegador(unittest.TestCase):
         self._montar(pg, self.con)
         k = self._t(pg, ".vm-kpi")
         self.assertIn(f"S/ {v:.0f}", k[0])
-        self.assertIn(f"{c / base * 100:.1f}%", k[1])
+        self.assertIn(f"{c / base * 100:.1f} %", k[1])
         self.assertIn(f"S/ {base - c:.0f}", k[2])
         self.assertIn(f"{q:.0f}", k[3])
         # Sólo las semanas con año pasado: 8 y 9 de 2025 contra sus espejos.
@@ -204,11 +204,11 @@ class EnElNavegador(unittest.TestCase):
         total = b["venta"].sum()
         ali = b.loc[b["grupo"] == "Alimentos", "venta"].sum()
         fon = b.loc[b["sub"] == "Fondos", "venta"].sum()
-        self.assertIn(f"{ali / total * 100:.1f}%", [x for x in filas() if "Alimentos" in x][0])
+        self.assertIn(f"{ali / total * 100:.1f} %", [x for x in filas() if "Alimentos" in x][0])
         pg.locator(".tn[data-n='0']", has_text="Alimentos").click()
         fila = [x for x in filas() if "Fondos" in x][0]
-        self.assertIn(f"{fon / ali * 100:.1f}%", fila)
-        self.assertIn(f"{fon / total * 100:.1f}%", fila)
+        self.assertIn(f"{fon / ali * 100:.1f} %", fila)
+        self.assertIn(f"{fon / total * 100:.1f} %", fila)
         # Abrir hasta los productos.
         pg.locator(".vm-zcab .vm-seg button[data-id='2']").click()
         n = len(filas())

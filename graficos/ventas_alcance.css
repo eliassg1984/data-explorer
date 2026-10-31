@@ -3,7 +3,7 @@
    van con !important: una regla general de la app les pinta el texto (el de
    «Listo» no se veía), como en las botoneras del Mix. */
 .va { position: relative; display: inline-flex; align-items: center; gap: 4px; font: inherit; }
-.va-b { height: 30px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); padding: 0 10px; font: inherit;
+.va-b { height: 30px; border: 1px solid transparent; border-radius: 8px; background: var(--marco-control); padding: 0 10px; font: inherit;
   font-size: 13px; color: var(--text-primary) !important; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
 .va-b.on { color: var(--accent-deep) !important; border-color: var(--border-lavender); background: var(--accent-tint); font-weight: 600; }
 .va-b i { font-style: normal; color: var(--text-secondary); }

@@ -22,6 +22,11 @@ CSS = """    <style>
            de Compras = cambiar esta línea. */
         --bg-card-tenue: var(--bg-primary);
         --bg-hover: #f0edfe;        /* hover lavanda suave */
+        --marco-fondo: #eeecf7;     /* lavanda alrededor de la hoja (regla #764) */
+        --marco-control: #f4f3f8;   /* relleno de los controles de la franja */
+        --marco-sombra: 0 2px 14px rgba(73, 56, 184, .12);
+        --marco-activo: 0 1px 3px rgba(73, 56, 184, .2);
+        --marco-radio: 14px;
         --rail-fondo: #f7f6fb;      /* == tema.LAVANDA_FILA: la columna del rail en árbol (regla #472) */
         /* Sombra de lo que se despliega ENCIMA del contenido (el árbol
            asomado, regla #472): hacia la derecha, porque es de ese lado
@@ -149,7 +154,7 @@ CSS = """    <style>
            El tramo de 769 a 900px se queda en 52: ahí arriba sigue habiendo
            una banda que pinta (`_40_ajuste_franja.py::before`) y el contenido
            tiene que arrancar debajo de ella. */
-        --cab-offset-contenido: 20px;
+        --cab-offset-contenido: 44px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -192,9 +197,11 @@ CSS = """    <style>
            usuario quiere «casi rozando». Con 8 quedan 4px de aire y el alto
            útil gana 16 (el margen cuenta arriba Y abajo). */
         --margen-tarjeta: 8px;        /* margen de bloque de Streamlit, arriba y abajo */
+        --marco-hoja: 8px;            /* lo que la hoja se aparta de la ventana */
         --alto-util-base: calc(100dvh - var(--cab-offset-contenido)
                                       - var(--aire-inferior)
-                                      - var(--margen-tarjeta) * 2);
+                                      - var(--margen-tarjeta) * 2
+                                      - var(--marco-hoja) * 2);
         /* La tarjeta usa `--alto-util`; la base existe para que una sección
            que pone algo ENCIMA de su tarjeta —las perspectivas de Movimientos,
            regla #710— le descuente ese alto sin repetir la cuenta:
@@ -497,17 +504,19 @@ CSS = """    <style>
          --rail-der-res     la reserva + 16px de canal, que deja las tarjetas
              en x=84 (plegado) o x=264 (fijado). En 1366 la tarjeta mide
              1240px plegada y ~1060 fijada, contra 1288 con la capa. */
+    @media (max-width: 900px) {
+        /* La hoja es de la vista de escritorio (`_90_marco.py`). */
+        :root { --marco-hoja: 0px; }
+    }
     @media (min-width: 769px) and (max-width: 900px) {
         :root { --cab-offset-contenido: 52px; }
     }
     @media (min-width: 901px) {
         :root {
             --franja-rep-alto: 44px;
-            /* Lo que la franja RESERVA en reposo: su tira de arriba, por
-               donde entra el cursor (2026-09-19). Mismo desdoblamiento que
-               tenía antes del árbol y el mismo número: 12px es un blanco
-               cómodo contra el borde y no puede pisar contenido. */
-            --franja-rep-reserva: 12px;
+            /* Reserva lo que mide: desde la regla #764 está siempre a la
+               vista. Hasta ese día reservaba 12 y aparecía con el cursor. */
+            --franja-rep-reserva: 44px;
             --rail-der-w: 248px;
             /* 68 -> 80 el 2026-09-29 (regla #568): íconos de 24px con su
                nombre DEBAJO, en botones de 72x56 — las medidas del riel de

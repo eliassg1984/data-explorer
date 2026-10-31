@@ -1837,17 +1837,15 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                         if (!s) return;
                         ev.preventDefault();
                         ev.stopPropagation();
-                        // El techo es lo que la cabecera RESERVA en reposo
-                        // (`--franja-rep-reserva`, la tira que abre la
-                        // franja de reportes). Hasta el 2026-09-14 se medía
-                        // la franja de vistas, que en escritorio ya no se
-                        // dibuja (regla #419): medía 0 y la sección caía
-                        // debajo de esa tira.
+                        // El techo es donde encajan las vistas
+                        // (`--cab-offset-contenido`, el `scroll-padding-top`
+                        // de `.stMain`). Hasta la regla #764 se calculaba con
+                        // la tira de la franja más 8, y daban lo mismo.
                         var techo = parseFloat(getComputedStyle(doc.documentElement)
-                          .getPropertyValue('--franja-rep-reserva')) || 0;
+                          .getPropertyValue('--cab-offset-contenido')) || 0;
                         var y = s.getBoundingClientRect().top
                               - raiz.getBoundingClientRect().top
-                              + raiz.scrollTop - techo - 8;
+                              + raiz.scrollTop - techo;
                         // El viaje sobrevuela la pila: se avisa para que el
                         // paso 2 del temporizador no active lo que cruza la
                         // pantalla de paso. 1400ms cubre el scroll suave mas

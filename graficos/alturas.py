@@ -79,7 +79,8 @@ VIEWPORT_OBJETIVO = 657
 # tira de 12px (`--franja-rep-reserva`), así que arriba quedan 12 + 8 de aire
 # en vez de 52. Las tarjetas suben esos 32px y el presupuesto los gana.
 # Regla #472.
-_CAB_OFFSET = 20    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
+_CAB_OFFSET = 44    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
+                    # 2026-10-30: 20 -> 44, la franja siempre a la vista (#764)
                     # 2026-08-31: 80 -> 118, los 38px de la franja de reportes
                     # 2026-09-01: 118 -> 128, la franja paso de 38 a 48
                     # 2026-09-07: 128 -> 88, la franja de vistas no reserva
@@ -95,7 +96,8 @@ _MARGEN_SUP = 8     # margen del bloque hasta la tarjeta (Streamlit)
 _AIRE_INF = 8       # padding-bottom del block-container  (_00_base.py)
 _MARGEN_INF = 8     # margen bajo la tarjeta             (Streamlit)
 
-CROMO = _CAB_OFFSET + _MARGEN_SUP + _AIRE_INF + _MARGEN_INF
+_MARCO = 16         # lo que la hoja se aparta de la ventana, arriba y abajo (#764)
+CROMO = _CAB_OFFSET + _MARGEN_SUP + _AIRE_INF + _MARGEN_INF + _MARCO
 
 # Alto máximo que puede medir una tarjeta sin obligar a scrollear la página.
 # Verificado dos veces contra el navegador: en viewport 864 el presupuesto da

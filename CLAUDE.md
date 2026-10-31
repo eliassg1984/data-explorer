@@ -422,7 +422,7 @@ Cada sección tiene su módulo, con prefijo numérico que marca el orden:
 `_00_base` → `_20_compras_rail` →
 `_26_rails_scroll` → `_27_pila` → `_28_arbol` → `_30_filtros` →
 `_40_ajuste_franja` → `_50_fecha` → `_60_calendario` → `_70_chrome` →
-`_80_cards` → `_85_asistente` → `_88_cargando` → `_99_movil`.
+`_80_cards` → `_85_asistente` → `_88_cargando` → `_90_marco` → `_99_movil`.
 
 **El orden de `_SECCIONES` en `__init__.py` es parte del comportamiento**, no
 estética: hay `!important` en ambos lados de varios conflictos, así que gana
@@ -582,12 +582,18 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   pantalla subrayada) —sin KPIs desde el 2026-10-03, a pedido (regla
   #596)—, y la fecha, Filtros, la hora del dato y Actualizar a la
   derecha, cada uno a la izquierda del anterior (`--barra-f`,
-  `--barra-fecha`, `--barra-sello`). **No está en reposo**: deja una tira
-  de 12px contra el borde de arriba y aparece —con sus controles— cuando
-  el cursor la toca. Por eso el contenido arranca en 20px y no en 52
-  (regla #473). **Abierta, EMPUJA la página 32px** en vez de taparla:
-  margen del contenido y `scroll-padding-top` de `.stMain` cambian
-  JUNTOS, o el encaje de la pila la devuelve arriba de un salto (#708).
+  `--barra-fecha`, `--barra-sello`). **Siempre a la vista desde la regla
+  #764** (de la #473 a ese día aparecía con el cursor).
+
+**Y todo va sobre una hoja blanca** (regla #764, `estilos/_90_marco.py`): la
+hoja es `.stMain` con margen, lavanda alrededor, la franja es su borde de arriba
+y las tarjetas no llevan caja. Lo que muerde: lo fijo se ubica contra la ventana,
+así que un control de la franja suma `--marco-hoja` a su `top` y a su `right`; el
+contenedor de `.stMain` va en `overflow: clip`, porque con `hidden` un salto a una
+vista lo corría 52px; y un margen negativo calculado con `--cab-offset-contenido`
+cambia de sentido si esa variable cambia (el de `fila_ajuste_top` subió la primera
+tarjeta debajo de la franja). En Documentos SUNAT las pestañas de su cabecera no
+se dibujan desde 901px: las vistas están en la franja.
 
 Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
 
@@ -1357,8 +1363,8 @@ Python, puesto encima de la pieza— pide una corrida. Lo que muerde:
 Desde el 2026-10-30 (regla #763) Mix no se aprieta: cuatro indicadores eligen
 qué se mide, una sola zona por pestaña (Gráfico, Tabla, Qué movió, Mapa, Mix y
 costo, Cálculo) y, al costado, la lista con la ficha. Boceto elegido entre seis
-marcos y seis estilos: https://claude.ai/artifact/TdTgy73p7FFQPWHspUs8LR (el
-marco de toda la app todavía no se aplicó). Lo que muerde:
+marcos y seis estilos: https://claude.ai/artifact/TdTgy73p7FFQPWHspUs8LR. Lo que
+muerde:
 
 - **El año pasado se pide después de dibujar** (trigger `ap`): la tarjeta no lo
   espera. Sin `st.spinner` antes de la pieza: la movería de lugar y se volvería a
