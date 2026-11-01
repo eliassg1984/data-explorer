@@ -55,7 +55,6 @@ cambiar de reporte es fiable en cada pulsación (no se cuelga ni "deja de
 hacer caso"). app.py lee la selección desde st.session_state["_nav_reporte"].
 """
 
-import contextlib
 import html
 import json
 import re
@@ -93,11 +92,8 @@ ZONA_PERU = ZoneInfo("America/Lima")
 #   · un `data-*` y no una clase: cambiarle una clase a `<html>` invalida
 #     todo lo que cuelga de un `[class*=...]` de estilos/.
 #
-# 2026-09-29: también abre el PANEL de un reporte (regla #568) — sus vistas,
-# al pasar el cursor por él. Ahí la marca va en el PANEL (`data-fly`) y no
-# en `<html>`: son seis paneles, y así el cambio recalcula uno solo. Suma
-# `--fly-top`, la altura: la de la fila del reporte, subida lo que haga falta
-# para que el panel entre en la ventana — el CSS no conoce ni una ni la otra.
+# Las vistas se eligen en las pestañas de la franja: los iconos de la
+# columna ya no abren paneles al pasar el cursor (2026-11-01).
 _SCRIPT_CAPAS = """<script>
 (function () {
   var w = window.parent, doc = w.document, raiz = doc.documentElement;
@@ -105,75 +101,6 @@ _SCRIPT_CAPAS = """<script>
     .filter(function (c) {
       try { doc.querySelector(c[1]); return true; } catch (e) { return false; }
     });
-  // ── El panel de un reporte (regla #568) ──────────────────────────────
-  // El del ACTIVO es la lista de vistas del rail (`nav_rail_lateral`), y
-  // sólo con la columna plegada: fijada, esa lista ya está a la vista en el
-  // árbol. Los demás, `navfly_<slug>`.
-  var ANCHO = w.matchMedia("(min-width: 901px)");
-  var FILAS = '.st-key-graf_tipo_chips [class*="st-key-navitem_"]';
-  // El panel donde se acaba de hacer clic no se reabre mientras el cursor
-  // siga ahí: una lista que se queda abierta después de elegir tapa lo que
-  // se eligió.
-  var cerrado = null;
-  // (Hasta el 2026-10-23 un clic en la vista de la franja —«› Por familia
-  // ▾»— abría acá el panel del activo debajo de ella. La franja pasó a
-  // listar las vistas como pestañas, regla #708, y ese desplegable se fue.)
-  //
-  // Un ÁREA (`navitem_area_<slug>`, regla #708) abre SIEMPRE su panel
-  // `navfly_area_<slug>`, también la activa: la lista del rail sólo tiene
-  // las vistas del reporte en pantalla, no las del área.
-  function panelDe(fila, plegado) {
-    var m = /(?:^|\\s)st-key-navitem_(\\S+)/.exec(fila.className);
-    if (!(m && m[1].indexOf("area_") === 0)
-        && fila.querySelector('button[kind="primary"]')) {
-      return plegado ? doc.querySelector(".st-key-nav_rail_lateral") : null;
-    }
-    return m ? doc.querySelector(".st-key-navfly_" + m[1]) : null;
-  }
-  function elegir() {
-    if (!ANCHO.matches) return [null, null];
-    var plegado = !!doc.querySelector(".st-key-rail_pestillo_plegado");
-    var p = doc.querySelector('.st-key-nav_paneles [class*="st-key-navfly_"]:hover')
-      || (plegado && doc.querySelector(".st-key-nav_rail_lateral:hover"));
-    if (!p) {
-      var f = doc.querySelector('.st-key-nav_paneles :focus-visible'
-                                + (plegado ? ", .st-key-nav_rail_lateral :focus-visible" : ""));
-      p = f && f.closest('[class*="st-key-navfly_"], .st-key-nav_rail_lateral');
-    }
-    if (p) return [p, null];
-    var fila = doc.querySelector(FILAS + ":hover");
-    if (!fila) {
-      var g = doc.querySelector(".st-key-graf_tipo_chips :focus-visible");
-      fila = g && g.closest('[class*="st-key-navitem_"]');
-    }
-    return fila ? [panelDe(fila, plegado), fila] : [null, null];
-  }
-  function paneles() {
-    var par = elegir(), obj = par[0], fila = par[1];
-    if (cerrado) { if (obj === cerrado) obj = null; else cerrado = null; }
-    var abiertos = doc.querySelectorAll("[data-fly]");
-    for (var i = 0; i < abiertos.length; i++) {
-      if (abiertos[i] !== obj) abiertos[i].removeAttribute("data-fly");
-    }
-    if (!obj) return;
-    if (fila) {
-      var r = fila.getBoundingClientRect();
-      var alto = obj.offsetHeight || 0;
-      var y = Math.round(Math.max(8, Math.min(r.top - 6, w.innerHeight - alto - 8)));
-      if (obj.style.getPropertyValue("--fly-top") !== y + "px") {
-        obj.style.setProperty("--fly-top", y + "px");
-      }
-    }
-    if (!obj.hasAttribute("data-fly")) obj.setAttribute("data-fly", "");
-  }
-  function alClic(ev) {
-    var t = ev.target;
-    if (!t || !t.closest) return;
-    if (t.closest("button")) {
-      var p = t.closest("[data-fly]");
-      if (p) cerrado = p;
-    }
-  }
   // LA RUEDA SOBRE LAS PESTAÑAS LAS CORRE DE LADO (regla #708). Las de un
   // área grande no entran en la franja —Inventario son 20— y la tira
   // desborda con su barra escondida: con un mouse sin rueda lateral no
@@ -195,7 +122,6 @@ _SCRIPT_CAPAS = """<script>
         else raiz.removeAttribute(CAPAS[i][0]);
       }
     }
-    paneles();
   }
   var pendiente = false;
   function pronto() {
@@ -210,7 +136,7 @@ _SCRIPT_CAPAS = """<script>
   try { if (w.__capasApagar) w.__capasApagar(); } catch (e) {}
   var EVENTOS = [["mouseover", pronto], ["mouseout", pronto],
                  ["focusin", pronto], ["focusout", pronto],
-                 ["click", alClic], ["click", despues], ["keyup", despues]];
+                 ["click", despues], ["keyup", despues]];
   EVENTOS.forEach(function (e) { doc.addEventListener(e[0], e[1], true); });
   // `passive: false`: si no, el navegador no deja cancelar el scroll de la
   // página cuando la rueda corrió las pestañas.
@@ -255,8 +181,8 @@ def _on_nav_click(nombre):
 
 
 def _ir_a_vista(nombre, state_key, vista):
-    """Callback de una vista en el PANEL de un reporte (regla #568): entra al
-    reporte ya parado en esa vista. Deja la vista elegida en el rail del
+    """Callback de una pestaña de la franja: entra al reporte ya parado
+    en esa vista. Deja la vista elegida en el rail del
     reporte —con eso un destino aparte ya se dibuja— y pide el salto a su
     sección, que resuelve `graficos/base.py::_render_rail` al llegar."""
     st.session_state["_nav_reporte"] = nombre
@@ -268,24 +194,12 @@ def _vistas_de(nombre):
     """`graficos.vistas_de`, importado acá adentro: `graficos.base` importa
     este módulo, así que traerlo arriba sería un import circular. None si el
     reporte no tiene dashboard —o si en Cloud este módulo nuevo quedó
-    hablando con un `graficos` viejo (regla #357): sin panel, no sin app."""
+    hablando con un `graficos` viejo (regla #357): sin pestañas, no sin app."""
     try:
         from graficos import vistas_de
     except ImportError:
         return None
     return vistas_de(nombre)
-
-
-def _bloques_de(nombre):
-    """Las vistas de `nombre` agrupadas para su panel (2026-10-21). Si en
-    Cloud este módulo quedó hablando con un `graficos` viejo (#357), cae en
-    la lista plana de `_vistas_de`: un renglón por vista, como antes."""
-    try:
-        from graficos import bloques_de
-    except ImportError:
-        par = _vistas_de(nombre)
-        return par and (par[0], [("vistas", (v,)) for v in par[1]])
-    return bloques_de(nombre)
 
 
 def _fmt_kpi(etiqueta, agregacion, v):
@@ -512,10 +426,11 @@ ROTULO_PESTANA = {
 
 
 def claves_vista(reporte, vista):
-    """Las keys de los dos botones que llevan a `vista` de `reporte` FUERA
-    de la columna: su pestaña en la franja y su fila en el panel del área.
-    Las arma este módulo, que los dibuja; `graficos/base.py::_render_rail`
-    las pide para marcarlos y hacerlos saltar sin rerun (regla #708)."""
+    """Keys de la pestaña de `vista` y del antiguo panel del área.
+
+    Se conserva la segunda key por compatibilidad con módulos cargados
+    antes de retirar los paneles (regla #357). `_render_rail` las usa para
+    marcar la pestaña y saltar sin rerun (regla #708)."""
     return (f"franjav_{_slug(reporte)}_{_slug(vista)}",
             f"navflyv_{_slug(reporte)}_{_slug(vista)}")
 
@@ -1232,8 +1147,9 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # 6. **BAJA AL PIE DE LA COLUMNA** (2026-09-29, regla #568). Arriba va
     #    ahora el que la OCULTA entera (abajo). Y la columna plegada ya no
     #    se despliega con el cursor: lleva el nombre debajo de cada ícono, y
-    #    las vistas de cada reporte salen en un panel al pasar por él. Fijar
-    #    sigue siendo lo que era: el árbol de 248px con los nombres enteros y
+    #    las vistas de cada reporte salían en un panel al pasar por él
+    #    (retirado el 2026-11-01: se eligen arriba). Fijar conserva el árbol
+    #    de 248px con los nombres enteros y
     #    las vistas del activo debajo. Doble chevron («»»/«««») porque es lo
     #    que mueve la columna entera, no un ítem.
     _plegado = bool(st.session_state.get("rail_plegado", True))
@@ -1481,9 +1397,9 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                     # sus reportes la siguen con sus filas de siempre (que
                     # desde 901px no se ven, ver `_esconder`). Su contenedor
                     # es un `navitem_` más —`navitem_area_<slug>`—: el ícono
-                    # con su nombre debajo, la píldora del activo y el panel
-                    # al pasar el cursor salen de las mismas reglas que un
-                    # reporte. Sin KPI: ¿de cuál de sus reportes sería?
+                    # con su nombre debajo y la píldora del activo siguen
+                    # las mismas reglas que un reporte. Sin KPI: ¿de cuál
+                    # de sus reportes sería?
                     _areas_dibujadas.add(area)
                     _ms = _areas[area]
                     with st.container(key=f"navitem_area_{_slug(area)}"):
@@ -1500,102 +1416,3 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         # PIE DEL RAIL — Refrescar, la única ACCIÓN (no un reporte). Fuera de
         # graf_tipo_chips por lo mismo que el pestillo (regla #6).
         boton_refresco()
-
-    # ── EL PANEL DE CADA REPORTE: sus vistas, sin entrar (regla #568) ─────
-    # 2026-09-29, a pedido: «que permita ver el esqueleto de las vistas sin
-    # entrar al reporte». Desde 901px, el cursor sobre un reporte del rail
-    # abre al costado un panel con sus vistas, en el orden de su página, y
-    # un clic en una entra al reporte YA PARADO en ella (`_ir_a_vista`).
-    #
-    # El del reporte ACTIVO no se dibuja acá: es la lista de vistas del
-    # propio rail (`nav_rail_lateral`, de `graficos/base.py::_render_rail`),
-    # que ya marca la vista en pantalla, lleva a ella sin rerun y trae los
-    # puntos de KPI de Compras. Plegada la columna, esa lista se presenta
-    # como panel; fijada, sigue siendo el árbol de debajo de los reportes.
-    #
-    # EL DE UN ÁREA SÍ, aunque sea la activa (regla #708): sus vistas son
-    # las de varios reportes, y la lista del rail sólo tiene las del que
-    # está en pantalla. Va cada reporte con su nombre y sus vistas; las del
-    # que está en pantalla las marca y las hace saltar sin rerun el
-    # temporizador de `_render_rail` (sus keys salen de `claves_vista`).
-    # La lista va en su propio contenedor (`navflylista_`), que scrollea:
-    # Inventario son 20 vistas y no entran en una pantalla de 619px.
-    #
-    # FUERA de `compras_tabs_row` a propósito: adentro heredaría las reglas
-    # de los botones de reportes —`estilos/` las cuelga del contenedor, y
-    # un descendiente nuevo las toma sin que nada lo avise (CLAUDE.md,
-    # «grep estilos/ antes de agregar un widget»)—. Quién abre cada panel y
-    # a qué altura lo decide `_SCRIPT_CAPAS` (`data-fly`, `--fly-top`); el
-    # aspecto, `estilos/_28_arbol.py`. Son HTML y botones nativos: el clic
-    # lo resuelve Streamlit con un rerun completo, como el de un reporte.
-    def _cab_panel(nombre, icono):
-        _ico = (icono or "").removeprefix(":material/").removesuffix(":")
-        st.markdown(
-            '<div class="fly-cab">'
-            + (f'<span class="fly-ico" aria-hidden="true">{html.escape(_ico)}</span>'
-               if _ico else "")
-            + f'<span class="fly-nom">{html.escape(nombre)}</span></div>',
-            unsafe_allow_html=True)
-
-    def _vistas_panel(nombre, sk, bloques):
-        # Subtítulos y gemelas en un renglón desde las 8 vistas
-        # (2026-10-21). Sin el pie «Clic en una vista: entra al
-        # reporte justo ahí» desde el mismo día, a pedido: lo
-        # que dice ya se lee en la fila que se ilumina, y en un
-        # panel que llega al borde de una pantalla de 619px
-        # ese renglón es el de los subtítulos.
-        for _bl in bloques:
-            if _bl[0] == "grupo":
-                st.markdown(f'<div class="fly-grupo">{html.escape(_bl[1])}</div>',
-                            unsafe_allow_html=True)
-                continue
-            if _bl[0] == "sep":
-                st.markdown('<div class="fly-sep"></div>',
-                            unsafe_allow_html=True)
-                continue
-            _fila = _bl[1]
-            _ctx = (st.container(horizontal=True, gap="small",
-                                 key=f"navflypar_{_slug(nombre)}_{_slug(_fila[0][0])}")
-                    if len(_fila) > 1 else contextlib.nullcontext())
-            with _ctx:
-                for _oid, _rot, _vico in _fila:
-                    st.button(
-                        _rot, key=claves_vista(nombre, _oid)[1],
-                        icon=_vico, on_click=_ir_a_vista,
-                        args=(nombre, sk, _oid),
-                    )
-
-    _paneles = []
-    for nombre, info in visibles.items():
-        if (nombre == reporte_activo or info.get("area")
-                or info.get("tool")):
-            continue
-        _rail = _bloques_de(nombre)
-        if _rail and _rail[1]:
-            _paneles.append(("rep", nombre, info, [(nombre, _rail)]))
-    for area, _ms in _areas.items():
-        _rails = [(m, _bloques_de(m)) for m in _ms]
-        _rails = [(m, r) for m, r in _rails if r and r[1]]
-        if _rails:
-            _paneles.append(("area", area, visibles[_ms[0]], _rails))
-    if _paneles:
-        with st.container(key="nav_paneles"):
-            for _tipo, nombre, info, _rails in _paneles:
-                if _tipo == "rep":
-                    with st.container(key=f"navfly_{_slug(nombre)}"):
-                        _cab_panel(info.get("label_largo") or info.get("label_corto")
-                                   or nombre, info.get("icono"))
-                        (_m, (_sk, _bloques)), = _rails
-                        _vistas_panel(_m, _sk, _bloques)
-                    continue
-                with st.container(key=f"navfly_area_{_slug(nombre)}"):
-                    _cab_panel(nombre, info.get("icono"))
-                    with st.container(key=f"navflylista_area_{_slug(nombre)}"):
-                        for _m, (_sk, _bloques) in _rails:
-                            st.markdown(
-                                '<div class="fly-miembro">'
-                                + html.escape(visibles[_m].get("label_largo")
-                                              or visibles[_m].get("label_corto") or _m)
-                                + '</div>',
-                                unsafe_allow_html=True)
-                            _vistas_panel(_m, _sk, _bloques)

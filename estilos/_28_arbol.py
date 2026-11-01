@@ -44,9 +44,8 @@ PLEGADO, FIJADO Y OCULTO (2026-09-29, regla #568)
 -------------------------------------------------
   · PLEGADO (el default): la columna mide `--rail-plegado-w` (80px) y cada
     reporte es un ícono de 24px con su nombre DEBAJO. El contenido le
-    reserva sólo eso. El cursor sobre un reporte abre al costado su PANEL:
-    sus vistas, y un clic en una entra al reporte ya parado en ella (el del
-    activo es la lista de vistas del rail, presentada como panel).
+    reserva sólo eso. Las vistas se eligen en las pestañas superiores;
+    pasar el cursor por los reportes ya no abre paneles (2026-11-01).
   · FIJADO: el pestillo (`rail_pestillo_abierto`, abajo de la columna) la
     deja en el árbol de `--rail-der-w`: reportes con su nombre entero y,
     debajo de todos, las vistas del activo. Ahí sí el contenido le reserva
@@ -82,26 +81,19 @@ cual sea el activo. El estado desplegado se prueba con el PESTILLO: forzar
 Y LAS FOTOS NO SALEN DEL PANEL DEL NAVEGADOR INTEGRADO con la app corriendo
 (se queda esperando a que la página termine de dibujar). Salen de
 Playwright (`pip` ya lo trae en esta máquina): una página de 1366x768, el
-cursor con `page.mouse.move` —así se abren los paneles— y una hoja con
+cursor con `page.mouse.move` y una hoja con
 `:is(#no,*) { transition: none !important }`. Ojo: un `*` a secas no
 alcanza, porque las transiciones de acá llevan `!important` y más
 especificidad (regla #568).
 """
 
 CSS = """
-    /* ── Los tres contenedores de la regla #568 no cobran gap, en NINGÚN
-       ancho: el botón de ocultar (`rail_vis_*`) y los paneles de vistas
-       (`nav_paneles`) son cromo fijo desde 901px y no existen por debajo
-       (el bloque de abajo), pero sus envoltorios estarían igual en el
-       flujo. Mismo recurso que los de cromo fijo del final de este
-       fichero; fuera del `@media` para que tampoco empujen a 900px. */
+    /* El botón fijo de ocultar no cobra gap en ningún ancho (#568). */
     [data-testid="stLayoutWrapper"]:has(> .st-key-rail_vis_visible),
-    [data-testid="stLayoutWrapper"]:has(> .st-key-rail_vis_oculto),
-    [data-testid="stLayoutWrapper"]:has(> .st-key-nav_paneles) {
+    [data-testid="stLayoutWrapper"]:has(> .st-key-rail_vis_oculto) {
         display: contents !important;
     }
-    /* El ícono del encabezado de la lista de vistas sólo se ve cuando esa
-       lista hace de PANEL (columna plegada, más abajo). */
+    /* El árbol muestra el nombre del reporte sin repetir su icono. */
     .rail-cab-ico {
         display: none;
     }
@@ -119,8 +111,7 @@ CSS = """
         .st-key-rail_pestillo_abierto,
         .st-key-rail_pestillo_plegado,
         .st-key-rail_vis_visible,
-        .st-key-rail_vis_oculto,
-        .st-key-nav_paneles {
+        .st-key-rail_vis_oculto {
             display: none !important;
         }
         .st-key-nav_franja_rep [data-testid="stElementContainer"]:has(.barra-ctx),
@@ -411,9 +402,9 @@ CSS = """
        Hasta el 2026-09-29 había además un estado ASOMADO: con el cursor en
        la columna plegada, el árbol entero se desplegaba ENCIMA del
        contenido (`:root[data-capa-col]`). Se fue con la regla #568: plegada
-       la columna ya dice el nombre de cada reporte bajo su ícono, y las
-       vistas de cada uno salen en su panel. La marca del cursor quedó sólo
-       para la columna OCULTA (arriba). */
+       la columna ya dice el nombre de cada reporte bajo su ícono. Las
+       vistas se eligen en las pestañas superiores. La marca del cursor
+       quedó sólo para la columna OCULTA (arriba). */
     :root:has(.st-key-rail_pestillo_abierto) :is(.st-key-compras_tabs_row,
         .st-key-nav_rail_lateral, .st-key-rail_rotulo_rep) {
         width: var(--rail-der-w) !important;
@@ -787,7 +778,7 @@ CSS = """
     /* Los subtítulos de grupo (2026-10-21), a la x de los nombres. En el
        árbol las gemelas NO van en un renglón: con la sangría, dos «Por
        Período» · «Por Área» piden ~240px de los 236 que hay. Se apilan como
-       cualquier vista; en un renglón van sólo en el panel (más abajo). */
+       cualquier vista. */
     .st-key-nav_rail_lateral .rail-grupo {
         margin: 6px 0 0 0 !important;
         padding: 4px 10px 2px calc(var(--icono-x) + 16px) !important;
@@ -814,8 +805,8 @@ CSS = """
        «Consumo» no se podía alcanzar. Sólo ella: con `overflow-y: auto` el
        navegador recorta también a los costados, y eso se comería el panel
        del KPI de una vista, que sale por la derecha (#482) — esos puntos los
-       tiene Compras, que no agrupa. Plegada la columna, la lista es un panel
-       y manda su propia regla (más abajo, `max-height: none`). */
+       tiene Compras, que no agrupa. Plegada la columna, la lista se oculta:
+       las vistas siguen disponibles en las pestañas superiores. */
     .st-key-nav_rail_lateral:has(.rail-grupo) {
         max-height: calc(100vh - var(--franja-rep-alto) - var(--arbol-cab)
                          - var(--arbol-filas, 6) * var(--fila-rep)) !important;
@@ -827,284 +818,10 @@ CSS = """
        acá su regla para esconderse con la columna plegada. Ya no la
        necesita: plegada se va con la lista entera.) */
 
-    /* ══ EL PANEL DE UN REPORTE: SUS VISTAS SIN ENTRAR (2026-09-29) ══════
-       Regla #568, a pedido: «que permita ver el esqueleto de las vistas sin
-       entrar al reporte». El cursor sobre un reporte de la columna abre al
-       costado un panel con sus vistas; un clic en una entra al reporte ya
-       parado en ella.
-
-       Son dos clases de panel con UNA sola pinta:
-         · el de un reporte que no es el activo, `navfly_<slug>` dentro de
-           `nav_paneles` (`navegacion.py`);
-         · el del ACTIVO, que es la lista de vistas del rail
-           (`nav_rail_lateral`) presentada como panel mientras la columna
-           está plegada. Fijada, esa lista vuelve a ser el árbol de arriba.
-
-       QUIÉN LO ABRE no es un `:hover` del CSS: los paneles no cuelgan de su
-       fila en el DOM (la del activo ni siquiera se dibuja en el mismo
-       sitio), así que `navegacion.py::_SCRIPT_CAPAS` marca el panel con
-       `data-fly` y le escribe `--fly-top`, la altura de su fila subida lo
-       que haga falta para que entre en la ventana. Un atributo en el panel
-       y no en `<html>`: recalcula ese panel, no la página (regla #469).
-
-       ENTRA CON PAUSA Y SE VA CON PAUSA. 150ms para abrir, para que cruzar
-       la columna camino a otra cosa no abra una lista por reporte; 220ms
-       para cerrar, para que el viaje en diagonal de la fila a su panel no
-       lo cierre en el camino. Y del borde de la columna al panel no hay
-       hueco: los primeros 10px del panel son un PUENTE transparente —la
-       superficie blanca es un `::before` que arranca después—, así que el
-       cursor nunca sale de algo que lo mantenga abierto. */
-    .st-key-nav_paneles {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 0 !important;
-        height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: visible !important;
-        z-index: 1000015 !important;
-    }
-    .st-key-nav_paneles [class*="st-key-navfly_"],
+    /* Las vistas se eligen en la franja superior (2026-11-01).
+       La lista lateral sólo se muestra al fijar la columna abierta. */
     :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral {
-        position: fixed !important;
-        top: var(--fly-top, 56px) !important;
-        bottom: auto !important;
-        /* `--fly-left` sólo existe cuando el panel del activo se abrió desde
-           la vista de la franja (2026-10-21): cae debajo de ella. */
-        left: var(--fly-left, calc(var(--rail-plegado-w) - 2px)) !important;
-        width: 278px !important;
-        height: auto !important;
-        max-height: none !important;
-        margin: 0 !important;
-        padding: 10px 8px 8px 18px !important;
-        box-sizing: border-box !important;
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 0 !important;
-        border: none !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        overflow: visible !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-        pointer-events: auto !important;
-        z-index: 1000015 !important;
-        transition: opacity 100ms linear 120ms,
-                    visibility 0s linear 220ms !important;
-    }
-    :root:has(.st-key-rail_pestillo_abierto) .st-key-nav_paneles [class*="st-key-navfly_"] {
-        left: calc(var(--rail-der-w) - 2px) !important;
-    }
-    .st-key-nav_paneles [class*="st-key-navfly_"]::before,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 10px;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        box-shadow: var(--sombra-capa);
-        z-index: -1;
-        pointer-events: none;
-    }
-    .st-key-nav_paneles [class*="st-key-navfly_"][data-fly],
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral[data-fly] {
-        opacity: 1 !important;
-        visibility: visible !important;
-        transition: opacity 120ms linear 150ms,
-                    visibility 0s linear 150ms !important;
-    }
-    .st-key-nav_paneles [class*="st-key-navfly_"] * {
-        visibility: inherit;
-    }
-    .st-key-nav_paneles [data-testid="stVerticalBlock"] {
-        gap: 0 !important;
-    }
-    .st-key-nav_paneles [data-testid="stElementContainer"],
-    .st-key-nav_paneles [data-testid="stButton"],
-    .st-key-nav_paneles [data-testid="stMarkdown"],
-    .st-key-nav_paneles [data-testid="stMarkdownContainer"] {
-        width: 100% !important;
-        margin: 0 !important;
-    }
-    /* El encabezado: el ícono y el nombre ENTERO del reporte. En el del
-       activo es la `.rail-cab` de siempre, sin el «Vistas de» del árbol. */
-    .fly-cab,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-cab {
-        display: flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-        margin: 0 0 4px 0 !important;
-        padding: 2px 8px 10px 8px !important;
-        border-top: none !important;
-        border-bottom: 1px solid var(--border) !important;
-    }
-    .fly-ico,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-cab-ico {
-        display: inline-block !important;
-        font-family: "Material Symbols Rounded";
-        font-feature-settings: "liga";
-        font-size: 20px;
-        line-height: 1;
-        color: var(--accent);
-        flex: 0 0 auto;
-    }
-    .fly-nom,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-cab-nom {
-        font-size: 14.5px !important;
-        font-weight: 700 !important;
-        line-height: 20px !important;
-        color: var(--text-primary) !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-    }
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-cab-nom::before {
-        content: none;
-    }
-    /* LOS GRUPOS (2026-10-21, 2026-10-21): desde 8 vistas el panel se parte
-       con subtítulos —hoy sólo Movimientos— y las dos gemelas de un grupo
-       («Por Período» · «Por Área») van en un renglón. Los arma
-       `graficos/base.py::bloques_de_vistas`, igual para los dos paneles. El
-       subtítulo no es un botón: se lee, no se cliquea. Hasta ese día el pie
-       decía «Clic en una vista: entra al reporte justo ahí»; se quitó a
-       pedido, y su alto es el de los subtítulos. */
-    .fly-grupo,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-grupo {
-        margin: 6px 0 0 0 !important;
-        padding: 4px 10px 2px 10px !important;
-        font-size: 11.5px !important;
-        font-weight: 600 !important;
-        line-height: 16px !important;
-        color: var(--text-muted) !important;
-        white-space: nowrap !important;
-    }
-    .fly-sep,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-grupo-sep {
-        margin: 5px 8px !important;
-        border-top: 1px solid var(--border) !important;
-    }
-    /* EL PANEL DE UN ÁREA (2026-10-23, regla #708): las vistas de cada uno
-       de sus reportes debajo de su nombre, que pesa más que un subtítulo de
-       grupo (Movimientos trae los suyos adentro). La lista scrollea sola:
-       Inventario son 20 vistas y en 619px no entran. Va en su propio
-       contenedor y no en el panel, para que la superficie blanca —el
-       `::before` del panel— mida lo que se ve y el encabezado quede fijo. */
-    .fly-miembro {
-        margin: 8px 0 2px 0 !important;
-        padding: 4px 10px 2px 10px !important;
-        font-size: 12.5px !important;
-        font-weight: 700 !important;
-        line-height: 18px !important;
-        color: var(--text-secondary) !important;
-        white-space: nowrap !important;
-    }
-    .st-key-nav_paneles [class*="st-key-navflylista_"] {
-        max-height: calc(100vh - 80px) !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        scrollbar-width: thin;
-    }
-    .st-key-nav_paneles [class*="st-key-navflylista_"] > [data-testid="stElementContainer"]:first-child .fly-miembro {
-        margin-top: 0 !important;
-    }
-    /* La vista en pantalla, en el panel de su área: la misma píldora que en
-       el panel del activo. */
-    .st-key-nav_paneles [data-testid="stButton"] button.vista-en-pantalla {
-        background: var(--accent-light) !important;
-        color: var(--accent-deep) !important;
-        font-weight: 600 !important;
-    }
-    .st-key-nav_paneles [data-testid="stButton"] button.vista-en-pantalla [data-testid="stIconMaterial"] {
-        color: var(--accent) !important;
-    }
-    .st-key-nav_paneles [class*="st-key-navflypar_"],
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [class*="st-key-raillatpar_"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 2px !important;
-        width: 100% !important;
-    }
-    .st-key-nav_paneles [class*="st-key-navflypar_"] > [data-testid="stElementContainer"],
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [class*="st-key-raillatpar_"] > [data-testid="stElementContainer"] {
-        flex: 1 1 0 !important;
-        min-width: 0 !important;
-        width: auto !important;
-    }
-    /* Cada vista: una fila de 32px con su ícono, que en el panel SÍ se ve
-       (en el árbol no: ahí guarda la sangría, más arriba). */
-    .st-key-nav_paneles [data-testid="stButton"] button,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button {
-        height: 32px !important;
-        min-height: 0 !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 10px !important;
-        gap: 10px !important;
-        display: flex !important;
-        justify-content: flex-start !important;
-        align-items: center !important;
-        border: none !important;
-        border-radius: 8px !important;
-        background: transparent !important;
-        color: var(--text-primary) !important;
-        box-shadow: none !important;
-        font-weight: 400 !important;
-        overflow: hidden !important;
-    }
-    .st-key-nav_paneles [data-testid="stButton"] button > div,
-    .st-key-nav_paneles [data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
-        display: block !important;
-        width: auto !important;
-        max-width: 100% !important;
-        margin: 0 !important;
-    }
-    .st-key-nav_paneles [data-testid="stButton"] button [data-testid="stIconMaterial"],
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button [data-testid="stIconMaterial"] {
-        font-size: 18px !important;
-        width: 18px !important;
-        margin: 0 !important;
-        flex: 0 0 auto !important;
-        opacity: 1 !important;
-        color: var(--text-secondary) !important;
-    }
-    .st-key-nav_paneles [data-testid="stButton"] button p,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button p {
-        margin: 0 !important;
-        font-size: 13.5px !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-    }
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
-        margin-left: 0 !important;
-    }
-    .st-key-nav_paneles [data-testid="stButton"] button:hover,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button:hover {
-        background: var(--accent-tint) !important;
-        color: var(--accent-deep) !important;
-    }
-    /* La vista en pantalla, en el panel del activo: la píldora, sin la
-       barra del árbol (que se ubica con la geometría del árbol). */
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button.vista-en-pantalla {
-        background: var(--accent-light) !important;
-        color: var(--accent-deep) !important;
-        font-weight: 600 !important;
-    }
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button.vista-en-pantalla [data-testid="stIconMaterial"] {
-        color: var(--accent) !important;
-    }
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button.vista-en-pantalla::before {
         display: none !important;
-    }
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .nav-rail-lat-sep {
-        margin: 4px 8px !important;
     }
 
     /* ══ LA FRANJA DE CONTEXTO ══════════════════════════════════════════

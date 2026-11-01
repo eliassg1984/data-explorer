@@ -36,6 +36,11 @@ en ambos ejes, y `.css` reserva su lugar. Los enlaces en otra pestaña usan
 un token transitorio (dos horas); vuelven al origen en la pestaña actual.
 `js_movil` conecta la reposición del estado local de las piezas. Regla #742.
 
+Desde 901px, las vistas se eligen en las pestañas de la franja superior.
+Los iconos de la columna cambian de área o reporte sin abrir paneles al
+pasar el cursor (2026-11-01). Al fijar la columna abierta se conserva la
+lista de vistas del reporte activo.
+
 Hasta 900px, `navegacion.py` ofrece los reportes en `nav_menu_movil`, con
 los mismos destinos que la columna de escritorio. `_99_movil.py` organiza
 los indicadores en dos columnas, deja fechas y controles nativos en el
