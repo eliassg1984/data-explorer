@@ -1989,6 +1989,15 @@ módulo (`FichaPlato`) que `carta_costeada.py` antepone a la lista, y su
   no se veía la lista en el celular. Debajo de 900px, la tabla y el panel
   de la ficha van con `flex: none`.
 
+**Desde la #775, Costo de Carta usa la opción B aprobada:** navegación sobre
+lavanda, hoja blanca, indicadores sin caja y ficha con plegables. Canal y
+Grupo a la vista; los demás controles en Más filtros. Detalle añade datos
+a la tabla, sin ocultar la ficha; Ampliar y Soltar reparten el ancho. El
+calendario es el nativo de siempre, ubicado sobre el hueco que mide la pieza:
+no copiar el calendario simplificado del boceto. Las cuentas y callbacks
+siguen en sus funciones anteriores. `test_ficha_plato.py` cubre además
+filtros secundarios, Detalle, Ampliar/Soltar y retorno de móvil a laptop.
+
 **«Nuevo Costeo» también, desde el mismo día** (regla #697): la tabla de la
 receta y el precio son `graficos/nuevo_costeo.js` + `.css`; el buscador, el
 importador, guardar y enviar, y el panel de al costado (Dónde se usa, lo

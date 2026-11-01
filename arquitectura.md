@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-774 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+775 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (253)
+**CSS y estilos** (254)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -320,8 +320,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#765** — Stock en una pantalla: lista con niveles y ficha al costado, en las dos perspectivas
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
+- **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
 
-**Layout y alturas** (110)
+**Layout y alturas** (111)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -433,6 +434,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#765** — Stock en una pantalla: lista con niveles y ficha al costado, en las dos perspectivas
 - **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
 - **#774** — Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de…
+- **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
 
 **Plotly y figuras** (130)
 
@@ -58005,6 +58007,31 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - **Se fueron** `COLUMNAS_DRILL_FICHA`, `alturas.CURVA_FICHA` y la excepción «sin techo» de las
      tarjetas de Producto (#382): no hay tarjetas. Sus reglas siguen para la tarjeta vacía sin compras.
    Lo vigilan `test_proveedor_pieza.py` y `test_producto_pieza.py`.
+
+775. **Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre.**
+   El usuario aprobó el boceto horizontal con datos reales el 2026-11-01: navegación sobre
+   lavanda, Carta | Combos en una hoja blanca, cuatro indicadores sin cajas, lista y ficha.
+   - **La fecha no se reemplaza.** Sigue `base.selector_fecha_tarjeta`, con `ctx_fecha` propio,
+     los atajos canónicos y todo el histórico. `carta_costeada.js::medir` ubica su fila nativa
+     sobre `.cc-fecha-lugar`, también al cambiar el ancho. La representación simplificada
+     del calendario del boceto no se copió a producción.
+   - **Canal y Grupo se ven; Tipo, Carta, Ver e Incluir están en Más filtros.** Cada indicador
+     tiene una explicación al pulsar su icono. Las cuentas de `enCanal`, `exceso`, `filtrar`,
+     `ordenar` y del Excel se conservan: Sobre el 30 % sigue mirando lo realmente cobrado,
+     con descuentos, y no lo que habría dado el precio de lista.
+   - **Detalle amplía la información, no oculta la ficha.** Añade venta neta, unidades, costo
+     al vender y señales. Columnas conserva costo/precio, margen y fecha de receta. La tabla
+     compacta tiene tres columnas; las tablas amplias se desplazan dentro de su propia zona.
+   - **La ficha tiene dos cifras principales y plegables.** Más cifras, Qué hacer con el precio,
+     Costo y utilidad; Qué mueve el costo y banda del combo cuando corresponden. Resumen,
+     Receta (Lista/Reparto/Porcionados), Evolución y Canales conservan su información y sus
+     acciones reales. Ampliar cede el ancho completo; Soltar devuelve el ancho a la lista.
+   - **La geometría depende de `--alto-util`.** El borde blanco y la navegación lavanda son
+     ajustes exclusivos de `.st-key-rec_card_carta` en `_90_marco.py`, sin tocar las otras
+     vistas. Las pastillas y el pie usan `box-sizing: border-box`: si se suma su padding al
+     alto, a 1000×619 se pierde una fila y el tercer plegable queda cortado.
+   Lo vigilan `test_costo_carta.py` y `test_ficha_plato.py`: cifras, filtros secundarios,
+   callbacks, Detalle, Ampliar/Soltar y ancho de 320 a 1323 px, con retorno a escritorio.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

@@ -196,10 +196,13 @@ _RECORRIDO = """([d, css]) => {
   const kpis = $$('.cc-kpi').map((k) => k.querySelector('.cc-kpi-rot').textContent);
   const ex = $('.cc-kpi[data-id=ex] .cc-kpi-val').textContent;
   const filtros = $$('.cc-filtros select').map((x) => x.dataset.acc);
+  $('[data-acc=filtros]').click();
+  const secundarios = $$('.cc-pop select').map((x) => x.dataset.acc);
+  $('[data-acc=cerrar]').click();
   const tabs = $$('[data-acc=ftab]').map((x) => x.textContent);
   const resumen = $('.cc-fpanel').textContent;
   $('[data-acc=simular-hab]').click();
-  $('.cc-ftit [data-acc=simular]').click();
+  $('.cc-fbottom [data-acc=simular]').click();
   $('[data-acc=fmenu]').click();
   $('.cc-menu [data-acc=nuevo]').click();
   $('[data-acc=fmenu]').click();
@@ -226,7 +229,7 @@ _RECORRIDO = """([d, css]) => {
   $('[data-acc=cols]').click();
   $('[data-acc=col][data-id=margen]').click();
   const conMargen = $$('.cc-tabla th').map((x) => x.textContent.trim()).includes('Margen');
-  return { cf, kpis, ex, filtros, tabs, resumen, formas, filasAbiertas, reparto, evo, canales, espera, titulo,
+  return { cf, kpis, ex, filtros, secundarios, tabs, resumen, formas, filasAbiertas, reparto, evo, canales, espera, titulo,
            conMargen, rep: F.reparto(d.ficha.filas), t: window.__t,
            cortos: ['Lomo trozos 170gr x und (produccion)', 'Salsa de lomo x kg (Calientes)', 'Pasta x gratinar'].map(F.corto) };
 }"""
@@ -234,6 +237,88 @@ _RECORRIDO = """([d, css]) => {
 
 @unittest.skipIf(_chromium() is None, "sin Playwright (requirements-dev.txt)")
 class EnElNavegador(unittest.TestCase):
+    def test_el_marco_sigue_a_la_vista_activa(self):
+        """La tarjeta sigue montada al navegar a otra vista de la pila."""
+        from estilos._90_marco import CSS
+        from navegacion import claves_vista
+        clave = claves_vista("Recetas", "Carta costeada")[0]
+        with _chromium()() as p:
+            try:
+                b = p.chromium.launch()
+            except Exception as e:
+                self.skipTest(f"sin Chromium: {e}")
+            pg = b.new_page(viewport={"width": 1000, "height": 619})
+            html = """<style>:root{--marco-fondo:lavender;--bg-card:white}
+                .stMain{background:var(--bg-card)}</style>
+                <div class=st-key-CLAVE_VISTA><button class=vista-en-pantalla>Carta</button></div>
+                <div class=stMain><div class=st-key-rec_card_carta></div></div>"""
+            pg.set_content(html.replace("CLAVE_VISTA", clave))
+            pg.add_style_tag(content=CSS)
+            color_carta = pg.locator(".stMain").evaluate("e=>getComputedStyle(e).backgroundColor")
+            pg.evaluate("document.querySelector('button').classList.remove('vista-en-pantalla')")
+            color_otra = pg.locator(".stMain").evaluate("e=>getComputedStyle(e).backgroundColor")
+            self.assertNotEqual(color_carta, color_otra)
+            self.assertEqual(color_otra, "rgb(255, 255, 255)")
+            b.close()
+
+    def test_divulgacion_progresiva_y_ancho_de_laptop(self):
+        """Los controles siguen accesibles y la lista no invade la ficha."""
+        d = _pieza()
+        js = (_XLSX + _JS + _JS_LISTA).replace("export default function (component)",
+                                               "window.__montar = function (component)")
+        with _chromium()() as p:
+            try:
+                b = p.chromium.launch()
+            except Exception as e:
+                self.skipTest(f"sin Chromium: {e}")
+            pg = b.new_page(viewport={"width": 1000, "height": 619})
+            errores = []
+            pg.on("pageerror", lambda e: errores.append(str(e)))
+            pg.set_content("<style>body{margin:0}</style><div id=h style='--alto-util:551px'></div>")
+            pg.add_script_tag(content=js)
+            pg.evaluate("""([d,css])=>{
+              const sr=document.querySelector('#h').attachShadow({mode:'open'});
+              const style=document.createElement('style');style.textContent=css;sr.append(style);
+              const host=document.createElement('div');sr.append(host);
+              __montar({data:d,parentElement:host,setTriggerValue:()=>{}});
+            }""", [d, _CSS_LISTA + _CSS])
+            root = pg.locator(".cc")
+            self.assertEqual(root.locator(".cc-filtros select").count(), 2)
+            self.assertEqual(root.locator(".cc-tabla thead th:visible").count(), 3)
+            root.locator('[data-acc="filtros"]').click()
+            self.assertEqual(root.locator(".cc-pop select:visible").count(), 4)
+            root.locator('select[data-acc="tipo"]').select_option("Receta")
+            self.assertEqual(root.locator("tr.cc-f").count(), 1)
+            root.locator('[data-acc="detalle"]').check()
+            self.assertEqual(root.locator(".cc-tabla thead th:visible").count(), 5)
+            root.locator('[data-acc="detalle"]').uncheck()
+            root.locator('[data-acc="info"][data-id="ex"]').click()
+            self.assertIn("S/ 124", root.locator(".cc-pop").inner_text())
+            root.get_by_role("button", name="Cerrar", exact=True).click()
+            root.get_by_role("button", name="Ampliar ficha", exact=True).click()
+            self.assertFalse(root.locator(".cc-lista").is_visible())
+            root.locator('.cc-return [data-acc="ampliar"]').click()
+            self.assertTrue(root.locator(".cc-lista").is_visible())
+            root.get_by_role("button", name="Soltar plato", exact=True).click()
+            self.assertFalse(root.locator(".cc-ficha").is_visible())
+            root.locator(".cc-plato").first.click()
+            self.assertTrue(root.locator(".cc-ficha").is_visible())
+            for width in (1000, 1323, 390, 320, 1000):
+                pg.set_viewport_size({"width": width, "height": 619})
+                pg.wait_for_timeout(80)
+                medidas = root.evaluate("""e=>({
+                  extra:e.scrollWidth-e.clientWidth,
+                  alto:e.getBoundingClientRect().height,
+                  lista:e.querySelector('.cc-lista').getBoundingClientRect().right,
+                  ficha:e.querySelector('.cc-ficha').getBoundingClientRect().left
+                })""")
+                self.assertLessEqual(medidas["extra"], 1, (width, medidas))
+                if width >= 901:
+                    self.assertEqual(medidas["alto"], 551)
+                    self.assertLessEqual(medidas["lista"], medidas["ficha"])
+            self.assertEqual(errores, [])
+            b.close()
+
     def test_una_pieza_mismas_cuentas_y_triggers(self):
         d = _pieza()
         js = (_XLSX + _JS + _JS_LISTA).replace("export default function (component)",
@@ -259,12 +344,13 @@ class EnElNavegador(unittest.TestCase):
         for o, u in zip(cf["objetivos"], (30, 35)):
             self.assertAlmostEqual(o["precio"], sr.precio_sugerido(26.0, u, 1.235))
             self.assertAlmostEqual(o["costo"], 64 * u / 100)
-        self.assertEqual(out["kpis"], ["% costo · ponderado por lo vendido", "Sobre el 30 %, en soles",
+        self.assertEqual(out["kpis"], ["% costo · meta 30 %", "Sobre el 30 %, en soles",
                                        "Sobre 35 %", "Datos para revisar"])
         # El Lomo en «En el Local»: 13 vendidos (15 − 2 de Rappi) y S/ 815.90
         # cobrados → 28.35 × 13 − 30 % de 815.90 = S/ 123.78.
         self.assertEqual(out["ex"], "S/ 124")
-        self.assertEqual(out["filtros"], ["canal", "grupo", "tipo", "oferta", "ver", "incluir"])
+        self.assertEqual(out["filtros"], ["canal", "grupo"])
+        self.assertEqual(out["secundarios"], ["tipo", "oferta", "ver", "incluir"])
         self.assertEqual(out["tabs"], ["Resumen", "Receta", "Evolución", "Canales"])
         for texto in ("Qué mueve el costo de hoy", "Costo y utilidad", "Para quedar en 30 %",
                       "Al vender, mes a mes", "set → oct (+20.0 %)"):

@@ -1,69 +1,25 @@
 """
-graficos.carta_costeada — Recetas y Costos › «Carta costeada» (2026-09-26).
+Recetas y Costos › Costo de Carta (reglas #696, #746 y #775).
 
-Toda la carta del POS, un producto de venta por fila (INFOREST.TPRODUCTO),
-con su % de costo sobre el precio neto de Salón — INCLUIDOS los combos, que
-el POS no costea (su `nInsumo` es 0). El costo de un combo lo calcula la
-consulta del Sheet `cartacosteada` (→ `cartacosteada.parquet`), en el
-servidor y al refrescar, así que abrir la vista no hace ninguna cuenta:
+La carta de hoy: cinco precios y cinco costos por canal. Los combos llegan
+costeados por la consulta del Sheet, con su banda y su método (#548).
+Lo vendido y lo cobrado conservan la definición canónica de venta.
 
-    FIJO                  todo fijo: la suma de sus platos
-    ESPERADO 90 DIAS      a elegir, con 10 o más vendidos en 90 días: cada
-                          opción pesada por lo que eligieron los clientes
-    ESPERADO HISTORICO    igual, con TODO su historial (menos de 10 en 90 d)
-    PROMEDIO SIN VENTAS   nunca vendido: el promedio de cada grupo
+Una tarjeta y una pieza v2: Carta | Combos, fecha nativa, canal y grupo,
+Más filtros, cuatro indicadores, lista y ficha al costado. Detalle amplía
+los datos de la lista; Columnas añade costo/precio, margen y última receta.
+La ficha conserva Resumen | Receta | Evolución | Canales; lo secundario va
+en plegables, y Ampliar le da todo el ancho. Simular, Ver cambios, Nuevo
+Costeo y los saltos a Producción conservan sus callbacks y sus destinos.
 
-Siempre con la cantidad de la FICHA (`TCOMBO.nCantidad`) y el costo de HOY
-de cada plato (`TPRODUCTO.nInsumo`); el mínimo, el máximo, el promedio y el
-costo real de lo servido en 90 días (`CPEDIDO`) viajan en sus columnas. El
-porqué de cada decisión, en `arquitectura.md` regla #548.
+El calendario sigue siendo base.selector_fecha_tarjeta, con ctx propio:
+Recetas no tiene fecha en la franja. Abre en Últimos 3 meses. La pieza deja
+un hueco y coloca ahí el botón nativo; no calcula otro rango en JavaScript.
 
-DESDE EL 2026-09-28 ES LA ÚNICA VISTA DE LA CARTA (regla #556). Absorbió a
-«Composición del plato», cuya tabla era ésta misma filtrada a los platos con
-receta (425 de 425 con el mismo precio, costo y %): un clic en un producto
-abre su receta con el simulador, la dona Costo/Utilidad y el Sankey
-(`graficos/recetaventa.py`) — AL COSTADO de la tabla desde el 2026-09-29
-(regla #570), y debajo hasta ese día. Y «Costeo Receta Venta», que sumaba el mismo
-costo por plato sin descartar los inactivos, se quitó. La regla que ordena
-las dos mitades:
-
-    esta vista = la carta de HOY    receta × precio de hoy, precio de lista
-    Ventas     = lo que PASÓ        el costo con que se vendió cada plato
-
-De Ventas trae sólo lo que hace falta para decidir sobre la carta —cuánto
-se vendió en 90 días y a qué % de costo—, con la definición de venta de
-siempre (`data.venta_por_producto_dia`, que llama a `definicion_venta`) y
-la validación de `pct_costo` del Mix importada. Acá el histórico se fecha
-por el comprobante y se divide entre el neto completo: no usa la base del
-Mix ajustada por devolución del banco y venta sin costo.
-
-Dos modos en UNA tarjeta, y no dos tarjetas: la carta completa y la banda de
-los combos no entran juntas en una pantalla de laptop, y una tarjeta con
-barra propia no va (`CLAUDE.md` § Alturas).
-
-LA TABLA PRIMERO, Y EL PLATO DEBAJO (regla #657, opción B del boceto
-https://claude.ai/artifact/JFkrxwH2wCipPTGQey1TJ5). Del 2026-09-29 al
-2026-10-15 el producto elegido iba AL COSTADO de la tabla (regla #570), y
-para que cupiera la tabla escondía la mitad de sus columnas detrás de «Más
-columnas». Desde la #657 la tabla va a todo el ancho con TODAS —lo vendido
-en el rango con su venta neta, su % y lo vendido sin costo incluidos—, las
-tres que dicen qué producto es quedan fijas al deslizarla de costado, y la
-ficha del elegido baja: la receta como árbol, con sus recetas base y la
-fecha en que se guardó cada una (`simulador_plato.receta_lectura`), y la
-evolución del costo con lo vendido de cada mes, los cambios de sus recetas
-base (`simulador_receta.marcas_plato`, del log del Almacén) y los días en
-que se vendió a un costo imposible (`simulador_receta.picos_plato`). La
-tarjeta no tiene techo: la página baja, como en Compras › Producto.
-
-UN SELECTOR DE FECHA manda sobre lo vendido —las cuatro columnas del rango
-y lo que la evolución resalta—: el panel de las tarjetas de Compras
-(`base.selector_fecha_tarjeta`), con su ctx propio (`_ctx_fecha`) porque
-Recetas no tiene fecha en la franja. Abre en «Últimos 3 meses».
-
-`st.dataframe` y no AgGrid: es una tabla de sólo lectura, y cada AgGrid
-cuesta 1,28 MB y más de un segundo de navegador (regla #540). Composición
-usaba AgGrid sólo para el clic en una fila; `st.dataframe` lo hace con
-`selection_mode="single-row-required"` (ver `_key_tabla`).
+Costo de hoy y costo guardado al vender son cuentas distintas. Sobre el
+30 % usa costo de hoy × unidades menos 30 % de lo realmente COBRADO,
+con descuentos, en el rango y canal elegidos. Las fórmulas no cambiaron
+con el rediseño; test_costo_carta y test_ficha_plato vigilan el contrato.
 """
 
 from graficos.movil import css_movil, js_movil
@@ -1260,9 +1216,8 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
     with st.container(border=True, key="rec_card_carta"):
         cab = st.container(horizontal=True, gap="small",
                            vertical_alignment="center", key="rec_carta_cab")
-        with cab:
-            st.markdown('<p class="chart-card-hdr">Costo de Carta</p>',
-                        unsafe_allow_html=True)
+        # El nombre de la vista ya está en la franja; la pieza reserva
+        # el lugar del calendario nativo en su fila de filtros (#775).
         if df is None or df.empty:
             st.info("Todavía no hay datos de la carta costeada "
                     f"({ARCHIVO}). Se genera con la consulta «cartacosteada» del "

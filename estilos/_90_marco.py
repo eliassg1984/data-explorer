@@ -198,4 +198,56 @@ CSS = """
         background: var(--accent-tint) !important;
     }
     }
+
+    /* #775: Costo de Carta, opción B. La navegación queda sobre lavanda;
+       la hoja empieza en Carta | Combos. Sólo afecta esta vista. */
+    @media (min-width: 901px) {
+    :root:has(.st-key-franjav_Recetas_Carta_costeada .vista-en-pantalla) .stMain {
+        background: var(--marco-fondo) !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+    :root:has(.st-key-franjav_Recetas_Carta_costeada .vista-en-pantalla) .st-key-nav_franja_rep {
+        background: var(--marco-fondo) !important;
+        border-bottom: none !important;
+    }
+    :root:has(.st-key-franjav_Recetas_Carta_costeada .vista-en-pantalla) .st-key-nav_franja_idx button.vista-en-pantalla {
+        background: var(--accent-deep) !important;
+        color: var(--bg-card) !important;
+        border-radius: 18px !important;
+    }
+    }
+    .st-key-rec_card_carta {
+        position: relative !important;
+        padding: 0 !important;
+        gap: 0 !important;
+        overflow: visible !important;
+    }
+    /* El calendario conserva su componente, estado y callbacks. Su fila
+       nativa se coloca sobre el hueco que mide carta_costeada.js. */
+    .st-key-rec_carta_cab {
+        position: absolute !important;
+        top: 46px;
+        left: 24px;
+        width: max-content !important;
+        max-width: calc(100% - 24px) !important;
+        z-index: 5;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        gap: 0 !important;
+    }
+    .st-key-rec_carta_cab_fecha {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .st-key-rec_carta_f_escala button {
+        height: 30px !important;
+        min-height: 30px !important;
+        background: var(--marco-control) !important;
+        border: none !important;
+        box-shadow: none !important;
+        font-weight: 400 !important;
+        font-size: 13px !important;
+    }
 """
