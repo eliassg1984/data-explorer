@@ -1,34 +1,29 @@
 """graficos.compras.producto - drill de Producto.
 
-Desde el 2026-10-23 es una PIEZA PROPIA (regla #713): `producto.js` +
-`producto.css`, montada dos veces —una en cada tarjeta— con el mismo cerebro
-en el navegador, como «Análisis por hora» (#704). Es la forma del boceto
-aprobado con sus cinco mejoras
-(https://claude.ai/artifact/1fymSPwVmqUtpQLnjzRB9m, página «Compras ›
-Producto: pieza propia»):
+Desde el 2026-10-23 es una PIEZA PROPIA (regla #713) y desde la #774 una sola
+pantalla: `producto.js` + `producto.css`, con `lista_ficha.js` y `.css`
+antepuestos, como Proveedor:
 
-    [ Ranking de productos   ][ Ficha del producto elegido                ]
-    [ fecha (Python)         ][  nombre · ventana · grano                 ]
-    [ buscar · Ver por       ][  cifras del rango                         ]
-    [ ⚠ para revisar · Excel ][  curva: cantidad en barras, precio línea  ]
-    [ familias, subfamilias  ][  Proveedores | Compras | Períodos         ]
-    [ lista con su curva 12m ][  (clic en una compra: el comprobante)     ]
+    [ Productos · fecha (Python) · familias · buscar · Excel                ]
+    [ Productos | Nuevos o vuelven | Se dejaron de comprar | Para revisar   ]
+    [ la lista, o por familia ][ en qué se va, o la ficha del elegido:      ]
+    [                         ][ Curva | Proveedores | Compras | Períodos   ]
 
-Hasta ese día cada clic era una corrida de 2,5 a 4,4 s (medido en la laptop
-con R2); ahora sólo la fecha del ranking vuelve a Python. Las cuentas son
-las de la regla #653, que siguen escritas ACÁ (`_resumen`, `_serie`,
-`_precios`) y el navegador las rehace con las mismas fórmulas: si se toca
-una, se toca la otra (lo vigila `test_producto_pieza.py`).
+Sólo la fecha y las familias vuelven a Python. Las cuentas son las de la regla
+#653, que siguen escritas ACÁ (`_resumen`, `_serie`, `_precios`) y el navegador
+las rehace con las mismas fórmulas: si se toca una, se toca la otra (lo vigila
+`test_producto_pieza.py`).
 
-Lo que manda Python, partido en dos para que cambiar la fecha no vuelva a
-mandar el historial:
+Lo que manda Python, partido en dos montajes para que cambiar la fecha no
+vuelva a mandar el historial:
 
-- la tarjeta de la FICHA (`historial_pieza`): cada línea de compra del
-  historial, de TODOS los productos de los filtros, con su precio habitual
-  y su marca. Depende sólo del historial: con la misma `sello`, Streamlit
-  no vuelve a mandar el mensaje (el navegador lo tiene guardado).
-- la del RANKING (`armar_ranking`): el resumen del rango por producto,
-  familia y subfamilia, que depende de la fecha.
+- `historial_pieza` (`parte: "ficha"`, sin nada que dibujar): cada línea de
+  compra del historial, de TODOS los productos de los filtros, con su precio
+  habitual y su marca. Depende sólo del historial: con la misma `sello`,
+  Streamlit no vuelve a mandar el mensaje (el navegador lo tiene guardado).
+- `armar_ranking` (`parte: "rank"`, la pantalla): el resumen del rango por
+  producto, familia y subfamilia, lo que se dejó de comprar y las familias de
+  la página, que dependen de la fecha.
 
 Dos reglas que la maqueta de la #653 midió y la vista cumple en todos lados:
 
@@ -52,14 +47,13 @@ import streamlit as st
 from cortes import MESES_ABR_ES
 from graficos.base import preservar_widgets, rango_tarjeta
 from graficos.compras._comun import (
-    CATEGORIA_SEC, COLUMNAS_DRILL_FICHA, GAP_DRILL, documento_legible,
-    inicio_de_periodo, moda_por_grupo, selector_fecha_tarjeta, tramo_parcial,
-    unidad_corta,
+    CATEGORIA_SEC, cambiar_familias, documento_legible, inicio_de_periodo,
+    moda_por_grupo, selector_fecha_tarjeta, tramo_parcial, unidad_corta,
 )
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.compras.semanal import precio_habitual
-from graficos import alturas, periodo
+from graficos import periodo
 
 
 _KEYS_WIDGET = ()
@@ -224,6 +218,32 @@ def _resumen(rng, keys, prev, antes):
     out["hab"] = (out["vref"] / out["refc"].where(out["refc"] > 0) - 1) * 100
     out["ppv"] = out["vref"] - out["refc"]
     return out.sort_values(["valor"], ascending=False, kind="stable")
+
+
+def _dejados(rng, prev, h_ref, r0, r1):
+    """Lo que se compró en el período anterior y en este no (regla #774): una fila
+    por producto, con lo de entonces, cuántas compras tuvo en los 90 días antes del
+    rango, su última compra y cada cuánto se compraba. Pura.
+
+    Hasta esta regla no se veía en ninguna parte: el ranking sale de lo comprado
+    en el rango, y octubre de 2026 dejó afuera S/ 17.962 en 70 productos."""
+    x = prev[~prev["prod"].isin(set(rng["prod"]))]
+    if x.empty:
+        return pd.DataFrame(columns=["prev", "fam", "sub", "um", "n90", "ult", "ultp", "cada"])
+    out = x.groupby("prod", sort=False).agg(prev=("valor", "sum"), fam=("fam", "first"),
+                                            sub=("sub", "first"))
+    out["um"] = (moda_por_grupo(x[x["um"] != ""][["prod", "um"]], "prod", "um")
+                 .reindex(out.index).fillna("").map(_um_corta))
+    antes = h_ref[(h_ref["fecha"] < r0) & h_ref["prod"].isin(out.index)]
+    a90 = antes[antes["fecha"] >= r0 - pd.Timedelta(days=90)]
+    out["n90"] = (a90.drop_duplicates(["prod", "docu", "prov"]).groupby("prod").size()
+                  .reindex(out.index).fillna(0).astype(int))
+    out["ult"] = antes.groupby("prod")["fecha"].max().reindex(out.index)
+    out["ultp"] = _ultimo_precio(antes).reindex(out.index)
+    out["cada"] = _cada_cuanto(h_ref[(h_ref["fecha"] > r1 - pd.Timedelta(days=90))
+                                     & (h_ref["fecha"] <= r1)
+                                     & h_ref["prod"].isin(out.index)]).reindex(out.index)
+    return out.sort_values("prev", ascending=False, kind="stable")
 
 
 def _ambito(res_p, fam, sub):
@@ -444,14 +464,14 @@ def historial_pieza(hist, sello):
         "nombres": nombres, "um": um.tolist(),
         "provs": [nombre_propio(p) for p in provs],
         "docs": [str(_leg.get(x, "")) for x in docs],
-        "lineas": lineas, "alto_curva": alturas.CURVA_FICHA,
+        "lineas": lineas,
     }
     return h, payload
 
 
 def armar_ranking(res_p, res_f, res_s, nombres, rango, ultimo, prev_total,
-                  n80, nflag, sello):
-    """Lo que recibe la tarjeta del RANKING: el resumen del rango. Pura.
+                  n80, nflag, sello, dejados=None, familias=None):
+    """Lo que recibe el montaje de la pantalla: el resumen del rango. Pura.
 
     Producto (`prods`): [índice en `nombres` de la ficha, familia,
     subfamilia, unidad, valor, cantidad, Δ %, «nuevo»/«vuelve»/«», precio
@@ -460,7 +480,10 @@ def armar_ranking(res_p, res_f, res_s, nombres, rango, ultimo, prev_total,
     anterior, valor y cantidad × habitual de las líneas con habitual].
     Familia (`fams`) y subfamilia (`subs`, con la familia adelante): valor,
     anterior, Δ %, estado, vs. habitual %, productos, marcadas y los dos
-    del habitual."""
+    del habitual. Lo que se dejó de comprar (`dejados`, de `_dejados`): [índice,
+    familia, subfamilia, unidad, valor del período anterior, compras en 90 días,
+    última compra, su precio, cada cuántos días]. `familias`, lo de
+    `_comun.familias_de_tarjeta`."""
     pos = {p: i for i, p in enumerate(nombres)}
     r0, r1 = rango
 
@@ -469,7 +492,11 @@ def armar_ranking(res_p, res_f, res_s, nombres, rango, ultimo, prev_total,
                 r["est"], _num(r["hab"], 3), int(r["n"]), int(r["nflag"]),
                 _num(r["vref"], 2) or 0, _num(r["refc"], 2) or 0]
 
-    return {
+    dej = dejados if dejados is not None else pd.DataFrame()
+    fams_p = set(res_p["fam"]) | set(res_f.index) | (set(dej["fam"]) if len(dej) else set())
+    subs_p = (set(res_p["sub"]) | {s2 for _f, s2 in res_s.index}
+              | (set(dej["sub"]) if len(dej) else set()))
+    salida = {
         "parte": "rank", "sello": sello,
         "rango": [_iso(r0), _iso(r1)], "dias": int((r1 - r0).days + 1),
         "ultimo": _iso(ultimo), "n80": int(n80), "nflag": int(nflag),
@@ -484,20 +511,29 @@ def armar_ranking(res_p, res_f, res_s, nombres, rango, ultimo, prev_total,
                   for p, r in res_p.iterrows()],
         "fams": [[f, *_grupo(r)] for f, r in res_f.iterrows()],
         "subs": [[f, s, *_grupo(r)] for (f, s), r in res_s.iterrows()],
-        "nomf": {f: _sin_gritar(f) for f in set(res_p["fam"]) | set(res_f.index)},
-        "noms": {s: _sin_gritar(s) for s in set(res_p["sub"])
-                 | {s2 for _f, s2 in res_s.index}},
+        "dejados": [[pos[p], r["fam"], r["sub"], r["um"] or "", _num(r["prev"], 2),
+                     int(r["n90"]), _iso(r["ult"]), _num(r["ultp"], 4), _num(r["cada"], 1)]
+                    for p, r in dej.iterrows()],
+        "nomf": {f: _sin_gritar(f) for f in fams_p},
+        "noms": {s: _sin_gritar(s) for s in subs_p},
     }
+    if familias:
+        salida["pagina"] = {"todas": [[f, nombre_propio(f), v] for f, v in familias["todas"]],
+                            "elegidas": list(familias["elegidas"])}
+    return salida
 
 
 # ── La pieza propia (regla #713) ───────────────────────────────────────
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "compras_producto",
-    css=css_movil((_AQUI / "producto.css").read_text(encoding="utf-8")),
+    css=css_movil((_AQUI / "lista_ficha.css").read_text(encoding="utf-8")
+                  + (_AQUI / "producto.css").read_text(encoding="utf-8")),
     # El Excel (`libro`, `bajar`, `archivo`) vive en `_xlsx.js`, compartido
-    # con Costo de Carta y Consistencia: se antepone.
+    # con Costo de Carta y Consistencia: se antepone. `lista_ficha.js` es lo que
+    # comparte con la pantalla de Proveedor.
     js=js_movil((_AQUI.parent / "_xlsx.js").read_text(encoding="utf-8")
+    + (_AQUI / "lista_ficha.js").read_text(encoding="utf-8")
     + (_AQUI / "producto.js").read_text(encoding="utf-8")),
 )
 
@@ -524,10 +560,10 @@ def _historial(hist):
 
 def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit,
                             col_um, col_fecha, col_prov=None, d_full=None,
-                            col_subfam=None, col_docu=None):
-    """Dashboard de Producto: el ranking y la ficha del producto elegido,
-    una pieza propia en cada tarjeta. Ver el docstring del módulo y
-    `arquitectura.md` reglas #653 y #713.
+                            col_subfam=None, col_docu=None, familias=None):
+    """Dashboard de Producto: una pantalla, con la lista y la ficha del producto
+    elegido. Ver el docstring del módulo y `arquitectura.md` reglas #653, #713 y
+    #774.
 
     La firma es la de antes, con `col_punit` sin usar (el precio sale de
     valor ÷ cantidad) y los opcionales al final: en Cloud un commit que le
@@ -595,18 +631,30 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
     _nflag = int((res_p["nflag"] > 0).sum())
     ranking = armar_ranking(res_p, res_f, res_s, payload_ficha["nombres"],
                             (r0, r1), ultimo, float(prev["valor"].sum()),
-                            _n80, _nflag, sello)
+                            _n80, _nflag, sello,
+                            dejados=_dejados(rng, prev, h_ref, r0, r1), familias=familias)
 
-    with st.container(key="compras_prod_marco"):
-        _c_rank, _c_ficha = st.columns(COLUMNAS_DRILL_FICHA, gap=GAP_DRILL)
-        with _c_rank:
-            with st.container(border=True, key="compras_prod_card_ranking"):
-                selector_fecha_tarjeta(
-                    "cp_prod", "_cp_prod_atajo_pendiente",
-                    titulo_html='<div class="cp-prod-rank-tit">Ranking de '
-                                'productos</div>',
-                    categoria=CATEGORIA_SEC["compras_sec_producto"])
-                _PIEZA(key=_K_RANK, data=ranking, width="stretch")
-        with _c_ficha:
-            with st.container(border=True, key="compras_prod_card_ficha"):
-                _PIEZA(key=_K_FICHA, data=payload_ficha, width="stretch")
+    # La fecha es un widget de Python, parado en el hueco que la pieza le deja en
+    # su cabecera (`lfPasarFecha`). El montaje del historial no dibuja.
+    st.markdown("""<style>
+    .st-key-cp_prod_nativa { position: relative; gap: 0 !important; }
+    .st-key-cp_prod_nativa_fecha { position: absolute; left: 110px; top: 8px; z-index: 5; width: auto !important; }
+    .st-key-cp_prod_nativa > [data-testid="stElementContainer"] { margin: 0 !important; }
+    .st-key-cp_prod_pieza_ficha { position: absolute !important; width: 0 !important; height: 0 !important; overflow: hidden; }
+    .st-key-cp_prod_escala.st-key-cp_prod_escala button {
+        min-height: 30px !important; height: 30px !important; border: 0 !important; border-radius: 8px !important;
+        background: var(--rail-fondo) !important; box-shadow: none !important; padding: 0 10px !important;
+    }
+    .st-key-cp_prod_escala.st-key-cp_prod_escala button:hover { background: var(--bg-hover) !important; }
+    .st-key-cp_prod_escala.st-key-cp_prod_escala button p { font-size: 12.5px !important; color: var(--text-primary) !important; }
+    </style>""", unsafe_allow_html=True)
+    st.markdown(CSS_PROVEEDOR, unsafe_allow_html=True)
+    with st.container(key="cp_prod_nativa"):
+        with st.container(key="cp_prod_nativa_fecha"):
+            selector_fecha_tarjeta(
+                "cp_prod", "_cp_prod_atajo_pendiente",
+                categoria=CATEGORIA_SEC["compras_sec_producto"])
+        _PIEZA(key=_K_FICHA, data=payload_ficha, width="stretch")
+        _PIEZA(key=_K_RANK, data=ranking, width="stretch",
+               on_familias_change=lambda: cambiar_familias(
+                   _K_RANK, "_cp_prod_atajo_pendiente", familias))

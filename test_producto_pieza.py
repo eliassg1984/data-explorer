@@ -1,10 +1,12 @@
-"""Compras › Producto como pieza propia (regla #713).
+"""Compras › Producto como pieza propia (reglas #713 y #774).
 
 Lo que recibe la pieza (`historial_pieza`, `armar_ranking`) y que el
 navegador rehaga la curva con las MISMAS cuentas que Python: `serie` de
 `producto.js` contra `_serie` de `producto.py`, en Chromium, en cada ventana
-y cada grano. Sin secrets ni red; la parte de Chromium se salta si Playwright
-no está (es de requirements-dev.txt).
+y cada grano. Desde la #774, también lo que se dejó de comprar, los indicadores y
+«de dónde sale la diferencia» contra pandas, y la pantalla entera. Sin secrets ni
+red; la parte de Chromium se salta si Playwright no está (es de
+requirements-dev.txt).
 
     python test_producto_pieza.py
 """
@@ -21,6 +23,9 @@ from graficos.compras import producto as P
 
 _AQUI = Path(P.__file__).parent
 _JS = (_AQUI / "producto.js").read_text(encoding="utf-8")
+_JS_LF = (_AQUI / "lista_ficha.js").read_text(encoding="utf-8")
+_JS_TODO = (_AQUI.parent / "_xlsx.js").read_text(encoding="utf-8") + _JS_LF + _JS
+_CSS = (_AQUI / "lista_ficha.css").read_text(encoding="utf-8") + (_AQUI / "producto.css").read_text(encoding="utf-8")
 
 # FAM, SUB, PROD, VAL, CANT, UM, FECHA, PROV, DOC — los casos de la regla
 # #653 (la compra de lomo a S/ 15,85, el producto nuevo, el que vuelve, la
@@ -124,6 +129,33 @@ class LoQueRecibe(unittest.TestCase):
         json.dumps(self.R)
         json.dumps(self.F)
 
+    def test_lo_que_se_dejo_de_comprar(self):
+        r0, r1 = pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-30")
+        prev = self.h[(self.h["fecha"] >= pd.Timestamp("2026-09-01")) & (self.h["fecha"] < r0)]
+        rng = self.h[(self.h["fecha"] >= r0) & (self.h["fecha"] <= r1)]
+        dj = P._dejados(rng, prev, self.h, r0, r1)
+        # Nada se compró en octubre: todo lo de setiembre quedó afuera, del mayor al menor.
+        self.assertEqual(set(dj.index), set(prev["prod"]))
+        self.assertEqual(dj["prev"].tolist(), sorted(dj["prev"].tolist(), reverse=True))
+        self.assertAlmostEqual(dj.loc["Lomo", "prev"], 745 + 237.75 + 800 + 380)
+        # Compras en los 90 días antes: cuatro documentos y una línea sin número.
+        self.assertEqual(dj.loc["Lomo", "n90"], 5)
+        self.assertEqual(dj.loc["Lomo", "ult"], pd.Timestamp("2026-09-22"))
+        # Un producto del rango no se cuenta como dejado.
+        self.assertTrue(P._dejados(self.h, prev, self.h, r0, r1).empty)
+
+    def test_viajan_en_el_ranking_sin_romper_el_json(self):
+        r0, r1 = pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-30")
+        rng = self.h[self.h["prod"] == "Bolsa"].assign(fecha=pd.Timestamp("2026-10-05"))
+        prev = self.h[(self.h["fecha"] >= pd.Timestamp("2026-09-01")) & (self.h["fecha"] < r0)]
+        res_p, res_f, res_s, pv = _ranking(pd.concat([self.h, rng]), r0, r1)
+        dj = P._dejados(rng, prev, self.h, r0, r1)
+        R = P.armar_ranking(res_p, res_f, res_s, self.F["nombres"], (r0, r1), r1, pv, 1, 0, self.sello, dejados=dj,
+                            familias={"todas": [["ALIMENTOS", 5.0]], "elegidas": ["ALIMENTOS"]})
+        json.dumps(R)
+        self.assertEqual({self.F["nombres"][x[0]] for x in R["dejados"]}, set(dj.index))
+        self.assertEqual(R["pagina"]["todas"], [["ALIMENTOS", "Alimentos", 5.0]])
+
     def test_el_js_lee_las_mismas_posiciones(self):
         self.assertIn("const RP = { i: 0, fam: 1, sub: 2, um: 3, valor: 4, cant: 5, var: 6, est: 7, pp: 8, hab: 9, ppv: 10, nflag: 11,", _JS)
         self.assertIn("docs: 12, ult: 13, ultp: 14, cada: 15, prev: 16, vref: 17, refc: 18 };", _JS)
@@ -173,7 +205,7 @@ class LaCurvaEnElNavegador(unittest.TestCase):
                 self.skipTest(f"sin Chromium: {e}")
             pg = b.new_page()
             pg.set_content("<p>")
-            pg.add_script_tag(content=js)
+            pg.add_script_tag(content=_JS_LF + js)
             out = pg.evaluate("""([F, casos, rango]) => {
               const f = leerFicha(F);
               return casos.map(([prod, gran, op, ultimo]) => {
@@ -210,6 +242,165 @@ class LaCurvaEnElNavegador(unittest.TestCase):
                             self.assertIsNone(x)
                         else:
                             self.assertAlmostEqual(x, y, places=6)
+
+
+_ESTILOS = (":root{--alto-util:575px;--text-primary:rgb(40,40,50);--text-secondary:rgb(100,100,110);--text-muted:rgb(150,150,160);--accent:rgb(108,92,231);"
+            "--accent-deep:rgb(73,56,184);--accent-tint:rgb(240,237,254);--accent-light:rgb(235,232,251);--bg-card:rgb(255,255,255);--bg-hover:rgb(247,246,251);"
+            "--bg-primary:rgb(250,249,251);--rail-fondo:rgb(244,243,248);--border:rgb(230,230,235);--border-lavender:rgb(220,215,250);--line-soft:rgb(243,243,246);"
+            "--danger-text:rgb(185,28,28);--success-text:rgb(15,118,110);--success-bg:rgb(225,245,240);--warning-text:rgb(180,72,15);--warning-bg:rgb(253,238,227);"
+            "--warning:rgb(234,122,28);--shadow:none;--shadow-md:none}body{margin:0;font-family:sans-serif}")
+
+
+@unittest.skipIf(_chromium() is None, "sin Playwright (requirements-dev.txt)")
+class LaPantalla(unittest.TestCase):
+    """La pantalla de la regla #774: se monta como en la app, con sus dos montajes."""
+
+    R0, R1 = pd.Timestamp("2026-09-01"), pd.Timestamp("2026-09-30")
+
+    @classmethod
+    def setUpClass(cls):
+        hist = _hist()
+        cls.sello = P.sello_historial(hist)
+        cls.h, cls.F = P.historial_pieza(hist, cls.sello)
+        res_p, res_f, res_s, prev = _ranking(cls.h, cls.R0, cls.R1)
+        dias = (cls.R1 - cls.R0).days + 1
+        rng = cls.h[(cls.h["fecha"] >= cls.R0) & (cls.h["fecha"] <= cls.R1)]
+        p = cls.h[(cls.h["fecha"] >= cls.R0 - pd.Timedelta(days=dias)) & (cls.h["fecha"] < cls.R0)]
+        cls.dj = P._dejados(rng, p, cls.h, cls.R0, cls.R1)
+        cls.Rk = P.armar_ranking(res_p, res_f, res_s, cls.F["nombres"], (cls.R0, cls.R1), cls.h["fecha"].max(), prev, 3, 2, cls.sello,
+                                 dejados=cls.dj, familias={"todas": [["A", 900.0], ["B", 300.0], ["SERV", 120.0]], "elegidas": ["A", "B"]})
+        cls._pw = _chromium()().start()
+        try:
+            cls.b = cls._pw.chromium.launch()
+        except Exception as e:
+            cls._pw.stop()
+            raise unittest.SkipTest(f"sin Chromium: {e}")
+        cls.pg = cls.b.new_page(viewport={"width": 1323, "height": 619})
+        cls.errores = []
+        cls.pg.on("pageerror", lambda e: cls.errores.append(str(e)))
+        cls.pg.set_content('<div id="datos"></div><div id="montar"></div>')
+        cls.pg.add_style_tag(content=_ESTILOS)
+        cls.pg.add_style_tag(content=_CSS)
+        cls.pg.add_script_tag(content=_JS_TODO.replace("export default function (component)", "window.__montar = function (component)"))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.b.close()
+        cls._pw.stop()
+
+    def setUp(self):
+        self.pg.evaluate("""([F, R]) => {
+          const G = window.__cpProd;
+          Object.assign(G, { raiz: null, F: null, R: null, rankData: null, spark: null, pendFam: null });
+          G.st = { kpi: 'todos', ver: 'todos', hasta: '1', ab: {}, q: '', sub: null, foco: null, amp: null, menu: null, tab: 'curva', gran: 'Mes', op: 'Todo', pw: '90', per: null, cprov: null, doc: null };
+          window.__pedidos = [];
+          document.querySelector('#montar').innerHTML = '';
+          __montar({ data: F, parentElement: document.querySelector('#datos') });
+          __montar({ data: JSON.parse(JSON.stringify(R)), parentElement: document.querySelector('#montar'), setTriggerValue: (...a) => window.__pedidos.push(a) });
+        }""", [self.F, self.Rk])
+        self.addCleanup(lambda: self.assertEqual(self.errores, []))
+
+    def _texto(self, sel):
+        return self.pg.locator(sel).first.inner_text()
+
+    def test_las_cuentas_contra_pandas(self):
+        j = self.pg.evaluate("""([F, R]) => {
+          const C = window.__cpProdCalc, f = C.leerFicha(F), r = C.leerRank(R), V = C.vista(r, f, { kpi: 'todos', ver: 'todos', q: '' });
+          return { n: V.base.length, vT: V.vT, prevT: V.prevT, n80: V.en80.size, nv: V.nv.length, rev: V.rev.length, dej: V.dej.map((p) => F.nombres[p.i]), seg: V.seg.length, dif: V.dif };
+        }""", [self.F, self.Rk])
+        h = self.h
+        dias = (self.R1 - self.R0).days + 1
+        rng = h[(h["fecha"] >= self.R0) & (h["fecha"] <= self.R1)]
+        prev = h[(h["fecha"] >= self.R0 - pd.Timedelta(days=dias)) & (h["fecha"] < self.R0)]
+        self.assertEqual(j["n"], rng["prod"].nunique())
+        self.assertAlmostEqual(j["vT"], rng["valor"].sum(), places=2)
+        self.assertAlmostEqual(j["prevT"], prev["valor"].sum(), places=2)
+        v = rng.groupby("prod")["valor"].sum().sort_values(ascending=False)
+        self.assertEqual(j["n80"], int((v.cumsum() / v.sum() < .8).sum() + 1))
+        pr = prev.groupby("prod")["valor"].sum()
+        self.assertEqual(j["nv"], int((~v.index.isin(pr.index)).sum()))
+        self.assertEqual(j["rev"], rng.loc[rng["flag"] != "", "prod"].nunique())
+        self.assertEqual(sorted(j["dej"]), sorted(set(pr.index) - set(v.index)))
+        # Las cuatro partes suman el total.
+        d = j["dif"]
+        self.assertAlmostEqual(d["mas"] + d["men"] + d["nv"] + d["dej"], d["total"], places=2)
+        self.assertAlmostEqual(d["total"], rng["valor"].sum() - prev["valor"].sum(), places=2)
+
+    def test_abre_en_el_resumen(self):
+        self.assertEqual(self.pg.locator(".lf-kpi").count(), 4)
+        self.assertIn("En qué se va", self._texto(".lf-panel"))
+        self.assertIn("Se dejaron de comprar", self._texto(".lf-dif"))
+        self.assertIn("Fuera de esta cuenta", self._texto(".lf-fuera"))
+
+    def test_no_pide_scroll_ni_se_sale(self):
+        m = self.pg.evaluate("(()=>{const e=document.querySelector('.lf-main');return [e.scrollWidth-e.clientWidth, e.scrollHeight-e.clientHeight, document.documentElement.scrollWidth-innerWidth]})()")
+        self.assertLessEqual(max(m), 1, m)
+
+    def test_la_ficha_y_sus_pestanas(self):
+        self.pg.locator("tbody tr[data-acc]", has_text="Lomo").click()
+        self.assertEqual(self._texto(".lf-panel h3"), "Lomo")
+        self.assertEqual(self.pg.locator(".lf-cf").count(), 4)
+        self.assertIn("revisar", self._texto(".lf-frase"))
+        self.assertGreater(self.pg.locator(".lf-ba").count(), 0)
+        self.assertGreater(self.pg.locator(".lf-pto.fl").count(), 0)
+        hit = self.pg.locator(".lf-hit").last
+        hit.hover()
+        self.assertIn("Cantidad", self._texto(".lf-tip"))
+        hit.click()
+        self.assertEqual(self.pg.evaluate("__cpProd.st.tab"), "comp")
+        self.pg.locator(".lf-fl .lf-quita", has_text="✕").first.click()
+        self.pg.locator(".ft.cp .ft-l .ft-f[data-acc]").first.click()
+        self.assertIn("Total del comprobante", self._texto(".lf-sub"))
+        self.pg.locator(".lf-panel .lf-seg button", has_text="Proveedores").click()
+        self.assertGreater(self.pg.locator(".ft.pv .ft-l .ft-f").count(), 0)
+        self.pg.locator(".ft.pv .ft-l .ft-f").first.click()
+        self.assertEqual(self.pg.evaluate("__cpProd.st.tab"), "comp")
+        self.pg.locator(".lf-panel .lf-seg button", has_text="Períodos").click()
+        self.assertGreater(self.pg.locator(".ft.pe .ft-l .ft-f").count(), 0)
+
+    def test_los_indicadores_y_lo_dejado_se_abre(self):
+        self.pg.locator(".lf-kpi").nth(3).click()
+        self.assertIn("Compras para revisar", self._texto(".lf-panel"))
+        self.pg.locator(".lf-kpi").nth(3).click()
+        if len(self.dj):
+            self.pg.locator(".lf-kpi").nth(2).click()
+            self.assertIn("Lo que se dejó de comprar", self._texto(".lf-panel"))
+            self.pg.locator("tbody tr[data-acc]").first.click()
+            self.assertIn("No se compró", self._texto(".lf-frase"))
+
+    def test_por_familia_abre_y_cierra(self):
+        self.pg.locator(".lf-izq .lf-seg button", has_text="Por familia").click()
+        self.assertEqual(self.pg.locator("tr.g0").count(), self.h[(self.h["fecha"] >= self.R0) & (self.h["fecha"] <= self.R1)]["fam"].nunique())
+        self.pg.locator('select[data-sel="hasta"]').select_option("2")
+        self.assertGreater(self.pg.locator('tbody tr[data-acc="fila"]').count(), 0)
+        self.pg.locator('select[data-sel="hasta"]').select_option("0")
+        self.assertEqual(self.pg.locator('tbody tr[data-acc="fila"]').count(), 0)
+        self.pg.locator("tr.g0").first.click()
+        self.assertGreater(self.pg.locator('tbody tr[data-acc="grupo"]').count(), self.pg.locator("tr.g0").count())
+
+    def test_buscar_ampliar_familias_y_excel(self):
+        b = self.pg.locator(".lf-busca")
+        b.click()
+        self.pg.keyboard.type("lomo", delay=20)
+        self.assertEqual(self.pg.evaluate("document.querySelector('.lf-busca').value"), "lomo")
+        self.assertEqual(self.pg.locator('tbody tr[data-acc="fila"]').count(), 1)
+        b.fill("")
+        self.pg.locator(".lf-izq .lf-pil", has_text="Ampliar").click()
+        self.assertEqual(self.pg.locator(".lf-panel").count(), 0)
+        self.pg.locator(".lf-izq .lf-pil", has_text="Ver la ficha").click()
+        self.pg.get_by_role("button", name="Sumarlas").click()
+        self.assertEqual(self.pg.evaluate("__pedidos"), [["familias", ["A", "B", "SERV"]]])
+        with self.pg.expect_download() as d:
+            self.pg.locator('[data-acc="excel"]').click()
+        self.assertIn("compras_productos", d.value.suggested_filename)
+
+    def test_el_celular_no_se_desborda(self):
+        self.pg.set_viewport_size({"width": 390, "height": 844})
+        try:
+            self.pg.locator("tbody tr[data-acc]").first.click()
+            self.assertLessEqual(self.pg.evaluate("document.documentElement.scrollWidth-document.documentElement.clientWidth"), 1)
+        finally:
+            self.pg.set_viewport_size({"width": 1323, "height": 619})
 
 
 if __name__ == "__main__":

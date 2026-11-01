@@ -1,0 +1,193 @@
+/* Compras › Proveedor y Producto (regla #774): la pantalla que comparten, antepuesta
+   a cada pieza en Python. Cuatro indicadores que filtran, la lista y, al costado, el
+   resumen o la ficha. Vive en el shadow root: los colores son las variables de
+   estilos/_00_base.py; ningún :has (#469). La fecha y el filtro de proveedores son de
+   Python, puestos en el hueco `.lf-lugar` de la cabecera. */
+.lf { position: relative; container-type: inline-size; color: var(--text-primary); font-size: 13px; line-height: 1.4; font-variant-numeric: tabular-nums; min-width: 0; box-sizing: border-box; }
+.lf *, .lf *::before { box-sizing: border-box; }
+.lf button, .lf input, .lf select { font: inherit; color: inherit; }
+.lf button { cursor: pointer; }
+.lf button:disabled { opacity: .45; cursor: default; }
+.lf button:focus-visible, .lf input:focus-visible, .lf select:focus-visible, .lf summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lf h3, .lf p { margin: 0; }
+.lf .rojo { color: var(--danger-text, var(--danger)); }
+.lf .verde { color: var(--success-text, var(--success)); }
+.lf .nar { color: var(--warning-text, var(--danger)); }
+.lf .gris { color: var(--text-secondary); }
+.lf .mar { color: var(--accent-deep); font-weight: 600; }
+.lf-main { position: relative; display: flex; flex-direction: column; gap: 8px; height: var(--alto-util, 575px); min-height: 460px; padding: 8px 18px; }
+.lf-esp { flex: 1; }
+.lf-cab { display: flex; align-items: center; gap: 8px; flex: none; min-height: 30px; }
+.lf-tit { margin: 0; font-size: 16px; font-weight: 700; color: var(--accent-deep); white-space: nowrap; }
+.lf-lugar { display: block; width: var(--lf-fecha, 150px); flex: none; }
+.lf-pil { height: 30px; border: 0; border-radius: 8px; background: var(--rail-fondo); padding: 0 10px; font-size: 12.5px; white-space: nowrap; flex: none; }
+.lf-pil:hover { background: var(--bg-hover); }
+.lf-men { height: 26px; border: 0; border-radius: 8px; background: var(--rail-fondo); padding: 0 6px; font-size: 12.5px; cursor: pointer; flex: 0 1 auto; min-width: 0; }
+.lf-men:hover { background: var(--bg-hover); }
+.lf-busca { height: 30px; width: 200px; min-width: 110px; flex: 0 1 200px; border: 0; border-radius: 8px; padding: 0 10px; font-size: 12.5px; background: var(--rail-fondo); }
+.lf-busca::placeholder { color: var(--text-secondary); }
+.lf-ms { position: relative; flex: none; }
+.lf-pop { position: absolute; top: 34px; left: 0; z-index: 8; width: 300px; max-height: 420px; overflow: auto; overscroll-behavior: contain; padding: 10px; display: flex; flex-direction: column; gap: 2px; background: var(--bg-card); border-radius: 10px; box-shadow: 0 6px 24px color-mix(in srgb, var(--text-primary) 18%, transparent); }
+.lf-pop label { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 4px; border-radius: 6px; cursor: pointer; }
+.lf-pop label:hover { background: var(--bg-hover); }
+.lf-pop label span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-pop label small { font-size: 11.5px; color: var(--text-secondary); }
+.lf-pop input { accent-color: var(--accent); margin: 0; }
+.lf-pop p { margin: 4px; font-size: 11.5px; color: var(--text-secondary); }
+.lf-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); flex: none; }
+.lf-kpi { position: relative; display: block; border: 0; border-left: 1px solid var(--border); background: none; padding: 4px 14px; text-align: left; min-width: 0; overflow: hidden; }
+.lf-kpi:first-child { border-left: 0; }
+.lf-kpi:hover { background: var(--bg-hover); }
+.lf-kpi.on { background: var(--accent-tint); border-radius: 10px; border-left-color: transparent; }
+.lf-kpi > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-kpi .r { font-size: 12px; color: var(--text-secondary); }
+.lf-kpi .v { font-size: 20px; font-weight: 700; line-height: 1.2; }
+.lf-kpi .d { font-size: 11.5px; color: var(--text-secondary); }
+.lf-seg { display: inline-flex; gap: 2px; max-width: 100%; background: var(--rail-fondo); border-radius: 8px; padding: 2px; flex: none; }
+.lf-seg button { border: 0; background: none; border-radius: 6px; min-height: 26px; padding: 0 10px; color: var(--text-secondary) !important; white-space: nowrap; font-size: 12.5px; }
+.lf-seg button:hover { color: var(--accent-deep) !important; }
+.lf-seg button.on { background: var(--bg-card); color: var(--accent-deep) !important; font-weight: 600; box-shadow: var(--shadow); }
+.lf-quita { height: 26px; border: 0; border-radius: 8px; padding: 0 9px; background: var(--accent-tint); color: var(--accent-deep) !important; font-weight: 600; font-size: 12px; white-space: nowrap; flex: 0 1 auto; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.lf-fl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: none; }
+.lf-cuerpo { flex: 1; min-height: 0; display: flex; gap: 16px; }
+.lf-izq { flex: 1.15 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.lf-panel { flex: 1 1 0; min-width: 400px; min-height: 0; display: flex; flex-direction: column; gap: 7px; border-left: 1px solid var(--border); padding-left: 16px; overflow: hidden; }
+.lf-cuerpo[data-amp="panel"] .lf-panel { border-left: 0; padding-left: 0; min-width: 0; }
+.lf-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 8px; }
+.lf-t { border-collapse: separate; border-spacing: 0; width: 100%; white-space: nowrap; table-layout: fixed; }
+.lf-t th, .lf-t td { padding: 0 8px; height: 30px; border-top: 1px solid var(--border); text-align: right; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+.lf-t thead th { position: sticky; top: 0; z-index: 3; background: var(--rail-fondo); border-top: 0; font-weight: 600; color: var(--text-secondary); font-size: 12px; }
+.lf-t thead th button { border: 0; background: none; padding: 0; font-weight: 600; color: var(--text-secondary) !important; text-align: inherit; }
+.lf-t thead th button:hover { color: var(--accent-deep) !important; }
+.lf-t .l { text-align: left; }
+.lf-t tr.tot td { position: sticky; top: 30px; z-index: 2; background: var(--bg-card); font-weight: 700; border-bottom: 1px solid var(--border); }
+.lf-t tbody tr[data-acc] { cursor: pointer; }
+.lf-t tbody tr[data-acc]:hover td { background: var(--bg-hover); }
+.lf-t tr.on td, .lf-t tr.on:hover td { background: var(--accent-tint); color: var(--accent-deep); }
+.lf-t tr.on .nm { font-weight: 600; }
+.lf-t tr.g0 td { font-weight: 600; }
+.lf-t tr.apag td { color: var(--text-secondary); font-style: italic; }
+.lf-t td.bv { background: linear-gradient(to right, var(--accent-light) var(--b), transparent var(--b)) no-repeat; }
+.lf-t tr.on td.bv { background: var(--accent-tint); }
+.lf-t .w-im { width: 94px; } .lf-t .w-pc { width: 54px; } .lf-t .w-pr { width: 80px; } .lf-t .w-n { width: 54px; } .lf-t .w-h { width: 70px; } .lf-t .w-t { width: 78px; } .lf-t .w-x { width: 88px; }
+.lf-t td.t { padding: 0 6px; }
+.lf-t td.t svg { width: 68px; height: 20px; display: block; margin: auto; overflow: visible; }
+.lf-t td.t polyline { fill: none; stroke: color-mix(in srgb, var(--accent) 70%, var(--bg-card)); stroke-width: 1.3; }
+.lf-chip { display: inline-block; font-size: 11px; border-radius: 5px; padding: 1px 6px; background: var(--rail-fondo); color: var(--text-secondary); margin-left: 6px; vertical-align: middle; font-weight: 400; }
+.lf-nota { font-size: 11.5px; color: var(--text-secondary); line-height: 1.35; flex: none; margin: 0; }
+.lf-vacio { padding: 24px; text-align: center; color: var(--text-secondary); }
+.lf-fcab { display: flex; gap: 8px; align-items: flex-start; flex: none; }
+.lf-ftit { flex: 1; min-width: 0; }
+.lf-miga { display: block; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-panel h3 { font-size: 15px; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-frase { background: var(--accent-tint); color: var(--accent-deep); border-radius: 8px; padding: 7px 10px; line-height: 1.35; flex: none; font-size: 12.5px; }
+.lf-bloque { font-size: 12px; font-weight: 600; color: var(--text-secondary); flex: none; margin-top: 2px; }
+.lf-lista { flex: 1 1 0; min-height: 60px; overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
+.lf-fi { border: 0; border-top: 1px solid var(--border); background: none; padding: 5px 4px; text-align: left; display: grid; grid-template-columns: minmax(0, 1fr) auto 80px; gap: 10px; align-items: baseline; flex: none; width: 100%; }
+.lf-fi:hover { background: var(--bg-hover); }
+.lf-fi.on { background: var(--accent-tint); }
+.lf-fi .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-fi small { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.lf-fi b { font-weight: 600; text-align: right; white-space: nowrap; }
+.lf-fuera { display: flex; gap: 8px; align-items: center; border-top: 1px solid var(--border); padding-top: 6px; font-size: 11.5px; color: var(--text-secondary); flex: none; line-height: 1.3; }
+.lf-fuera span { flex: 1; min-width: 0; }
+.lf-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; flex: none; }
+.lf-cf { min-width: 0; }
+.lf-cf span, .lf-cf b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-cf span { font-size: 11.5px; color: var(--text-secondary); }
+.lf-cf b { font-size: 14px; font-weight: 600; }
+.lf-cf small { display: block; font-size: 11px; line-height: 1.25; color: var(--text-secondary); }
+.lf-dif { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; font-size: 12.5px; flex: none; }
+.lf-dif span { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-dif b { font-weight: 600; text-align: right; }
+.lf-dif .tt { border-top: 1px solid var(--border); padding-top: 3px; color: var(--text-primary); font-weight: 600; }
+.lf-zona { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.lf-ev { display: flex; align-items: center; gap: 8px; flex: none; flex-wrap: wrap; min-height: 26px; }
+.lf-ev .sub { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lf-leyc { display: flex; gap: 12px; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+.lf-leyc i { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--accent-deep); vertical-align: middle; margin-right: 4px; }
+.lf-leyc i.h { border-top: 2px dashed var(--text-secondary); }
+.lf-leyc i.b { width: 10px; height: 10px; border: 0; background: var(--lf-barra); border-radius: 2px; }
+.lf-leyc i.f { width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--warning, orange); }
+.lf { --lf-barra: color-mix(in srgb, var(--accent) 35%, var(--bg-card)); }
+.lf-grf { position: relative; flex: 1; min-height: 120px; margin: 16px 4px 0; border-bottom: 1px solid var(--border); }
+.lf-gl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line-soft); pointer-events: none; }
+.lf-ba { position: absolute; bottom: 0; background: var(--lf-barra); border-radius: 3px 3px 0 0; min-height: 1px; pointer-events: none; }
+.lf-ba.foco { background: var(--accent); }
+.lf-ba.par { background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bg-card) 55%, transparent) 0 3px, transparent 3px 7px); }
+.lf-rot { position: absolute; transform: translateX(-50%); font-size: 11px; font-weight: 600; white-space: nowrap; padding-bottom: 2px; pointer-events: none; }
+.lf-ref { position: absolute; border-top: 2px solid var(--text-primary); pointer-events: none; }
+.lf-grf svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.lf-grf svg polyline { fill: none; vector-effect: non-scaling-stroke; }
+.lf-grf svg .lin { stroke: var(--accent-deep); stroke-width: 1.8; }
+.lf-grf svg .hab { stroke: var(--text-secondary); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.lf-pto { position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--accent); border: 1px solid var(--bg-card); pointer-events: none; }
+.lf-pto.fl { background: var(--warning, orange); }
+.lf-prec { position: absolute; transform: translate(-50%, -140%); font-size: 11px; font-weight: 600; color: var(--accent-deep); white-space: nowrap; pointer-events: none; background: color-mix(in srgb, var(--bg-card) 75%, transparent); border-radius: 3px; padding: 0 3px; }
+.lf-hit { position: absolute; top: -14px; bottom: 0; border: 0; background: transparent; padding: 0; }
+.lf-hit:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.lf-cm { position: relative; height: 14px; flex: none; margin: 0 4px; font-size: 11px; color: var(--text-secondary); }
+.lf-cm span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.lf-tip { position: absolute; top: 0; z-index: 6; background: var(--text-primary); color: var(--bg-card); border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.35; pointer-events: none; width: 232px; box-shadow: var(--shadow-md); }
+.lf-tip b { display: block; font-weight: 600; font-size: 12.5px; margin-bottom: 2px; }
+.lf-tip > span { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.lf-tip > span > i { font-style: normal; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-tip em { display: block; font-style: normal; text-align: right; opacity: .75; }
+.lf-sinc { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); }
+/* Las tablas de la ficha: filas de una grilla, con su total abajo y sólo ellas se deslizan. */
+.lf-zona .cuerpo { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-x: auto; overscroll-behavior: contain; }
+.lf-panel .ft { flex: 1 1 auto; }
+.ft { display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; }
+.ft-f { display: grid; gap: 6px; align-items: center; min-height: 28px; padding: 0 2px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; font-size: 12.5px; }
+.ft-f > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ft-f .r { text-align: right; }
+.ft-h { color: var(--text-secondary); font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--border); flex: 0 0 auto; }
+.ft-l { overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1 1 auto; }
+.ft-t { background: var(--accent-tint); color: var(--accent-deep); font-weight: 700; border-radius: 4px; flex: 0 0 auto; }
+.ft-t .tot3 { grid-column: 1 / span 3; }
+.ft-l .ft-f[data-acc] { cursor: pointer; }
+.ft-l .ft-f[data-acc]:hover { background: var(--bg-hover); }
+.ft-f.foco { background: var(--accent-tint); }
+.ft-f.foco .nm { font-weight: 600; color: var(--accent-deep); }
+.ft .parc { font-style: italic; }
+.ch { color: var(--text-secondary); font-size: 10px; text-align: center; }
+.chip { font-style: normal; font-size: 11px; border-radius: 5px; padding: 1px 6px; font-weight: 600; }
+.chip.barato { color: var(--success-text); background: var(--success-bg); }
+.chip.revisar { color: var(--warning-text); background: var(--warning-bg); }
+.w { color: var(--warning-text); font-style: normal; }
+.sube { color: var(--danger-text); }
+.baja { color: var(--success-text); }
+.igual { color: var(--text-secondary); }
+.nota-v { padding: 8px 4px; color: var(--text-secondary); font-size: 12px; }
+.lf-sub { background: var(--bg-primary); border-bottom: 1px solid var(--border-lavender); padding: 4px 6px 6px 12px; font-size: 12px; }
+.lf-sub .enc { color: var(--text-secondary); font-size: 11px; }
+.lf-sub .dl-l { display: grid; gap: 6px; min-height: 22px; align-items: center; white-space: nowrap; }
+.lf-sub .dl-l > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lf-sub .dl-l .r { text-align: right; }
+@container (max-width: 1040px) { .lf-cab { flex-wrap: wrap; } }
+@media (max-width: 1040px) {
+  .lf-main { height: auto; }
+  .lf-cuerpo { flex-direction: column; flex: none; }
+  .lf-izq { flex: none; }
+  .lf-scroll { flex: none; height: 420px; }
+  .lf-panel { flex: none; min-width: 0; border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 10px; overflow: visible; }
+  .lf-lista { flex: none; max-height: 320px; }
+  .lf-zona { overflow: visible; flex: none; }
+  .lf-grf { flex: none; height: 220px; }
+  .ft-l { max-height: 360px; }
+}
+@media (max-width: 900px) {
+  .lf-main { padding: 0; min-height: 0; }
+  .lf-cab { flex-wrap: wrap; }
+  .lf-lugar { display: none; }
+  .lf-busca { flex: 1 1 100%; width: 100%; }
+  .lf-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lf-kpi:nth-child(odd) { border-left: 0; }
+  .lf-t { min-width: 520px; }
+  .lf-t .w-t, .lf-t td.t { display: none; }
+  .lf-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lf-seg { overflow-x: auto; overscroll-behavior: contain; flex-wrap: nowrap !important; }
+  .lf-seg button, .lf-pil, .lf-men, .lf-busca, .lf-quita { min-height: 44px; height: auto; }
+  .lf-fi { min-height: 44px; }
+  .lf-pop { position: fixed; top: auto; bottom: 72px; left: 12px; right: 12px; width: auto; max-height: 50dvh; }
+}

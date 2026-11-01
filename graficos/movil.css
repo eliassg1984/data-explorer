@@ -33,13 +33,8 @@
   .rpt-movil :is(.rk-l, .ft-l, .tl) { overflow-x: auto; overscroll-behavior: contain; }
 
   /* Compras: rankings, ficha y análisis de documentos. */
-  :is(.cpvr, .cpvf, .cpr, .cpf).rpt-movil { height: auto !important; min-height: 0 !important; }
-  .rpt-movil :is(.cab, .ctl, .cc, .cpvf .tabs, .cpf .tabs) { flex-wrap: wrap; }
-  :is(.cpvf, .cpf).rpt-movil .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  :is(.cpvf, .cpf).rpt-movil .cuerpo { overflow-x: auto; overscroll-behavior: contain; }
-  :is(.cpvr, .cpr).rpt-movil .rk-f { grid-template-columns: minmax(140px, 1fr) 96px 76px 48px; min-width: 400px; }
-  :is(.cpvr, .cpr).rpt-movil .tabla { overflow-x: auto; overscroll-behavior: contain; }
-  :is(.cpvr, .cpr).rpt-movil .rk-l { min-width: 400px; max-height: 420px; }
+  :is(.cpv, .cpd).rpt-movil { height: auto !important; min-height: 0 !important; }
+  .rpt-movil :is(.cab, .ctl, .cc) { flex-wrap: wrap; }
   .rpt-movil :is(.vap-dos, .cv-lower, .iar-rankings, .iar-analisis-cuerpo, .pvu-cuerpo, .mre-cuerpo, .mrv-cuerpo) { display: flex; flex-direction: column; }
   .rpt-movil :is(.vap-serie, .vap-explica, .vap-detalle, .cv-rank, .cv-detail, .cv-analysis, .dc-main, .dc-ficha, .iar-main, .iar-analisis, .pvu-main, .mre-main, .mrv-main) { height: auto !important; min-height: 0 !important; }
   .rpt-movil :is(.dc-kpis, .cv-kpis, .vap-kpis) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -3,7 +3,7 @@
 const __movilMedia = '(max-width: 900px)';
 const __movilPerfiles = [
   ['.re', ''], ['.cv', '.cv-controles'], ['.cd', '.cd-der'],
-  ['.cpvr', ''], ['.cpvf', '.cc'], ['.cpr', '.ctl'], ['.cpf', '.cc'],
+  ['.cpv', ''], ['.cpd', ''],
   ['.sv', '.cab .campo, .filtros'], ['.cvol', '.cv-toolbar'], ['.vap', '.vap-controles'], ['.dc', '.dc-filtros'], ['.sud', '.sud-controles'],
   ['.vp', '.fils, .vp-ctrl'], ['.vm', '.vm-ctrl'], ['.ig', '.ig-filtro'], ['.vh', '.ctrl'],
   ['.vcc', '.vcc-controls'], ['.msp', '.ms-toolbar'], ['.ctl', '.ctl-filtros'],

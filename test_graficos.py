@@ -6143,22 +6143,18 @@ def _pruebas_grilla_horizontal():
           "(usar COLUMNAS_DRILL, o marcar `# columnas-internas:`)",
           not culpables, ", ".join(culpables[:6]))
 
-    # ── 2) La fila del drill de Proveedor usa su constante ──────────────
-    # Positiva, no negativa: sin esto, borrar la llamada dejaría la guarda
-    # #1 en verde. Desde el 2026-10-12 es UNA fila, Ranking | ficha, con
-    # `COLUMNAS_DRILL_FICHA` (regla #646); hasta ese día eran dos, con
-    # `COLUMNAS_DRILL_TABLAS` y `COLUMNAS_DRILL_ABAJO` (reglas #578 y #579).
+    # ── 2) Proveedor y Producto son la MISMA pantalla ───────────────────
+    # Desde la regla #774: no parten la fila con columnas de Streamlit, la lista
+    # y la ficha van en la pieza, con `lista_ficha.css` antepuesta. Dos secciones
+    # vecinas con la forma distinta hacen saltar la vista de lado (regla #653).
     prov = (raiz / "graficos" / "compras" / "proveedor.py").read_text(
         encoding="utf-8")
-    n_filas = len(re.findall(r"st\.columns\(COLUMNAS_DRILL_FICHA\b", prov))
-    check("la fila del drill de Proveedor parte con COLUMNAS_DRILL_FICHA",
-          n_filas == 1, f"se encontraron {n_filas}")
-    # Y la de Producto, la MISMA desde el 2026-10-13 (regla #653): dos
-    # secciones vecinas con el orden al revés hacían saltar la vista de lado.
+    check("Proveedor dibuja con la pantalla común",
+          '"lista_ficha.css"' in prov and '"lista_ficha.js"' in prov and "st.columns(" not in prov)
     prod = (raiz / "graficos" / "compras" / "producto.py").read_text(
         encoding="utf-8")
-    n_filas = len(re.findall(r"st\.columns\(COLUMNAS_DRILL_FICHA\b", prod))
-    check("la fila del drill de Producto parte con COLUMNAS_DRILL_FICHA",
+    n_filas = 1 if '"lista_ficha.css"' in prod and '"lista_ficha.js"' in prod and "st.columns(" not in prod else 0
+    check("Producto dibuja con la pantalla común",
           n_filas == 1, f"se encontraron {n_filas}")
 
     # ── 3) La constante tiene UN dueño ──────────────────────────────────

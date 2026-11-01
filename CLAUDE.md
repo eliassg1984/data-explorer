@@ -202,11 +202,12 @@ pieza y que el `.js` lea lo que Python manda. Ver `arquitectura.md` reglas
 
 `test_producto_pieza.py` vigila Compras › Producto como pieza propia
 (`graficos/compras/producto.py` y `producto.js`): lo que recibe cada
-tarjeta —el historial con su marca y su habitual, el resumen del rango,
+montaje —el historial con su marca y su habitual, el resumen del rango,
 la misma `sello`— y, en Chromium con Playwright, que la curva del
 navegador dé período por período lo mismo que `_serie`, en cada grano y
 cada ventana. Sin Playwright esa parte se salta. Ver `arquitectura.md`
-regla #713.
+regla #713. Desde la #774, los indicadores y lo dejado contra pandas, que las partes
+sumen la diferencia, la ficha, Por familia, «Ampliar», las familias y el celular.
 
 `test_ventas_periodo.py` vigila Ventas › «Venta por Periodo» como pieza
 propia (`graficos/ventas_resumen.py::armar_periodo` y `ventas_periodo.js`):
@@ -226,7 +227,9 @@ historial por proveedor con su habitual, el rango y el filtro— y, en
 Chromium, que el navegador haga las cuentas de la vista de antes, escritas
 en pandas: el ranking con «nuevo», «vuelve» y «Otros», las cifras del
 proveedor, la curva en cada grano, ventana y medida, el Desglose y la
-historia de los documentos. Ver `arquitectura.md` regla #715.
+historia de los documentos. Ver `arquitectura.md` regla #715. Desde la #774, el
+efecto del precio sin las marcadas, lo que sólo se compra a uno y «Ya no» contra
+pandas, las pestañas, el clic en la curva, «Ampliar», las familias y el celular.
 
 `test_compras_periodo.py` vigila Compras › «Compras por período» como pieza
 propia (`graficos/compras/semanal.py` y `semanal.js`): lo que recibe —las
@@ -717,13 +720,11 @@ falla si reaparece uno, o si el cromo de CSS y el de Python se
 desincronizan.
 
 Una tarjeta = una pantalla: se clampea con `max-height: var(--alto-util)` y
-lo que no entra scrollea DENTRO (`estilos/_80_cards.py`). **Excepción
-pedida (2026-09-12): las de Compras › Producto (`compras_prod_card_`) no
-llevan techo** — «las tarjetas no deben deslizarse internamente, solo la
-tabla». Una tarjeta con barra propia y grids con la suya se lee como una
-caja rota; ahí la tarjeta mide su contenido y scrollea la página. Antes de
-sumar otra tarjeta de varios niveles al techo, pensar si no va por el mismo
-lado. Ver `arquitectura.md` regla #382. Dos trampas que
+lo que no entra scrollea DENTRO (`estilos/_80_cards.py`). Una tarjeta con
+barra propia y grids con la suya se lee como una caja rota —«las tarjetas no
+deben deslizarse internamente, solo la tabla», regla #382—: antes de sumar otra
+tarjeta de varios niveles al techo, pensar si no va en una pieza de una pantalla,
+como Compras › Producto desde la #774. Dos trampas que
 ya están medidas y documentadas en `arquitectura.md` reglas #101 y #102:
 **`height` en CSS no aplica** a un bloque de Streamlit (son flex items con
 `flex: 1 1 0%`; hay que usar `max-height`), y **Plotly no llena su
@@ -734,16 +735,9 @@ en 450px, así que el alto sale de `fig.layout.height`, o sea de Python.
 
 Tercera cara del mismo patrón (color / alto / **eje horizontal**). La
 proporción que parte en dos una fila de un drill de Compras sale de
-`graficos/compras/_comun.py::COLUMNAS_DRILL`, no de un literal. Proveedor
-tiene la suya desde el 2026-10-12, en el mismo sitio: `COLUMNAS_DRILL_FICHA`
-(0.92 : 1.5), UNA fila con el Ranking a toda la altura y la ficha del
-proveedor elegido —cifras, curva, Productos | Documentos—; la fila marcada
-del ranking manda sobre toda la ficha (regla #646, que reemplazó las cuatro
-tarjetas de las #578 y #579). **Producto usa la MISMA desde el
-2026-10-13** (regla #653): ranking de productos | ficha del producto, con
-«Ver por: Producto | Subfamilia | Familia» en la lista. Hasta ese día tenía
-la suya al revés (la Evolución a la izquierda, #583), y al bajar de
-Proveedor a Producto la vista saltaba de lado.
+`graficos/compras/_comun.py::COLUMNAS_DRILL`, no de un literal. Proveedor y
+Producto no parten la fila con columnas: la lista y la ficha van en la pieza
+(`graficos/compras/lista_ficha.css`, regla #774).
 
 **En la ficha de Producto hay UN precio, el ponderado** (soles ÷
 cantidad), y **las compras marcadas «revisar» no entran en ningún precio**
@@ -752,26 +746,39 @@ propia: S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o decimales
 en UND). Antes la barra promediaba facturas sin pesar y la tabla de abajo
 ponderaba: dos precios para el mismo mes. Regla #653.
 
-**Y desde el 2026-10-23 Producto es una PIEZA PROPIA** (regla #713):
-`graficos/compras/producto.js` + `.css`, montada una vez en cada tarjeta
-—`parte: "rank"` y `parte: "ficha"`— con el estado de las dos en
-`window.__cpProd`, como «Análisis por hora». Nada vuelve a Python salvo la
-fecha del ranking: buscar, Ver por, familias, el orden, la curva, las
-pestañas, el comprobante de una compra y el Excel los resuelve el
-navegador. El historial viaja en la tarjeta de la ficha
-(`historial_pieza`, con su `sello`) y el resumen del rango en la del
-ranking (`armar_ranking`): cambiar la fecha no vuelve a mandar el
-historial. Las cuentas siguen en `producto.py` (`_resumen`, `_serie`,
-`_precios`) y el `.js` las rehace igual: si se toca una, se toca la otra
-— `test_producto_pieza.py` compara la curva en Chromium.
+**Y Producto es una PIEZA PROPIA** (reglas #713 y #774):
+`graficos/compras/producto.js` + `.css`, con `lista_ficha.js` y `.css`
+antepuestos, montada DOS veces: `parte: "ficha"` trae el historial
+(`historial_pieza`, con su `sello`) y no dibuja; `parte: "rank"` trae el resumen
+del rango (`armar_ranking`) y dibuja la pantalla, con el estado en
+`window.__cpProd`. Cambiar la fecha no vuelve a mandar el historial. A Python
+vuelven sólo la fecha y las familias. Las cuentas siguen en `producto.py`
+(`_resumen`, `_serie`, `_precios`) y el `.js` las rehace igual: si se toca una, se
+toca la otra — `test_producto_pieza.py` compara la curva en Chromium.
 
-**Proveedor, igual desde el 2026-10-24** (regla #715):
-`graficos/compras/proveedor.js` + `.css`, con `window.__cpProv`. El ranking
-lo arma el navegador con el historial de la ficha (el `d` del drill es
-`d_full` recortado al rango); a Python vuelven sólo la fecha y el FILTRO de
-proveedores, que sigue siendo de Python porque «Detalle docs.» lee su
-selección. Las cuentas de la vista de antes están escritas en pandas en
-`test_proveedor_pieza.py`, que las compara con el `.js` en Chromium.
+**Proveedor, igual** (reglas #715 y #774): `graficos/compras/proveedor.js` +
+`.css`, con `window.__cpProv`. El ranking lo arma el navegador con el historial
+(el `d` del drill es `d_full` recortado al rango); a Python vuelven la fecha, las
+familias y el FILTRO de proveedores, que sigue siendo de Python porque «Detalle
+docs.» lee su selección. Las cuentas de la vista de antes están escritas en pandas
+en `test_proveedor_pieza.py`, que las compara con el `.js` en Chromium.
+
+**Desde la #774 las dos son una pantalla, sin nada elegido al abrir** (la misma
+forma, una al lado de la otra en la pila). Cuatro indicadores que filtran, la lista
+y, al costado, el resumen o la ficha, con «Ampliar» y «Soltar». Lo que muerde:
+
+- **El efecto del precio de Proveedor salta las compras marcadas**, como Precios y
+  Producto (`vale`): hasta la #774 las contaba, y Anhelar daba +S/ 377 donde era
+  +S/ 137. Y **el total de «Vs. antes» cuenta a quienes ya no se les compró**
+  (`yaNo`): sin ellos, el mismo mes daba −14,0 % acá y −19,2 % en Producto.
+- **«Se dejaron de comprar» viaja aparte** (`_dejados`, `dejados` del ranking): el
+  resumen del rango no los trae. En un árbol, su «antes» suma en el grupo aunque no
+  se dibujen, o «Vs. antes» no da el total.
+- **La curva va en HTML y porcentajes** (`lfCurva`): no mide nada, también con
+  «Ampliar». El precio, en su propia escala. Rojo y verde sólo para el precio.
+- **«Había más barato» NO es un indicador**: va de S/ 1.433 a S/ 5.475 según la regla
+  y trae casos no comparables (Vino de la casa a S/ 1,03 el litro). Se queda como
+  columna «Vs. más barato» de un producto.
 
 **El período en curso no se compara con uno entero**: al 11 de octubre,
 «octubre contra septiembre» da ▼75 % en verde en casi todo, y es el

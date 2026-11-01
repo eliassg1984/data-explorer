@@ -65,26 +65,6 @@ B mide 289px en una pantalla de 1280 y 535px en una de 1920. Cualquier cosa
 que reaccione al ancho de ESE panel se consulta por `@container`, no por
 `@media` — el viewport no distingue esos dos casos. Ver regla #317."""
 
-COLUMNAS_DRILL_FICHA = [0.92, 1.5]
-"""La ÚNICA fila del drill de Proveedor: el Ranking a la izquierda, a toda
-la altura, y la FICHA del proveedor elegido a la derecha (sus cifras, su
-curva y sus productos y documentos en pestañas).
-
-Desde el 2026-10-12 (regla #646): la «opción A», elegida sobre tres
-maquetas clicables de cómo fusionar las cuatro tarjetas que había desde el
-2026-10-01 (Ranking | Productos arriba, Documentos | Evolución abajo,
-`COLUMNAS_DRILL_TABLAS` y `COLUMNAS_DRILL_ABAJO`, reglas #578 y #579). El
-ranking pasa de 7 filas a la vista a ~17, y la curva de ~400px de ancho a
-~740 en una laptop. 0.92 y no 1: el ranking tiene cuatro columnas y la
-ficha una tabla de ocho (el Desglose: producto, tendencia, seis períodos
-y la variación).
-
-Desde el 2026-10-13 la usa también Producto (regla #653), con la misma
-forma: el ranking de productos a la izquierda y la ficha del producto a la
-derecha. Hasta ese día tenía la suya, `COLUMNAS_DRILL_PRODUCTO` (1 : 1.25,
-la Evolución a la izquierda, regla #583): dos secciones vecinas con el
-orden al revés hacían saltar la vista de lado al bajar."""
-
 GAP_DRILL = "small"
 """Gap entre las columnas de un drill. Va con `COLUMNAS_DRILL`: si las dos
 filas parten en el mismo sitio pero con gaps distintos, el canal gris cambia

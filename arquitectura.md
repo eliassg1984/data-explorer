@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-773 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+774 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (253)
 
@@ -321,7 +321,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 
-**Layout y alturas** (109)
+**Layout y alturas** (110)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -432,6 +432,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#758** — Venta por Periodo no se aprieta: indicadores que eligen, comparación elegible y cierre
 - **#765** — Stock en una pantalla: lista con niveles y ficha al costado, en las dos perspectivas
 - **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
+- **#774** — Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de…
 
 **Plotly y figuras** (130)
 
@@ -1135,7 +1136,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (242)
+**Decisiones de diseño y UX** (243)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1379,6 +1380,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#771** — Compras › Año pasado en una pantalla: los indicadores son las partes de la diferencia
 - **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
 - **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
+- **#774** — Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57964,6 +57966,45 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - **Lo descartado, medido**: «ingresado tarde» no es un indicador. En octubre ningún documento
      tardó más de 2 días y en 12 meses el máximo fue 25; la hora va en la ficha.
    Lo vigila `test_compras_documentos_pieza.py`.
+
+774. **Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de comprar a la vista.**
+   Eran dos tarjetas por vista: el ranking y la ficha, con cinco cifras en cajas, dos filas de
+   controles y la tabla apretada en ocho filas; Producto empezaba su lista a 270 px de 696, tras
+   buscador, «Ver por», «⚠» y dos filas de familias. Ahora las dos son la misma pantalla
+   (`lista_ficha.js` y `.css`, antepuestos): cuatro indicadores que filtran, la lista y, al costado,
+   lo que responde la vista o la ficha del elegido, una zona por pestaña, con «Ampliar» y «Soltar».
+   Boceto: https://claude.ai/artifact/B9SMXVyxvWrgcXJ59UNXVU, las dos últimas pantallas.
+   - **Dos cifras estaban mal, y las dos se contradecían con otra vista.** El total «Δ» de Proveedor
+     no contaba a quienes ya no se les compró (`ranking`, `yaNo`): 1–30 oct de 2026 daba −14,0 % contra
+     −19,2 % en Producto, con el mismo dato. Con ellos, los dos dan −S/ 26.677. Y el «vs. precio
+     habitual» de su ficha contaba las compras marcadas para revisar (`vale`): Anhelar +S/ 377 donde
+     era +S/ 137, The Spirit +S/ 41 donde era −S/ 8. Ahora suma lo mismo que Precios: +3.318 − 5.556.
+   - **Dos montajes, como antes, pero uno no dibuja**: `parte: "ficha"` trae el historial con su
+     `sello`, y `parte: "rank"` la pantalla. Cambiar la fecha sigue sin volver a mandar el historial.
+     El de `ficha` va en una caja de 0×0 (`.st-key-*_pieza_ficha`): si se le saca, deja un hueco.
+   - **Lo que se dejó de comprar no se veía en ninguna parte**: el ranking sale del rango. En octubre,
+     70 productos y S/ 17.962, 35 comprados seguido (3 o más en 90 días): Magret de Pato, S/ 6.202. Viaja
+     aparte (`_dejados`) y en el árbol su «antes» suma en el grupo aunque no se dibuje. «De dónde sale
+     la diferencia» parte el total en cuatro: los mismos se compró más, menos, nuevos y dejados.
+   - **«Había más barato» se midió y se descartó como indicador**: mismo producto y unidad, otro
+     proveedor en 90 días, da de S/ 1.433 a S/ 5.475 según se exijan más compras o un tope de precio, y trae
+     casos que no se comparan (Vino tinto de la casa a S/ 1,03 el litro contra S/ 22,49). Se queda
+     como la columna «Vs. más barato» de un producto, que avisa de la calidad.
+   - **«Sólo se compran a uno» dice su trampa**: S/ 31.019 en 159 productos, pero 91 se compraron una
+     sola vez. La frase lo dice: no todos son una dependencia de verdad.
+   - **Producto no duplica a Precios**: Precios responde dónde pago más; Producto, en qué se va y qué
+     cambió. Por eso sus indicadores son nuevos, dejados y para revisar, y el precio es una columna.
+   - **La curva va en HTML y porcentajes** (`lfCurva`), no en SVG medido: sigue a «Ampliar» sin volver a
+     calcular. Barras para soles y cantidad; el precio, línea en su propia escala. Todo el ancho de cada
+     período responde al cursor y al clic (`.lf-hit`, regla #421).
+   - **«Vs. antes» va en soles y en gris**: «+6.769 %» sobre S/ 90 no decía nada, y comprar más no es malo.
+     El % queda en el globo. Rojo y verde sólo para el precio, como en Precios y Año pasado.
+   - **Sigue todo lo de antes**: el Desglose, Por período, «Todo el histórico» de un producto, el
+     comprobante entero (ahora debajo de su fila), la ventana de la curva con ‹ ›, Excel. La fecha de la curva
+     quedó adentro de su pestaña: eran dos fechas a la vista, y no se sabía cuál mandaba.
+   - **Se fueron** `COLUMNAS_DRILL_FICHA`, `alturas.CURVA_FICHA` y la excepción «sin techo» de las
+     tarjetas de Producto (#382): no hay tarjetas. Sus reglas siguen para la tarjeta vacía sin compras.
+   Lo vigilan `test_proveedor_pieza.py` y `test_producto_pieza.py`.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

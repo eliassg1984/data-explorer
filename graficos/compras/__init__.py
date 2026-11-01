@@ -792,7 +792,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 _compras_proveedor_drill(_d_sec("compras_sec_proveedor"),
                                          col_prov, col_prod, col_cant, col_valor,
                                          col_punit, col_um, col_fecha, col_docu,
-                                         d_full=d_full)
+                                         d_full=d_full,
+                                         familias=_familias_de("compras_sec_proveedor"))
 
     def _dib_producto():
             with st.container(key="compras_prod_drill_wrap"):
@@ -800,7 +801,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                         col_prod, col_fam, col_valor, col_cant,
                                         col_punit, col_um, col_fecha, col_prov,
                                         d_full=d_full, col_subfam=col_subfam,
-                                        col_docu=col_docu)
+                                        col_docu=col_docu,
+                                        familias=_familias_de("compras_sec_producto"))
 
     def _dib_vs_ano_pasado():
             # Serie mensual + puente precio/cantidad + tabla de detalle. Es el

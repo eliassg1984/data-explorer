@@ -1,20 +1,15 @@
-// Compras › Proveedor (regla #715).
+// Compras › Proveedor (reglas #715 y #774).
 //
 // La monta graficos/compras/proveedor.py con st.components.v2 (sin iframe,
-// estilos en un shadow root) DOS VECES, una en cada tarjeta: la del ranking
-// (`parte: "rank"`: el rango y el filtro de proveedores) y la de la ficha
-// (`parte: "ficha"`: el historial de líneas, por proveedor). `_xlsx.js` va
-// antepuesto (libro, bajar, archivo).
+// estilos en un shadow root) DOS VECES: `parte: "ficha"` trae el historial de
+// líneas y no dibuja nada; `parte: "rank"` trae el rango y el filtro, y dibuja
+// la pantalla. Así cambiar la fecha no vuelve a mandar el historial.
+// `_xlsx.js` y `lista_ficha.js` van antepuestos.
 //
-// UN CEREBRO, DOS MONTAJES, como Producto (#713): `window.__cpProv` guarda
-// los datos de las dos, el estado de lo elegido y las dos raíces, y dibuja
-// cuando tiene las dos con la MISMA `sello`. El estado vive ahí y no en la
-// raíz: sobrevive a que Streamlit vuelva a montar la pieza.
-//
-// Nada vuelve a Python: el proveedor elegido, el producto en foco, la
-// ventana, el grano y la medida de la curva, las pestañas, lo desplegado y
-// el Excel los resuelve el navegador. Sólo la fecha y el filtro de
-// proveedores (arriba de la pieza, de Python) piden una corrida.
+// `window.__cpProv` guarda los datos de los dos montajes y lo elegido: sobrevive
+// a que Streamlit vuelva a montar la pieza. A Python vuelven sólo la fecha y el
+// filtro de proveedores (widgets suyos, en el hueco de la cabecera) y el menú de
+// familias, que es el filtro de la página.
 //
 // Las cuentas son las de la vista de antes (regla #646): `_contra_anterior`
 // y `_estado` del ranking, `_ppv`, la curva con `periodo.ventana`,
@@ -25,12 +20,11 @@
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'];
 const DIA = 864e5;
 // Una línea del historial (proveedor.historial_pieza).
-const RL = { dia: 0, prod: 1, doc: 2, cant: 3, valor: 4, ref: 5, um: 6 };
-const GRANOS = [['Día', 'Día'], ['Semana', 'Semana'], ['Mes', 'Mes'], ['Año', 'Año'], ['Documento', 'Doc.']];
+const RL = { dia: 0, prod: 1, doc: 2, cant: 3, valor: 4, ref: 5, um: 6, flag: 7 };
+const GRANOS = [['Día', 'Día'], ['Semana', 'Semana'], ['Mes', 'Mes'], ['Año', 'Año'], ['Documento', 'Documento']];
 const GRAN_POR = { Día: 'Por día', Semana: 'Por semana', Mes: 'Por mes', Año: 'Por año', Documento: 'Por documento' };
 const MEDIDAS = [['valor', 'Soles'], ['cant', 'Cantidad'], ['precio', 'Precio']];
-const OPS = [['Rango', 'El rango del ranking'], ['3m', 'Últimos 3 meses'], ['12m', 'Últimos 12 meses'],
-  ['24m', 'Últimos 24 meses'], ['Todo', 'Todo el histórico']];
+const OPS = [['Rango', 'el rango'], ['3m', '3 meses'], ['12m', '12 meses'], ['24m', '24 meses'], ['Todo', 'todo']];
 const MESES_OP = { '3m': 3, '12m': 12, '24m': 24 };
 const VENTANA_AUTO = 12;   // max(4, min(12, int(1200 / (16 * 2)))) de la vista de antes
 const UMBRAL_PRECIO = 2.0; // % que pinta una celda de precio del Desglose (umbral PROPIO, #646)
@@ -56,10 +50,14 @@ const cantTxt = (c) => num(c, 2).replace(/\.?0+$/, '');
 const sk = (v) => (v >= 1000 ? `S/ ${num(v / 1000, 1)}k` : `S/ ${num(v, 0)}`);
 // `_var_pct`: null si no hay contra qué (desde cero no hay porcentaje).
 const varPct = (cur, prev) => (finito(prev) && prev > 0 && finito(cur) ? (cur - prev) / prev * 100 : null);
-const fmtVar = (v) => (!finito(v) ? '—' : Math.abs(v) < 0.05 ? '0.0%' : `${v > 0 ? '▲' : '▼'} ${Math.abs(v).toFixed(1)}%`);
+const fmtVar = (v) => (!finito(v) ? '—' : Math.abs(v) < 0.05 ? '0 %' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)} %`);
+const solesG = (v) => (!finito(v) ? '—' : Math.abs(v) < 0.5 ? 'S/ 0' : `${v > 0 ? '+' : '−'}S/ ${num(Math.abs(v), 0)}`);
+const colorPpv = (v) => (!finito(v) || Math.abs(v) < 1 ? '' : v > 0 ? 'rojo' : 'verde');
+const coincide = (nom, q) => sinTildes(q).split(/\s+/).filter(Boolean).every((p) => sinTildes(nom).includes(p));
+const tramo = (a, b) => { const x = ymd(a), y = ymd(b); return x[1] === y[1] ? `${x[2]}–${y[2]} ${MES[y[1] - 1]}` : `${fCorta(a)} – ${fCorta(b)}`; };
 // Rojo si subió el gasto, verde si bajó; sin color por debajo del 0,5 %.
 const clsVar = (v) => (!finito(v) || Math.abs(v) < 0.5 ? '' : v > 0 ? 'sube' : 'baja');
-const filaVar = (v) => `<span class="var ${clsVar(v)}">${fmtVar(v)}</span>`;
+const filaVar = (v, conColor) => `<span class="var ${conColor ? clsVar(v) : 'igual'}">${fmtVar(v)}</span>`;
 const trunc = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 const sinTildes = (s) => String(s).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const suma = (xs, f) => xs.reduce((s, x) => s + f(x), 0);
@@ -142,16 +140,16 @@ function leerFicha(data) {
   const vacio = new Set(['', 'nan', 'None']);
   const P = data.lineas.map((ls, p) => ls.map((l) => ({
     p, d: base + l[RL.dia], prod: l[RL.prod], doc: l[RL.doc], cant: l[RL.cant] || 0, valor: l[RL.valor] || 0,
-    ref: l[RL.ref], um: l[RL.um], sinDoc: !data.docs[l[RL.doc]] })));
+    ref: l[RL.ref], um: l[RL.um], flag: l[RL.flag] || 0, sinDoc: !data.docs[l[RL.doc]] })));
   const todas = P.flat();
   let min = Infinity;
   todas.forEach((l) => { if (l.d < min) min = l.d; });
   return { sello: data.sello, ULT: dn(data.ultimo), MIN: min, provs: data.provs, noms: data.noms, prods: data.prods,
-    docs: data.docs, ums: data.ums, umsRaw: data.ums.map((u) => !vacio.has(u)), P, todas, alto: data.alto_curva || 150,
+    docs: data.docs, ums: data.ums, umsRaw: data.ums.map((u) => !vacio.has(u)), P, todas,
     porProd: null };
 }
 function leerRank(data) {
-  return { sello: data.sello, R0: dn(data.rango[0]), R1: dn(data.rango[1]), sel: data.sel || [], otros: !!data.otros };
+  return { sello: data.sello, R0: dn(data.rango[0]), R1: dn(data.rango[1]), sel: data.sel || [], otros: !!data.otros, pagina: data.pagina || null };
 }
 // Las líneas de un producto, de todos los proveedores (se arma una vez).
 function delProducto(F, i) {
@@ -191,6 +189,10 @@ function ranking(F, R) {
     return { var: null, est: 'vuelve', ayuda: `Sin compras desde el ${d} ${MES[m - 1]} ${y}` };
   };
   const filas = top.map((p) => ({ p, valor: val[p], pct: val[p] / totAll * 100, prev: prev[p], ...estado(p) }));
+  // A quienes se les compró en el período anterior y en este no. Sin ellos, el
+  // total de «Vs. antes» no da lo mismo que el de Producto (regla #774).
+  const yaNo = [];
+  if (!fuera.length) for (let p = 0; p < n; p += 1) if (!hay[p] && prev[p] > 0) yaNo.push({ p, valor: 0, pct: 0, prev: prev[p], var: -100, est: '', ayuda: '', ya: true });
   if (R.otros && fuera.length) {
     const v = suma(fuera, (p) => val[p]);
     filas.push({ p: -1, valor: v, pct: v / totAll * 100, prev: suma(fuera, (p) => prev[p]), var: null, est: '', ayuda: '', otros: fuera.length });
@@ -199,9 +201,14 @@ function ranking(F, R) {
   const vals = filas.map((f) => f.valor).sort((a, b) => b - a);
   let acum = 0, n80 = 0;
   vals.forEach((v) => { acum += v; if (acum / totAll * 100 < 80) n80 += 1; });
-  return { filas, defecto, top, totAll, dias, n80: vals.length ? n80 + 1 : 0,
-    total: { n: filas.length, valor: vTot, pct: suma(filas, (f) => f.pct), var: varPct(vTot, suma(filas, (f) => f.prev)) } };
+  return { filas, defecto, top, totAll, dias, yaNo, n80: vals.length ? n80 + 1 : 0,
+    total: { n: filas.length, valor: vTot, pct: suma(filas, (f) => f.pct), var: varPct(vTot, suma(filas, (f) => f.prev) + suma(yaNo, (f) => f.prev)) } };
 }
+
+// Una línea que entra en un precio: con habitual, cantidad y valor, y sin marca.
+// Hasta la regla #774 las marcadas entraban acá y no en Precios ni en Producto:
+// Anhelar daba +S/ 377 donde era +S/ 137, y The Spirit cambiaba de signo.
+const vale = (l) => finito(l.ref) && l.cant > 0 && l.valor > 0 && !l.flag;
 
 // Las cifras del rango de un proveedor y el «vs. precio habitual» (`_ppv`):
 // (precio pagado − habitual) × cantidad, y el % por producto.
@@ -212,7 +219,7 @@ function cifras(F, R, p) {
   let ppv = 0, hay = false;
   const porProd = new Map();
   ls.forEach((l) => {
-    if (!finito(l.ref) || !(l.cant > 0) || !(l.valor > 0)) return;
+    if (!vale(l)) return;
     hay = true;
     const x = l.valor - l.ref * l.cant;
     ppv += x;
@@ -223,6 +230,30 @@ function cifras(F, R, p) {
   const hab = new Map();
   porProd.forEach((a, k) => hab.set(k, a.vref > 0 ? a.ppv / a.vref * 100 : null));
   return { ls, compra, docs, ppv: hay ? ppv : null, hab };
+}
+
+// Lo que dicen los indicadores y la lista, por proveedor: el efecto del precio, sus
+// documentos y productos, y lo que en 90 días sólo se le compró a él.
+function panorama(F, R) {
+  const pv90 = new Map();
+  F.todas.forEach((l) => {
+    if (l.d <= R.R1 - 90 || l.d > R.R1) return;
+    if (!pv90.has(l.prod)) pv90.set(l.prod, new Set());
+    pv90.get(l.prod).add(l.p);
+  });
+  const det = new Map();
+  F.todas.forEach((l) => {
+    if (l.d < R.R0 || l.d > R.R1) return;
+    if (!det.has(l.p)) det.set(l.p, { ppv: 0, hay: false, docs: new Set(), prods: new Set(), nfl: 0, solos: new Set(), vSolo: 0, ult: null });
+    const a = det.get(l.p);
+    a.prods.add(l.prod);
+    if (!l.sinDoc) a.docs.add(l.doc);
+    if (l.flag) a.nfl += 1;
+    if (vale(l)) { a.ppv += l.valor - l.ref * l.cant; a.hay = true; }
+    if (pv90.get(l.prod) && pv90.get(l.prod).size === 1) { a.solos.add(l.prod); a.vSolo += l.valor; }
+    a.ult = a.ult == null ? l.d : Math.max(a.ult, l.d);
+  });
+  return { pv90, det };
 }
 
 // La curva de la ficha: los períodos, el valor de cada uno en la medida, el
@@ -347,7 +378,7 @@ function historiaDocs(H) {
 function calcular(F, R, st) {
   const rk = ranking(F, R);
   // El foco, si compró en el rango; si no, el que más (la fila de arriba).
-  const p = st.foco != null && F.P[st.foco] && F.P[st.foco].some((l) => l.d >= R.R0 && l.d <= R.R1) ? st.foco : rk.defecto;
+  const p = st.foco != null && F.P[st.foco] && (F.P[st.foco].some((l) => l.d >= R.R0 && l.d <= R.R1) || rk.yaNo.some((f) => f.p === st.foco)) ? st.foco : rk.defecto;
   if (p == null) return { rk };
   const ci = cifras(F, R, p);
   const prods = new Set(ci.ls.map((l) => l.prod));
@@ -356,144 +387,25 @@ function calcular(F, R, st) {
   return { rk, p, prod, ci, C };
 }
 
-window.__cpProvCalc = { leerFicha, leerRank, ranking, cifras, curvaDe, desglose, historiaDocs, calcular, clave, parcial };
+window.__cpProvCalc = { leerFicha, leerRank, ranking, cifras, panorama, curvaDe, desglose, historiaDocs, calcular, clave, parcial };
 
 const G = window.__cpProv || (window.__cpProv = {
-  st: { gran: 'Mes', op: '12m', medida: 'valor', tab: 'prod', pmodo: 'tot', dmodo: 'doc', abiertos: new Set() },
-  R: null, F: null, raices: {} });
-
-// ── El ranking ───────────────────────────────────────────────────────────
-function pintarRank() {
-  const raiz = G.raices.rank;
-  if (!raiz) return;
-  const { F, st } = G, X = G.X;
-  const rk = X.rk;
-  const elegido = X.p;
-  const max = Math.max(1, ...rk.filas.map((f) => f.valor));
-  const s = st.sort;
-  const filas = rk.filas.slice();
-  if (s) {
-    const k = { nom: (f) => (f.p < 0 ? '~' : sinTildes(F.noms[f.p])), val: (f) => f.valor, pct: (f) => f.valor,
-      var: (f) => (f.est ? (s.dir > 0 ? 1e15 : -1e15) : finito(f.var) ? f.var : -1e16) }[s.col];
-    filas.sort((a, b) => { const x = k(a), y = k(b); return (x < y ? -1 : x > y ? 1 : 0) * s.dir; });
-  }
-  const col = s && s.col, dir = s && s.dir;
-  const cab = [['nom', 'Proveedor', '', ''], ['val', 'Valor', '', 'r'], ['var', 'Δ', 'Contra el período anterior de igual largo', 'r'],
-    ['pct', '%', '% del total comprado en el rango', 'r']];
-  let html = '<div class="rk-f rk-h">' + cab.map(([k, t, ayuda, al]) =>
-    `<button class="${al}" data-acc="orden" data-v="${k}" title="${esc(ayuda)}">${esc(t)}${col === k ? (dir > 0 ? ' ↑' : ' ↓') : ''}</button>`).join('')
-    + '</div><div class="rk-l">';
-  html += filas.map((f) => {
-    const otros = f.p < 0;
-    const nom = otros ? `Otros · ${f.otros}` : F.noms[f.p];
-    const sel = !otros && f.p === elegido;
-    const varTxt = f.est || fmtVar(f.var);
-    const varCls = f.est || clsVar(f.var);
-    return `<div class="rk-f${sel ? ' sel' : ''}${otros ? ' otros' : ''}"${otros ? '' : ` data-acc="fila" data-v="${f.p}"`} title="${esc(nom)}">`
-      + `<span class="nm">${esc(nom)}</span>`
-      + `<span class="r val" style="--b:${(Math.max(0, Math.min(1, f.valor / max)) * 100).toFixed(1)}%">${soles(f.valor)}</span>`
-      + `<span class="r b ${varCls}" title="${esc(f.ayuda)}">${esc(varTxt)}</span>`
-      + `<span class="r">${Math.round(f.pct)}%</span></div>`;
-  }).join('');
-  if (!filas.length) html += '<div class="vacio">Sin proveedores en el rango.</div>';
-  const t = rk.total;
-  html += '</div><div class="rk-f rk-t">'
-    + `<span class="nm">TOTAL · ${t.n}</span><span class="r">${soles(t.valor)}</span>`
-    + `<span class="r ${clsVar(t.var)}">${fmtVar(t.var)}</span><span class="r">${Math.round(t.pct)}%</span></div>`;
-  raiz.querySelector('.tabla').innerHTML = html;
-  raiz.querySelector('.pie span').textContent = `${rk.n80} ${rk.n80 === 1 ? 'proveedor hace' : 'proveedores hacen'} el 80 % de lo `
-    + 'comprado · Δ: contra el período anterior de igual largo';
-  const fsel = raiz.querySelector('.rk-f.sel');
-  if (fsel && G.scrollAlSel) { fsel.scrollIntoView({ block: 'nearest' }); G.scrollAlSel = false; }
-}
+  st: { gran: 'Mes', op: '12m', medida: 'valor', tab: 'curva', pmodo: 'tot', dmodo: 'doc', kpi: 'todos', ver: 'todos', q: '', foco: null, per: null, amp: null, menu: null, abiertos: new Set() },
+  R: null, F: null });
 
 function excelRank() {
-  const { F, R } = G, rk = G.X.rk;
-  const filas = rk.filas.map((f) => [f.p < 0 ? `Otros (${f.otros})` : F.noms[f.p], f.valor, f.prev, f.var, f.est, f.pct]);
-  filas.push([`TOTAL · ${rk.total.n}`, rk.total.valor, null, rk.total.var, '', rk.total.pct]);
-  bajar(`compras_proveedores_${iso(R.R0)}_${iso(R.R1)}.xlsx`, libro([{ nombre: 'Ranking de proveedores',
-    cabeza: ['Proveedor', 'Valor (S/)', `Período anterior (${rk.dias} días antes, S/)`, 'Δ % vs. período anterior', 'Estado', '% del total'], filas }]));
+  const { F, R } = G, V = G.V, rk = G.X.rk;
+  const filas = V.vis.map((f) => {
+    const d = V.det(f), nd = d.docs ? d.docs.size : 0;
+    return [f.p < 0 ? `Otros (${f.otros})` : F.noms[f.p], f.valor, f.prev, f.var, f.est || (f.ya ? 'ya no' : ''), f.pct, d.hay ? d.ppv : null, d.prods ? d.prods.size : null, nd, nd ? f.valor / nd : null, d.solos.size, d.ult != null ? iso(d.ult) : ''];
+  });
+  bajar(`compras_proveedores_${iso(R.R0)}_${iso(R.R1)}.xlsx`, libro([{ nombre: 'Proveedores',
+    cabeza: ['Proveedor', 'Valor (S/)', `Período anterior (${rk.dias} días antes, S/)`, 'Δ % vs. período anterior', 'Estado', '% del total', 'Efecto del precio (S/)', 'Productos', 'Documentos', 'Ticket (S/)', 'Productos que sólo se le compran a él', 'Última compra'], filas }]));
 }
 
 // ── La ficha ─────────────────────────────────────────────────────────────
 const celda = (t, cls, ayuda) => `<span class="${cls || ''}"${ayuda ? ` title="${esc(ayuda)}"` : ''}>${t}</span>`;
-
-function kpis(F, R, X) {
-  const { rk, p, ci } = X;
-  const f = rk.filas.find((x) => x.p === p) || { ...ranking(F, { ...R, sel: [F.provs[p]], otros: false }).filas[0] };
-  const ant = `${fDM(R.R0 - rk.dias)} – ${fDM(R.R0 - 1)}`;
-  const kpi = (rot, val, ayuda, small) => `<div class="kpi"${ayuda ? ` title="${esc(ayuda)}"` : ''}><span>${esc(rot)}</span>`
-    + `<p>${val}${small ? `<small>${esc(small)}</small>` : ''}</p></div>`;
-  const vVar = f.est ? `<i class="chip ${f.est}" title="${esc(f.ayuda)}">${f.est}</i>` : `<b class="${clsVar(f.var)}">${fmtVar(f.var)}</b>`;
-  let vPpv;
-  if (ci.ppv == null) vPpv = '<b class="igual">—</b>';
-  else if (Math.abs(ci.ppv) < 1) vPpv = '<b class="igual">S/ 0</b>';
-  else vPpv = `<b class="${ci.ppv > 0 ? 'sube' : 'baja'}">${ci.ppv > 0 ? '+' : '−'}S/ ${num(Math.abs(ci.ppv), 0)}</b>`;
-  return kpi('Compra en el rango', `<b>${soles(ci.compra)}</b>`)
-    + kpi(`vs. los ${rk.dias} días antes`, vVar, ant)
-    + kpi('% del total', `<b>${(ci.compra / rk.totAll * 100).toFixed(1)}%</b>`)
-    + kpi('Documentos · ticket', `<b>${num(ci.docs, 0)}</b>`, '', ci.docs ? soles(ci.compra / ci.docs) : '—')
-    + kpi('vs. precio habitual', vPpv, 'Lo pagado de más (+) o de menos (−) contra el precio habitual de cada compra: '
-      + 'la mediana de los 90 días anteriores, la misma de «Compras por período»');
-}
-
-// La curva: línea con área (o sin ella, en precio), el período en curso
-// RAYADO con el tramo final punteado, el punto hueco y la raya de los
-// mismos días del anterior (la `_fig_curva` de antes, sin Plotly).
-function curvaSvg(F, C, ancho, alto) {
-  const W = Math.max(280, ancho), PL = 46, PR = 12, PT = 8, PB = 22, PH = alto - PT - PB;
-  const n = C.keys.length, slot = (W - PL - PR) / Math.max(1, n);
-  const vals = C.ys.map((y) => (finito(y) ? y : null));
-  const nums = vals.filter((x) => x != null);
-  if (finito(C.ref)) nums.push(C.ref);
-  if (!nums.length) nums.push(0);
-  let y0, y1;
-  if (C.medida === 'precio') {
-    const lo = Math.min(...nums), hi = Math.max(...nums), pad = (hi - lo) * 0.2 || hi * 0.05 || 1;
-    y0 = Math.max(0, lo - pad); y1 = hi + pad;
-  } else { y0 = 0; y1 = Math.max(...nums) * 1.15 || 1; }
-  const X = (i) => PL + (i + 0.5) * slot, Y = (v) => PT + PH - (v - y0) / (y1 - y0) * PH;
-  const redondo = (r) => { const b = Math.pow(10, Math.floor(Math.log10(r || 1))); const f = r / b; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * b; };
-  const fmtY = C.medida === 'precio' ? (v) => `S/ ${num(v, 1)}`
-    : (v) => (v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${+(v / 1e3).toFixed(1)}k` : String(+v.toFixed(1)));
-  let svg = `<svg width="${W}" height="${alto}" viewBox="0 0 ${W} ${alto}" role="img" aria-label="Curva del proveedor">`
-    + '<defs><pattern id="cpv-raya" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
-    + '<line x1="0" y1="0" x2="0" y2="7" class="rl"/></pattern></defs>';
-  const paso = redondo((y1 - y0) / 4);
-  for (let v = Math.ceil(y0 / paso) * paso; v <= y1 * 1.0001; v += paso) {
-    svg += `<line class="gr" x1="${PL}" x2="${W - PR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/>`
-      + `<text class="ty" x="${PL - 6}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end">${fmtY(v)}</text>`;
-  }
-  const parc = !!C.parc && n > 0;
-  if (parc) svg += `<rect class="raya" x="${(PL + (n - 1) * slot + slot * 0.05).toFixed(1)}" y="${PT}" width="${(slot * 0.9).toFixed(1)}" height="${PH}" fill="url(#cpv-raya)"/>`;
-  const ult = parc && n > 1 ? n - 2 : n - 1;
-  const pts = [];
-  for (let i = 0; i <= ult; i += 1) if (vals[i] != null) pts.push([X(i), Y(vals[i])]);
-  if (pts.length) {
-    const linea = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-    if (C.medida !== 'precio') {
-      svg += `<polygon class="area" points="${pts[0][0].toFixed(1)},${Y(y0).toFixed(1)} ${linea} ${pts[pts.length - 1][0].toFixed(1)},${Y(y0).toFixed(1)}"/>`;
-    }
-    svg += `<polyline class="ln" points="${linea}"/>`;
-    pts.forEach(([x, y]) => { svg += `<circle class="pt" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3"/>`; });
-  }
-  if (parc && n > 1 && vals[n - 1] != null) {
-    if (vals[n - 2] != null) svg += `<line class="lnp" x1="${X(n - 2).toFixed(1)}" y1="${Y(vals[n - 2]).toFixed(1)}" x2="${X(n - 1).toFixed(1)}" y2="${Y(vals[n - 1]).toFixed(1)}"/>`;
-    if (finito(C.ref) && C.medida !== 'precio') svg += `<line class="ref" x1="${(X(n - 1) - 11).toFixed(1)}" x2="${(X(n - 1) + 11).toFixed(1)}" y1="${Y(C.ref).toFixed(1)}" y2="${Y(C.ref).toFixed(1)}"/>`;
-    svg += `<circle class="pta" cx="${X(n - 1).toFixed(1)}" cy="${Y(vals[n - 1]).toFixed(1)}" r="4.5"/>`;
-  }
-  const etqs = C.keys.map((k) => etq(k, C.gran, true, F)), largo = Math.max(1, ...etqs.map((e) => e.length));
-  // ~5,6 px por carácter a 11px (medido con «nov 25»: 34 px) y 8 de aire.
-  const cada = Math.max(1, Math.ceil(n / Math.max(1, Math.floor((W - PL - PR) / (largo * 5.6 + 8)))));
-  C.keys.forEach((k, i) => {
-    if ((n - 1 - i) % cada === 0) svg += `<text class="tx" x="${X(i).toFixed(1)}" y="${alto - 6}" text-anchor="middle">${esc(etqs[i])}</text>`;
-  });
-  C.keys.forEach((k, i) => {
-    svg += `<rect class="hit" data-acc="per-curva" data-v="${esc(k)}" x="${(PL + i * slot).toFixed(1)}" y="${PT}" width="${slot.toFixed(1)}" height="${PH}"></rect>`;
-  });
-  svg += '</svg>';
-  return { svg, X, W };
-}
+const etqLarga = (k, C, F) => (C.gran === 'Mes' ? mesAnio(dn(`${k}-01`)) : etq(k, C.gran, false, F));
 
 function fmtMedida(v, medida, um) {
   if (!finito(v)) return '—';
@@ -515,26 +427,24 @@ function tablaProductos(F, R, X, colores) {
   });
   const rows = [...g.values()].sort((a, b) => b.valor - a.valor);
   if (!rows.length) return { n: 0, html: '<div class="nota-v">Sin productos para este proveedor.</div>' };
-  const tot = suma(rows, (a) => a.valor) || 1, vmax = Math.max(1, ...rows.map((a) => a.valor));
+  const tot = suma(rows, (a) => a.valor) || 1;
   const filas = rows.map((a) => {
     const nom = F.prods[a.prod], um = moda(a.ls, F), hab = ci.hab.get(a.prod);
     let vh;
     if (!finito(hab)) vh = '<span class="var">—</span>';
     else if (Math.abs(hab) < 0.5) vh = '<span class="var igual" title="Igual al precio habitual (±0,5 %)">=</span>';
     else vh = `<span class="var ${hab > 0 ? 'sube' : 'baja'}">${fmtVar(hab)}</span>`;
-    const foco = a.prod === prod;
-    return `<div class="pl-f${foco ? ' foco' : ''}" data-acc="prod" data-v="${a.prod}" title="${esc(nom)} · clic: sus proveedores y su curva">`
-      + celda(esc(nom), 'nm') + `<span class="vb"><span class="bar" style="width:${(a.valor / vmax * 62).toFixed(1)}%"></span>`
-      + `<span class="v">${soles(a.valor)}</span></span>` + celda(`${Math.round(a.valor / tot * 100)}%`, 'r')
+    const foco = a.prod === prod, solo = G.pan && G.pan.pv90.get(a.prod) && G.pan.pv90.get(a.prod).size === 1;
+    return `<div class="ft-f${foco ? ' foco' : ''}" data-acc="prod" data-v="${a.prod}" title="${esc(nom)}${solo ? ' · en 90 días, sólo a este proveedor' : ''} · clic: sus proveedores y su curva">`
+      + celda(esc(nom), 'nm') + celda(soles(a.valor), 'r') + celda(`${Math.round(a.valor / tot * 100)} %`, 'r igual')
       + celda(cantTxt(a.cant) + (um ? ` ${esc(um)}` : ''), 'r') + celda(a.cant ? precio(a.valor / a.cant) : '—', 'r')
-      + `<span class="r">${vh}</span><span class="ch">${foco ? '▴' : '▾'}</span></div>`
-      + (foco ? `<div class="pl-provs">${provsDelProducto(F, R, a.prod, colores)}</div>` : '');
+      + `<span class="r">${vh}</span></div>`
+      + (foco ? `<div class="lf-sub pl-provs">${provsDelProducto(F, R, a.prod, colores)}</div>` : '');
   });
-  return { n: rows.length, html: '<div class="nota">El rango del ranking · clic en un producto: sus proveedores y su curva</div>'
-    + tabla('pl', [celda('Producto'), celda('Valor', 'r'), celda('%', 'r'), celda('Cant.', 'r'), celda('P. prom.', 'r'),
-      celda('vs. habitual', 'r', 'Contra la mediana del precio de los 90 días anteriores a cada compra'), celda('')],
-    filas, [celda(`TOTAL · ${rows.length} ${rows.length === 1 ? 'producto' : 'productos'}`, 'nm'), celda(soles(suma(rows, (a) => a.valor)), 'r'),
-      celda('100%', 'r'), celda(''), celda(''), celda(''), celda('')]) };
+  return { n: rows.length, html: tabla('pl', [celda('Producto'), celda('Valor', 'r'), celda('%', 'r'), celda('Cant.', 'r'), celda('Precio', 'r'),
+      celda('Vs. hab.', 'r', 'Contra la mediana del precio de los 90 días anteriores a cada compra, sin las compras para revisar')],
+    filas, [celda(`Total · ${rows.length} ${rows.length === 1 ? 'producto' : 'productos'}`, 'nm'), celda(soles(suma(rows, (a) => a.valor)), 'r'),
+      celda('100 %', 'r'), celda(''), celda(''), celda('')]) };
 }
 function provsDelProducto(F, R, i, colores) {
   const L = delProducto(F, i);
@@ -552,7 +462,7 @@ function provsDelProducto(F, R, i, colores) {
   let h = `<div class="sub">Últimos 90 días · ${r9.length} ${r9.length === 1 ? 'proveedor' : 'proveedores'} · precio promedio del período</div>`;
   h += r9.length ? r9.map((a) => {
     const dif = pmin ? (a.pr / pmin - 1) * 100 : 0;
-    const marca = Math.abs(dif) < 0.05 ? '<i class="chip barato">más barato</i>' : `<span class="var sube">+${dif.toFixed(1)}%</span>`;
+    const marca = r9.length < 2 ? '' : Math.abs(dif) < 0.05 ? '<i class="chip barato">el más bajo</i>' : `<span class="igual">+${dif.toFixed(1)} %</span>`;
     return `<div class="p90">${celda(esc(F.noms[a.p]), 'nm', F.noms[a.p])}${celda(`${precio(a.pr)} ${marca}`, 'r')}`
       + `${celda(cantTxt(a.c) + (um9 ? ` ${esc(um9)}` : ''), 'r')}${celda(fDMA(a.ult), 'r f')}</div>`;
   }).join('') : '<div class="nota-v">Sin compras en los últimos 90 días.</div>';
@@ -602,9 +512,9 @@ function tablaDesglose(F, X) {
     if (D.modo === 'ref') {
       const rv = total ? (medida === 'valor' ? suma([...D.refV.values()], (x) => x) : null)
         : (medida === 'valor' ? D.refV.get(a.prod) : D.refC.get(a.prod));
-      return `<span class="r">${filaVar(varPct(u, rv))}</span>`;
+      return `<span class="r">${filaVar(varPct(u, rv), medida === 'precio')}</span>`;
     }
-    return `<span class="r">${filaVar(varPct(u, serie.length > 1 ? serie[serie.length - 2] : null))}</span>`;
+    return `<span class="r">${filaVar(varPct(u, serie.length > 1 ? serie[serie.length - 2] : null), medida === 'precio')}</span>`;
   };
   const spark = (vals) => {
     const n = vals.length, nums = vals.filter((v) => finito(v));
@@ -640,7 +550,7 @@ function tablaDesglose(F, X) {
       return `<span class="${cls}"${estilo}>${txt(v)}</span>`;
     }).join('');
     const nom = F.prods[a.prod];
-    return `<div class="pm-f${a.prod === prod ? ' foco' : ''}" data-acc="prod-curva" data-v="${a.prod}" title="${esc(nom)} · clic: su curva">`
+    return `<div class="ft-f pm-f${a.prod === prod ? ' foco' : ''}" data-acc="prod-curva" data-v="${a.prod}" title="${esc(nom)} · clic: su curva">`
       + `<span class="nm">${esc(nom)}${a.um ? `<small>${esc(a.um)}</small>` : ''}</span>${spark(serieT)}${celdas}${delta(serie, a, false)}</div>`;
   });
   let tot = null;
@@ -664,10 +574,10 @@ function tablaDesglose(F, X) {
     + `<div class="ft-l">${filas.join('')}</div>${tot ? `<div class="ft-f ft-t">${tot.join('')}</div>` : ''}</div>`;
 }
 
-function tablaDocumentos(F, X) {
-  const { ci, p } = X;
-  const ls = ci.ls.filter((l) => !l.sinDoc);
-  if (!ls.length) return { n: 0, html: '<div class="nota-v">Sin números de documento para este proveedor en el rango.</div>' };
+function tablaDocumentos(F, X, per) {
+  const { ci, p, C } = X;
+  const ls = (per ? C.deP.filter((l) => l.k === per) : ci.ls).filter((l) => !l.sinDoc);
+  if (!ls.length) return { n: 0, html: `<div class="nota-v">Sin números de documento para este proveedor en ${per ? 'ese período' : 'el rango'}.</div>` };
   const hd = historiaDocs(F.P[p]);
   const g = new Map();
   ls.forEach((l) => {
@@ -684,7 +594,7 @@ function tablaDocumentos(F, X) {
     let subio = '<span class="var">—</span>';
     if (s) {
       const n = hd.nSube.get(a.doc) || 1;
-      subio = `<span class="var sube">▲ ${s.dp.toFixed(1)}%</span> ${esc(F.prods[s.prod])}${n > 1 ? ` <small>y ${n - 1} más</small>` : ''}`;
+      subio = `<span class="var sube">+${s.dp.toFixed(1)} %</span> ${esc(F.prods[s.prod])}${n > 1 ? ` <small>y ${n - 1} más</small>` : ''}`;
     }
     const lin = [...a.prods.values()].sort((x, y) => y.valor - x.valor).map((b) => {
       const um = F.umsRaw[b.um] ? F.ums[b.um] : '';
@@ -692,17 +602,15 @@ function tablaDocumentos(F, X) {
         + `${celda(b.cant ? precio(b.valor / b.cant) : '—', 'r')}${celda(soles(b.valor), 'r')}</div>`;
     }).join('');
     return `<details class="dl" data-k="${k}"${G.st.abiertos.has(k) ? ' open' : ''}><summary class="ft-f">`
-      + `${celda(fDMA(a.fecha))}${celda(esc(F.docs[a.doc]), 'nm')}${celda(String(a.prods.size), 'r')}${celda(soles(a.valor), 'r')}`
+      + `${celda(fCorta(a.fecha))}${celda(esc(F.docs[a.doc]), 'nm')}${celda(String(a.prods.size), 'r')}${celda(soles(a.valor), 'r')}`
       + `${celda(dias == null ? '—' : String(dias), 'r')}<span class="nm" title="${s ? esc(F.prods[s.prod]) : ''}">${subio}</span>`
-      + '<span class="ch">▾</span></summary><div class="dl-d"><div class="dl-l enc"><span>Producto</span><span class="r">Cant.</span>'
+      + '<span class="ch">▾</span></summary><div class="lf-sub dl-d"><div class="dl-l enc"><span>Producto</span><span class="r">Cant.</span>'
       + `<span class="r">P. unit.</span><span class="r">Valor</span></div>${lin}</div></details>`;
   });
   const tot = suma(docs, (a) => a.valor);
-  return { n: docs.length, html: '<div class="nota">El rango del ranking · Días: desde la compra anterior · Subió de precio: contra la '
-    + 'compra anterior del mismo producto a este proveedor</div>'
-    + tabla('dd', [celda('Fecha'), celda('Documento'), celda('Prods', 'r', 'Productos distintos en el documento'), celda('Valor', 'r'),
-      celda('Días', 'r'), celda('Subió de precio'), celda('')], filas,
-    [celda(`Total · ${num(docs.length, 0)} ${docs.length === 1 ? 'documento' : 'documentos'} · ticket ${soles(tot / docs.length)}`, 'nm tot3'),
+  return { n: docs.length, html: tabla('dd', [celda('Fecha'), celda('Documento'), celda('Prods', 'r', 'Productos distintos en el documento'), celda('Valor', 'r'),
+      celda('Días', 'r', 'Desde la compra anterior'), celda('Subió de precio', '', 'Contra la compra anterior del mismo producto a este proveedor'), celda('')], filas,
+    [celda(`Total · ${num(docs.length, 0)} · ticket ${soles(tot / docs.length)}`, 'nm tot3'),
       celda(soles(tot), 'r'), celda(''), celda(''), celda('')]) };
 }
 
@@ -731,166 +639,304 @@ function tablaDocsPeriodo(F, X) {
     const kk = `per|${C.gran}|${k}`;
     filas.push(`<details class="dl" data-k="${esc(kk)}"${G.st.abiertos.has(kk) ? ' open' : ''}><summary class="ft-f">`
       + `<span class="nm${esParc ? ' parc' : ''}"><b>${esc(rot)}</b></span>${celda(String(nDocs[i].size), 'r')}${celda(soles(vals[i]), 'r')}`
-      + `<span class="r">${filaVar(v)}</span><span class="ch">▾</span></summary><div class="dl-d">`
+      + `<span class="r">${filaVar(v)}</span><span class="ch">▾</span></summary><div class="lf-sub dl-d">`
       + (ds.length ? '<div class="dl-l per enc"><span>Fecha</span><span>Documento</span><span class="r">Filas</span><span class="r">Total</span></div>'
         + ds.map((a) => `<div class="dl-l per">${celda(fDMA(a.fecha))}${celda(esc(F.docs[a.doc]), 'nm')}${celda(String(a.filas), 'r')}${celda(soles(a.valor), 'r')}</div>`).join('')
         : '<div class="nota-v">Sin documentos en el período.</div>') + '</div></details>');
   }
-  let nota = 'Los períodos de la curva · Var. %: contra el período anterior';
-  if (C.parc) nota += ` · ${esc(C.parc.rot)} contra ${esc(C.parc.rotRef)}`;
   const nd = suma(nDocs, (s) => s.size), tv = suma(vals, (x) => x);
-  return `<div class="nota">${nota}</div>` + tabla('dp', [celda('Período'), celda('Docs', 'r'), celda('Valor', 'r'), celda('Var. %', 'r'), celda('')],
+  return tabla('dp', [celda('Período'), celda('Docs', 'r'), celda('Valor', 'r'), celda('Var. %', 'r'), celda('')],
     filas, [celda(`Total · ${num(nd, 0)} ${nd === 1 ? 'documento' : 'documentos'}`, 'nm'), celda(''), celda(soles(tv), 'r'), celda(''), celda('')]);
 }
 
-function ficha() {
-  const { F, R, st } = G, X = G.X;
-  if (X.p == null) return '<div class="nota-v">Sin proveedores en el rango.</div>';
-  const { p, prod, ci, C } = X;
-  const nom = F.noms[p], H = F.P[p];
-  const desde = H.length ? H[0].d : null;
-  const colores = new Map(X.rk.top.map((q, i) => [q, i]));
-  // Cabecera: nombre, «desde», la ventana de la curva y, con «Rango», su tamaño.
-  const opRot = OPS.find((o) => o[0] === st.op)[1];
-  let ven = `<div class="men"><button class="men-b" data-acc="menu" data-v="op" aria-haspopup="listbox">${esc(opRot)} <i>▾</i></button>`
-    + (st.menu === 'op' ? `<div class="men-l" role="listbox">${OPS.map(([k, t]) => `<button role="option" class="${k === st.op ? 'on' : ''}" data-acc="op" data-v="${k}">${esc(t)}</button>`).join('')}</div>` : '')
-    + '</div>';
-  if (C.win) {
-    const w = C.win;
-    const fmtW = (o) => (o == null ? `Auto ${VENTANA_AUTO}` : o === w.nPer ? (w.nPer < 100 ? `Todo ${w.nPer}` : 'Todo') : String(o));
-    ven += `<div class="men"><button class="men-b" data-acc="menu" data-v="win" title="Períodos visibles">${esc(fmtW(w.tam))} <i>▾</i></button>`
-      + (st.menu === 'win' ? `<div class="men-l">${w.ops.map((o) => `<button class="${o === w.tam ? 'on' : ''}" data-acc="win" data-v="${o == null ? '' : o}">${esc(fmtW(o))}</button>`).join('')}</div>` : '')
-      + '</div>'
-      + `<button class="fl" data-acc="mover" data-v="-1" title="Períodos anteriores"${w.ini <= 0 ? ' disabled' : ''}>‹</button>`
-      + `<button class="fl" data-acc="mover" data-v="1" title="Períodos siguientes"${w.ini >= w.iniMax ? ' disabled' : ''}>›</button>`;
-  }
-  const cab = `<div class="cab"><h3 title="${esc(nom)}">${esc(nom)}${desde != null ? `<span>desde ${mesAnio(desde)}</span>` : ''}</h3>${ven}</div>`;
-  // La curva y sus controles.
-  const sujeto = prod != null ? `<b>${esc(trunc(F.prods[prod], 30))}</b> · ${esc(trunc(nom, 22))}` : `<b>${esc(trunc(nom, 30))}</b> · todo lo comprado`;
-  const ctrl = `<div class="cc"><span class="tit" title="${esc(prod != null ? F.prods[prod] + ' · ' + nom : nom)}">Curva de ${sujeto}</span>`
-    + (prod != null ? '<button class="x" data-acc="soltar" title="Volver a todo el proveedor">✕</button>' : '')
-    + `<span class="esp"></span><div class="seg">${MEDIDAS.map(([k, t]) => `<button class="${k === st.medida ? 'on' : ''}" data-acc="medida" data-v="${k}">${t}</button>`).join('')}</div>`
-    + `<div class="seg">${GRANOS.map(([k, t]) => `<button class="${k === st.gran ? 'on' : ''}" data-acc="gran" data-v="${k}">${t}</button>`).join('')}</div></div>`;
-  let curva;
-  if (C.keys.length) {
-    const ancho = (G.raices.ficha && G.raices.ficha.clientWidth) || 700;
-    const c = curvaSvg(F, C, ancho, F.alto);
-    G.cX = c.X; G.cW = c.W;
-    curva = `<div class="curva" style="height:${F.alto}px">${c.svg}<div class="tip" hidden></div></div>`;
-  } else curva = `<div class="sin-curva" style="height:${F.alto}px">Sin compras de este proveedor en la ventana.</div>`;
-  const ley = [], n = C.keys.length;
-  if (C.parc && n) {
-    ley.push(`<span><i class="m hueco"></i>${esc(C.parc.rot)} en curso: ${esc(fmtMedida(C.ys[n - 1], C.medida, C.um))}</span>`);
-    if (C.medida === 'precio') ley.push(`<span>contra el período anterior entero: ${filaVar(varPct(C.ys[n - 1], n > 1 ? C.ys[n - 2] : null))}</span>`);
-    else ley.push(`<span><i class="m raya"></i>${esc(C.parc.rotRef)}: ${esc(fmtMedida(C.ref, C.medida, C.um))} ${filaVar(varPct(C.ys[n - 1], C.ref))}</span>`);
-  }
-  if (st.medida !== 'valor' && prod == null) ley.push('<span>en soles: la cantidad y el precio van por producto (clic en uno)</span>');
-  if (C.hist) ley.push(`<span>${esc({ '3m': 'últimos 3 meses', '12m': 'últimos 12 meses', '24m': 'últimos 24 meses', Todo: 'todo el histórico' }[st.op])}</span>`);
-  // Las pestañas.
+function fichaHtml() {
+  const { F, R, st } = G, X = G.X, { p, prod, ci, C, rk } = X, D = G.pan.det.get(p);
+  const nom = F.noms[p], H = F.P[p], desde = H.length ? H[0].d : null;
+  const colores = new Map(rk.top.map((q, i) => [q, i]));
+  const f = rk.filas.find((x) => x.p === p) || rk.yaNo.find((x) => x.p === p) || { prev: 0, valor: 0, est: '' };
+  const ant = tramo(R.R0 - rk.dias, R.R0 - 1);
+  const cf = (rot, val, cls, sub, ayuda) => `<div class="lf-cf"${ayuda ? ` title="${esc(ayuda)}"` : ''}><span>${esc(rot)}</span><b class="${cls || ''}">${esc(val)}</b><small>${esc(sub)}</small></div>`;
+  const ppv = ci.ppv;
+  const cifrasH = cf('Compra', soles(ci.compra), '', `${(ci.compra / rk.totAll * 100).toFixed(1)} % de lo comprado`)
+    + cf(`Vs. ${rk.dias} días antes`, f.est ? f.est : (f.prev > 0 ? fmtVar(varPct(ci.compra, f.prev)) : '—'), '', `${soles(f.prev)} · ${ant}`, 'Comprar más o menos no es bueno ni malo: por eso va en gris.')
+    + cf('Precio', ppv == null ? '—' : solesG(ppv), colorPpv(ppv), 'contra lo habitual', 'Lo pagado de más o de menos contra el precio habitual de cada compra (la mediana de los 90 días anteriores), sin las compras para revisar: la misma cuenta de Precios.')
+    + cf('Documentos', num(ci.docs, 0), '', ci.docs ? `ticket ${soles(ci.compra / ci.docs)}` : 'sin número');
+  const frase = [];
+  if (D && D.solos.size) frase.push(`${D.solos.size} de sus ${new Set(ci.ls.map((l) => l.prod)).size} productos sólo se los compraste a este proveedor en 90 días (${soles(D.vSolo)}).`);
+  const porPd = new Map();
+  ci.ls.forEach((l) => { if (vale(l)) porPd.set(l.prod, (porPd.get(l.prod) || 0) + l.valor - l.ref * l.cant); });
+  const ord = [...porPd].filter((a) => Math.abs(a[1]) >= 1).sort((a, b) => b[1] - a[1]);
+  if (ord.length && ord[0][1] > 0) frase.push(`Lo que más subió: ${F.prods[ord[0][0]]}, ${solesG(ord[0][1])}.`);
+  if (ord.length && ord[ord.length - 1][1] < 0) frase.push(`Lo que más bajó: ${F.prods[ord[ord.length - 1][0]]}, ${solesG(ord[ord.length - 1][1])}.`);
+  if (D && D.nfl) frase.push(`${D.nfl} ${D.nfl === 1 ? 'línea para revisar no entra' : 'líneas para revisar no entran'} en el precio.`);
+  if (!ci.ls.length) frase.push(`No se le compró en este rango. Antes: ${soles(f.prev)}.`);
   const nProd = new Set(ci.ls.map((l) => l.prod)).size;
-  const tabs = [['prod', `Productos · ${nProd}`], ['doc', `Documentos · ${ci.docs}`]]
-    .map(([k, t]) => `<button class="tab${k === st.tab ? ' on' : ''}" data-acc="tab" data-v="${k}">${esc(t)}</button>`).join('');
-  let modos;
-  if (st.tab === 'prod') modos = [['tot', 'Total del rango'], ['per', 'Desglose']].map(([k, t]) => `<button class="pw${k === st.pmodo ? ' on' : ''}" data-acc="pmodo" data-v="${k}">${t}</button>`).join('');
-  else if (C.gran === 'Documento') modos = '';
-  else modos = [['doc', 'Por documento'], ['per', GRAN_POR[C.gran]]].map(([k, t]) => `<button class="pw${k === st.dmodo ? ' on' : ''}" data-acc="dmodo" data-v="${k}">${t}</button>`).join('');
-  let cuerpo;
-  if (st.tab === 'prod' && st.pmodo === 'per') cuerpo = tablaDesglose(F, X);
-  else if (st.tab === 'prod') cuerpo = tablaProductos(F, R, X, colores).html;
-  else if (st.dmodo === 'per' && C.gran !== 'Documento') cuerpo = tablaDocsPeriodo(F, X);
-  else cuerpo = tablaDocumentos(F, X).html;
-  return cab + `<div class="kpis">${kpis(F, R, X)}</div>` + ctrl + curva
-    + (ley.length ? `<div class="ley">${ley.join('')}</div>` : '')
-    + `<div class="tabs">${tabs}<span class="esp"></span>${modos}</div><div class="cuerpo">${cuerpo}</div>`;
+  const per = st.per && C.keys.includes(st.per) ? st.per : null;
+  const tabs = [['curva', 'Curva'], ['prod', `Productos · ${nProd}`], ['doc', `Documentos · ${ci.docs}`]]
+    .map(([k, t]) => `<button class="${k === st.tab ? 'on' : ''}" data-acc="tab" data-v="${k}" aria-pressed="${k === st.tab}">${esc(t)}</button>`).join('');
+  const chips = (prod != null ? `<button class="lf-quita" data-acc="soltar-prod" title="${esc(F.prods[prod])}">${esc(F.prods[prod])} ✕</button>` : '')
+    + (per && st.tab === 'doc' ? `<button class="lf-quita" data-acc="soltar-per">${esc(etqLarga(per, C, F))} ✕</button>` : '');
+  let zona = '';
+  if (st.tab === 'curva') zona = zonaCurva(F, C, prod, per);
+  else if (st.tab === 'prod') {
+    const sel = `<select class="lf-men" data-sel="pmodo" aria-label="Cómo ver los productos">${[['tot', 'Ver: Total del rango'], ['per', 'Ver: Desglose']].map(([k, t]) => `<option value="${k}"${k === st.pmodo ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+    zona = `<div class="lf-ev">${sel}<span class="sub">${st.pmodo === 'tot' ? 'Clic: quién más lo vende, y su curva' : ''}</span></div><div class="cuerpo">${st.pmodo === 'per' ? tablaDesglose(F, X) : tablaProductos(F, R, X, colores).html}</div>`;
+  } else {
+    const sel = `<select class="lf-men" data-sel="dmodo" aria-label="Cómo ver los documentos">${[['doc', 'Ver: Por documento'], ['per', `Ver: ${GRAN_POR[C.gran === 'Documento' ? 'Mes' : C.gran]}`]].map(([k, t]) => `<option value="${k}"${k === st.dmodo ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+    const porPer = st.dmodo === 'per' && C.gran !== 'Documento';
+    zona = `<div class="lf-ev">${C.gran === 'Documento' ? '' : sel}<span class="sub">${porPer ? 'Los períodos de la curva' : per ? 'De ese período. Clic: sus líneas' : 'Del rango. Clic: sus líneas'}</span></div><div class="cuerpo">${porPer ? tablaDocsPeriodo(F, X) : tablaDocumentos(F, X, per).html}</div>`;
+  }
+  return `<div class="lf-fcab"><div class="lf-ftit"><span class="lf-miga">Proveedor${desde != null ? ` · desde ${mesAnio(desde)}` : ''}</span><h3 title="${esc(nom)}">${esc(nom)}</h3></div>`
+    + `<button class="lf-pil" data-acc="amp" data-v="panel">${st.amp === 'panel' ? 'Ver la lista' : 'Ampliar'}</button><button class="lf-quita" data-acc="soltar">Soltar</button></div>`
+    + `<div class="lf-cifras">${cifrasH}</div>${frase.length ? `<p class="lf-frase">${esc(frase.join(' '))}</p>` : ''}`
+    + `<div class="lf-fl"><span class="lf-seg" role="group" aria-label="Qué mirar">${tabs}</span>${chips}</div><div class="lf-zona">${zona}</div>`;
 }
 
-function pintarFicha() {
-  const raiz = G.raices.ficha;
-  if (!raiz) return;
-  const scroll = raiz.querySelector('.ft-l');
-  const y = scroll ? scroll.scrollTop : 0;
-  const de = `${G.X.p}|${G.st.tab}|${G.st.pmodo}|${G.st.dmodo}`;
-  const mismo = G.fichaDe === de;
-  raiz.innerHTML = ficha();
-  G.fichaDe = de;
-  const nuevo = raiz.querySelector('.ft-l');
-  if (nuevo && mismo) nuevo.scrollTop = y;
-  const foco = raiz.querySelector('.pl-f.foco');
-  if (foco && G.scrollAlFoco) { foco.scrollIntoView({ block: 'nearest' }); G.scrollAlFoco = false; }
+function zonaCurva(F, C, prod, per) {
+  const st = G.st;
+  const op = (v, t, on) => `<option value="${v}"${on ? ' selected' : ''}>${t}</option>`;
+  let ctl = '';
+  if (prod != null) ctl += `<select class="lf-men" data-sel="medida" aria-label="Qué medir">${MEDIDAS.map(([k, t]) => op(k, `Medir: ${t}`, k === st.medida)).join('')}</select>`;
+  ctl += `<select class="lf-men" data-sel="gran" aria-label="Agrupar">${GRANOS.map(([k, t]) => op(k, `Por: ${t}`, k === st.gran)).join('')}</select>`;
+  ctl += `<select class="lf-men" data-sel="op" aria-label="Ventana de la curva">${OPS.map(([k, t]) => op(k, `Curva: ${t}`, k === st.op)).join('')}</select>`;
+  if (C.win) {
+    const w = C.win, fmtW = (o) => (o == null ? `Ver: ${VENTANA_AUTO}` : o === w.nPer ? `Ver: todos (${w.nPer})` : `Ver: ${o}`);
+    ctl += `<select class="lf-men" data-sel="win" aria-label="Períodos visibles">${w.ops.map((o) => op(o == null ? '' : o, fmtW(o), o === w.tam)).join('')}</select>`
+      + `<button class="lf-pil lf-fl1" data-acc="mover" data-v="-1" title="Períodos anteriores"${w.ini <= 0 ? ' disabled' : ''}>‹</button>`
+      + `<button class="lf-pil lf-fl1" data-acc="mover" data-v="1" title="Períodos siguientes"${w.ini >= w.iniMax ? ' disabled' : ''}>›</button>`;
+  }
+  let graf;
+  if (!C.keys.length) graf = '<div class="lf-sinc">Sin compras de este proveedor en la ventana.</div>';
+  else {
+    const fmt = (y) => esc(fmtMedida(y, C.medida, C.um)), precioMed = C.medida === 'precio';
+    graf = lfCurva({ etqs: C.keys.map((k) => esc(etq(k, C.gran, true, F))), ys: precioMed ? C.ys.map(() => null) : C.ys, claves: C.keys, acc: 'per-curva',
+      parcial: !!C.parc, refY: precioMed ? null : C.ref, foco: per, rotY: fmt, linea: precioMed ? C.ys : null });
+  }
+  const n = C.keys.length, ley = [];
+  if (C.parc && n) {
+    ley.push(`${C.parc.rot} en curso: ${fmtMedida(C.ys[n - 1], C.medida, C.um)}`);
+    if (C.medida === 'precio') ley.push(`contra el período anterior entero: ${fmtVar(varPct(C.ys[n - 1], n > 1 ? C.ys[n - 2] : null))}`);
+    else ley.push(`${C.parc.rotRef}: ${fmtMedida(C.ref, C.medida, C.um)} ${fmtVar(varPct(C.ys[n - 1], C.ref))}`);
+  }
+  if (prod == null) ley.push('Para cantidad y precio, elige un producto en «Productos».');
+  return `<div class="lf-ev">${ctl}</div>${graf}<p class="lf-nota">${esc(ley.join(' · '))}</p>`;
 }
 
-// La ficha al pasar el cursor por un período (el hover de la curva de antes).
+// El globo de un período: su cifra, contra qué, y lo que hace el clic.
 function pintarTip(k) {
-  const raiz = G.raices.ficha;
-  const tip = raiz && raiz.querySelector('.tip');
-  const C = G.X && G.X.C;
-  if (!tip || !C) return;
-  const i = k == null ? -1 : C.keys.indexOf(k);
-  if (i < 0) { tip.hidden = true; return; }
-  const n = C.keys.length, esParc = C.parc && i === n - 1;
-  const rot = esParc ? C.parc.rot : (C.gran === 'Mes' ? mesAnio(dn(`${k}-01`)) : etq(k, C.gran, false, G.F));
+  const raiz = G.raiz, C = G.X && G.X.C;
+  if (!raiz || !C) return;
+  const i = k == null ? -1 : C.keys.indexOf(k), n = C.keys.length;
+  if (i < 0) { lfTip(raiz, null); return; }
+  const esParc = C.parc && i === n - 1;
+  const rot = esParc ? `${C.parc.rot} (en curso)` : (C.gran === 'Mes' ? mesAnio(dn(`${k}-01`)) : etq(k, C.gran, false, G.F));
   const cmp = esParc && C.medida !== 'precio' ? varPct(C.ys[i], C.ref) : varPct(C.ys[i], i ? C.ys[i - 1] : null);
-  let html = `<b>${esc(rot)}</b><div class="v">${esc(fmtMedida(C.ys[i], C.medida, C.um))}</div><div>vs. anterior: ${fmtVar(cmp)}</div>`;
-  if (C.medida === 'valor' && C.gran !== 'Documento') html += `<div>${(C.v[i] / (C.tot[i] || 1) * 100).toFixed(1)}% del total</div>`;
-  html += `<div>${C.docs[i]} documentos</div><div class="tm">clic: sus documentos</div>`;
-  tip.innerHTML = html;
-  tip.hidden = false;
-  const tw = tip.offsetWidth || 190, x = G.cX(i);
-  tip.style.left = `${x + 14 + tw <= G.cW ? x + 14 : Math.max(0, x - 14 - tw)}px`;
+  const fila = (a, b) => `<span><i>${esc(a)}</i>${esc(b)}</span>`;
+  let html = `<b>${esc(rot)}</b>` + fila(C.medida === 'cant' ? 'Cantidad' : C.medida === 'precio' ? 'Precio' : 'Compra', fmtMedida(C.ys[i], C.medida, C.um))
+    + fila(esParc && C.medida !== 'precio' ? `Contra ${C.parc.rotRef}` : 'Contra el anterior', fmtVar(cmp));
+  if (C.medida === 'valor' && C.gran !== 'Documento') html += fila('Del total comprado', `${(C.v[i] / (C.tot[i] || 1) * 100).toFixed(1)} %`);
+  html += `${fila('Documentos', String(C.docs[i]))}<em>clic: sus documentos</em>`;
+  lfTip(raiz, i, n, html);
+}
+
+function listaVisible() {
+  const { F, R, st } = G, rk = G.X.rk, pan = G.pan, q = st.q || '';
+  const ok = (f) => !q || coincide(f.p < 0 ? `Otros ${f.otros}` : F.noms[f.p], q);
+  const base = rk.filas.filter(ok), reales = base.filter((f) => f.p >= 0);
+  const vT = suma(reales, (f) => f.valor) || 1;
+  const en80 = new Set(); let ac = 0;
+  [...reales].sort((a, b) => b.valor - a.valor).forEach((f) => { if (ac / vT < 0.8) en80.add(f.p); ac += f.valor; });
+  const det = (f) => pan.det.get(f.p) || { ppv: 0, hay: false, solos: new Set(), vSolo: 0 };
+  const nv = reales.filter((f) => f.est), sub = reales.filter((f) => det(f).ppv > 1), baj = reales.filter((f) => det(f).ppv < -1), sol = reales.filter((f) => det(f).solos.size);
+  const yaNo = rk.yaNo.filter(ok);
+  let vis = st.kpi === 'sube' ? sub : st.kpi === 'baja' ? baj : st.kpi === 'solo' ? sol : base;
+  if (st.ver === 'n80') vis = vis.filter((f) => en80.has(f.p));
+  else if (st.ver === 'nv') vis = vis.filter((f) => f.est);
+  else if (st.ver === 'ya') vis = [...yaNo].sort((a, b) => b.prev - a.prev);
+  const s = st.sort;
+  const clave2 = s ? { nom: (f) => (f.p < 0 ? '~' : sinTildes(F.noms[f.p])), val: (f) => f.valor, ant: (f) => f.valor - f.prev, ppv: (f) => det(f).ppv, pro: (f) => (det(f).prods ? det(f).prods.size : 0) }[s.col] : null;
+  vis = [...vis].sort(clave2 ? (a, b) => { const x = clave2(a), y = clave2(b); return (x < y ? -1 : x > y ? 1 : 0) * s.dir; }
+    : st.kpi === 'sube' ? (a, b) => det(b).ppv - det(a).ppv : st.kpi === 'baja' ? (a, b) => det(a).ppv - det(b).ppv
+      : st.kpi === 'solo' ? (a, b) => det(b).vSolo - det(a).vSolo : (a, b) => b.valor - a.valor);
+  const solos = new Set(); sol.forEach((f) => det(f).solos.forEach((x) => solos.add(x)));
+  return { base, reales, vT, en80, nv, sub, baj, sol, yaNo, vis, det, solos, sumaPpv: (xs) => suma(xs, (f) => det(f).ppv), vSolo: suma(sol, (f) => det(f).vSolo) };
+}
+
+function kpisHtml(V) {
+  const { st } = G, kp = (id, rot, val, d, tip, vc) => `<button class="lf-kpi${st.kpi === id ? ' on' : ''}" data-acc="kpi" data-v="${id}" aria-pressed="${st.kpi === id}" title="${esc(tip)}"><span class="r">${esc(rot)}</span><span class="v ${vc}">${esc(val)}</span><span class="d">${esc(d)}</span></button>`;
+  const nP = (n) => `${num(n, 0)} ${n === 1 ? 'proveedor' : 'proveedores'}`;
+  return kp('todos', 'Proveedores', num(V.reales.length, 0), `${soles(V.vT)} · ${V.en80.size} hacen el 80 %`, 'Lo comprado en el rango, sin IGV.', '')
+    + kp('sube', 'Subieron el precio', solesG(V.sumaPpv(V.sub)), `${nP(V.sub.length)} · contra lo habitual`, 'Lo pagado de más contra el precio habitual de cada compra. Sin las compras para revisar: es la misma cuenta de Precios.', 'rojo')
+    + kp('baja', 'Bajaron el precio', solesG(V.sumaPpv(V.baj)), `${nP(V.baj.length)} · contra lo habitual`, 'Lo pagado de menos contra el precio habitual de cada compra.', 'verde')
+    + kp('solo', 'Sólo se compran a uno', soles(V.vSolo), `${V.solos.size} productos · en 90 días nadie más los vendió`, 'Productos que en los últimos 90 días tuvieron un solo proveedor: si falla, no hay otro a la mano.', '');
+}
+
+function listaHtml(V) {
+  const { F, R, st } = G, s = st.sort, amp = st.amp === 'izq', rk = G.X.rk;
+  const th = (k, t, ayuda, cls) => `<th class="${cls}"${ayuda ? ` title="${esc(ayuda)}"` : ''}><button data-acc="orden" data-v="${k}">${esc(t)}${s && s.col === k ? (s.dir > 0 ? ' ↑' : ' ↓') : ''}</button></th>`;
+  const tods = st.kpi === 'todos' && st.ver === 'todos';
+  const vMax = Math.max(1, ...V.vis.map((f) => f.valor)), meses = mesesSpark(F);
+  const tv = suma(V.vis, (f) => f.valor), tprev = tods ? suma(V.base, (f) => f.prev) + suma(V.yaNo, (f) => f.prev) : suma(V.vis, (f) => f.prev), tppv = V.sumaPpv(V.vis.filter((f) => f.p >= 0));
+  let h = `<div class="lf-scroll" data-tabla="lista"><table class="lf-t"><thead><tr>${th('nom', 'Proveedor', '', 'l')}${th('val', 'Compra', '', 'w-im')}${th('val', '%', 'Del total comprado', 'w-pc')}`
+    + `${th('ant', 'Vs. antes', 'Contra el período anterior de igual largo. En soles: un % sobre casi nada no dice mucho.', 'w-im')}${th('ppv', 'Precio', 'Contra su precio habitual, la mediana de los 90 días anteriores: lo mismo que en Precios.', 'w-pr')}`
+    + `${th('pro', 'Prods', 'Productos comprados en el rango', 'w-n')}`
+    + (amp ? '<th class="w-n">Docs</th><th class="w-pr">Ticket</th><th class="w-n">Cada</th><th class="w-n" title="Productos que en 90 días sólo se le compraron a él">Sólo él</th><th class="w-pr">Última</th>' : '')
+    + '<th class="w-t" title="Lo comprado en cada mes">13 meses</th></tr></thead><tbody>';
+  h += `<tr class="tot"><td class="l">Total · ${num(V.vis.length, 0)}</td><td>${soles(tv)}</td><td>${Math.round(tv / V.vT * 100)} %</td>`
+    + `<td title="${tods && V.yaNo.length ? esc(`Con los ${V.yaNo.length} proveedores a los que ya no se les compró: ${soles(suma(V.yaNo, (f) => f.prev))}`) : ''}">${solesG(tv - tprev)}</td><td class="${colorPpv(tppv)}">${solesG(tppv)}</td><td></td>${amp ? '<td></td><td></td><td></td><td></td><td></td>' : ''}<td></td></tr>`;
+  h += V.vis.map((f) => {
+    if (f.p < 0) return `<tr class="apag"><td class="l">Otros · ${f.otros}</td><td>${soles(f.valor)}</td><td>${Math.round(f.valor / V.vT * 100)} %</td><td></td><td></td><td></td>${amp ? '<td></td><td></td><td></td><td></td><td></td>' : ''}<td></td></tr>`;
+    const d = V.det(f), nom = F.noms[f.p], nd = d.docs ? d.docs.size : 0, np = d.prods ? d.prods.size : 0;
+    const ayudaAnt = f.ya ? `Sin compras en este rango. Antes: ${soles(f.prev)}` : f.est ? f.ayuda : `${soles(f.prev)} → ${soles(f.valor)} · ${fmtVar(varPct(f.valor, f.prev))}`;
+    return `<tr class="${f.p === st.foco ? 'on' : ''}" data-acc="fila" data-v="${f.p}"><td class="l nm" title="${esc(nom)}">${esc(nom)}</td><td class="bv" style="--b:${(f.valor / vMax * 100).toFixed(1)}%">${soles(f.valor)}</td><td class="gris">${f.valor ? `${Math.round(f.valor / V.vT * 100)} %` : '—'}</td>`
+      + `<td class="${f.est ? 'mar' : 'gris'}" title="${esc(ayudaAnt)}">${esc(f.est || solesG(f.valor - f.prev))}</td><td class="${colorPpv(d.ppv)} fuerte">${d.hay ? solesG(d.ppv) : '—'}</td><td class="gris">${st.kpi === 'solo' ? `${d.solos.size} de ${np}` : np || '—'}</td>`
+      + (amp ? `<td class="gris">${nd || '—'}</td><td class="gris">${nd ? soles(f.valor / nd) : '—'}</td><td class="gris">${nd > 1 ? `${Math.round(rk.dias / nd)} d` : '—'}</td><td class="gris">${d.solos.size || '—'}</td><td class="gris">${d.ult != null ? fCorta(d.ult) : '—'}</td>` : '')
+      + `<td class="t"><svg viewBox="0 0 68 20" aria-hidden="true"><polyline points="${sparkDe(F, f.p, meses)}"></polyline></svg></td></tr>`;
+  }).join('');
+  if (!V.vis.length) h += `<tr><td colspan="${amp ? 12 : 7}" class="lf-vacio">Sin proveedores con ese filtro.</td></tr>`;
+  return `${h}</tbody></table></div><p class="lf-nota">Sin IGV. «Vs. antes»: contra ${esc(tramo(R.R0 - rk.dias, R.R0 - 1))}, en soles y en gris: comprar más o menos no es bueno ni malo. «Precio»: contra lo habitual, en rojo o verde.</p>`;
+}
+
+function mesesSpark(F) {
+  if (F.mesesSp) return F.mesesSp;
+  const fin = F.ULT, k = [], [y, m] = ymd(fin);
+  for (let i = 12; i >= 0; i -= 1) { const t = new Date(Date.UTC(y, m - 1 - i, 1)); k.push(`${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}`); }
+  F.mesesSp = k; F.sparks = new Map();
+  return k;
+}
+function sparkDe(F, p, meses) {
+  if (F.sparks.has(p)) return F.sparks.get(p);
+  const por = new Map();
+  F.P[p].forEach((l) => { const k = clave(l, 'Mes'); por.set(k, (por.get(k) || 0) + l.valor); });
+  const v = lfSpark(meses.map((k) => por.get(k) || 0));
+  F.sparks.set(p, v);
+  return v;
+}
+
+// Sin nadie elegido, el panel responde la pregunta de la vista.
+function resumenHtml(V) {
+  const { F, R, st } = G, rk = G.X.rk, pan = G.pan;
+  const item = (n, s, v, c, acc, val) => `<button class="lf-fi" data-acc="${acc}" data-v="${val}"><span class="n" title="${esc(n)}">${esc(n)}</span><small title="${esc(s)}">${esc(s)}</small><b class="${c}">${esc(v)}</b></button>`;
+  const rango = `${fCorta(R.R0)} – ${fCorta(R.R1)}`;
+  const cab = (t) => `<div class="lf-fcab"><div class="lf-ftit"><span class="lf-miga">Todos los proveedores · ${esc(rango)}</span><h3>${esc(t)}</h3></div></div>`;
+  const nP = (n) => `${num(n, 0)} ${n === 1 ? 'proveedor' : 'proveedores'}`;
+  const dosListas = (t1, l1, t2, l2) => `<div class="lf-bloque">${esc(t1)}</div><div class="lf-lista">${l1}</div>${t2 ? `<div class="lf-bloque">${esc(t2)}</div><div class="lf-lista">${l2}</div>` : ''}`;
+  let h;
+  if (st.kpi === 'solo') {
+    const porPd = new Map();
+    F.todas.forEach((l) => { if (l.d >= R.R0 && l.d <= R.R1 && pan.pv90.get(l.prod) && pan.pv90.get(l.prod).size === 1) {
+      const a = porPd.get(l.prod) || { prod: l.prod, p: l.p, v: 0, docs: new Set() }; a.v += l.valor; a.docs.add(l.doc); porPd.set(l.prod, a); } });
+    const visibles = new Set(V.reales.map((f) => f.p)), xs = [...porPd.values()].filter((a) => visibles.has(a.p)).sort((a, b) => b.v - a.v), una = xs.filter((a) => a.docs.size === 1);
+    h = cab('De quién dependes') + `<p class="lf-frase">${esc(`${xs.length} productos tuvieron un solo proveedor en 90 días: ${soles(suma(xs, (a) => a.v))}. Ojo: ${una.length} de ellos se compraron una sola vez, así que no todos son una dependencia de verdad.`)}</p>`
+      + dosListas('Los que más pesan', xs.slice(0, 40).map((a) => item(F.prods[a.prod], F.noms[a.p], soles(a.v), '', 'fila', a.p)).join(''));
+  } else if (st.kpi === 'sube' || st.kpi === 'baja') {
+    const signo = st.kpi === 'sube' ? 1 : -1, lst = st.kpi === 'sube' ? V.sub : V.baj, porPd = new Map(), visibles = new Set(V.reales.map((f) => f.p));
+    F.todas.forEach((l) => { if (l.d >= R.R0 && l.d <= R.R1 && vale(l) && visibles.has(l.p)) { const k = `${l.prod}|${l.p}`, a = porPd.get(k) || { prod: l.prod, p: l.p, x: 0 }; a.x += l.valor - l.ref * l.cant; porPd.set(k, a); } });
+    const xs = [...porPd.values()].filter((a) => a.x * signo > 0).sort((a, b) => (b.x - a.x) * signo);
+    h = cab(st.kpi === 'sube' ? 'Quién subió el precio' : 'Quién bajó el precio') + `<p class="lf-frase">${esc(`${nP(lst.length)} sumaron ${solesG(V.sumaPpv(lst))} contra lo habitual. Se mide compra por compra, contra la mediana de los 90 días anteriores de ese producto; sin las compras para revisar.`)}</p>`
+      + dosListas('Producto por producto', xs.slice(0, 40).map((a) => item(F.prods[a.prod], F.noms[a.p], solesG(a.x), colorPpv(a.x), 'fila', a.p)).join(''));
+  } else {
+    const neto = V.sumaPpv(V.reales), ordS = [...V.sub].sort((a, b) => V.det(b).ppv - V.det(a).ppv).slice(0, 6), ordB = [...V.baj].sort((a, b) => V.det(a).ppv - V.det(b).ppv).slice(0, 6);
+    const pr = (f) => { const n = V.det(f).prods.size; return `${n} ${n === 1 ? 'prod' : 'prods'}`; };
+    h = cab('A quién le compras') + `<p class="lf-frase">${esc(`${V.en80.size} de ${nP(V.reales.length)} hacen el 80 % de lo comprado. Contra tu precio habitual, ${V.sub.length} subieron ${solesG(V.sumaPpv(V.sub))} y ${V.baj.length} bajaron ${solesG(V.sumaPpv(V.baj))}: en total pagaste ${soles(Math.abs(neto))} ${neto < 0 ? 'menos' : 'más'} de lo habitual.${V.yaNo.length ? ` A ${V.yaNo.length} proveedores del período anterior ya no se les compró (${soles(suma(V.yaNo, (f) => f.prev))}).` : ''}`)}</p>`
+      + dosListas('Los que más subieron', ordS.map((f) => item(F.noms[f.p], pr(f), solesG(V.det(f).ppv), 'rojo', 'fila', f.p)).join(''), 'Los que más bajaron', ordB.map((f) => item(F.noms[f.p], pr(f), solesG(V.det(f).ppv), 'verde', 'fila', f.p)).join(''));
+  }
+  return h + lfFuera(G.R.pagina, soles, esc);
 }
 
 function pintar() {
-  const { R, F } = G;
-  if (!R || !F || R.sello !== F.sello) {
-    if (G.raices.ficha && !G.raices.ficha.innerHTML) G.raices.ficha.innerHTML = '<div class="nota-v">Cargando…</div>';
-    return;
+  const { R, F, st } = G, raiz = G.raiz;
+  if (!raiz) return;
+  if (!R || !F || R.sello !== F.sello) { if (!raiz.innerHTML) raiz.innerHTML = '<div class="lf-vacio">Cargando…</div>'; return; }
+  G.X = st.foco != null ? calcular(F, R, st) : { rk: ranking(F, R) };
+  G.panK = `${F.sello}|${R.R0}|${R.R1}`;
+  if (!G.pan || G.pan.k !== G.panK) { G.pan = panorama(F, R); G.pan.k = G.panK; }
+  const V = listaVisible();
+  G.V = V;
+  const yL = raiz.querySelector('[data-tabla="lista"]')?.scrollTop || 0, yF = raiz.querySelector('.ft-l')?.scrollTop || 0, yR = raiz.querySelector('.lf-lista')?.scrollTop || 0;
+  const foco = raiz.querySelector('.lf-busca:focus'), sel = foco ? [foco.selectionStart, foco.selectionEnd] : null;
+  const verIzq = st.amp !== 'panel' || st.foco == null, verPanel = st.amp !== 'izq';
+  const tods = [['todos', `Todos · ${V.reales.length}`, ''], ['n80', `Hacen el 80 % · ${V.en80.size}`, 'Los que suman el 80 % de lo comprado'], ['nv', `Nuevos o vuelven · ${V.nv.length}`, 'Sin compras en el período anterior'], ['ya', `Ya no · ${V.yaNo.length}`, 'Se les compró en el período anterior y en este no']];
+  let h = `<div class="lf-main"><div class="lf-cab"><h2 class="lf-tit">Proveedores</h2><span class="lf-lugar" aria-hidden="true"></span>${lfMenuFamilias(R.pagina, st.menu === 'fam', soles, esc)}<span class="lf-esp"></span>`
+    + `<input class="lf-busca" type="search" value="${esc(st.q || '')}" placeholder="Buscar proveedor…" aria-label="Buscar proveedor"><button class="lf-pil" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div>`
+    + `<div class="lf-kpis">${kpisHtml(V)}</div><div class="lf-cuerpo" data-amp="${st.amp || ''}">`;
+  if (verIzq) {
+    const chip = st.kpi !== 'todos' ? `<button class="lf-quita" data-acc="kpi" data-v="${st.kpi}">${{ sube: 'Subieron', baja: 'Bajaron', solo: 'Sólo a uno' }[st.kpi]} ✕</button>` : '';
+    h += `<div class="lf-izq"><div class="lf-fl"><span class="lf-seg" role="group" aria-label="Qué proveedores">${tods.map(([k, t, tip]) => `<button class="${st.ver === k ? 'on' : ''}" data-acc="ver" data-v="${k}" aria-pressed="${st.ver === k}" title="${esc(tip)}">${esc(t)}</button>`).join('')}</span>${chip}<span class="lf-esp"></span><button class="lf-pil" data-acc="amp" data-v="izq">${st.amp === 'izq' ? 'Ver la ficha' : 'Ampliar'}</button></div>${listaHtml(V)}</div>`;
   }
-  G.X = calcular(F, R, G.st);
-  pintarRank();
-  pintarFicha();
+  if (verPanel) h += `<aside class="lf-panel" aria-label="Ficha">${st.foco != null && G.X.p != null ? fichaHtml() : resumenHtml(V)}</aside>`;
+  raiz.innerHTML = `${h}</div></div>`;
+  const pon = (q, y) => { const e = raiz.querySelector(q); if (e) e.scrollTop = y; };
+  pon('[data-tabla="lista"]', yL);
+  if (G.reseteaF) G.reseteaF = false; else pon('.ft-l', yF);
+  pon('.lf-lista', yR);
+  if (sel) { const e = raiz.querySelector('.lf-busca'); e.focus({ preventScroll: true }); e.setSelectionRange(...sel); }
+  lfPasarFecha(raiz, '.st-key-cp_prov_nativa_fecha');
 }
 
 // ── Los clics ────────────────────────────────────────────────────────────
 function accion(acc, val) {
   const st = G.st;
-  if (acc !== 'menu') st.menu = null;
+  if (acc === 'menu') { st.menu = st.menu === val ? null : val; if (!st.menu) avisarFamilias(); pintar(); return; }
+  if (st.menu) { st.menu = null; avisarFamilias(); }
   if (acc === 'orden') {
     const s = st.sort, d0 = val === 'nom' ? 1 : -1;
     st.sort = !s || s.col !== val ? { col: val, dir: d0 } : s.dir === d0 ? { col: val, dir: -s.dir } : null;
   } else if (acc === 'fila') {
     const p = +val;
-    st.foco = st.foco === p ? null : p;
-    st.prod = null;
+    st.foco = st.foco === p ? null : p; st.prod = null; st.per = null; G.reseteaF = true;
+    if (st.amp === 'izq') st.amp = null;
+    if (st.foco == null && st.amp === 'panel') st.amp = null;
   } else if (acc === 'excel') { excelRank(); return; }
-  else if (acc === 'menu') { st.menu = st.menu === val ? null : val; pintarFicha(); return; }
-  else if (acc === 'op') st.op = val;
-  else if (acc === 'win') { st.win = val === '' ? null : +val; }
-  else if (acc === 'mover') { const w = G.X.C.win; if (w) st.winIni = Math.min(Math.max(0, w.ini + (+val) * w.ven), w.iniMax); }
-  else if (acc === 'medida') st.medida = val;
-  else if (acc === 'gran') st.gran = val;
-  else if (acc === 'tab') st.tab = val;
-  else if (acc === 'pmodo') st.pmodo = val;
-  else if (acc === 'dmodo') st.dmodo = val;
-  else if (acc === 'prod') { const i = +val; st.prod = st.prod === i ? null : i; }
-  else if (acc === 'prod-curva') { const i = +val; st.prod = st.prod === i ? null : i; }
-  else if (acc === 'soltar') st.prod = null;
+  else if (acc === 'kpi') { st.kpi = st.kpi === val ? 'todos' : val; st.foco = null; st.sort = null; }
+  else if (acc === 'ver') { st.ver = val; }
+  else if (acc === 'amp') { st.amp = st.amp === val ? null : val; }
+  else if (acc === 'soltar') { st.foco = null; st.prod = null; st.per = null; if (st.amp === 'panel') st.amp = null; }
+  else if (acc === 'soltar-prod') { st.prod = null; st.medida = 'valor'; }
+  else if (acc === 'soltar-per') { st.per = null; }
+  else if (acc === 'sumar') { const pa = G.R.pagina; pa.elegidas = pa.todas.map((x) => x[0]); G.pendFam = pa.elegidas.slice(); avisarFamilias(); return; }
+  else if (acc === 'mover') { const w = G.X.C && G.X.C.win; if (w) st.winIni = Math.min(Math.max(0, w.ini + (+val) * w.ven), w.iniMax); }
+  else if (acc === 'tab') { st.tab = val; G.reseteaF = true; }
+  else if (acc === 'prod' || acc === 'prod-curva') { const i = +val; st.prod = st.prod === i ? null : i; if (st.prod == null) st.medida = 'valor'; }
   else if (acc === 'per-curva') {
-    // El clic en un período de la curva abre sus documentos.
-    st.tab = 'doc';
     const C = G.X.C;
-    if (C.gran === 'Documento') { const k = `doc|${+val.split('|')[1]}`; st.dmodo = 'doc'; st.abiertos.add(k); }
-    else { st.dmodo = 'per'; st.abiertos.add(`per|${C.gran}|${val}`); }
+    st.tab = 'doc'; st.dmodo = 'doc'; st.per = val; G.reseteaF = true;
+    if (C.gran === 'Documento') st.abiertos.add(`doc|${+val.split('|')[1]}`);
   } else return;
   pintar();
+}
+function avisarFamilias() {
+  if (G.pendFam && G.enviar) { const x = G.pendFam; G.pendFam = null; G.enviar('familias', x); }
 }
 function enlazar(raiz) {
   raiz.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-acc]');
     if (!b || !raiz.contains(b) || b.disabled) {
-      if (G.st.menu && !(ev.target.closest && ev.target.closest('.men'))) { G.st.menu = null; pintarFicha(); }
+      if (G.st.menu && !(ev.target.closest && ev.target.closest('.lf-ms'))) { G.st.menu = null; avisarFamilias(); pintar(); }
       return;
     }
+    if (b.matches('details summary *') && !b.dataset.acc) return;
     accion(b.dataset.acc, b.dataset.v);
+  });
+  raiz.addEventListener('input', (ev) => {
+    if (!ev.target.classList.contains('lf-busca')) return;
+    G.st.q = ev.target.value;
+    pintar();
+  });
+  raiz.addEventListener('change', (ev) => {
+    const t = ev.target, st = G.st;
+    if (t.matches('[data-pfam]')) {
+      const pa = G.R.pagina, el = pa.elegidas.length ? pa.elegidas : pa.todas.map((x) => x[0]);
+      pa.elegidas = t.checked ? [...el, t.value] : el.filter((x) => x !== t.value);
+      G.pendFam = pa.elegidas.slice();
+      pintar();
+      return;
+    }
+    const k = t.dataset && t.dataset.sel;
+    if (!k) return;
+    if (k === 'win') st.win = t.value === '' ? null : +t.value; else st[k] = t.value;
+    if (k === 'gran' || k === 'op') st.per = null;
+    pintar();
   });
   // Lo desplegado se recuerda: la ficha se vuelve a dibujar con cada clic.
   raiz.addEventListener('toggle', (ev) => {
@@ -907,44 +953,27 @@ function enlazar(raiz) {
     if (b && !(ev.relatedTarget && ev.relatedTarget.closest && ev.relatedTarget.closest('[data-acc="per-curva"]'))) pintarTip(null);
   });
   raiz.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && G.st.menu) { G.st.menu = null; pintarFicha(); }
+    if (ev.key === 'Escape' && G.st.menu) { G.st.menu = null; avisarFamilias(); pintar(); }
   });
 }
 
-const ESQ_RANK = '<div class="tabla"></div><p class="pie"><span></span>'
-  + '<button class="excel" data-acc="excel" title="Baja el ranking tal como se ve">Excel</button></p>';
-
 export default function (component) {
-  const { data, parentElement } = component;
+  const { data, parentElement, setTriggerValue } = component;
   if (!data || !data.parte) return;
   if (data.parte === 'ficha') {
-    let raiz = parentElement.querySelector('.cpvf');
-    if (!raiz) {
-      raiz = document.createElement('div');
-      raiz.className = 'cpvf';
-      parentElement.appendChild(raiz);
-      enlazar(raiz);
-      // Al cambiar de ancho, la curva se vuelve a dibujar a su medida.
-      let ancho = 0, espera = 0;
-      new ResizeObserver(() => {
-        if (Math.abs(raiz.clientWidth - ancho) < 2) return;
-        ancho = raiz.clientWidth;
-        clearTimeout(espera);
-        espera = setTimeout(() => { if (G.R && G.F && G.R.sello === G.F.sello && G.X) pintarFicha(); }, 120);
-      }).observe(raiz);
-    }
-    G.raices.ficha = raiz;
-    if (!G.F || G.F.sello !== data.sello) G.F = leerFicha(data);
+    if (!G.F || G.F.sello !== data.sello) { G.F = leerFicha(data); G.pan = null; }
   } else {
-    let raiz = parentElement.querySelector('.cpvr');
+    let raiz = parentElement.querySelector('.cpv');
     if (!raiz) {
       raiz = document.createElement('div');
-      raiz.className = 'cpvr';
-      raiz.innerHTML = ESQ_RANK;
+      raiz.className = 'lf cpv';
       parentElement.appendChild(raiz);
       enlazar(raiz);
+      // La fecha y el filtro de Python siguen a su hueco si cambia el ancho.
+      new ResizeObserver(() => lfPasarFecha(raiz, '.st-key-cp_prov_nativa_fecha')).observe(raiz);
     }
-    G.raices.rank = raiz;
+    G.raiz = raiz;
+    G.enviar = setTriggerValue;
     if (G.rankData !== data) {
       G.rankData = data; G.R = leerRank(data);
       // Detalle docs. comparte esta selección; su fragment puede estar ya dibujado.
