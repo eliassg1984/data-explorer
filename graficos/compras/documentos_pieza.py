@@ -1,4 +1,4 @@
-"""Detalle docs.: controles locales; fecha y aviso del ranking releen Python (#726)."""
+"""Detalle docs.: controles locales; fecha, familias y aviso del ranking releen Python (#726, #773)."""
 from graficos.movil import css_movil, js_movil
 import hashlib
 from pathlib import Path
@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from graficos.base import rango_tarjeta
-from ._comun import CATEGORIA_SEC, base_normalizada, selector_fecha_tarjeta
+from ._comun import CATEGORIA_SEC, base_normalizada, cambiar_familias, selector_fecha_tarjeta
 from . import documentos_datos as datos
 
 _DIR=Path(__file__).parent
@@ -16,7 +16,10 @@ _PIEZA=st.components.v2.component('compras_documentos',
     js=js_movil((_DIR.parent/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'documentos.js').read_text(encoding='utf-8')))
 
 
-def renderizar(d,cols):
+def renderizar(d,cols,extra=None,d_historia=None,familias=None):
+    """`d_historia` es el histórico SIN el filtro de familias y `extra` nombra sus columnas
+    de familia, IGV, tipo, ingreso y nota: viajan las líneas de otras familias para decir
+    el documento entero, y el habitual necesita los 90 días anteriores (#773)."""
     ss=st.session_state
     if ss.pop('_cp_docs_atajo_pendiente',False):
         # Los controles propios viven en el navegador; no hay widgets que
@@ -36,18 +39,26 @@ def renderizar(d,cols):
     contexto={'Familias de la página':ss.get('compras_graf_filtro_fam') or [],
               'Subfamilias de la página':ss.get('compras_graf_filtro_sub') or [],
               'Proveedores del ranking':top}
-    firma=(hashlib.sha256(pd.util.hash_pandas_object(b,index=True).values.tobytes()).hexdigest(),
-           tuple(top),str(contexto),str(rango),bool(cols[-1]),bool(cols[4]))
+    hist=d_historia if d_historia is not None and extra else None
+    bh=base_normalizada(hist,*cols) if hist is not None else b
+    firma=(hashlib.sha256(pd.util.hash_pandas_object(bh,index=True).values.tobytes()).hexdigest(),
+           tuple(top),str(contexto),str(rango),bool(cols[-1]),bool(cols[4]),repr(familias))
     cache=ss.get('_compras_documentos_cache')
     if cache is None or cache[0]!=firma:
-        cache=(firma,datos.armar(b,top,col_docu=bool(cols[-1]),col_punit=bool(cols[4]),contexto=contexto,rango=rango))
+        fuente=b
+        if hist is not None:
+            fuente=datos.con_detalle(hist,cols,extra)
+            if rango:
+                f=pd.to_datetime(fuente['fecha'],errors='coerce')
+                fuente=fuente[(f>=pd.Timestamp(rango[0]))&(f<=pd.Timestamp(rango[1]))]
+        cache=(firma,datos.armar(fuente,top,col_docu=bool(cols[-1]),col_punit=bool(cols[4]),contexto=contexto,rango=rango,pagina=familias))
         ss['_compras_documentos_cache']=cache
     P=dict(cache[1]);gran=ss.get('compras_prov_gran','Mes')
     P['inicial']=dict(gran=gran if gran in datos.GRANOS else 'Mes',
                        proveedores=None if set(inicial)==set(top) else inicial)
     st.markdown('''<style>
     .st-key-cp_docs_nativa{position:relative;gap:0!important}
-    .st-key-cp_docs_nativa_fecha{position:absolute;right:18px;top:12px;z-index:5;width:auto!important}
+    .st-key-cp_docs_nativa_fecha{position:absolute;left:210px;top:10px;z-index:5;width:auto!important}
     .st-key-cp_docs_nativa>[data-testid="stElementContainer"]{margin:0!important}
     </style>''',unsafe_allow_html=True)
     with st.container(key='cp_docs_nativa'):
@@ -56,4 +67,5 @@ def renderizar(d,cols):
                                   categoria=CATEGORIA_SEC['compras_sec_documentos'])
         # El evento sólo solicita releer la selección canónica de Python.
         # No aplica filtros ni importes enviados desde el navegador.
-        _PIEZA(key='compras_documentos_pieza',data=P,width='stretch',on_ranking_change=lambda:None)
+        _PIEZA(key='compras_documentos_pieza',data=P,width='stretch',on_ranking_change=lambda:None,
+               on_familias_change=lambda:cambiar_familias('compras_documentos_pieza','_cp_docs_atajo_pendiente',familias))

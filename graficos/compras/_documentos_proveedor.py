@@ -72,10 +72,11 @@ llamador), y escribir las del otro sería tocar widgets ajenos."""
 
 
 def render_seccion(d, col_prov, col_prod, col_cant, col_valor, col_punit,
-                   col_um, col_fecha, col_docu):
-    """Firma conservada; fecha compartida y controles propios (#726)."""
+                   col_um, col_fecha, col_docu, extra=None, d_historia=None, familias=None):
+    """Fecha compartida y controles propios (#726, #773)."""
     from .documentos_pieza import renderizar
-    return renderizar(d,(col_prov,col_prod,col_cant,col_valor,col_punit,col_um,col_fecha,col_docu))
+    return renderizar(d,(col_prov,col_prod,col_cant,col_valor,col_punit,col_um,col_fecha,col_docu),
+                      extra=extra,d_historia=d_historia,familias=familias)
 
 
 def _render_seccion_legacy(d, col_prov, col_prod, col_cant, col_valor, col_punit,

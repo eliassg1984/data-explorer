@@ -342,7 +342,9 @@ mantiene la categoría compartida con Proveedores; las firmas de
 `_documentos_proveedor.py` y el dibujante de referencia se conservan.
 El montaje del ranking avisa cambios de selección; con el mismo historial
 y rango, documentos solicita releer sólo su fragment y toma el filtro de
-Python. Sus controles locales no envían eventos. Ver regla #726.
+Python. Ver regla #726. Desde la #773, la pantalla: abre en la lista, los cuatro
+indicadores, la ficha al costado con las líneas fuera del filtro, el habitual
+contra Producto, las familias de la página y que no pida scroll en ninguna zona.
 
 `test_produccion_periodo_pieza.py` vigila Producción › Órdenes de
 producción como instancia propia del componente de Movimientos: los cuatro

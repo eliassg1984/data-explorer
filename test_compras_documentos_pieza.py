@@ -1,4 +1,5 @@
-"""Detalle docs. nativo: paridad, pivote configurable y ficha completa (#726)."""
+"""Detalle docs. nativo: paridad, pivote configurable, ficha completa y la pantalla con
+lista, indicadores y ficha al costado, con lo que queda fuera del filtro (#726, #773)."""
 import inspect
 import json
 import tempfile
@@ -13,6 +14,7 @@ import pandas as pd
 from graficos.compras import documentos_datos as datos
 from graficos.compras import _documentos_proveedor as anterior
 from graficos.compras import _comun as comun
+from graficos.compras import producto
 from graficos.compras._comun import base_normalizada, agregar_periodo
 
 ROOT=Path(__file__).parent
@@ -38,6 +40,24 @@ def muestra():
     return base_normalizada(d,*COLS)
 
 
+COLS_D=('PROV','PROD','Q','V','PU','U','F','DOC')
+EXTRA=dict(fam='FAM',igv='IGV',tipo='TIPO',proc='PROC',nc='NC')
+
+
+def detalle():
+    """Una factura con líneas en dos familias, una guía, una compra a diez veces su precio
+    y una fila sin proveedor, que `base_normalizada` descarta."""
+    filas=[]
+    for i,f in enumerate(pd.date_range('2026-06-01','2026-09-30',freq='7D')):
+        filas.append(('ALFA','Arroz','UNO','SUB',f,f'F0F00100000{100+i:04d}',10,100,10,'KILOS','Factura',18,f,0))
+    filas+=[('ALFA','Arroz','UNO','SUB',pd.Timestamp('2026-10-05'),'F0F001000000001',10,200,20,'KILOS','Factura',36,pd.Timestamp('2026-10-05 10:30'),0),
+            ('ALFA','Bolsas','DOS','SUB',pd.Timestamp('2026-10-05'),'F0F001000000001',5,50,10,'UND','Factura',9,pd.Timestamp('2026-10-05 10:30'),0),
+            (float('nan'),'X','UNO','SUB',pd.Timestamp('2026-10-05'),'F0F001000000009',1,1,1,'UND','Factura',0,pd.Timestamp('2026-10-05'),0),
+            ('BETA','Arroz','UNO','SUB',pd.Timestamp('2026-10-06'),'G0F001000000002',10,1000,100,'KILOS','Guía de Remisión',0,pd.Timestamp('2026-10-06 08:00'),0),
+            ('BETA','Bolsas','DOS','SUB',pd.Timestamp('2026-10-07'),'F0F001000000003',5,50,10,'UND','Factura',9,pd.Timestamp('2026-10-07'),0)]
+    return pd.DataFrame(filas,columns=['PROV','PROD','FAM','SUB','F','DOC','Q','V','PU','U','TIPO','IGV','PROC','NC'])
+
+
 def payload(b=None,top=None):
     b=muestra() if b is None else b
     return datos.armar(b,top if top is not None else ['PROV A','PROV B','PROV C'])
@@ -57,7 +77,7 @@ class Contrato(unittest.TestCase):
     def test_identidad_precision_y_firmas(self):
         b=muestra();P=payload(b);json.dumps(P,allow_nan=False)
         self.assertEqual(len(P['lineas']),len(b));self.assertEqual(P['sello'],payload(b)['sello'])
-        self.assertEqual(len(inspect.signature(anterior.render_seccion).parameters),9)
+        self.assertEqual(len(inspect.signature(anterior.render_seccion).parameters),12)
         self.assertEqual(len(inspect.signature(anterior.tabla_documentos).parameters),6)
         self.assertEqual(len([d for d in P['documentos'] if d[3]=='F001-0001']),3)
         b.loc[0,'valor']+=.000000001;self.assertNotEqual(P['sello'],payload(b)['sello'])
@@ -78,6 +98,27 @@ class Contrato(unittest.TestCase):
         for gran in ['Día','Semana']:
             c=P['calendario'][gran];self.assertNotEqual(c['por_fecha'][0],c['por_fecha'][1])
             self.assertTrue(any('2024' in t for t in c['rotulos'].values()))
+
+    def test_guias_legibles_y_detalle_contra_producto(self):
+        s=comun.documento_legible(pd.Series(['G0F001000037384','F0F001000006345','F0001-123']))
+        self.assertEqual(s.tolist(),['F001-37384','F001-6345','F0001-123'])
+        d=detalle();b=datos.con_detalle(d,COLS_D,EXTRA)
+        # La posición de cada fila se conserva: IGV y tipo no se corren aunque falte un proveedor.
+        self.assertEqual(b[b['docu']=='G0F001000000002']['tipo'].iloc[0],'Guía de Remisión')
+        self.assertEqual(b[b['docu']=='F0F001000000001']['igv'].sum(),45.0)
+        self.assertFalse(b['prov'].isin(['nan']).any())
+        # El habitual y la marca son los de Compras › Producto.
+        n=producto._normalizar(d,'PROD','FAM','SUB','V','Q','U','F','PROV','DOC');h=producto._con_referencia(n)
+        for prod,fecha,ref,flag in zip(h['prod'],h['fecha'],h['ref'],h['flag']):
+            x=b[(b['prod']==prod)&(b['fecha']==fecha)]
+            if x.empty:continue
+            x=x.iloc[0];self.assertEqual(x['flag'],flag)
+            if ref==ref:self.assertAlmostEqual(x['ref'],ref,places=6)
+        self.assertIn('precio',set(b['flag']))
+        P=datos.armar(b,['ALFA','BETA'],pagina=dict(todas=[['UNO',10.],['DOS',5.]],elegidas=['UNO']))
+        json.dumps(P,allow_nan=False)
+        self.assertEqual(len(P['documentos'][0]),8);self.assertEqual(len(P['lineas'][0]),13)
+        self.assertEqual(P['pagina']['todas'][0],['UNO','Uno',10.]);self.assertEqual(P['familias'],['Dos','Uno'])
 
     def test_cero_neto_vacio_y_documento_estable(self):
         b=muestra();b=b.iloc[:2].copy();b['valor']=[10,-10];P=payload(b)
@@ -171,6 +212,7 @@ class Navegador(unittest.TestCase):
 
     def test_configuracion_arrastre_orden_y_ficha_teclado(self):
         root=self.mount();pg=self.pg
+        root.locator('[data-a=modo][data-v="Tabla dinámica"]').click()
         root.locator('[data-a=config]').click()
         root.locator('[data-campo=Producto]').drag_to(root.locator('.dc-eje[data-eje=columnas]'))
         self.assertIn('Producto',pg.evaluate('__comprasDocs.s.columnas'));self.assertNotIn('Producto',pg.evaluate('__comprasDocs.s.filas'))
@@ -188,7 +230,7 @@ class Navegador(unittest.TestCase):
 
     def test_ejes_numericos_y_columnas_completas_en_excel(self):
         self.mount()
-        r=self.pg.evaluate('''()=>{const G=__comprasDocs;Object.assign(G.s,{filas:['Cantidad'],columnas:['Valor'],nCols:1});
+        r=self.pg.evaluate('''()=>{const G=__comprasDocs;Object.assign(G.s,{modo:'Tabla dinámica',filas:['Cantidad'],columnas:['Valor'],nCols:1});
           __docsDatos.pintar(G);const H=__docsDatos.exportar(G).find(h=>h.nombre==='Tabla dinámica');return {n:G.D.piv.columnas.length,vis:G.tablas.pivot.cols.length,head:H.cabeza.length,total:G.D.piv.raiz.total.v}}''')
         self.assertEqual(r['vis'],1);self.assertGreater(r['n'],1);self.assertEqual(r['head'],r['n']+2)
         self.assertAlmostEqual(r['total'],float(self.b.valor.sum()),places=7)
@@ -213,12 +255,83 @@ class Navegador(unittest.TestCase):
                 for word in ['Contexto','Tabla dinámica','Ficha completa','Rango compartido','<v>12.123457</v>']:self.assertIn(word,text)
                 self.assertNotIn('<f>',text)
 
+    def pag(self,elegidas=('UNO',)):
+        d=detalle();b=datos.con_detalle(d,COLS_D,EXTRA);b=b[b['fecha']>='2026-10-01']
+        return datos.armar(b,['ALFA','BETA'],rango=(pd.Timestamp('2026-10-01'),pd.Timestamp('2026-10-31')),
+                           pagina=dict(todas=[['UNO',1200.],['DOS',100.]],elegidas=list(elegidas)))
+
+    def test_indicadores_lo_que_queda_afuera_y_ficha_entera(self):
+        P=self.pag()
+        r=self.pg.evaluate('''P=>{const D=__docsDatos.calcular(P,__docsDatos.inicial());return{res:D.resumen,docs:D.docs,k:Object.fromEntries(Object.entries(D.kpis).map(([k,v])=>[k,v.length]))}}''',P)
+        # La familia DOS no suma, pero su línea sigue en el documento.
+        self.assertAlmostEqual(r['res']['valor'],1200);self.assertEqual(r['res']['documentos'],2)
+        self.assertEqual(r['k'],{'todos':2,'guia':1,'raro':1,'parcial':1})
+        f=next(d for d in r['docs'] if d['nAfuera'])
+        self.assertAlmostEqual(f['valor'],200);self.assertAlmostEqual(f['vAfuera'],50);self.assertAlmostEqual(f['completo'],250);self.assertAlmostEqual(f['igv'],36);self.assertAlmostEqual(f['total'],236)
+        g=next(d for d in r['docs'] if d['tipo'].startswith('Gu'));self.assertEqual(g['numero'],'F001-2');self.assertEqual(g['nfl'],1)
+        # Un indicador filtra lista y totales, y los otros no caen a cero.
+        k=self.pg.evaluate('''P=>{const D=__docsDatos.calcular(P,__docsDatos.inicial({kpi:'guia'}));return[D.docs.length,D.resumen.valor,D.kpis.todos.length]}''',P)
+        self.assertEqual(k[0],1);self.assertAlmostEqual(k[1],1000);self.assertEqual(k[2],2)
+        # Sin el filtro, nada queda afuera.
+        n=self.pg.evaluate('''P=>__docsDatos.calcular(P,__docsDatos.inicial()).kpis.parcial.length''',self.pag(()))
+        self.assertEqual(n,0)
+
+    def test_ui_lista_ficha_al_costado_ampliar_y_familias(self):
+        P=self.pag();root=self.mount(P);pg=self.pg
+        # Abre en la lista, sin tabla dinámica, con el resumen al costado.
+        self.assertEqual(pg.evaluate('__comprasDocs.s.modo'),'Documentos')
+        self.assertIn('Qué hay en estos documentos',root.locator('.dc-panel h3').inner_text())
+        self.assertIn('Fuera de esta cuenta',root.locator('.dc-fuera').inner_text())
+        self.assertEqual(root.locator('.dc-kpi').count(),4)
+        self.assertEqual(root.locator('.dc-chip.lav').count(),1)
+        # La ficha va al costado: dentro y fuera del filtro, y dice cuánto es el documento.
+        root.locator('tr[data-a=doc]').filter(has=pg.locator('.dc-chip.lav')).click()
+        self.assertEqual(root.locator('.dc-panel h3').inner_text(),'F001-1')
+        self.assertIn('250.00',root.locator('.dc-frase').inner_text())
+        self.assertEqual(root.locator('.dc-panel tbody tr').count(),2);self.assertEqual(root.locator('.dc-panel tr.tenue').count(),1)
+        self.assertIn('sólo lo que entra',root.locator('.dc-cifras').inner_text())
+        root.locator('.dc-panel [data-a=amp]').click();self.assertEqual(root.locator('.dc-izq').count(),0)
+        root.locator('.dc-panel [data-a=amp]').click();root.locator('[data-a=cerrar]').click()
+        root.locator('.dc-izq [data-a=amp]').click();self.assertEqual(root.locator('.dc-panel').count(),0);self.assertIn('IGV',root.locator('thead').inner_text())
+        root.locator('.dc-izq [data-a=amp]').click()
+        # Un indicador deja lo suyo y se quita con su chip.
+        root.locator('.dc-kpi[data-v=raro]').click();self.assertEqual(root.locator('tr[data-a=doc]').count(),1)
+        root.locator('.dc-fl [data-a=kpi]').click();self.assertEqual(root.locator('tr[data-a=doc]').count(),2)
+        # Un proveedor del resumen filtra.
+        root.locator('.dc-fi[data-a=provuno]').first.click();self.assertEqual(pg.evaluate('__comprasDocs.s.proveedores.length'),1)
+        root.locator('.dc-fl [data-a=provtop]').click();self.assertIsNone(pg.evaluate('__comprasDocs.s.proveedores'))
+        # Las líneas: precio, habitual y su marca.
+        root.locator('[data-a=modo][data-v=Líneas]').click();self.assertIn('revisar',root.locator('tbody').inner_text())
+        # Con un solo período, la tabla dinámica no repite el total; el Excel sí lo trae.
+        root.locator('[data-a=modo][data-v="Tabla dinámica"]').click()
+        self.assertEqual(root.locator('thead th').count(),2);self.assertEqual(root.locator('.dc-panel').count(),0)
+        # El menú de familias avisa al cerrarse, una vez; «Sumarlas», enseguida.
+        root.locator('[data-a=menu]').click();root.locator('[data-a=pfam][value=DOS]').check()
+        self.assertEqual(pg.evaluate('__requests.length'),0);pg.keyboard.press('Escape')
+        self.assertEqual(pg.evaluate('__requests'),[['familias',['UNO','DOS']]])
+        root=self.mount(self.pag());root.locator('[data-a=sumar]').click()
+        self.assertEqual(pg.evaluate('__requests'),[['familias',['UNO','DOS']]])
+
+    def test_una_pantalla_en_cada_zona(self):
+        root=self.mount(self.pag());pg=self.pg
+        self.assertEqual(root.locator('.dc-main').evaluate('e=>Math.round(e.getBoundingClientRect().height)'),575)
+        for m in ('Documentos','Líneas','Tabla dinámica'):
+            root.locator(f'[data-a=modo][data-v="{m}"]').click()
+            self.assertLessEqual(root.locator('.dc-main').evaluate('e=>e.scrollHeight-e.clientHeight'),1,m)
+        pg.set_viewport_size({'width':390,'height':844})
+        try:
+            for m in ('Documentos','Líneas','Tabla dinámica'):
+                root.locator(f'[data-a=modo][data-v="{m}"]').click()
+                self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'),390,m)
+        finally:
+            pg.set_viewport_size({'width':1323,'height':619})
+
     def test_tandas_largas_exportacion_y_movil(self):
         b=pd.concat([self.b.iloc[:1].assign(prod=f'Producto {i:04d}',docu=f'F-{i:04d}') for i in range(540)],ignore_index=True)
         root=self.mount(payload(b));root.locator('[data-a=modo][data-v=Líneas]').click()
-        t=root.locator('[data-tabla=lineas]');self.assertEqual(t.locator('tbody tr').count(),150)
+        t=root.locator('[data-tabla=lineas]');self.assertEqual(t.locator('tbody tr:not(.tot)').count(),150)
         for _ in range(3):t.evaluate('e=>{e.scrollTop=e.scrollHeight;e.dispatchEvent(new Event("scroll"))}')
-        self.assertGreater(t.locator('tbody tr').count(),150)
+        self.assertGreater(t.locator('tbody tr:not(.tot)').count(),150)
         h=self.pg.evaluate('__docsDatos.exportar(__comprasDocs)');self.assertEqual(len(next(x for x in h if x['nombre']=='Líneas filtradas')['filas']),540)
         self.pg.set_viewport_size({'width':390,'height':844});self.assertLessEqual(self.pg.evaluate('document.documentElement.scrollWidth'),390)
         self.pg.set_viewport_size({'width':1323,'height':619});self.assertEqual(root.locator('.dc-main').evaluate('e=>Math.round(e.getBoundingClientRect().height)'),575)

@@ -921,10 +921,21 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # ranking del que sale— y no uno propio: ver `CATEGORIA_SEC`.
             # `_d_sec` memoiza por categoría, así que este recorte ya está
             # hecho y no se paga dos veces.
+            #
+            # Viaja además el histórico sin el filtro de familias: una factura con
+            # líneas en otras familias tiene que poder decirlo, y el precio
+            # habitual mira 90 días atrás (regla #773).
             with st.container(key="compras_docs_wrap"):
+                _docs_todas = (_ops_src[_ops_src[col_subfam].isin(sub_sel)]
+                               if sub_sel and col_subfam in _ops_src.columns else _ops_src)
                 _docs_seccion(_d_sec("compras_sec_documentos"),
                               col_prov, col_prod, col_cant, col_valor,
-                              col_punit, col_um, col_fecha, col_docu)
+                              col_punit, col_um, col_fecha, col_docu,
+                              extra=dict(fam=col_fam, igv=col_igv, tipo=col_tipo_doc,
+                                         proc=_resolver(_ops_src, ["Fecha_proceso_doc", "Fecha proceso doc"]),
+                                         nc=_resolver(_ops_src, ["Valor_nc", "Valor nc"])),
+                              d_historia=_docs_todas,
+                              familias=_familias_de("compras_sec_documentos"))
 
     _DIBUJANTES = {
         "compras_sec_proveedor":     _dib_proveedor,

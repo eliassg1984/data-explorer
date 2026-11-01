@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-772 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+773 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (253)
 
@@ -842,7 +842,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 
-**Datos, R2 y DuckDB** (130)
+**Datos, R2 y DuckDB** (131)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -974,6 +974,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#752** — El cierre es FÍSICO: se cuenta el día 1 por la mañana y se abre después; lo digitado hasta la…
 - **#753** — Las compras del mes nuevo procesadas antes de la apertura van a su mes: compras.parquet trae…
 - **#761** — Lo «Sin descargo» del POS suma en la venta y no se observa como «sin costo»
+- **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
 
 **SUNAT y SIRE** (77)
 
@@ -1134,7 +1135,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (241)
+**Decisiones de diseño y UX** (242)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1377,6 +1378,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#770** — Compras: Período y Precios en una pantalla, con el efecto del precio a la vista
 - **#771** — Compras › Año pasado en una pantalla: los indicadores son las partes de la diferencia
 - **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
+- **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -57939,6 +57941,29 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      - **Dos «sin plato» para el mismo mes, a propósito**: Cierres S/ 57.264 y el flujo de Productos S/ 54.623,
        porque el flujo es neto por producto (#743).
      (2026-10-31.)
+
+773. **Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero.**
+   Abría en una tabla dinámica de 45 proveedores con dos columnas idénticas (el mes y el Total),
+   con 12 controles antes del primer dato y la ficha abajo, en otra tarjeta. Ahora cuatro
+   indicadores que filtran (Documentos, Guías sin factura, Con precio raro, Con líneas afuera),
+   Documentos | Líneas | Tabla dinámica, y al costado el resumen o la ficha.
+   - **«Documento completo» mentía con el filtro de familias**: en octubre de 2026, 8 documentos
+     tenían S/ 2.333 en familias fuera del filtro (F001-38028: S/ 214,66 de S/ 623,14). Por eso viaja
+     el histórico sin ese filtro (`d_historia`): las líneas de afuera se ven en gris en la ficha, no
+     suman en la lista y la frase dice cuánto suma el documento entero.
+   - **El habitual y la marca son los de Producto** (`datos.con_detalle`), sobre el histórico entero
+     porque el habitual mira 90 días atrás. Se calcula sólo cuando cambia la firma.
+   - **Los indicadores se cuentan antes de filtrar por ellos** (`cache.kpis`): si no, al tocar uno
+     los otros tres caerían a cero.
+   - **Con una búsqueda, las cifras suman sólo las líneas que coinciden** (como antes, y sirve:
+     «cuánto compré de lomo»); la ficha muestra el documento entero, y la nota lo dice.
+   - **La tabla dinámica se quedó entera** (`pivot`, `valor`, «Configurar tabla»). Con un solo período
+     no dibuja la columna Total, que repetía la de al lado; el Excel la conserva.
+   - **La fecha sigue compartida con Por Proveedor** (`CATEGORIA_SEC`, regla #726).
+   - **`documento_legible` también decodifica las guías**: `G0F001000037384` es F001-37384.
+   - **Lo descartado, medido**: «ingresado tarde» no es un indicador. En octubre ningún documento
+     tardó más de 2 días y en 12 meses el máximo fue 25; la hora va en la ficha.
+   Lo vigila `test_compras_documentos_pieza.py`.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

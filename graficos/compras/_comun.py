@@ -885,7 +885,8 @@ def documento_legible(num_documento):
     devuelve entero, que es la única respuesta honesta cuando el formato no
     es el que se sabe decodificar."""
     s = num_documento.astype(str).str.strip()
-    _codificado = (s.str.len() == 15) & s.str.startswith("F0")
+    # «F0» factura, «G0» guía: `G0F001000037384` es la guía F001-37384.
+    _codificado = (s.str.len() == 15) & s.str.match(r"^[FG]0")
     return s.where(~_codificado, _llave_documento_parquet(s))
 
 
