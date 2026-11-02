@@ -322,7 +322,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 - **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
 
-**Layout y alturas** (111)
+**Layout y alturas** (110)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -434,7 +434,6 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#765** — Stock en una pantalla: lista con niveles y ficha al costado, en las dos perspectivas
 - **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
 - **#774** — Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de…
-- **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
 
 **Plotly y figuras** (130)
 
@@ -1138,7 +1137,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (243)
+**Decisiones de diseño y UX** (244)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1383,6 +1382,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
 - **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
 - **#774** — Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de…
+- **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58011,6 +58011,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 775. **Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre.**
    El usuario aprobó el boceto horizontal con datos reales el 2026-11-01: navegación sobre
    lavanda, Carta | Combos en una hoja blanca, cuatro indicadores sin cajas, lista y ficha.
+   A pedido, sus cifras usan 17 px y sus rótulos 11 px, como Alza; la franja tiene menos alto.
    - **La fecha no se reemplaza.** Sigue `base.selector_fecha_tarjeta`, con `ctx_fecha` propio,
      los atajos canónicos y todo el histórico. `carta_costeada.js::medir` ubica su fila nativa
      sobre `.cc-fecha-lugar`, también al cambiar el ancho. La representación simplificada

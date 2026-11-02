@@ -198,15 +198,15 @@
 .cc .cc-sel>span { color:var(--text-secondary); }
 .cc .cc-sel select { border:0; background:transparent; padding:0; width:100%; min-width:0; text-overflow:ellipsis; }
 .cc .cc-sel.on { background:var(--accent-tint); }
-.cc .cc-kpis { flex:none; padding:8px var(--cc-space); display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:24px; background:var(--rail-fondo); border-top:1px solid var(--marco-fondo); border-bottom:1px solid var(--marco-fondo); position:relative; }
+.cc .cc-kpis { flex:none; padding:6px var(--cc-space); display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:24px; background:var(--rail-fondo); border-top:1px solid var(--marco-fondo); border-bottom:1px solid var(--marco-fondo); position:relative; }
 .cc .cc-kpi-zona { min-width:0; position:relative; padding-right:20px; }
 .cc .cc-kpi { border:0; background:transparent; display:block; width:100%; padding:0; text-align:left; border-bottom:2px solid transparent; }
 .cc .cc-kpi:disabled { opacity:1; }
 .cc .cc-kpi.on { border-bottom-color:var(--accent); }
-.cc .cc-kpi-rot { display:block; font-size:12px; color:var(--text-secondary); line-height:16px; }
-.cc .cc-kpi-lin { display:flex; align-items:center; gap:12px; height:32px; }
-.cc .cc-kpi-val { font-size:22px; font-weight:500; line-height:32px; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.cc .cc-kpi-sub { display:none; color:var(--text-secondary); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cc .cc-kpi-rot { display:block; font-size:11px; color:var(--text-secondary); line-height:16px; }
+.cc .cc-kpi-lin { display:flex; align-items:center; gap:8px; height:24px; }
+.cc .cc-kpi-val { font-size:17px; font-weight:500; line-height:24px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.cc .cc-kpi-sub { display:none; color:var(--text-secondary); font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .cc .cc-meta { position:relative; height:6px; flex:1; border-radius:4px; background:color-mix(in srgb,var(--focus-lavender) 25%,transparent); display:none; }
 .cc .cc-meta i { display:block; height:100%; border-radius:4px; background:var(--accent); }
 .cc .cc-meta b { position:absolute; height:10px; width:1px; top:-2px; background:var(--text-primary); }
@@ -399,7 +399,6 @@
 @media(max-width:500px) {
   .cc { --cc-space:12px; }
   .cc-kpis { gap:12px; }
-  .cc-kpi-val { font-size:20px; }
   .cc-kpi-rot { white-space:normal; }
   .cc-cab { gap:8px; }
   .cc-der { gap:8px; }
