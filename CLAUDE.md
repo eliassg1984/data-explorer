@@ -2004,7 +2004,10 @@ filtros secundarios, Detalle, Ampliar/Soltar y retorno de móvil a laptop.
 Desde la #776 el marco (navegación sobre lavanda, hoja por vista) es de toda la
 app; lo de adentro de las demás vistas sigue como estaba. **La escala de letra
 (#777, a pedido):** cifras de indicador en 17 px y nada visible bajo 12 px,
-salvo la «ⓘ»; vale para toda vista que pase a este lenguaje.
+salvo la «ⓘ»; vale para toda vista que pase a este lenguaje. **Desde la #778
+toda Recetas lo usa**: Alza, Recetas base, Cambios, Vs porcionado y Nuevo
+Costeo llevan al final de su `.css` un bloque «#778» (franja de indicadores de
+borde a borde desde 901 px, lista y ficha sin caja, segmentados con subrayado).
 
 **«Nuevo Costeo» también, desde el mismo día** (regla #697): la tabla de la
 receta y el precio son `graficos/nuevo_costeo.js` + `.css`; el buscador, el

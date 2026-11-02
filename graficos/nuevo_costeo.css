@@ -26,7 +26,7 @@
 .nc-zt { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 .nc-tabla { flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .nc-tabla table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
-.nc-tabla th { position: sticky; top: 0; z-index: 1; background: var(--bg-card-tenue); text-align: left; font-size: 11px;
+.nc-tabla th { position: sticky; top: 0; z-index: 1; background: var(--bg-card-tenue); text-align: left; font-size: 12px;
   font-weight: 600; color: var(--text-secondary); padding: 6px 7px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .nc-tabla th.num, .nc-tabla td.num { text-align: right; }
 .nc-tabla td { padding: 4px 7px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; white-space: nowrap; }
@@ -36,13 +36,13 @@
 .nc-ins { max-width: 320px; }
 .nc-ins div { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .nc-ins b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nc-ins > span { display: block; font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden;
+.nc-ins > span { display: block; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; padding-left: 2px; }
-.nc-chip { flex: none; font-size: 10.5px; padding: 1px 6px; border-radius: 9px; background: var(--line-soft); color: var(--text-secondary); cursor: help; }
+.nc-chip { flex: none; font-size: 12px; padding: 1px 6px; border-radius: 9px; background: var(--line-soft); color: var(--text-secondary); cursor: help; }
 .nc-chip.lav { background: var(--accent-light); color: var(--accent-deep); }
 .nc-chip.azul { background: var(--bg-hover); color: var(--accent-deep); border: 1px solid var(--border-lavender); }
 .nc-chip.ambar { background: var(--warning-bg); color: var(--warning-text); }
-.nc-tag { flex: none; font-size: 10.5px; padding: 1px 6px; border-radius: 9px; background: var(--warning-bg); color: var(--warning-text); }
+.nc-tag { flex: none; font-size: 12px; padding: 1px 6px; border-radius: 9px; background: var(--warning-bg); color: var(--warning-text); }
 .nc-cant, .nc-pre { white-space: nowrap; }
 .nc-cant input, .nc-pre input { width: 66px; height: 26px; border: 1px solid var(--border); border-radius: 6px; text-align: right;
   padding: 0 4px; background: var(--bg-card); font-variant-numeric: tabular-nums; }
@@ -52,9 +52,9 @@
    una diga «ml» y otra «porcion». Antes iban alineados a la derecha y el
    campo se corría con el largo de la unidad. */
 .nc-cant, .nc-pre { text-align: left; }
-.nc-und { display: inline-block; width: 58px; margin-left: 4px; font-size: 11px; color: var(--text-secondary);
+.nc-und { display: inline-block; width: 58px; margin-left: 4px; font-size: 12px; color: var(--text-secondary);
   vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nc-sol { display: inline-block; width: 16px; font-size: 11px; color: var(--text-secondary); vertical-align: middle; }
+.nc-sol { display: inline-block; width: 16px; font-size: 12px; color: var(--text-secondary); vertical-align: middle; }
 .nc-fijo { display: inline-block; width: 78px; text-align: right; padding-right: 5px; box-sizing: border-box; }
 .nc-cant input, .nc-pre input { vertical-align: middle; box-sizing: border-box; }
 .nc-tabla th.nc-th-in { text-align: left; }
@@ -63,7 +63,7 @@
 .nc-costo div { display: flex; align-items: center; gap: 6px; }
 .nc-costo i { display: block; height: 8px; border-radius: 2px; background: var(--focus-lavender); flex: none; }
 .nc-costo b { font-weight: 600; }
-.nc-costo span { font-size: 11px; color: var(--text-muted); }
+.nc-costo span { font-size: 12px; color: var(--text-muted); }
 .nc-vs { font-size: 12px; color: var(--text-muted); }
 .nc-vs.sube { color: var(--danger-text); }
 .nc-vs.baja { color: var(--success-text); }
@@ -76,7 +76,7 @@
 .nc-pie-txt { font-size: 12px; color: var(--text-secondary); }
 .nc-pie-bot { display: flex; gap: 6px; }
 .nc-total { margin-left: auto; display: flex; align-items: baseline; gap: 8px; }
-.nc-total span { font-size: 11px; color: var(--text-secondary); }
+.nc-total span { font-size: 12px; color: var(--text-secondary); }
 .nc-total b { font-size: 16px; }
 .nc-btn { height: 28px; padding: 0 10px; border-radius: 8px; cursor: pointer; font-size: 12px; border: 1px solid var(--border-lavender);
   background: var(--bg-card); color: var(--accent-deep) !important; white-space: nowrap; }
@@ -92,7 +92,7 @@
 .nc-ptit { font-size: 13px; font-weight: 700; }
 .nc-pv { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
 .nc-pv > label, .nc-pv > div { display: grid; gap: 2px; }
-.nc-pv span { font-size: 11px; color: var(--text-secondary); }
+.nc-pv span { font-size: 12px; color: var(--text-secondary); }
 .nc-pv-in { display: flex !important; align-items: center; gap: 4px; height: 34px; border: 1px solid var(--border-lavender); border-radius: 8px;
   padding: 0 8px; background: var(--bg-card); }
 .nc-pv-in input { width: 72px; border: 0; outline: none; font-size: 15px; font-weight: 700; background: transparent; }
@@ -105,17 +105,17 @@
 .nc-nota { font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
 .nc-barra { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--line-soft); }
 .nc-barra i, .nc-ley i { display: block; height: 14px; }
-.nc-ley { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11px; color: var(--text-secondary); }
+.nc-ley { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; color: var(--text-secondary); }
 .nc-ley span { display: flex; align-items: center; gap: 4px; }
 .nc-ley i { width: 8px; height: 8px; border-radius: 2px; }
 i.c { background: var(--accent); } i.c.ambar { background: var(--warning); } i.c.rojo { background: var(--danger); } i.c.verde { background: var(--accent); }
 i.u { background: var(--success); opacity: .55; }
 i.r { background: var(--serie-1); opacity: .6; }
 i.g { background: var(--serie-2); opacity: .55; }
-.nc-crot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-secondary); margin-bottom: 4px; }
+.nc-crot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
 .nc-crot label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
 .nc-canales table { border-collapse: collapse; width: 100%; font-size: 12px; }
-.nc-canales th { font-size: 10.5px; color: var(--text-secondary); font-weight: 600; text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--border); }
+.nc-canales th { font-size: 12px; color: var(--text-secondary); font-weight: 600; text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--border); }
 .nc-canales td { padding: 3px 4px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
 .nc-canales .num { text-align: right; }
 .nc-canales input { width: 62px; height: 22px; border: 1px solid var(--border); border-radius: 5px; text-align: right; padding: 0 4px;
@@ -124,10 +124,10 @@ i.g { background: var(--serie-2); opacity: .55; }
 .nc-obj { text-align: left; border: 1px solid var(--border-lavender); border-radius: 8px; background: var(--accent-tint); padding: 5px 10px;
   cursor: pointer; display: grid; gap: 1px; }
 .nc-obj:hover { border-color: var(--accent); }
-.nc-obj span { font-size: 11px; color: var(--accent-deep); }
+.nc-obj span { font-size: 12px; color: var(--accent-deep); }
 .nc-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
 .nc-cifras div { display: grid; }
-.nc-cifras span { font-size: 11px; color: var(--text-secondary); }
+.nc-cifras span { font-size: 12px; color: var(--text-secondary); }
 .nc-cifras b { font-size: 14px; }
 .nc-aviso { font-size: 12px; padding: 7px 10px; border-radius: 8px; background: var(--warning-bg); color: var(--warning-text); line-height: 1.4; }
 .nc-pbot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
@@ -150,11 +150,13 @@ i.g { background: var(--serie-2); opacity: .55; }
 .ng-chip.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-deep) !important; }
 .ng-cuerpo .nc-f { cursor: pointer; }
 .ng-cuerpo .nc-tabla td { padding: 6px 8px; }
-.ng-fcab span { font-size: 11px; color: var(--text-secondary); }
+.ng-fcab span { font-size: 12px; color: var(--text-secondary); }
 .ng-fcab h3 { margin: 0; font-size: 15px; font-weight: 700; }
 .nc-fbloque { display: flex; flex-direction: column; gap: 4px; }
 .ng-lineas { border-collapse: collapse; width: 100%; font-size: 12px; }
 .ng-lineas td { padding: 3px 4px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
 .ng-lineas td.num { text-align: right; }
 .ng-lineas .nc-ins { max-width: 210px; }
-.ng-und { font-size: 11px; color: var(--text-secondary); }
+.ng-und { font-size: 12px; color: var(--text-secondary); }
+/* #778: nada bajo 12 px (#777). Los campos conservan su caja: es lo que se
+   escribe. */

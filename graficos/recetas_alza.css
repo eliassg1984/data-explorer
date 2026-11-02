@@ -43,10 +43,10 @@
 .sa-precio { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
 .sa-precio input { width: 72px; height: 22px; border: 1px solid var(--border); border-radius: 6px; padding: 0 4px; font: inherit;
   font-weight: 600; color: var(--text-primary); background: var(--bg-card); text-align: right; font-variant-numeric: tabular-nums; }
-.sa-base { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-base { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sa-ins-pie { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.sa-ins-pie span { margin-left: auto; font-size: 11px; color: var(--text-secondary); }
-.sa-pre { height: 22px; padding: 0 8px; border-radius: 11px; font-size: 11px; cursor: pointer; border: 1px solid var(--border);
+.sa-ins-pie span { margin-left: auto; font-size: 12px; color: var(--text-secondary); }
+.sa-pre { height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; cursor: pointer; border: 1px solid var(--border);
   background: var(--bg-card); color: var(--text-secondary) !important; }
 .sa-pre:hover { border-color: var(--border-lavender); }
 .sa-pre.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-deep) !important; }
@@ -57,20 +57,20 @@
   align-items: center; justify-content: center; gap: 2px; padding: 8px; text-align: center; }
 .sa-agr-b:hover { background: var(--accent-tint); }
 .sa-agr-b .mas { font-size: 18px; line-height: 1; }
-.sa-agr-b span:last-child { font-size: 11px; color: var(--text-secondary); }
+.sa-agr-b span:last-child { font-size: 12px; color: var(--text-secondary); }
 .sa-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 5; width: 360px; max-width: calc(100vw - 32px);
   background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--sombra-capa);
   padding: 8px; display: flex; flex-direction: column; gap: 4px; }
 .sa-pop input { height: 30px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font: inherit;
   background: var(--bg-card); color: var(--text-primary); }
-.sa-pop-nota { font-size: 11px; color: var(--text-secondary); padding: 2px 4px; }
+.sa-pop-nota { font-size: 12px; color: var(--text-secondary); padding: 2px 4px; }
 .sa-pop-lista { max-height: 320px; overflow: auto; overscroll-behavior: contain; }
 .sa-sug { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 10px; text-align: left; border: 0;
   background: none; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
 .sa-sug:hover { background: var(--bg-hover); }
 .sa-sug b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sa-sug-s { font-weight: 600; font-variant-numeric: tabular-nums; }
-.sa-sug-d { font-size: 11px; color: var(--text-secondary); }
+.sa-sug-d { font-size: 12px; color: var(--text-secondary); }
 .sa-sug-b { align-self: center; width: 80px; height: 4px; border-radius: 2px; background: var(--line-soft); overflow: hidden; }
 .sa-sug-b i { display: block; height: 4px; background: var(--focus-lavender); }
 .sa-sug-vacio { padding: 10px 8px; color: var(--text-secondary); font-size: 12px; }
@@ -79,11 +79,11 @@
 .sa-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .sa-kpi { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 6px 12px; min-width: 0;
   display: grid; gap: 1px; }
-.sa-kpi-rot { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-kpi-rot { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sa-kpi-lin { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .sa-kpi-val { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sa-kpi-val.ambar { color: var(--warning-text); }
-.sa-kpi-sub { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.sa-kpi-sub { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-variant-numeric: tabular-nums; }
 
 /* Lista | ficha, a la altura que queda. */
@@ -98,7 +98,7 @@
   background: transparent; color: var(--text-secondary) !important; }
 .sa-tabs button.on { background: var(--bg-card); color: var(--accent-deep) !important; font-weight: 600;
   box-shadow: var(--shadow); }
-.sa-leyenda { font-size: 11.5px; color: var(--text-secondary); flex: 1; min-width: 0; }
+.sa-leyenda { font-size: 12px; color: var(--text-secondary); flex: 1; min-width: 0; }
 .sa-leyenda b { font-weight: 500; }
 .sa-leyenda .ambar { color: var(--warning-text); }
 .sa-leyenda .rojo { color: var(--danger-text); }
@@ -109,7 +109,7 @@
 .sa-tabla { flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .sa-tabla table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 .sa-tabla th { position: sticky; top: 0; z-index: 1; background: var(--bg-card-tenue); text-align: left; font-weight: 600;
-  color: var(--text-secondary); font-size: 11px; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  color: var(--text-secondary); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .sa-tabla td { padding: 6px 7px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; white-space: nowrap; }
 .sa-tabla .num { text-align: right; font-variant-numeric: tabular-nums; }
 .sa-fila { cursor: pointer; }
@@ -119,13 +119,13 @@
 .sa-plato { max-width: 210px; }
 .sa-plato div { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .sa-plato b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sa-plato > span, .sa-sub { font-size: 11px; color: var(--text-secondary); }
-.sa-revisar { flex: none; font-size: 10.5px; padding: 1px 6px; border-radius: 9px; background: var(--danger-bg);
+.sa-plato > span, .sa-sub { font-size: 12px; color: var(--text-secondary); }
+.sa-revisar { flex: none; font-size: 12px; padding: 1px 6px; border-radius: 9px; background: var(--danger-bg);
   color: var(--danger-text); cursor: help; }
 .sa-seg { display: flex; width: 88px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--line-soft); }
 .sa-seg i { display: block; height: 6px; }
 .sa-pct .hoy { color: var(--text-secondary); }
-.sa-pct em { display: block; font-style: normal; font-size: 10.5px; color: var(--warning-text); text-align: right; }
+.sa-pct em { display: block; font-style: normal; font-size: 12px; color: var(--warning-text); text-align: right; }
 .pill { display: inline-block; padding: 1px 7px; border-radius: 9px; font-weight: 600; background: var(--line-soft);
   font-variant-numeric: tabular-nums; }
 .pill.ambar { background: var(--warning-bg); color: var(--warning-text); }
@@ -141,10 +141,10 @@
 .sa-ficha { flex: 0 1 320px; min-width: 280px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card);
   padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; overflow: auto; overscroll-behavior: contain; }
 .sa-ficha > * { flex: none; }
-.sa-fcab span { font-size: 11px; color: var(--text-secondary); }
+.sa-fcab span { font-size: 12px; color: var(--text-secondary); }
 .sa-fcab h3 { margin: 0; font-size: 15px; font-weight: 700; }
 .sa-fbloque { display: flex; flex-direction: column; gap: 6px; }
-.sa-frot { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-secondary); }
+.sa-frot { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-secondary); }
 .sa-frot b { color: var(--text-primary); }
 .sa-fseg { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--line-soft); }
 .sa-fseg i { display: block; height: 14px; }
@@ -157,12 +157,12 @@
 .sa-opc { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px; padding: 7px 10px; border-radius: 8px;
   border: 1px solid var(--border); }
 .sa-opc.prop { background: var(--accent-tint); border-color: var(--border-lavender); }
-.sa-opc span { font-size: 11px; color: var(--text-secondary); }
+.sa-opc span { font-size: 12px; color: var(--text-secondary); }
 .sa-opc span.num { text-align: right; }
-.sa-fpie { font-size: 11px; color: var(--text-muted); margin-top: auto; }
-.sa-pie { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+.sa-fpie { font-size: 12px; color: var(--text-muted); margin-top: auto; }
+.sa-pie { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
 .sa-ayuda { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border);
-  color: var(--text-secondary); font-size: 10px; font-weight: 600; cursor: help; flex: none; }
+  color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: help; flex: none; }
 
 /* Angosto: sin altura fija; la lista con su tope y la ficha debajo. */
 @media (max-width: 1100px) {
@@ -176,3 +176,24 @@
   .sa-agr { flex: 1 1 100%; }
   .sa-pop { left: 0; right: auto; }
 }
+/* #778: el lenguaje de Costo de Carta (#775): indicadores en una franja
+   lavanda sin cajas, lista y ficha sin caja, «Platos | Por subgrupo» con
+   subrayado, nada bajo 12 px (#777). El escenario conserva su caja: es lo
+   que se edita. */
+/* La franja de borde a borde, sólo desde 901 px: en el celular cada tarjeta
+   tiene otro aire y la grilla de indicadores es la de siempre. */
+@media (min-width: 901px) {
+.sa-kpis { gap: 24px; margin: 0 -18px; padding: 6px 18px; background: var(--rail-fondo);
+  border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+}
+.sa-kpi { border: 0; border-radius: 0; background: transparent; padding: 2px 0; }
+.sa-kpi-val { font-weight: 500; }
+.sa-lista { border: 0; border-radius: 0; background: transparent; }
+.sa-ficha { border: 0; border-left: 1px solid var(--border); border-radius: 0; background: transparent; }
+.sa-tabs { background: transparent; padding: 0; gap: 16px; border-radius: 0; }
+.sa-tabs button { padding: 0; border-radius: 0; border-bottom: 2px solid transparent; box-shadow: none; }
+.sa-tabs button.on { background: transparent; box-shadow: none; border-bottom: 2px solid var(--accent);
+  color: var(--text-primary) !important; }
+/* Con los encabezados a 12 px la última columna se cortaba a 1323 px: menos aire
+   a los costados de cada celda. */
+.sa-tabla th, .sa-tabla td { padding-left: 5px; padding-right: 5px; }

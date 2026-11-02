@@ -18,7 +18,7 @@
 .rb button, .rb input, .rb select { font: inherit; color: inherit; }
 .rb button:focus-visible, .rb input:focus-visible, .rb select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .verde { color: var(--success-text); } .ambar { color: var(--warning-text); } .gris { color: var(--text-secondary); }
-code { font-size: 11.5px; background: var(--rail-fondo); padding: 1px 4px; border-radius: 4px; }
+code { font-size: 12px; background: var(--rail-fondo); padding: 1px 4px; border-radius: 4px; }
 
 /* El renglón del título. */
 .cab { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
@@ -36,18 +36,18 @@ code { font-size: 11.5px; background: var(--rail-fondo); padding: 1px 4px; borde
 .kpi:hover { border-color: var(--border-lavender); }
 .kpi.on { border-color: var(--accent); background: var(--accent-tint); }
 .kpi.alerta .v { color: var(--warning-text); }
-.kpi .r { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .r { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi .v { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.kpi .s { font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .s { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* La lista y la ficha. */
 .cuerpo { display: flex; gap: 10px; flex: 1 1 auto !important; min-height: 0; }
 .caja { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); min-width: 0; }
 .lista { flex: 1.6 1 0; display: flex; flex-direction: column; min-height: 0; }
-.lista-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; font-size: 11.5px; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+.lista-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
 .lista-w { overflow: auto; overscroll-behavior: contain; flex: 1 1 auto; min-height: 0; }
 table.l { width: 100%; border-collapse: collapse; font-size: 12px; }
-table.l th { position: sticky; top: 0; background: var(--bg-card); z-index: 1; text-align: right; font-size: 10.5px; font-weight: 600; color: var(--text-secondary); padding: 5px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; }
+table.l th { position: sticky; top: 0; background: var(--bg-card); z-index: 1; text-align: right; font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 5px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; }
 table.l th:first-child { text-align: left; cursor: default; }
 table.l th.ord { color: var(--accent-deep); }
 table.l td { padding: 4px 6px; border-bottom: 1px solid var(--line-soft); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; vertical-align: middle; }
@@ -56,8 +56,8 @@ table.l tbody tr { cursor: pointer; }
 table.l tbody tr:hover td { background: var(--bg-card-tenue); }
 table.l tr.on td { background: var(--accent-tint); }
 .nom { font-weight: 600; font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 215px; }
-.sub { font-size: 10.5px; color: var(--text-secondary); }
-.chip { display: inline-block; font-size: 10px; padding: 0 5px; border-radius: 6px; margin-left: 4px; font-weight: 600; vertical-align: 1px; }
+.sub { font-size: 12px; color: var(--text-secondary); }
+.chip { display: inline-block; font-size: 12px; padding: 0 5px; border-radius: 6px; margin-left: 4px; font-weight: 600; vertical-align: 1px; }
 .chip.dd { background: var(--warning-bg); color: var(--warning-text); }
 .chip.ins { background: var(--rail-fondo); color: var(--text-secondary); }
 .chip.inac { background: var(--rail-fondo); color: var(--text-muted); }
@@ -66,31 +66,31 @@ table.l tr.on td { background: var(--accent-tint); }
 .cob .b i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 4px; }
 .cob .b i.baja, .cob .b i.alta { background: var(--warning); }
 .cob .b u { position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px; background: var(--text-muted); }
-.var { font-size: 10.5px; font-weight: 600; margin-left: 4px; }
+.var { font-size: 12px; font-weight: 600; margin-left: 4px; }
 svg.spk { display: block; margin-left: auto; }
 
 .ficha { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
 .fcab { padding: 8px 12px 6px; border-bottom: 1px solid var(--line-soft); display: grid; gap: 4px; }
 .fnom { font-size: 14.5px; font-weight: 700; display: flex; gap: 6px; align-items: baseline; justify-content: space-between; }
-.fnom small { font-size: 11px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+.fnom small { font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
 .cifs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .cif { border: 1px solid var(--line-soft); background: var(--bg-card-tenue); border-radius: 8px; padding: 3px 8px; min-width: 0; }
-.cif span { display: block; font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cif span { display: block; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cif b { font-size: 13.5px; font-variant-numeric: tabular-nums; }
-.cif small { display: block; font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cif small { display: block; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .veredicto { font-size: 12px; border-radius: 8px; padding: 6px 9px; background: var(--rail-fondo); }
 .veredicto.alerta { background: var(--warning-bg); border: 1px solid var(--warning-border); }
 .veredicto b { font-weight: 600; }
 .tabs { display: flex; gap: 2px; padding: 6px 12px 0; border-bottom: 1px solid var(--line-soft); }
 .tabs button { border: 0; background: none; padding: 3px 9px 5px; cursor: pointer; font-size: 12.5px; color: var(--text-secondary) !important; border-bottom: 2px solid transparent; }
 .tabs button.on { color: var(--accent-deep) !important; border-bottom-color: var(--accent); font-weight: 600; }
-.tabs button sup { font-size: 9.5px; color: var(--text-muted); margin-left: 2px; }
+.tabs button sup { font-size: 12px; color: var(--text-muted); margin-left: 2px; }
 .fcuerpo { padding: 8px 12px 10px; overflow: auto; overscroll-behavior: contain; flex: 1 1 auto; min-height: 0; display: grid; gap: 10px; align-content: start; }
 .bl { display: grid; gap: 4px; }
-.bl-t { font-size: 11.5px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+.bl-t { font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
 .bl-t span { font-weight: 500; color: var(--text-secondary); }
 table.r { width: 100%; border-collapse: collapse; font-size: 12px; }
-table.r th { text-align: right; font-size: 10.5px; color: var(--text-secondary); font-weight: 600; padding: 3px 6px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg-card); }
+table.r th { text-align: right; font-size: 12px; color: var(--text-secondary); font-weight: 600; padding: 3px 6px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg-card); }
 table.r th:first-child { text-align: left; }
 table.r td { padding: 3px 6px; border-bottom: 1px solid var(--line-soft); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.r td:first-child { text-align: left; white-space: normal; }
@@ -100,10 +100,10 @@ table.r tr.tot td { font-weight: 700; border-top: 1px solid var(--border); borde
 table.r tr.rara td { color: var(--warning-text); }
 .pct { display: inline-block; width: 40px; height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; vertical-align: middle; margin-left: 4px; }
 .pct i { display: block; height: 100%; background: var(--accent); }
-.abrir { border: 0; background: none; padding: 0 0 0 6px; cursor: pointer; color: var(--accent-deep) !important; font-size: 11px; text-decoration: underline; }
+.abrir { border: 0; background: none; padding: 0 0 0 6px; cursor: pointer; color: var(--accent-deep) !important; font-size: 12px; text-decoration: underline; }
 .abrir.sin { padding: 0; font-size: 12px; text-align: left; }
-.volver { border: 0; background: none; padding: 0; cursor: pointer; color: var(--accent-deep) !important; font-size: 11.5px; text-decoration: underline; justify-self: start; }
-.nota { font-size: 11.5px; color: var(--text-secondary); background: var(--bg-card-tenue); border-radius: 8px; padding: 6px 8px; }
+.volver { border: 0; background: none; padding: 0; cursor: pointer; color: var(--accent-deep) !important; font-size: 12px; text-decoration: underline; justify-self: start; }
+.nota { font-size: 12px; color: var(--text-secondary); background: var(--bg-card-tenue); border-radius: 8px; padding: 6px 8px; }
 .mini { display: grid; grid-template-columns: minmax(0, 1fr) 60px auto auto; gap: 3px 8px; font-size: 12px; align-items: center; }
 .mini > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mini .b { height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
@@ -112,15 +112,15 @@ table.r tr.rara td { color: var(--warning-text); }
 .ed { border: 1px solid var(--line-soft); border-radius: 8px; padding: 6px 8px; display: grid; gap: 3px; }
 .ed .t { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; }
 .ed .t b { font-weight: 600; }
-.ed ul { margin: 0; padding-left: 16px; font-size: 11.5px; color: var(--text-secondary); display: grid; gap: 1px; }
+.ed ul { margin: 0; padding-left: 16px; font-size: 12px; color: var(--text-secondary); display: grid; gap: 1px; }
 svg.evo, svg.sem { display: block; width: 100%; }
-svg .eje { font-size: 9.5px; fill: var(--text-secondary); }
+svg .eje { font-size: 12px; fill: var(--text-secondary); }
 svg .rotulo { paint-order: stroke; stroke: var(--bg-card); stroke-width: 3px; }
 svg .pto { fill: var(--accent); opacity: .35; }
-svg .rara { font-size: 10px; fill: var(--warning); }
-svg .edic { font-size: 11px; fill: var(--serie-2); }
+svg .rara { font-size: 12px; fill: var(--warning); }
+svg .edic { font-size: 12px; fill: var(--serie-2); }
 svg .b-usado { fill: var(--text-muted); opacity: .55; }
-.ley { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 10.5px; color: var(--text-secondary); align-items: center; }
+.ley { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 12px; color: var(--text-secondary); align-items: center; }
 .ley i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
 .ley i.pto-ley { background: var(--accent); opacity: .35; border-radius: 50%; }
 .ley i.b-usado { background: var(--text-muted); opacity: .55; }
@@ -135,3 +135,24 @@ svg .b-usado { fill: var(--text-muted); opacity: .55; }
   .cuerpo { flex-direction: column; }
   .lista, .ficha { flex: none; max-height: 520px; }
 }
+/* #778: el lenguaje de Costo de Carta (#775). Los indicadores son una franja
+   lavanda de borde a borde, sin cajas (la tarjeta tiene 18 px a los
+   costados); la lista y la ficha van sin caja, la ficha separada por una
+   línea; los segmentados son pestañas con subrayado; cifras de 17 px y nada
+   bajo 12 px (#777). Las cuentas y los eventos no cambian. */
+/* La franja de borde a borde, sólo desde 901 px: en el celular cada tarjeta
+   tiene otro aire y la grilla de indicadores es la de siempre. */
+@media (min-width: 901px) {
+.kpis { gap: 24px; margin: 0 -18px; padding: 6px 18px; background: var(--rail-fondo);
+  border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+}
+.kpi { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 2px 0; }
+.kpi:hover { background: transparent; border-color: var(--border-lavender); }
+.kpi.on { background: transparent; border-color: var(--accent); }
+.kpi .v { font-size: 17px; font-weight: 500; }
+.caja { border: 0; border-radius: 0; background: transparent; }
+.ficha.caja { border-left: 1px solid var(--border); }
+.seg { background: transparent; padding: 0; gap: 16px; border-radius: 0; }
+.seg button { padding: 0; border-radius: 0; border-bottom: 2px solid transparent; box-shadow: none; }
+.seg button.on { background: transparent; box-shadow: none; border-bottom-color: var(--accent);
+  color: var(--text-primary) !important; }

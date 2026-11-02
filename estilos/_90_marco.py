@@ -270,7 +270,8 @@ CSS = """
         margin: 0 !important;
         padding: 0 !important;
     }
-    .st-key-rec_carta_f_escala button {
+    .st-key-rec_carta_f_escala button,
+    .st-key-rec_cambios_f_escala button {
         height: 30px !important;
         min-height: 30px !important;
         background: var(--marco-control) !important;

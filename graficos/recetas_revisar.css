@@ -27,10 +27,10 @@
 .kpi { text-align: left; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 5px 12px; cursor: pointer; display: grid; gap: 0; min-width: 0; }
 .kpi:hover { border-color: var(--border-lavender); }
 .kpi.on { border-color: var(--accent); background: var(--accent-tint); }
-.kpi .r { font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .r { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi .r i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .kpi .v { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.kpi .s { font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .s { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .cuerpo { display: flex; gap: 10px; align-items: stretch; min-height: 0; height: max(300px, calc(var(--alto-util, 720px) - 146px)); }
 .caja { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); min-width: 0; }
@@ -40,7 +40,7 @@
 .lcab .n { font-size: 12px; color: var(--text-secondary); margin-left: auto; }
 .filas { flex: 1 1 0; overflow: auto; overscroll-behavior: contain; padding: 2px 6px 8px; }
 .grupo { margin-top: 4px; }
-.gcab { display: flex; justify-content: space-between; gap: 8px; padding: 6px 6px 3px; font-size: 11.5px; color: var(--text-secondary); border-bottom: 1px solid var(--line-soft); }
+.gcab { display: flex; justify-content: space-between; gap: 8px; padding: 6px 6px 3px; font-size: 12px; color: var(--text-secondary); border-bottom: 1px solid var(--line-soft); }
 .gcab b { color: var(--text-primary); font-size: 12.5px; }
 .gcab .par { color: var(--accent-deep); font-weight: 600; }
 .f { display: grid; grid-template-columns: minmax(0, 1fr) 196px 150px 70px 56px; gap: 10px; align-items: center; padding: 5px 6px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
@@ -48,26 +48,26 @@
 .f.sel { background: var(--accent-tint); border-color: var(--border-lavender); }
 .f .c { min-width: 0; }
 .f .c b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.f .c span { display: block; font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f .c span { display: block; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .f .ch { display: block; min-width: 0; overflow: hidden; }
-.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; box-sizing: border-box; }
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; box-sizing: border-box; }
 .chip i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 .ch-sin { background: var(--warning-bg); color: var(--warning-text); } .ch-sin i { background: var(--warning); }
 .ch-falta { background: var(--danger-bg); color: var(--danger-text); } .ch-falta i { background: var(--danger); }
 .ch-viejo { background: var(--rail-fondo); color: var(--text-secondary); } .ch-viejo i { background: var(--text-muted); }
 .ch-salida { background: var(--accent-tint); color: var(--accent-deep); } .ch-salida i { background: var(--accent); }
-.barras { display: grid; gap: 3px; font-size: 10.5px; color: var(--text-secondary); }
+.barras { display: grid; gap: 3px; font-size: 12px; color: var(--text-secondary); }
 .barras div { display: grid; grid-template-columns: 62px 1fr; gap: 6px; align-items: center; }
 .barras s { display: block; height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; text-decoration: none; }
 .barras s i { display: block; height: 100%; border-radius: 3px; }
 .f .v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-.f .u { text-align: right; font-size: 11.5px; color: var(--text-secondary); }
+.f .u { text-align: right; font-size: 12px; color: var(--text-secondary); }
 
 .ficha { flex: 0 0 360px; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; overflow: auto; overscroll-behavior: contain; box-sizing: border-box; }
 .ficha > * { flex: none; }
 .fi-cab { display: grid; gap: 4px; }
 .fi-nom { font-size: 15px; font-weight: 700; line-height: 1.25; }
-.fi-de { font-size: 11.5px; color: var(--text-secondary); }
+.fi-de { font-size: 12px; color: var(--text-secondary); }
 .veredicto { font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border-radius: 8px; border-left: 3px solid var(--warning); background: var(--warning-bg); }
 .veredicto.rojo { border-color: var(--danger); background: var(--danger-bg); color: var(--text-primary); }
 .veredicto.gris { border-color: var(--text-muted); background: var(--rail-fondo); color: var(--text-primary); }
@@ -75,16 +75,16 @@
 .cuenta span:nth-child(even) { text-align: right; }
 .cuenta .t { border-top: 1px solid var(--border); padding-top: 3px; font-weight: 700; }
 .bl { display: grid; gap: 4px; }
-.bl-t { font-size: 11.5px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+.bl-t { font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
 .bl-t span { font-weight: 500; color: var(--text-secondary); }
 .sem { display: block; width: 100%; height: 86px; }
-.ley { display: flex; gap: 12px; font-size: 11px; color: var(--text-secondary); }
+.ley { display: flex; gap: 12px; font-size: 12px; color: var(--text-secondary); }
 .ley i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .mini { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 3px 10px; font-size: 12px; align-items: baseline; }
 .mini span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mini .d { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 .que-hacer { font-size: 12px; background: var(--bg-card-tenue); border: 1px solid var(--line-soft); border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; }
-.que-hacer b { font-size: 11.5px; }
+.que-hacer b { font-size: 12px; }
 .acc { display: flex; flex-wrap: wrap; gap: 6px; }
 .btn { min-height: 28px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--border-lavender); background: var(--accent-tint); color: var(--accent-deep) !important; cursor: pointer; font-size: 12px; text-align: left; }
 .vacio { padding: 16px; text-align: center; color: var(--text-secondary); font-size: 12.5px; }
@@ -100,3 +100,24 @@
   .f { grid-template-columns: minmax(0, 1fr) 70px; }
   .f .ch { display: none; }
 }
+/* #778: el lenguaje de Costo de Carta (#775). Los indicadores son una franja
+   lavanda de borde a borde, sin cajas (la tarjeta tiene 18 px a los
+   costados); la lista y la ficha van sin caja, la ficha separada por una
+   línea; los segmentados son pestañas con subrayado; cifras de 17 px y nada
+   bajo 12 px (#777). Las cuentas y los eventos no cambian. */
+/* La franja de borde a borde, sólo desde 901 px: en el celular cada tarjeta
+   tiene otro aire y la grilla de indicadores es la de siempre. */
+@media (min-width: 901px) {
+.kpis { gap: 24px; margin: 0 -18px; padding: 6px 18px; background: var(--rail-fondo);
+  border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+}
+.kpi { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 2px 0; }
+.kpi:hover { background: transparent; border-color: var(--border-lavender); }
+.kpi.on { background: transparent; border-color: var(--accent); }
+.kpi .v { font-size: 17px; font-weight: 500; }
+.caja { border: 0; border-radius: 0; background: transparent; }
+.ficha.caja { border-left: 1px solid var(--border); }
+.seg { background: transparent; padding: 0; gap: 16px; border-radius: 0; }
+.seg button { padding: 0; border-radius: 0; border-bottom: 2px solid transparent; box-shadow: none; }
+.seg button.on { background: transparent; box-shadow: none; border-bottom-color: var(--accent);
+  color: var(--text-primary) !important; }

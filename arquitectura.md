@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-777 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+778 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (255)
+**CSS y estilos** (256)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -322,6 +322,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 - **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
 - **#776** — El marco de la opción B en toda la app: la navegación sobre lavanda y cada vista, su hoja
+- **#778** — Recetas entera en el lenguaje de la #775: franja de indicadores, sin cajas, nada bajo 12 px
 
 **Layout y alturas** (110)
 
@@ -1139,7 +1140,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (246)
+**Decisiones de diseño y UX** (247)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1387,6 +1388,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
 - **#776** — El marco de la opción B en toda la app: la navegación sobre lavanda y cada vista, su hoja
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
+- **#778** — Recetas entera en el lenguaje de la #775: franja de indicadores, sin cajas, nada bajo 12 px
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58081,6 +58083,29 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      referencia). En Costo de Carta, medido en Chromium, sólo quedaban «Canal» y «Grupo»
      en 11,5. Toda vista que pase al lenguaje de la #775 sigue esta escala.
 
+778. **Recetas entera en el lenguaje de la #775: franja de indicadores, sin cajas, nada bajo 12 px.**
+   Alza, Recetas base, Cambios, Vs porcionado y Nuevo Costeo tenían 5 o 6 indicadores en caja,
+   la lista y la ficha en caja, y de 52 a 189 textos de 9,5 a 11,5 px (medido en Chromium a
+   1323×619). Se cambió sólo el CSS de cada pieza, con un bloque «#778» al final; las cuentas,
+   los eventos y lo que se muestra son los mismos.
+   - **Tres piezas comparten nombres** (`recetas_base_costo`, `recetas_cambios`,
+     `recetas_revisar`: `.kpis .kpi .caja .lista .ficha .seg`) y llevan el mismo bloque; Alza el
+     suyo (`.sa-*`). Indicadores en una franja `--rail-fondo` de borde a borde (`margin: 0
+     -18px`, el aire de su tarjeta), cifra de 17 px; lista y ficha sin caja, la ficha con una
+     línea a la izquierda; los segmentados (`.seg`, `.sa-tabs`) son pestañas con subrayado.
+   - **La franja de borde a borde va sólo desde 901 px.** En el celular el aire de la tarjeta
+     es otro y la franja quedaba corta de un lado.
+   - **Todo `font-size` de 9,5 a 11,5 px pasó a 12**, regla por regla (las de 12,5 y más no se
+     tocaron). Medido después: ningún texto visible bajo 12 px en las cinco.
+   - **Lo que se escribe conserva su caja**: el escenario de Alza, los campos de Nuevo Costeo.
+   - **Alza:** con los encabezados a 12 px la última columna («Precio para mantener») se
+     cortaba; las celdas pasaron de 7-8 a 5 px de aire a los costados.
+   - **Cambios, dos que venían de antes:** `.filtros input` (el buscador: 250 px y borde) le
+     pegaba al checkbox de «Incluir productos sin costo», que se veía como un cuadrado suelto
+     lejos de su texto; y su botón de fecha medía 50 px de alto: ahora 30, como Costo de Carta.
+   Lo que falta del boceto en estas vistas —títulos que repiten la vista, el «Detalle», los
+   plegables y pops de la ficha— es trabajo por vista, con su inventario.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58093,7 +58118,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#777**; la próxima toma el número siguiente.
+> última regla es la **#778**; la próxima toma el número siguiente.
 
 >
 
