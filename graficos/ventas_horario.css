@@ -234,3 +234,11 @@ input.num { width: 70px; height: 24px; border: 1px solid var(--border); border-r
 .kpi:hover { background: rgba(255, 255, 255, .55); border-color: transparent; }
 button.kpi:hover { border-color: transparent; }
 .kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }
+
+/* #795: las pestañas que NAVEGAN van subrayadas, como en Costo de Carta (#775) y
+   Compras (#790-#794); los ajustes que sólo cambian cómo se cuenta lo mismo
+   (grano, unidad, Clave | Todas) siguen en la caja gris. */
+.subtabs { background: none !important; padding: 0 !important; gap: 18px !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+.subtabs button { background: none !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important; box-shadow: none !important; padding: 4px 0 !important; color: var(--text-secondary) !important; }
+.subtabs button:hover { color: var(--accent-deep) !important; }
+.subtabs button.on { background: none !important; box-shadow: none !important; color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent) !important; }

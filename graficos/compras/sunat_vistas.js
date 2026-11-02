@@ -121,7 +121,8 @@ function barra(f, m, rotulo, resalta) {
 }
 
 function seg(nombre, opciones, actual) {
-  return `<span class="seg" role="group" aria-label="${esc(nombre)}">` +
+  // «Medir en» es un ajuste (cuenta lo mismo de otra forma): caja gris; lo demás navega (#795).
+  return `<span class="seg${nombre === 'Medir en' ? ' ajuste' : ''}" role="group" aria-label="${esc(nombre)}">` +
     opciones.map(([x, t]) => `<button type="button" data-seg="${esc(nombre)}" data-v="${esc(x)}" class="${x === actual ? 'on' : ''}">${esc(t)}</button>`).join('') +
     '</span>';
 }

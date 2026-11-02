@@ -129,3 +129,8 @@ table.tipos td.mal { color: var(--warning-text); font-weight: 700; }
 .seg button:last-child { border-right: 0; }
 .seg button:hover { background: none; color: var(--accent-deep); }
 .seg button.on { background: none; color: var(--text-primary); border-bottom-color: var(--accent); }
+/* #795: un ajuste (Soles | Documentos) cuenta lo mismo de otra forma: caja gris. */
+.seg.ajuste { gap: 2px; padding: 2px; border-radius: 8px; background: var(--rail-fondo); margin-left: 0; border-left: 0; }
+.seg.ajuste + .seg, .seg + .seg.ajuste { margin-left: 8px; padding-left: 2px; border-left: 0; }
+.seg.ajuste button { border-bottom: 0; border-radius: 6px; padding: 3px 10px; font-size: 12px; }
+.seg.ajuste button.on { background: var(--bg-card); color: var(--accent-deep); font-weight: 600; box-shadow: var(--shadow); }

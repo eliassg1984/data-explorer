@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-794 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+795 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -996,7 +996,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 
-**SUNAT y SIRE** (79)
+**SUNAT y SIRE** (80)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1077,6 +1077,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#760** — Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían sin convertir
 - **#784** — Compras en la franja común (#782) y nada bajo 12 px
 - **#794** — Documentos SUNAT en el lenguaje de Costo de Carta: franja, pastillas y subrayados
+- **#795** — Pestañas subrayadas, ajustes en la caja gris: un criterio para toda la app
 
 **Fechas, rangos y cortes** (26)
 
@@ -1158,7 +1159,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (251)
+**Decisiones de diseño y UX** (252)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1411,6 +1412,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#783** — La franja de Ventas abre el mismo panel de fecha que las tarjetas
 - **#788** — «Ampliar» en Mix, Meseros y Pedidos
 - **#790** — Compras › Proveedor y Producto en el lenguaje entero de Costo de Carta
+- **#795** — Pestañas subrayadas, ajustes en la caja gris: un criterio para toda la app
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58406,6 +58408,19 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      Documentos, Documentos | XML…) pierden la caja y marcan el elegido con la raya índigo; dos
      grupos seguidos van separados por una línea.
 
+795. **Pestañas subrayadas, ajustes en la caja gris: un criterio para toda la app.**
+   A pedido («¿cuál es el criterio entre la cajita gris y el subrayado?»). La prueba: después
+   del clic, ¿se mira OTRA COSA o LO MISMO contado de otra forma?
+   - **Otra cosa → pestaña subrayada** (navega): Gráfico | Tabla, las zonas de Mix y de Platos,
+     las de Comparativo, Resumen | Mesas | Pedidos de Por hora, Por tipo | Por año, Documentos |
+     XML, Por área | Evolución | Cobertura de la ficha de Stock.
+   - **Lo mismo contado distinto → caja gris** (ajusta): Día | Semana | Mes | Año, Soles |
+     Documentos, Monto | % del período, Clave | Todas, Días de la semana | sueltos.
+   - Así se corrigió un error en cada lado: Ventas tenía sus pestañas en caja gris
+     (`.seg.zonas`, `.vm-tabs`, `.pl-tabs`, `.vcc-tabs`, `.subtabs`), y la #794 había
+     subrayado «Medir en» de SUNAT, que es un ajuste (`.seg.ajuste`).
+   - Una vista nueva elige con esta prueba, no por cómo se ve la de al lado.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58418,7 +58433,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#794**; la próxima toma el número siguiente.
+> última regla es la **#795**; la próxima toma el número siguiente.
 
 >
 

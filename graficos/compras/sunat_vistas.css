@@ -182,10 +182,16 @@ button.pp:hover { background: var(--accent-tint); }
 .kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }
 
 /* #794: los segmentados con subrayado, como en Costo de Carta (#775, #778):
-   sin caja, el elegido con su raya índigo. */
+   sin caja, el elegido con su raya índigo. Desde la #795 sólo las pestañas que
+   navegan; los ajustes (`.seg.ajuste`) vuelven a la caja gris, abajo. */
 .seg { border: 0; border-radius: 0; background: none; gap: 16px; overflow: visible; }
 .seg button { border: 0; border-bottom: 2px solid transparent; padding: 3px 0; font-size: 13px; background: none; }
 .seg button:last-child { border-right: 0; }
 .seg button:hover { background: none; color: var(--accent-deep); }
 .seg button.on { background: none; color: var(--text-primary); border-bottom-color: var(--accent); }
 .seg + .seg { margin-left: 4px; padding-left: 16px; border-left: 1px solid var(--border); border-radius: 0; }
+/* #795: un ajuste (Soles | Documentos) cuenta lo mismo de otra forma: caja gris. */
+.seg.ajuste { gap: 2px; padding: 2px; border-radius: 8px; background: var(--rail-fondo); margin-left: 0; border-left: 0; }
+.seg.ajuste + .seg, .seg + .seg.ajuste { margin-left: 8px; padding-left: 2px; border-left: 0; }
+.seg.ajuste button { border-bottom: 0; border-radius: 6px; padding: 3px 10px; font-size: 12px; }
+.seg.ajuste button.on { background: var(--bg-card); color: var(--accent-deep); font-weight: 600; box-shadow: var(--shadow); }

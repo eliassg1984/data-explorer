@@ -190,7 +190,7 @@ function htmlAmp(st) {
 function htmlPie(d, st) {
   const ejes = d.hay_area ? [['Carta', 'Carta'], ['Área', 'Área']] : [['Carta', 'Carta']];
   const medida = st.kpi === 'und' ? 'und' : st.kpi === 'costo' ? 'pct' : 'soles';
-  return seg(ZONAS, st.zona, 'zona') + '<span class="vm-esp"></span>' +
+  return seg(ZONAS, st.zona, 'zona').replace('class="vm-seg"', 'class="vm-seg vm-tabs"') + '<span class="vm-esp"></span>' +
     menu('eje', 'Abrir por', ejes, st.eje) +
     menu('medir', 'Medir', [['soles', 'Soles'], ['und', 'Unidades'], ['pct', '% de costo', true]], medida) +
     menu('gran', 'Agrupar', d.grans.map((g) => [g, g]), d.gran) + htmlAmp(st);

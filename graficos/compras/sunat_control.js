@@ -62,7 +62,7 @@ function dibujarMeses(P, st) {
   const filas = vis.map((m) => { const r4 = m.r4 && m.r4.tot, mas = r4 && r4[0] !== m.app[0]; const [e, c] = ESTADO[m.e2]; return `<tr class="${m.p === el.p ? 'on' : ''}"><td class="i"><button data-a="mes" data-v="${m.p}" aria-pressed="${m.p === el.p}">${nomMes(m.p)}</button></td><td>${v2(m.app)}</td><td>${v2(m.r1 && m.r1.tot)}</td><td class="${mas ? 'reg' : 'neu'}">${r4 ? v2(r4) : '—'}</td><td class="i"><span class="est ${c}">${e}</span></td></tr>`; }).join('');
   const chip = st.cfil ? `<button class="quita" data-a="fil" data-v="">✕ ${esc({ ok: 'Igual a la lista', act: 'Aún no llegan', rev: 'Cifras distintas', reg: 'Presentados, no están' }[st.cfil])}</button>` : '';
   return `<div class="kpis">${kpis}</div><div class="cuerpo"><div class="izq">
-    <div class="fl"><span class="seg" role="group" aria-label="Medir en">${[['doc', 'Documentos'], ['sol', 'Soles']].map(([k, n]) => `<button class="${st.cmed === k ? 'on' : ''}" data-a="med" data-v="${k}">${n}</button>`).join('')}</span><span class="esp"></span>${chip}</div>
+    <div class="fl"><span class="seg ajuste" role="group" aria-label="Medir en">${[['doc', 'Documentos'], ['sol', 'Soles']].map(([k, n]) => `<button class="${st.cmed === k ? 'on' : ''}" data-a="med" data-v="${k}">${n}</button>`).join('')}</span><span class="esp"></span>${chip}</div>
     <div class="caja"><table><thead><tr><th class="i">Mes</th><th>En la app</th><th title="Los comprobantes que SUNAT reunió por su cuenta">Lista de SUNAT</th><th title="La lista, con lo que se agregó o corrigió al presentarla">Lo presentado</th><th class="i">La app contra la lista</th></tr></thead><tbody>${filas}</tbody></table></div>
   </div>${fichaMes(P, st, el, v2)}</div>`;
 }

@@ -247,3 +247,11 @@
 .vm-amp:hover, .vm-amp[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent-deep) !important; }
 .vm-amp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .vm-cuerpo.ampl .vm-panel { display: none; }
+
+/* #795: las pestañas que NAVEGAN van subrayadas, como en Costo de Carta (#775) y
+   Compras (#790-#794); los ajustes que sólo cambian cómo se cuenta lo mismo
+   (grano, unidad, Clave | Todas) siguen en la caja gris. */
+.vm-seg.vm-tabs { background: none !important; padding: 0 !important; gap: 18px !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+.vm-seg.vm-tabs button { background: none !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important; box-shadow: none !important; padding: 4px 0 !important; color: var(--text-secondary) !important; }
+.vm-seg.vm-tabs button:hover { color: var(--accent-deep) !important; }
+.vm-seg.vm-tabs button.on { background: none !important; box-shadow: none !important; color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent) !important; }
