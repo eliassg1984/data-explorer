@@ -267,6 +267,28 @@ CSS = """
         background: var(--bg-card) !important;
         box-shadow: var(--shadow);
     }
+    /* #807: «Filtros» con la forma de «Refrescar», su vecino: pastilla gris, sin el
+       subrayado índigo, que en esta app quiere decir «pestaña elegida». Lo activo lo
+       dice la cuenta. */
+    .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
+        background: var(--rail-fondo) !important;
+        border: 0 !important;
+        border-radius: 8px !important;
+        color: var(--text-primary) !important;
+        padding: 0 10px !important;
+    }
+    .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
+        background: var(--bg-hover) !important;
+    }
+    .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla [data-testid="stPopover"] button p {
+        color: var(--text-primary) !important;
+        font-size: 12.5px !important;
+    }
+    /* La familia de «Filtros» dicha donde aplica (Ajuste › Evolución y Tabla dinámica). */
+    .aj-fam-pag { font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
+    .aj-fam-pag span { color: var(--text-muted); }
+    /* Mix sin su fecha (#807): el renglón queda para los controles de la pieza. */
+    .vt-mix-hueco { height: 36px; }
     /* El −1rem de Streamlit bajo un markdown lo descentraba de la fecha. */
     .st-key-vt_mix_cab [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;

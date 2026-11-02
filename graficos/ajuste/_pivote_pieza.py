@@ -6,7 +6,7 @@ import pickle
 import streamlit as st
 import tema
 from . import _pivote_datos as datos
-from ._comun import ctx_meses, mes_operativo_activo, rango_meses, recortar_meses, selector_meses
+from ._comun import ctx_meses, mes_operativo_activo, rango_meses, recortar_meses, rotulo_familias_pagina, selector_meses
 
 _DIR=Path(__file__).parent
 _CSS=(_DIR/'pivote.css').read_text(encoding='utf-8')
@@ -24,7 +24,7 @@ def renderizar(d,col_fecha,col_familia,col_area,col_ajuste_val,col_producto,col_
     with st.container(border=True,key='ajuste_graf_card_izq_detalle'):
         with st.container(key='ajdet_fecha_nativa'):
             ct,cf=st.columns([3,1.45],vertical_alignment='center')
-            with ct:st.markdown('<div style="font-size:14px;font-weight:600">Detalle por producto</div>',unsafe_allow_html=True)
+            with ct:st.markdown(rotulo_familias_pagina(),unsafe_allow_html=True)  # sin título; la familia de Filtros (#807)
             ctx=ctx_meses('det',d[col_fecha])
             with cf:selector_meses('ajf_det',ctx)
         d=recortar_meses(d,col_fecha,rango_meses(ctx))

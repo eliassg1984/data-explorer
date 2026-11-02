@@ -231,7 +231,15 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # «Mes del cierre» vivía acá hasta el 2026-10-11: pasó al pie del panel
     # de meses de cada vista, que es el único lugar donde cambia algo
     # (`_comun._pie_mes_cierre`, regla #632).
-    with compartimento_filtros(contar_filtros("ajuste_graf_filtro_familia")):
+    # SIN CUENTA EN EL BOTÓN (#807): esta Familia sólo la leen Evolución y la
+    # Tabla dinámica (las demás vistas traen su propio filtro de familias), y un
+    # «Filtros 1» en Diferencias decía un filtro que ahí no hace nada. El estado
+    # se ve donde aplica: `_comun.rotulo_familias_pagina`, en esas dos vistas.
+    if col_familia and df_full is not None and col_familia in df_full.columns:
+        st.session_state["_aj_fam_total"] = int(df_full[col_familia].dropna().astype(str).nunique())
+    with compartimento_filtros(0):
+        st.caption("Sólo para Evolución y la Tabla dinámica: las demás vistas "
+                   "de Ajuste tienen su propio filtro de familias.")
         _, fam_sel = filtro_pills(df_full, col_familia,
                                   "ajuste_graf_filtro_familia", "Familia")
 

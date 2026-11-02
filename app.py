@@ -898,8 +898,10 @@ if isinstance(_fecha_actualizacion, datetime.datetime):
     # navegación y en pantallas angostas se queda sólo con el valor (el
     # docstring de la inyección tiene las medidas).
     inject_sello_actualizacion(
-        "Última actualización:",
-        _fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")
+        # «Datos al» y sin el año (#807): sin rótulo, la hora parecía la fecha
+        # de hoy o un filtro; corta, el rótulo entra también a 1323 px.
+        "Datos al",
+        _fecha_actualizacion.strftime("%d/%m · %H:%M")
         + (f" · {_texto_antiguedad(_horas_dato)}" if _dato_viejo else ""),
         color=ADVERTENCIA_TEXTO if _dato_viejo else None,
     )

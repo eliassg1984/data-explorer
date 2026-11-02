@@ -66,7 +66,7 @@ from graficos import alturas
 from graficos.ajuste._comun import (
     FAMILIAS_DE_ENTRADA, _MESES_ABR_ES, _periodo_pivote_ajuste,
     css_filtros_vista, ctx_meses, fechas_del_mes, filtro_area_en_titulo,
-    mes_operativo_activo, rango_meses, recortar_meses, selector_meses,
+    mes_operativo_activo, rango_meses, recortar_meses, rotulo_familias_pagina, selector_meses,
 )
 from utils import fmt_k
 
@@ -645,6 +645,8 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         d = recortar_meses(d, col_fecha, rango_meses(ctx_m))
         d = filtro_area_en_titulo(c_area, d, col_area, col_ajuste_val,
                                   _K_AREA, "ajevo_ctrl_area")
+        with c_tit:
+            st.markdown(rotulo_familias_pagina(), unsafe_allow_html=True)
         publicar_contexto_ia("Ajuste de Inventario", d, {
             "Familia": st.session_state.get("ajuste_graf_filtro_familia"),
             "Área": st.session_state.get(_K_AREA)})

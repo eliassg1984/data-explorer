@@ -1087,7 +1087,7 @@ CSS = """
         --barra-fecha: 218px;
     }
     @media (max-width: 1499px) {
-        :root { --barra-sello: 110px; }
+        :root { --barra-sello: 140px; }   /* «Datos al 02/11 · 11:12» (#807) */
     }
     @media (max-width: 1199px) {
         :root { --barra-sello: 0px; }

@@ -914,3 +914,16 @@ def css_filtros_vista(prefijo_ctrl, prefijo_corte):
         padding: 5px 10px !important; }}
     div[class*="st-key-{prefijo_corte}"] button p {{ font-size: 12px !important; }}
 """
+
+
+def rotulo_familias_pagina():
+    """«Familias: 5 de 8 · de Filtros»: la Familia del compartimento de la franja,
+    dicha en las dos vistas que la leen (Evolución y la Tabla dinámica, #807).
+    El botón de «Filtros» ya no lleva la cuenta: en las demás vistas no aplica."""
+    sel = st.session_state.get("ajuste_graf_filtro_familia") or []
+    tot = st.session_state.get("_aj_fam_total") or 0
+    txt = (f"Familias: {len(sel)} de {tot}" if sel and tot and len(sel) < tot
+           else "Familias: todas")
+    return (f'<div class="aj-fam-pag" title="Se cambia en «Filtros», arriba a la derecha">'
+            f'{txt} <span>· de Filtros</span></div>')
+

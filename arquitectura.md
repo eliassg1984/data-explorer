@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-806 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+807 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1162,7 +1162,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (260)
+**Decisiones de diseño y UX** (261)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1424,6 +1424,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#803** — Inicio en el lenguaje de Costo de Carta: la portada y Pendientes
 - **#804** — La portada con el aire de la hoja
 - **#805** — Inventario › Por tipo en el lenguaje de Costo de Carta
+- **#807** — La esquina de la franja: la hora con su rótulo, Filtros como Refrescar, y lo que no aplica…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58572,6 +58573,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    en el resto de la app. La comparación de franjas de Por hora conserva el suyo: es una
    segunda tarjeta y lo necesita para distinguirse de la primera.
 
+807. **La esquina de la franja: la hora con su rótulo, Filtros como Refrescar, y lo que no aplica sin cuenta.**
+   A pedido, tras una revisión de jerarquía y usabilidad de la esquina derecha de la franja:
+   - **«Datos al 02/11 · 11:12»** (`app.py`): el rótulo «Última actualización:» se escondía por
+     debajo de 1500 px y la hora suelta se leía como la fecha de hoy o un filtro. Corto y sin el
+     año, entra a 1323 px (`--barra-sello: 140px` de 1200 a 1499, `_28_arbol.py`).
+   - **«Filtros» con la forma de «Refrescar»** (`_90_marco.py`): era texto índigo con un
+     subrayado de 2 px, que en esta app quiere decir «pestaña elegida». Pastilla gris; lo activo
+     lo dice la cuenta.
+   - **En Ajuste el botón ya no cuenta**: su Familia sólo la leen Evolución y la Tabla dinámica,
+     y «Filtros 1» en Diferencias decía un filtro que ahí no hace nada (las demás vistas traen el
+     suyo). El panel lo dice en una línea, y esas dos vistas muestran «Familias: 5 de 6 · de
+     Filtros» (`_comun.rotulo_familias_pagina`). Mudar el filtro a las vistas pediría que un
+     cambio adentro de un fragment recargara la página: queda para cuando haga falta.
+   - **Mix sin su fecha**: escribía la MISMA clave que la de la franja (`categoria=None`), así que
+     era el mismo control dos veces. La pieza abre sus controles al borde si no hay fecha
+     (`ubicarCabecera`). Por hora conserva la suya: es un rango PROPIO (#531), no un duplicado.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58584,7 +58602,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#806**; la próxima toma el número siguiente.
+> última regla es la **#807**; la próxima toma el número siguiente.
 
 >
 

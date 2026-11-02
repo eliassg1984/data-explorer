@@ -678,7 +678,9 @@ function dibujar(raiz) {
 function ubicarCabecera(raiz) {
   const fecha = document.querySelector('.st-key-vt_mix_cab_fecha');
   const c = raiz.querySelector('.vm-cabi');
-  if (!fecha || !c) return;
+  if (!c) return;
+  // Sin la fecha de la tarjeta (#807: está en la franja), los controles abren el renglón.
+  if (!fecha) { if (c.style.left !== '0px') c.style.left = '0px'; return; }
   const poner = () => { c.style.left = `${Math.round(fecha.getBoundingClientRect().right - raiz.getBoundingClientRect().left + 8)}px`; };
   poner();
   if (raiz.__fechaObs !== fecha) {

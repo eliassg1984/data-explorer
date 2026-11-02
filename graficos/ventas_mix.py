@@ -47,7 +47,7 @@ from cortes import MESES_ABR_ES
 from data import REPORTES, platos_sin_descargo
 from tema import ADVERTENCIA_TEXTO, ERROR, PALETA_SERIES, SCROLL_THUMB
 from graficos import ventas_alcance
-from graficos.base import _resolver, selector_fecha_tarjeta
+from graficos.base import _resolver
 from graficos.compras._comun import (_cobertura, _limites_periodo,
                                      _periodo_serie)
 from graficos.compras.semanal import _rotulo_periodo
@@ -664,12 +664,10 @@ def _ventas_mix(d, filtrar_cb=None):
 
     with st.container(horizontal=True, gap="small", vertical_alignment="center",
                       key="vt_mix_cab"):
-        # Sin título (#806): el nombre de la vista está en la franja.
-        with st.container(key="vt_mix_cab_fecha", width="content"):
-            # «vt_mixf» y no «vt_mix»: el selector arma SUS keys con ese
-            # prefijo (`_fila`, `_escala`, `_escala_panel`, `_panelf`).
-            selector_fecha_tarjeta("vt_mixf", "vt_mix_fecha_flag",
-                                   categoria=None)
+        # Sin título (#806) ni fecha (#807): los dos están en la franja, y la
+        # fecha de acá escribía la MISMA clave (`categoria=None`): era el mismo
+        # control dos veces. El renglón queda para los controles de la pieza.
+        st.markdown('<div class="vt-mix-hueco"></div>', unsafe_allow_html=True)
 
     cols = columnas(d)
     if not (cols["fecha"] and cols["venta"] and cols["grupo"]):

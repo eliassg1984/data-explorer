@@ -474,7 +474,7 @@ html[data-vt-sin-fecha] .st-key-fecha_ajuste_pill { visibility: hidden !importan
         }
     }
     @media (min-width: 901px) and (max-width: 1499px) {
-        #sello-actualizacion .sello-rotulo { display: none !important; }
+        /* Desde la #807 el rótulo («Datos al») se queda: es corto. */
         :root:has(#sello-actualizacion.sello-viejo) { --barra-sello: 190px; }
     }
     @media (min-width: 901px) and (max-width: 1199px) {
