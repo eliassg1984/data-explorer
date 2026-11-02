@@ -227,7 +227,7 @@ const VAP=(()=>{
     const valor=(r,k)=>k==='cambioP'?(r.pa>0&&r.pn!=null?r.pn/r.pa-1:null):k==='cambioQ'?(r.qa>0?r.q/r.qa-1:null):r[k];
     filas=[...filas];if(o)filas.sort((a,b)=>{const x=valor(a,o.k),y=valor(b,o.k);if(x==null)return y==null?0:1;if(y==null)return-1;return(typeof x==='string'?cmp(x,y):x-y)*o.d;});else if(defecto)filas.sort(defecto);
     return{id,filas,medida,o,valor};}
-  function columnas(G,medida){const{s}=G,gr=s.agrupar!=='Producto',base=nombreBase(G),amp=s.amp==='izq',lado=s.lado||'dej';
+  function columnas(G,medida){const{s}=G,gr=s.agrupar!=='Producto',base=nombreBase(G),amp=!!s.det,lado=s.lado||'dej';
     const C=(k,t,w,f,cl,tip='')=>({k,t,w,f,cl,tip}),cV=C('v','Este período','w-x',r=>fS(r.v)),cA=C('va',base,'w-x',r=>fS(r.va));
     if(gr)return[C('n','Productos','w-x',r=>n0.format(r.n)),C(medida,s.kpi==='compra'?'Diferencia':'Impacto','w-im',r=>fD(r[medida]),r=>medida==='ep'?rojoVerde(r.ep):'')];
     if(s.kpi==='precio')return[C('pa','Antes','w-pr',r=>f2(r.pa)),C('pn','Ahora','w-pr',r=>f2(r.pn)),C('cambioP','%','w-pc',r=>fP(r.pn/r.pa-1),r=>rojoVerde(r.ep)),C('ep','Impacto','w-im',r=>fD(r.ep),r=>rojoVerde(r.ep),'Cambio de precio × la cantidad promedio de los dos períodos'),...(amp?[cV,cA]:[])];
@@ -257,7 +257,7 @@ const VAP=(()=>{
     const cif=(r,v,d,c='')=>`<div class="vap-cf"><span>${esc(r)}</span><b class="${c}">${esc(v)}</b><small>${esc(d)}</small></div>`,ambos=P1.clase==='ambos',cp=P1.pa>0&&P1.pn!=null?P1.pn/P1.pa-1:null,cq=P1.qa>0?P1.q/P1.qa-1:null;
     const fr=ambos?(Math.abs(P1.ep)>=Math.abs(P1.ev)?`Lo que más pesa es el precio: ${P1.ep>0?'subió':'bajó'} ${fP(cp).replace(/[+−]/,'')}, ${fD(P1.ep)}. La cantidad movió ${fD(P1.ev)}.`:`Lo que más pesa es la cantidad: se compró ${P1.ev<0?'menos':'más'} (${fP(cq)}), ${fD(P1.ev)}. El precio movió ${fD(P1.ep)}.`)
       :P1.clase==='nuevo'?`No se compró en ${baseMin(G)}: los ${fS(P1.v)} son todos nuevos.`:P1.clase==='dejado'?`En ${baseMin(G)} se compraron ${fS(P1.va)} y en este período nada.`:'Con cantidad cero o negativa en un lado (notas de crédito o ajustes): no se puede partir en precio y cantidad.';
-    return`<div class="vap-fcab"><div class="vap-ftit"><span class="vap-miga">${esc([P1.fam,P1.sub].filter(Boolean).join(' › '))}</span><h3 title="${esc(P1.item)}">${esc(P1.item)}</h3><span class="vap-miga">${esc(ambos?'Comprado en los dos períodos':P1.clase==='nuevo'?`Nuevo: no se compró en ${baseMin(G)}`:P1.clase==='dejado'?'Se dejó de comprar':'Sin cantidad comparable')}</span></div><button class="vap-pil" data-a="amp" data-v="panel">${s.amp==='panel'?'Ver la lista':'Ampliar'}</button><button class="vap-quita" data-a="soltar">Soltar</button></div>
+    return`<div class="vap-fcab"><div class="vap-ftit"><span class="vap-miga">${esc([P1.fam,P1.sub].filter(Boolean).join(' › '))}</span><h3 title="${esc(P1.item)}">${esc(P1.item)}</h3><span class="vap-miga">${esc(ambos?'Comprado en los dos períodos':P1.clase==='nuevo'?`Nuevo: no se compró en ${baseMin(G)}`:P1.clase==='dejado'?'Se dejó de comprar':'Sin cantidad comparable')}</span></div>${ampB(s,'panel','la ficha')}<button class="vap-quita" data-a="soltar">Soltar</button></div>
       <div class="vap-cifras">${cif('Compra',fS(P1.v),`antes ${fS(P1.va)}`)}${cif('Precio',P1.pn!=null?`S/ ${f2(P1.pn)}`:'—',P1.pa!=null?`antes S/ ${f2(P1.pa)} · ${fP(cp)}`:'',rojoVerde(P1.ep))}${cif('Cantidad',`${fQ(P1.q)} ${um}`,`antes ${fQ(P1.qa)} ${um}`)}${cif('Diferencia',fD(P1.delta),ambos?`precio ${fD(P1.ep)} · cantidad ${fD(P1.ev)}`:'')}</div>
       <p class="vap-frase">${esc(fr)}</p><div class="vap-fl"><div class="vap-seg" role="group" aria-label="Qué medir">${['Soles','Cantidad','Precio'].map(m=>`<button class="${s.magn===m?'on':''}" data-a="magn" data-v="${m}" aria-pressed="${s.magn===m}">${m}</button>`).join('')}</div><span class="vap-sub">13 meses · oscuro: el rango</span><span class="vap-esp"></span><span class="vap-ley"><i></i> ${esc(baseMin(G))}</span></div>
       <div class="vap-plot chica${s.amp==='panel'?' grande':''}" data-plot="ficha">${cols}<div class="vap-tip" hidden></div></div><div class="vap-ejes chicos">${T.meses.map((m,i)=>`<span>${i%2===(n-1)%2?esc((P.etq_meses||[])[+m.slice(5)-1]||''):''}</span>`).join('')}</div>`;}
@@ -273,7 +273,7 @@ const VAP=(()=>{
     const fams=[...porF].filter(([f])=>f).map(([f,rs])=>({f,t:totales(porProducto(rs,P,D.plan))})).filter(x=>Math.abs(x.t.v)>.005||Math.abs(x.t.va)>.005).sort((a,b)=>b.t.va-a.t.va||b.t.v-a.t.v);
     const fila=x=>`<button class="vap-fi${s.fam===x.f?' on':''}" data-a="fam" data-v="${esc(x.f)}"><span class="n" title="${esc(x.f)}">${esc(x.f)}</span><small>${esc(s.kpi==='compra'?fF(x.t.va>0?x.t.delta/x.t.va:null):s.kpi==='precio'?(x.t.paasche==null?'':fP(x.t.paasche)):s.kpi==='carta'?`${x.t.nDej} dejados · ${x.t.nNue} nuevos`:'')}</small><b class="${s.kpi==='precio'?rojoVerde(med(x.t)):''}">${esc(fD(med(x.t)))}</b></button>`;
     const ambito=`${s.sub||(s.fam===ALL?'Todas las compras':s.fam)} · ${rangoTxt(P,D.meses.length?D.meses:D.V.meses)}`;
-    let h=`<div class="vap-fcab"><div class="vap-ftit"><span class="vap-miga">${esc(ambito)}</span><h3>${esc(TIT[s.kpi])}</h3><span class="vap-miga">${esc(`${fS(t.va)} → ${fS(t.v)} · ${fD(t.delta)} (${t.pct==null?'—':fP(t.pct/100)})`)}</span></div></div><p class="vap-frase">${esc(fraseDe(G,t,prods))}</p>`;
+    let h=`<div class="vap-fcab"><div class="vap-ftit"><span class="vap-miga">${esc(ambito)}</span><h3>${esc(TIT[s.kpi])}</h3><span class="vap-miga">${esc(`${fS(t.va)} → ${fS(t.v)} · ${fD(t.delta)} (${t.pct==null?'—':fP(t.pct/100)})`)}</span></div>${ampB(s,'panel','el resumen')}</div><p class="vap-frase">${esc(fraseDe(G,t,prods))}</p>`;
     if(s.kpi==='compra')h+=cascadaHtml(G,t);
     const titF=s.kpi==='compra'?'Por familia':s.kpi==='precio'?'Precio, por familia':s.kpi==='cantidad'?'Cantidad, por familia':'Dejados y nuevos, por familia';
     h+=`<div class="vap-bloque">${titF}</div><div class="vap-lista" data-lista="panel">${fams.map(fila).join('')}`;
@@ -283,27 +283,42 @@ const VAP=(()=>{
     return h;}
   function menuFamilias(G,F){const{P,s}=G,pa=P.pagina;if(!pa?.todas?.length)return'';const el=new Set(pa.elegidas),n=pa.elegidas.length||pa.todas.length,ab=s.menu==='fam';
     return`<div class="vap-ms"><button class="vap-pil" data-a="menu" data-v="fam" aria-expanded="${ab}">${n===pa.todas.length?'Todas las familias':`Familias: ${n} de ${pa.todas.length}`} ▾</button>${ab?`<div class="vap-pop">${[...pa.todas].sort((a,b)=>(F.por.get(b[1])||0)-(F.por.get(a[1])||0)).map(([r,nom])=>`<label><input type="checkbox" data-a="pfam" value="${esc(r)}"${el.has(r)||!el.size?' checked':''}><span>${esc(nom)}</span><small>${esc(fS(F.por.get(nom)||0))}</small></label>`).join('')}<p>Vale para todas las vistas de Compras.</p></div>`:''}</div>`;}
-  function pasarFecha(G){const fb=document.querySelector('.st-key-cp_vap_nativa_fecha'),lg=G.root.querySelector('.vap-lugar');if(!fb||!fb.offsetWidth||!lg)return;
+  const ICO_AMP='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>',ICO_VOLVER='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>';
+  const ampB=(s,cual,rot)=>`<button class="vap-amp" data-a="amp" data-v="${cual}" aria-pressed="${s.amp===cual}" title="${s.amp===cual?'Volver (Esc)':`Ampliar ${rot}`}" aria-label="${s.amp===cual?'Volver':`Ampliar ${rot}`}">${s.amp===cual?ICO_VOLVER:ICO_AMP}</button>`;
+  const leerLS=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},guardarLS=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){/* sólo esta vez */}};
+  function pasarFecha(G){const fb=document.querySelector('.st-key-cp_vap_nativa_fecha'),lg=G.root.querySelector('.vap-lugar');if(!fb)return;
+    const ver=!!(lg&&lg.offsetWidth);if(fb.style.visibility!==(ver?'':'hidden'))fb.style.visibility=ver?'':'hidden';if(!ver||!fb.offsetWidth)return;
     const w=`${fb.offsetWidth+8}px`;if(G.root.style.getPropertyValue('--vap-fecha')!==w)G.root.style.setProperty('--vap-fecha',w);
-    const padre=fb.offsetParent;if(!padre||!lg.offsetWidth)return;const x=`${Math.round(lg.getBoundingClientRect().left-padre.getBoundingClientRect().left)}px`;if(fb.style.left!==x)fb.style.left=x;}
+    const padre=fb.offsetParent;if(!padre)return;const a=lg.getBoundingClientRect(),b=padre.getBoundingClientRect();
+    const x=`${Math.round(a.left-b.left)}px`,y=`${Math.round(a.top-b.top+(a.height-fb.offsetHeight)/2)}px`;if(fb.style.left!==x)fb.style.left=x;if(fb.style.top!==y)fb.style.top=y;}
+  // Nivel 2: qué se mira, y a la derecha «Detalle» (las columnas de más de la lista) y «Cómo se calcula» (#793).
+  function nivel2(G,n){const{s}=G,como=s.como?`<div class="vap-pop-como" role="dialog"><p>Cada mes contra su espejo según «Contra»; el mes en curso, contra los mismos días. Sin IGV.</p><dl>`
+      +'<dt>Compra</dt><dd>Lo comprado en los meses del rango contra los mismos meses de la base. Precio, cantidad y dejados y nuevos suman la diferencia.</dd>'
+      +'<dt>Precio</dt><dd>Cambio de precio × la cantidad promedio de los dos períodos, producto por producto: no depende de cuál se tome de base.</dd>'
+      +'<dt>Cantidad</dt><dd>Lo demás de los productos comprados en los dos períodos, cada uno en su unidad de compra.</dd>'
+      +'<dt>Dejados y nuevos</dt><dd>Los que se compraron de un solo lado. Se empareja por nombre: un producto que cambió de nombre aparece en los dos.</dd>'
+      +'<dt>Por S/ 100 vendidos</dt><dd>La compra de meses completos ÷ la venta del mismo mes × 100. No es el costo de ventas.</dd></dl><p>Es un cálculo propio, no un estándar.</p></div>':'';
+    return`<div class="vap-n2"><div class="vap-tabs" role="tablist">${[['graf','Gráfico'],['prod',`Productos${n!=null?` · ${n0.format(n)}`:''}`]].map(([k,x])=>`<button role="tab" class="${s.zona===k?'on':''}" data-a="zona" data-v="${k}" aria-selected="${s.zona===k}">${esc(x)}</button>`).join('')}</div>`
+      +`<div class="vap-n2-der"><label class="vap-switch"><input type="checkbox" data-a="det" role="switch"${s.det?' checked':''}>Detalle</label><span class="vap-como"><button class="vap-link" data-a="como" aria-expanded="${!!s.como}">Cómo se calcula</button>${como}</span></div></div>`;}
   function dibujar(G){const{P,s,root}=G;const D=G.D=calcular(P,{...s,foco:null,modo:'Valor',corte:'Por qué',detalleMeses:true,cobertura:'Todos'},G.cache);s.meses=D.meses;
     const active=root.querySelector('input[type=search]:focus'),f=active?[active.selectionStart,active.selectionEnd]:null,y=root.querySelector('.vap-wrap')?.scrollTop||0,yl=root.querySelector('.vap-lista')?.scrollTop||0;
     const V=D.V,tituloC=s.contra==='aa'?'Compras vs año pasado':s.contra==='aa2'?'Compras vs hace dos años':s.contra==='ant'?'Compras vs período anterior':`Compras vs desde ${etq(P,String(s.contra).slice(2))}`;
     const F=fueraDePagina(P,D,G.cache);
-    let html=`<div class="vap-cab"><h2 class="vap-tit">${esc(tituloC)}</h2><span class="vap-lugar" aria-hidden="true"></span>${menuFamilias(G,F)}<select class="vap-men" data-select="contra" aria-label="Contra qué período">${opcionesContra(G)}</select><span class="vap-esp"></span><input class="vap-busca" type="search" data-input="q" placeholder="Buscar producto…" aria-label="Buscar producto" value="${esc(s.q)}"><button class="vap-pil" data-a="excel" ${!D.g.length?'disabled':''} title="Baja lo que se ve">Excel ↓</button></div>`;
-    if(!V.meses.length){const base=baseMin(G);root.innerHTML=html+`<p class="vap-vacio">No hay meses para comparar: ${V.n?`el rango termina antes de ${esc(etq(P,V.piso))}, el primer mes con ${esc(base)} en los datos`:'el rango elegido no tiene compras'}. Probá con otra fecha u otro «Contra».</p>`;pasarFecha(G);return;}
-    const T=trece(P,s,D,G.cache),t=D.totC,prods=porProducto(D.gc,P,D.plan),P1=s.sel!=null?prods.find(r=>r.item===s.sel)||null:null;if(!P1){s.sel=null;if(s.amp==='panel')s.amp=null;}
+    root.classList.toggle('amp',!!s.amp);
+    let html=`<div class="vap-cab" title="${esc(tituloC)}"><span class="vap-lugar" aria-hidden="true"></span>${menuFamilias(G,F)}<select class="vap-men" data-select="contra" aria-label="Contra qué período">${opcionesContra(G)}</select><span class="vap-esp"></span><input class="vap-busca" type="search" data-input="q" placeholder="Buscar producto…" aria-label="Buscar producto" value="${esc(s.q)}"><button class="vap-pil" data-a="excel" ${!D.g.length?'disabled':''} title="Baja lo que se ve">Excel ↓</button></div>`;
+    if(!V.meses.length){const base=baseMin(G);root.innerHTML=nivel2(G,null)+html+`<p class="vap-vacio">No hay meses para comparar: ${V.n?`el rango termina antes de ${esc(etq(P,V.piso))}, el primer mes con ${esc(base)} en los datos`:'el rango elegido no tiene compras'}. Probá con otra fecha u otro «Contra».</p>`;pasarFecha(G);return;}
+    const T=trece(P,s,D,G.cache),t=D.totC,prods=porProducto(D.gc,P,D.plan),P1=s.sel!=null?prods.find(r=>r.item===s.sel)||null:null;if(!P1)s.sel=null;
     const verIzq=s.amp!=='panel',verPanel=s.amp!=='izq',L=listaDe(G,prods),par=P.parcial?.[0],base=baseMin(G);
     const nS=prods.filter(r=>r.clase==='ambos'&&r.ep>.5).length,nB=prods.filter(r=>r.clase==='ambos'&&r.ep<-.5).length,nM=prods.filter(r=>r.clase==='ambos'&&r.ev<-.5).length,nM2=prods.filter(r=>r.clase==='ambos'&&r.ev>.5).length,nO=prods.filter(r=>r.clase==='otro').length;
     const SENT={precio:[['sube',`Subieron · ${nS}`],['baja',`Bajaron · ${nB}`]],cantidad:[['baja',`Se compró menos · ${nM}`],['sube',`Se compró más · ${nM2}`]],carta:[['dej',`Dejaron · ${t.nDej}`],['nue',`Nuevos · ${t.nNue}`],...(nO?[['otr',`Sin cantidad · ${nO}`]]:[])]}[s.kpi]||[];
     const actSent=s.kpi==='precio'?s.sentido.precio:s.kpi==='cantidad'?s.sentido.volumen:s.lado||'dej';
     const chips=[...D.meses.map(m=>`<button class="vap-quita" data-a="quita-mes" data-v="${m}">${esc(etq(P,m))}${m===par?'*':''} ✕</button>`),...(s.fam!==ALL?[`<button class="vap-quita" data-a="quita-fam">${esc(s.fam)} ✕</button>`]:[]),...(s.sub?[`<button class="vap-quita" data-a="quita-sub">${esc(s.sub)} ✕</button>`]:[])].join('');
-    html+=`<div class="vap-kpis">${kpisHtml(G,t,T)}</div><div class="vap-cuerpo" data-amp="${s.amp||''}">`;
+    html=nivel2(G,SENT.length?null:L.filas.length)+html+`<div class="vap-kpis">${kpisHtml(G,t,T)}</div><div class="vap-cuerpo" data-amp="${s.amp||''}">`;
     if(verIzq){const graf=s.zona==='graf',vta=s.medir==='venta';
-      html+=`<section class="vap-izq"><div class="vap-fl"><div class="vap-seg" role="group" aria-label="Qué mirar">${[['graf','Gráfico'],['prod',SENT.length?'Productos':`Productos · ${n0.format(L.filas.length)}`]].map(([k,x])=>`<button class="${s.zona===k?'on':''}" data-a="zona" data-v="${k}" aria-pressed="${s.zona===k}">${esc(x)}</button>`).join('')}</div>`
+      html+=`<section class="vap-izq"><div class="vap-fl">`
         +(!graf&&SENT.length?`<div class="vap-seg" role="group" aria-label="Cuáles">${SENT.map(([k,x])=>`<button class="${actSent===k?'on':''}" data-a="sent" data-v="${k}" aria-pressed="${actSent===k}">${esc(x)}</button>`).join('')}</div>`:'')+chips+'<span class="vap-esp"></span>'
         +(graf?`<select class="vap-men" data-select="medir" aria-label="Qué medir"><option value="soles"${vta?'':' selected'}>Medir: Soles</option><option value="venta"${vta?' selected':''}>Medir: por S/ 100 vendidos</option></select>`:`<select class="vap-men" data-select="agrupar" aria-label="Ver por">${D.grupos.map(g=>`<option value="${esc(g)}"${s.agrupar===g?' selected':''}>Ver por: ${esc(g)}</option>`).join('')}</select>`)
-        +`<button class="vap-pil" data-a="amp" data-v="izq">${s.amp==='izq'?'Ver la ficha':'Ampliar'}</button></div>`;
+        +ampB(s,'izq',graf?'el gráfico':'la lista')+'</div>';
       if(graf){const hayPar=V.meses.includes(par);
         html+=`<div class="vap-fl"><span class="vap-sub"><b>${vta?'Compra por cada S/ 100 vendidos':'Compra por mes'}</b> · ${vta?'cálculo propio: no es el costo de ventas':`sin IGV${hayPar?` · * hasta el día ${P.parcial[1]}, en los dos lados`:''}`}</span><span class="vap-esp"></span><span class="vap-ley"><i></i> ${esc(base)}</span></div>${barrasHtml(G,T)}<p class="vap-nota">${V.antes?`${V.antes} ${V.antes===1?'mes del rango no tiene':'meses del rango no tienen'} ${esc(base)} en los datos y no se comparan. `:''}${vta?(P.venta==null?'Cargando la venta…':'Sólo meses completos con venta en los dos lados.'):'Un clic en un mes explica sólo ese mes; Mayús + clic suma varios. Cada mes se parte contra su espejo: mes a mes el precio no suma exacto lo del período.'}</p>`;
       }else html+=`${tablaHtml(G,L)}<p class="vap-nota">${s.kpi==='precio'?'Impacto = cambio de precio × cantidad promedio de los dos períodos: no depende de cuál se tome de base.':s.kpi==='cantidad'?'Los mismos productos, comprados en los dos períodos. Cada uno en su unidad de compra: no se suman kilos con unidades.':s.kpi==='carta'?'Se empareja por nombre: un producto que cambió de nombre aparece en los dos lados.':'Precio y cantidad sólo existen si el producto se compró en los dos períodos.'}</p>`;
@@ -315,11 +330,16 @@ const VAP=(()=>{
     pasarFecha(G);}
   function avisarFamilias(G){if(G.pagina){const v=G.pagina;G.pagina=null;G.enviar?.('familias',v);}}
   function montar({data:P,parentElement,setTriggerValue}){const old=window.__comprasAno;old?.abort.abort();let root=parentElement.querySelector('.vap');if(!root){root=document.createElement('div');root.className='vap';parentElement.appendChild(root);}
-    const s=old?.s||inicial(P.inicial);
+    const s=old?.s||inicial(P.inicial);if(s.det==null)s.det=!!leerLS('cp_vap_det',false);
     if(s.fam!==ALL&&!(P.familias||[]).includes(s.fam))s.fam=ALL;if(s.sub&&!Object.values(P.mapas?.Subfamilia||{}).includes(s.sub))s.sub=null;if(s.agrupar!=='Producto'&&!(P.mapas||{})[s.agrupar])s.agrupar='Producto';
     const G={P,s,root,cache:{},abort:new AbortController(),enviar:setTriggerValue,pedido:old?.pedido||false};window.__comprasAno=G;const signal=G.abort.signal;
-    root.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b||b.disabled||b.matches('input'))return;const{a,v}=b.dataset;
-      if(a==='kpi'){s.kpi=v;if(v!=='compra')s.zona='prod';s.sel=null;s.amp=null;s.lim=150;s.orden=null;}
+    root.addEventListener('click',e=>{const b=e.target.closest('[data-a]');
+      if(!b&&s.como&&!e.target.closest?.('.vap-como')){s.como=false;dibujar(G);return;}
+      if(b&&b.dataset.a==='det'){s.det=!!b.checked;guardarLS('cp_vap_det',s.det);dibujar(G);return;}
+      if(!b||b.disabled||b.matches('input'))return;const{a,v}=b.dataset;
+      if(a!=='como')s.como=false;
+      if(a==='como')s.como=!s.como;
+      else if(a==='kpi'){s.kpi=v;if(v!=='compra')s.zona='prod';s.sel=null;s.amp=null;s.lim=150;s.orden=null;}
       else if(a==='zona')s.zona=v;
       else if(a==='sent'){if(s.kpi==='precio')s.sentido={...s.sentido,precio:v};else if(s.kpi==='cantidad')s.sentido={...s.sentido,volumen:v};else s.lado=v;s.lim=150;s.orden=null;}
       else if(a==='item'){s.sel=s.sel===v?null:v;if(s.amp==='izq')s.amp=null;}
@@ -352,7 +372,8 @@ const VAP=(()=>{
       tip.innerHTML=pl.dataset.plot==='mes'?tipMes(G,i):tipFicha(G,i);tip.hidden=false;const bx=col.getBoundingClientRect(),bp=pl.getBoundingClientRect(),x=bx.left-bp.left+bx.width*.6;tip.style.left=`${Math.max(0,x+tip.offsetWidth>bp.width?x-tip.offsetWidth-8:x)}px`;},{signal});
     root.addEventListener('mouseout',e=>{const pl=e.target.closest?.('[data-plot]');if(pl&&!pl.contains(e.relatedTarget))pl.querySelector('.vap-tip').hidden=true;},{signal});
     document.addEventListener('pointerdown',e=>{if(!s.menu||e.composedPath().some(n=>n.classList?.contains('vap-ms')))return;s.menu=null;dibujar(G);avisarFamilias(G);},{signal});
-    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&s.menu){s.menu=null;dibujar(G);avisarFamilias(G);}},{signal});
+    document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!root.isConnected)return;
+      if(s.menu){s.menu=null;dibujar(G);avisarFamilias(G);}else if(s.como){s.como=false;dibujar(G);}else if(s.amp){s.amp=null;dibujar(G);}},{signal});
     dibujar(G);
     // La venta se pide después de dibujar: sin caché tarda, y las compras no la esperan.
     if(P.venta_pendiente&&P.venta==null&&typeof setTriggerValue==='function'&&!G.pedido){G.pedido=true;setTimeout(()=>{if(!signal.aborted)setTriggerValue('venta',Date.now());},120);}

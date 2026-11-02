@@ -87,7 +87,7 @@ const DOCS=(()=>{
   function fCorta(v,P){if(!v)return'Sin fecha';const[y,m,d]=v.split('-'),varios=P&&new Set(P.fechas.filter(Boolean).map(f=>f.slice(0,4))).size>1;return`${+d} ${MES[+m-1]}${varios?` ${y.slice(2)}`:''}`;}
   const tipoGuia=t=>String(t||'').toLowerCase().startsWith('gu');
   function colsPantalla(s){if(s==='ficha')return[['producto','Producto','','l'],['cantTxt','Cant.','w-x','r'],['medio','Precio','w-pr','v'],['vsHab','Vs. hab.','w-pc','p'],['v','Valor','w-im','v']];
-    const amp=G0?.s.amp==='izq';if(s==='Documentos')return[['fecha','Fecha','w-fe','f'],['numero','Documento','w-do','l'],['proveedor','Proveedor','','m'],['lineas','Líneas','w-pc','n'],['valor','Neto','w-im','v'],...(amp?[['igv','IGV','w-im','v'],['total','Total','w-im','v']]:[])];
+    const amp=!!G0?.s.det;if(s==='Documentos')return[['fecha','Fecha','w-fe','f'],['numero','Documento','w-do','l'],['proveedor','Proveedor','','m'],['lineas','Líneas','w-pc','n'],['valor','Neto','w-im','v'],...(amp?[['igv','IGV','w-im','v'],['total','Total','w-im','v']]:[])];
     return[['fecha','Fecha','w-fe','f'],...(amp?[['numero','Documento','w-do','l']]:[]),['producto','Producto','','l'],['proveedor','Proveedor','w-pv','l'],['cantTxt','Cantidad','w-x','r'],['medio','Precio','w-pr','v'],['vsHab','Vs. hab.','w-pc','p'],['v','Valor','w-im','v']];}
   let G0=null;
   function celda(r,c,P){const[k,,,t]=c,v=r[k];
@@ -127,7 +127,7 @@ const DOCS=(()=>{
     const cif=(r,x,y,c='')=>`<div class="dc-cf"><span>${esc(r)}</span><b class="${c}">${esc(x)}</b><small>${esc(y)}</small></div>`,fr=[];
     if(afuera.length)fr.push(`Tiene ${afuera.length} ${afuera.length===1?'línea más':'líneas más'} en familias fuera del filtro, por ${fS(va)}: el documento entero suma ${fS2(v+va)} sin IGV.`);if(guia)fr.push('Guía: todavía no lleva IGV; lo trae la factura.');if(nc>.005)fr.push(`Ya tiene restada una nota de crédito de ${fS(nc)}.`);
     const emit=fCorta(P.fechas[d[2]],P),ingreso=proc?`· ingresada el ${fCorta(proc.slice(0,10),P)} a las ${proc.slice(11,16)}`:'';
-    return`<div class="dc-fcab"><div class="dc-ftit"><span class="dc-miga">${esc(P.proveedores[d[1]][1])}</span><h3 title="${esc(d[4])}">${esc(d[5]?d[4]:'Línea sin número')}</h3><span class="dc-miga">${esc(`${tipo} · emitida el ${emit} ${ingreso}`)}</span></div><button class="dc-pil" data-a="amp" data-v="panel">${s.amp==='panel'?'Ver la lista':'Ampliar'}</button><button class="dc-quita" data-a="cerrar">Soltar</button></div>
+    return`<div class="dc-fcab"><div class="dc-ftit"><span class="dc-miga">${esc(P.proveedores[d[1]][1])}</span><h3 title="${esc(d[4])}">${esc(d[5]?d[4]:'Línea sin número')}</h3><span class="dc-miga">${esc(`${tipo} · emitida el ${emit} ${ingreso}`)}</span></div>${ampB(s,'panel','la ficha')}<button class="dc-quita" data-a="cerrar">Soltar</button></div>
       <div class="dc-cifras">${cif('Neto',fS2(v),nN(dentro.length,'línea'))}${cif('IGV',guia?'—':fS2(igv),guia?'la guía no lo lleva':'')}${cif('Total',fS2(v+igv),afuera.length?'sólo lo que entra en el filtro':'lo que dice el papel')}${cif('Precios raros',String(nfl),nfl?'no entran en los precios':'',nfl?'nar':'')}</div>
       ${fr.length?`<p class="dc-frase">${esc(fr.join(' '))}</p>`:''}${tablaLista(G,'ficha',colsPantalla('ficha'),lineasTabla([...dentro,...afuera],P),false)}`;}
   function resumenHtml(G){const{P,D,s}=G,docs=D.docs,v=suma(docs,'valor'),igv=suma(docs,'igv'),nF=docs.filter(d=>d.tipo==='Factura').length,nG=docs.filter(d=>tipoGuia(d.tipo)).length,may=[...docs].sort((a,b)=>b.valor-a.valor)[0];
@@ -136,20 +136,35 @@ const DOCS=(()=>{
     const tit={todos:'Qué hay en estos documentos',guia:'Guías sin factura',raro:'Documentos con precio raro',parcial:'Documentos con líneas afuera'}[s.kpi],por=new Map();for(const d of docs){const a=por.get(d.provI)||{n:0,v:0};a.n++;a.v+=d.valor;por.set(d.provI,a);}
     const uno=s.proveedores?.length===1?s.proveedores[0]:null,filas=[...por].sort((a,b)=>b[1].v-a[1].v).map(([i,a])=>`<button class="dc-fi${uno===P.proveedores[i][0]?' on':''}" data-a="provuno" data-v="${esc(P.proveedores[i][0])}"><span class="n" title="${esc(P.proveedores[i][1])}">${esc(P.proveedores[i][1])}</span><small>${esc(nN(a.n,'documento'))}</small><b>${esc(fS(a.v))}</b></button>`).join('');
     const pa=P.pagina,el=new Set(pa?.elegidas||[]),fuera=pa&&el.size?pa.todas.filter(x=>!el.has(x[0])).sort((a,b)=>b[2]-a[2]):[],sF=fuera.reduce((a,x)=>a+x[2],0);
-    return`<div class="dc-fcab"><div class="dc-ftit"><span class="dc-miga">${esc(s.proveedores?nN(s.proveedores.length,'proveedor'):'Todos los proveedores')}${P.rango?` · ${esc(fCorta(P.rango[0],P))} – ${esc(fCorta(P.rango[1],P))}`:''}</span><h3>${esc(tit)}</h3><span class="dc-miga">${esc(`${nN(docs.length,'documento')} · ${fS(v)} sin IGV`)}</span></div></div><p class="dc-frase">${esc(fr)}</p><div class="dc-bloque">Por proveedor</div><div class="dc-lista" data-lista="panel">${filas}</div>${s.kpi==='todos'&&sF>.5?`<div class="dc-fuera"><span>Fuera de esta cuenta: ${esc(fS(sF))} de ${esc(fuera.slice(0,2).map(x=>x[1]).join(', '))}${fuera.length>2?'…':''}</span><button class="dc-quita" data-a="sumar">Sumarlas</button></div>`:''}`;}
-  function pasarFecha(G){const fb=document.querySelector('.st-key-cp_docs_nativa_fecha'),lg=G.root.querySelector('.dc-lugar');if(!fb||!fb.offsetWidth||!lg)return;const w=`${fb.offsetWidth+8}px`;if(G.root.style.getPropertyValue('--dc-fecha')!==w)G.root.style.setProperty('--dc-fecha',w);
-    const padre=fb.offsetParent;if(!padre||!lg.offsetWidth)return;const x=`${Math.round(lg.getBoundingClientRect().left-padre.getBoundingClientRect().left)}px`;if(fb.style.left!==x)fb.style.left=x;}
+    return`<div class="dc-fcab"><div class="dc-ftit"><span class="dc-miga">${esc(s.proveedores?nN(s.proveedores.length,'proveedor'):'Todos los proveedores')}${P.rango?` · ${esc(fCorta(P.rango[0],P))} – ${esc(fCorta(P.rango[1],P))}`:''}</span><h3>${esc(tit)}</h3><span class="dc-miga">${esc(`${nN(docs.length,'documento')} · ${fS(v)} sin IGV`)}</span></div>${ampB(s,'panel','el resumen')}</div><p class="dc-frase">${esc(fr)}</p><div class="dc-bloque">Por proveedor</div><div class="dc-lista" data-lista="panel">${filas}</div>${s.kpi==='todos'&&sF>.5?`<div class="dc-fuera"><span>Fuera de esta cuenta: ${esc(fS(sF))} de ${esc(fuera.slice(0,2).map(x=>x[1]).join(', '))}${fuera.length>2?'…':''}</span><button class="dc-quita" data-a="sumar">Sumarlas</button></div>`:''}`;}
+  const ICO_AMP='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>',ICO_VOLVER='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>';
+  const ampB=(s,cual,rot)=>`<button class="dc-amp" data-a="amp" data-v="${cual}" aria-pressed="${s.amp===cual}" title="${s.amp===cual?'Volver (Esc)':`Ampliar ${rot}`}" aria-label="${s.amp===cual?'Volver':`Ampliar ${rot}`}">${s.amp===cual?ICO_VOLVER:ICO_AMP}</button>`;
+  const leerLS=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},guardarLS=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){/* sólo esta vez */}};
+  function pasarFecha(G){const fb=document.querySelector('.st-key-cp_docs_nativa_fecha'),lg=G.root.querySelector('.dc-lugar');if(!fb)return;
+    const ver=!!(lg&&lg.offsetWidth);if(fb.style.visibility!==(ver?'':'hidden'))fb.style.visibility=ver?'':'hidden';if(!ver||!fb.offsetWidth)return;
+    const w=`${fb.offsetWidth+8}px`;if(G.root.style.getPropertyValue('--dc-fecha')!==w)G.root.style.setProperty('--dc-fecha',w);
+    const padre=fb.offsetParent;if(!padre)return;const a=lg.getBoundingClientRect(),b=padre.getBoundingClientRect();
+    const x=`${Math.round(a.left-b.left)}px`,y=`${Math.round(a.top-b.top+(a.height-fb.offsetHeight)/2)}px`;if(fb.style.left!==x)fb.style.left=x;if(fb.style.top!==y)fb.style.top=y;}
+  // Nivel 2: cómo ver, y a la derecha «Detalle» y «Cómo se calcula» (#793).
+  function nivel2(G,n,nL){const{s}=G,como=s.como?`<div class="dc-pop-como" role="dialog"><p>Los documentos del rango, sin IGV salvo en «Detalle», con las notas de crédito ya restadas.</p><dl>`
+      +'<dt>Documentos</dt><dd>Comprobantes distintos; con una búsqueda, las cifras suman sólo las líneas que coinciden y la ficha muestra el documento entero.</dd>'
+      +'<dt>Guías sin factura</dt><dd>Guías de remisión que todavía no se canjearon por su factura.</dd>'
+      +'<dt>Precio raro</dt><dd>Una compra de S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o con decimales en una unidad entera.</dd>'
+      +'<dt>Líneas afuera</dt><dd>Documentos con líneas de familias que no están en el filtro de la página: la ficha las muestra.</dd>'
+      +'<dt>Vs. hab.</dt><dd>El precio de la línea contra el habitual del producto: la mediana de los 90 días anteriores.</dd></dl><p>Es un cálculo propio, no un estándar.</p></div>':'';
+    return`<div class="dc-n2"><div class="dc-tabs" role="tablist">${[['Documentos',`Documentos · ${n.toLocaleString('en-US')}`],['Líneas',`Líneas · ${nL.toLocaleString('en-US')}`],['Tabla dinámica','Tabla dinámica']].map(([k,t])=>`<button role="tab" data-a="modo" data-v="${k}" class="${s.modo===k?'on':''}" aria-selected="${s.modo===k}">${esc(t)}</button>`).join('')}</div>`
+      +`<div class="dc-n2-der"><label class="dc-switch"><input type="checkbox" data-a="det" role="switch"${s.det?' checked':''}>Detalle</label><span class="dc-como"><button class="dc-link" data-a="como" aria-expanded="${!!s.como}">Cómo se calcula</button>${como}</span></div></div>`;}
   function pintar(G){const {P,s,root}=G;G0=G;G.D=calcular(P,s,G.cache);const D=G.D;
-    if(!D.ficha)s.doc=null;if(!D.ficha&&s.amp==='panel')s.amp=null;
+    if(!D.ficha)s.doc=null;root.classList.toggle('amp',!!s.amp);root.classList.toggle('det',!!s.det);
     const input=root.querySelector('[data-input=q]:focus'),f=input?[input.selectionStart,input.selectionEnd]:null;
     const provAbierto=root.querySelector('.dc-provs')?.open,provQ=root.querySelector('[data-provq]')?.value||'';
     const pos=G.resetScroll?[]:[...root.querySelectorAll('[data-tabla]')].map(e=>[e.dataset.tabla,e.scrollTop,e.scrollLeft]),yL=root.querySelector('[data-lista]')?.scrollTop||0;G.resetScroll=false;G.tablas={};
-    const piv=s.modo==='Tabla dinámica',verIzq=s.amp!=='panel',verPanel=s.amp!=='izq'&&(!piv||!!D.ficha),n=D.docs.length,nL=D.rs.length,uno=s.proveedores?.length===1?P.proveedores.find(x=>x[0]===s.proveedores[0])?.[1]:null;
+    const piv=s.modo==='Tabla dinámica',verIzq=s.amp!=='panel',verPanel=s.amp!=='izq'&&(!piv||!!D.ficha||s.amp==='panel'),n=D.docs.length,nL=D.rs.length,uno=s.proveedores?.length===1?P.proveedores.find(x=>x[0]===s.proveedores[0])?.[1]:null;
     const chips=[...(uno?[`<button class="dc-quita" data-a="provtop" data-v="Todos">${esc(uno)} ✕</button>`]:[]),...(s.kpi!=='todos'?[`<button class="dc-quita" data-a="kpi" data-v="${s.kpi}">${esc({guia:'Guías sin factura',raro:'Con precio raro',parcial:'Con líneas afuera'}[s.kpi])} ✕</button>`]:[])].join('');
-    let h=`<section class="dc-card dc-main"><div class="dc-cab"><h2 class="dc-tit">Detalle de documentos</h2><span class="dc-lugar" aria-hidden="true"></span>${menuFamilias(G)}${filtros(G)}<span class="dc-esp"></span><input class="dc-busca" data-input="q" type="search" value="${esc(s.q)}" placeholder="Documento, proveedor o producto…" aria-label="Buscar documentos"><button class="dc-pil" data-a="excel" ${!D.rs.length?'disabled':''} title="Baja lo que se ve">Excel ↓</button></div><div class="dc-kpis">${kpisHtml(G)}</div><div class="dc-cuerpo" data-amp="${s.amp||''}">`;
-    if(verIzq){h+=`<div class="dc-izq${!verPanel?' full':''}"><div class="dc-fl"><div class="dc-seg" role="group" aria-label="Qué mirar">${[['Documentos',`Documentos · ${n.toLocaleString('en-US')}`],['Líneas',`Líneas · ${nL.toLocaleString('en-US')}`],['Tabla dinámica','Tabla dinámica']].map(([k,t])=>`<button data-a="modo" data-v="${k}" class="${s.modo===k?'on':''}" aria-pressed="${s.modo===k}">${esc(t)}</button>`).join('')}</div>${chips}<span class="dc-esp"></span>`
+    let h=`<section class="dc-card dc-main">${nivel2(G,n,nL)}<div class="dc-cab"><span class="dc-lugar" aria-hidden="true"></span>${menuFamilias(G)}${filtros(G)}${chips}<span class="dc-esp"></span><input class="dc-busca" data-input="q" type="search" value="${esc(s.q)}" placeholder="Documento, proveedor o producto…" aria-label="Buscar documentos"><button class="dc-pil" data-a="excel" ${!D.rs.length?'disabled':''} title="Baja lo que se ve">Excel ↓</button></div><div class="dc-kpis">${kpisHtml(G)}</div><div class="dc-cuerpo" data-amp="${s.amp||''}">`;
+    if(verIzq){h+=`<div class="dc-izq${!verPanel?' full':''}"><div class="dc-fl"><span class="dc-esp"></span>`
         +(piv?`<select class="dc-men" data-select="gran" aria-label="Columnas por período">${P.granos.map(g=>`<option value="${g}"${g===s.gran?' selected':''}>Columnas: ${g}</option>`).join('')}</select><button class="dc-pil" data-a="config" aria-expanded="${s.config}">Configurar tabla ${s.config?'▴':'▾'}</button>`:`<select class="dc-men" data-select="importe" aria-label="Importes">${['Todos','Positivos','Negativos','Cero'].map(x=>`<option value="${x}"${x===s.importe?' selected':''}>Importes: ${x.toLowerCase()}</option>`).join('')}</select>`)
-        +`<button class="dc-pil" data-a="amp" data-v="izq">${s.amp==='izq'?'Ver el resumen':'Ampliar'}</button></div>`;
+        +ampB(s,'izq',piv?'la tabla':'la lista')+'</div>';
       if(piv)h+=`${s.config?configuracion(G):''}${tablaPivot(G)}<p class="dc-nota">${D.resumen.sinNumero?`${D.resumen.sinNumero} líneas sin número de documento. `:''}Cantidad sólo suma unidades compatibles; los precios requieren un producto y una unidad.</p>`;
       else h+=`${tablaLista(G,s.modo==='Documentos'?'docs':'lineas',colsPantalla(s.modo),s.modo==='Documentos'?D.docs:lineasTabla([...D.rs].sort((a,b)=>b.fecha-a.fecha||b.doc-a.doc),P))}<p class="dc-nota">${s.q?'Con una búsqueda, las cifras suman sólo las líneas que coinciden; la ficha muestra el documento entero. ':'Sin IGV. Las notas de crédito ya están restadas. '}${s.modo==='Líneas'?'En naranja, los precios raros. ':''}Un clic abre el documento al costado.</p>`;
       h+='</div>';}
@@ -171,7 +186,7 @@ const DOCS=(()=>{
     const hojas=[docs,ls,{nombre:'Tabla dinámica',cabeza:headers,decimales:6,filas},{nombre:'Contexto',cabeza:['Dato','Selección'],decimales:6,filas:contexto}];
     if(D.ficha)hojas.push(hoja('Ficha completa',columnasLista('Líneas'),lineasTabla(D.ficha.ls,P)));return hojas;
   }
-  function montar({data:P,parentElement,setTriggerValue}){const old=window.__comprasDocs;old?.abort.abort();old?.ro?.disconnect();let root=parentElement.querySelector('.dc');if(!root){root=document.createElement('div');root.className='dc';parentElement.appendChild(root);}const s=old?.s||inicial(P.inicial);G0=null;
+  function montar({data:P,parentElement,setTriggerValue}){const old=window.__comprasDocs;old?.abort.abort();old?.ro?.disconnect();let root=parentElement.querySelector('.dc');if(!root){root=document.createElement('div');root.className='dc';parentElement.appendChild(root);}const s=old?.s||inicial(P.inicial);if(s.det==null)s.det=!!leerLS('cp_docs_det',false);G0=null;
     if(old&&old.P.sello!==P.sello){s.abiertos=[];if(old.P.documentos.find(d=>d[0]===s.doc)?.[5]===false)s.doc=null;}
     if(!['Documentos','Líneas','Tabla dinámica'].includes(s.modo))s.modo='Documentos';if(!P.granos.includes(s.gran))s.gran='Mes';
     if(s.proveedores!=null)s.proveedores=s.proveedores.filter(p=>P.proveedores.some(x=>x[0]===p));
@@ -182,10 +197,15 @@ const DOCS=(()=>{
       if(siguiente===actual||siguiente===G.pedido)return;G.pedido=siguiente;setTriggerValue?.('ranking',{sello:P.sello});
     },{signal});
     const avisarFamilias=()=>{if(G.pagina){const x=G.pagina;G.pagina=null;setTriggerValue?.('familias',x);}};
-    root.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b||b.disabled||b.matches('input'))return;const {a,v,id,eje,i,dir}=b.dataset;
-      if(a==='modo'){s.modo=v;s.orden=null;G.resetScroll=true;}else if(a==='config')s.config=!s.config;
+    root.addEventListener('click',e=>{const b=e.target.closest('[data-a]');
+      if(!b&&s.como&&!e.target.closest?.('.dc-como')){s.como=false;pintar(G);return;}
+      if(b&&b.dataset.a==='det'){s.det=!!b.checked;guardarLS('cp_docs_det',s.det);pintar(G);return;}
+      if(!b||b.disabled||b.matches('input'))return;const {a,v,id,eje,i,dir}=b.dataset;
+      if(a!=='como')s.como=false;
+      if(a==='como')s.como=!s.como;
+      else if(a==='modo'){s.modo=v;s.orden=null;G.resetScroll=true;}else if(a==='config')s.config=!s.config;
       else if(a==='kpi'){s.kpi=s.kpi===v?'todos':v;s.doc=null;G.resetScroll=true;}
-      else if(a==='amp'){s.amp=s.amp===v?null:v;if(v==='izq')s.doc=null;}
+      else if(a==='amp'){s.amp=s.amp===v?null:v;}
       else if(a==='provuno'){s.proveedores=s.proveedores?.length===1&&s.proveedores[0]===v?null:[v];s.doc=null;G.resetScroll=true;}
       else if(a==='menu'){s.menu=s.menu===v?null:v;if(!s.menu)avisarFamilias();}
       else if(a==='sumar'){const pa=P.pagina;pa.elegidas=pa.todas.map(x=>x[0]);G.pagina=pa.elegidas.slice();avisarFamilias();}
@@ -217,7 +237,8 @@ const DOCS=(()=>{
     root.addEventListener('keydown',e=>{const el=e.target.closest('tr[data-a]');if(el&&(e.key==='Enter'||e.key===' ')){e.preventDefault();el.click();}},{signal});
     root.addEventListener('scroll',e=>{const el=e.target,id=el.dataset?.tabla,t=G.tablas[id];if(t&&el.scrollTop+el.clientHeight>=el.scrollHeight-160&&t.n<t.rs.length){el.querySelector('tbody').insertAdjacentHTML('beforeend',id==='pivot'?cuerpoPivot(G,t.n,t.n+150):filasLista(G,id,t.n,t.n+150));t.n+=150;}},{signal,capture:true});
     document.addEventListener('pointerdown',e=>{if(!s.menu||e.composedPath().some(n=>n.classList?.contains('dc-ms')))return;s.menu=null;pintar(G);avisarFamilias();},{signal});
-    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&s.menu){s.menu=null;pintar(G);avisarFamilias();}},{signal});
+    document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!root.isConnected)return;
+      if(s.menu){s.menu=null;pintar(G);avisarFamilias();}else if(s.como){s.como=false;pintar(G);}else if(s.amp){s.amp=null;pintar(G);}},{signal});
     root.addEventListener('dragstart',e=>{const el=e.target.closest('[data-campo]');if(el)e.dataTransfer.setData('text/plain',el.dataset.campo);},{signal});
     root.addEventListener('dragover',e=>{if(e.target.closest('[data-eje]'))e.preventDefault();},{signal});
     root.addEventListener('drop',e=>{const eje=e.target.closest('[data-eje]'),tag=e.target.closest('[data-pos]');if(!eje)return;e.preventDefault();mover(s,e.dataTransfer.getData('text/plain'),eje.dataset.eje,tag?+tag.dataset.pos:null);pintar(G);},{signal});

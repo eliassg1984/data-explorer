@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-792 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+793 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1431,13 +1431,14 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#654** — «Análisis de diferencias» reconoce lo descontado desde un ÁREA a la que la receta ya no apunta
 - **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 
-**Sin tema asignado** (5)
+**Sin tema asignado** (6)
 
 - **#300** — Un riel que PINTA casilleros enteros dice de más cuando el rango es más fino que su escala:…
 - **#547** — Un plato de cortesía cobrado a S/ 0 no tiene neto cero: tiene un RESIDUO, y dividir por él da…
 - **#735** — Salidas por Área es una pieza propia de extremo a extremo, con cinco cuadros y la nota completa
 - **#756** — Costos: lo que va a Mayta se cuenta UNA vez, como salida, y no es venta
 - **#792** — Compras › Período en el lenguaje entero de Costo de Carta
+- **#793** — Compras › Año pasado y Detalle docs. en el lenguaje entero de Costo de Carta
 
 <!-- INDICE:FIN -->
 
@@ -58377,6 +58378,19 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      de rehacer el HTML.
    - La fecha la ubica la pieza (`ponerFecha`), como en Precios (#791).
 
+793. **Compras › Año pasado y Detalle docs. en el lenguaje entero de Costo de Carta.**
+   Con estas dos, las seis vistas de Compras tienen la forma de Recetas (#790-#793).
+   - **Año pasado:** nivel 2 con Gráfico | Productos, «Detalle» y «Cómo se calcula»; nivel 3
+     sin el título «Compras vs año pasado», que repetía lo que dice «Contra» (queda en el `title`
+     de la cabecera). Sus indicadores son MEDIDAS: el renglón de abajo se queda; «Detalle» suma
+     las columnas de más de la lista (Motivo, la familia…), que antes salían con «Ampliar».
+   - **Detalle docs.:** nivel 2 con Documentos | Líneas | Tabla dinámica; los filtros puestos
+     pasan a la cabecera. Sus indicadores son CONTADORES: sin «Detalle» su renglón de abajo se
+     esconde, y con él vuelven IGV, Total y el número de documento de las líneas.
+   - ⤢ en la lista o el gráfico, en la ficha y en el resumen; ↙ o `Esc` vuelven. El resumen sin
+     nada elegido también se amplía (antes ⤢ se soltaba si no había ficha).
+   - La fecha de Python sigue a su hueco en alto y se esconde con una zona ampliada.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58389,7 +58403,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#792**; la próxima toma el número siguiente.
+> última regla es la **#793**; la próxima toma el número siguiente.
 
 >
 

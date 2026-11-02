@@ -171,3 +171,46 @@
 .dc-kpi:hover { background: transparent; border-bottom-color: var(--border-lavender); }
 .dc-kpi.on { background: transparent; border-radius: 0; border-bottom-color: var(--accent); }
 .dc-kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }
+
+/* #793: el lenguaje entero de Costo de Carta (#775), como el resto de Compras
+   (#790-#792). Nivel 2 arriba, subrayado y de borde a borde: Documentos | Líneas |
+   Tabla dinámica, «Detalle» y «Cómo se calcula». Nivel 3 sin título, con los
+   filtros puestos. Los indicadores son CONTADORES que filtran: sin «Detalle»,
+   su renglón de abajo se esconde. ⤢ deja la lista o la ficha solas. */
+.dc-main { padding-top: 0; }
+.dc-tit { display: none; }
+.dc-n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; flex: none; margin: 0 -18px; padding: 0 18px;
+  border-bottom: 1px solid var(--border); font-size: 13px; }
+.dc-tabs { display: flex; align-items: stretch; gap: 20px; min-width: 0; }
+.dc-tabs button { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; padding: 0; cursor: pointer;
+  white-space: nowrap; color: var(--text-secondary) !important; font-size: 13px; }
+.dc-tabs button:hover { color: var(--accent-deep) !important; }
+.dc-tabs button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent); }
+.dc-n2-der { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.dc-switch { display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+.dc-switch input { appearance: none; position: relative; width: 26px; height: 14px; margin: 0; border-radius: 7px; background: var(--text-muted); cursor: pointer; }
+.dc-switch input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg-card); }
+.dc-switch input:checked { background: var(--accent); }
+.dc-switch input:checked::before { left: 14px; }
+.dc-como { position: relative; display: flex; align-items: center; }
+.dc-link { border: 0; background: none; padding: 0; cursor: pointer; white-space: nowrap; color: var(--accent-deep) !important; font-size: 13px; }
+.dc-pop-como { position: absolute; top: 26px; right: 0; z-index: 9; width: 420px; max-width: calc(100vw - 32px); max-height: 420px; overflow: auto;
+  overscroll-behavior: contain; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--bg-card); border-radius: 10px;
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--text-primary) 18%, transparent); font-size: 13px; line-height: 1.4; }
+.dc-pop-como dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; }
+.dc-pop-como dt { font-weight: 600; }
+.dc-pop-como dd { margin: 0; color: var(--text-secondary); }
+.dc:not(.det) .dc-kpi .d { display: none; }
+.dc.amp .dc-cab, .dc.amp .dc-kpis { display: none; }
+.dc-cuerpo[data-amp="panel"] .dc-panel { flex: 1 1 0; border-left: 0; padding-left: 0; min-width: 0; }
+.dc-amp { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--text-secondary) !important; cursor: pointer; }
+.dc-amp:hover { background: var(--marco-control, var(--bg-hover)); color: var(--accent-deep) !important; }
+.dc-amp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 900px) {
+  .dc-n2 { margin: 0; padding: 0; height: auto; min-height: 36px; flex-wrap: wrap; }
+  .dc-tabs { overflow-x: auto; overscroll-behavior: contain; }
+  .dc-tabs button, .dc-link { min-height: 44px; }
+  .dc-amp { display: none; }
+}
+

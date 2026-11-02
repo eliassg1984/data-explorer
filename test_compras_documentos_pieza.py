@@ -292,14 +292,15 @@ class Navegador(unittest.TestCase):
         self.assertIn('sólo lo que entra',root.locator('.dc-cifras').inner_text())
         root.locator('.dc-panel [data-a=amp]').click();self.assertEqual(root.locator('.dc-izq').count(),0)
         root.locator('.dc-panel [data-a=amp]').click();root.locator('[data-a=cerrar]').click()
-        root.locator('.dc-izq [data-a=amp]').click();self.assertEqual(root.locator('.dc-panel').count(),0);self.assertIn('IGV',root.locator('thead').inner_text())
-        root.locator('.dc-izq [data-a=amp]').click()
+        # #793: ⤢ deja la lista sola y Esc vuelve; IGV y Total son de «Detalle».
+        root.locator('.dc-izq [data-a=amp]').click();self.assertEqual(root.locator('.dc-panel').count(),0);self.pg.keyboard.press('Escape');self.assertEqual(root.locator('.dc-panel').count(),1)
+        root.locator('.dc-switch').click();self.assertIn('IGV',root.locator('thead').inner_text());root.locator('.dc-switch').click()
         # Un indicador deja lo suyo y se quita con su chip.
         root.locator('.dc-kpi[data-v=raro]').click();self.assertEqual(root.locator('tr[data-a=doc]').count(),1)
-        root.locator('.dc-fl [data-a=kpi]').click();self.assertEqual(root.locator('tr[data-a=doc]').count(),2)
+        root.locator('.dc-cab .dc-quita[data-a=kpi]').click();self.assertEqual(root.locator('tr[data-a=doc]').count(),2)
         # Un proveedor del resumen filtra.
         root.locator('.dc-fi[data-a=provuno]').first.click();self.assertEqual(pg.evaluate('__comprasDocs.s.proveedores.length'),1)
-        root.locator('.dc-fl [data-a=provtop]').click();self.assertIsNone(pg.evaluate('__comprasDocs.s.proveedores'))
+        root.locator('.dc-cab .dc-quita[data-a=provtop]').click();self.assertIsNone(pg.evaluate('__comprasDocs.s.proveedores'))
         # Las líneas: precio, habitual y su marca.
         root.locator('[data-a=modo][data-v=Líneas]').click();self.assertIn('revisar',root.locator('tbody').inner_text())
         # Con un solo período, la tabla dinámica no repite el total; el Excel sí lo trae.
