@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-797 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+798 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1437,7 +1437,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#654** — «Análisis de diferencias» reconoce lo descontado desde un ÁREA a la que la receta ya no apunta
 - **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 
-**Sin tema asignado** (6)
+**Sin tema asignado** (7)
 
 - **#300** — Un riel que PINTA casilleros enteros dice de más cuando el rango es más fino que su escala:…
 - **#547** — Un plato de cortesía cobrado a S/ 0 no tiene neto cero: tiene un RESIDUO, y dividir por él da…
@@ -1445,6 +1445,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#756** — Costos: lo que va a Mayta se cuenta UNA vez, como salida, y no es venta
 - **#792** — Compras › Período en el lenguaje entero de Costo de Carta
 - **#793** — Compras › Año pasado y Detalle docs. en el lenguaje entero de Costo de Carta
+- **#798** — Ajuste › Análisis de diferencias en el lenguaje de Costo de Carta
 
 <!-- INDICE:FIN -->
 
@@ -58464,6 +58465,16 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      vacío sí viaja, es el que lo quita), y sin una grilla A LA VISTA el puente sigue esperando
      en vez de avisar (`inyecciones/grid.py`).
 
+798. **Ajuste › Análisis de diferencias en el lenguaje de Costo de Carta.**
+   - Sin el título «Análisis de diferencias» (está en la franja); la sesión sigue arriba a la
+     derecha (`_diferencias_pieza.py`).
+   - Faltantes | Sobrantes navegan (otra lista): subrayadas; Áreas juntas | Por área cuenta lo
+     mismo de otra forma: caja gris (#795).
+   - ⤢ al pie de la lista y en la ficha; ↙ o `Esc` (si no hay un pop abierto) vuelven. La ficha
+     se redibuja sola al cambiar de pestaña, así que el botón se repone después de cada clic
+     (`aplicarAmp`, en el mismo nivel que `render`: dentro de `ficha` no lo veía nadie).
+   - El código, la familia y la unidad ya estaban en la lista desde la #650.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58476,7 +58487,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#797**; la próxima toma el número siguiente.
+> última regla es la **#798**; la próxima toma el número siguiente.
 
 >
 

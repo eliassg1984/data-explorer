@@ -26,3 +26,24 @@
 @media (max-width: 900px) {
   .adf .dif-kpis { padding: 6px; border-radius: 10px; }
 }
+
+/* #798: el lenguaje de Costo de Carta (#775). Faltantes | Sobrantes navegan (otra
+   lista): subrayadas; Áreas juntas | Por área cuenta lo mismo de otra forma: caja
+   gris (#795). ⤢ en la lista y en la ficha: la zona elegida toma la hoja. */
+.adf [data-k="lados"] { display: inline-flex; gap: 16px; margin-right: 6px; }
+.adf [data-k="lados"] button { border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important;
+  background: none !important; padding: 4px 0 !important; color: var(--text-secondary) !important; font-size: 13px; }
+.adf [data-k="lados"] button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent) !important; }
+.adf-pie2 { display: flex; align-items: center; gap: 8px; }
+.adf-pie2 .adf-mas { flex: 1; }
+.adf .adf-amp { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--text-secondary); cursor: pointer; }
+.adf .adf-amp:hover { background: var(--marco-control, var(--bg-hover)); color: var(--accent-deep); }
+.adf .adf-amp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.adf .adf-amp-f { position: absolute; right: 40px; top: 6px; }
+.adf.amp-lista .adf-ficha { display: none !important; }
+.adf.amp-lista .adf-grid.con-ficha, .adf.amp-ficha .adf-grid.con-ficha { grid-template-columns: minmax(0, 1fr); }
+.adf.amp-ficha .adf-grid > section:first-child, .adf.amp-ficha [data-k="kpis"], .adf.amp-ficha .adf-controls,
+.adf.amp-ficha > .adf-ayuda, .adf.amp-ficha .adf-exp { display: none !important; }
+@media (max-width: 900px) { .adf .adf-amp { display: none; } }
+

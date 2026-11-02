@@ -28,7 +28,8 @@ def renderizar(df_full,col_fecha,col_familia,col_area,col_ajuste_val,col_product
     with st.container(border=True,key=dif.CARD),st.container(key='ajdif_nativa'):
         with st.container(key='ajdif_sesion_nativa'):
             ct,cs=st.columns([3,1.3],vertical_alignment='center')
-            with ct:st.markdown('<div class="inv-rank-tit">Análisis de diferencias</div>',unsafe_allow_html=True)
+            # Sin título (#798): el nombre está en la franja, como en el resto de la app.
+            with ct:st.markdown('<div class="inv-rank-tit"></div>',unsafe_allow_html=True)
             with cs:
                 if sesiones:dif.selector_sesion('ajses_dif',dif.K_SES,sesiones,stats=dif.stats_de_vista(df_full,sesiones,col_fecha,col_area,col_ajuste_val,col_producto,col_familia,[]),familias_txt='todas las familias',pie=['Las cifras del selector corresponden a todas las familias.','Cada línea se compara con su conteo anterior en esa área, que puede ser un parcial.'])
         s=dif.sesion_vigente(dif.K_SES,sesiones) if sesiones else None
