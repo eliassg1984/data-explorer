@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-783 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+784 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (259)
+**CSS y estilos** (260)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -326,6 +326,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#779** — Alza en el lenguaje entero de Costo de Carta: niveles, jerarquía y divulgación progresiva
 - **#780** — Recetas base en el lenguaje entero de Costo de Carta, y «Ampliar» (⤢) en la lista y la ficha
 - **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
+- **#784** — Compras en la franja común (#782) y nada bajo 12 px
 
 **Layout y alturas** (112)
 
@@ -988,7 +989,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 
-**SUNAT y SIRE** (77)
+**SUNAT y SIRE** (78)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1067,6 +1068,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#742** — Volver de un enlace requiere guardar el origen antes de sembrar el destino
 - **#759** — ¿La app tiene todo lo de SUNAT? Una vista para contestarlo, y un mes que falla ya no desaparece
 - **#760** — Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían sin convertir
+- **#784** — Compras en la franja común (#782) y nada bajo 12 px
 
 **Fechas, rangos y cortes** (26)
 
@@ -58216,6 +58218,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    del rango, la mantiene viva el eco de `estado_rango`. Vale para todo reporte que no elige
    la fecha por vista.
 
+784. **Compras en la franja común (#782) y nada bajo 12 px.**
+   Las diez vistas de Compras (con las cuatro de Documentos SUNAT) ya tenían la forma de
+   octubre —indicadores sin caja, lista y ficha, «Ampliar»— pero con separadores verticales,
+   el elegido en una caja lavanda y de 15 a 42 textos de 10,5 a 11,5 px por vista. Ahora:
+   - **Medidas** (Período, Precios, Año pasado): el elegido como ficha blanca, con su
+     minigráfico. **Contadores que filtran** (Proveedor y Producto —`lista_ficha.css`, las
+     dos—, Detalle docs., Cruce, Fechas, Documentos y Control): el elegido subrayado.
+   - Franja lavanda de borde a borde (18 px de aire en todas), sin separadores, cifra de
+     17 px (antes 19 y 20).
+   - 110 reglas de 8 a 11,5 px a 12 en los diez `.css` de `graficos/compras/`; medido después,
+     ningún texto visible bajo 12 px en las diez vistas.
+   - **A 12 px la cifra de la última barra de la curva de Proveedor salía del ancho en el
+     celular** (4 px, `test_proveedor_pieza`): estaba centrada en su barra; ahora va pegada al
+     borde derecho de la barra (`lista_ficha.js`, `.lf-rot.fin`).
+   - `test_sunat_vistas_pieza` y `test_sunat_control` montan la pieza con los 18 px de aire de
+     su tarjeta desde 901 px, como `test_ventas_periodo` (#782).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58228,7 +58247,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#783**; la próxima toma el número siguiente.
+> última regla es la **#784**; la próxima toma el número siguiente.
 
 >
 

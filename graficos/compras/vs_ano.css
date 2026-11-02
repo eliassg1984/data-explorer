@@ -35,9 +35,9 @@
 .vap-pop label { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 4px; border-radius: 6px; cursor: pointer; }
 .vap-pop label:hover { background: var(--bg-hover); }
 .vap-pop label span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vap-pop label small { font-size: 11.5px; color: var(--text-secondary); }
+.vap-pop label small { font-size: 12px; color: var(--text-secondary); }
 .vap-pop input { accent-color: var(--accent); margin: 0; }
-.vap-pop p { margin: 4px; font-size: 11.5px; color: var(--text-secondary); }
+.vap-pop p { margin: 4px; font-size: 12px; color: var(--text-secondary); }
 .vap-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); flex: none; }
 .vap-kpi { position: relative; display: block; border: 0; border-left: 1px solid var(--border); background: none; padding: 4px 14px; text-align: left; min-width: 0; overflow: hidden; }
 .vap-kpi:first-child { border-left: 0; }
@@ -46,7 +46,7 @@
 .vap-kpi > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
 .vap-kpi .r { font-size: 12px; color: var(--text-secondary); }
 .vap-kpi .v { font-size: 20px; font-weight: 700; line-height: 1.2; }
-.vap-kpi .d { font-size: 11.5px; color: var(--text-secondary); }
+.vap-kpi .d { font-size: 12px; color: var(--text-secondary); }
 .vap-kpi svg { position: absolute; right: 10px; top: 8px; width: 28%; height: 34px; }
 .vap-kpi svg polyline { fill: none; stroke: var(--vap-tono); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .vap-seg { display: inline-flex; gap: 2px; max-width: 100%; background: var(--rail-fondo); border-radius: 8px; padding: 2px; flex: none; }
@@ -57,7 +57,7 @@
 .vap-sub b { color: var(--text-primary); font-weight: 600; }
 .vap-quita { height: 26px; border: 0; border-radius: 8px; padding: 0 9px; background: var(--accent-tint); color: var(--accent-deep) !important; font-weight: 600; font-size: 12px; white-space: nowrap; flex: none; }
 .vap-fl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: none; }
-.vap-ley { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+.vap-ley { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
 .vap-ley i { width: 11px; height: 11px; background: var(--vap-gris); border-radius: 3px; display: block; }
 .vap-cuerpo { flex: 1; min-height: 0; display: flex; gap: 16px; }
 .vap-izq { flex: 1.55 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -75,18 +75,18 @@
 .vap-col i.s.fuera { background-color: var(--vap-claro); }
 .vap-col .rot { position: absolute; left: 51%; width: 32%; text-align: center; font-size: 12px; font-weight: 600; white-space: nowrap; margin-bottom: 3px; display: flex; justify-content: center; }
 .vap-ejes { display: flex; gap: 10px; flex: none; padding: 0 4px; }
-.vap-ejes span { flex: 1; min-width: 0; text-align: center; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vap-ejes span { flex: 1; min-width: 0; text-align: center; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vap-plot.chica { flex: 1; min-height: 112px; padding-top: 6px; gap: 3px; margin-top: 2px; }
 .vap-plot.chica .vap-col i.g { left: 8%; width: 42%; }
 .vap-plot.chica .vap-col i.s { left: 50%; width: 42%; }
 .vap-ejes.chicos { gap: 3px; }
-.vap-ejes.chicos span { font-size: 10.5px; }
+.vap-ejes.chicos span { font-size: 12px; }
 .vap-tip { position: absolute; top: 6px; z-index: 6; width: 236px; background: var(--text-primary); color: var(--bg-card); border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.35; pointer-events: none; box-shadow: 0 4px 14px color-mix(in srgb, var(--text-primary) 25%, transparent); }
 .vap-tip[hidden] { display: none; }
 .vap-tip b { display: block; font-weight: 600; font-size: 12.5px; margin-bottom: 2px; }
 .vap-tip span { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .vap-tip i { font-style: normal; opacity: .75; }
-.vap-nota { font-size: 11.5px; color: var(--text-secondary); line-height: 1.35; flex: none; }
+.vap-nota { font-size: 12px; color: var(--text-secondary); line-height: 1.35; flex: none; }
 .vap-wrap { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 8px; }
 .vap-wrap table { border-collapse: separate; border-spacing: 0; width: 100%; white-space: nowrap; table-layout: fixed; }
 .vap-wrap th, .vap-wrap td { padding: 0 8px; height: 30px; border-top: 1px solid var(--border); text-align: right; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
@@ -105,32 +105,32 @@ tr.on .vap-tn { color: var(--accent-deep) !important; font-weight: 600; }
 .vap-vacio { padding: 24px; text-align: center; color: var(--text-secondary); }
 .vap-fcab { display: flex; gap: 8px; align-items: flex-start; flex: none; }
 .vap-ftit { flex: 1; min-width: 0; }
-.vap-miga { display: block; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vap-miga { display: block; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vap-panel h3 { font-size: 15px; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vap-frase { background: var(--accent-tint); color: var(--accent-deep); border-radius: 8px; padding: 7px 10px; line-height: 1.35; flex: none; font-size: 12.5px; }
 .vap-casc { display: flex; height: 122px; flex: none; gap: 4px; border-bottom: 1px solid var(--border); margin-top: 2px; }
 .vap-cp { flex: 1; min-width: 0; position: relative; border: 0; background: none; padding: 0; border-radius: 6px 6px 0 0; }
 button.vap-cp:hover, .vap-cp.on { background: var(--accent-tint); }
 .vap-cp i { position: absolute; left: 16%; right: 16%; display: block; border-radius: 3px; }
-.vap-cp .val { position: absolute; left: 0; right: 0; text-align: center; font-size: 11.5px; font-weight: 600; white-space: nowrap; margin-bottom: 2px; }
+.vap-cp .val { position: absolute; left: 0; right: 0; text-align: center; font-size: 12px; font-weight: 600; white-space: nowrap; margin-bottom: 2px; }
 .vap-cascn { display: flex; gap: 4px; flex: none; }
-.vap-cascn span { flex: 1; min-width: 0; text-align: center; font-size: 11px; line-height: 1.2; color: var(--text-secondary); }
+.vap-cascn span { flex: 1; min-width: 0; text-align: center; font-size: 12px; line-height: 1.2; color: var(--text-secondary); }
 .vap-bloque { font-size: 12px; font-weight: 600; color: var(--text-secondary); flex: none; margin-top: 2px; }
 .vap-lista { flex: 1 1 0; min-height: 60px; overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
 .vap-fi { border: 0; border-top: 1px solid var(--border); background: none; padding: 4px; text-align: left; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: baseline; flex: none; width: 100%; }
 .vap-fi:hover { background: var(--bg-hover); }
 .vap-fi.on { background: var(--accent-tint); }
 .vap-fi .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vap-fi small { font-size: 11.5px; color: var(--text-secondary); }
+.vap-fi small { font-size: 12px; color: var(--text-secondary); }
 .vap-fi b { font-weight: 600; text-align: right; white-space: nowrap; min-width: 72px; }
-.vap-fuera { display: flex; gap: 8px; align-items: center; border-top: 1px solid var(--border); padding-top: 6px; font-size: 11.5px; color: var(--text-secondary); flex: none; line-height: 1.3; }
+.vap-fuera { display: flex; gap: 8px; align-items: center; border-top: 1px solid var(--border); padding-top: 6px; font-size: 12px; color: var(--text-secondary); flex: none; line-height: 1.3; }
 .vap-fuera span { flex: 1; min-width: 0; }
 .vap-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; flex: none; }
 .vap-cf { min-width: 0; }
 .vap-cf span, .vap-cf b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vap-cf span { font-size: 11.5px; color: var(--text-secondary); }
+.vap-cf span { font-size: 12px; color: var(--text-secondary); }
 .vap-cf b { font-size: 14px; font-weight: 600; }
-.vap-cf small { display: block; font-size: 11px; line-height: 1.25; color: var(--text-secondary); }
+.vap-cf small { display: block; font-size: 12px; line-height: 1.25; color: var(--text-secondary); }
 @container (max-width: 1040px) { .vap-cab { flex-wrap: wrap; } }
 @media (max-width: 1040px) {
   .vap { height: auto; }
@@ -161,3 +161,18 @@ button.vap-cp:hover, .vap-cp.on { background: var(--accent-tint); }
   .vap-fi { min-height: 44px; }
   .vap-pop { position: fixed; top: auto; bottom: 72px; left: 12px; right: 12px; width: auto; max-height: 50dvh; }
 }
+
+/* #784: los indicadores en la franja común de la app (#782): lavanda de borde a
+   borde, sin cajas, cifra de 17 px y nada bajo 12. Son MEDIDAS que cambian lo que se mira: el elegido se levanta como una ficha blanca. La tarjeta tiene
+   18 px a cada costado. */
+@media (min-width: 901px) {
+  .vap-kpis { gap: 8px; margin-left: -18px; margin-right: -18px; padding: 6px 12px;
+    background: var(--rail-fondo); border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+}
+@media (max-width: 900px) {
+  .vap-kpis { gap: 6px; padding: 6px; border-radius: 10px; background: var(--rail-fondo); }
+}
+.vap-kpi { border: 0; border-radius: 10px; background: transparent; padding: 4px 8px; box-shadow: none; }
+.vap-kpi:hover { background: rgba(255, 255, 255, .55); }
+.vap-kpi.on { border: 0; background: var(--bg-card); box-shadow: 0 1px 4px rgba(73, 56, 184, .16); }
+.vap-kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }

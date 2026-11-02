@@ -24,7 +24,7 @@ function lfCurva({ etqs, ys, acc, claves, parcial, refY, foco, rotY, linea, hab,
     if (y == null || !isFinite(y)) return;
     const alto = (y / max * 100).toFixed(2), par = parcial && i === n - 1;
     h += `<span class="lf-ba${par ? ' par' : ''}${claves[i] === foco ? ' foco' : ''}" style="left:${(i * w + w * 0.18).toFixed(3)}%;width:${(w * 0.64).toFixed(3)}%;height:${alto}%"></span>`;
-    if (rotY && y && (n <= 8 || i === n - 1 || i === iMax)) h += `<span class="lf-rot" style="left:${((i + 0.5) * w).toFixed(2)}%;bottom:${alto}%">${rotY(y)}</span>`;
+    if (rotY && y && (n <= 8 || i === n - 1 || i === iMax)) h += `<span class="lf-rot${i === n - 1 ? ' fin' : ''}" style="left:${((i + (i === n - 1 ? 1 : 0.5)) * w).toFixed(2)}%;bottom:${alto}%">${rotY(y)}</span>`;
   });
   if (parcial && n && refY != null && isFinite(refY)) {
     h += `<span class="lf-ref" style="left:${((n - 1) * w + w * 0.1).toFixed(3)}%;width:${(w * 0.8).toFixed(3)}%;bottom:${(refY / max * 100).toFixed(2)}%" title="Los mismos días del período anterior"></span>`;

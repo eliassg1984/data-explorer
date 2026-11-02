@@ -11,7 +11,7 @@
 .lf-sub .dl-l { grid-template-columns: minmax(0, 1fr) 64px 64px 62px; }
 .lf-sub .dl-l.sel { background: var(--accent-tint); font-weight: 600; }
 .lf-sub .dl-l.tot { font-weight: 700; color: var(--accent-deep); border-top: 1px solid var(--border-lavender); }
-.lf-t td.l .w { font-size: 11px; }
+.lf-t td.l .w { font-size: 12px; }
 @media (max-width: 900px) {
   .ft { min-width: 520px; }
 }

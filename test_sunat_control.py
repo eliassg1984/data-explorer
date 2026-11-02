@@ -355,7 +355,11 @@ class Navegador(unittest.TestCase):
             raise unittest.SkipTest(str(e))
         cls.pg = cls.br.new_page(viewport={"width": 1323, "height": 696}, accept_downloads=True)
         cls.pg.set_default_timeout(5000)
-        cls.pg.route("https://scx.test.example/**", lambda r: r.fulfill(body='<div id="host"></div>', content_type="text/html"))
+        # El aire de la tarjeta de verdad (18 px por lado desde 901 px): la franja de
+        # indicadores sale hasta el borde de la hoja con márgenes negativos (#784).
+        cls.pg.route("https://scx.test.example/**", lambda r: r.fulfill(
+            body='<style>@media (min-width:901px){#host{padding:0 18px}}</style><div id="host"></div>',
+            content_type="text/html"))
         cls.pg.goto("https://scx.test.example/")
         css = (ROOT / "graficos/compras/sunat_control.css").read_text(encoding="utf-8")
         cls.pg.evaluate('css=>{const sr=document.querySelector("#host").attachShadow({mode:"open"});window.mount=document.createElement("div");'

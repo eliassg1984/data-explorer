@@ -23,7 +23,7 @@
 .sud-chip { border: 1px solid var(--border); background: var(--bg-card); border-radius: 8px; padding: 3px 10px; cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; min-height: 28px; }
 .sud-chip:hover { border-color: var(--border-lavender); }
 .sud-chip b { font-weight: 700; }
-.sud-chip small { font-size: 11px; color: var(--text-secondary); }
+.sud-chip small { font-size: 12px; color: var(--text-secondary); }
 .sud-chip.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-deep); }
 .sud-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: none; }
 .sud-controles > input { flex: 1 1 180px; min-width: 150px; border: 1px solid var(--border); border-radius: 8px; padding: 3px 10px; min-height: 28px; background: var(--bg-card); }
@@ -48,22 +48,22 @@
 .sud tbody tr[data-id] { cursor: pointer; }
 .sud tbody tr[data-id]:hover td { background: var(--accent-tint); }
 .sud tr.sud-elegida td { background: var(--accent-tint); }
-.sud td small { display: block; font-size: 11px; color: var(--text-secondary); }
+.sud td small { display: block; font-size: 12px; color: var(--text-secondary); }
 .sud-fecha-movil { display: none !important; }
 .sud-chips { display: inline-flex; gap: 3px; margin-left: 5px; }
-.sud-chips i { font-style: normal; font-size: 10px; padding: 0 4px; border-radius: 4px; background: var(--bg-primary); color: var(--text-secondary); }
+.sud-chips i { font-style: normal; font-size: 12px; padding: 0 4px; border-radius: 4px; background: var(--bg-primary); color: var(--text-secondary); }
 .sud-pos { color: var(--sud-pos, var(--success-text)); }
 .sud-neg { color: var(--sud-neg, var(--warning-text)); }
-.sud-est { font-size: 11.5px; font-weight: 600; border-radius: 6px; padding: 1px 6px; display: inline-block; }
+.sud-est { font-size: 12px; font-weight: 600; border-radius: 6px; padding: 1px 6px; display: inline-block; }
 .sud-est.a { background: var(--success-bg); color: var(--success-text); }
 .sud-est.b { background: var(--accent-tint); color: var(--accent-deep); }
 .sud-est.c { background: var(--warning-bg); color: var(--warning-text); }
 .sud-est.e { background: var(--bg-primary); color: var(--text-secondary); }
-.sud-col-est button { margin-left: 5px; border: 1px solid var(--border-lavender); background: var(--bg-card); color: var(--accent-deep); border-radius: 6px; font-size: 11px; padding: 0 5px; cursor: pointer; }
+.sud-col-est button { margin-left: 5px; border: 1px solid var(--border-lavender); background: var(--bg-card); color: var(--accent-deep); border-radius: 6px; font-size: 12px; padding: 0 5px; cursor: pointer; }
 .sud-fl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: none; }
 .sud-pie { flex: none; }
 .sud-esp { flex: 1; }
-.sud-nota { font-size: 11.5px; color: var(--text-secondary); line-height: 1.35; margin: 0; }
+.sud-nota { font-size: 12px; color: var(--text-secondary); line-height: 1.35; margin: 0; }
 .sud-pil { border: 1px solid var(--border); background: var(--bg-card); border-radius: 8px; padding: 3px 10px; color: var(--text-secondary); min-height: 26px; font-size: 12px; cursor: pointer; }
 .sud-amp { border: 1px solid var(--border-lavender); background: var(--bg-card); color: var(--accent-deep); border-radius: 8px; padding: 3px 10px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 26px; }
 .sud-amp:hover, .sud-ir:hover { background: var(--accent-tint); }
@@ -72,7 +72,7 @@
 .sud-panel { flex: 1 1 300px; min-width: 290px; max-width: 380px; border-left: 1px solid var(--border); padding-left: 14px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .sud-panel > * { flex-shrink: 0; }
 .sud-panel h3 { margin: 0; font-size: 13.5px; font-weight: 700; line-height: 1.25; }
-.sud-panel .sub { font-size: 11.5px; color: var(--text-secondary); }
+.sud-panel .sub { font-size: 12px; color: var(--text-secondary); }
 .sud-causa { border-radius: 8px; padding: 5px 9px; font-size: 12.5px; line-height: 1.35; flex: none; }
 .sud-causa.ok { background: var(--success-bg); color: var(--success-text); }
 .sud-causa.gris { background: var(--bg-primary); color: var(--text-secondary); }
@@ -80,7 +80,7 @@
 .sud-causa.lav { background: var(--accent-tint); color: var(--accent-deep); }
 .sud table.sud-cmp { margin: 2px 0 4px; }
 .sud-cmp th, .sud-cmp td { padding: 3px 6px !important; font-size: 12.5px; }
-.sud-cmp thead th { position: static; font-size: 11.5px; }
+.sud-cmp thead th { position: static; font-size: 12px; }
 .sud-cmp tr.si td { background: var(--warning-bg); }
 .sud-cmp td.mal { color: var(--warning-text); font-weight: 700; }
 .sud-pr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 2px 0; align-items: baseline; }
@@ -91,10 +91,10 @@
 .sud-seg button:last-child { border-right: 0; }
 .sud-seg button:hover { background: var(--accent-tint); }
 .sud-seg button.on { background: var(--accent-tint); color: var(--accent-deep); font-weight: 600; }
-.sud-quita { border: 1px solid var(--border-lavender); background: var(--bg-card); color: var(--accent-deep); border-radius: 6px; font-size: 11.5px; padding: 1px 7px; cursor: pointer; }
+.sud-quita { border: 1px solid var(--border-lavender); background: var(--bg-card); color: var(--accent-deep); border-radius: 6px; font-size: 12px; padding: 1px 7px; cursor: pointer; }
 .sud-ln { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 4px 0; border-top: 1px solid var(--border); align-items: baseline; }
 .sud-ln span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sud-ln small { display: block; font-size: 11px; color: var(--text-secondary); white-space: normal; }
+.sud-ln small { display: block; font-size: 12px; color: var(--text-secondary); white-space: normal; }
 .sud-ln b { font-weight: 600; }
 .sud-ln.tot { border-top: 1px solid var(--text-muted); font-weight: 600; }
 .sud-ir { border: 1px solid var(--border-lavender); background: var(--bg-card); color: var(--accent-deep); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-weight: 600; font-size: 12.5px; margin-top: 4px; }
