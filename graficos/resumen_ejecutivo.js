@@ -369,6 +369,18 @@ function metodo(raiz) {
     </div></details>`;
 }
 
+// ⤢ en el gráfico y en «Para revisar» (#803): la zona elegida toma la hoja; ↙ o Esc vuelven.
+const RE_AMP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>', RE_VOL = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>';
+function botonAmp(raiz, cual, rot) {
+  const on = raiz.__amp === cual;
+  return `<button type="button" class="re-amp" data-amp="${cual}" aria-pressed="${on}" title="${on ? 'Volver (Esc)' : 'Ampliar ' + rot}" aria-label="${on ? 'Volver' : 'Ampliar ' + rot}">${on ? RE_VOL : RE_AMP}</button>`;
+}
+function aplicarAmp(raiz) {
+  raiz.classList.toggle('amp-graf', raiz.__amp === 'graf');
+  raiz.classList.toggle('amp-revisar', raiz.__amp === 'revisar');
+  raiz.querySelectorAll('.re-amp').forEach(b => { b.outerHTML = botonAmp(raiz, b.dataset.amp, b.dataset.amp === 'graf' ? 'el gráfico' : 'la lista'); });
+}
+
 function render(raiz, d) {
   const sinVenta = !d.actual;
   const i = d.meses.findIndex(m => m.k === d.mes);
@@ -399,6 +411,7 @@ function render(raiz, d) {
             <button type="button" data-modo="acumulado" aria-pressed="${raiz.__modo !== 'diario'}">Acumulado</button>
             <button type="button" data-modo="diario" aria-pressed="${raiz.__modo === 'diario'}">Diario</button>
           </div>
+          ${botonAmp(raiz, 'graf', 'el gráfico')}
         </div>
         <div class="re-legend"></div>
         <div class="re-chart"></div>
@@ -408,6 +421,8 @@ function render(raiz, d) {
     </div>
     <section class="re-panel re-lower" aria-label="El costo del mes">${htmlCosto(d)}</section>
     ${metodo(raiz)}`;
+  raiz.querySelector('.re-revisar .re-panel-head')?.insertAdjacentHTML('beforeend', botonAmp(raiz, 'revisar', 'la lista'));
+  aplicarAmp(raiz);
   sincronizar(raiz);
 }
 
@@ -428,11 +443,17 @@ function sincronizar(raiz) {
 }
 
 function enlazar(raiz) {
+  document.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && raiz.isConnected && raiz.__amp) { raiz.__amp = null; aplicarAmp(raiz); dibujarGrafico(raiz); }
+  });
   raiz.addEventListener('click', ev => {
     const t = ev.target.closest('button');
     if (!t || !raiz.contains(t) || t.disabled) return;
     const comp = raiz.__componente;
-    if (t.dataset.kpi) {
+    if (t.dataset.amp) {
+      raiz.__amp = raiz.__amp === t.dataset.amp ? null : t.dataset.amp;
+      aplicarAmp(raiz); dibujarGrafico(raiz);
+    } else if (t.dataset.kpi) {
       raiz.__kpi = t.dataset.kpi;
       if (raiz.__kpi === 'venta' && raiz.__datos.diario?.actual) raiz.__escala = raiz.__escalaVenta || 'mes';
       sincronizar(raiz); dibujarGrafico(raiz);

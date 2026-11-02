@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-802 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+803 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1161,7 +1161,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (257)
+**Decisiones de diseño y UX** (258)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1420,6 +1420,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#799** — Ajuste › Evolución en el lenguaje de Costo de Carta: una zona por pestaña
 - **#800** — Movimientos en el lenguaje de Costo de Carta, y el código en Sin plato
 - **#801** — Producción: Kg útil, Para revisar y Consumo en el lenguaje de Costo de Carta
+- **#803** — Inicio en el lenguaje de Costo de Carta: la portada y Pendientes
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58534,6 +58535,17 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      tienen la forma de Recetas. Ventas ya la tenía (#758-#769, #788), con el criterio de la
      #795.
 
+803. **Inicio en el lenguaje de Costo de Carta: la portada y Pendientes.**
+   La #787 sólo les había subido la letra. A pedido («la primera vista, Resumen, ¿también
+   está revisada?»):
+   - **Resumen:** los cinco indicadores eran cajas blancas con borde; son MEDIDAS en el tiempo
+     (#782): franja lavanda de borde a borde, cifra de 17 px, el elegido como ficha blanca. El
+     gráfico y «Para revisar» van sin caja, separados por una línea, y cada uno con su ⤢: la
+     zona toma la hoja (el gráfico crece a 400 px y se redibuja al ancho nuevo); ↙ o `Esc`
+     vuelven. Octubre | 12 meses y Acumulado | Diario siguen en la caja gris (#795).
+   - **Pendientes:** sin el título repetido; el renglón que explica se queda. Los grupos por
+     área siguen en su tarjeta: cada uno es un bloque aparte.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58546,7 +58558,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#802**; la próxima toma el número siguiente.
+> última regla es la **#803**; la próxima toma el número siguiente.
 
 >
 

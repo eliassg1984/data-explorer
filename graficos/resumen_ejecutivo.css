@@ -214,3 +214,34 @@
   .re-pr .nom { white-space: normal; line-height: 1.2; }
 }
 @media (prefers-reduced-motion: reduce) { .re-caret { transition: none; } }
+
+/* #803: el lenguaje de Costo de Carta (#775), como el resto de la app. Los cinco
+   indicadores son MEDIDAS en el tiempo (#782): una franja lavanda de borde a borde,
+   sin cajas, cifra de 17 px y el elegido como ficha blanca. El gráfico y «Para
+   revisar» van sin caja, separados por una línea; ⤢ deja cualquiera de los dos solo. */
+.re-kpis { gap: 8px; padding: 6px 12px; background: var(--rail-fondo); border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+.re-kpi { border: 0; border-radius: 10px; background: transparent; padding: 4px 8px; box-shadow: none; }
+.re-kpi:hover { background: rgba(255, 255, 255, .55); }
+.re-kpi[aria-pressed="true"] { border: 0; background: var(--bg-card); box-shadow: 0 1px 4px rgba(73, 56, 184, .16); }
+.re-value { font-size: 17px; font-weight: 500; letter-spacing: 0; line-height: 24px; }
+.re-panel { border: 0; border-radius: 0; background: transparent; padding: 0; }
+.re-grid { gap: 16px; }
+.re-revisar { border-left: 1px solid var(--border); padding-left: 16px; }
+.re-lower { border-top: 1px solid var(--border); padding-top: 12px; }
+.re-amp { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--text-secondary); cursor: pointer; }
+.re-amp:hover { background: var(--marco-control, var(--bg-hover)); color: var(--accent-deep); }
+.re-amp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.re.amp-graf .re-revisar, .re.amp-revisar .re-graf { display: none; }
+.re.amp-graf .re-grid, .re.amp-revisar .re-grid { grid-template-columns: minmax(0, 1fr); }
+.re.amp-revisar .re-revisar { border-left: 0; padding-left: 0; }
+.re.amp-graf .re-kpis, .re.amp-graf .re-titular, .re.amp-graf .re-lower,
+.re.amp-revisar .re-kpis, .re.amp-revisar .re-titular, .re.amp-revisar .re-lower { display: none; }
+@media (max-width: 900px) {
+  .re-kpis { border-radius: 10px; }
+  .re-revisar { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 10px; }
+  .re-amp { display: none; }
+}
+
+/* Ampliado, el gráfico toma el alto de la hoja: el SVG llena su caja (inset: 0). */
+.re.amp-graf .re-chart { min-height: 400px; }

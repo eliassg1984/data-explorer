@@ -79,3 +79,6 @@ button.pd-fila:hover { background: var(--accent-tint); }
 }
 .pd-kpi { border: 0; border-radius: 0; background: transparent; padding: 4px 8px; }
 .pd-kpi-n { font-size: 17px; font-weight: 500; }
+
+/* #803: sin el título repetido (está en la franja); el renglón que explica se queda. */
+.pd-tit > h2 { display: none; }
