@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-803 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+804 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -334,7 +334,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#790** — Compras › Proveedor y Producto en el lenguaje entero de Costo de Carta
 - **#791** — Compras › Precios en el lenguaje entero de Costo de Carta
 
-**Layout y alturas** (112)
+**Layout y alturas** (113)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -448,6 +448,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#774** — Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de…
 - **#780** — Recetas base en el lenguaje entero de Costo de Carta, y «Ampliar» (⤢) en la lista y la ficha
 - **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
+- **#804** — La portada con el aire de la hoja
 
 **Plotly y figuras** (130)
 
@@ -1161,7 +1162,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (258)
+**Decisiones de diseño y UX** (259)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1421,6 +1422,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#800** — Movimientos en el lenguaje de Costo de Carta, y el código en Sin plato
 - **#801** — Producción: Kg útil, Para revisar y Consumo en el lenguaje de Costo de Carta
 - **#803** — Inicio en el lenguaje de Costo de Carta: la portada y Pendientes
+- **#804** — La portada con el aire de la hoja
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58546,6 +58548,14 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - **Pendientes:** sin el título repetido; el renglón que explica se queda. Los grupos por
      área siguen en su tarjeta: cada uno es un bloque aparte.
 
+804. **La portada con el aire de la hoja.**
+   Reportado con captura («parece que la tarjeta está cortada, no le veo espacio interno»): la
+   pieza de Inicio no vive en una tarjeta con relleno, y el mes, la frase y el gráfico iban
+   pegados al borde de la hoja. Desde 901 px lleva 18 px a cada costado y 8 arriba, como las
+   demás vistas (#775); la franja de indicadores sigue de borde a borde (`margin: 0 -18px`).
+   Una pieza que no va dentro de una tarjeta se pone su propio aire, como la de Diferencias
+   (`.ajc-main`, #769).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58558,7 +58568,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#803**; la próxima toma el número siguiente.
+> última regla es la **#804**; la próxima toma el número siguiente.
 
 >
 

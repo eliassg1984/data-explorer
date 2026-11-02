@@ -245,3 +245,12 @@
 
 /* Ampliado, el gráfico toma el alto de la hoja: el SVG llena su caja (inset: 0). */
 .re.amp-graf .re-chart { min-height: 400px; }
+
+/* #804: el aire de la hoja. La portada no vive en una tarjeta con relleno: sin
+   esto, el mes, la frase y el gráfico iban pegados al borde (reportado con
+   captura). 18 px a cada costado y 8 arriba, como las demás vistas (#775); la
+   franja de indicadores sigue de borde a borde. */
+@media (min-width: 901px) {
+  .re { padding: 8px 18px 16px; }
+  .re-kpis { margin: 0 -18px; }
+}
