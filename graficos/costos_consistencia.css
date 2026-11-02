@@ -154,3 +154,7 @@ button.cd-kpi:hover { border-color: var(--border-lavender); background: var(--ac
 button.cd-kpi:hover { background: transparent; border-bottom-color: var(--border-lavender); }
 .cd-kpi-val { font-weight: 500; }
 .cd-kpis { margin-bottom: 8px; }
+
+/* #802: sin el título de la vista (está en la franja); la «?» de la explicación se queda. */
+.cd-tit > h2 { display: none; }
+

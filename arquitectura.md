@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-801 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+802 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -997,7 +997,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 
-**SUNAT y SIRE** (80)
+**SUNAT y SIRE** (81)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1079,6 +1079,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#784** — Compras en la franja común (#782) y nada bajo 12 px
 - **#794** — Documentos SUNAT en el lenguaje de Costo de Carta: franja, pastillas y subrayados
 - **#795** — Pestañas subrayadas, ajustes en la caja gris: un criterio para toda la app
+- **#802** — Costos en el lenguaje de Costo de Carta: con esta, toda la app
 
 **Fechas, rangos y cortes** (26)
 
@@ -58521,6 +58522,18 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - Flujo es un recorrido para capacitar («Presentar»): se queda como está, y ya mostraba los
      códigos.
 
+802. **Costos en el lenguaje de Costo de Carta: con esta, toda la app.**
+   La franja ya era la común (#787). Faltaba la forma:
+   - **Costo de ventas:** sin «Estado de costo de venta» (está en la franja); los rótulos
+     (Período, Año, Columnas, los de los indicadores y de los tramos de la tabla) sin mayúsculas
+     ni su espaciado; Tablero | Cascada cambia lo que se ve: subrayado (#795).
+   - **Consistencia:** sin «¿Los datos del sistema tienen lógica?»; la «?» con la explicación se
+     queda. Todo | Stock | Recetas… filtra la lista: sigue en su caja (#795). El código ya
+     estaba en la tabla de casos.
+   - Con #790-#802, las áreas que faltaban (Compras, SUNAT, Inventario, Producción y Costos)
+     tienen la forma de Recetas. Ventas ya la tenía (#758-#769, #788), con el criterio de la
+     #795.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58533,7 +58546,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#801**; la próxima toma el número siguiente.
+> última regla es la **#802**; la próxima toma el número siguiente.
 
 >
 

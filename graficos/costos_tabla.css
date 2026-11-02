@@ -383,3 +383,14 @@ i.brecha { background: var(--border-lavender); }
 }
 .cv-kpi, .cv-kpi.raro { border: 0; border-radius: 0; background: transparent; padding: 4px 8px; box-shadow: none; }
 .cv-kpi .cv-cifra { font-size: 17px; font-weight: 500; }
+
+/* #802: el lenguaje de Costo de Carta (#775). Sin el título de la vista (está en la
+   franja); rótulos sin mayúsculas ni su espaciado; Tablero | Cascada cambia lo que
+   se ve: subrayado (#795). */
+.cv-tit > h2 { display: none; }
+.cv-rot, tr.sec td, tr.tramo td { text-transform: none; letter-spacing: 0; }
+.modo.cv-vista { background: none !important; padding: 0 !important; gap: 16px !important; border: 0 !important; border-radius: 0 !important; }
+.modo.cv-vista button { background: none !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important;
+  box-shadow: none !important; padding: 4px 0 !important; color: var(--text-secondary) !important; }
+.modo.cv-vista button[aria-pressed="true"] { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent) !important; }
+
