@@ -122,3 +122,10 @@ table.tipos td.mal { color: var(--warning-text); font-weight: 700; }
 .kpi:hover { background: transparent; border-bottom-color: var(--border-lavender); }
 .kpi.on { background: transparent; border-radius: 0; border-bottom-color: var(--accent); }
 .kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }
+
+/* #794: los segmentados con subrayado, como en Costo de Carta (#775, #778). */
+.seg { border: 0; border-radius: 0; background: none; gap: 16px; overflow: visible; }
+.seg button { border: 0; border-bottom: 2px solid transparent; padding: 3px 0; font-size: 13px; background: none; }
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: none; color: var(--accent-deep); }
+.seg button.on { background: none; color: var(--text-primary); border-bottom-color: var(--accent); }

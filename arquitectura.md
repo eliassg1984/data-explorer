@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-793 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+794 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -996,7 +996,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 
-**SUNAT y SIRE** (78)
+**SUNAT y SIRE** (79)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1076,6 +1076,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#759** — ¿La app tiene todo lo de SUNAT? Una vista para contestarlo, y un mes que falla ya no desaparece
 - **#760** — Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían sin convertir
 - **#784** — Compras en la franja común (#782) y nada bajo 12 px
+- **#794** — Documentos SUNAT en el lenguaje de Costo de Carta: franja, pastillas y subrayados
 
 **Fechas, rangos y cortes** (26)
 
@@ -58391,6 +58392,20 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      nada elegido también se amplía (antes ⤢ se soltaba si no había ficha).
    - La fecha de Python sigue a su hueco en alto y se esconde con una zona ampliada.
 
+794. **Documentos SUNAT en el lenguaje de Costo de Carta: franja, pastillas y subrayados.**
+   Las cuatro vistas son en parte Python (la cabecera común, `sunat_cabecera.py`) y en parte
+   piezas (`sunat_vistas`, `sunat_documentos`, `sunat_control`): el pase es de forma, sin tocar
+   cuentas ni flujos.
+   - **Documentos:** los cinco estados (Todos, Falta cargar, Con diferencia, Cuadra, Sólo en el
+     sistema) eran chips con caja; pasan a la franja común como CONTADORES que filtran: lavanda
+     de borde a borde, cifra de 17 px, el elegido subrayado. «Ampliar» es ⤢ (sigue sumando las
+     columnas al ampliar: aquí no hay «Detalle» aparte).
+   - **Cabecera común:** «Mes en SUNAT» y «Proveedor», actualizar y bajar, como pastillas grises
+     sin borde (`estilos/_30_filtros.py`); el aviso del Control sin caja, en su color.
+   - **Cruce, Fechas y Control:** los segmentados (Por tipo | Por año | Tipo × año, Soles |
+     Documentos, Documentos | XML…) pierden la caja y marcan el elegido con la raya índigo; dos
+     grupos seguidos van separados por una línea.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58403,7 +58418,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#793**; la próxima toma el número siguiente.
+> última regla es la **#794**; la próxima toma el número siguiente.
 
 >
 

@@ -151,6 +151,25 @@ CSS = """    /* ================================================================
         width: 34px !important;
         padding: 0 !important;
     }
+    /* #794: el nivel 3 de Costo de Carta (#775): los dos filtros y sus botones
+       como pastillas grises sin borde, como en el resto de Compras (#790), y el
+       aviso del Control sin caja, en su color. */
+    .st-key-sunat_card_izq .st-key-sunat_mes_sunat [data-testid="stSelectbox"] div[role="group"],
+    .st-key-sunat_card_izq .st-key-sunat_prov [data-testid="stSelectbox"] div[role="group"],
+    .st-key-sunat_card_izq .st-key-sunat_mes_sunat [data-baseweb="select"] > div,
+    .st-key-sunat_card_izq .st-key-sunat_prov [data-baseweb="select"] > div {
+        border: 0 !important;
+        background: var(--rail-fondo) !important;
+    }
+    .st-key-sunat_actualizar button, .st-key-sunat_dl_xlsx button {
+        border: 0 !important;
+        background: var(--rail-fondo) !important;
+    }
+    .st-key-sunat_sello_ojo button, .st-key-sunat_sello_grave button, .st-key-sunat_sello_ok button {
+        border: 0 !important;
+        background: transparent !important;
+        padding: 0 4px !important;
+    }
     /* En el celular las vistas ya están en la barra de abajo, y apiladas se comían
        media pantalla: la cabecera deja el aviso y un control por renglón, con los dos
        botones juntos al final. */

@@ -121,3 +121,23 @@
   .sud thead .sud-documento { z-index: 5; background: var(--bg-primary); }
   .sud .sud-proveedor { min-width: 140px; max-width: 170px; }
 }
+
+/* #794: los estados en la franja común de la app (#782): lavanda de borde a
+   borde, sin cajas. Son CONTADORES que filtran la lista: el elegido va
+   subrayado, la cifra en 17 px. La tarjeta tiene 18 px a cada costado. */
+.sud-estados { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 6px 12px; background: var(--rail-fondo); }
+.sud-chip { flex-direction: column; align-items: flex-start; gap: 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  background: transparent; padding: 2px 8px; min-height: 0; text-align: left; color: var(--text-secondary); font-size: 12px; }
+.sud-chip:hover { border-bottom-color: var(--border-lavender); }
+.sud-chip b { font-size: 17px; font-weight: 500; line-height: 24px; color: var(--text-primary); }
+.sud-chip.on { background: transparent; border-bottom-color: var(--accent); color: var(--text-secondary); }
+@media (min-width: 901px) {
+  .sud-estados { margin: 0 -18px; border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+}
+@media (max-width: 900px) {
+  .sud-estados { grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 10px; }
+}
+/* ⤢ como en el resto de la app (#780): el dibujo de cuatro esquinas, sin caja. */
+.sud-amp { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; background: none; color: var(--text-secondary); }
+.sud-amp:hover { color: var(--accent-deep); }
+.sud-amp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
