@@ -664,8 +664,7 @@ def _ventas_mix(d, filtrar_cb=None):
 
     with st.container(horizontal=True, gap="small", vertical_alignment="center",
                       key="vt_mix_cab"):
-        st.markdown('<p class="chart-card-hdr">Mix de carta</p>',
-                    unsafe_allow_html=True)
+        # Sin título (#806): el nombre de la vista está en la franja.
         with st.container(key="vt_mix_cab_fecha", width="content"):
             # «vt_mixf» y no «vt_mix»: el selector arma SUS keys con ese
             # prefijo (`_fila`, `_escala`, `_escala_panel`, `_panelf`).

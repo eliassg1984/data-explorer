@@ -338,8 +338,7 @@ def _ventas_horario(d, col_venta=None, col_fecha=None, col_pax=None,
     with st.container(border=True, key="ajuste_graf_card_izq_ventas_hora"):
         with st.container(horizontal=True, gap="small",
                           vertical_alignment="center", key="vt_hora_cab"):
-            st.markdown('<p class="chart-card-hdr">Análisis por hora</p>',
-                        unsafe_allow_html=True)
+            # Sin título (#806): el nombre de la vista está en la franja.
             with st.container(key="vt_hora_cab_fecha", width="content"):
                 if ctx:
                     # «vt_horaf»: el selector arma SUS keys con ese prefijo.

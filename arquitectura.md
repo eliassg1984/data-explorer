@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-805 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+806 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1445,7 +1445,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#654** — «Análisis de diferencias» reconoce lo descontado desde un ÁREA a la que la receta ya no apunta
 - **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 
-**Sin tema asignado** (7)
+**Sin tema asignado** (8)
 
 - **#300** — Un riel que PINTA casilleros enteros dice de más cuando el rango es más fino que su escala:…
 - **#547** — Un plato de cortesía cobrado a S/ 0 no tiene neto cero: tiene un RESIDUO, y dividir por él da…
@@ -1454,6 +1454,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#792** — Compras › Período en el lenguaje entero de Costo de Carta
 - **#793** — Compras › Año pasado y Detalle docs. en el lenguaje entero de Costo de Carta
 - **#798** — Ajuste › Análisis de diferencias en el lenguaje de Costo de Carta
+- **#806** — Ventas › Mix y Por hora sin su título
 
 <!-- INDICE:FIN -->
 
@@ -58566,6 +58567,11 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      (la cuenta se redibuja al ancho nuevo); ↙ o `Esc` vuelven. Lo de abajo, debajo de una raya.
    - El código del Almacén también en la tabla de ventas sin costo (la de productos ya lo traía).
 
+806. **Ventas › Mix y Por hora sin su título.**
+   Los dos que quedaban («Mix de carta», «Análisis por hora»): el nombre está en la franja, como
+   en el resto de la app. La comparación de franjas de Por hora conserva el suyo: es una
+   segunda tarjeta y lo necesita para distinguirse de la primera.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58578,7 +58584,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#805**; la próxima toma el número siguiente.
+> última regla es la **#806**; la próxima toma el número siguiente.
 
 >
 
