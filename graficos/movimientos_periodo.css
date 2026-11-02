@@ -46,7 +46,7 @@
 @media (max-width: 900px) {
   .mv-kpis { gap: 6px; padding: 6px; border-radius: 10px; background: var(--rail-fondo); }
 }
-.mv-kpi { border: 0; border-radius: 10px; background: transparent; padding: 4px 8px; box-shadow: none; }
-.mv-kpi:hover { background: rgba(255, 255, 255, .55); }
+.mv .mv-kpi, .mv-kpi { border: 0; border-radius: 10px; background: transparent; padding: 4px 8px; box-shadow: none; }
+.mv .mv-kpi:hover { background: rgba(255, 255, 255, .55); }
 .mv .mv-kpi.on, .mv-kpi.on { border: 0; background: var(--bg-card); box-shadow: 0 1px 4px rgba(73, 56, 184, .16); }
 .mv-kpi b { font-size: 17px; font-weight: 500; }

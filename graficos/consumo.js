@@ -570,7 +570,7 @@ function seccionCuando(a) {
   }
   const h = horasDe(a), mx = Math.max(...h, 1e-9), ip = h.indexOf(mx), { al, ce } = turnosDe(h);
   return `<div class="det-sec"><h3>Por hora del plato<small>promedio por día, en ${esc(corta(u))}</small></h3>
-    <div class="semanas" style="--n:${NH};gap:3px">${h.map((v, j) => `<div class="sem${j === ip ? ' pico' : ''}" style="font-size:10.5px"><span class="v num">${v >= 0.5 * mx ? prom(v) : ''}</span><div class="col" style="height:${Math.max(2, 70 * v / mx)}px" title="${D.horas[j]} h: ${prom(v)}"></div><span>${D.horas[j]}</span></div>`).join('')}</div>
+    <div class="semanas" style="--n:${NH};gap:3px">${h.map((v, j) => `<div class="sem${j === ip ? ' pico' : ''}" style="font-size: 12px"><span class="v num">${v >= 0.5 * mx ? prom(v) : ''}</span><div class="col" style="height:${Math.max(2, 70 * v / mx)}px" title="${D.horas[j]} h: ${prom(v)}"></div><span>${D.horas[j]}</span></div>`).join('')}</div>
     <div class="turnos">
       <div><div class="eyebrow">Almuerzo · antes de las 17 h</div><div class="grande num">${prom(al)} <span class="und">${esc(corta(u))} por día</span></div><div class="sub num">${pct0(al, al + ce)} del consumo</div></div>
       <div><div class="eyebrow">Cena · desde las 17 h</div><div class="grande num">${prom(ce)} <span class="und">${esc(corta(u))} por día</span></div><div class="sub num">${pct0(ce, al + ce)} del consumo</div></div>

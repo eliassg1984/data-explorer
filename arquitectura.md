@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-785 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+786 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (261)
+**CSS y estilos** (262)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -328,6 +328,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
 - **#784** — Compras en la franja común (#782) y nada bajo 12 px
 - **#785** — Inventario en la franja común (#782) y nada bajo 12 px
+- **#786** — Producción en la franja común (#782) y nada bajo 12 px
 
 **Layout y alturas** (112)
 
@@ -58254,6 +58255,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - **En Sin plato la franja no llega al borde**: su contenedor recorta el margen negativo. Se
      ve como una franja con aire a los costados; queda así.
 
+786. **Producción en la franja común (#782) y nada bajo 12 px.**
+   Las seis vistas (Porcionamientos, Kg útil, Para revisar, Órdenes, Consumo y Flujo): de 16 a
+   283 textos de 8 a 11,5 px por vista, e indicadores en caja en Kg útil y Consumo.
+   - 67 reglas a 12 en `consumo.css`/`.js`, `flujo_producto.css`, los tres `merma_*.css` y
+     `requerimientos_area.css`. Medido después: ningún texto visible bajo 12 px en las seis.
+   - **Kg útil** (`.pvu-kpis`) son cifras fijas: franja de borde a borde, sin caja. **Consumo**
+     (`.resumen`) también, pero dentro del ancho: la pieza recorta el margen negativo, así que
+     va como una franja con esquinas, con sus cuatro bloques separados por una línea blanca.
+     Su cifra grande pasó de 26 a 17 px. En **Para revisar** las tres cifras de la ficha
+     (Entrada, Merma, Valor) dejan sus cajas y se separan por una línea, como el panel de Costo
+     de Carta; sus marcas ya eran contadores subrayados.
+   - **El «sin caja» de la #785 no alcanzaba a `.mv-kpi`**: la regla de base es
+     `.mv .mv-kpi` y pesa más que una clase sola, así que Porcionamientos, Órdenes y —desde la
+     #785— Inventario › Req. y salidas seguían con las cuatro cajas blancas dentro de la franja.
+     Se nombra igual (`.mv .mv-kpi, .mv-kpi`). Al pisar una regla de una pieza, copiar su
+     selector, no acortarlo.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58266,7 +58284,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#785**; la próxima toma el número siguiente.
+> última regla es la **#786**; la próxima toma el número siguiente.
 
 >
 
