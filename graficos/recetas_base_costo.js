@@ -2,11 +2,12 @@
 //
 // La monta graficos/recetas_base_costo.py::render_costo_recetas_base con
 // st.components.v2 (sin iframe, estilos en un shadow root). Es la forma del
-// boceto aprobado (https://claude.ai/artifact/8Mgy71Rs9TC4TirzoE8pSo): el
-// renglón del título con el período, el área, «Con | Sin órdenes» y el
-// buscador; seis indicadores que filtran; la lista y, al costado, la ficha
-// de la elegida con su veredicto y cuatro pestañas (Receta, Producciones,
-// Dónde se usa, Cambios). Python manda las cuatro ventanas de una vez: nada
+// boceto aprobado (https://claude.ai/artifact/8Mgy71Rs9TC4TirzoE8pSo), en el
+// lenguaje de Costo de Carta desde la #780: nivel 2 con «Todas | Con | Sin
+// órdenes», «Detalle» y «Cómo se calcula»; nivel 3 con el período, el área y
+// el buscador; seis indicadores que filtran; la lista y, al costado, la
+// ficha de la elegida con su veredicto y cuatro pestañas (Receta,
+// Producciones, Dónde se usa, Cambios). Lista y ficha se amplían (⤢). Python manda las cuatro ventanas de una vez: nada
 // de esto pide una corrida.
 //
 // Python manda en `data`: `fin`, `ventana`, `filas` (una por receta: lo que
@@ -93,17 +94,24 @@ function dibujar(raiz) {
     return r.sort((a, b) => k(a) - k(b) || a.nombre.localeCompare(b.nombre));
   }
 
-  // ── Cabecera e indicadores ─────────────────────────────────────────────
+  // ── Nivel 2, nivel 3 e indicadores (#780) ─────────────────────────────
+  // Nivel 2, con subrayado: qué recetas se miran, que cambia toda la lista,
+  // como Carta | Combos; a la derecha «Detalle» y «Cómo se calcula». Nivel 3,
+  // en pastillas grises: el período, el área y el buscador.
+  const amp = (id, que) => `<button type="button" class="amp" data-acc="ampliar" data-id="${id}" title="${S.amp === id ? 'Volver' : `Ampliar ${que}`}" aria-label="${S.amp === id ? 'Volver' : `Ampliar ${que}`}">${S.amp === id ? '↙' : '⤢'}</button>`;
+  function nivel2() {
+    const PROD = [['todas', 'Todas'], ['con', 'Con órdenes'], ['sin', 'Sin órdenes']];
+    q('[data-zona="n2"]').innerHTML = `<div class="tabs2" role="tablist" aria-label="Recetas">${PROD.map(([k, r]) => `<button type="button" role="tab" data-prod="${k}" aria-selected="${S.prod === k}" class="${S.prod === k ? 'on' : ''}">${r}</button>`).join('')}</div>
+      <div class="n2-der"><label class="switch"><input type="checkbox" data-acc="detalle" role="switch"${S.detalle ? ' checked' : ''}>Detalle</label>
+        <button type="button" class="link" data-acc="info" data-id="calculo">Cómo se calcula</button></div>`;
+  }
   function cabecera() {
     // Mientras se escribe en el buscador no se rehace: se perdería el cursor.
     // (Sin buscador todavía, `activeElement` también es null: no es «enfocado».)
     const b = q('[data-acc="buscar"]');
     if (b && raiz.getRootNode().activeElement === b) return;
-    q('[data-zona="cab"]').innerHTML = `<span class="tit">Costo recetas base</span>
-      <div class="seg">${VENT.map(([k, r]) => `<button type="button" data-vent="${k}" class="${S.vent === k ? 'on' : ''}">${r}</button>`).join('')}</div>
-      <select class="sel" data-acc="area" aria-label="Área"><option value="">Todas las áreas</option>${X.areas.map((a) => `<option${S.area === a ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
-      <select class="sel" data-acc="prod" aria-label="Órdenes de producción"><option value="todas"${S.prod === 'todas' ? ' selected' : ''}>Todas las recetas</option><option value="con"${S.prod === 'con' ? ' selected' : ''}>Con órdenes</option><option value="sin"${S.prod === 'sin' ? ' selected' : ''}>Sin órdenes</option></select>
-      <span class="sp"></span>
+    q('[data-zona="cab"]').innerHTML = `<label class="pill"><span>Período</span><select data-acc="vent" aria-label="Período de las ventas">${VENT.map(([k, r]) => `<option value="${k}"${S.vent === k ? ' selected' : ''}>${r}</option>`).join('')}</select></label>
+      <label class="pill"><span>Área</span><select data-acc="area" aria-label="Área"><option value="">Todas</option>${X.areas.map((a) => `<option${S.area === a ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select></label>
       <input class="buscar" data-acc="buscar" placeholder="Buscar receta" value="${esc(S.q)}" aria-label="Buscar receta">`;
   }
   function indicadores() {
@@ -134,17 +142,18 @@ function dibujar(raiz) {
     const r = filtradas();
     if (!r.some((x) => x.cod === S.sel) && !S.pila.length) S.sel = r[0]?.cod ?? null;
     const ind = S.ind ? IND.find((i) => i[0] === S.ind)[1] : null;
-    q('[data-zona="lcab"]').innerHTML = `<span>${fn(r.length)} recetas${ind ? ` · <b>${esc(ind)}</b> <button type="button" class="volver" data-ind="${S.ind}">quitar</button>` : ''}</span><span>ventas hasta el ${fecha(D.fin)} · ${VENT.find((v) => v[0] === S.vent)[1]}</span>`;
+    const det = S.detalle;
+    q('[data-zona="lcab"]').innerHTML = `<span>${fn(r.length)} recetas${ind ? ` · <b>${esc(ind)}</b> <button type="button" class="volver" data-ind="${S.ind}">quitar</button>` : ''} · ventas hasta el ${fecha(D.fin)}, ${VENT.find((v) => v[0] === S.vent)[1]}</span>${amp('lista', 'la lista')}`;
     const th = (k, t, tip) => `<th data-orden="${k}" class="${S.orden === k ? 'ord' : ''}" title="${esc(tip)}">${t}${S.orden === k ? ' ▾' : ''}</th>`;
-    q('[data-zona="lista"]').innerHTML = `<table class="l"><thead><tr><th>Receta base</th>${th('vendidos', 'Vendidos', 'Unidades vendidas de los platos que la llevan (directo o adentro de otra receta base)')}${th('usado', 'Usado', 'Lo que usaron esas ventas, en la unidad de la receta')}${th('producido', 'Producido', 'Lo que produjeron las órdenes procesadas')}${th('cob', 'Prod. ÷ uso', `Producido ÷ usado. En ámbar debajo de ${fn(U.cob_baja * 100)} % o arriba de ${fn(U.cob_alta * 100)} %`)}${th('ultimo', 'Último costo', 'Costo por unidad de la última orden; la variación, de los últimos 12 meses')}<th title="El costo de cada mes con órdenes, últimos 12">12 m</th></tr></thead><tbody>
+    q('[data-zona="lista"]').innerHTML = `<table class="l"><thead><tr><th>Receta base</th>${det ? th('vendidos', 'Vendidos', 'Unidades vendidas de los platos que la llevan (directo o adentro de otra receta base)') + th('usado', 'Usado', 'Lo que usaron esas ventas, en la unidad de la receta') + th('producido', 'Producido', 'Lo que produjeron las órdenes procesadas') : ''}${th('cob', 'Prod. ÷ uso', `Producido ÷ usado. En ámbar debajo de ${fn(U.cob_baja * 100)} % o arriba de ${fn(U.cob_alta * 100)} %`)}${th('ultimo', 'Último costo', 'Costo por unidad de la última orden; la variación, de los últimos 12 meses')}${det ? '<th title="El costo de cada mes con órdenes, últimos 12">12 m</th>' : ''}</tr></thead><tbody>
       ${r.slice(0, 250).map((x) => `<tr data-cod="${esc(x.cod)}" class="${x.cod === S.sel ? 'on' : ''}">
         <td><span class="nom" title="${esc(x.nombre)}">${esc(x.nombre)}</span><span class="sub">${esc(x.area || '—')} · ${esc(x.unid)}${x.ddProd ? '<span class="chip dd">DD como producto</span>' : ''}${x.activa ? '' : '<span class="chip inac">inactiva</span>'}</span></td>
-        <td>${cant(x.vendidos)}<div class="sub">${x.platos ? `${fn(x.platos)} platos` : ''}</div></td>
+        ${det ? `<td>${cant(x.vendidos)}<div class="sub">${x.platos ? `${fn(x.platos)} platos` : ''}</div></td>
         <td>${cant(x.usado)}</td>
-        <td>${x.con_ordenes && !x.producido ? '0' : cant(x.producido)}<div class="sub">${x.con_ordenes ? `${fn(x.ordenes)} órd.` : ''}</div></td>
+        <td>${x.con_ordenes && !x.producido ? '0' : cant(x.producido)}<div class="sub">${x.con_ordenes ? `${fn(x.ordenes)} órd.` : ''}</div></td>` : ''}
         <td>${barraCob(x)}</td>
         <td>${soles(x.ultimo)}<span class="var ${x.var >= U.var ? 'ambar' : x.var <= -U.var ? 'verde' : 'gris'}">${varTxt(x.var)}</span></td>
-        <td>${spark(x.linea)}</td></tr>`).join('')}</tbody></table>${r.length > 250 ? '<div class="nota" style="margin:8px">Se ven las primeras 250: buscá o filtrá para las demás.</div>' : ''}${r.length ? '' : '<div class="nota" style="margin:8px">Ninguna receta base con este filtro.</div>'}`;
+        ${det ? `<td>${spark(x.linea)}</td>` : ''}</tr>`).join('')}</tbody></table>${r.length > 250 ? '<div class="nota" style="margin:8px">Se ven las primeras 250: buscá o filtrá para las demás.</div>' : ''}${r.length ? '' : '<div class="nota" style="margin:8px">Ninguna receta base con este filtro.</div>'}`;
   }
 
   // ── La ficha ───────────────────────────────────────────────────────────
@@ -260,7 +269,8 @@ function dibujar(raiz) {
     const cuerpo = { receta: pestReceta, prod: pestProducciones, donde: pestDonde, cambios: pestCambios }[S.tab](x);
     z.innerHTML = `<div class="fcab">
         ${S.pila.length ? `<button type="button" class="volver" data-volver="1">← volver a ${esc((F.get(S.pila[S.pila.length - 1]) || {}).nombre || '')}</button>` : ''}
-        <div class="fnom"><span>${esc(x.nombre)}</span><small>${esc(x.area || '—')} · por ${esc(x.unid)}${x.activa ? '' : ' · inactiva'}</small></div>
+        <span class="fsub">${esc(x.area || '—')} · por ${esc(x.unid)}${x.activa ? '' : ' · inactiva'}</span>
+        <div class="ftit"><h3>${esc(x.nombre)}</h3>${amp('ficha', 'la ficha')}</div>
         <div class="cifs"><div class="cif"><span>Última orden</span><b>${soles(x.ultimo)}</b><small>${x.f_ultimo ? fecha(x.f_ultimo) : 'nunca'}</small></div>
           <div class="cif"><span>Receta hoy</span><b>${soles(x.costo_hoy)}</b><small>${x.brecha != null ? `${varTxt(x.brecha)} vs. la orden` : 'precios de hoy'}</small></div>
           <div class="cif"><span>12 meses</span><b class="${x.var >= U.var ? 'ambar' : x.var <= -U.var ? 'verde' : ''}">${varTxt(x.var) || '—'}</b><small>${x.linea.length ? `${x.linea.length} meses con órdenes` : 'sin órdenes'}</small></div></div></div>
@@ -268,17 +278,50 @@ function dibujar(raiz) {
       <div class="fcuerpo">${veredicto(x)}${cuerpo}</div>`;
   }
 
-  cabecera(); indicadores(); lista(); ficha();
+  raiz.classList.toggle('detalle', !!S.detalle);
+  raiz.classList.toggle('amp-lista', S.amp === 'lista');
+  raiz.classList.toggle('amp-ficha', S.amp === 'ficha');
+  nivel2(); cabecera(); indicadores(); lista(); ficha();
   const l = q('[data-zona="lista"]'), on = l.querySelector('tr.on');
   if (on && raiz.__d.llevar) { const r = on.getBoundingClientRect(), c = l.getBoundingClientRect(); if (r.top < c.top + 24 || r.bottom > c.bottom) l.scrollTop += r.top - c.top - 60; }
   raiz.__d.llevar = false;
+}
+
+// Lo que explica va en un pop (boceto de la #775): se abre con un clic.
+function abrirInfo(raiz, b) {
+  const S = raiz.__d.st, U = raiz.__d.x.U;
+  const pop = raiz.querySelector('[data-zona="pop"]');
+  S.pop = b && S.pop !== b.dataset.id ? b.dataset.id : null;
+  if (!S.pop) { pop.hidden = true; return; }
+  const p = (v) => `${fn(v * 100)} %`;
+  const txt = [
+    '«En uso»: recetas base que usó alguna venta del período, directo o adentro de otra receta base.',
+    `«Se produce de menos» y «de más»: lo que produjeron las órdenes ÷ lo que usaron las ventas, fuera de ${p(U.cob_baja)} a ${p(U.cob_alta)}. No cuentan las que todas sus líneas descargan por insumo: no llevan orden.`,
+    '«DD» como producto: se llama DD (se descarga por insumo) pero alguna línea la descarga como producto y pide una orden que nadie hace.',
+    `«Costo subió»: el costo por unidad sube ${p(U.var)} o más del primer mes con órdenes al último, en 12 meses.`,
+    `«Receta ≠ orden»: lo que cuesta hoy la receta contra la última orden de los últimos ${fn(U.dias_orden)} días, a más de ${p(U.brecha)}.`,
+    'Un clic en un indicador deja sólo esas recetas; otro, todas.',
+  ];
+  pop.innerHTML = `<div class="pi-cab"><b>Cómo se calcula</b><button type="button" class="x" data-acc="cerrar-info" aria-label="Cerrar">×</button></div>${txt.map((t) => `<p>${esc(t)}</p>`).join('')}`;
+  pop.hidden = false;
+  const r = b.getBoundingClientRect(), base = raiz.getBoundingClientRect();
+  const ancho = Math.min(380, base.width - 16);
+  pop.style.width = `${ancho}px`;
+  pop.style.left = `${Math.max(8, Math.min(r.right - base.left - ancho, base.width - ancho - 8))}px`;
+  pop.style.top = `${r.bottom - base.top + 6}px`;
 }
 
 function enlazar(raiz) {
   const tip = () => raiz.querySelector('[data-zona="tip"]');
   raiz.addEventListener('click', (ev) => {
     const S = raiz.__d.st, t = ev.target;
-    const v = t.closest('[data-vent]'); if (v) { S.vent = v.dataset.vent; dibujar(raiz); return; }
+    const acc = t.closest('[data-acc]')?.dataset.acc;
+    if (S.pop && !t.closest('[data-zona="pop"]') && acc !== 'info') abrirInfo(raiz, null);
+    if (acc === 'info') { abrirInfo(raiz, t.closest('[data-acc]')); return; }
+    if (acc === 'cerrar-info') { abrirInfo(raiz, null); return; }
+    if (acc === 'detalle') { S.detalle = t.checked; try { localStorage.setItem('rb_detalle', S.detalle ? '1' : ''); } catch (_) { /* sin almacenamiento */ } dibujar(raiz); return; }
+    if (acc === 'ampliar') { const id = t.closest('[data-acc]').dataset.id; S.amp = S.amp === id ? null : id; dibujar(raiz); return; }
+    const pr = t.closest('[data-prod]'); if (pr) { S.prod = pr.dataset.prod; dibujar(raiz); return; }
     const k = t.closest('[data-ind]'); if (k) { S.ind = S.ind === k.dataset.ind ? null : k.dataset.ind; dibujar(raiz); return; }
     const o = t.closest('[data-orden]'); if (o) { S.orden = o.dataset.orden; dibujar(raiz); return; }
     const ir = t.closest('[data-ir]');
@@ -294,7 +337,7 @@ function enlazar(raiz) {
   });
   raiz.addEventListener('change', (ev) => {
     const S = raiz.__d.st, a = ev.target.dataset.acc;
-    if (a === 'area') S.area = ev.target.value; else if (a === 'prod') S.prod = ev.target.value; else return;
+    if (a === 'area') S.area = ev.target.value; else if (a === 'vent') S.vent = ev.target.value; else return;
     dibujar(raiz);
   });
   raiz.addEventListener('input', (ev) => {
@@ -314,6 +357,11 @@ function enlazar(raiz) {
     t.style.left = `${Math.max(0, left)}px`; t.style.top = `${Math.max(0, top)}px`;
   });
   raiz.addEventListener('mouseleave', () => { const t = tip(); if (t) t.style.display = 'none'; });
+  // En el documento y no en la raíz: el redibujo reemplaza el botón ⤢ que
+  // tenía el foco, y la tecla ya no llegaría a la pieza.
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && raiz.__d.st.amp) { raiz.__d.st.amp = null; dibujar(raiz); }
+  });
 }
 
 export default function (component) {
@@ -323,12 +371,13 @@ export default function (component) {
   if (!raiz) {
     raiz = document.createElement('div');
     raiz.className = 'rb';
-    raiz.innerHTML = `<div class="cab" data-zona="cab"></div><div class="kpis" data-zona="kpis"></div>
-      <div class="cuerpo"><div class="caja lista"><div class="lista-cab" data-zona="lcab"></div><div class="lista-w" data-zona="lista"></div></div>
-      <aside class="caja ficha" data-zona="ficha" aria-label="Ficha de la receta"></aside></div>
-      <div class="tip" data-zona="tip"></div>`;
+    raiz.innerHTML = `<div class="n2" data-zona="n2"></div><div class="cab" data-zona="cab"></div><div class="kpis" data-zona="kpis"></div>
+      <div class="cuerpo"><div class="lista"><div class="lista-w" data-zona="lista"></div><div class="lista-pie" data-zona="lcab"></div></div>
+      <aside class="ficha" data-zona="ficha" aria-label="Ficha de la receta"></aside></div>
+      <div class="tip" data-zona="tip"></div><div class="pi" data-zona="pop" role="dialog" hidden></div>`;
     parentElement.appendChild(raiz);
-    raiz.__d = { st: { vent: data.ventana || '90', area: '', prod: 'todas', q: '', ind: null, orden: 'vendidos', sel: null, tab: 'receta', abiertos: new Set(), pila: [] } };
+    raiz.__d = { st: { vent: data.ventana || '90', area: '', prod: 'todas', q: '', ind: null, orden: 'vendidos', sel: null, tab: 'receta', abiertos: new Set(), pila: [],
+      detalle: (() => { try { return !!localStorage.getItem('rb_detalle'); } catch (_) { return false; } })(), amp: null, pop: null } };
     enlazar(raiz);
   }
   if (raiz.__d.data !== data) { raiz.__d.data = data; raiz.__d.x = armarDatos(data); }

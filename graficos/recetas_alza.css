@@ -136,7 +136,7 @@
 .sa-plato { max-width: 260px; }
 /* Sin «Detalle» son tres columnas: el plato toma el ancho que sobra y las cifras van
    juntas a la derecha, como en Costo de Carta. */
-.sa:not(.detalle) .sa-plato { width: 100%; max-width: none; }
+@media (min-width: 901px) { .sa:not(.detalle) .sa-plato { width: 100%; max-width: none; } }
 .sa-tabla th.der, .sa-pct { text-align: right; }
 .sa-tabla th.der { padding-left: 24px; }
 .sa-tabla td:last-child .sa-bar { justify-content: flex-end; }
@@ -200,6 +200,17 @@
 .sa-opc span { font-size: 12px; color: var(--text-secondary); }
 .sa-opc span.num, .sa-opc b.num { text-align: right; }
 
+/* ── Ampliar (⤢): la lista o la ficha toma la hoja debajo del nivel 2 (#780) ── */
+.sa-amp { flex: none; margin-left: auto; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px;
+  background: none; color: var(--text-secondary) !important; font-size: 16px !important; line-height: 28px; cursor: pointer; }
+.sa-amp:hover { background: var(--marco-control); color: var(--accent-deep) !important; }
+.sa-ftit { display: flex; align-items: flex-start; gap: var(--e1); }
+.sa-ftit h3 { flex: 1; min-width: 0; }
+.sa.amp-lista .sa-n3, .sa.amp-lista [data-zona="editor"], .sa.amp-lista .sa-kpis, .sa.amp-lista .sa-ficha,
+.sa.amp-ficha .sa-n3, .sa.amp-ficha [data-zona="editor"], .sa.amp-ficha .sa-kpis, .sa.amp-ficha .sa-lista { display: none; }
+.sa.amp-ficha .sa-ficha { flex: 1 1 0; border-left: 0; padding-left: 0; }
+.sa.amp-ficha .sa-ficha > * { max-width: 760px; }
+
 /* ── El pop: título y explicación ─────────────────────────────────────── */
 .sa-pi { position: absolute; z-index: 6; box-sizing: border-box; padding: 14px 16px; border: 1.5px solid var(--accent);
   border-radius: 12px; background: var(--bg-card); box-shadow: 0 8px 28px rgba(73, 56, 184, .18);
@@ -233,4 +244,10 @@
   .sa-tabla { flex: none; max-height: 460px; }
   .sa-ficha { flex: none; border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: var(--e3); overflow: visible; }
   .sa-npl { margin-left: 0; }
+  .sa-plato { max-width: 128px; }
+  .sa-tabla td, .sa-tabla th { padding-left: 4px; padding-right: 4px; }
+  .sa-tabla th.der { padding-left: 4px; }
+  /* La barrita del cambio no entra: queda la cifra. */
+  .sa-bar i { display: none; }
+  .sa-plato b { white-space: normal; }
 }

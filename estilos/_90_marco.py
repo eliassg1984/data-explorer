@@ -247,7 +247,8 @@ CSS = """
     }
     }
     .st-key-rec_card_carta,
-    .st-key-rec_card_alza {
+    .st-key-rec_card_alza,
+    .st-key-rec_card_costo_rb {
         position: relative !important;
         padding: 0 !important;
         gap: 0 !important;

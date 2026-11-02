@@ -2011,6 +2011,9 @@ borde a borde desde 901 px, lista y ficha sin caja, segmentados con subrayado).
 **Alza va además con la forma entera** (#779): niveles, «Detalle», el escenario
 en pastillas con un renglón de edición, ficha con lectura y plegables, pops; su
 fecha nativa se ubica como la de Costo de Carta. Es el modelo para las demás.
+**Recetas base, igual desde la #780.** Y **toda lista y toda ficha se amplía**
+(⤢, a pedido): toma la hoja debajo del nivel 2, ↙ o `Esc` vuelven; `Esc` se
+escucha en el `document`, porque el redibujo se lleva el foco.
 
 **«Nuevo Costeo» también, desde el mismo día** (regla #697): la tabla de la
 receta y el precio son `graficos/nuevo_costeo.js` + `.css`; el buscador, el

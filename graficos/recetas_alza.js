@@ -185,10 +185,12 @@ function htmlTabs(st) {
     `<button type="button" role="tab" aria-selected="${st.vista === id}" class="${st.vista === id ? 'on' : ''}" data-acc="vista" data-id="${id}">${r}</button>`).join('');
 }
 
+const amp = (st, id, que) => `<button type="button" class="sa-amp" data-acc="ampliar" data-id="${id}" title="${st.amp === id ? 'Volver' : `Ampliar ${que}`}" aria-label="${st.amp === id ? 'Volver' : `Ampliar ${que}`}">${st.amp === id ? '↙' : '⤢'}</button>`;
+
 function htmlLista(d, st, filas, elegido) {
   const vendidos = filas.filter((f) => f.vend > 0).length;
   const pie = `<div class="sa-lpie"><span>${filas.length} ${filas.length === 1 ? 'plato lo lleva' : 'platos los llevan'} · ${vendidos} con ventas en el período</span>
-    <button type="button" class="sa-i" data-acc="info" data-id="lista" aria-label="Cómo leer la lista">i</button></div>`;
+    <button type="button" class="sa-i" data-acc="info" data-id="lista" aria-label="Cómo leer la lista">i</button>${amp(st, 'lista', 'la lista')}</div>`;
   if (!filas.length) {
     const msg = st.orden.length ? 'Ningún plato de la carta lleva los insumos elegidos.'
       : 'Agrega un insumo arriba para ver qué platos lo llevan y cómo quedan.';
@@ -261,7 +263,7 @@ function htmlFicha(d, st, f) {
   const dif = (x) => (Math.abs(x - f.precio) < 0.005 ? 'sin cambio' : dinero(x - f.precio, 2, true));
   const absorber = f.vend ? `${dinero(-f.delta * f.vend, 0, true)} de margen en el período` : `${dinero(-f.delta, 2, true)} por plato`;
   const sube = Math.abs(f.mant - f.precio) < 0.005 ? 'el precio queda igual' : `el precio pasa a ${dinero(f.mant, 2)}`;
-  return `<div class="sa-fcab"><span>${esc(f.sub)} · ${f.vend ? `se vendieron ${num(f.vend)} en el período` : 'sin ventas en el período'}</span><h3>${esc(f.plato)}</h3></div>
+  return `<div class="sa-fcab"><span>${esc(f.sub)} · ${f.vend ? `se vendieron ${num(f.vend)} en el período` : 'sin ventas en el período'}</span><div class="sa-ftit"><h3>${esc(f.plato)}</h3>${amp(st, 'ficha', 'la ficha')}</div></div>
     <div class="sa-cifras">
       <div><span class="sa-c-rot">Costo del plato · antes ${dinero(f.costo, 2)}</span><b class="sa-c-val ${tinta(f.delta)}">${dinero(f.nuevo, 2)}</b></div>
       <div><span class="sa-c-rot">% de costo · hoy ${pct(f.pH)}</span><b class="sa-c-val ${nivel(f.pN)}">${pct(f.pN)}</b></div>
@@ -296,6 +298,9 @@ function dibujar(raiz, zonas) {
   }
   if (!st.orden.includes(st.activo)) st.activo = st.orden[st.orden.length - 1] || null;
   raiz.classList.toggle('detalle', !!st.detalle);
+  // Ampliar: la zona elegida toma la hoja debajo del nivel 2 (#780).
+  raiz.classList.toggle('amp-lista', st.amp === 'lista');
+  raiz.classList.toggle('amp-ficha', st.amp === 'ficha');
   raiz.querySelector('[data-acc="detalle"]').checked = !!st.detalle;
   const filas = calcular(d, st);
   const elegido = filas.find((f) => f.cod === st.sel) || filas[0];
@@ -329,6 +334,8 @@ function medir(raiz) {
   const x = `${Math.round(a.left - p.left)}px`, y = `${Math.round(a.top - p.top + (a.height - cab.offsetHeight) / 2)}px`;
   if (cab.style.left !== x) cab.style.left = x;
   if (cab.style.top !== y) cab.style.top = y;
+  const vis = raiz.__d.st.amp ? 'hidden' : 'visible';
+  if (cab.style.visibility !== vis) cab.style.visibility = vis;
 }
 
 function fijar(raiz, cod, p) {
@@ -364,6 +371,7 @@ function enlazar(raiz) {
     else if (acc === 'plato') { st.sel = cod; dibujar(raiz, []); return; }
     else if (acc === 'activo') { st.activo = cod; dibujar(raiz, ['esc']); return; }
     else if (acc === 'info') { abrirInfo(raiz, b); return; }
+    else if (acc === 'ampliar') { st.amp = st.amp === b.dataset.id ? null : b.dataset.id; dibujar(raiz, []); return; }
     else if (acc === 'cerrar-info') { abrirInfo(raiz, null); return; }
     else if (acc === 'detalle') { st.detalle = b.checked; guardar('sa_detalle', st.detalle); dibujar(raiz, []); return; }
     else if (acc === 'pleg') { st.pleg[b.dataset.id] = !st.pleg[b.dataset.id]; guardar('sa_pleg', st.pleg); dibujar(raiz, []); return; }
@@ -404,6 +412,11 @@ function enlazar(raiz) {
     if (acc === 'pct' || acc === 'precio') dibujar(raiz, ['esc']);
   });
   window.addEventListener('resize', () => medir(raiz));
+  // En el documento y no en la raíz: el redibujo reemplaza el botón ⤢ que
+  // tenía el foco, y la tecla ya no llegaría a la pieza.
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && raiz.__d.st.amp) { raiz.__d.st.amp = null; dibujar(raiz, []); }
+  });
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => medir(raiz)).observe(raiz);
 }
 
@@ -429,7 +442,7 @@ export default function (component) {
     raiz.className = 'sa';
     parentElement.appendChild(raiz);
     raiz.__d = { st: Object.assign({ sel: null, vista: leer('sa_vista', 'platos'), agregar: false, q: '',
-      activo: null, pop: null, detalle: leer('sa_detalle', false), pleg: leer('sa_pleg', { precio: true }) },
+      activo: null, pop: null, amp: null, detalle: leer('sa_detalle', false), pleg: leer('sa_pleg', { precio: true }) },
     inicial(data, false)) };
     enlazar(raiz);
   }

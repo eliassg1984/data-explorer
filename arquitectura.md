@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-779 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+780 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (257)
+**CSS y estilos** (258)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -324,8 +324,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#776** — El marco de la opción B en toda la app: la navegación sobre lavanda y cada vista, su hoja
 - **#778** — Recetas entera en el lenguaje de la #775: franja de indicadores, sin cajas, nada bajo 12 px
 - **#779** — Alza en el lenguaje entero de Costo de Carta: niveles, jerarquía y divulgación progresiva
+- **#780** — Recetas base en el lenguaje entero de Costo de Carta, y «Ampliar» (⤢) en la lista y la ficha
 
-**Layout y alturas** (110)
+**Layout y alturas** (111)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -437,6 +438,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#765** — Stock en una pantalla: lista con niveles y ficha al costado, en las dos perspectivas
 - **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
 - **#774** — Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de…
+- **#780** — Recetas base en el lenguaje entero de Costo de Carta, y «Ampliar» (⤢) en la lista y la ficha
 
 **Plotly y figuras** (130)
 
@@ -58135,6 +58137,28 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      `movil.css` lleva todo botón a 44 px (su `:is()` pesa (0,3,1)): la «i» conserva el
      círculo con (0,4,1) y el área de toque la da un `::after`.
 
+780. **Recetas base en el lenguaje entero de Costo de Carta, y «Ampliar» (⤢) en la lista y la ficha.**
+   A pedido: toda tabla o ficha tiene que poder ampliarse, como la ficha de Costo de Carta.
+   - **Ampliar:** un ⤢ al pie de la lista y al lado del nombre en la ficha; la zona elegida
+     toma la hoja debajo del nivel 2 (se esconden el nivel 3, la franja y la otra zona) y el
+     botón pasa a ↙. `Esc` también vuelve, escuchado en el `document`: el redibujo reemplaza
+     el botón que tenía el foco y la tecla ya no llegaba a la pieza. En Alza el calendario
+     nativo se esconde mientras tanto (`medir`), como en Costo de Carta.
+   - **Recetas base (#706):** nivel 2 con «Todas | Con órdenes | Sin órdenes» (antes un
+     desplegable) y a la derecha «Detalle» y «Cómo se calcula», un pop con las seis señales y
+     sus umbrales (los de `U`, no escritos a mano). Nivel 3 en pastillas: Período (antes cuatro
+     botones), Área y el buscador. Los seis indicadores siguen filtrando, sin caja, con su
+     renglón de abajo sólo con «Detalle». La lista abre en Receta base, Prod. ÷ uso y Último
+     costo; «Detalle» suma Vendidos, Usado, Producido y 12 m. El renglón de arriba de la lista
+     («366 recetas · … · ventas hasta …», con «quitar») pasó al pie. La ficha: área y unidad,
+     el nombre en 18 px con ⤢, tres cifras sin caja, el veredicto y las cuatro pestañas.
+   - **La tarjeta va sin aire** (`rec_card_costo_rb` en `_90_marco.py`, como Alza): la pieza
+     pone sus 24 px y mide `--alto-util`.
+   - **Celular:** `movil.css` deja a los hijos de la pieza en `max-width: 100 %`, así que la
+     franja con márgenes negativos se achicaba en vez de llegar al borde: ahí va sin ellos.
+     El plato a `width: 100 %` empujaba las cifras fuera de la vista: sólo desde 901 px. Y las
+     barritas de la lista se esconden: no entraban junto a la cifra.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58147,7 +58171,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#779**; la próxima toma el número siguiente.
+> última regla es la **#780**; la próxima toma el número siguiente.
 
 >
 
