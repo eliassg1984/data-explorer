@@ -2,9 +2,10 @@
 //
 // La monta graficos/recetas_alza.py con st.components.v2 (sin iframe,
 // estilos en un shadow root). Es la forma del boceto aprobado
-// (https://claude.ai/artifact/9Cyr741W82XtckkUzZheCJ): el escenario (una
-// ficha por insumo), una tira de indicadores, la lista de platos y la ficha
-// del elegido. Toda la cuenta pasa acá mientras se escribe; nada vuelve a
+// (https://claude.ai/artifact/9Cyr741W82XtckkUzZheCJ), pasado desde la #779 al
+// lenguaje de Costo de Carta (#775): nivel 2 con «Platos | Por subgrupo» y
+// «Detalle», el escenario en pastillas (nivel 3), la franja de indicadores,
+// la lista y la ficha con plegables; lo que explica, en pops. Toda la cuenta pasa acá mientras se escribe; nada vuelve a
 // Python. El escenario vive en la raíz (sobrevive a las corridas: cambiar
 // la fecha manda otro `data` sin rehacer el DOM) y en localStorage.
 //
@@ -62,29 +63,50 @@ function calcular(d, st) {
   return filas;
 }
 
-// ── El escenario ─────────────────────────────────────────────────────────
-function fichaInsumo(d, st, cod) {
-  const i = d.insumos.findIndex((x) => x[0] === cod);
+// ── El escenario: una pastilla por insumo y el editor del elegido ──────
+// Regla #779: el escenario ocupaba una tarjeta de 110 px por insumo. Ahora
+// cada insumo es una pastilla de la fila de filtros (nivel 3) con su %, y
+// el elegido se edita en UN renglón debajo. Los campos conservan sus
+// `data-acc`: la lógica de `enlazar` no cambió.
+function htmlChips(d, st) {
+  const chips = st.orden.map((cod) => {
+    const i = d.insumos.findIndex((x) => x[0] === cod);
+    const nombre = d.insumos[i][1];
+    const p = st.pcts[cod] || 0;
+    const on = cod === st.activo;
+    return `<span class="sa-chip${on ? ' on' : ''}">
+      <button type="button" class="sa-chip-b" data-acc="activo" data-cod="${esc(cod)}" aria-pressed="${on}" title="${esc(nombre)}">
+        <i style="background:${color(i)}"></i><span class="sa-chip-n">${esc(nombre)}</span><b class="${tinta(p)}">${p > 0 ? '+' : p < 0 ? '−' : ''}${num(Math.abs(p))} %</b></button>
+      <button type="button" class="sa-x" data-acc="quitar" data-cod="${esc(cod)}" aria-label="Quitar ${esc(nombre)}">×</button></span>`;
+  }).join('');
+  const pop = st.agregar ? `<div class="sa-pop">
+      <input type="search" data-acc="buscar" placeholder="Buscar un insumo…" value="${esc(st.q)}" aria-label="Buscar un insumo">
+      <div class="sa-pop-nota">Ordenados por lo que cargan a la carta (costo × lo vendido en 90 días)</div>
+      <div class="sa-pop-lista" data-zona="sug">${sugerencias(d, st)}</div>
+    </div>` : '';
+  return `${chips}<div class="sa-agr"><button type="button" class="sa-agr-b" data-acc="abrir-agregar" aria-expanded="${st.agregar}">+ Agregar insumo</button>${pop}</div>`;
+}
+
+function htmlEditor(d, st) {
+  const i = d.insumos.findIndex((x) => x[0] === st.activo);
+  if (i < 0) return '';
+  const cod = st.activo;
   const [, nombre, base, unid, fuente, , npl] = d.insumos[i];
   const p = st.pcts[cod] || 0;
   const precio = base
     ? `<label class="sa-precio"><span>S/</span><input type="number" step="0.01" min="0" data-acc="precio" data-cod="${esc(cod)}" value="${(base * (1 + p / 100)).toFixed(2)}" aria-label="Nuevo precio por ${esc(unid)}"><span>/ ${esc(unid)}</span></label>
        <span class="sa-base">hoy ${dinero(base, 2)} / ${esc(unid)} · ${esc(fuente === 'promedio de almacén' ? 'prom. almacén' : fuente)}</span>`
     : `<span class="sa-base">${esc(fuente)}: sólo el %</span>`;
-  return `<div class="sa-ins">
-    <div class="sa-ins-cab"><i style="background:${color(i)}"></i><b title="${esc(nombre)}">${esc(nombre)}</b>
-      <button type="button" class="sa-x" data-acc="quitar" data-cod="${esc(cod)}" aria-label="Quitar ${esc(nombre)}">×</button></div>
-    <div class="sa-ins-mid">
-      <div class="sa-step">
-        <button type="button" data-acc="menos" data-cod="${esc(cod)}" aria-label="Bajar 1 %">−</button>
-        <input type="number" step="0.1" min="-100" data-acc="pct" data-cod="${esc(cod)}" value="${+p.toFixed(2)}" class="${tinta(p)}" aria-label="Cambio en %">
-        <span>%</span>
-        <button type="button" data-acc="mas" data-cod="${esc(cod)}" aria-label="Subir 1 %">+</button>
-      </div>
-      <div class="sa-ins-precio">${precio}</div>
+  return `<div class="sa-ins" aria-label="${esc(nombre)}">
+    <div class="sa-step">
+      <button type="button" data-acc="menos" data-cod="${esc(cod)}" aria-label="Bajar 1 %">−</button>
+      <input type="number" step="0.1" min="-100" data-acc="pct" data-cod="${esc(cod)}" value="${+p.toFixed(2)}" class="${tinta(p)}" aria-label="Cambio en %">
+      <span>%</span>
+      <button type="button" data-acc="mas" data-cod="${esc(cod)}" aria-label="Subir 1 %">+</button>
     </div>
-    <div class="sa-ins-pie">${PRESETS.map((v) => `<button type="button" class="sa-pre${p === v ? ' on' : ''}" data-acc="preset" data-cod="${esc(cod)}" data-v="${v}">${v > 0 ? '+' : '−'}${Math.abs(v)} %</button>`).join('')}
-      <span>${npl} ${npl === 1 ? 'plato' : 'platos'}</span></div>
+    ${precio}
+    <div class="sa-pres">${PRESETS.map((v) => `<button type="button" class="sa-pre${p === v ? ' on' : ''}" data-acc="preset" data-cod="${esc(cod)}" data-v="${v}">${v > 0 ? '+' : '−'}${Math.abs(v)} %</button>`).join('')}</div>
+    <span class="sa-npl">lo llevan ${npl} ${npl === 1 ? 'plato' : 'platos'}</span>
   </div>`;
 }
 
@@ -101,20 +123,42 @@ function sugerencias(d, st) {
     </button>`).join('');
 }
 
-function htmlEscenario(d, st) {
-  const fichas = st.orden.map((c) => fichaInsumo(d, st, c)).join('');
-  const pop = st.agregar ? `<div class="sa-pop">
-      <input type="search" data-acc="buscar" placeholder="Buscar un insumo…" value="${esc(st.q)}" aria-label="Buscar un insumo">
-      <div class="sa-pop-nota">Ordenados por lo que cargan a la carta (costo × lo vendido en 90 días)</div>
-      <div class="sa-pop-lista" data-zona="sug">${sugerencias(d, st)}</div>
-    </div>` : '';
-  return `${fichas}<div class="sa-agr">
-      <button type="button" class="sa-agr-b" data-acc="abrir-agregar" aria-expanded="${st.agregar}">
-        <span class="mas">+</span><b>Agregar insumo</b><span>${st.orden.length ? 'los que más pesan en la carta' : 'elige el primero: abre con los que más pesan'}</span>
-      </button>${pop}</div>`;
+// ── Las explicaciones: un pop con título y texto ─────────────────────────
+// Lo que explica va acá y no a la vista (boceto de la #775). Se abre con un
+// clic, para que sirva en el celular.
+function info(d, id) {
+  const T = {
+    k0: ['Costo de recetas del período', 'Lo que cambia el costo de las recetas de lo vendido en las fechas elegidas: el cambio de cada plato × sus unidades vendidas. Con la receta de hoy.'],
+    k1: ['Food cost de la carta', 'Costo de recetas ÷ venta neta de toda la carta activa costeada en el período, hoy y con el alza. Incluye los platos que no llevan los insumos elegidos.'],
+    k2: ['Margen sobre recetas', 'Venta neta − costo de recetas, con el alza. Es margen sobre recetas, no la utilidad final.'],
+    k3: ['Cruzan un umbral', 'Platos que hoy están en 30 % o menos y con el alza pasan el 30 %, más los que pasan el 35 %.'],
+    calculo: ['Cómo se calcula', `${d.ayuda || ''} Costo con la receta de hoy, sobre el neto. El precio lleva IGV, en la misma proporción que el neto de hoy. Los cortes porcionados cuentan para su insumo de origen.`],
+    lista: ['Cómo leer la lista', `% de costo sobre el neto: ámbar más de 30 %, rojo más de 35 %. «revisar costo»: el costo de hoy ya pasa el 60 % del neto, casi seguro un error de receta o de factor. Ordenada por el cambio en el período. ${d.periodo ? `Ventas del ${d.periodo}.` : 'Sin ventas disponibles: el efecto del período es cero.'}`],
+  };
+  const [tit, txt] = T[id] || ['', ''];
+  return { tit, txt };
+}
+
+function abrirInfo(raiz, b) {
+  const { data: d, st } = raiz.__d;
+  const pop = raiz.querySelector('[data-zona="pop"]');
+  const id = b ? b.dataset.id : null;
+  st.pop = id && st.pop !== id ? id : null;
+  if (!st.pop) { pop.hidden = true; return; }
+  const t = info(d, id);
+  pop.innerHTML = `<div class="sa-pi-cab"><b>${esc(t.tit)}</b><button type="button" class="sa-x" data-acc="cerrar-info" aria-label="Cerrar">×</button></div><p>${esc(t.txt)}</p>`;
+  pop.hidden = false;
+  const r = b.getBoundingClientRect(), base = raiz.getBoundingClientRect();
+  const ancho = Math.min(340, base.width - 16);
+  pop.style.width = `${ancho}px`;
+  pop.style.left = `${Math.max(8, Math.min(r.right - base.left - ancho, base.width - ancho - 8))}px`;
+  const abajo = r.bottom - base.top + 6;
+  pop.style.top = `${abajo + pop.offsetHeight > base.height ? Math.max(0, r.top - base.top - pop.offsetHeight - 6) : abajo}px`;
 }
 
 // ── Indicadores ──────────────────────────────────────────────────────────
+// Cuatro, como Costo de Carta. «Platos que los llevan» pasó al pie de la
+// lista; el renglón de abajo de cada uno aparece con «Detalle».
 function htmlKpis(d, filas) {
   const dTot = filas.reduce((s, f) => s + f.dPer, 0);
   const hay = !!d.periodo;
@@ -122,31 +166,33 @@ function htmlKpis(d, filas) {
   const pp = fcN - fcH;
   const c30 = filas.filter((f) => f.pH <= 30 && f.pN > 30).length;
   const c35 = filas.filter((f) => f.pH <= 35 && f.pN > 35).length;
-  const vendidos = filas.filter((f) => f.vend > 0).length;
-  const kpi = (rot, val, sub, cls = '') => `<div class="sa-kpi"><span class="sa-kpi-rot">${rot}</span>
-    <div class="sa-kpi-lin"><span class="sa-kpi-val ${cls}">${val}</span><span class="sa-kpi-sub">${sub}</span></div></div>`;
+  const kpi = (id, rot, val, sub, cls = '') => `<div class="sa-kpi"><span class="sa-kpi-rot">${rot}</span>
+    <span class="sa-kpi-val ${cls}">${val}</span><span class="sa-kpi-sub">${sub}</span>
+    <button type="button" class="sa-i" data-acc="info" data-id="${id}" aria-label="Qué es ${rot}">i</button></div>`;
   return [
-    kpi('Costo de recetas del período', hay ? dinero(dTot, 0, true) : '—',
+    kpi('k0', 'Costo de recetas del período', hay ? dinero(dTot, 0, true) : '—',
       hay ? `${dinero(d.costo, 0)} → ${dinero(d.costo + dTot, 0).replace('S/ ', '')}` : 'sin ventas disponibles', tinta(dTot)),
-    kpi('Food cost de la carta', pct(fcN), isFinite(pp) ? `hoy ${pct(fcH)} · ${pp >= 0 ? '+' : '−'}${Math.abs(pp).toFixed(2)} pp` : 'sin ventas en el período'),
-    kpi('Margen sobre recetas', hay ? dinero(d.neto - d.costo - dTot, 0) : '—',
+    kpi('k1', 'Food cost de la carta', pct(fcN), isFinite(pp) ? `hoy ${pct(fcH)} · ${pp >= 0 ? '+' : '−'}${Math.abs(pp).toFixed(2)} pp` : 'sin ventas en el período'),
+    kpi('k2', 'Margen sobre recetas', hay ? dinero(d.neto - d.costo - dTot, 0) : '—',
       hay ? `${dinero(-dTot, 0, true)} · venta ${dinero(d.neto, 0)}` : ''),
-    kpi('Platos que los llevan', String(filas.length), `${vendidos} con ventas en el período`),
-    kpi('Cruzan un umbral', String(c30 + c35), `${c30} pasan 30 % · ${c35} pasan 35 %`, c30 + c35 ? 'ambar' : ''),
+    kpi('k3', 'Cruzan un umbral', String(c30 + c35), `${c30} pasan 30 % · ${c35} pasan 35 %`, c30 + c35 ? 'ambar' : ''),
   ].join('');
 }
 
 // ── Lista y ficha ────────────────────────────────────────────────────────
-function htmlLista(d, st, filas, elegido) {
-  const tabs = [['platos', 'Platos'], ['sub', 'Por subgrupo']].map(([id, r]) =>
+function htmlTabs(st) {
+  return [['platos', 'Platos'], ['sub', 'Por subgrupo']].map(([id, r]) =>
     `<button type="button" role="tab" aria-selected="${st.vista === id}" class="${st.vista === id ? 'on' : ''}" data-acc="vista" data-id="${id}">${r}</button>`).join('');
-  const cab = `<div class="sa-lcab"><div class="sa-tabs" role="tablist" aria-label="Ver por">${tabs}</div>
-    <span class="sa-leyenda">% de costo sobre el neto: <b class="ambar">ámbar &gt; 30 %</b>, <b class="rojo">rojo &gt; 35 %</b></span>
-    <button type="button" class="sa-btn" data-acc="reset">Restablecer</button></div>`;
+}
+
+function htmlLista(d, st, filas, elegido) {
+  const vendidos = filas.filter((f) => f.vend > 0).length;
+  const pie = `<div class="sa-lpie"><span>${filas.length} ${filas.length === 1 ? 'plato lo lleva' : 'platos los llevan'} · ${vendidos} con ventas en el período</span>
+    <button type="button" class="sa-i" data-acc="info" data-id="lista" aria-label="Cómo leer la lista">i</button></div>`;
   if (!filas.length) {
     const msg = st.orden.length ? 'Ningún plato de la carta lleva los insumos elegidos.'
       : 'Agrega un insumo arriba para ver qué platos lo llevan y cómo quedan.';
-    return `${cab}<div class="sa-vacio">${msg}</div>`;
+    return `<div class="sa-vacio">${msg}</div>${pie}`;
   }
   const maxPer = Math.max(1e-9, ...filas.map((f) => Math.abs(f.dPer)));
   if (st.vista === 'sub') {
@@ -158,36 +204,45 @@ function htmlLista(d, st, filas, elegido) {
     }
     const subs = [...g].sort((a, b) => Math.abs(b[1].d) - Math.abs(a[1].d));
     const maxS = Math.max(1e-9, ...subs.map(([, x]) => Math.abs(x.d)));
-    return `${cab}<div class="sa-tabla"><table><thead><tr><th>Subgrupo</th><th class="num">Platos</th>
+    return `<div class="sa-tabla"><table><thead><tr><th>Subgrupo</th><th class="num">Platos</th>
       <th class="num" title="Costo de recetas ÷ neto vendido de esos platos">% de costo</th><th>Δ en el período</th></tr></thead><tbody>
       ${subs.map(([s, x]) => `<tr><td><b>${esc(s || '—')}</b></td><td class="num">${x.n}</td>
         <td class="num">${x.v ? `${pct(x.c / x.v * 100)} → <b>${pct((x.c + x.d) / x.v * 100)}</b>` : '—'}</td>
-        <td><div class="sa-bar"><i class="${x.d >= 0 ? 'sube' : 'baja'}" style="width:${Math.max(2, Math.abs(x.d) / maxS * 220)}px"></i><b class="${tinta(x.d)}">${dinero(x.d, 0, true)}</b></div></td></tr>`).join('')}
-      </tbody></table></div>`;
+        <td><div class="sa-bar"><i class="${x.d >= 0 ? 'sube' : 'baja'}" style="width:${Math.max(2, Math.abs(x.d) / maxS * 160)}px"></i><b class="${tinta(x.d)}">${dinero(x.d, 0, true)}</b></div></td></tr>`).join('')}
+      </tbody></table></div>${pie}`;
   }
+  // Sin «Detalle», tres columnas: el plato, cómo queda y cuánto pesa en el
+  // período. Con «Detalle» vuelven las otras cuatro.
+  const det = st.detalle;
   const filasHtml = filas.map((f) => {
     const cruza = f.pH <= 35 && f.pN > 35 ? 'pasa 35 %' : f.pH <= 30 && f.pN > 30 ? 'pasa 30 %' : '';
     const dif = f.mant - f.precio;
     return `<tr class="sa-fila${elegido && f.cod === elegido.cod ? ' sel' : ''}" data-acc="plato" data-cod="${esc(f.cod)}">
-      <td class="sa-plato"><div><b title="${esc(f.plato)}">${esc(f.plato)}</b>${f.pH > 60 ? '<span class="sa-revisar" title="El costo de hoy ya pasa el 60 % del neto: casi seguro un error de receta o de factor. Revisarlo en Costo Carta.">revisar costo</span>' : ''}</div>
+      <td class="sa-plato"><div><b title="${esc(f.plato)}">${esc(f.plato)}</b>${f.pH > 60 ? '<span class="sa-revisar" title="El costo de hoy ya pasa el 60 % del neto: casi seguro un error de receta o de factor. Revisarlo en Costo de Carta.">revisar costo</span>' : ''}</div>
         <span>${esc(f.sub)} · S/ ${num(f.precio)}</span></td>
-      <td><div class="sa-seg">${f.partes.map(([i, s]) => `<i style="width:${Math.min(100, s / f.costo * 100)}%;background:${color(i)}"></i>`).join('')}</div>
-        <span class="sa-sub" title="${dinero(f.peso, 2)} de un costo de ${dinero(f.costo, 2)}">${dinero(f.peso, 2)} · ${Math.round(f.peso / f.costo * 100)} % del costo</span></td>
+      ${det ? `<td><div class="sa-seg">${f.partes.map(([i, s]) => `<i style="width:${Math.min(100, s / f.costo * 100)}%;background:${color(i)}"></i>`).join('')}</div>
+        <span class="sa-sub" title="${dinero(f.peso, 2)} de un costo de ${dinero(f.costo, 2)}">${dinero(f.peso, 2)} · ${Math.round(f.peso / f.costo * 100)} % del costo</span></td>` : ''}
       <td class="sa-pct"><span class="hoy">${f.pH.toFixed(1)}</span> → <span class="pill ${nivel(f.pN)}">${pct(f.pN)}</span>${cruza ? `<em>${cruza}</em>` : ''}</td>
-      <td class="num ${tinta(f.delta)}">${dinero(f.delta, 2, true)}</td>
-      <td class="num">${num(f.vend)}</td>
+      ${det ? `<td class="num ${tinta(f.delta)}">${dinero(f.delta, 2, true)}</td><td class="num">${num(f.vend)}</td>` : ''}
       <td><div class="sa-bar"><i class="${f.dPer >= 0 ? 'sube' : 'baja'}" style="width:${Math.max(2, Math.abs(f.dPer) / maxPer * 56)}px"></i><b class="${tinta(f.dPer)}">${dinero(f.dPer, 0, true)}</b></div></td>
-      <td class="num"><b>${dinero(f.mant, 2)}</b> <span class="sa-sub">${Math.abs(dif) < 0.005 ? '=' : dinero(dif, 2, true).replace('S/ ', '')}</span></td>
+      ${det ? `<td class="num"><b>${dinero(f.mant, 2)}</b> <span class="sa-sub">${Math.abs(dif) < 0.005 ? '=' : dinero(dif, 2, true).replace('S/ ', '')}</span></td>` : ''}
     </tr>`;
   }).join('');
-  return `${cab}<div class="sa-tabla"><table><thead><tr>
-      <th>Plato</th><th title="Soles de los insumos elegidos en el plato: dentro de sus recetas base y de los cortes que salen de ellos">Pesan en el plato</th>
-      <th>% de costo</th><th class="num" title="Cuánto cambia el costo de UN plato">Δ por plato</th><th class="num">Vend.</th>
-      <th title="Cambio por plato × unidades vendidas en las fechas elegidas">Δ en el período</th>
-      <th class="num" title="El precio de venta con que el plato queda en su % de costo de hoy">Precio para mantener</th>
-    </tr></thead><tbody>${filasHtml}</tbody></table></div>`;
+  return `<div class="sa-tabla"><table><thead><tr>
+      <th>Plato</th>${det ? '<th title="Soles de los insumos elegidos en el plato: dentro de sus recetas base y de los cortes que salen de ellos">Pesan en el plato</th>' : ''}
+      <th class="der">% de costo</th>${det ? '<th class="num" title="Cuánto cambia el costo de UN plato">Δ por plato</th><th class="num">Vend.</th>' : ''}
+      <th class="orden der" title="Cambio por plato × unidades vendidas en las fechas elegidas">Δ en el período ↓</th>
+      ${det ? '<th class="num" title="El precio de venta con que el plato queda en su % de costo de hoy">Precio para mantener</th>' : ''}
+    </tr></thead><tbody>${filasHtml}</tbody></table></div>${pie}`;
 }
 
+function plegable(st, id, tit, cuerpo) {
+  const ab = !!st.pleg[id];
+  return `<div class="sa-pleg${ab ? ' abierto' : ''}"><button type="button" class="sa-pleg-b" data-acc="pleg" data-id="${id}" aria-expanded="${ab}"><span>${tit}</span><i>▾</i></button>
+    <div class="sa-pleg-c">${cuerpo}</div></div>`;
+}
+
+// La ficha: quién es, dos cifras, la barra, una lectura y lo demás plegado.
 function htmlFicha(d, st, f) {
   if (!f) return '<div class="sa-vacio">Elige un plato de la lista.</div>';
   const total = Math.max(f.costo, f.nuevo);
@@ -204,53 +259,76 @@ function htmlFicha(d, st, f) {
   const en30 = f.precio * (f.nuevo / 0.30) / f.neto;
   const opc = (t, v, det, extra, cls = '') => `<div class="sa-opc ${cls}"><b>${t}</b><b class="num">${v}</b><span>${det}</span><span class="num">${extra}</span></div>`;
   const dif = (x) => (Math.abs(x - f.precio) < 0.005 ? 'sin cambio' : dinero(x - f.precio, 2, true));
+  const absorber = f.vend ? `${dinero(-f.delta * f.vend, 0, true)} de margen en el período` : `${dinero(-f.delta, 2, true)} por plato`;
+  const sube = Math.abs(f.mant - f.precio) < 0.005 ? 'el precio queda igual' : `el precio pasa a ${dinero(f.mant, 2)}`;
   return `<div class="sa-fcab"><span>${esc(f.sub)} · ${f.vend ? `se vendieron ${num(f.vend)} en el período` : 'sin ventas en el período'}</span><h3>${esc(f.plato)}</h3></div>
-    <div class="sa-fbloque"><div class="sa-frot"><span>Costo del plato</span><span class="num">${dinero(f.costo, 2)} → <b>${dinero(f.nuevo, 2)}</b></span></div>
-      <div class="sa-fseg">${segs}</div>${ley}</div>
-    <div class="sa-fbloque"><div class="sa-frot"><span>Qué hacer con el precio de ${dinero(f.precio, 2)}</span></div>
-      ${opc('Mantener su % de costo', dinero(f.mant, 2), `queda en ${pct(f.pH)}`, dif(f.mant), 'prop')}
-      ${opc('Absorberlo', dinero(f.precio, 2), `queda en ${pct(f.pN)}`, f.vend ? `${dinero(-f.delta * f.vend, 0, true)} de margen en el período` : `${dinero(-f.delta, 2, true)} por plato`)}
-      ${opc('Llevarlo a 30 %', dinero(en30, 2), f.pN > 30 ? `hoy está en ${pct(f.pH)}` : 'ya queda por debajo', dif(en30))}
+    <div class="sa-cifras">
+      <div><span class="sa-c-rot">Costo del plato · antes ${dinero(f.costo, 2)}</span><b class="sa-c-val ${tinta(f.delta)}">${dinero(f.nuevo, 2)}</b></div>
+      <div><span class="sa-c-rot">% de costo · hoy ${pct(f.pH)}</span><b class="sa-c-val ${nivel(f.pN)}">${pct(f.pN)}</b></div>
     </div>
-    <div class="sa-fpie">Precio con IGV, en la misma proporción que el neto de hoy. Los cortes porcionados cuentan para su insumo de origen.</div>`;
+    <div class="sa-fseg">${segs}</div>
+    <div class="sa-lectura"><b>Para quedar en ${pct(f.pH)}, ${sube}</b><span>${dif(f.mant)} sobre los ${dinero(f.precio, 2)} de hoy. Absorberlo: ${absorber}.</span></div>
+    ${plegable(st, 'precio', `Qué hacer con el precio de ${dinero(f.precio, 2)}`,
+      opc('Mantener su % de costo', dinero(f.mant, 2), `queda en ${pct(f.pH)}`, dif(f.mant), 'prop')
+      + opc('Absorberlo', dinero(f.precio, 2), `queda en ${pct(f.pN)}`, absorber)
+      + opc('Llevarlo a 30 %', dinero(en30, 2), f.pN > 30 ? `hoy está en ${pct(f.pH)}` : 'ya queda por debajo', dif(en30)))}
+    ${plegable(st, 'ley', 'Cuánto pone cada insumo', ley)}`;
 }
 
 // ── Dibujar ──────────────────────────────────────────────────────────────
+// Los niveles del boceto de la #775: nivel 2 (qué se mira, con subrayado y
+// línea de borde a borde), nivel 3 (la fecha nativa y el escenario, en
+// pastillas grises), el resumen y, abajo, la lista y la ficha.
 function dibujar(raiz, zonas) {
   const { data: d, st } = raiz.__d;
   if (!raiz.querySelector('.sa-arriba')) {
     raiz.innerHTML = `<div class="sa-arriba">
-        <div class="sa-esc" data-zona="esc"></div>
+        <div class="sa-n2"><div class="sa-tabs" role="tablist" aria-label="Ver por" data-zona="tabs"></div>
+          <div class="sa-n2-der"><label class="sa-switch"><input type="checkbox" data-acc="detalle" role="switch">Detalle</label>
+            <button type="button" class="sa-link" data-acc="reset">Restablecer</button>
+            <button type="button" class="sa-link" data-acc="info" data-id="calculo">Cómo se calcula</button></div></div>
+        <div class="sa-n3"><span class="sa-fecha-lugar" aria-hidden="true"></span><div class="sa-chips" data-zona="chips"></div></div>
+        <div data-zona="editor"></div>
         <div class="sa-kpis" data-zona="kpis"></div>
       </div>
       <div class="sa-cuerpo"><div class="sa-lista" data-zona="lista"></div><div class="sa-ficha" data-zona="ficha"></div></div>
-      <div class="sa-pie"><span class="sa-ayuda" title="${esc(d.ayuda)}">?</span> ${d.periodo ? `Ventas del ${esc(d.periodo)}.` : 'Sin ventas disponibles: se calcula el efecto por plato, pero el del período es cero.'} Costo con la receta de hoy, sobre el neto.</div>`;
-  } else {
-    const pie = raiz.querySelector('.sa-pie');
-    pie.innerHTML = `<span class="sa-ayuda" title="${esc(d.ayuda)}">?</span> ${d.periodo ? `Ventas del ${esc(d.periodo)}.` : 'Sin ventas disponibles: se calcula el efecto por plato, pero el del período es cero.'} Costo con la receta de hoy, sobre el neto.`;
+      <div class="sa-pi" data-zona="pop" role="dialog" hidden></div>`;
   }
+  if (!st.orden.includes(st.activo)) st.activo = st.orden[st.orden.length - 1] || null;
+  raiz.classList.toggle('detalle', !!st.detalle);
+  raiz.querySelector('[data-acc="detalle"]').checked = !!st.detalle;
   const filas = calcular(d, st);
   const elegido = filas.find((f) => f.cod === st.sel) || filas[0];
   const z = (n) => raiz.querySelector(`[data-zona="${n}"]`);
   const todas = !zonas;
-  if (todas || zonas.includes('esc')) z('esc').innerHTML = htmlEscenario(d, st);
+  if (todas || zonas.includes('esc') || zonas.includes('chips')) z('chips').innerHTML = htmlChips(d, st);
+  if (todas || zonas.includes('esc')) z('editor').innerHTML = htmlEditor(d, st);
+  z('tabs').innerHTML = htmlTabs(st);
   z('kpis').innerHTML = htmlKpis(d, filas);
   const lista = z('lista'), scroll = lista.querySelector('.sa-tabla')?.scrollTop || 0;
   lista.innerHTML = htmlLista(d, st, filas, elegido);
   const t = lista.querySelector('.sa-tabla');
   if (t) t.scrollTop = scroll;
-  z('ficha').innerHTML = htmlFicha(d, st, elegido);
+  const ficha = z('ficha'), fscroll = ficha.scrollTop;
+  ficha.innerHTML = htmlFicha(d, st, elegido);
+  ficha.scrollTop = fscroll;
   medir(raiz);
 }
 
+// El calendario es el nativo de siempre (`rec_alza_cab`, de Streamlit): se
+// ubica sobre el hueco que deja la pieza en su fila de filtros, como en
+// Costo de Carta.
 function medir(raiz) {
-  const arriba = raiz.querySelector('.sa-arriba');
-  if (!arriba) return;
-  const alto = Math.ceil(arriba.getBoundingClientRect().height);
-  if (raiz.__d.arriba !== alto) {
-    raiz.__d.arriba = alto;
-    raiz.style.setProperty('--sa-arriba', `${alto}px`);
-  }
+  const cab = document.querySelector('.st-key-rec_alza_cab'), slot = raiz.querySelector('.sa-fecha-lugar');
+  if (!cab || !slot || !cab.offsetWidth) return;
+  const ancho = `${cab.offsetWidth + 4}px`;
+  if (raiz.style.getPropertyValue('--sa-fecha') !== ancho) raiz.style.setProperty('--sa-fecha', ancho);
+  const padre = cab.offsetParent;
+  if (!padre) return;
+  const a = slot.getBoundingClientRect(), p = padre.getBoundingClientRect();
+  const x = `${Math.round(a.left - p.left)}px`, y = `${Math.round(a.top - p.top + (a.height - cab.offsetHeight) / 2)}px`;
+  if (cab.style.left !== x) cab.style.left = x;
+  if (cab.style.top !== y) cab.style.top = y;
 }
 
 function fijar(raiz, cod, p) {
@@ -267,6 +345,7 @@ function enlazar(raiz) {
     const { data: d, st } = raiz.__d;
     // Un clic afuera del panel de «Agregar» lo cierra.
     if (st.agregar && !ev.target.closest('.sa-agr')) { st.agregar = false; dibujar(raiz, ['esc']); }
+    if (st.pop && !ev.target.closest('.sa-pi') && !(b && b.dataset.acc === 'info')) abrirInfo(raiz, null);
     if (!b || !raiz.contains(b)) return;
     const acc = b.dataset.acc, cod = b.dataset.cod;
     if (acc === 'mas' || acc === 'menos') fijar(raiz, cod, (st.pcts[cod] || 0) + (acc === 'mas' ? 1 : -1));
@@ -277,11 +356,17 @@ function enlazar(raiz) {
     } else if (acc === 'abrir-agregar') { st.agregar = !st.agregar; st.q = ''; }
     else if (acc === 'agregar') {
       st.orden = st.orden.concat([cod]);
+      st.activo = cod;
       if (st.pcts[cod] == null) st.pcts[cod] = 10;
       st.agregar = false; st.q = '';
       guardar(CLAVE, { orden: st.orden, pcts: st.pcts });
     } else if (acc === 'vista') { st.vista = b.dataset.id; guardar('sa_vista', st.vista); dibujar(raiz, []); return; }
     else if (acc === 'plato') { st.sel = cod; dibujar(raiz, []); return; }
+    else if (acc === 'activo') { st.activo = cod; dibujar(raiz, ['esc']); return; }
+    else if (acc === 'info') { abrirInfo(raiz, b); return; }
+    else if (acc === 'cerrar-info') { abrirInfo(raiz, null); return; }
+    else if (acc === 'detalle') { st.detalle = b.checked; guardar('sa_detalle', st.detalle); dibujar(raiz, []); return; }
+    else if (acc === 'pleg') { st.pleg[b.dataset.id] = !st.pleg[b.dataset.id]; guardar('sa_pleg', st.pleg); dibujar(raiz, []); return; }
     else if (acc === 'reset') { Object.assign(st, inicial(d, true)); guardar(CLAVE, { orden: st.orden, pcts: st.pcts }); }
     else return;
     dibujar(raiz);
@@ -311,7 +396,7 @@ function enlazar(raiz) {
     const inPct = ficha?.querySelector('[data-acc="pct"]');
     if (inPct) inPct.className = tinta(st.pcts[cod]);
     ficha?.querySelectorAll('.sa-pre').forEach((x) => x.classList.toggle('on', +x.dataset.v === st.pcts[cod]));
-    dibujar(raiz, []);
+    dibujar(raiz, ['chips']);
   });
   // Al salir del campo, el escenario se dibuja con lo que quedó (−100 como piso).
   raiz.addEventListener('change', (ev) => {
@@ -319,6 +404,7 @@ function enlazar(raiz) {
     if (acc === 'pct' || acc === 'precio') dibujar(raiz, ['esc']);
   });
   window.addEventListener('resize', () => medir(raiz));
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => medir(raiz)).observe(raiz);
 }
 
 // El escenario con que abre: el guardado, si sus insumos siguen en la
@@ -342,7 +428,9 @@ export default function (component) {
     raiz = document.createElement('div');
     raiz.className = 'sa';
     parentElement.appendChild(raiz);
-    raiz.__d = { st: Object.assign({ sel: null, vista: leer('sa_vista', 'platos'), agregar: false, q: '' }, inicial(data, false)) };
+    raiz.__d = { st: Object.assign({ sel: null, vista: leer('sa_vista', 'platos'), agregar: false, q: '',
+      activo: null, pop: null, detalle: leer('sa_detalle', false), pleg: leer('sa_pleg', { precio: true }) },
+    inicial(data, false)) };
     enlazar(raiz);
   }
   raiz.__d.data = data;

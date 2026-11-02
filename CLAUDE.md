@@ -2008,6 +2008,9 @@ salvo la «ⓘ»; vale para toda vista que pase a este lenguaje. **Desde la #778
 toda Recetas lo usa**: Alza, Recetas base, Cambios, Vs porcionado y Nuevo
 Costeo llevan al final de su `.css` un bloque «#778» (franja de indicadores de
 borde a borde desde 901 px, lista y ficha sin caja, segmentados con subrayado).
+**Alza va además con la forma entera** (#779): niveles, «Detalle», el escenario
+en pastillas con un renglón de edición, ficha con lectura y plegables, pops; su
+fecha nativa se ubica como la de Costo de Carta. Es el modelo para las demás.
 
 **«Nuevo Costeo» también, desde el mismo día** (regla #697): la tabla de la
 receta y el precio son `graficos/nuevo_costeo.js` + `.css`; el buscador, el

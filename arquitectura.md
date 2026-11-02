@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-778 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+779 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (256)
+**CSS y estilos** (257)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -323,6 +323,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
 - **#776** — El marco de la opción B en toda la app: la navegación sobre lavanda y cada vista, su hoja
 - **#778** — Recetas entera en el lenguaje de la #775: franja de indicadores, sin cajas, nada bajo 12 px
+- **#779** — Alza en el lenguaje entero de Costo de Carta: niveles, jerarquía y divulgación progresiva
 
 **Layout y alturas** (110)
 
@@ -671,7 +672,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 
-**Streamlit** (172)
+**Streamlit** (173)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -845,6 +846,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#718** — Compras > Volatilidad es una PIEZA PROPIA, con análisis del tramo
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
+- **#779** — Alza en el lenguaje entero de Costo de Carta: niveles, jerarquía y divulgación progresiva
 
 **Datos, R2 y DuckDB** (132)
 
@@ -58106,6 +58108,33 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    Lo que falta del boceto en estas vistas —títulos que repiten la vista, el «Detalle», los
    plegables y pops de la ficha— es trabajo por vista, con su inventario.
 
+779. **Alza en el lenguaje entero de Costo de Carta: niveles, jerarquía y divulgación progresiva.**
+   La #778 le había cambiado sólo el estilo. Ahora la forma es la del boceto B de la #775, con
+   el inventario de la vista: nada se quitó, todo quedó a uno o dos gestos.
+   - **Nivel 2** (subrayado, línea de borde a borde): «Platos | Por subgrupo» —cambian toda la
+     lista, como Carta | Combos— y a la derecha «Detalle», «Restablecer» y «Cómo se calcula».
+   - **Nivel 3** (pastillas grises): la fecha nativa —sin título: el nombre está en la franja—,
+     una pastilla por insumo con su % y «+ Agregar insumo». El elegido se edita en UN renglón
+     debajo (−/%/+, precio, atajos, «lo llevan N platos»): la tarjeta de 110 px por insumo se
+     fue. Los campos conservan sus `data-acc`; `enlazar` y `calcular` no cambiaron.
+   - **El calendario es el nativo** (`rec_alza_cab`), ubicado por `recetas_alza.js::medir` sobre
+     `.sa-fecha-lugar`, con las mismas reglas de `_90_marco.py` que Costo de Carta.
+   - **Cuatro indicadores** en la franja; «Platos que los llevan» pasó al pie de la lista. Su
+     renglón de abajo sale con «Detalle»; cada uno explica en un pop.
+   - **La lista sin «Detalle» son tres columnas** (plato, % de costo, Δ en el período): el plato
+     toma el ancho y las cifras van juntas a la derecha. «Detalle» suma Pesan en el plato, Δ
+     por plato, Vend. y Precio para mantener, y la tabla se desplaza en su zona.
+   - **La ficha:** dos cifras (costo nuevo y % de costo nuevo, con lo de hoy en el rótulo), la
+     barra, una lectura con la recomendación («Para quedar en 47,8 %, el precio pasa a…») y dos
+     plegables: «Qué hacer con el precio» (abierto) y «Cuánto pone cada insumo». Lo que se
+     abre se recuerda (`sa_pleg`, `sa_detalle`).
+   - **El botón de fecha medía 200 px fijos** y cortaba «Últimos 3 meses · 2 ago – 1 nov»
+     (también en Costo de Carta): Streamlit le da `width: 100%` dentro de una caja de 200, así
+     que `auto` no alcanza; va `max-content`. Y se fue la rayita que separaba el título.
+   - **Celular:** en columna, `flex: 1 1 0` dejaba la lista en 0 px y la ficha encima; y
+     `movil.css` lleva todo botón a 44 px (su `:is()` pesa (0,3,1)): la «i» conserva el
+     círculo con (0,4,1) y el área de toque la da un `::after`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58118,7 +58147,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#778**; la próxima toma el número siguiente.
+> última regla es la **#779**; la próxima toma el número siguiente.
 
 >
 

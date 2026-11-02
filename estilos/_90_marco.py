@@ -246,15 +246,18 @@ CSS = """
         box-shadow: none !important;
     }
     }
-    .st-key-rec_card_carta {
+    .st-key-rec_card_carta,
+    .st-key-rec_card_alza {
         position: relative !important;
         padding: 0 !important;
         gap: 0 !important;
         overflow: visible !important;
     }
     /* El calendario conserva su componente, estado y callbacks. Su fila
-       nativa se coloca sobre el hueco que mide carta_costeada.js. */
-    .st-key-rec_carta_cab {
+       nativa se coloca sobre el hueco que mide la pieza
+       (carta_costeada.js, recetas_alza.js #779). */
+    .st-key-rec_carta_cab,
+    .st-key-rec_alza_cab {
         position: absolute !important;
         top: 46px;
         left: 24px;
@@ -266,11 +269,13 @@ CSS = """
         margin: 0 !important;
         gap: 0 !important;
     }
-    .st-key-rec_carta_cab_fecha {
+    .st-key-rec_carta_cab_fecha,
+    .st-key-rec_alza_cab_fecha {
         margin: 0 !important;
         padding: 0 !important;
     }
     .st-key-rec_carta_f_escala button,
+    .st-key-rec_alza_f_escala button,
     .st-key-rec_cambios_f_escala button {
         height: 30px !important;
         min-height: 30px !important;
@@ -279,5 +284,17 @@ CSS = """
         box-shadow: none !important;
         font-weight: 400 !important;
         font-size: 13px !important;
+        /* Un ancho fijo de 200 px cortaba «Últimos 3 meses · 2 ago – 1
+           nov» contra el borde (#779): el botón toma el de su texto
+           (`max-content`: con `auto` Streamlit lo deja en el 100 % de una
+           caja de 200), y la pieza mide el hueco con ese ancho. */
+        width: max-content !important;
+        min-width: 200px !important;
+        padding: 0 14px !important;
+    }
+    /* La rayita separaba el título de la fecha; el título ya no está. */
+    .st-key-rec_carta_cab_fecha::after,
+    .st-key-rec_alza_cab_fecha::after {
+        display: none !important;
     }
 """

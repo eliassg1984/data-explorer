@@ -35,7 +35,6 @@ from graficos.recetas_comun import catalogo_insumos
 from graficos.simulador_plato import _precios_compra
 
 CATEGORIA_FECHA = "alza"
-TITULO = "Simular Alza de Insumos"
 
 _AQUI = Path(__file__).parent
 _PIEZA = st.components.v2.component(
@@ -171,11 +170,11 @@ def render_alza(ventas=None):
     """La vista. `ventas`: lo vendido por producto y día, o la función que
     lo carga (`data.venta_por_producto_dia`)."""
     with st.container(border=True, key="rec_card_alza"):
+        # El nombre de la vista ya está en la franja; la pieza reserva el
+        # lugar del calendario nativo en su fila de filtros, como Costo de
+        # Carta (#775, #779).
         cab = st.container(horizontal=True, gap="small",
                            vertical_alignment="center", key="rec_alza_cab")
-        with cab:
-            st.markdown(f'<p class="chart-card-hdr">{TITULO}</p>',
-                        unsafe_allow_html=True)
         df_carta = cargar(ARCHIVO_CARTA)
         if df_carta is None or df_carta.empty:
             st.info("Todavía no hay datos de la carta costeada "
