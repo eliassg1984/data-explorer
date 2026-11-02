@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-786 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+787 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (262)
+**CSS y estilos** (263)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -329,6 +329,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#784** — Compras en la franja común (#782) y nada bajo 12 px
 - **#785** — Inventario en la franja común (#782) y nada bajo 12 px
 - **#786** — Producción en la franja común (#782) y nada bajo 12 px
+- **#787** — Costos e Inicio en la franja común (#782) y nada bajo 12 px
 
 **Layout y alturas** (112)
 
@@ -58272,6 +58273,20 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      Se nombra igual (`.mv .mv-kpi, .mv-kpi`). Al pisar una regla de una pieza, copiar su
      selector, no acortarlo.
 
+787. **Costos e Inicio en la franja común (#782) y nada bajo 12 px.**
+   Las dos últimas áreas: Costo de ventas tenía 53 textos de 10 a 11 px (la tasa de cada
+   celda, los rótulos de la tabla), Consistencia 56 y Pendientes 34; las tres, indicadores en
+   caja. 40 reglas a 12 en `costos_tabla.css`, `costos_consistencia.css`, `pendientes.css` y
+   `resumen_ejecutivo.css`; medido después, ningún texto visible bajo 12 px en las cuatro vistas.
+   - **Costo de ventas**: cuatro MEDIDAS con su minigráfico, sin elegido (el período se elige
+     en la tabla); cifra de 22 a 17 px. «Sin explicar» raro deja la caja rosa y conserva el rojo
+     en la cifra y en la línea.
+   - **Consistencia**: los controles más pesados son CONTADORES que abren su detalle; subrayado
+     al pasar. **Pendientes**: cifras fijas (el filtro es «Todo | Revisar ya | Para mirar»).
+   - Con esta, todas las áreas usan la franja y el piso de 12 px. Lo que se sume después
+     nace así: indicadores sin caja en `--rail-fondo`, medidas con ficha blanca, contadores
+     subrayados, y ningún `font-size` bajo 12 px salvo la «ⓘ».
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58284,7 +58299,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#786**; la próxima toma el número siguiente.
+> última regla es la **#787**; la próxima toma el número siguiente.
 
 >
 

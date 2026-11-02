@@ -21,7 +21,7 @@
 .cd-tit { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .cd-tit h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .cd-ayuda { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
-  border: 1px solid var(--border); color: var(--text-secondary); font-size: 11px; font-weight: 600; cursor: help; flex: none; }
+  border: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: help; flex: none; }
 .cd-der { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .cd-corte { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
 .cd-btn { height: 30px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 12.5px;
@@ -34,10 +34,10 @@
   display: grid; gap: 1px; align-content: start; text-align: left; min-width: 0; }
 button.cd-kpi { cursor: pointer; }
 button.cd-kpi:hover { border-color: var(--border-lavender); background: var(--accent-tint); }
-.cd-kpi-rot { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cd-kpi-rot { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cd-kpi-lin { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .cd-kpi-val { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cd-kpi-sub { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cd-kpi-sub { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cd-cuenta { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
 .cd-cuenta b { font-size: 17px; font-weight: 700; }
 .cd-cuenta .r { color: var(--danger-text); } .cd-cuenta .a { color: var(--warning-text); } .cd-cuenta .v { color: var(--success-text); }
@@ -50,7 +50,7 @@ button.cd-kpi:hover { border-color: var(--border-lavender); background: var(--ac
   border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); cursor: pointer; font-size: 12.5px; }
 .cd-tab:hover { border-color: var(--border-lavender); }
 .cd-tab.sel { background: var(--accent); border-color: var(--accent); color: var(--bg-card); font-weight: 600; }
-.cd-pts { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; }
+.cd-pts { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; }
 .pt { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .pt.r { background: var(--danger); } .pt.a { background: var(--warning); margin-left: 3px; }
 
@@ -62,9 +62,9 @@ button.cd-kpi:hover { border-color: var(--border-lavender); background: var(--ac
   background: var(--bg-card); overflow: auto; overscroll-behavior: contain; }
 .cd-fila, .cd-lcab { display: grid; grid-template-columns: 88px minmax(0, 1fr) 50px 88px minmax(90px, 130px);
   gap: 10px; align-items: center; padding: 8px 14px; }
-.cd-lcab { position: sticky; top: 0; z-index: 1; padding: 7px 14px; font-size: 11px; font-weight: 600;
+.cd-lcab { position: sticky; top: 0; z-index: 1; padding: 7px 14px; font-size: 12px; font-weight: 600;
   color: var(--text-secondary); background: var(--bg-card-tenue); border-bottom: 1px solid var(--border); }
-.cd-grupo { position: sticky; top: 29px; z-index: 1; padding: 5px 14px 4px; font-size: 10.5px; font-weight: 700;
+.cd-grupo { position: sticky; top: 29px; z-index: 1; padding: 5px 14px 4px; font-size: 12px; font-weight: 700;
   letter-spacing: .04em; color: var(--accent-deep); background: var(--accent-light); border-bottom: 1px solid var(--border); }
 .cd-fila { width: 100%; border: 0; border-bottom: 1px solid var(--line-soft); background: var(--bg-card);
   text-align: left; cursor: pointer; }
@@ -74,14 +74,14 @@ button.cd-kpi:hover { border-color: var(--border-lavender); background: var(--ac
 .cd-nom b { font-size: 13px; font-weight: 600; }
 /* Un renglón: el texto entero va en el `title` de la fila. Partido en
    tres, cada fila medía 65px y la lista mostraba cinco. */
-.cd-nom span { font-size: 11.5px; color: var(--text-secondary); line-height: 1.3;
+.cd-nom span { font-size: 12px; color: var(--text-secondary); line-height: 1.3;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cd-n { text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .cd-s { text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.cd-donde { font-size: 11.5px; color: var(--text-secondary); line-height: 1.3; }
+.cd-donde { font-size: 12px; color: var(--text-secondary); line-height: 1.3; }
 
 .chip { display: inline-flex; align-items: center; justify-content: center; height: 22px; padding: 0 9px;
-  border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; }
+  border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; }
 .chip.rojo { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
 .chip.ambar { background: var(--warning-bg); color: var(--warning-text); border-color: var(--warning-border); }
 .chip.verde { background: var(--success-bg); color: var(--success-text); }
@@ -95,7 +95,7 @@ button.cd-kpi:hover { border-color: var(--border-lavender); background: var(--ac
 .cd-ficha > * { flex: none; min-width: 0; }
 .cd-fcab { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .cd-fcab h3 { margin: 0; font-size: 15px; font-weight: 700; }
-.cd-fdom { font-size: 10.5px; color: var(--text-secondary); letter-spacing: .03em; }
+.cd-fdom { font-size: 12px; color: var(--text-secondary); letter-spacing: .03em; }
 .cd-ficha p { margin: 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.45; }
 .cd-cifras { font-size: 12.5px; }
 .cd-cifras b { font-variant-numeric: tabular-nums; }
@@ -116,12 +116,12 @@ button.cd-kpi:hover { border-color: var(--border-lavender); background: var(--ac
   border: 1px solid var(--line-soft); border-radius: 8px; }
 .cd-tabla table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .cd-tabla th { position: sticky; top: 0; background: var(--bg-card-tenue); text-align: left; font-weight: 600;
-  color: var(--text-secondary); font-size: 11px; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  color: var(--text-secondary); font-size: 12px; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .cd-tabla td { padding: 5px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; white-space: nowrap; }
 .cd-tabla td.num, .cd-tabla th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cd-tabla td.cod { color: var(--text-secondary); white-space: nowrap; }
 /* Un caso, un renglón: la tabla se desliza de lado si no entra. */
-.cd-pie { font-size: 11px; color: var(--text-muted); flex: none; }
+.cd-pie { font-size: 12px; color: var(--text-muted); flex: none; }
 .cd-vacio { font-size: 13px; color: var(--success-text); background: var(--success-bg); border-radius: 8px; padding: 10px 12px; }
 
 /* Angosto (celular, tablet): sin altura fija; la lista arriba con su tope y
@@ -139,3 +139,18 @@ button.cd-kpi:hover { border-color: var(--border-lavender); background: var(--ac
   .cd-fila, .cd-lcab { grid-template-columns: 84px minmax(0, 1fr) 46px 80px; gap: 8px; padding: 8px 10px; }
   .cd-fila > :nth-child(5), .cd-lcab > :nth-child(5) { display: none; }
 }
+
+/* #787: los indicadores en la franja común de la app (#782): lavanda de borde a
+   borde, sin cajas, cifra de 17 px y nada bajo 12. Los de cada control son CONTADORES que abren su detalle: al pasar, subrayado. La tarjeta tiene
+   18 px a cada costado. */
+@media (min-width: 901px) {
+  .cd-kpis { gap: 8px; margin-left: -18px; margin-right: -18px; padding: 6px 12px;
+    background: var(--rail-fondo); border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+}
+@media (max-width: 900px) {
+  .cd-kpis { gap: 6px; padding: 6px; border-radius: 10px; background: var(--rail-fondo); }
+}
+.cd-kpi, button.cd-kpi { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 2px 8px; }
+button.cd-kpi:hover { background: transparent; border-bottom-color: var(--border-lavender); }
+.cd-kpi-val { font-weight: 500; }
+.cd-kpis { margin-bottom: 8px; }
