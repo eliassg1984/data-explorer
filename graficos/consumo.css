@@ -273,3 +273,8 @@ details.metodo summary .mini { font-weight: 400; color: var(--suave); margin-lef
 .resumen { border: 0; border-radius: 10px; background: var(--rail-fondo); }
 .resumen > div + div { border-color: var(--bg-card); }
 .resumen .grande { font-size: 17px; font-weight: 600; }
+
+/* #801: el lenguaje de Costo de Carta (#775): rótulos en minúscula, sin el
+   espaciado de las mayúsculas, en las tarjetas y en las cabeceras de las tablas. */
+.eyebrow, .td th, .tabla-wrap th { text-transform: none; letter-spacing: 0; }
+

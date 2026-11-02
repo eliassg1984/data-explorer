@@ -52,7 +52,8 @@ def _al_merma(insumos):
 def renderizar(fam_sel=(), sub_sel=(), rango=None, fecha=None):
     ini, fin = mc.rango_de_la_vista(rango)
     with st.container(border=True, key=mc.CARD):
-        titulo = '<p class="chart-card-hdr">Consumo según ventas</p>'
+        # Sin título (#801): el nombre de la vista está en la franja.
+        titulo = '<p class="chart-card-hdr"></p>'
         if fecha is not None:
             fecha(titulo)
         else:

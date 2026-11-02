@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-800 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+801 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1160,7 +1160,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (256)
+**Decisiones de diseño y UX** (257)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1418,6 +1418,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#797** — «Qué faltó» con cantidad, unidad y código; y «Explorar», la tabla dinámica de Ajuste
 - **#799** — Ajuste › Evolución en el lenguaje de Costo de Carta: una zona por pestaña
 - **#800** — Movimientos en el lenguaje de Costo de Carta, y el código en Sin plato
+- **#801** — Producción: Kg útil, Para revisar y Consumo en el lenguaje de Costo de Carta
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58509,6 +58510,17 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - **El código del ítem, a pedido:** en «Los que más pesan» de Sin plato, y en la lista de
      Productos también sin «Ampliar» (el `<small>` con código y familia estaba escondido).
 
+801. **Producción: Kg útil, Para revisar y Consumo en el lenguaje de Costo de Carta.**
+   Porcionamientos y Órdenes ya tomaron la forma con la pieza de Movimientos (#800).
+   - **Kg útil y Para revisar:** sin el título de la vista (está en la franja); en Kg útil,
+     Proveedores | Comparar | Porcionamientos navegan y van subrayadas, y 6 | 12 | 18 meses sigue
+     en la caja gris (#795). El código del Almacén va pegado al nombre del producto en las dos
+     listas («Papa Huamantanga · 0000363»), a pedido: el buscador también lo encuentra.
+   - **Consumo:** sin el título «Consumo según ventas», y los rótulos de las tarjetas y de las
+     tablas sin mayúsculas ni su espaciado.
+   - Flujo es un recorrido para capacitar («Presentar»): se queda como está, y ya mostraba los
+     códigos.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58521,7 +58533,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#800**; la próxima toma el número siguiente.
+> última regla es la **#801**; la próxima toma el número siguiente.
 
 >
 

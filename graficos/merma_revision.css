@@ -8,3 +8,8 @@
 .mrv-tiles>div:first-child { padding-left: 0; }
 .mrv-tiles>div+div { border-left: 1px solid var(--border); }
 .mrv-tiles b { font-size: 17px; font-weight: 500; }
+
+/* #801: el lenguaje de Costo de Carta (#775). Sin el título de la vista (está en la
+   franja); las pestañas que navegan, subrayadas (#795); el código del Almacén pegado
+   al nombre del producto en la lista, a pedido. */
+.mrv-main > header h3 { display: none; }

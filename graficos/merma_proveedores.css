@@ -13,3 +13,12 @@
 }
 .pvu-kpis>div { border: 0; border-radius: 0; background: transparent; padding: 4px 8px; }
 .pvu-kpis b { font-size: 17px; font-weight: 500; }
+
+/* #801: el lenguaje de Costo de Carta (#775). Sin el título de la vista (está en la
+   franja); las pestañas que navegan, subrayadas (#795); el código del Almacén pegado
+   al nombre del producto en la lista, a pedido. */
+.pvu-main > header h3 { display: none; }
+.pvu .pvu-seg.pvu-tabs { background: none !important; padding: 0 !important; gap: 18px !important; border: 0 !important; border-radius: 0 !important; }
+.pvu .pvu-seg.pvu-tabs button { background: none !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important; box-shadow: none !important; padding: 4px 0 !important; color: var(--text-secondary) !important; }
+.pvu .pvu-seg.pvu-tabs button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent) !important; }
+
