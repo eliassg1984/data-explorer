@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-781 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+783 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (258)
+**CSS y estilos** (259)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -325,8 +325,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#778** — Recetas entera en el lenguaje de la #775: franja de indicadores, sin cajas, nada bajo 12 px
 - **#779** — Alza en el lenguaje entero de Costo de Carta: niveles, jerarquía y divulgación progresiva
 - **#780** — Recetas base en el lenguaje entero de Costo de Carta, y «Ampliar» (⤢) en la lista y la ficha
+- **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
 
-**Layout y alturas** (111)
+**Layout y alturas** (112)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -439,6 +440,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#772** — Movimientos en dos pestañas: Req. y salidas con «Contar por» y calendario, y Sin plato con…
 - **#774** — Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de…
 - **#780** — Recetas base en el lenguaje entero de Costo de Carta, y «Ampliar» (⤢) en la lista y la ficha
+- **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
 
 **Plotly y figuras** (130)
 
@@ -1066,7 +1068,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#759** — ¿La app tiene todo lo de SUNAT? Una vista para contestarlo, y un mes que falla ya no desaparece
 - **#760** — Cruce, Proveedores y Documentos: lista y ficha, y los dólares que venían sin convertir
 
-**Fechas, rangos y cortes** (25)
+**Fechas, rangos y cortes** (26)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -1093,6 +1095,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#744** — La ficha del plato de «Costo de Carta» es una pieza propia: dice qué mueve el costo de hoy y…
 - **#747** — Stock › «Movimientos por Tipo» se lee con DOS relojes: abre «De conteo a conteo» y el…
 - **#771** — Compras › Año pasado en una pantalla: los indicadores son las partes de la diferencia
+- **#783** — La franja de Ventas abre el mismo panel de fecha que las tarjetas
 
 **Asistente IA** (5)
 
@@ -1145,7 +1148,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (248)
+**Decisiones de diseño y UX** (249)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1395,6 +1398,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 - **#778** — Recetas entera en el lenguaje de la #775: franja de indicadores, sin cajas, nada bajo 12 px
 - **#781** — Recetas entera en el lenguaje de Costo de Carta, y los códigos a la vista
+- **#783** — La franja de Ventas abre el mismo panel de fecha que las tarjetas
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58182,6 +58186,36 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - **Celular:** en Vs porcionado y en la tabla de Nuevo Costeo, `flex: 1 1 0` en una columna
      dejaba la zona en 0 px (la lista no se veía; el aviso de receta vacía tapaba el pie).
 
+782. **Una franja de indicadores para toda la app, con dos formas según qué miden.**
+   El usuario comparó la franja de Costo de Carta con las tarjetas de Venta por Periodo:
+   «¿ambas son válidas?». Sí, y cada una para otro tipo de dato:
+   - **Medidas en el tiempo** (Venta, Mix, Año pasado, Por hora, Meseros, Pedidos): el
+     número lleva su minigráfico y su comparación, y elegirlo cambia lo que se mira. El
+     elegido se levanta como **ficha blanca** con sombra: un tinte lavanda no se ve sobre
+     la franja.
+   - **Contadores que filtran una lista** (Recetas, Platos): sólo el número, la explicación
+     en la «i», y el elegido **subrayado**.
+   - **En las dos**, la misma franja: `--rail-fondo` de borde a borde (desde 901 px, con el
+     margen negativo del aire de su tarjeta: 18 px en Ventas, 17 en Meseros, 19 en Pedidos,
+     medidos), sin bordes de tarjeta, cifra de 17 px. Así se leen de la misma familia.
+   - **Ventas, nada bajo 12 px**: 155 reglas de 8 a 11,5 px pasaron a 12 en los diez `.css`
+     de Ventas y cuatro en línea de `ventas_horario.js` (de 59, 25, 60, 47, 9, 106 y 103
+     textos chicos por vista a ninguno, medido; queda uno de Streamlit en Pedidos).
+   - **`test_ventas_periodo.py` monta la pieza con el aire de la tarjeta** (18 px desde 901
+     px): sin él, la franja con margen negativo «desbordaba» una página que en la app no
+     existe.
+
+783. **La franja de Ventas abre el mismo panel de fecha que las tarjetas.**
+   A pedido: «en ventas, el calendario no es el mismo». `franja_fecha.render()` dibujaba su
+   panel viejo —seis atajos y un `date_input` con la clave del rango— y las tarjetas el de
+   `graficos/panel_fecha.py` (#616). Ahora `render()` llama a `selector_fecha_tarjeta`
+   sin `categoria`: el panel escribe la clave de la franja (`ctx["k_rango"]`) con
+   `aplicar_atajo` y su `usa_carga_rango`, y Ventas recarga igual que antes (verificado:
+   «Últimos 30 días» recalculó la venta del 3 oct al 1 nov). El contenedor conserva la key
+   `fecha_ajuste_pill`, de la que cuelga su lugar en la franja; sin un widget con la clave
+   del rango, la mantiene viva el eco de `estado_rango`. Vale para todo reporte que no elige
+   la fecha por vista.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58194,7 +58228,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#781**; la próxima toma el número siguiente.
+> última regla es la **#783**; la próxima toma el número siguiente.
 
 >
 

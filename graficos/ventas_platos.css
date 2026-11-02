@@ -30,10 +30,10 @@
 .vp-kpi { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 6px 12px; min-width: 0; display: grid; gap: 1px; text-align: left; }
 .vp-kpi.clic { cursor: pointer; }
 .vp-kpi.clic:hover { border-color: var(--focus-lavender); }
-.vp-kpi-rot { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp-kpi-rot { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vp-kpi-lin { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .vp-kpi-val { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-.vp-kpi-sub { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.vp-kpi-sub { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 
 /* La zona y la ficha. */
 .vp-cuerpo { flex: 1 1 0; min-height: 0; display: flex; gap: 16px; align-items: stretch; }
@@ -75,29 +75,29 @@
 .vp-sub { font-size: 12px; color: var(--text-secondary); }
 .vp-barras { display: flex; align-items: flex-end; justify-content: center; gap: 2px; height: 22px; }
 .vp-barras i { display: block; width: 9px; border-radius: 1px 1px 0 0; }
-.vp-mov { font-size: 11px; padding: 0 5px; border-radius: 9px; background: var(--line-soft); color: var(--text-secondary); }
+.vp-mov { font-size: 12px; padding: 0 5px; border-radius: 9px; background: var(--line-soft); color: var(--text-secondary); }
 .vp-mov.sube { background: var(--success-bg); color: var(--success-text); }
 .vp-mov.baja { background: var(--danger-bg); color: var(--danger-text); }
 .vp-mov.entra { background: var(--accent-tint); color: var(--accent-deep); }
 .pill { display: inline-block; padding: 0 6px; border-radius: 9px; font-size: 12px; font-weight: 500; background: var(--line-soft); font-variant-numeric: tabular-nums; }
 .pill.ambar { background: var(--warning-bg); color: var(--warning-text); }
 .pill.rojo { background: var(--danger-bg); color: var(--danger-text); }
-.vp-pie { flex: none; padding-top: 5px; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp-pie { flex: none; padding-top: 5px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* La ficha: entra entera, sin deslizarse. */
-.vp-fcab span { font-size: 11.5px; color: var(--text-secondary); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp-fcab span { font-size: 12px; color: var(--text-secondary); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vp-fcab h3 { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vp-cifras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; }
 .vp-cifras div { display: grid; min-width: 0; }
-.vp-cifras span { font-size: 11.5px; color: var(--text-secondary); }
+.vp-cifras span { font-size: 12px; color: var(--text-secondary); }
 .vp-cifras b { font-size: 14px; font-weight: 600; }
-.vp-frot { font-size: 11.5px; color: var(--text-secondary); }
+.vp-frot { font-size: 12px; color: var(--text-secondary); }
 .vp-cargando { color: var(--text-muted); }
 .vp-ficha > .vp-evol { flex: 1 1 0; min-height: 60px; display: flex; align-items: flex-end; gap: 3px; }
 .vp-ev { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; }
-.vp-ev span { font-size: 10px; color: var(--text-secondary); white-space: nowrap; line-height: 1.1; }
+.vp-ev span { font-size: 12px; color: var(--text-secondary); white-space: nowrap; line-height: 1.1; }
 .vp-ev i { display: block; width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; flex: none; }
-.vp-ev em { font-style: normal; font-size: 10px; color: var(--text-muted); white-space: nowrap; height: 13px; line-height: 13px; flex: none; }
+.vp-ev em { font-style: normal; font-size: 12px; color: var(--text-muted); white-space: nowrap; height: 13px; line-height: 13px; flex: none; }
 .vp-aviso { font-size: 12px; line-height: 1.35; color: var(--text-secondary); }
 .vp-aviso.rojo { color: var(--danger-text); }
 .vp-fbot { display: flex; gap: 4px; }
@@ -119,3 +119,18 @@
   .vp-ficha > .vp-evol { flex: none; height: 120px; }
   .vp-pie { white-space: normal; }
 }
+
+/* #782: los indicadores en la franja común de la app (#775, #778): lavanda de
+   borde a borde, sin cajas, cifra de 17 px y nada bajo 12. Son CONTADORES que filtran la lista, como en Recetas: el elegido va subrayado. La tarjeta
+   tiene 18 px a cada costado. */
+@media (min-width: 901px) {
+  .vp-kpis { gap: 8px; margin-left: -18px; margin-right: -18px; padding: 6px 12px;
+    background: var(--rail-fondo); border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+}
+@media (max-width: 900px) {
+  .vp-kpis { gap: 6px; padding: 6px; border-radius: 10px; background: var(--rail-fondo); }
+}
+.vp-kpi { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 2px 0; }
+.vp-kpi.clic:hover { border-color: var(--border-lavender); }
+.vp-kpi.on { border-color: var(--accent); background: transparent; }
+.vp-kpi-val { font-weight: 500; }

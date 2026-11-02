@@ -21,7 +21,7 @@
 .vcc .vcc-tabs button.on {background:var(--bg-card);color:var(--accent-deep);box-shadow:var(--shadow);}
 .vcc .vcc-m {position:relative;flex:none;}
 .vcc .vcc-mb {height:30px;}
-.vcc .vcc-mb i {font-style:normal;font-size:10px;}
+.vcc .vcc-mb i {font-style:normal;font-size: 12px;}
 .vcc .vcc-fijo {flex:none;height:30px;display:inline-flex;align-items:center;padding:0 10px;border-radius:7px;background:var(--rail-fondo);color:var(--text-secondary);}
 .vcc .vcc-pop {position:absolute;top:34px;left:0;z-index:9;min-width:190px;padding:6px;background:var(--bg-card);border-radius:10px;box-shadow:var(--shadow-md);display:flex;flex-direction:column;gap:2px;}
 .vcc .vcc-pop button {background:transparent;text-align:left;}
@@ -36,13 +36,13 @@
 .vcc button.vcc-kpi:hover {background:var(--bg-card);border-color:var(--focus-lavender);}
 .vcc button.vcc-kpi.on {background:var(--accent-tint);border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);color:inherit;}
 .vcc .vcc-kt {flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
-.vcc .vcc-kr {font-size:11.5px;color:var(--text-secondary);}
+.vcc .vcc-kr {font-size: 12px;color:var(--text-secondary);}
 .vcc .vcc-kpi strong {font-size:18px;font-weight:650;line-height:1.2;white-space:nowrap;}
-.vcc .vcc-kpi small {font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vcc .vcc-kpi small {font-size: 12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .vcc .vcc-kpi small b {font-weight:600;}
 .vcc .vcc-ks {flex:none;width:72px;height:28px;overflow:visible;}
 .vcc .vcc-ks polyline {fill:none;stroke:var(--accent);stroke-width:1.5px;vector-effect:non-scaling-stroke;}
-.vcc .vcc-kc {flex:none;width:104px;font-size:11px;color:var(--text-secondary);text-align:right;}
+.vcc .vcc-kc {flex:none;width:104px;font-size: 12px;color:var(--text-secondary);text-align:right;}
 .vcc .vcc-kc b {color:var(--text-primary);font-weight:600;}
 .vcc .vcc-prog {display:block;height:4px;border-radius:2px;background:var(--accent-light);margin-top:3px;overflow:hidden;}
 .vcc .vcc-prog i {display:block;height:100%;background:var(--accent);}
@@ -68,8 +68,8 @@
 .vcc .vcc-pn-t b {font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .vcc .vcc-lnk {flex:none;background:transparent !important;padding:0;font-size:12px;color:var(--accent-deep);}
 .vcc .vcc-frase {flex:none;margin:2px 0;font-size:12.5px;line-height:1.35;color:var(--text-primary);}
-.vcc .vcc-notas {flex:none;font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.vcc .vcc-pn-s {flex:none;font-size:11px;color:var(--text-secondary);margin-top:4px;padding-top:4px;border-top:1px solid var(--line-soft);}
+.vcc .vcc-notas {flex:none;font-size: 12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vcc .vcc-pn-s {flex:none;font-size: 12px;color:var(--text-secondary);margin-top:4px;padding-top:4px;border-top:1px solid var(--line-soft);}
 .vcc .vcc-break {flex:none;display:flex;flex-direction:column;}
 .vcc .vcc-pn-f {flex:none;width:100%;display:grid;grid-template-columns:minmax(0,1fr) 44px 70px;gap:6px;align-items:center;min-height:21px;padding:0 3px;background:transparent;border-radius:5px;text-align:left;font-weight:400;}
 .vcc .vcc-pn-n {white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -77,20 +77,20 @@
 .vcc .vcc-pn-b i {position:absolute;left:0;top:0;bottom:0;opacity:.65;}
 .vcc .vcc-pn-f strong {text-align:right;font-weight:500;font-size:12px;}
 .vcc .vcc-vacio {padding:24px;text-align:center;color:var(--text-secondary);}
-.vcc .vcc-notice {flex:none;font-size:11px;color:var(--warning-text);}
+.vcc .vcc-notice {flex:none;font-size: 12px;color:var(--warning-text);}
 /* El gráfico. */
 .vcc .vcc-plot {flex:1;min-height:150px;position:relative;}
 .vcc svg {display:block;overflow:visible;}
 .vcc .vcc-grid {stroke:var(--line-soft);stroke-width:1;}
 .vcc .vcc-zero {stroke:var(--text-secondary);stroke-opacity:.6;}
-.vcc .vcc-axis {font-size:10.5px;fill:var(--text-secondary);}
-.vcc .vcc-et {font-size:11px;font-weight:600;fill:var(--text-primary);paint-order:stroke;stroke:var(--bg-card);stroke-width:3px;}
+.vcc .vcc-axis {font-size: 12px;fill:var(--text-secondary);}
+.vcc .vcc-et {font-size: 12px;font-weight:600;fill:var(--text-primary);paint-order:stroke;stroke:var(--bg-card);stroke-width:3px;}
 .vcc .vcc-ppto-l {stroke:var(--text-secondary);stroke-width:1.5;stroke-dasharray:4 3;stroke-opacity:.7;}
 .vcc .vcc-parc {fill:none;stroke:var(--accent-deep);stroke-width:1.5;stroke-dasharray:3 2;}
-.vcc .vcc-warning {font-size:10px;fill:var(--warning-text);}
+.vcc .vcc-warning {font-size: 12px;fill:var(--warning-text);}
 .vcc .vcc-hit {fill:transparent;cursor:pointer;touch-action:pan-y;}
 .vcc .vcc-hit:hover,.vcc .vcc-hit.chosen {fill:var(--accent);fill-opacity:.075;}
-.vcc .vcc-tip {position:absolute;z-index:8;top:8px;width:280px;max-width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);box-shadow:var(--shadow-md);font-size:11.5px;pointer-events:none;}
+.vcc .vcc-tip {position:absolute;z-index:8;top:8px;width:280px;max-width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);box-shadow:var(--shadow-md);font-size: 12px;pointer-events:none;}
 .vcc .vcc-tip div {margin-top:4px;}
 .vcc .vcc-tip strong {display:block;}
 /* Día de semana. */
@@ -107,7 +107,7 @@
 .vcc .vcc-cl {display:flex;flex-direction:column;justify-content:center;min-width:0;height:44px;padding:3px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);text-align:left;font-weight:400;}
 .vcc button.vcc-cl:hover {background:var(--bg-card);border-color:var(--focus-lavender);}
 .vcc button.vcc-cl.on {background:var(--accent-tint);border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);}
-.vcc .vcc-cl span {font-size:11.5px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vcc .vcc-cl span {font-size: 12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .vcc .vcc-cl strong {font-size:14px;font-weight:600;}
 .vcc .vcc-search {flex:none;display:flex;align-items:center;gap:8px;min-width:0;}
 .vcc .vcc-search>input {height:28px;width:240px;max-width:100%;border:1px solid var(--border);border-radius:7px;padding:0 9px;background:var(--bg-card);min-width:0;}
@@ -124,7 +124,7 @@
 .vcc .vcc-num {text-align:right;}
 .vcc .vcc-rest {color:var(--text-secondary);font-style:italic;}
 .vcc .vcc-rest button {background:transparent;padding:0;color:var(--accent-deep);text-decoration:underline;}
-.vcc .vcc-table-foot {flex:none;font-size:11.5px;color:var(--text-secondary);display:flex;justify-content:space-between;gap:12px;white-space:nowrap;overflow:hidden;}
+.vcc .vcc-table-foot {flex:none;font-size: 12px;color:var(--text-secondary);display:flex;justify-content:space-between;gap:12px;white-space:nowrap;overflow:hidden;}
 /* En una columna, una zona con `flex: 1 1 0` en una caja sin alto mediría 0 (#746). */
 @media(max-width:900px){
   .vcc .vcc-amp {display:none;}
@@ -142,3 +142,18 @@
   .vcc .vcc-sem-f>:nth-child(3) {display:none;}
   .vcc .vcc-table-foot {flex-wrap:wrap;white-space:normal;}
 }
+
+/* #782: los indicadores en la franja común de la app (#775, #778): lavanda de
+   borde a borde, sin cajas, cifra de 17 px y nada bajo 12. Son MEDIDAS que cambian lo que se mira: el elegido se levanta como una ficha blanca (un tinte lavanda no se vería sobre la franja). La tarjeta
+   tiene 18 px a cada costado. */
+@media (min-width: 901px) {
+  .vcc .vcc-kpis { gap: 8px; margin-left: -18px; margin-right: -18px; padding: 6px 12px;
+    background: var(--rail-fondo); border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+}
+@media (max-width: 900px) {
+  .vcc .vcc-kpis { gap: 6px; padding: 6px; border-radius: 10px; background: var(--rail-fondo); }
+}
+.vcc .vcc-kpi { border: 0; border-radius: 10px; background: transparent; padding: 4px 8px; box-shadow: none; }
+.vcc button.vcc-kpi:hover { background: rgba(255, 255, 255, .55); border-color: transparent; }
+.vcc button.vcc-kpi.on { border: 0; background: var(--bg-card); box-shadow: 0 1px 4px rgba(73, 56, 184, .16); }
+.vcc .vcc-kpi strong { font-size: 17px; font-weight: 500; line-height: 24px; }

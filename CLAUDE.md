@@ -2019,6 +2019,13 @@ cada producto en la ficha (y en la lista con «Detalle»). Ojo con
 `st.segmented_control`: el elegido se marca con `aria-checked="true"`, no con
 `kind`.
 
+**La franja de indicadores tiene dos formas** (#782): MEDIDAS en el tiempo
+(Ventas) con minigráfico y comparación, el elegido como ficha blanca; CONTADORES
+que filtran una lista (Recetas, Platos), sólo el número, el elegido subrayado.
+Las dos sobre la misma franja lavanda de borde a borde, sin cajas, en 17 px. Y
+**la fecha de la franja abre el mismo panel que las tarjetas** (#783):
+`franja_fecha.render()` llama a `selector_fecha_tarjeta` sin `categoria`.
+
 **«Nuevo Costeo» también, desde el mismo día** (regla #697): la tabla de la
 receta y el precio son `graficos/nuevo_costeo.js` + `.css`; el buscador, el
 importador, guardar y enviar, y el panel de al costado (Dónde se usa, lo

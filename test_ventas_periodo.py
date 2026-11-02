@@ -310,7 +310,12 @@ class LaComparacionEnElNavegador(unittest.TestCase):
         js = xlsx + _JS.replace("export default function (component)", "window.__montar = function (component)")
         css = (Path(vr.__file__).parent / "ventas_periodo.css").read_text(encoding="utf-8")
         pg = b.new_page(viewport={"width": ancho, "height": alto})
-        pg.set_content(f"<style>:root{{--alto-util:620px}}{css}</style><div id='r'></div>")
+        # El aire de la tarjeta de verdad (18 px por lado, medido): la franja de
+        # indicadores sale hasta el borde de la hoja con márgenes negativos (#782),
+        # y sin ese aire desbordaba la página de prueba. Sólo desde 901 px, como la
+        # franja de borde a borde.
+        pg.set_content(f"<style>:root{{--alto-util:620px}}@media (min-width:901px){{#r{{padding:0 18px}}}}{css}</style>"
+                       "<div id='r'></div>")
         pg.add_script_tag(content=js)
         return b, pg
 

@@ -10,7 +10,9 @@ franja de `app.py`, en los reportes que no eligen la fecha por vista.
 
 POR QUE HUBO QUE MOVER LA LLAMADA Y NO COPIAR EL WIDGET
 ------------------------------------------------------
-El `st.date_input` de aca usa como KEY la clave canonica del rango
+(Hasta la regla #783; desde ese día la franja dibuja el panel de las
+tarjetas y ya no hay `date_input`, pero sigue siendo una sola llamada.)
+El `st.date_input` de aca usaba como KEY la clave canonica del rango
 (`clave_rango(...)`). O sea el widget NO es una copia del estado: ES el
 estado. De ahi que no se pueda tener dos:
 
@@ -34,7 +36,6 @@ ya usa `graficos.base.publicar_contexto_ia()` para el asistente.
 
 import streamlit as st
 
-from estado_rango import atajos_rango, aplicar_atajo
 from cortes import MESES_ABR_ES
 
 _CLAVE_CTX = "_franja_fecha_ctx"
@@ -95,67 +96,28 @@ def contexto():
 
 
 def render():
-    """Dibuja el pill + su panel con el contexto publicado.
+    """Dibuja el botón de fecha de la franja y su panel con el contexto
+    publicado.
 
-    Se llama UNA sola vez por render, desde `app.py` (franja) o desde el
-    drill que se lo quede. Llamarlo dos veces = dos widgets con la misma
-    key = excepcion de Streamlit, que es exactamente la red de seguridad
-    que queremos.
+    Se llama UNA sola vez por render, desde `app.py`. Llamarlo dos veces =
+    dos widgets con la misma key = excepcion de Streamlit, que es
+    exactamente la red de seguridad que queremos.
+
+    EL MISMO PANEL QUE LAS TARJETAS (regla #783, a pedido: «en ventas, el
+    calendario no es el mismo»). Hasta ese día la franja abría su panel
+    viejo —seis atajos y un `date_input` con la clave del rango— y las
+    tarjetas el de `graficos/panel_fecha.py` (#616): atajos agrupados, años
+    en pestañas y meses como casilleros. Sin `categoria`, el panel escribe
+    la clave de la franja (`ctx["k_rango"]`) con `aplicar_atajo` y su
+    `usa_carga_rango`: Ventas recarga igual que antes. Como ya no hay un
+    widget con esa clave, la mantiene viva el eco de `estado_rango`. El
+    contenedor conserva su key, que es de donde cuelga su lugar en la
+    franja (`_90_marco.py`).
     """
     ctx = st.session_state.get(_CLAVE_CTX)
     if not ctx:
         return
-    _k_rango_franja = ctx["k_rango"]
-    fecha_min_full = ctx["fecha_min"]
-    fecha_max_full = ctx["fecha_max"]
-    reporte = ctx["reporte"]
-    _usa_carga_rango = ctx["usa_carga_rango"]
-    _hoy = ctx["hoy"]
-
-    # El estado ya quedó sembrado y recortado por asegurar_rango()
-    # arriba (una sola vez, antes del widget). Aquí solo se LEE.
-    # El texto del rango es el TRIGGER de un panel (Opción B):
-    # atajos rápidos a la izquierda + calendario manual a la
-    # derecha. El date_input, los atajos y el label leen/escriben
-    # la MISMA clave → no pueden desincronizarse.
-    _rango_actual = st.session_state.get(_k_rango_franja)
-    # Hasta el 2026-10-11 el label decía el CORTE cuando había uno elegido
-    # («Corte 1-4 ago»): la franja tenía los modos Rango / Corte / Varios
-    # para Ajuste. Ajuste pasó a una sesión por vista (regla #632) y los
-    # modos se borraron (regla #635).
-    if (isinstance(_rango_actual, (tuple, list))
-            and len(_rango_actual) == 2 and all(_rango_actual)):
-        _label_fecha = fmt_rango_es(_rango_actual[0], _rango_actual[1])
-    else:
-        _label_fecha = "Seleccionar rango"
-
-    # Atajos válidos para la data actual (los calcula el dueño único).
-    _atajos = atajos_rango(_hoy, (fecha_min_full, fecha_max_full))
-
+    # Adentro: `graficos.base` importa este módulo.
+    from graficos.base import selector_fecha_tarjeta
     with st.container(key="fecha_ajuste_pill"):
-        with st.popover(_label_fecha, use_container_width=False,
-                        icon=":material/calendar_month:"):
-            # Contenedor keyed → permite scopear el ancho del panel
-            # por CSS aunque el popover se renderice en un portal.
-            with st.container(key="fecha_panel"):
-                _c_izq, _c_cal = st.columns([1, 1.5])
-                with _c_izq:
-                    st.caption("Atajos")
-                    for _ca, _et, _rg in _atajos:
-                        st.button(
-                            _et, use_container_width=True,
-                            key=f"atajo_{reporte}_{_ca}".replace(" ", "_"),
-                            on_click=aplicar_atajo,
-                            args=(_k_rango_franja, _rg, reporte,
-                                  _usa_carga_rango),
-                        )
-                with _c_cal:
-                    st.caption("Rango manual")
-                    st.date_input(
-                        "Rango a Evaluar",
-                        min_value=fecha_min_full,
-                        max_value=fecha_max_full,
-                        format="DD/MM/YYYY",
-                        key=_k_rango_franja,
-                        label_visibility="collapsed",
-                    )
+        selector_fecha_tarjeta("franja_f", None, ctx=ctx)

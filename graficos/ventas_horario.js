@@ -592,7 +592,7 @@ function tira(vals, v, fmt) {
   let s = `<svg class="tira" viewBox="0 0 ${W} ${H}"><line x1="8" x2="${W - 8}" y1="23" y2="23" style="stroke:var(--border)"/>`;
   vals.forEach((x) => { if (isFinite(x)) s += `<circle cx="${px(x)}" cy="23" r="4" style="fill:var(--text-muted)"/>`; });
   if (isFinite(med)) s += `<line x1="${px(med)}" x2="${px(med)}" y1="13" y2="33" style="stroke:var(--text-secondary)" stroke-width="1.5"/>`;
-  return s + `<circle cx="${px(v)}" cy="23" r="6" style="fill:var(--accent)"/><text x="${px(v)}" y="9" text-anchor="middle" style="font-size:10px;fill:var(--accent-deep);font-weight:700">esta</text><text x="8" y="${H - 1}" style="font-size:10px;fill:var(--text-secondary)">0</text><text x="${W - 8}" y="${H - 1}" text-anchor="end" style="font-size:10px;fill:var(--text-secondary)">${fmt(mx)}</text></svg>`;
+  return s + `<circle cx="${px(v)}" cy="23" r="6" style="fill:var(--accent)"/><text x="${px(v)}" y="9" text-anchor="middle" style="font-size: 12px;fill:var(--accent-deep);font-weight:700">esta</text><text x="8" y="${H - 1}" style="font-size: 12px;fill:var(--text-secondary)">0</text><text x="${W - 8}" y="${H - 1}" text-anchor="end" style="font-size: 12px;fill:var(--text-secondary)">${fmt(mx)}</text></svg>`;
 }
 function factores(dias, h) {
   // La celda partida en mesas × personas × gasto, y la operación (mesas a
@@ -669,7 +669,7 @@ function fichaItem(items) {
   const noche = porH.filter((_, i) => esNoche(HORAS[i])).reduce((a, b) => a + b, 0);
   const normal = disponible('normal') ? mediana(SEMANAS.map((s) => sumaDe(correr(DIAS_R, -7 * s)))) : NaN;
   const ap = disponible('ap') ? sumaDe(correr(DIAS_R, -DIAS_AP)) : NaN;
-  const barras = (vals, rots, fmt) => { const W = 300, H = 62, mx = Math.max(...vals, 1e-9), bw = (W - 10) / vals.length; return `<svg class="barras" viewBox="0 0 ${W} ${H}">${vals.map((q, i) => `<rect x="${5 + i * bw + 2}" y="${H - 14 - (H - 22) * Math.max(0, q) / mx}" width="${Math.max(1, bw - 4)}" height="${(H - 22) * Math.max(0, q) / mx}" rx="2" style="fill:${q === mx ? 'var(--c5)' : 'var(--c2)'}"><title>${rots[i]}: ${fmt(q)}</title></rect><text x="${5 + i * bw + bw / 2}" y="${H - 3}" text-anchor="middle" style="font-size:9px;fill:var(--text-secondary)">${rots[i].replace(' pm', '').replace(' am', '')}</text>`).join('')}</svg>`; };
+  const barras = (vals, rots, fmt) => { const W = 300, H = 62, mx = Math.max(...vals, 1e-9), bw = (W - 10) / vals.length; return `<svg class="barras" viewBox="0 0 ${W} ${H}">${vals.map((q, i) => `<rect x="${5 + i * bw + 2}" y="${H - 14 - (H - 22) * Math.max(0, q) / mx}" width="${Math.max(1, bw - 4)}" height="${(H - 22) * Math.max(0, q) / mx}" rx="2" style="fill:${q === mx ? 'var(--c5)' : 'var(--c2)'}"><title>${rots[i]}: ${fmt(q)}</title></rect><text x="${5 + i * bw + bw / 2}" y="${H - 3}" text-anchor="middle" style="font-size: 12px;fill:var(--text-secondary)">${rots[i].replace(' pm', '').replace(' am', '')}</text>`).join('')}</svg>`; };
   const p = PRODS.find((z) => z.nombre === x.nombre), n = DIAS_R.length;
   const pico = uH.indexOf(Math.max(...uH));
   const subt = S.por === 'platos' && p ? `${p.grupo} › ${p.sub} · ${p.area}` : S.por === 'grupos' ? 'grupo de la carta' : 'área de producción';
