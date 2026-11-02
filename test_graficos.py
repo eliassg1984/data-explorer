@@ -6570,9 +6570,10 @@ def _pruebas_fechas_ajuste():
     # Desde la regla #712 las cuatro de la sesión y del tiempo son dos
     # vistas con perspectivas: la pila lleva las que las contienen, y cada
     # perspectiva sigue siendo su sección de siempre.
-    check("una sola pila con las tres vistas",
+    # «Explorar», la tabla dinámica de AgGrid, volvió como cuarta vista (#797).
+    check("una sola pila con las cuatro vistas",
           [c for c, _v in aj._PILA],
-          ["aj_sec_persp_cierre", "aj_sec_diferencias", "aj_sec_persp_tiempo"])
+          ["aj_sec_persp_cierre", "aj_sec_diferencias", "aj_sec_persp_tiempo", "aj_sec_explorar"])
     check("y las cuatro de antes como perspectivas",
           [p[1] for p in aj.PERSPECTIVAS_CIERRE + aj.PERSPECTIVAS_TIEMPO],
           ["aj_sec_cascada", "aj_sec_heatmap", "aj_sec_evolucion", "aj_sec_detalle"])
@@ -6591,7 +6592,7 @@ def _pruebas_fechas_ajuste():
     check("«Mes del cierre» se fue de Filtros",
           "_selector_mes_ajuste" in ini, False)
     check("las vistas de meses recargan si cambió el mes del cierre",
-          ini.count("recargar_si_cambio_mes()"), 2)
+          ini.count("recargar_si_cambio_mes()"), 3)   # Evolución, Tabla dinámica y Explorar (#797)
     css = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
     check("los dos controles tienen su CSS",
           ('st-key-ajf_' in css, 'st-key-ajses_' in css), (True, True))

@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-796 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+797 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -582,7 +582,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#751** — Producción › «Consumo según ventas» dice la cuenta de cada porcionamiento, deja elegir el…
 - **#768** — La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte
 
-**AgGrid y tablas** (98)
+**AgGrid y tablas** (99)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -682,6 +682,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#724** — Stock › Por área y familia es una PIEZA PROPIA con matriz y comparación entre áreas
 - **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
+- **#797** — «Qué faltó» con cantidad, unidad y código; y «Explorar», la tabla dinámica de Ajuste
 
 **Streamlit** (175)
 
@@ -1159,7 +1160,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (253)
+**Decisiones de diseño y UX** (254)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1414,6 +1415,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#790** — Compras › Proveedor y Producto en el lenguaje entero de Costo de Carta
 - **#795** — Pestañas subrayadas, ajustes en la caja gris: un criterio para toda la app
 - **#796** — Stock en el lenguaje entero de Costo de Carta, y el código siempre a la vista
+- **#797** — «Qué faltó» con cantidad, unidad y código; y «Explorar», la tabla dinámica de Ajuste
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58438,6 +58440,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      ficha, y en «Lo que más cambió» de Por área. También en la lista de Compras › Producto.
    - En Por área, Lista | Matriz | Comparar | Excluidos navegan: subrayadas (`.ist-tabs`).
 
+797. **«Qué faltó» con cantidad, unidad y código; y «Explorar», la tabla dinámica de Ajuste.**
+   A pedido: «en "Qué faltó" debe permitir ver las cantidades, la unidad y el código del
+   producto», y «había una tabla dinámica AgGrid oculta en Ajuste: ponerla como otra vista».
+   - **Qué faltó** (`cierre.js`, `cfilaprod`): cada producto lleva su código en un segundo
+     renglón, en gris («cód. 0000003952»), y la columna Cantidad con su unidad («−28.561
+     KILOS») también lado a lado; hasta hoy sólo salía al abrir una lista sola. En el celular
+     la cantidad desplaza a la barrita de 6 cierres.
+   - **Explorar** es la vista «Tabla» de Ajuste (AgGrid con agrupación y Modo pivote, oculta
+     con las demás «Tabla» desde la #507). Vuelve con otro id —`rail_sin_tablas` filtra por el
+     nombre «Tabla»— y tres cambios: **fecha propia** (el panel de meses de Evolución, abre en
+     3 meses: 12 son ~115 mil líneas y el árbol tarda), porque `app.py` no filtra el `df_f` de
+     Ajuste y recibía el histórico entero; **el código pegado al producto** («Aceite Vegetal ·
+     0000000010»), en la columna por la que agrupa (`PRODUCTO`); y la columna del árbol con
+     nombre («Familia › Subfamilia › Producto › Unidad › Área») y 380 px, que cortaba los
+     nombres bajo «Group».
+   - La «Tabla» de los demás reportes sigue oculta.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58450,7 +58469,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#796**; la próxima toma el número siguiente.
+> última regla es la **#797**; la próxima toma el número siguiente.
 
 >
 

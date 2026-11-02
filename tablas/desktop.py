@@ -479,6 +479,12 @@ def renderizar_aggrid_desktop(df_grid, cols_mostrar, reporte, font_px=14,
 
         opciones_grid["pivotMode"] = True
         opciones_grid["groupDefaultExpanded"] = 0
+        # «Explorar» (regla #797): el árbol dice qué es y no corta los nombres,
+        # que llevan su código («Pellejo de pato x kg · 0003952»).
+        opciones_grid["autoGroupColumnDef"] = {
+            "headerName": "Familia › Subfamilia › Producto › Unidad › Área",
+            "minWidth": 380, "flex": 2,
+        }
 
     # ── Quitar del panel de Filtros las columnas que se manejan con chips
     # externos ── universal: cualquier reporte cuyos chips filtren Área/

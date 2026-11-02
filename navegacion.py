@@ -399,6 +399,7 @@ ROTULO_PESTANA = {
     ("Ajuste de Inventario", "Ajuste del cierre"): "Diferencias",
     ("Ajuste de Inventario", "Diferencias"): "Análisis",
     ("Ajuste de Inventario", "Evolución del ajuste"): "Evolución",
+    ("Ajuste de Inventario", "Explorar"): "Explorar",
     ("Movimientos", "Requerimientos y salidas"): "Req. y salidas",
     ("Movimientos", "Sin plato por cierre"): "Sin plato",
     ("Producción", "Porcionamientos"): "Porcionamientos",

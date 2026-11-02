@@ -211,3 +211,24 @@
 .ajc-kpi.ajc-aparte { background: transparent; }
 .ajc-kpi.ajc-aparte b { color: var(--warning-text); }
 .ajc-kpi b { font-size: 17px; font-weight: 500; letter-spacing: 0; }
+
+/* #797: en «Qué faltó» cada producto dice su código, su cantidad y su unidad, también
+   lado a lado (a pedido: «debe permitir ver las cantidades, la unidad y el código»).
+   El código va en un segundo renglón, en gris, debajo del nombre; la cantidad, en su
+   columna. */
+.ajc .ajc-p{height:auto;min-height:38px;padding-top:3px;padding-bottom:3px;}
+.ajc .ajc-p.cab{min-height:28px;}
+.ajc .ajc-lists.dos .ajc-p{grid-template-columns:minmax(0,1fr) 92px 52px 42px 72px;}
+.ajc .ajc-lists.dos.pareto .ajc-p{grid-template-columns:minmax(0,1fr) 92px 112px 42px 72px;}
+.ajc-pnom{display:flex;flex-direction:column;min-width:0;line-height:1.25;}
+.ajc-pnom > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ajc-cod{font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums;}
+.ajc-pq{text-align:right;font-variant-numeric:tabular-nums;}
+@media(max-width:900px){
+  .ajc .ajc-lists.dos .ajc-p{grid-template-columns:minmax(0,1fr) 84px 42px 72px;}
+  .ajc .ajc-lists.dos .ajc-6,.ajc .ajc-lists.dos .ajc-acum{display:none;}
+  .ajc .ajc-lists.una .ajc-p{grid-template-columns:minmax(0,1fr) 84px 42px 72px;}
+  .ajc .ajc-lists.una .ajc-pq{display:block;}
+  .ajc .ajc-lists.una .ajc-6,.ajc .ajc-lists.una .ajc-acum{display:none;}
+}
+
