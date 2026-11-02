@@ -8,3 +8,21 @@
 .adf .adf-partes table{min-width:590px}
 
 .adf-cuerpo .dif-dos{display:flex;flex-wrap:wrap;gap:12px}.adf-cuerpo .dif-dos>div{flex:1 1 190px;min-width:0}.adf-cuerpo .dif-mot>span:first-child{min-width:0;overflow-wrap:anywhere}
+
+/* #789: los totales en la franja común de la app (#782): lavanda de borde a
+   borde, sin cajas ni separadores, rótulos en minúscula y cifra de 17 px. Son
+   cifras fijas: sin elegido. «Sin descargar al contar» conserva su color de
+   aviso en el rótulo. La tarjeta tiene 18 px a cada costado. */
+.adf .dif-kpis { border: 0; border-radius: 0; overflow: visible; gap: 0 8px; margin: 2px 0;
+  padding: 2px 12px; background: var(--rail-fondo); }
+.adf .dif-kpi { border: 0; padding: 2px 8px; background: transparent; }
+.adf .dif-kpi.al { background: transparent; }
+.adf .dif-kpi .r { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.adf .dif-kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }
+@media (min-width: 901px) {
+  .adf .dif-kpis { margin-left: -18px; margin-right: -18px;
+    border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+}
+@media (max-width: 900px) {
+  .adf .dif-kpis { padding: 6px; border-radius: 10px; }
+}

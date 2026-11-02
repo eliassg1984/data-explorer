@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-788 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+789 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (263)
+**CSS y estilos** (264)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -330,6 +330,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#785** — Inventario en la franja común (#782) y nada bajo 12 px
 - **#786** — Producción en la franja común (#782) y nada bajo 12 px
 - **#787** — Costos e Inicio en la franja común (#782) y nada bajo 12 px
+- **#789** — Sin plato y Análisis de diferencias en la franja, y «Por hora» en el rango del enlace
 
 **Layout y alturas** (112)
 
@@ -58304,6 +58305,22 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - Medido en Chromium a 1323 px: el panel escondido mide 0 y la zona ~1200 px; al volver, los
      anchos de antes al píxel.
 
+789. **Sin plato y Análisis de diferencias en la franja, y «Por hora» en el rango del enlace.**
+   Los tres cabos que quedaron de las #785-#788:
+   - **La franja de Sin plato no llegaba al borde**: la raíz de la pieza (`.destino`) recorta
+     con `overflow: hidden`, y se comía el −18 px que la lleva hasta la hoja. Desde 901 px la de
+     «Cierres» recorta con `overflow: clip; overflow-clip-margin: 18px` (`destino.css`).
+   - **Los totales de Análisis de diferencias** seguían en su caja con separadores y rótulos en
+     MAYÚSCULAS (el CSS de `_diferencias.py`, de la vista de antes). `diferencias.css` los pasa a
+     la franja: cifras fijas, sin elegido, de borde a borde, en 34 px de alto (30 antes) para no
+     esconder el pie de la lista.
+   - **«Por hora» abría en «1 nov», vacío, llegando desde la portada con `desde`/`hasta`**: el
+     default de las tarjetas sin rango propio era el mes en curso, y la #777 sólo lo corría cuando
+     la carga caía en el mes anterior. Ahora en un reporte que carga por rango es lo que se cargó
+     (`app.py`, `_rango_cargado`): el enlace, el mes anterior de la #777 o el default de siempre.
+     Medido: con `desde=2026-10-01&hasta=2026-10-31` abre en «Mes pasado · octubre».
+   - Medido en Chromium a 1323 px: las dos franjas van de 80 a 1315, lo mismo que la hoja.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58316,7 +58333,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#788**; la próxima toma el número siguiente.
+> última regla es la **#789**; la próxima toma el número siguiente.
 
 >
 

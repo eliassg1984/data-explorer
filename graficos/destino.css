@@ -38,6 +38,9 @@
    borde, sin cajas, cifra de 17 px y nada bajo 12. Son cifras fijas: sin caja y sin elegido. La tarjeta tiene
    18 px a cada costado. */
 @media (min-width: 901px) {
+  /* #789: la raíz recorta (overflow: hidden) y se comía el -18 px de la franja;
+     se le deja ese margen para que llegue al borde de la hoja. */
+  .destino.dst-cierre { overflow: clip; overflow-clip-margin: 18px; }
   .dst-kpis { gap: 8px; margin-left: -18px; margin-right: -18px; padding: 6px 12px;
     background: var(--rail-fondo); border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
 }

@@ -326,6 +326,7 @@ if cfg.get("tool"):
 # Nombra el REPORTE porque a esta altura ya se sabe cuál es, y así el primer
 # texto de la pantalla dice también dónde estás — no sólo que hay que esperar.
 _mes_sin_venta = None   # el mes anterior, si el en curso vino vacío (#777)
+_rango_cargado = None   # lo que se bajó de R2, en un reporte que carga por rango (#789)
 with perf.phase("cargar()"), st.spinner(f"Cargando {reporte}…"):            # ⚡ PERF
     _col_rango = cfg.get("carga_por_rango")
     if _col_rango:
@@ -367,6 +368,7 @@ with perf.phase("cargar()"), st.spinner(f"Cargando {reporte}…"):            # 
             aplicar_atajo(_k_rango, _mes_sin_venta, reporte=reporte,
                           usa_carga_rango=True)
             df = cargar_rango(cfg["archivo"], _col_rango, *_mes_sin_venta)
+        _rango_cargado = _mes_sin_venta or (_r_ini, _r_fin)
     else:
         df = cargar(cfg["archivo"])
 if df is None or df.empty:
@@ -599,10 +601,12 @@ if _franja_con_fecha and reporte in REPORTES_FECHA_EN_TARJETA_SUNAT:
 _ancla_mes = min(_hoy, fecha_max_full) if fecha_max_full else _hoy
 fecha_ini_default = _ancla_mes.replace(day=1)   # 01 del mes con datos
 fecha_fin_default = _ancla_mes                  # hoy, o el último día con datos
-# Y si el mes en curso vino sin venta, las tarjetas sin rango propio abren en
-# el mismo mes anterior que la carga: «Por hora» abría en «1 nov», en cero.
-if _mes_sin_venta:
-    fecha_ini_default, fecha_fin_default = _mes_sin_venta
+# En un reporte que carga por rango, las tarjetas sin rango propio abren en
+# lo que se cargó: el mes anterior si el en curso vino sin venta (#777), o el
+# rango de un enlace (#789). «Por hora» abría en «1 nov», en cero, también
+# llegando desde la portada con las fechas de octubre.
+if _rango_cargado:
+    fecha_ini_default, fecha_fin_default = _rango_cargado
 
 # EL MISMO MES, PERO ANCLADO AL PARQUET (2026-09-11). Es el default de las
 # tarjetas que abren en el mes en curso (hoy Proveedores, Producto y
