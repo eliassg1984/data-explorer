@@ -8,6 +8,7 @@ import hashlib
 import json
 
 import pandas as pd
+import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 from utils import _norm, buscar_columna, LOCALE_ES
 from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height, inject_fix_column_panel_ajuste, inject_filtros_grid
@@ -839,7 +840,16 @@ def renderizar_aggrid_desktop(df_grid, cols_mostrar, reporte, font_px=14,
     inject_dynamic_grid_height(_clave_grid, offset_px=260, min_px=320)
     inject_fix_column_panel_ajuste(_clave_grid)
 
+    # Un modelo VACÍO no se manda si nunca hubo uno (regla #797): no hay nada que
+    # aplicar, y el puente espera un acuse que no llega mientras la grilla no
+    # se montó (una sección de la pila fuera de pantalla), así que pintaba
+    # «Los filtros no se aplicaron» en cualquier vista. Si antes hubo un
+    # filtro, el vacío sí viaja: es el que lo quita.
+    _k_prev = f"_filtros_grid_previo_{_clave_grid}"
+    if filtros_grid is not None and not filtros_grid and not st.session_state.get(_k_prev):
+        filtros_grid = None
     if filtros_grid is not None:
+        st.session_state[_k_prev] = bool(filtros_grid)
         # El sello identifica al modelo: si no cambio respecto del rerun
         # anterior el grid lo acusa pero no lo re-aplica (setFilterModel cuesta
         # ~130 ms y casi ningun rerun cambia los filtros).

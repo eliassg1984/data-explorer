@@ -58456,6 +58456,13 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      nombre («Familia › Subfamilia › Producto › Unidad › Área») y 380 px, que cortaba los
      nombres bajo «Group».
    - La «Tabla» de los demás reportes sigue oculta.
+   - **Lo que mordió al publicarla:** el puente de filtros de AgGrid (`inject_filtros_grid`)
+     espera el acuse de la grilla y, a los 6 s sin él, pinta «Los filtros no se aplicaron a la
+     tabla» en rojo. Con «Explorar» en la pila, la grilla de una sección todavía sin montar no
+     acusa nunca, y el aviso salía en Análisis y en Evolución. Dos arreglos: un modelo VACÍO no
+     se manda si nunca hubo uno (`tablas/desktop.py`, `_filtros_grid_previo_*`; si hubo, el
+     vacío sí viaja, es el que lo quita), y sin una grilla A LA VISTA el puente sigue esperando
+     en vez de avisar (`inyecciones/grid.py`).
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

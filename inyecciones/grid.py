@@ -660,7 +660,19 @@ def inject_filtros_grid(modelo, sello):
             if (intentos < MAX) {
                 win.setTimeout(enviar, 150);
             } else if (!aplicado) {
-                mostrarAviso();
+                // Sin una grilla A LA VISTA no hay a quién culpar (regla #797):
+                // es una sección de la pila que todavía no se montó. Se sigue
+                // esperando, más despacio; el aviso, sólo con la grilla en
+                // pantalla y sin acuse.
+                var hay = false;
+                try {
+                    win.document.querySelectorAll('iframe').forEach(function(f) {
+                        var t = (f.title || '') + ' ' + (f.src || '');
+                        if (/aggrid/i.test(t) && f.offsetWidth > 0 && f.offsetHeight > 0) hay = true;
+                    });
+                } catch(e) {}
+                if (hay) mostrarAviso();
+                else { intentos = MAX - 5; win.setTimeout(enviar, 1000); }
             }
         }
         enviar();
