@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-795 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+796 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1159,7 +1159,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (252)
+**Decisiones de diseño y UX** (253)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1413,6 +1413,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#788** — «Ampliar» en Mix, Meseros y Pedidos
 - **#790** — Compras › Proveedor y Producto en el lenguaje entero de Costo de Carta
 - **#795** — Pestañas subrayadas, ajustes en la caja gris: un criterio para toda la app
+- **#796** — Stock en el lenguaje entero de Costo de Carta, y el código siempre a la vista
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58421,6 +58422,22 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      subrayado «Medir en» de SUNAT, que es un ajuste (`.seg.ajuste`).
    - Una vista nueva elige con esta prueba, no por cómo se ve la de al lado.
 
+796. **Stock en el lenguaje entero de Costo de Carta, y el código siempre a la vista.**
+   - **Nivel 2** es el renglón de «Ver» (Python, `dibujar_perspectiva`): sin el título «Stock»
+     —está en la franja—, Por producto | Por área y familia subrayadas (navegan, #795) y una
+     raya de borde a borde (`_90_marco.py`). A la derecha, la pieza pone «Detalle» y «Cómo se
+     calcula» (`.ist-n2der`, `top: -40px`).
+   - **Nivel 3**: los controles de la pieza (áreas, familias, fecha, buscador, Más, Excel), que
+     antes se subían al renglón de «Ver», bajan a su propio renglón (`.ist-cab` en el flujo).
+   - **«Ampliar» se parte en dos**, como en Compras (#790): «Detalle» suma Código, Precio,
+     Consumo 90 d y el desglose por área (la tabla pide 1.120 px, se desplaza y el nombre queda
+     fijo); ⤢ en la lista o en la ficha deja esa zona sola, y ↙ o `Esc` vuelven. Con la lista
+     ampliada el buscador no está: vuelve con `Esc`.
+   - **El código del Almacén siempre a la vista** (a pedido: «no olvides añadir el código del
+     ítem»): en gris al lado del nombre en la lista (con «Detalle», en su columna), «cód.» en la
+     ficha, y en «Lo que más cambió» de Por área. También en la lista de Compras › Producto.
+   - En Por área, Lista | Matriz | Comparar | Excluidos navegan: subrayadas (`.ist-tabs`).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58433,7 +58450,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#795**; la próxima toma el número siguiente.
+> última regla es la **#796**; la próxima toma el número siguiente.
 
 >
 

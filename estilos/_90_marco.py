@@ -108,6 +108,38 @@ CSS = """
         font-size: 16px !important;
         font-weight: 700 !important;
     }
+    /* #796: el renglón de «Ver» de Stock es el nivel 2 de Costo de Carta: sin el
+       título (está en la franja), las perspectivas subrayadas y una raya de borde
+       a borde debajo. La pieza pone a la derecha «Detalle» y «Cómo se calcula». */
+    .st-key-persp_stock .persp-tit { display: none; }
+    .st-key-persp_stock.st-key-persp_stock {
+        border-bottom: 1px solid var(--border);
+        margin-left: -18px !important;
+        margin-right: -18px !important;
+        padding: 0 18px;
+    }
+    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] {
+        background: none;
+        padding: 0;
+        gap: 18px !important;
+    }
+    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] button {
+        border-bottom: 2px solid transparent !important;
+        padding: 0 !important;
+        margin-right: 18px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+    }
+    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] button[aria-checked="true"],
+    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {
+        background: transparent !important;
+        box-shadow: none;
+        border-bottom-color: var(--accent) !important;
+    }
+    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] button[aria-checked="true"] p,
+    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {
+        color: var(--text-primary) !important;
+    }
     /* El −1rem de Streamlit bajo un markdown lo descentraba de la fecha. */
     .st-key-vt_mix_cab [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;

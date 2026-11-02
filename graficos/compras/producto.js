@@ -400,7 +400,7 @@ function listaHtml(V) {
   const filaPd = (p, pad) => {
     const nom = F.nombres[p.i];
     const ayudaAnt = p.est === 'nuevo' ? 'Primera compra' : p.est === 'vuelve' ? 'No se compró en el período anterior' : p.dej ? `Última compra: ${p.ult != null ? fCorta(p.ult) : '—'}` : `${soles(p.prev)} → ${soles(p.valor)} · ${fmtVar(p.var)}`;
-    return `<tr class="${p.i === st.foco ? 'on' : ''}" data-acc="fila" data-v="${p.i}"><td class="l nm" style="padding-left:${8 + pad}px" title="${esc(nom)}${F.cods[p.i] ? ` · cód. ${esc(F.cods[p.i])}` : ''}${p.nflag ? ' · tiene una compra para revisar' : ''}">${p.nflag ? '<i class="w">⚠</i> ' : ''}${esc(nom)}${p.dej ? `<span class="lf-chip">${p.n90} en 90 d</span>` : ''}</td>`
+    return `<tr class="${p.i === st.foco ? 'on' : ''}" data-acc="fila" data-v="${p.i}"><td class="l nm" style="padding-left:${8 + pad}px" title="${esc(nom)}${F.cods[p.i] ? ` · cód. ${esc(F.cods[p.i])}` : ''}${p.nflag ? ' · tiene una compra para revisar' : ''}">${p.nflag ? '<i class="w">⚠</i> ' : ''}${esc(nom)}${!amp && F.cods[p.i] ? `<span class="lf-cod">${esc(F.cods[p.i])}</span>` : ''}${p.dej ? `<span class="lf-chip">${p.n90} en 90 d</span>` : ''}</td>`
       + (amp ? `<td class="gris">${esc(F.cods[p.i] || '—')}</td>` : '')
       + `<td class="bv" style="--b:${(p.valor / vMax * 100).toFixed(1)}%">${soles(p.valor)}</td>${amp ? `<td class="gris">${p.valor ? `${(p.valor / V.vT * 100).toFixed(1)} %` : '—'}</td>` : ''}`
       + `<td class="${p.est ? 'mar' : 'gris'}" title="${esc(ayudaAnt)}">${esc(p.est || solesG(p.valor - p.prev))}</td><td class="${colorPrecio(p.hab)}">${fmtVar(p.hab)}</td>`

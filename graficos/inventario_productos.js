@@ -7,6 +7,16 @@ function sinicial(P){const tope=P.rango?.[1]||'',fecha=tope?new Date(Date.parse(
     abiertos:[],foco:null,grupo:null,focoArea:null,tab:'areas',objetivo:30,limite:150,orden:[],prof:'Subfamilia',ab:{},amp:false,ref:Math.max(0,(P.meses?.length||0)-3),...P.inicial};}
 const sb=(act,v,txt,on=false,tip='',cls='')=>`<button type="button" data-act="${act}" data-v="${se(v)}" class="${on?'on':''} ${cls}" title="${se(tip)}" aria-pressed="${on}">${se(txt)}</button>`;
 const stoggle=(key,txt,val)=>`<label><input type="checkbox" data-toggle="${key}" ${val?'checked':''}><span>${se(txt)}</span></label>`;
+const SICO_AMP='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>',SICO_VOL='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>';
+const samp=(st,cual,rot)=>`<button type="button" class="ist-amp" data-act="amp" data-v="${cual}" aria-pressed="${st.amp===cual}" title="${st.amp===cual?'Volver (Esc)':`Ampliar ${rot}`}" aria-label="${st.amp===cual?'Volver':`Ampliar ${rot}`}">${st.amp===cual?SICO_VOL:SICO_AMP}</button>`;
+const sleerLS=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},sguardarLS=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){/* sólo esta vez */}};
+// A la derecha del nivel 2 (el renglón de «Ver», de Python): «Detalle» y «Cómo se calcula» (#796).
+function sn2der(G){const st=G.st;return `<label class="ist-switch"><input type="checkbox" data-toggle="det" role="switch"${st.det?' checked':''}>Detalle</label><span class="ist-como"><button type="button" class="ist-link" data-act="como" aria-expanded="${!!st.como}">Cómo se calcula</button>${st.como?`<div class="ist-pop-como" role="dialog"><p>El stock que el POS da por activo: área activa, producto activo, habilitado en el área y de mercadería.</p><dl>`
+  +'<dt>Valorizado</dt><dd>Cantidad × el precio de cada área. «Por producto» cuenta las áreas elegidas; «Por área» las cuenta todas.</dd>'
+  +'<dt>Sin consumo en 90 días</dt><dd>Lo que no salió en 90 días. Los insumos de operación (menaje, limpieza, leña) van aparte: ninguna receta los descarga.</dd>'
+  +'<dt>Días de stock</dt><dd>La cantidad ÷ el consumo diario de los últimos 90 días, del restaurante entero.</dd>'
+  +'<dt>ABC</dt><dd>A: los que suman el 80 % del valorizado; B, el 15 % siguiente; C, el resto.</dd>'
+  +'<dt>A una fecha</dt><dd>La foto sale del kardex: el último movimiento por correlativo, con el precio del área.</dd></dl><p>Es un cálculo propio, no un estándar.</p></div>':''}</span>`;}
 const ssegm=(act,ops,val)=>`<span class="ist-seg" role="group">${ops.map(([v,t])=>sb(act,v,t,val===v)).join('')}</span>`;
 const sopcion=(key,G,v,suma)=>`<label><input type="checkbox" data-filter="${key}" value="${se(v)}" ${G.st[key].includes(v)?'checked':''}><span>${se(key==='areas'?v:slabel(G,key==='fams'?'fam':'sub',v))}</span><small>${se(ss(suma,0))}</small></label>`;
 function ssumas(rows,k){const m=new Map();for(const r of rows)if(r[k])m.set(r[k],(m.get(r[k])||0)+r.v);return [...m.entries()].sort((a,b)=>b[1]-a[1]);}
@@ -49,10 +59,10 @@ function sgrupos(G,rs,k,o){const lab=n=>slabel(G,k==='sub'?'sub':'fam',n);
     if(o.k==='dias'){const x=a.dias,y=b.dias;if(x==null||y==null)return x==null?(y==null?0:1):-1;return (x-y)*o.d;}
     return (a.v-b.v)*(o.k==='v'?o.d:-1);});}
 function scols(G,D){const st=G.st,cmp=st.af&&st.comparar&&D.photo?.comparar,h=[];
-  if(st.amp)h.push(['cod','Código','w-c'],['precio','Precio','w-n']);
+  if(st.det)h.push(['cod','Código','w-c'],['precio','Precio','w-n']);
   h.push(['q',st.af?'A la fecha':'Cantidad','w-q'],['v','Valor S/','w-v']);
   if(cmp)h.push(['qh','Cantidad hoy','w-q'],['vh','Valor hoy','w-v'],['delta','Δ valor','w-v']);
-  if(D.analisis){h.push(['pct','%','w-p'],['dias','Días','w-d']);if(st.amp)h.push(['consumo','Consumo 90 d','w-u']);h.push(['h',`${G.B.P.meses.length} meses`,'w-t'],['abc','ABC','w-a']);}
+  if(D.analisis){h.push(['pct','%','w-p'],['dias','Días','w-d']);if(st.det)h.push(['consumo','Consumo 90 d','w-u']);h.push(['h',`${G.B.P.meses.length} meses`,'w-t'],['abc','ABC','w-a']);}
   return h;
 }
 function scelda(G,r,k,tot,area=false){const {P}=G.B,st=G.st,unidad=P.unidades[r.um]||r.um,usal=P.unidades[r.usal]||r.usal;
@@ -71,9 +81,9 @@ function scelda(G,r,k,tot,area=false){const {P}=G.B,st=G.st,unidad=P.unidades[r.
 const sv0n=n=>`${n<0&&Math.abs(n)>=.005?'−':''}${sn(Math.abs(n),2)}`;
 const sclaseCol=(r,k)=>k==='abc'?`abc ${r.abc||''}`:k==='v'||k==='q'||k==='vh'||k==='qh'||k==='delta'?(((k==='delta'?r.vh-r.v:r[k])<0?'rojo':'')+(k==='v'?' val':'')):k==='dias'&&(r.estado==='sin'||r.estado==='alto')?'nar':k==='h'?'t':'';
 function sfilas(G,D,cols){const st=G.st,o=sord(st),tot=D.visibles.reduce((s,r)=>s+Math.max(0,r.v),0),niv={Familia:0,Subfamilia:1,Producto:2}[st.prof],out=[],plana=st.q.trim()||st.prof==='Lista';
-  const fProd=(r,ind)=>{const on=st.foco===r.cod,abr=st.abiertos.includes(r.cod),mk=st.amp&&r.areas.length?`<button class="ist-mk" data-act="abrir" data-v="${se(r.cod)}" aria-expanded="${abr}" title="Abrir sus áreas">${abr?'▾':'▸'}</button>`:'<span class="ist-mk0"></span>';
-    out.push(`<tr class="ist-n2 ${on?'chosen':''}"><td class="i isp-col-prod" title="${se(r.prod)}"><span class="ist-fila" style="padding-left:${ind}px">${mk}<button class="ist-tn ${on?'on':''}" data-act="foco" data-v="${se(r.cod)}" data-sel="p:${se(r.cod)}" aria-pressed="${on}"><span class="nm">${se(r.prod)}</span></button></span></td>${cols.map(([k])=>`<td class="${sclaseCol(r,k)}">${scelda(G,r,k,tot)}</td>`).join('')}</tr>`);
-    if(st.amp&&abr)for(const a of r.areas)out.push(`<tr class="ist-area"><td class="i"><span class="ist-fila" style="padding-left:${ind+18}px"><span class="ist-mk0"></span>↳ ${se(a.area)}</span></td>${cols.map(([k])=>`<td class="${sclaseCol({...r,...a},k)}">${scelda(G,{...r,...a},k,tot,true)}</td>`).join('')}</tr>`);};
+  const fProd=(r,ind)=>{const on=st.foco===r.cod,abr=st.abiertos.includes(r.cod),mk=st.det&&r.areas.length?`<button class="ist-mk" data-act="abrir" data-v="${se(r.cod)}" aria-expanded="${abr}" title="Abrir sus áreas">${abr?'▾':'▸'}</button>`:'<span class="ist-mk0"></span>';
+    out.push(`<tr class="ist-n2 ${on?'chosen':''}"><td class="i isp-col-prod" title="${se(r.prod)}"><span class="ist-fila" style="padding-left:${ind}px">${mk}<button class="ist-tn ${on?'on':''}" data-act="foco" data-v="${se(r.cod)}" data-sel="p:${se(r.cod)}" aria-pressed="${on}"><span class="nm">${se(r.prod)}</span>${st.det?'':`<small class="ist-cod">${se(r.cod)}</small>`}</button></span></td>${cols.map(([k])=>`<td class="${sclaseCol(r,k)}">${scelda(G,r,k,tot)}</td>`).join('')}</tr>`);
+    if(st.det&&abr)for(const a of r.areas)out.push(`<tr class="ist-area"><td class="i"><span class="ist-fila" style="padding-left:${ind+18}px"><span class="ist-mk0"></span>↳ ${se(a.area)}</span></td>${cols.map(([k])=>`<td class="${sclaseCol({...r,...a},k)}">${scelda(G,{...r,...a},k,tot,true)}</td>`).join('')}</tr>`);};
   const fGrupo=(g,n,fam,sub,key,ind)=>{const abierto=st.ab[key]??niv>n,on=st.grupo&&st.grupo.fam===fam&&(st.grupo.sub??null)===(sub??null),h=sserie(g.g,G.B.P.meses.length);
     out.push(`<tr class="ist-n${n} ${on?'chosen':''}"><td class="i" title="${se(slabel(G,n?'sub':'fam',g.n))}"><span class="ist-fila" style="padding-left:${ind}px"><button class="ist-mk" data-act="abrirG" data-v="${se(key)}" data-ab="${abierto?1:0}" aria-expanded="${abierto}" aria-label="Abrir o cerrar">${abierto?'▾':'▸'}</button><button class="ist-tn" data-act="grupo" data-fam="${se(fam)}" data-sub="${se(sub??'')}" data-n="${n}" data-sel="g:${se(fam)}|${se(sub??'')}" aria-pressed="${!!on}"><span class="nm">${se(slabel(G,n?'sub':'fam',g.n))}</span><small>${sn(g.g.length)}</small></button></span></td>${cols.map(([k])=>`<td class="${k==='h'?'t':k==='v'?`val ${g.v<0?'rojo':''}`:k==='abc'?'abc':''}">${k==='v'?se(sv0(g.v)):k==='pct'?(g.v>0&&tot>0?`${sn(g.v/tot*100,g.v/tot<.1?1:0)} %`:'—'):k==='dias'?se(sdiasTxt(g.dias)):k==='h'?smini(h):''}</td>`).join('')}</tr>`);
     return abierto;};
@@ -92,7 +102,7 @@ function sprincipal(G,D){const st=G.st;
   if(D.pending||D.error)return `<div class="ist-aviso" role="status">${se(D.pending?'Consultando el stock de esa fecha y hora…':D.error)}${D.error?sb('reintentar','','Reintentar',false,'','ist-mini-btn'):''}</div>`;
   const nota=!D.analisis&&!st.af?'<p class="ist-nota">Análisis reciente del kardex no disponible: se muestra el stock actual.</p>':'';
   const clase=D.analisis?`<select class="ist-men" data-change="clase" aria-label="Filtrar por clase">${[['todos','Clase: todas'],['A','Clase A'],['B','Clase B'],['C','Clase C'],['areaNeg','Con un área negativa']].map(([v,t])=>`<option value="${v}" ${st.clase===v?'selected':''}>${t}</option>`).join('')}</select>`:'';
-  return `<div class="ist-fl"><span class="ist-lb">Abrir hasta ${ssegm('prof',[['Familia','Familia'],['Subfamilia','Subfamilia'],['Producto','Producto'],['Lista','Lista']],st.prof)}</span>${st.chip!=='todos'?`<button class="ist-quita" data-act="chip" data-v="${se(st.chip)}" title="Ver todo">${se(sestadoNom[st.chip]||st.chip)} ✕</button>`:''}<span class="ist-esp"></span>${clase}${sb('amp','',st.amp?'Ver la ficha':'Ampliar',false,st.amp?'':'Más columnas: código, precio y consumo','ist-pil')}</div>
+  return `<div class="ist-fl"><span class="ist-lb">Abrir hasta ${ssegm('prof',[['Familia','Familia'],['Subfamilia','Subfamilia'],['Producto','Producto'],['Lista','Lista']],st.prof)}</span>${st.chip!=='todos'?`<button class="ist-quita" data-act="chip" data-v="${se(st.chip)}" title="Ver todo">${se(sestadoNom[st.chip]||st.chip)} ✕</button>`:''}<span class="ist-esp"></span>${clase}${samp(st,'lista','la lista')}</div>
     <div class="ist-wrap ist-arbol isp-table">${D.visibles.length?stabla(G,D):'<p class="ist-aviso">No hay productos con estos filtros.</p>'}</div>${nota}`;
 }
 function salcance(G,D){const st=G.st;if(!D.visibles)return {rs:[],P:null,sel:false};
@@ -105,7 +115,7 @@ function sficha(G,D){const st=G.st,P=G.B.P;
   const {rs,P:r,sel}=salcance(G,D),um=r?(P.unidades[r.um]||r.um):'',usal=r?(P.unidades[r.usal]||r.usal):'',cmp=st.af&&st.comparar&&D.photo?.comparar,qq=q=>r&&!r.mixed?scantidad(q,r.factor,um,usal,st.salida):'—',nA=st.areas.length?`${st.areas.length} ${st.areas.length===1?'área':'áreas'}`:'todas las áreas';
   const miga=r?`${slabel(G,'fam',r.fam)} › ${slabel(G,'sub',r.sub)}`:sel&&st.grupo.sub!=null?slabel(G,'fam',st.grupo.fam):sel?'Familia':'Stock';
   const tit=r?r.prod:sel?(st.grupo.sub!=null?slabel(G,'sub',st.grupo.sub):slabel(G,'fam',st.grupo.fam)):st.chip!=='todos'?sestadoNom[st.chip]:'Todo el stock';
-  const sub=r?`${r.cod} · ${um}${r.abc?` · Clase ${r.abc}`:''}`:`${sn(rs.length)} productos · ${nA}`;
+  const sub=r?`cód. ${r.cod} · ${um}${r.abc?` · Clase ${r.abc}`:''}`:`${sn(rs.length)} productos · ${nA}`;
   const cf=(rot,v,s='',c='')=>`<div class="ist-cf"><span>${se(rot)}</span><b class="${c}">${se(v)}</b><small>${se(s)}</small></div>`;
   const pa=sparado(rs,P);
   const cifras=!sel?'':r?cf('Cantidad',qq(r.q),`en ${r.areas.length} ${r.areas.length===1?'área':'áreas'}`,r.q<0?'rojo':'')+cf('Valor',ss(r.v),r.precio==null?'':`a ${ss(r.precio)} / ${um}`,r.v<0?'rojo':'')+(D.analisis?cf('Consumo 90 días',r.mixed?'—':r.consumo>0?scantidad(r.consumo,r.factor,um,usal,false):'Nada',r.consumo>0&&!r.mixed?`${sv(r.consumo/P.ventana)} ${um} por día`:'Restaurante entero')+cf('Días de stock',r.estado==='neg'||r.mixed?'—':r.estado==='sin'?'Sin consumo':sdiasTxt(r.dias),r.estado==='alto'?`más de ${P.umbral}`:'',r.estado==='sin'||r.estado==='alto'?'nar':''):cf('Precio',ss(r.precio))):cf('Valor',ss(ssum(rs,'v'),0))+cf('En positivo',ss(pa.pos,0))+cf('En negativo',ss(pa.neg,0),`${sn(rs.filter(x=>x.estado==='neg').length)} productos`,pa.neg<-.5?'rojo':'')+(D.analisis?cf('Días de inventario',sdiasTxt(sdiasConjunto(rs,P.ventana))):'');
@@ -139,7 +149,7 @@ function sficha(G,D){const st=G.st,P=G.B.P;
     }else{const lista=rs.map(x=>({x,s:ssobra(x,dias)})).filter(z=>z.s>=1).sort((a,b)=>b.s-a.s),tot=lista.reduce((s,z)=>s+z.s,0),sinC=ssum(rs.filter(x=>x.estado==='sin'),'v');
       body=`${cab}<p class="ist-frase">Por encima de ${dias} días sobran ${se(ss(tot,0))} en lo que sí se consume${sinC>.5?`, y ${se(ss(sinC,0))} más en lo que no tuvo consumo.`:'.'}</p><div class="ist-lista">${lista.slice(0,8).map(z=>`<div class="ist-tp"><span class="n" title="${se(z.x.prod)}">${se(z.x.prod)}</span><small>${se(sdiasTxt(z.x.dias))} días</small><b>${se(ss(z.s,0))}</b></div>`).join('')}</div>${nota}`;}
   }
-  return `<div class="ist-fcab"><div class="ist-ftit"><span class="ist-miga">${se(miga)}</span><h3 title="${se(tit)}">${se(tit)}</h3><span class="ist-fsub">${se(sub)}</span></div>${r?sb('excel','ficha','Excel',false,'Baja la ficha de este producto','ist-mini-btn'):''}${sel?sb('soltar','','Soltar',false,'','ist-mini-btn'):''}</div>${cifras?`<div class="ist-cifras">${cifras}</div>`:''}${verFrase?`<p class="ist-frase">${se(frase)}</p>`:''}<div class="ist-fl ist-ftabs">${ssegm('tab',tabs,st.tab)}</div><div class="ist-fzona">${body}</div>`;
+  return `<div class="ist-fcab"><div class="ist-ftit"><span class="ist-miga">${se(miga)}</span><h3 title="${se(tit)}">${se(tit)}</h3><span class="ist-fsub">${se(sub)}</span></div>${r?sb('excel','ficha','Excel',false,'Baja la ficha de este producto','ist-mini-btn'):''}${samp(st,'ficha','la ficha')}${sel?sb('soltar','','Soltar',false,'','ist-mini-btn'):''}</div>${cifras?`<div class="ist-cifras">${cifras}</div>`:''}${verFrase?`<p class="ist-frase">${se(frase)}</p>`:''}<div class="ist-fl ist-ftabs">${ssegm('tab',tabs,st.tab)}</div><div class="ist-fzona">${body}</div>`;
 }
 // Lo que el total de arriba deja afuera: por eso «Por área» dice otro número.
 function sfuera(G,D,sel){const st=G.st,P=G.B.P;if(sel||st.af||st.chip!=='todos'||st.clase!=='todos'||st.fams.length||st.subs.length||st.q.trim())return '';
@@ -170,7 +180,9 @@ function spintar(G,modo){G.D=sfiltrar(G.B,G.st);const root=G.root,st=G.st;
     root.querySelector('.isp-main').innerHTML=sprincipal(G,G.D);
     const nuevo=root.querySelector('.isp-table');if(nuevo){nuevo.scrollTop=y;nuevo.scrollLeft=x;}
   }
-  const ficha=root.querySelector('.isp-ficha');ficha.hidden=st.amp;if(!st.amp)ficha.innerHTML=sficha(G,G.D);
+  root.classList.toggle('amp',!!st.amp);root.classList.toggle('det',!!st.det);root.querySelector('.isp-main').hidden=st.amp==='ficha';
+  const der=root.querySelector('.isp-n2der');if(der)der.innerHTML=sn2der(G);
+  const ficha=root.querySelector('.isp-ficha');ficha.hidden=st.amp==='lista';if(st.amp!=='lista')ficha.innerHTML=sficha(G,G.D);
   const clave=st.foco?`p:${st.foco}`:st.grupo?`g:${st.grupo.fam}|${st.grupo.sub??''}`:'';
   for(const b of root.querySelectorAll('.isp-main [data-sel]')){const on=b.dataset.sel===clave;b.closest('tr').classList.toggle('chosen',on);b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));}
 }
@@ -181,7 +193,8 @@ function spedir(G,reintentar=false){const st=G.st;if(!st.af)return;const key=`${
   G.enviar?.('foto',{sello:G.B.P.sello,fecha:st.fecha,hora:st.hora,reintentar});
 }
 function senlazar(G){const root=G.root;
-  root.addEventListener('click',ev=>{const b=ev.target.closest('[data-act]');if(!b)return;const {act,v}=b.dataset,st=G.st;let modo;
+  root.addEventListener('click',ev=>{const b=ev.target.closest('[data-act]');if(!b){if(G.st.como&&!ev.target.closest('.ist-como')){G.st.como=false;spintar(G,'ficha');}return;}const {act,v}=b.dataset,st=G.st;let modo;
+    if(act!=='como')st.como=false;
     if(act==='todos'){st[v]=[];if(v==='fams')st.subs=[];st.limite=150;st.foco=null;st.grupo=null;}else if(act==='principales'){st.areas=[...G.B.P.areas_iniciales];st.limite=150;}
     else if(act==='abrir')st.abiertos=st.abiertos.includes(v)?st.abiertos.filter(x=>x!==v):[...st.abiertos,v];
     else if(act==='abrirG')st.ab={...st.ab,[v]:b.dataset.ab!=='1'};
@@ -194,7 +207,8 @@ function senlazar(G){const root=G.root;
     else if(act==='tab'){st.tab=v;modo='ficha';}
     else if(act==='obj'){st.objetivo=+v;modo='ficha';}
     else if(act==='chip'){st.chip=st.chip===v?'todos':v;st.foco=null;st.grupo=null;st.focoArea=null;st.limite=150;}
-    else if(act==='amp')st.amp=!st.amp;
+    else if(act==='amp')st.amp=st.amp===v?false:v;
+    else if(act==='como'){st.como=!st.como;}
     else if(act==='mas')st.limite+=150;
     else if(act==='orden'){const o=sord(st),num=!['prod','cod'].includes(v);st.orden=[{k:v,d:o.k===v?-o.d:num?-1:1}];}
     else if(act==='reintentar'){G.B.fotos.delete(`${st.fecha}|${st.hora}`);spedir(G,true);}
@@ -205,6 +219,7 @@ function senlazar(G){const root=G.root;
     if(key){st[key]=el.checked?[...st[key],el.value]:st[key].filter(v=>v!==el.value);
       if(key==='fams'){const subs=new Set(G.B.rows.filter(r=>!st.fams.length||st.fams.includes(r.fam)).map(r=>r.sub));st.subs=st.subs.filter(x=>subs.has(x));}
       st.limite=150;st.foco=null;st.grupo=null;spintar(G);return;}
+    if(el.dataset.toggle==='det'){st.det=el.checked;sguardarLS('stock_det',st.det);spintar(G);return;}
     const toggle=el.dataset.toggle;if(toggle){st[toggle]=el.checked;st.limite=150;if(toggle==='af'){st.chip='todos';st.clase='todos';st.focoArea=null;}spintar(G);if(toggle==='af')spedir(G);return;}
     if(el.dataset.change==='fecha'||el.dataset.change==='hora'){const key=el.dataset.change;
       if(key==='fecha'&&(!el.value||el.value<G.B.P.rango[0]||el.value>G.B.P.rango[1])){el.value=st.fecha;return;}
@@ -234,10 +249,12 @@ export default function(component){const {data:P,parentElement,setTriggerValue}=
   if(!P.hay_fecha)st.af=false;else if(P.rango){st.fecha=st.fecha<P.rango[0]?P.rango[0]:st.fecha>P.rango[1]?P.rango[1]:st.fecha;}
   if(!P.analisis)st.chip='todos';
   let root=parentElement.querySelector('.isp');if(root)root.remove();root=document.createElement('div');root.className='isp ist';
-  root.innerHTML='<div class="isp-cab ist-cab"></div><div class="isp-kpis ist-kpis"></div><div class="ist-cuerpo"><section class="isp-main ist-izq"></section><aside class="isp-ficha ist-ficha" aria-label="Ficha"></aside></div>';parentElement.appendChild(root);
+  if(st.det==null)st.det=!!sleerLS('stock_det',false);if(typeof st.amp==='boolean'&&st.amp)st.amp='lista';
+  root.innerHTML='<div class="isp-n2der ist-n2der"></div><div class="isp-cab ist-cab"></div><div class="isp-kpis ist-kpis"></div><div class="ist-cuerpo"><section class="isp-main ist-izq"></section><aside class="isp-ficha ist-ficha" aria-label="Ficha"></aside></div>';parentElement.appendChild(root);
   const G={root,st,B,enviar:setTriggerValue,semilla:P.semilla,abort:new AbortController(),pedido:old?.B.P.sello===P.sello?old.pedido:null};window.__stockProd=G;
   const pend=window.__stockFotoPendiente;if(pend?.sello===P.sello){B.fotos.set(`${pend.fecha}|${pend.hora}`,pend);window.__stockFotoPendiente=null;}
   senlazar(G);spintar(G);spedir(G);
   document.addEventListener('pointerdown',ev=>{if(!ev.composedPath().some(n=>n.dataset?.menu))root.querySelectorAll('details[open]').forEach(d=>d.open=false);},{signal:G.abort.signal});
-  document.addEventListener('keydown',ev=>{if(ev.key==='Escape')root.querySelectorAll('details[open]').forEach(d=>d.open=false);},{signal:G.abort.signal});
+  document.addEventListener('keydown',ev=>{if(ev.key!=='Escape'||!root.isConnected)return;const ab=root.querySelectorAll('details[open]');
+    if(ab.length)ab.forEach(d=>d.open=false);else if(G.st.como){G.st.como=false;spintar(G);}else if(G.st.amp){G.st.amp=false;spintar(G);}},{signal:G.abort.signal});
 }

@@ -255,11 +255,14 @@ class Navegador(unittest.TestCase):
                 self.assertIn('restaurante entero',z.read('xl/worksheets/sheet5.xml').decode().lower())
 
     def test_orden_busqueda_despliegue_remontaje_y_salto(self):
-        self.mount();pg=self.pg;root=pg.locator('.isp');self.lista();root.locator('[data-act=amp]').click()
+        self.mount();pg=self.pg;root=pg.locator('.isp');self.lista();root.locator('.ist-izq [data-act=amp]').click()
         self.assertTrue(root.locator('.isp-ficha').is_hidden())
+        # #796: el desglose por área es una columna de más: viene con «Detalle».
+        root.locator('[data-toggle=det]').click()
         root.locator('[data-act=abrir][data-v="001"]').click();self.assertGreater(root.locator('.ist-area').count(),0)
         root.locator('[data-act=orden][data-v=v]').click();self.assertEqual(pg.evaluate('__stockProd.st.orden'),[{'k':'v','d':1}])
         root.locator('[data-act=orden][data-v=v]').click();self.assertEqual(pg.evaluate('__stockProd.st.orden'),[{'k':'v','d':-1}])
+        pg.keyboard.press('Escape');self.assertTrue(root.locator('.isp-ficha').is_visible())
         root.locator('.isp-search').fill('Aoz');root.locator('.isp-search').evaluate('e=>e.setSelectionRange(1,1)');root.locator('.isp-search').type('rr',delay=20)
         self.assertEqual(root.locator('.isp-search').input_value(),'Arroz')
         self.assertEqual(pg.evaluate('__stockProd.D.visibles.map(r=>r.cod)'),['002'])

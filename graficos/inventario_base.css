@@ -229,3 +229,47 @@ td.abc.A { color: var(--accent-deep); font-weight: 700; }
 .ist-ftabs .ist-seg button { background: none !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important; box-shadow: none !important; padding: 4px 0 !important; color: var(--text-secondary) !important; }
 .ist-ftabs .ist-seg button:hover { color: var(--accent-deep) !important; }
 .ist-ftabs .ist-seg button.on { background: none !important; box-shadow: none !important; color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent) !important; }
+
+/* #796: el lenguaje entero de Costo de Carta (#775). El renglón de «Ver» (Python)
+   es el nivel 2: las perspectivas subrayadas y, a la derecha, «Detalle» y «Cómo se
+   calcula» de la pieza. Los controles (áreas, familias, fecha, buscador, Excel)
+   bajan a su propio renglón, el nivel 3: ya no se suben al de «Ver». */
+.ist-cab, .iar-cab { position: static; height: auto; min-height: 32px; flex: none; }
+.ist-n2der { position: absolute; top: -40px; right: 18px; height: 32px; display: flex; align-items: center; gap: 16px; z-index: 6; font-size: 13px; }
+.ist-switch { display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+.ist-switch input { appearance: none; position: relative; width: 26px; height: 14px; margin: 0; border-radius: 7px; background: var(--text-muted); cursor: pointer; }
+.ist-switch input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg-card); }
+.ist-switch input:checked { background: var(--accent); }
+.ist-switch input:checked::before { left: 14px; }
+.ist-como { position: relative; display: flex; align-items: center; }
+.ist-link { border: 0; background: none; padding: 0; cursor: pointer; white-space: nowrap; color: var(--accent-deep) !important; font-size: 13px; }
+.ist-pop-como { position: absolute; top: 26px; right: 0; z-index: 9; width: 420px; max-width: calc(100vw - 32px); max-height: 420px; overflow: auto;
+  overscroll-behavior: contain; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--bg-card); border-radius: 10px;
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--text-primary) 18%, transparent); font-size: 13px; line-height: 1.4; }
+.ist-pop-como p { margin: 0; }
+.ist-pop-como dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; }
+.ist-pop-como dt { font-weight: 600; }
+.ist-pop-como dd { margin: 0; color: var(--text-secondary); }
+.ist.amp .ist-cab, .ist.amp .ist-kpis { display: none; }
+.ist-amp { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--text-secondary) !important; cursor: pointer; }
+.ist-amp:hover { background: var(--marco-control, var(--bg-hover)); color: var(--accent-deep) !important; }
+.ist-amp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.isp-main[hidden] { display: none !important; }
+.ist.amp .ist-ficha:not([hidden]) { flex: 1 1 0; border-left: 0; padding-left: 0; max-width: none; }
+.ist-tabs { background: none !important; padding: 0 !important; gap: 18px !important; border-radius: 0 !important; }
+.ist-tabs button { background: none !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important;
+  box-shadow: none !important; padding: 4px 0 !important; color: var(--text-secondary) !important; }
+.ist-tabs button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent) !important; }
+@media (max-width: 900px) {
+  .ist-n2der { position: static; height: auto; margin-bottom: 4px; }
+  .ist-amp { display: none; }
+}
+/* El código del Almacén siempre a la vista, en gris al lado del nombre; con «Detalle» va en su columna (#796). */
+.ist-cod { margin-left: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 400; font-variant-numeric: tabular-nums; }
+/* Con «Detalle» la tabla pide su ancho y se desplaza en su zona; el nombre queda fijo (#796). */
+.isp.det .isp-table table { min-width: 1120px; }
+.isp.det .isp-table th.i, .isp.det .isp-table td.i { position: sticky; left: 0; z-index: 1; background: var(--bg-card); min-width: 260px; }
+.isp.det .isp-table thead th.i { z-index: 4; background: var(--rail-fondo); }
+.isp.det .isp-table tr.chosen td.i { background: var(--accent-tint); }
+
