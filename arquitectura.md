@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-790 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+791 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (265)
+**CSS y estilos** (266)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -332,6 +332,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#787** — Costos e Inicio en la franja común (#782) y nada bajo 12 px
 - **#789** — Sin plato y Análisis de diferencias en la franja, y «Por hora» en el rango del enlace
 - **#790** — Compras › Proveedor y Producto en el lenguaje entero de Costo de Carta
+- **#791** — Compras › Precios en el lenguaje entero de Costo de Carta
 
 **Layout y alturas** (112)
 
@@ -58348,6 +58349,21 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      `left`, con el `top` fijo en 8 px; con el nivel 2 arriba quedaba encima de las pestañas.
      Con una zona ampliada el nivel 3 no está, y la fecha se esconde.
 
+791. **Compras › Precios en el lenguaje entero de Costo de Carta.**
+   La misma forma que Proveedor y Producto (#790), escrita en `volatilidad.js` y `.css`, que no
+   comparten `lista_ficha` (su código es otro, con el prefijo `cp-`).
+   - Nivel 2: «Los que hacen el 80 % | Todos» (antes una pastilla gris sobre la lista), «Detalle»
+     y «Cómo se calcula». Nivel 3 sin el título «Precios»: fecha, familias, «Contra», el filtro
+     de indicador puesto, buscador y Excel.
+   - Sin «Detalle», la lista es producto, ahora, contra, % e impacto; «Detalle» suma «Se mueve»,
+     mín–máx, «En semanas», cantidad, valor, compras y 13 meses, y el renglón de abajo de los
+     indicadores. ⤢ al pie de la lista y en la ficha; ↙ o `Esc` vuelven.
+   - **La fecha la ubica la pieza** (`vponerFecha`, inline sobre el `left`/`top` de
+     `_80_cards.py`): la regla de allá la dejaba al lado de un título que ya no está. Con una
+     zona ampliada se esconde.
+   - El resumen sin nada elegido va en dos plegables; lo plegado y «Detalle» se recuerdan
+     (`cp_vol_*`). Precios no trae el código del Almacén: su lista viene por nombre.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58360,7 +58376,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#790**; la próxima toma el número siguiente.
+> última regla es la **#791**; la próxima toma el número siguiente.
 
 >
 

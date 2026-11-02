@@ -18,6 +18,11 @@ const vsuma = (rs,k) => rs.reduce((s,r)=>s+(r[k]||0),0);
 const vrango = (rs,a,b) => rs.filter(r=>r.f>=a&&r.f<=b);
 const vpal = ['var(--serie-0)','var(--serie-1)','var(--serie-2)','var(--serie-3)','var(--serie-4)','var(--serie-5)','var(--serie-6)'];
 
+const VICO_AMP='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>',VICO_VOL='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>';
+const vamp=(cual,on,rot)=>`<button class="cp-amp" data-acc="pamp" data-v="${cual}" aria-pressed="${!!on}" title="${on?'Volver (Esc)':`Ampliar ${rot}`}" aria-label="${on?'Volver':`Ampliar ${rot}`}">${on?VICO_VOL:VICO_AMP}</button>`;
+const vleerLS=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}};
+const vguardarLS=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){/* sólo esta vez */}};
+const vpleg=(st,id,t,c)=>{const ab=(st.pleg||{})[id]!==false;return `<div class="cp-pleg${ab?' abierto':''}"><button class="cp-pleg-b" data-acc="ppleg" data-v="${vesc(id)}" aria-expanded="${ab}"><span>${vesc(t)}</span><i><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg></i></button>${ab?`<div class="cp-pleg-c">${c}</div>`:''}</div>`;};
 function vleer(P) {
   const base=vdia(P.base), prods=new Map();
   const rows=P.lineas.map((r,id)=>({id,f:base+r[VL.dia],t:r[VL.hora],prod:r[VL.prod],prov:r[VL.prov],doc:r[VL.doc],u:r[VL.um],p:r[VL.precio],q:r[VL.cant],v:r[VL.valor]}));
@@ -206,22 +211,21 @@ function plista(G,C){const {st}=G,q=(st.q||'').trim().toLocaleLowerCase('es');
   else if(st.ver==='80'&&st.kpi==='todos')vis=vis.filter(r=>r.a80);
   const o=st.ord,kv=r=>({n:r.n,pp:r.pp,pct:r.pct,mv:r.disp,vo:r.vol,va:r.val,im:r.im}[o.k]);
   vis=[...vis].sort((a,b)=>{const x=kv(a),y=kv(b);if(x==null&&y==null)return b.val-a.val;if(x==null)return 1;if(y==null)return -1;return (typeof x==='string'?x.localeCompare(y):x-y)*o.d;});
-  G.vis=vis;const amp=st.amp==='lista';
+  G.vis=vis;const amp=!!st.det;
   const h=(k,t,tip='')=>`<button data-acc="pord" data-v="${k}" title="${vesc(tip)}">${vesc(t)}${o.k===k?(o.d>0?' ↑':' ↓'):''}</button>`;
-  const fila=r=>`<tr class="${st.p===r.p?'chosen':''}"><td class="i" title="${vesc(r.n)}"><button class="cp-tn" data-acc="pprod" data-v="${r.p}"><span>${vesc(r.n)}</span></button></td><td>${pp2(r.pp)}</td><td>${pp2(r.ref)}</td><td class="${pcv(r.im)}">${ppc(r.pct)}</td><td class="fuerte ${pcv(r.im)}">${r.im==null?'—':pd0(r.im)}</td><td class="tenue" title="${r.disp==null?'Menos de cinco compras en el rango':`Mín – máx: ${pp2(r.min)} – ${pp2(r.max)}`}">${r.disp==null?'—':`±${vnum(r.disp*100)} %`}</td>${amp?`<td class="tenue">${r.min==null?'—':r.min===r.max?pp2(r.min):`${pp2(r.min)} – ${pp2(r.max)}`}</td><td class="tenue">${r.vol?`${vnum(r.vol)} %`:'—'}</td><td>${pq(r.cOk)} ${vesc(r.um)}</td><td>${ps0(r.val)}</td><td>${r.nl}</td>`:''}<td class="t">${pmini(r.serie)}${r.nfl?'<i class="cp-punto" title="Con compras para revisar"></i>':''}</td></tr>`;
+  const fila=r=>`<tr class="${st.p===r.p?'chosen':''}"><td class="i" title="${vesc(r.n)}"><button class="cp-tn" data-acc="pprod" data-v="${r.p}"><span>${vesc(r.n)}</span></button></td><td>${pp2(r.pp)}</td><td>${pp2(r.ref)}</td><td class="${pcv(r.im)}">${ppc(r.pct)}</td><td class="fuerte ${pcv(r.im)}">${r.im==null?'—':pd0(r.im)}</td>${amp?`<td class="tenue" title="${r.disp==null?'Menos de cinco compras en el rango':`Mín – máx: ${pp2(r.min)} – ${pp2(r.max)}`}">${r.disp==null?'—':`±${vnum(r.disp*100)} %`}</td><td class="tenue">${r.min==null?'—':r.min===r.max?pp2(r.min):`${pp2(r.min)} – ${pp2(r.max)}`}</td><td class="tenue">${r.vol?`${vnum(r.vol)} %`:'—'}</td><td>${pq(r.cOk)} ${vesc(r.um)}</td><td>${ps0(r.val)}</td><td>${r.nl}</td><td class="t">${pmini(r.serie)}${r.nfl?'<i class="cp-punto" title="Con compras para revisar"></i>':''}</td>`:''}</tr>`;
   const tI=vis.reduce((s,r)=>s+(r.im||0),0);
-  return `<div class="cp-fl"><div class="cp-seg" role="group" aria-label="Qué productos">${[['80','Los que hacen el 80 %',`${C.n80} productos que suman el 80 % de lo comprado`],['todos','Todos','Todos los productos comprados en el rango']].map(([k,t,tp])=>`<button class="${st.ver===k?'on':''}" data-acc="pver" data-v="${k}" title="${vesc(tp)}" aria-pressed="${st.ver===k}">${vesc(t)}</button>`).join('')}</div><span class="cp-sub">${pn(vis.length)}</span>${st.kpi!=='todos'?`<button class="cp-quita" data-acc="pkpi" data-v="${st.kpi}">${({sube:'Subieron',baja:'Bajaron',rev:'Para revisar'})[st.kpi]} ✕</button>`:''}<span class="cp-esp"></span><button class="cp-pil" data-acc="pamp" data-v="lista">${amp?'Ver la ficha':'Ampliar'}</button></div>
-    <div class="cp-wrap"><table><thead><tr><th class="i">${h('n','Producto')}</th><th class="w-pr">${h('pp','Ahora','Precio ponderado del rango: soles ÷ cantidad, sin las compras para revisar')}</th><th class="w-pr">Contra</th><th class="w-pc">${h('pct','%')}</th><th class="w-im">${h('im','Impacto')}</th><th class="w-mv">${h('mv','Se mueve','Dispersión: cuánto se aleja el precio de cada compra de su promedio. Pide cinco compras.')}</th>${amp?`<th class="w-mm">Mín – máx</th><th class="w-x">${h('vo','En semanas','Volatilidad: suma de los cambios de precio de una semana a otra, en %')}</th><th class="w-x">Cantidad</th><th class="w-x">${h('va','Valor')}</th><th class="w-mv">Compras</th>`:''}<th class="w-t">13 meses</th></tr></thead><tbody><tr class="tot"><td class="i">Total · ${pn(vis.length)}</td><td></td><td></td><td></td><td class="fuerte ${pcv(tI)}">${pd0(tI)}</td><td></td>${amp?`<td></td><td></td><td></td><td>${ps0(vsuma(vis,'val'))}</td><td></td>`:''}<td></td></tr>${vis.slice(0,st.limite).map(fila).join('')}</tbody></table>${vis.length?'':'<p class="cp-aviso">Nada que mostrar con estos filtros.</p>'}</div>`;}
+  return `<div class="cp-wrap"><table><thead><tr><th class="i">${h('n','Producto')}</th><th class="w-pr">${h('pp','Ahora','Precio ponderado del rango: soles ÷ cantidad, sin las compras para revisar')}</th><th class="w-pr">Contra</th><th class="w-pc">${h('pct','%')}</th><th class="w-im">${h('im','Impacto')}</th>${amp?`<th class="w-mv">${h('mv','Se mueve','Dispersión: cuánto se aleja el precio de cada compra de su promedio. Pide cinco compras.')}</th><th class="w-mm">Mín – máx</th><th class="w-x">${h('vo','En semanas','Volatilidad: suma de los cambios de precio de una semana a otra, en %')}</th><th class="w-x">Cantidad</th><th class="w-x">${h('va','Valor')}</th><th class="w-mv">Compras</th><th class="w-t">13 meses</th>`:''}</tr></thead><tbody><tr class="tot"><td class="i">Total · ${pn(vis.length)}</td><td></td><td></td><td></td><td class="fuerte ${pcv(tI)}">${pd0(tI)}</td>${amp?`<td></td><td></td><td></td><td></td><td>${ps0(vsuma(vis,'val'))}</td><td></td><td></td>`:''}</tr>${vis.slice(0,st.limite).map(fila).join('')}</tbody></table>${vis.length?'':'<p class="cp-aviso">Nada que mostrar con estos filtros.</p>'}</div><div class="cp-pie"><p class="cp-pie-n">${pn(vis.length)} · sin IGV · ${vesc(pcontra[st.contra])}</p>${vamp('lista',st.amp==='lista','la lista')}</div>`;}
 function pficha(G,C){const {st,B}=G,PR=pleer(B),P=st.p!=null?C.rows.find(r=>r.p===st.p):null,cif=(r,v,s='',c='')=>`<div class="cp-cf"><span>${vesc(r)}</span><b class="${c}">${vesc(v)}</b><small>${vesc(s)}</small></div>`;
   if(!P){const top=(a,f)=>[...a].sort(f).slice(0,5).map(r=>`<button class="cp-fi" data-acc="pprod" data-v="${r.p}"><span class="n" title="${vesc(r.n)}">${vesc(r.n)}</span><small>${ppc(r.pct)}</small><b class="${pcv(r.im)}">${pd0(r.im)}</b></button>`).join('');
     const may=[...C.sube].sort((a,b)=>b.im-a.im)[0],fr=st.kpi==='rev'?'Estas compras tienen un precio a 2,5 veces su habitual o a menos de 0,4, o decimales en una unidad entera: suelen ser errores de tipeo o de unidad, y no entran en ningún precio.':`${pn(C.sube.length)} ${C.sube.length===1?'subió':'subieron'} ${pcontra[st.contra]} y ${C.sube.length===1?'costó':'costaron'} ${ps0(C.up)} de más; ${C.baja.length} ${C.baja.length===1?'bajó y ahorró':'bajaron y ahorraron'} ${ps0(-C.dn)}.${may?` El que más pesa: ${may.n}, ${pd0(may.im)}.`:''}`;
-    return `<div class="cp-fcab"><div class="cp-ftit"><span class="cp-miga">Todos los productos</span><h3>${({todos:'Qué pasó con los precios',sube:'Los que subieron',baja:'Los que bajaron',rev:'Para revisar'})[st.kpi]}</h3><span class="cp-miga">${pn(C.rows.length)} · ${C.n80} hacen el 80 %</span></div></div><p class="cp-frase">${vesc(fr)}</p><div class="cp-bloque">Los que más costaron de más</div><div class="cp-lista">${top(C.sube,(a,b)=>b.im-a.im)}</div><div class="cp-bloque">Los que más ahorraron</div><div class="cp-lista">${top(C.baja,(a,b)=>a.im-b.im)}</div>`;}
+    return `<div class="cp-fcab"><div class="cp-ftit"><span class="cp-miga">Todos los productos</span><h3>${({todos:'Qué pasó con los precios',sube:'Los que subieron',baja:'Los que bajaron',rev:'Para revisar'})[st.kpi]}</h3><span class="cp-miga">${pn(C.rows.length)} · ${C.n80} hacen el 80 %</span></div>${vamp('ficha',st.amp==='ficha','el resumen')}</div><p class="cp-frase">${vesc(fr)}</p>${vpleg(st,'mas','Los que más costaron de más',`<div class="cp-lista">${top(C.sube,(a,b)=>b.im-a.im)}</div>`)}${vpleg(st,'menos','Los que más ahorraron',`<div class="cp-lista">${top(C.baja,(a,b)=>a.im-b.im)}</div>`)}`;}
   const hl=PR.por.get(P.p),ult=[...P.rg].filter(pok).sort((a,b)=>b.d-a.d)[0];
   const fr=(P.im==null?'Sin precio de referencia para comparar.':`${P.im>=1?`Subió ${ppc(P.pct).replace('+','')} ${pcontra[st.contra]}: ${ps0(P.im)} de más`:P.im<=-1?`Bajó ${ppc(P.pct).replace('−','')} ${pcontra[st.contra]}: ${ps0(-P.im)} de ahorro`:`Igual ${pcontra[st.contra]}`} en ${pq(P.cOk)} ${P.um}.`)+(ult?` Última compra: ${pfc(ult.d)} a S/ ${pp2(ult.v/ult.c)}, con ${PR.provs[ult.prov]}.`:'');
   const tabs=[['curva','Curva'],['prov','Proveedores'],['comp','Compras'],['sem','Semanas'],['gasto','Cambio del gasto']];
   let body;
   if(st.ptab==='curva')body=pcurva(G,P,hl);else if(st.ptab==='prov')body=pprovs(G,P);else if(st.ptab==='comp')body=pcompras(G,P,hl);else if(st.ptab==='sem')body=psemanas(G,P);else body=pgasto(G,P);
-  return `<div class="cp-fcab"><div class="cp-ftit"><span class="cp-miga">${vesc(P.fam)} › ${vesc(P.sub)}</span><h3 title="${vesc(P.n)}">${vesc(P.n)}</h3><span class="cp-miga">${P.nl} compras en el rango · ${ps0(P.val)}</span></div><button class="cp-pil" data-acc="pamp" data-v="ficha">${st.amp==='ficha'?'Ver la lista':'Ampliar'}</button><button class="cp-quita" data-acc="psoltar">Soltar</button></div>
+  return `<div class="cp-fcab"><div class="cp-ftit"><span class="cp-miga">${vesc(P.fam)} › ${vesc(P.sub)}</span><h3 title="${vesc(P.n)}">${vesc(P.n)}</h3><span class="cp-miga">${P.nl} compras en el rango · ${ps0(P.val)}</span></div>${vamp('ficha',st.amp==='ficha','la ficha')}<button class="cp-quita" data-acc="psoltar">Soltar</button></div>
     <div class="cp-cifras">${cif('Precio ahora',`S/ ${pp2(P.pp)}`,`por ${P.um}`)}${cif('Contra',`S/ ${pp2(P.ref)}`,({hab:'su habitual',ant:'período anterior',ano:'año pasado'})[st.contra])}${cif('Impacto',P.im==null?'—':pd0(P.im),ppc(P.pct),pcv(P.im))}${cif('Mín – máx',P.min==null?'—':`${pp2(P.min)} – ${pp2(P.max)}`,P.disp!=null?`se mueve ±${vnum(P.disp*100)} % · ${vnum(P.vol)} % en semanas`:P.vol?`${vnum(P.vol)} % en semanas · menos de 5 compras`:'')}</div>
     <p class="cp-frase">${vesc(fr)}</p><div class="cp-fl"><div class="cp-seg" role="group" aria-label="Qué mirar">${tabs.map(([k,t])=>`<button class="${st.ptab===k?'on':''}" data-acc="ptab" data-v="${k}" aria-pressed="${st.ptab===k}">${t}</button>`).join('')}</div></div><div class="cp-zona">${body}</div>`;}
 function pcurva(G,P,hl){const {st,B}=G,PR=pleer(B),esC=st.pgran==='Compra',off=st.off[P.p]||[],R1=(B.planes[st.op]||B.planes['12m'])[1];
@@ -267,16 +271,33 @@ function pgasto(G,P){const {B,st}=G,R=vbase(B,st.op),id=B.P.prods.findIndex(x=>S
 function vpintar(G){
   const {root,B,st}=G,C=pfilas(B,st);G.C=C;
   if(st.p!=null&&!C.rows.some(r=>r.p===st.p))st.p=null;
-  if(st.amp==='ficha'&&st.p==null)st.amp=null;
   const y=root.querySelector('.cp-wrap')?.scrollTop||0;
-  root.querySelector('.cp-cab-din').innerHTML=pmenuFam(B,st);
+  root.classList.toggle('det',!!st.det);root.classList.toggle('amp',!!st.amp);
+  root.querySelector('.cp-n2').innerHTML=vnivel2(G,C);
+  root.querySelector('.cp-cab-din').innerHTML=pmenuFam(B,st)+(st.kpi!=='todos'?`<button class="cp-quita" data-acc="pkpi" data-v="${st.kpi}">${({sube:'Subieron',baja:'Bajaron',rev:'Para revisar'})[st.kpi]} ✕</button>`:'');
   root.querySelector('.cp-kpis').innerHTML=pkpis(G,C);
   const iz=root.querySelector('.cp-izq'),fi=root.querySelector('.cp-ficha');iz.hidden=st.amp==='ficha';fi.hidden=st.amp==='lista';
   iz.innerHTML=plista(G,C);fi.innerHTML=pficha(G,C);
   root.querySelector('.cp-cuerpo').dataset.amp=st.amp||'';
   const w=root.querySelector('.cp-wrap');if(w)w.scrollTop=y;
-  vpuentePlot(G);
+  vpuentePlot(G);vponerFecha(G);
 }
+// La fecha es de Python: se para en el hueco del nivel 3, y se esconde con una zona ampliada (#791).
+function vponerFecha(G){const fb=document.querySelector('.st-key-cp_vol_fecha'),lg=G.root.querySelector('.cp-lugar');if(!fb)return;
+  const ver=!!(lg&&lg.offsetWidth);if(fb.style.visibility!==(ver?'':'hidden'))fb.style.visibility=ver?'':'hidden';if(!ver||!fb.offsetWidth)return;
+  const w=`${fb.offsetWidth+8}px`;if(G.root.style.getPropertyValue('--cp-fecha')!==w)G.root.style.setProperty('--cp-fecha',w);
+  const pa=fb.offsetParent;if(!pa)return;const a=lg.getBoundingClientRect(),b=pa.getBoundingClientRect();
+  const x=`${Math.round(a.left-b.left)}px`,yy=`${Math.round(a.top-b.top+(a.height-fb.offsetHeight)/2)}px`;if(fb.style.left!==x)fb.style.left=x;if(fb.style.top!==yy)fb.style.top=yy;}
+// Nivel 2: qué productos, y a la derecha «Detalle» y «Cómo se calcula» (#791).
+function vnivel2(G,C){const {st}=G,tabs=[['80',`Los que hacen el 80 % · ${C.n80}`,'Los que suman el 80 % de lo comprado'],['todos',`Todos · ${C.rows.length}`,'Todos los productos comprados en el rango']];
+  return `<div class="cp-tabs" role="tablist">${tabs.map(([k,t,tp])=>`<button role="tab" class="${st.ver===k?'on':''}" data-acc="pver" data-v="${k}" aria-selected="${st.ver===k}" title="${vesc(tp)}">${vesc(t)}</button>`).join('')}</div>`
+    +`<div class="cp-n2-der"><label class="cp-switch"><input type="checkbox" data-acc="pdet" role="switch"${st.det?' checked':''}>Detalle</label><span class="cp-como"><button class="cp-link" data-acc="pcomo" aria-expanded="${!!st.como}">Cómo se calcula</button>${st.como?`<div class="cp-pop cp-pop-como" role="dialog"><p>Del ${pfc(C.R0)} al ${pfc(C.R1)}, sin IGV, ${vesc(pcontra[st.contra])}.</p><dl>`
+    +'<dt>Precio ahora</dt><dd>El ponderado del rango: soles ÷ cantidad, sin las compras para revisar.</dd>'
+    +'<dt>Contra</dt><dd>Su precio habitual (la mediana de los 90 días anteriores a cada compra), el del período anterior o el del año pasado, según el menú.</dd>'
+    +'<dt>Impacto</dt><dd>Lo pagado menos lo que hubiera costado al precio de referencia, producto por producto. «Efecto del precio» es su suma.</dd>'
+    +'<dt>Para revisar</dt><dd>Una compra de S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o con decimales en una unidad entera: no entra en la cuenta.</dd>'
+    +'<dt>Se mueve</dt><dd>Dispersión: desvío ÷ promedio de los precios de cada compra; pide cinco compras. Con «Detalle».</dd>'
+    +'<dt>En semanas</dt><dd>Volatilidad: la suma de los cambios de precio de una semana a otra, en %. Con «Detalle».</dd></dl><p>Es un cálculo propio, no un estándar.</p></div>':''}</span></div>`;}
 function ppintarFicha(G){const fi=G.root.querySelector('.cp-ficha');fi.innerHTML=pficha(G,G.C);G.root.querySelectorAll('.cp-izq tr').forEach(tr=>{const b=tr.querySelector('[data-acc=pprod]');if(b)tr.classList.toggle('chosen',+b.dataset.v===G.st.p);});vpuentePlot(G);}
 function vexcel(G){
   const {B,st,C}=G,vis=G.vis||[],PR=pleer(B),P=st.p!=null?C.rows.find(r=>r.p===st.p):null;
@@ -292,9 +313,15 @@ function pavisar(G){if(G.pagina){const v=G.pagina;G.pagina=null;G.enviar?.('fami
 function vconectar(G){
   const {root}=G,signal=G.abort.signal;
   root.addEventListener('click',ev=>{
-    const e=ev.target.closest('[data-acc]');if(!e||!root.contains(e)||e.matches('input,select'))return;
+    const e=ev.target.closest('[data-acc]');
+    if(!e&&G.st.como&&!ev.target.closest?.('.cp-como')){G.st.como=false;vpintar(G);return;}
+    if(e&&e.dataset.acc==='pdet'){G.st.det=!!e.checked;vguardarLS('cp_vol_det',G.st.det);vpintar(G);return;}
+    if(!e||!root.contains(e)||e.matches('input,select'))return;
     const {acc,v}=e.dataset,{st}=G;
-    if(acc==='pkpi'){st.kpi=st.kpi===v?'todos':v;st.ord=st.kpi==='baja'?{k:'im',d:1}:{k:'im',d:-1};st.p=null;st.limite=150;}
+    if(acc!=='pcomo')st.como=false;
+    if(acc==='pcomo'){st.como=!st.como;}
+    else if(acc==='ppleg'){st.pleg={...(st.pleg||{}),[v]:(st.pleg||{})[v]===false};vguardarLS('cp_vol_pleg',st.pleg);ppintarFicha(G);return;}
+    else if(acc==='pkpi'){st.kpi=st.kpi===v?'todos':v;st.ord=st.kpi==='baja'?{k:'im',d:1}:{k:'im',d:-1};st.p=null;st.limite=150;}
     else if(acc==='pver'){st.ver=v;st.limite=150;}
     else if(acc==='pord'){st.ord={k:v,d:st.ord.k===v?-st.ord.d:v==='n'?1:-1};}
     else if(acc==='pamp'){st.amp=st.amp===v?null:v;}
@@ -326,12 +353,14 @@ function vconectar(G){
   root.addEventListener('pointerdown',ev=>{const el=enCurva(ev);if(!el||ev.button!==0||!G.curva?.items.length)return;const i=pos(el,ev);G.drag={i,j:i,t:ev.pointerType};pmostrarTip(G,el,i);});
   window.addEventListener('pointerup',()=>{const d=G.drag;G.drag=null;if(!d||!root.isConnected)return;if(d.i===d.j)return;G.st.tr=[Math.min(d.i,d.j),Math.max(d.i,d.j)];ppintarFicha(G);},{signal});
   document.addEventListener('pointerdown',ev=>{if(!G.st.menu||ev.composedPath().some(n=>n.classList&&n.classList.contains('cp-ms')))return;G.st.menu=null;vpintar(G);pavisar(G);},{signal});
-  document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&G.st.menu){G.st.menu=null;vpintar(G);pavisar(G);}},{signal});
+  document.addEventListener('keydown',ev=>{if(ev.key!=='Escape'||!root.isConnected)return;
+    if(G.st.menu){G.st.menu=null;vpintar(G);pavisar(G);}else if(G.st.como){G.st.como=false;vpintar(G);}else if(G.st.amp){G.st.amp=null;vpintar(G);}},{signal});
 }
 window.__cvUI={inicial:vinicial,pintar:vpintar};
 export default function(component){
   const {data:P,parentElement,setTriggerValue}=component;if(!P)return;
   let G=window.__cpVol,st=G?.st||vinicial(P.inicial);
+  if(st.det==null)st.det=!!vleerLS('cp_vol_det',false);if(!st.pleg)st.pleg=vleerLS('cp_vol_pleg',{});
   G?.abort?.abort();G?.observer?.disconnect();
   if(G&&G.B.P.sello!==P.sello){
     const nombre=G.B.P.precios?.prods?.[st.p]?.[0],id=P.precios?.prods?P.precios.prods.findIndex(x=>x[0]===nombre):-1;st.p=id<0?null:id;
@@ -339,7 +368,7 @@ export default function(component){
   }
   let root=parentElement.querySelector('.cvol');
   if(!root){root=document.createElement('div');root.className='cvol';
-    root.innerHTML=`<div class="cp-cab"><h2 class="cp-tit">Precios</h2><span class="cp-lugar" aria-hidden="true"></span><span class="cp-cab-din"></span><select class="cp-men" data-acc="pcontra" aria-label="Contra qué precio"><option value="hab">Contra: su precio habitual</option><option value="ant">Contra: el período anterior</option><option value="ano">Contra: el año pasado</option></select><span class="cp-esp"></span><input class="cp-busca" type="search" data-acc="q" placeholder="Buscar producto…" aria-label="Buscar producto"><button class="cp-pil" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div><div class="cp-kpis"></div><div class="cp-cuerpo"><section class="cp-izq"></section><aside class="cp-ficha" aria-label="Ficha"></aside></div>`;
+    root.innerHTML=`<div class="cp-n2"></div><div class="cp-cab"><span class="cp-lugar" aria-hidden="true"></span><span class="cp-cab-din"></span><select class="cp-men" data-acc="pcontra" aria-label="Contra qué precio"><option value="hab">Contra: su precio habitual</option><option value="ant">Contra: el período anterior</option><option value="ano">Contra: el año pasado</option></select><span class="cp-esp"></span><input class="cp-busca" type="search" data-acc="q" placeholder="Buscar producto…" aria-label="Buscar producto"><button class="cp-pil" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div><div class="cp-kpis"></div><div class="cp-cuerpo"><section class="cp-izq"></section><aside class="cp-ficha" aria-label="Ficha"></aside></div>`;
     parentElement.appendChild(root);}
   const nuevo=!G||G.root!==root;
   G={root,st,B:G?.B.P.sello===P.sello?G.B:vleer(P),abort:new AbortController(),enviar:setTriggerValue};window.__cpVol=G;
@@ -347,5 +376,5 @@ export default function(component){
   const fb=document.querySelector('.st-key-cp_vol_fecha');if(fb&&fb.offsetWidth)root.style.setProperty('--cp-fecha',`${fb.offsetWidth+8}px`);
   vconectar(G);vpintar(G);
   let ancho=root.clientWidth;
-  G.observer=new ResizeObserver(()=>{if(Math.abs(root.clientWidth-ancho)<2)return;ancho=root.clientWidth;if(root.isConnected)vpuentePlot(G);});G.observer.observe(root);
+  G.observer=new ResizeObserver(()=>{vponerFecha(G);if(Math.abs(root.clientWidth-ancho)<2)return;ancho=root.clientWidth;if(root.isConnected)vpuentePlot(G);});G.observer.observe(root);
 }

@@ -174,3 +174,57 @@ td.t polyline { fill: none; stroke: var(--cp-tono); stroke-width: 1.3; }
 .cp-kpi:hover { background: rgba(255, 255, 255, .55); }
 .cp-kpi.on { border: 0; background: var(--bg-card); box-shadow: 0 1px 4px rgba(73, 56, 184, .16); }
 .cp-kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }
+
+/* #791: el lenguaje entero de Costo de Carta (#775), como Proveedor y Producto
+   (#790). Nivel 2 arriba, subrayado y de borde a borde: «Los que hacen el 80 % |
+   Todos», «Detalle» y «Cómo se calcula». Nivel 3, la cabecera sin título. Sin
+   «Detalle», el renglón de abajo de los indicadores y las columnas de más se
+   esconden. ⤢ deja la lista o la ficha solas debajo del nivel 2. */
+.cvol { padding-top: 0; }
+.cp-tit { display: none; }
+.cp-n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; flex: none; margin: 0 -18px; padding: 0 18px;
+  border-bottom: 1px solid var(--border); font-size: 13px; }
+.cp-tabs { display: flex; align-items: stretch; gap: 20px; min-width: 0; }
+.cp-tabs button { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; padding: 0;
+  white-space: nowrap; color: var(--text-secondary) !important; font-size: 13px; }
+.cp-tabs button:hover { color: var(--accent-deep) !important; }
+.cp-tabs button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent); }
+.cp-n2-der { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.cp-switch { display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+.cp-switch input { appearance: none; position: relative; width: 26px; height: 14px; margin: 0; border-radius: 7px; background: var(--text-muted); cursor: pointer; }
+.cp-switch input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg-card); }
+.cp-switch input:checked { background: var(--accent); }
+.cp-switch input:checked::before { left: 14px; }
+.cp-como { position: relative; display: flex; align-items: center; }
+.cp-link { border: 0; background: none; padding: 0; white-space: nowrap; color: var(--accent-deep) !important; font-size: 13px; }
+.cp-pop-como { position: absolute; top: 26px; right: 0; z-index: 8; width: 420px; max-width: calc(100vw - 32px); max-height: 420px; overflow: auto;
+  overscroll-behavior: contain; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--bg-card); border-radius: 10px;
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--text-primary) 18%, transparent); font-size: 13px; line-height: 1.4; }
+.cp-pop-como dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; }
+.cp-pop-como dt { font-weight: 600; }
+.cp-pop-como dd { margin: 0; color: var(--text-secondary); }
+.cvol:not(.det) .cp-kpi .d { display: none; }
+.cvol.amp .cp-cab, .cvol.amp .cp-kpis { display: none; }
+.cp-cuerpo[data-amp="lista"] .cp-izq, .cp-cuerpo[data-amp="ficha"] .cp-ficha { flex: 1 1 0; }
+.cp-pie { display: flex; align-items: center; gap: 8px; flex: none; min-height: 28px; }
+.cp-pie .cp-pie-n { margin: 0; font-size: 12px; color: var(--text-secondary); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-amp { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--text-secondary) !important; }
+.cp-amp:hover { background: var(--marco-control, var(--bg-hover)); color: var(--accent-deep) !important; }
+.cp-amp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.cvol.det .cp-wrap table { min-width: 1120px; }
+.cp-pleg { border-top: 1px solid var(--line-soft, var(--border)); flex: none; }
+.cp-pleg.abierto { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
+.cp-pleg-b { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; border: 0; background: none; padding: 0; text-align: left;
+  font-size: 13px; font-weight: 600; color: var(--text-primary) !important; }
+.cp-pleg-b span { flex: 1; min-width: 0; }
+.cp-pleg-b i { display: inline-flex; color: var(--accent-deep); transition: transform .12s; }
+.cp-pleg-b svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.cp-pleg.abierto .cp-pleg-b i { transform: rotate(180deg); }
+.cp-pleg-c { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; padding-bottom: 8px; }
+@media (max-width: 900px) {
+  .cp-n2 { margin: 0; padding: 0; height: auto; min-height: 36px; flex-wrap: wrap; }
+  .cp-tabs { overflow-x: auto; overscroll-behavior: contain; }
+  .cp-tabs button, .cp-link { min-height: 44px; }
+  .cp-amp { display: none; }
+}
