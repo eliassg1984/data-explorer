@@ -245,6 +245,28 @@ CSS = """
     .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {
         color: var(--text-primary) !important;
     }
+    /* #805: Por tipo · «De conteo a conteo | Fechas del calendario» cuenta lo mismo
+       con otro reloj: un ajuste, en la caja gris (#795), y no dos botones con borde. */
+    .st-key-stock_mov_cab_reloj [data-testid="stButtonGroup"] {
+        background: var(--rail-fondo);
+        border-radius: 8px;
+        padding: 2px;
+        gap: 2px !important;
+        width: fit-content;
+    }
+    .st-key-stock_mov_cab_reloj [data-testid="stButtonGroup"] button {
+        border: 0 !important;
+        border-radius: 6px !important;
+        background: transparent !important;
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 10px !important;
+    }
+    .st-key-stock_mov_cab_reloj [data-testid="stButtonGroup"] button[aria-checked="true"],
+    .st-key-stock_mov_cab_reloj [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {
+        background: var(--bg-card) !important;
+        box-shadow: var(--shadow);
+    }
     /* El −1rem de Streamlit bajo un markdown lo descentraba de la fecha. */
     .st-key-vt_mix_cab [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;

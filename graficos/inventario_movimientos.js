@@ -181,12 +181,12 @@ export default function (component) {
     <div class="imv-kpis" data-k="kpis"></div>
     <div class="imv-cuerpo">
       <section class="imv-panel">
-        <div class="imv-phead"><h3 data-k="g-tit">La cuenta del stock</h3><span data-k="chip"></span></div>
+        <div class="imv-phead"><h3 data-k="g-tit">La cuenta del stock</h3><span data-k="chip"></span><button type="button" class="imv-amp" data-a="amp" data-v="graf" aria-label="Ampliar la cuenta" title="Ampliar la cuenta"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button></div>
         <div class="imv-chart" data-k="chart"></div>
         <p class="imv-pie" data-k="g-pie"></p>
       </section>
       <section class="imv-panel">
-        <div class="imv-phead"><h3>Por área</h3><span class="imv-pista">un clic arma su cuenta</span></div>
+        <div class="imv-phead"><h3>Por área</h3><span class="imv-pista">un clic arma su cuenta</span><button type="button" class="imv-amp" data-a="amp" data-v="area" aria-label="Ampliar por área" title="Ampliar por área"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button></div>
         <div class="imv-areas" data-k="areas" role="list"></div>
       </section>
     </div>
@@ -401,7 +401,7 @@ export default function (component) {
       a costo cero; el valor a precio actual es para revisarlas y no se suma al balance.</p>
       <div class="imv-wrap"><table><thead><tr><th>Producto</th><th>Área</th><th>Movs.</th><th>Cantidad</th><th>A precio actual</th></tr></thead>
       <tbody data-k="sin-costo-tabla"></tbody></table></div>`);
-    lote('sin-costo-tabla', rs, r => `<tr><td>${esc(r.producto)}</td><td>${esc(rot(r.area))}</td><td class="num">${ent(r.movs)}</td>
+    lote('sin-costo-tabla', rs, r => `<tr><td>${esc(r.producto)}${r.cod ? `<small>${esc(r.cod)}</small>` : ''}</td><td>${esc(rot(r.area))}</td><td class="num">${ent(r.movs)}</td>
       <td class="num">${cant(r.cant)}</td><td class="num">${r.precio_hoy == null ? 'Sin precio actual' : ent(r.valor_hoy)}</td></tr>`);
   }
 
@@ -496,10 +496,15 @@ export default function (component) {
       s.porden = el.value; pr = listaProductos(); filasProductos(); fichaProducto(); guardar();
     }
   }, {signal: abort.signal});
+  // ⤢ (#805): la cuenta o «Por área» toman la hoja; ↙ con el mismo botón o Esc.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && s.amp && root.isConnected) { s.amp = null; root.classList.remove('amp-graf', 'amp-area'); render(); }
+  });
   root.addEventListener('click', e => {
     const el = e.composedPath().find(x => x?.dataset?.a);
     if (!el || !root.contains(el)) return;
     const a = el.dataset.a, v = el.dataset.v;
+    if (a === 'amp') { s.amp = s.amp === v ? null : v; root.classList.toggle('amp-graf', s.amp === 'graf'); root.classList.toggle('amp-area', s.amp === 'area'); render(); return; }
     if (a === 'excel') exportar();
     else if (a === 'limpiar') { s[v] = []; s.grupo = null; render(); }
     else if (a === 'foco') enfocar(v);

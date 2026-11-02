@@ -160,7 +160,7 @@ def renderizar(d,*,col_cod_area,col_cod,col_area,col_prod,col_fam=None,col_punit
     pc=data.periodos_conteo() or {}
     periodos,sesiones=pc.get('periodos') or [],pc.get('sesiones') or []
     with st.container(key='stock_mov_cab',horizontal=True,gap='small',vertical_alignment='center'):
-        st.markdown('<p class="chart-card-hdr">Por qué cambió el stock</p>',unsafe_allow_html=True)
+        st.markdown('<p class="chart-card-hdr"></p>',unsafe_allow_html=True)  # sin título (#805): está en la franja
         reloj=CALENDARIO
         if periodos:
             with st.container(key='stock_mov_cab_reloj',width='content'):

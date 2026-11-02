@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-804 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+805 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1162,7 +1162,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (259)
+**Decisiones de diseño y UX** (260)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1423,6 +1423,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#801** — Producción: Kg útil, Para revisar y Consumo en el lenguaje de Costo de Carta
 - **#803** — Inicio en el lenguaje de Costo de Carta: la portada y Pendientes
 - **#804** — La portada con el aire de la hoja
+- **#805** — Inventario › Por tipo en el lenguaje de Costo de Carta
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58556,6 +58557,15 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    Una pieza que no va dentro de una tarjeta se pone su propio aire, como la de Diferencias
    (`.ajc-main`, #769).
 
+805. **Inventario › Por tipo en el lenguaje de Costo de Carta.**
+   Se había quedado con sólo la franja y la letra (#785); reportado con captura.
+   - Sin «Por qué cambió el stock» (está en la franja); De conteo a conteo | Fechas del
+     calendario cuenta lo mismo con otro reloj: caja gris (#795), no dos botones con borde
+     (`_90_marco.py`, `stock_mov_cab_reloj`).
+   - La cuenta del stock y «Por área» sin caja, separadas por una línea, cada una con su ⤢
+     (la cuenta se redibuja al ancho nuevo); ↙ o `Esc` vuelven. Lo de abajo, debajo de una raya.
+   - El código del Almacén también en la tabla de ventas sin costo (la de productos ya lo traía).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58568,7 +58578,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#804**; la próxima toma el número siguiente.
+> última regla es la **#805**; la próxima toma el número siguiente.
 
 >
 

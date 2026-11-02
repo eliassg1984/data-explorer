@@ -167,3 +167,25 @@
 }
 .imv-kpi { border: 0; border-radius: 10px; background: transparent; padding: 4px 8px; box-shadow: none; }
 .imv-kpi-val { font-size: 17px; font-weight: 500; letter-spacing: 0; }
+
+/* #805: el lenguaje de Costo de Carta (#775). La cuenta y «Por área» sin caja,
+   separadas por una línea, cada una con su ⤢; lo de abajo, debajo de una raya. */
+.imv-panel { border: 0; border-radius: 0; background: transparent; padding: 0; }
+.imv-cuerpo { gap: 16px; }
+.imv-cuerpo > .imv-panel + .imv-panel { border-left: 1px solid var(--border); padding-left: 16px; }
+.imv-panel.imv-abajo { border-top: 1px solid var(--border); padding-top: 10px; }
+.imv-phead { display: flex; align-items: center; gap: 8px; }
+.imv-phead h3 { margin-right: auto; }
+.imv-amp { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--text-secondary); cursor: pointer; }
+.imv-amp:hover { background: var(--marco-control, var(--bg-hover)); color: var(--accent-deep); }
+.imv-amp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.amp-graf .imv-cuerpo > .imv-panel + .imv-panel, .amp-area .imv-cuerpo > .imv-panel:first-child,
+.amp-graf .imv-kpis, .amp-area .imv-kpis, .amp-graf .imv-abajo, .amp-area .imv-abajo, .amp-graf .imv-aviso, .amp-area .imv-aviso { display: none !important; }
+.amp-graf .imv-cuerpo, .amp-area .imv-cuerpo { grid-template-columns: minmax(0, 1fr); }
+.amp-area .imv-cuerpo > .imv-panel + .imv-panel { border-left: 0; padding-left: 0; }
+@media (max-width: 900px) {
+  .imv-cuerpo > .imv-panel + .imv-panel { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 10px; }
+  .imv-amp { display: none; }
+}
+
