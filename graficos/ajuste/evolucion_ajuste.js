@@ -267,7 +267,9 @@ function htmlMatriz(d, ui) {
       fmt = pc;
       tip = (j) => (sis[j] ? `${r.nombre} · ${P[j].eje}: el sistema decía ${soles(sis[j][0]).replace('+', '')} y se ajustó ${pc(vals[j])}` : `${r.nombre} · ${P[j].eje}: ${d.gran === 'Mes' ? 'sin cierre' : 'sin dato'}`);
     } else {
-      vals = P.map((_, j) => (hay(r.s[j]) || hay(r.f[j]) ? (r.s[j] || 0) + (r.f[j] || 0) : null));
+      const lado = ui.lado || 'n';
+      vals = P.map((_, j) => (hay(r.s[j]) || hay(r.f[j])
+        ? (lado === 's' ? (r.s[j] || 0) : lado === 'f' ? (r.f[j] || 0) : (r.s[j] || 0) + (r.f[j] || 0)) : null));
       tot = sum(vals);
       fmt = fk;
       tip = (j) => `${r.nombre} · ${P[j].eje}: sobró ${soles(r.s[j])}, faltó ${soles(r.f[j])}, neto ${soles(vals[j])}`;
@@ -406,6 +408,108 @@ function htmlAbajo(d, ui) {
     `<div class="hueco" style="height:${d.alto.abajo}px">${cuerpo}</div></div>`;
 }
 
+
+// ── #799: la franja, las pestañas, la ficha de la familia ───────────────
+// El boceto aprobado (https://claude.ai/artifact/9yhcARxuLTYEFpJaQk4Baq): Serie
+// es la opción A (el gráfico con sus dos lados y la lectura al costado) y
+// Familia × mes la B (la matriz, con la ficha de la familia al costado). Una
+// zona por pestaña, a todo el alto: la tarjeta ya no se desliza.
+const ICO_AMP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+const ICO_VOL = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>';
+const ampB = (ui, cual, rot) => `<button type="button" class="ev-amp" data-act="amp" data-arg="${cual}" aria-pressed="${ui.amp === cual}" title="${ui.amp === cual ? 'Volver (Esc)' : 'Ampliar ' + rot}" aria-label="${ui.amp === cual ? 'Volver' : 'Ampliar ' + rot}">${ui.amp === cual ? ICO_VOL : ICO_AMP}</button>`;
+
+// Los totales del rango: cifras fijas, sin elegido (#782). El neto lleva su curva.
+function htmlKpis(d) {
+  const P = d.periodos;
+  const S = sum(P.map((p) => p.s)), F = sum(P.map((p) => p.f)), N = S + F, neg = sum(d.neg);
+  const T = d.sistema && d.sistema.TOTAL;
+  const cs = T ? T.filter(Boolean) : [];
+  const c = [0, 1, 2, 3, 4].map((m) => sum(cs.map((x) => x[m])));
+  const netos = P.map((p) => p.n).filter(hay);
+  let curva = '';
+  if (netos.length > 1) {
+    const lo = Math.min(...netos), hi = Math.max(...netos), r = hi - lo || 1;
+    curva = `<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polyline points="${netos.map((v, i) => `${(i * 100 / (netos.length - 1)).toFixed(1)},${(27 - (v - lo) / r * 24).toFixed(1)}`).join(' ')}"/></svg>`;
+  }
+  const k = (rot, val, cls, sub, extra = '') => `<div class="ev-kpi">${extra}<span class="r">${esc(rot)}</span><span class="v ${cls}">${val}</span><span class="d">${esc(sub)}</span></div>`;
+  const nCierres = cs.length ? `${cs.length} ${d.gran === 'Mes' ? 'cierres' : 'sesiones'}` : `${P.length} ${d.gran === 'Mes' ? 'meses' : 'cortes'}`;
+  return '<div class="ev-kpis">' +
+    k(`Neto · ${nCierres}`, soles(N), N < 0 ? 'neg' : 'pos', c[0] > 0 ? `${pc((100 * (c[1] + c[2])) / c[0])} del valor del sistema` : 'sobrante más faltante', curva) +
+    k('Faltante', soles(F), 'neg', c[0] > 0 ? `${pc((100 * c[1]) / c[0])} · contado en cero ${pc((100 * c[3]) / c[0])}` : 'lo que faltó al contar') +
+    k('Sobrante', soles(S), 'pos', S > 0 && neg > 0 ? `${Math.round((100 * neg) / S)} % era sistema en negativo` : 'lo que sobró al contar') +
+    (c[0] > 0 ? k('Valor del sistema', soles(c[0]).replace('+', ''), '', 'lo que el sistema decía al contar') : '') + '</div>';
+}
+
+function htmlTabs(d, ui) {
+  const tabs = [['serie', 'Serie']];
+  if (d.familias.length) tabs.push(['fam', d.gran === 'Mes' ? 'Familia × mes' : 'Familia × corte']);
+  tabs.push(['pct', '¿Es mucho?'], ['tabla', 'Tabla']);
+  if (!tabs.some(([t]) => t === ui.zona)) ui.zona = 'serie';
+  return '<div class="ev-tabs" role="tablist" aria-label="Qué se ve">' + tabs.map(([t, n]) =>
+    `<button type="button" role="tab" data-act="zona" data-arg="${t}" aria-selected="${ui.zona === t}" class="${ui.zona === t ? 'on' : ''}">${n}</button>`).join('') + '</div>';
+}
+
+// La ficha de una familia (opción B): sus dos lados mes a mes y su peso.
+function fichaFam(d, ui) {
+  const P = d.periodos;
+  const r = ui.abierta === 'TOTAL'
+    ? { id: 'TOTAL', nombre: 'Todas las familias', s: P.map((p) => p.s), f: P.map((p) => p.f) }
+    : d.familias.find((f) => f.id === ui.abierta);
+  if (!r) return '';
+  const S = sum(r.s), F = sum(r.f), N = S + F, mov = S - F;
+  const max = Math.max(1, ...r.s.filter(hay), ...r.f.filter(hay).map((v) => -v));
+  const barras = P.map((p, j) => {
+    const hs = hay(r.s[j]) ? (100 * r.s[j]) / max : 0, hf = hay(r.f[j]) ? (-100 * r.f[j]) / max : 0;
+    return `<span class="fb" title="${esc(`${p.eje}: sobró ${soles(r.s[j])}, faltó ${soles(r.f[j])}`)}"><span class="up"><i class="s" style="height:${hs.toFixed(1)}%"></i></span><span class="dn"><i class="f" style="height:${hf.toFixed(1)}%"></i></span></span>`;
+  }).join('');
+  const netos = P.map((p, j) => [(r.s[j] || 0) + (r.f[j] || 0), j]).filter(([, j]) => hay(r.s[j]) || hay(r.f[j]));
+  const peor = netos.length ? netos.reduce((a, b) => (b[0] < a[0] ? b : a)) : null;
+  const totN = sum(P.map((p) => p.n));
+  const frase = peor
+    ? `${esc(r.nombre)}: neto ${soles(N)} sobre ${soles(mov).replace('+', '')} movidos${hay(totN) && Math.abs(totN) > 0.5 && r.id !== 'TOTAL' ? ` (${Math.round((100 * N) / totN)} % del neto del rango)` : ''}. El peor ${d.gran === 'Mes' ? 'mes' : 'corte'}: ${esc(P[peor[1]].eje)}, ${soles(peor[0])}.`
+    : 'Sin movimientos en el rango.';
+  let sis = '';
+  const sx = d.sistema && d.sistema[r.id];
+  if (sx) {
+    const c = [0, 1, 2, 3, 4].map((m) => sum(sx.filter(Boolean).map((x) => x[m])));
+    if (c[0] > 0) sis = `<div class="ev-fl"><span>Del valor del sistema</span><b class="${c[1] + c[2] < 0 ? 'neg' : 'pos'}">${pc((100 * (c[1] + c[2])) / c[0])}</b></div>` +
+      `<div class="ev-fl suave"><span>el sistema decía</span><span>${soles(c[0]).replace('+', '')}</span></div>`;
+  }
+  return '<aside class="panel ev-ficha" aria-label="Ficha de la familia">' +
+    `<div class="cab"><div class="tt"><span class="miga">Familia · ${esc(d.area_txt || 'todas las áreas')}</span><h3>${esc(r.nombre)}</h3></div>` +
+    ampB(ui, 'panel', 'la ficha') + '<button type="button" class="soltar" data-act="fam" data-arg="' + esc(r.id) + '">Soltar</button></div>' +
+    `<div class="ev-cifras"><div><span>Neto</span><b class="${N < 0 ? 'neg' : 'pos'}">${soles(N)}</b></div><div><span>Se movió</span><b>${soles(mov).replace('+', '')}</b></div></div>` +
+    `<div class="ev-mini" aria-hidden="true">${barras}</div>` +
+    `<p class="ev-frase">${frase}</p>` +
+    `<div class="ev-fl"><span>Sobrante</span><b class="pos">${soles(S)}</b></div><div class="ev-fl"><span>Faltante</span><b class="neg">${soles(F)}</b></div>` +
+    sis + '</aside>';
+}
+
+function htmlZona(d, ui) {
+  if (ui.zona === 'serie') return htmlExplicar(d, ui) + htmlSerie(d, ui);
+  let extra = '', cuerpo = '';
+  if (ui.zona === 'fam') {
+    const lado = '<span class="seg mini" role="group" aria-label="Qué pintar">' + [['n', 'Neto'], ['f', 'Faltante'], ['s', 'Sobrante']].map(([k, t]) =>
+      `<button type="button" data-act="lado" data-arg="${k}" aria-pressed="${(ui.lado || 'n') === k}" class="${(ui.lado || 'n') === k ? 'on' : ''}">${t}</button>`).join('') + '</span>';
+    const modos = d.sistema && d.sistema.TOTAL
+      ? '<span class="seg mini" role="group" aria-label="Medir la matriz">' + [['soles', 'En soles'], ['pct', '% del sistema']].map(([k, t]) =>
+        `<button type="button" data-act="modo" data-arg="${k}" aria-pressed="${ui.modo === k}" class="${ui.modo === k ? 'on' : ''}">${t}</button>`).join('') + '</span>' : '';
+    const txt = ui.modo === 'pct' ? 'ajuste ÷ lo que el sistema decía' : 'la cifra, sólo donde se sale de lo normal';
+    extra = (ui.modo === 'pct' ? '' : lado) + modos + `<span class="ayuda">${txt} · clic en una familia</span>`;
+    cuerpo = `<div class="mz-marco">${htmlMatriz(d, ui)}</div>`;
+  } else if (ui.zona === 'pct') {
+    const c = d.consumo_estado === 'listo' ? d.consumo : null;
+    extra = c && hay(c.ci)
+      ? '<span class="ayuda"><i class="bh"></i>lo habitual <i class="bf"></i>todavía normal <i class="med"></i>mediana ' + pc(c.med) + ' · el neto como % del consumo operativo del mes</span>'
+      : '<span class="ayuda">el neto como % del consumo operativo del mes</span>';
+    cuerpo = htmlEsMucho(d, ui);
+  } else {
+    extra = `<span class="ayuda">del más nuevo al más viejo${d.nota_kx ? ' · ' + d.nota_kx : ''}</span>`;
+    cuerpo = htmlTabla(d, ui);
+  }
+  return `<div class="abajo"><div class="cab">${extra}</div><div class="hueco" style="height:${d.alto.abajo}px">${cuerpo}</div></div>`;
+}
+
 // ── dibujar y escuchar ──────────────────────────────────────────────────
 function dibujar(raiz) {
   const { data: d, ui } = raiz.__st;
@@ -421,12 +525,19 @@ function dibujar(raiz) {
   raiz.style.setProperty('--ev-alerta', d.col.alerta);
   const mz = raiz.querySelector('.mz-marco');
   const scroll = mz ? [mz.scrollTop, mz.scrollLeft] : null;
-  raiz.innerHTML = '<div class="cuerpo"><div class="izq">' + htmlExplicar(d, ui) + htmlSerie(d, ui) + '</div>' +
-    htmlPanel(d, ui) + htmlAbajo(d, ui) + '</div>';
+  // Una zona a todo el alto (#799): el alto de la serie y el de abajo se suman.
+  const Hz = d.alto.graf + d.alto.abajo - 6;
+  const dz = { ...d, alto: { graf: Hz - 150, abajo: Hz - 74 } };
+  const conFicha = ui.zona === 'fam' && ui.abierta;
+  const panel = conFicha ? fichaFam(d, ui) : htmlPanel(d, ui).replace('</h3>', `</h3><span class="ev-esp"></span>${ampB(ui, 'panel', 'la lectura')}`);
+  raiz.classList.toggle('amp-izq', ui.amp === 'izq');
+  raiz.classList.toggle('amp-panel', ui.amp === 'panel');
+  raiz.innerHTML = htmlKpis(d) + '<div class="ev-fila">' + htmlTabs(d, ui) + '<span class="ev-esp"></span>' + ampB(ui, 'izq', 'la zona') + '</div>' +
+    `<div class="cuerpo ev-uno" style="height:${Hz - 40}px"><div class="izq">` + htmlZona(dz, ui) + '</div>' + panel + '</div>';
   const mz2 = raiz.querySelector('.mz-marco');
   if (mz2 && scroll) { mz2.scrollTop = scroll[0]; mz2.scrollLeft = scroll[1]; }
   // Lo caro se pide UNA vez por montaje: al llegar, Python lo deja en `data`.
-  if (ui.abajo === 'pct' && d.consumo_estado === 'no' && !ui.pidioConsumo) {
+  if (ui.zona === 'pct' && d.consumo_estado === 'no' && !ui.pidioConsumo) {
     ui.pidioConsumo = true;
     raiz.__st.enviar('consumo');
   }
@@ -451,7 +562,9 @@ function enlazar(raiz) {
       case 'soltar': ui.foco = null; break;
       case 'chip': ui.on = { ...ui.on, [arg]: !ui.on[arg] }; break;
       case 'quitar': ui.on = {}; break;
-      case 'abajo': ui.abajo = arg; break;
+      case 'abajo': case 'zona': ui.zona = arg; break;
+      case 'lado': ui.lado = arg; break;
+      case 'amp': ui.amp = ui.amp === arg ? null : arg; break;
       case 'modo': ui.modo = arg; break;
       case 'fam': ui.abierta = ui.abierta === arg ? null : arg; break;
       default: return;
@@ -467,8 +580,12 @@ export default function (component) {
     raiz = document.createElement('div');
     raiz.className = 'ev';
     parentElement.appendChild(raiz);
-    raiz.__st = { ui: { foco: null, on: {}, abajo: 'fam', abierta: null, modo: 'soles' } };
+    raiz.__st = { ui: { foco: null, on: {}, zona: 'serie', abierta: null, modo: 'soles', lado: 'n', amp: null } };
     enlazar(raiz);
+    // `Esc` vuelve de una zona ampliada; se escucha en el documento: el redibujo se lleva el foco (#780).
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && raiz.isConnected && raiz.__st.ui.amp) { raiz.__st.ui.amp = null; dibujar(raiz); }
+    });
   }
   raiz.__st.data = { periodos: [], familias: [], neg: [], sistema: {}, col: {}, alto: { graf: 186, abajo: 172 }, ...(data || {}) };
   // Un sello por pedido: el mismo pedido dos veces son dos avisos.

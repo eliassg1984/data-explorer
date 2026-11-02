@@ -622,9 +622,11 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
     with st.container(border=True, key="ajuste_graf_card_izq_evo"):
         # Los controles se dibujan ANTES de calcular nada: en Streamlit el
         # orden de ejecucion es el orden en que se leen los valores.
-        c_tit, c_fecha, c_area, c_gran = st.columns(
-            # columnas-internas: titulo | meses | area | grano
-            [3.7, 1.45, 0.95, 1.1],
+        # Sin título desde la #799: el nombre está en la franja, y los totales
+        # del rango van en la de indicadores de la pieza. Quedan los controles.
+        c_fecha, c_area, c_gran, c_tit = st.columns(
+            # columnas-internas: meses | area | grano | aire
+            [1.45, 0.95, 1.1, 3.7],
             vertical_alignment="center")
         with c_gran:
             # Una sesión vieja puede traer «Semana» guardada (regla #585):
@@ -658,11 +660,6 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
 
         s = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
                          col_kardex=col_kardex)
-        with c_tit:
-            st.markdown(
-                f"<div style='font-size:14px;font-weight:600;color:{TEXTO_PRINCIPAL};"
-                "line-height:1.3;white-space:nowrap'>Sobrante, faltante y neto</div>"
-                + kpis_rango_html(s), unsafe_allow_html=True)
 
         hay_fam = bool(col_familia and col_familia in dp.columns)
         sf = (serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,

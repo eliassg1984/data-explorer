@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-798 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+799 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1160,7 +1160,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (254)
+**Decisiones de diseño y UX** (255)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1416,6 +1416,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#795** — Pestañas subrayadas, ajustes en la caja gris: un criterio para toda la app
 - **#796** — Stock en el lenguaje entero de Costo de Carta, y el código siempre a la vista
 - **#797** — «Qué faltó» con cantidad, unidad y código; y «Explorar», la tabla dinámica de Ajuste
+- **#799** — Ajuste › Evolución en el lenguaje de Costo de Carta: una zona por pestaña
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58475,6 +58476,27 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      (`aplicarAmp`, en el mismo nivel que `render`: dentro de `ficha` no lo veía nadie).
    - El código, la familia y la unidad ya estaban en la lista desde la #650.
 
+799. **Ajuste › Evolución en el lenguaje de Costo de Carta: una zona por pestaña.**
+   Boceto aprobado: https://claude.ai/artifact/9yhcARxuLTYEFpJaQk4Baq («las dos»: la A como
+   Serie y la B como Familia × mes). La pieza (#692) no cambia sus cuentas: lo que cambia es
+   cómo se reparte la pantalla.
+   - **Arriba**, el renglón de «Ver» es el nivel 2 (Serie | Tabla dinámica subrayadas, sin
+     «Ver», `_90_marco.py`, como Stock en la #796). Los controles de Python (meses, área, Mes |
+     Corte) quedan sin el título «Sobrante, faltante y neto» ni la línea de totales: los totales
+     pasaron a la pieza.
+   - **La franja** con cuatro cifras fijas (#782): Neto (con su curva y el % del valor del
+     sistema), Faltante (y «contado en cero»), Sobrante (y cuánto era sistema en negativo) y el
+     valor del sistema.
+   - **Las pestañas** Serie | Familia × mes | ¿Es mucho? | Tabla (`ui.zona`) muestran UNA zona a
+     todo el alto: hasta hoy la serie iba arriba y las otras tres en un hueco de abajo, y la
+     tarjeta se deslizaba (#382). Al costado, la lectura del período o, en Familia × mes con una
+     familia abierta, **su ficha** (opción B): neto y lo que se movió, sus dos lados mes a mes,
+     el peor mes y el % del valor del sistema.
+   - **Neto | Faltante | Sobrante** en la matriz (caja gris: cuenta lo mismo de otra forma,
+     #795), a pedido: la B coloreaba sólo el neto, y un mes con mucho faltante y mucho
+     sobrante se veía tranquilo.
+   - ⤢ en la zona y en el costado; ↙ o `Esc` vuelven.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58487,7 +58509,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#798**; la próxima toma el número siguiente.
+> última regla es la **#799**; la próxima toma el número siguiente.
 
 >
 
