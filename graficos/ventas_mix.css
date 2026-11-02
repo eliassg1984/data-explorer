@@ -241,3 +241,9 @@
 .vm-kpi:first-child { border-left: 0; }
 .vm-kpi.on { border: 0; background: var(--bg-card); box-shadow: 0 1px 4px rgba(73, 56, 184, .16); }
 .vm-kpi-val { font-size: 17px; font-weight: 500; line-height: 24px; }
+
+/* #788: «Ampliar», como en Venta por Periodo: la zona toma el ancho de la lista y la ficha. */
+.vm-amp { height: 30px; flex: none; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; background: var(--rail-fondo); padding: 0 10px; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.vm-amp:hover, .vm-amp[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent-deep) !important; }
+.vm-amp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.vm-cuerpo.ampl .vm-panel { display: none; }

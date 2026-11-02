@@ -23,3 +23,13 @@
 }
 .ctl-kpi { background: transparent; border-radius: 10px; padding: 4px 8px; gap: 0; }
 .ctl-kpi b { font-size: 17px; font-weight: 500; line-height: 24px; }
+
+/* #788: ⤢ en el resumen y en el detalle, como en Recetas: el elegido toma el ancho. */
+.ctl .ctl-amp,.ctl .ctl-ambito .ctl-amp{margin-left:auto;flex:none;width:30px;height:30px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;background:var(--rail-fondo);color:var(--text-primary);font-size:15px;line-height:1;cursor:pointer}
+.ctl .ctl-titulo-zona .ctl-amp{margin-left:0;font-size:15px}
+.ctl .ctl-amp:hover,.ctl .ctl-amp[aria-pressed="true"]{background:var(--accent-tint);color:var(--accent-deep)}
+.ctl-cuerpo.amp-izq,.ctl-cuerpo.amp-der{grid-template-columns:minmax(0,1fr)}
+.ctl-cuerpo.amp-izq>.ctl-der,.ctl-cuerpo.amp-der>.ctl-izq{display:none}
+@media (max-width:900px){.ctl-cuerpo.amp-izq>.ctl-izq,.ctl-cuerpo.amp-der>.ctl-der{height:auto;min-height:360px}}
+.ctl .ctl-amp svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle}
+

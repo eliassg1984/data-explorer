@@ -87,6 +87,8 @@ window.__mesCalc={leer:mleer,resumen:mresumen,pozo:mpozo,planilla:mplanilla,dist
 
 function minicial(){return {turno:'Todo el día',modo:'Por mesero',ms:null,q:'',orden:'propina',dir:-1,mas:false,tab:'Propinas',filtro:'Todos',celda:null,weekday:null,pedido:null,limite:150,mapa:'Por mesa',ayuda:false};}
 const mboton=(a,v,t,on=false,tip='')=>`<button type="button" data-acc="${a}" data-v="${mesc(v)}" class="${on?'on':''}" aria-pressed="${on}" title="${mesc(tip)}">${mesc(t)}</button>`;
+// ⤢ amplía la lista o la ficha a todo el ancho; ↙ o Esc vuelven (#788, como Recetas).
+const mamp=(st,cual)=>{const on=st.amp===cual;return `<button type="button" class="ms-amp" data-acc="amp" data-v="${cual}" aria-pressed="${on}" title="${on?'Volver a las dos columnas (Esc)':'Ampliar '+(cual==='lista'?'la lista':'la ficha')+' a todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${on?'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6':'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg></button>`;};
 const msegmento=(a,ops,v)=>`<div class="ms-seg" role="group">${ops.map(x=>mboton(a,x,x,x===v)).join('')}</div>`;
 const mkpi=(n,v,sub='',tip='',color='')=>`<div class="ms-kpi" title="${mesc(tip)}"><span>${mesc(n)}</span><strong${color?` style="color:${color}"`:''}>${mesc(v)}</strong><small>${mesc(sub)}</small></div>`;
 const mtabla=(heads,rows,cls='')=>`<div class="ms-scroll ${cls}"><table><thead><tr>${heads.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
@@ -103,7 +105,7 @@ function mpintar(G){
   root.innerHTML=`<section class="ms-card ms-overview"><div class="ms-head ms-native-space"><h3>Propinas por mesero</h3>${msegmento('turno',['Todo el día','Almuerzo','Cena'],st.turno)}${mboton('ayuda','','?',st.ayuda,'Cuentas y alcance')}</div>
     <div class="ms-caption">${B.P.rango.map(s=>mfecha(mdia(s))).join('–')} · comparación: ${B.P.anterior.map(s=>mfecha(mdia(s))).join('–')}${corte}${!B.P.hay_anterior?' · sin datos anteriores disponibles':''}</div>
     <div class="ms-kpis">${mkpi('Propinas',msol(t.propina,0),mdelta(vp),'Propina registrada; sin «Sin mesero»',mcolor(vp))}${mkpi('% de la venta',mpct(pct),B.P.hay_anterior&&t0.venta>0?`${mnum((pct-t0.propina/t0.venta)*100,1)} pp vs anterior`:'Propina / venta')}${mkpi('Por mesa',msol(mdiv(t.propina,t.mesas)),`${t.mesas} mesas`)}${mkpi('Por persona',msol(mdiv(t.propina,t.personas)),`${mnum(t.personas)} adultos`)}<button class="ms-kpi ms-kpi-button" data-acc="sinpropina">${mkpi('Tarjeta sin propina',mpct(mdiv(t.sin_propina,t.tarjeta)),`${t.sin_propina} de ${t.tarjeta} · ver mesas`)}</button>${mkpi('Sólo efectivo',`${t.solo_efectivo} mesas`,'Propina no registrada en POS')}</div>
-    <div class="ms-panes"><div class="ms-list"><div class="ms-toolbar"><input type="search" data-acc="buscar" aria-label="Buscar mesero en la lista" placeholder="Buscar mesero…" value="${mesc(st.q)}">${mboton('mas','','Más datos',st.mas)}${mboton('equipo','','Equipo',st.ms===-1)}</div>${mrank(G)}<div class="ms-caption">Comparación Almuerzo/Cena: % de la venta de cada turno. La búsqueda acota la lista.</div>${sin?.mesas?`<div class="ms-caption">${mboton('sinmesero','','Sin mesero: '+sin.mesas+' pedidos')} · ${msol(sin.venta,0)}</div>`:''}</div>${mficha(G)}</div>
+    <div class="ms-panes${st.amp?' amp-'+st.amp:''}"><div class="ms-list"><div class="ms-toolbar"><input type="search" data-acc="buscar" aria-label="Buscar mesero en la lista" placeholder="Buscar mesero…" value="${mesc(st.q)}">${mboton('mas','','Más datos',st.mas)}${mboton('equipo','','Equipo',st.ms===-1)}${mamp(st,'lista')}</div>${mrank(G)}<div class="ms-caption">Comparación Almuerzo/Cena: % de la venta de cada turno. La búsqueda acota la lista.</div>${sin?.mesas?`<div class="ms-caption">${mboton('sinmesero','','Sin mesero: '+sin.mesas+' pedidos')} · ${msol(sin.venta,0)}</div>`:''}</div>${mficha(G)}</div>
     ${st.ayuda?`<div class="ms-help">${mboton('ayuda','','Cerrar')}<p>Mesas = pedidos con venta; personas = adultos. Cada ítem suma venta una vez y cada pago suma propina una vez. El día es el del comprobante.</p><p>La propina se registra con tarjeta. Efectivo puede incluir una propina que el POS no registra. El % usa la venta de la mesa; los descuentos se explican en la ficha.</p><p>Pozo común: partes iguales por día y turno entre meseros con al menos una mesa. Es la regla supuesta de esta vista. El rango y el turno fijan el reparto; búsqueda, selección y filtros de ficha son análisis.</p><p>La comparación conserva los mismos días del mes anterior y la hora de corte del último día. Las muestras y los importes describen lo registrado.</p></div>`:''}
   </section>${mplan(G)}`;
   const sc=root.querySelector('.ms-pay-scroll');if(sc)sc.scrollLeft=left;
@@ -147,7 +149,7 @@ function mficha(G){
     const v=S.vendido;body=`<div class="ms-chips">${v.grupos.map(([g,q])=>`<span>${mesc(B.P.grupos[g]||'Sin grupo')} · ${mnum(q)} u</span>`).join('')}</div>`+
       mtabla(['Producto','Unidades','Venta'],[...v.platos.map(r=>({...r,tipo:'Plato'})),...v.bebidas.map(r=>({...r,tipo:'Bebida'}))].map(r=>`<tr><td>${mesc(B.P.prods[r.id])}<small>${r.tipo}</small></td><td>${mnum(r.u,2)}</td><td>${msol(r.venta,0)}</td></tr>`));
   }
-  return `<div class="ms-ficha"><div class="ms-toolbar"><h4>${mesc(nom)}</h4>${contexto?mboton('limpiar','','Quitar selección'):''}</div>${contexto?`<div class="ms-caption">${contexto}</div>`:''}${msegmento('tab',['Propinas','Mesas','12 meses','Lo que vendió'],st.tab)}${body}</div>`;
+  return `<div class="ms-ficha"><div class="ms-toolbar"><h4>${mesc(nom)}</h4>${contexto?mboton('limpiar','','Quitar selección'):''}${mamp(st,'ficha')}</div>${contexto?`<div class="ms-caption">${contexto}</div>`:''}${msegmento('tab',['Propinas','Mesas','12 meses','Lo que vendió'],st.tab)}${body}</div>`;
 }
 function mplan(G){
   const {B,st,T,plan}=G,ultimo=B.P.rango[0].slice(0,4)!==B.P.rango[1].slice(0,4),col=st.modo==='Pozo común'?'parte':'propia';
@@ -200,6 +202,7 @@ function menlazar(G){
     else if(acc==='volver')st.pedido=null;
     else if(acc==='limpiar')mlimpiar(st);
     else if(acc==='mas')st.mas=!st.mas;
+    else if(acc==='amp')st.amp=st.amp===v?null:v;
     else if(acc==='ayuda')st.ayuda=!st.ayuda;
     else if(acc==='orden'){if(v==='id'){st.orden='id';st.dir=st.dir===1?-1:1;}else if(['propina','tasa','mesas','por_mesa','sin_pct','dias','personas','items','venta','var','pozo'].includes(v)){st.dir=st.orden===v?-st.dir:-1;st.orden=v;}}
     else if(acc==='celda'){const [m,f,t]=v.split('|');st.ms=+m;mlimpiar(st);st.celda={f:+f,turn:t===''?null:+t};st.tab='Mesas';}
@@ -210,6 +213,8 @@ function menlazar(G){
     mpintar(G);
     if(['celda','weekday','sinpropina','sinmesero'].includes(acc))root.querySelector('.ms-ficha')?.scrollIntoView({block:'nearest',behavior:'smooth'});
   });
+  // Esc en el document: el redibujo se lleva el botón que tenía el foco.
+  document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&st.amp&&root.isConnected){st.amp=null;mpintar(G);}});
   root.addEventListener('input',ev=>{if(ev.target.dataset.acc==='buscar'){st.q=ev.target.value;mpintar(G);}});
   root.addEventListener('change',ev=>{if(ev.target.dataset.acc==='filtro'){st.filtro=ev.target.value;st.pedido=null;st.limite=150;mpintar(G);}});
   root.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(st.ayuda)st.ayuda=false;else st.pedido=null;mpintar(G);}const r=ev.target.closest('tr[data-acc]');if(r&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();r.click();}});

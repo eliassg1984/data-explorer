@@ -183,13 +183,17 @@ function seg(opciones, actual, acc, apagadas = {}) {
 function menu(acc, rot, opciones, actual) {
   return `<select class="vm-men" data-acc="${acc}" aria-label="${esc(rot)}">${opciones.map(([v, t, off]) => `<option value="${esc(v)}"${v === actual ? ' selected' : ''}${off ? ' disabled' : ''}>${esc(rot)}: ${esc(t)}</option>`).join('')}</select>`;
 }
+// «Ampliar» esconde la lista y la ficha y le da todo el ancho a la zona (#788), como Venta.
+function htmlAmp(st) {
+  return `<button type="button" class="vm-amp" data-acc="ampl" aria-pressed="${!!st.ampl}" title="${st.ampl ? 'Volver a poner la lista y la ficha al costado' : 'Esconder la lista y la ficha y usar todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${st.ampl ? 'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6' : 'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg>${st.ampl ? 'Con panel' : 'Ampliar'}</button>`;
+}
 function htmlPie(d, st) {
   const ejes = d.hay_area ? [['Carta', 'Carta'], ['Área', 'Área']] : [['Carta', 'Carta']];
   const medida = st.kpi === 'und' ? 'und' : st.kpi === 'costo' ? 'pct' : 'soles';
   return seg(ZONAS, st.zona, 'zona') + '<span class="vm-esp"></span>' +
     menu('eje', 'Abrir por', ejes, st.eje) +
     menu('medir', 'Medir', [['soles', 'Soles'], ['und', 'Unidades'], ['pct', '% de costo', true]], medida) +
-    menu('gran', 'Agrupar', d.grans.map((g) => [g, g]), d.gran);
+    menu('gran', 'Agrupar', d.grans.map((g) => [g, g]), d.gran) + htmlAmp(st);
 }
 function apDisponible(d, i) { return !d.ap || !!d.ap.nombres[i]; }
 
@@ -666,6 +670,7 @@ function dibujar(raiz) {
   lista.innerHTML = htmlLista(d, st, x);
   lista.scrollTop = yLista;
   z('ficha').innerHTML = htmlFicha(d, st, x);
+  raiz.querySelector('.vm-cuerpo').classList.toggle('ampl', !!st.ampl);
   dibujarZona(raiz);
   ubicarCabecera(raiz);
 }
@@ -755,6 +760,7 @@ function enlazar(raiz) {
     else if (acc === 'kpi') { st.kpi = id; raiz.__d.mismaZona = true; }
     else if (acc === 'ojo') { st.zona = 'Calculo'; st.ruta = []; st.sel = null; st.fiT = null; }
     else if (acc === 'excel') { bajarExcel(raiz); return; }
+    else if (acc === 'ampl') { st.ampl = !st.ampl; raiz.__d.mismaZona = true; }
     else if (acc === 'prof') { st.prof = +id; st.ab = {}; raiz.__d.mismaZona = true; }
     else if (acc === 'fila') {
       // Elegir en la tabla no la achica: abre o cierra y cambia la ficha.

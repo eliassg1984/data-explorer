@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-787 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+788 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (263)
 
@@ -1154,7 +1154,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (249)
+**Decisiones de diseño y UX** (250)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1405,6 +1405,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#778** — Recetas entera en el lenguaje de la #775: franja de indicadores, sin cajas, nada bajo 12 px
 - **#781** — Recetas entera en el lenguaje de Costo de Carta, y los códigos a la vista
 - **#783** — La franja de Ventas abre el mismo panel de fecha que las tarjetas
+- **#788** — «Ampliar» en Mix, Meseros y Pedidos
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58287,6 +58288,22 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      nace así: indicadores sin caja en `--rail-fondo`, medidas con ficha blanca, contadores
      subrayados, y ningún `font-size` bajo 12 px salvo la «ⓘ».
 
+788. **«Ampliar» en Mix, Meseros y Pedidos.**
+   Eran las tres vistas de Ventas con dos columnas y sin forma de darle el ancho a una. A pedido,
+   toda lista y toda ficha se amplía (#780):
+   - **Mix** lleva el botón de Venta por Periodo («Ampliar» / «Con panel») al final de su fila de
+     pestañas: esconde la lista y la ficha y la zona toma el ancho. La clase se pone ANTES de
+     `dibujarZona`, porque el gráfico mide su ancho al dibujarse; sin eso quedaba al ancho de antes.
+   - **Meseros** y **Pedidos** tienen dos paneles del mismo peso (ranking y ficha; resumen por
+     período y detalle): cada uno lleva su ⤢, como Recetas, y ↙ o `Esc` vuelven. `Esc` se escucha
+     en el `document` (en Pedidos, con la `signal` de la pieza para no apilar oyentes).
+   - El ícono es el dibujo de cuatro esquinas de Venta, no los caracteres ⤢ y ↙: a 15 px el ↙ se
+     leía como un ✓.
+   - En Pedidos la regla de base `.ctl button` (0,1,1) le ganaba a `.ctl-amp`: el botón salía con
+     borde y relleno. Va como `.ctl .ctl-amp`, la misma lección de la #786.
+   - Medido en Chromium a 1323 px: el panel escondido mide 0 y la zona ~1200 px; al volver, los
+     anchos de antes al píxel.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58299,7 +58316,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#787**; la próxima toma el número siguiente.
+> última regla es la **#788**; la próxima toma el número siguiente.
 
 >
 

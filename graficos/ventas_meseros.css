@@ -90,3 +90,12 @@
 .msp .ms-kpi>strong { font-size: 17px; font-weight: 500; line-height: 24px; }
 .msp .ms-kpi-button { border: 0; border-radius: 10px; padding: 0; }
 .msp .ms-kpi-button:hover { background: rgba(255, 255, 255, .55); }
+
+/* #788: ⤢ en la lista y en la ficha, como en Recetas: la elegida toma el ancho. */
+.msp .ms-amp{margin-left:auto;flex:none;width:30px;height:30px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;background:var(--rail-fondo);color:var(--text-primary);font-size:15px;line-height:1;cursor:pointer;}
+.msp .ms-amp:hover,.msp .ms-amp[aria-pressed="true"]{background:var(--accent-tint);color:var(--accent-deep);}
+.msp .ms-panes.amp-lista,.msp .ms-panes.amp-ficha{grid-template-columns:minmax(0,1fr);}
+.msp .ms-panes.amp-lista>.ms-ficha,.msp .ms-panes.amp-ficha>.ms-list{display:none;}
+.msp .ms-panes.amp-ficha>.ms-ficha{border-left:0;padding-left:0;}
+.msp .ms-amp svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle}
+
