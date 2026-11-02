@@ -901,7 +901,7 @@ def css_filtros_vista(prefijo_ctrl, prefijo_corte):
         justify-content: flex-start !important;
         transition: background .12s ease, color .12s ease !important; }}
     div[class*="st-key-{prefijo_ctrl}"] button[data-testid="stPopoverButton"] p {{
-        font-size: 11.5px !important; }}
+        font-size: 12px !important; }}
     div[class*="st-key-{prefijo_ctrl}"] button[data-testid="stPopoverButton"]:hover,
     div[class*="st-key-{prefijo_ctrl}"] button[data-testid="stPopoverButton"][aria-expanded="true"] {{
         background: {LAVANDA_SELECCION} !important;

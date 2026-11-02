@@ -156,7 +156,7 @@ function semanas(d, f) {
     s += `<path d="${dd}" fill="none" style="stroke:var(--danger)" stroke-width="1.8"/>`;
     semD.forEach((v, k) => { s += `<circle cx="${x(k)}" cy="${y(v)}" r="2.4" style="fill:var(--danger)"><title>Semana del ${sem(k)}: piden ${cant(v, f.unid)}</title></circle>`; });
   }
-  [0, Math.floor(n / 2), n - 1].forEach((k) => { s += `<text x="${x(k)}" y="${H - 3}" text-anchor="middle" style="font-size:10px;fill:var(--text-secondary)">${sem(k)}</text>`; });
+  [0, Math.floor(n / 2), n - 1].forEach((k) => { s += `<text x="${x(k)}" y="${H - 3}" text-anchor="middle" style="font-size:12px;fill:var(--text-secondary)">${sem(k)}</text>`; });
   return s + '</svg>';
 }
 function veredicto(f) {

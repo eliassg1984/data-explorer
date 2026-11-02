@@ -293,7 +293,7 @@ def render_pareto(det, col_val, col_prod, col_area, col_cantidad, col_unidad,
         tp["__sel"] = False
         _cols.append(("valor", "Valor", "saldo"))
         st.markdown(
-            f"<div style='font-size:11.5px;font-weight:700;letter-spacing:.04em;"
+            f"<div style='font-size: 12px;font-weight:700;letter-spacing:.04em;"
             f"text-transform:uppercase;margin:2px 0 4px 2px'>{_marc}</div>",
             unsafe_allow_html=True)
         _kg = f"{prefijo}_par_areas_{_clave(ident, lado, _marc)}"

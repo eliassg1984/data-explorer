@@ -202,7 +202,7 @@ def _celda_total_html(v, max_abs, modo_val):
         f"border-radius:6px;padding:0 3px'>"
         f"<div style='position:relative;height:{_ALTO_CELDA}px'>{_barra}"
         f"<div style='position:relative;line-height:{_ALTO_CELDA}px;"
-        f"padding-left:6px;font-size:11px;font-weight:600;color:{_txt};"
+        f"padding-left:6px;font-size: 12px;font-weight:600;color:{_txt};"
         f"font-variant-numeric:tabular-nums;white-space:nowrap'>"
         f"S/ {v:,.0f}</div></div></div>"
     )
@@ -474,13 +474,13 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         '100%; justify-content: flex-start !important; }',
         '.st-key-hm_tabla [class*="st-key-hm_fam_"] button p { overflow: '
         'hidden; text-overflow: ellipsis; font-weight: 500 !important; '
-        'font-size: 11.5px !important; }',
+        'font-size: 12px !important; }',
         # El texto del botón vive en un <p> con su propio font-size (regla
         # #68): sin esto las celdas salen en los 14px de Streamlit.
         # El monto va a la IZQUIERDA, donde arranca su barra. El
         # `justify-content` del botón no alcanza: el <div> del label ocupa
         # todo el ancho y el <p> centraba adentro.
-        '.st-key-hm_tabla button p { font-size: 11px !important; '
+        '.st-key-hm_tabla button p { font-size: 12px !important; '
         'font-weight: 600 !important; line-height: 1 !important; margin: 0 '
         '!important; color: inherit !important; text-align: left '
         '!important; white-space: nowrap; '
@@ -599,7 +599,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     f"<div style='background:{ACENTO};"
                     f"border-radius:6px;height:{_ALTO_CELDA}px;"
                     f"line-height:{_ALTO_CELDA}px;padding-left:9px;"
-                    f"font-size:11px;font-weight:700;color:{BLANCO};"
+                    f"font-size: 12px;font-weight:700;color:{BLANCO};"
                     f"font-variant-numeric:tabular-nums;white-space:nowrap'>"
                     f"S/ {_tot_gral:,.0f}</div>",
                     unsafe_allow_html=True)
@@ -716,7 +716,7 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
                 f"<span style='font-size:12px;font-weight:700;letter-spacing:.05em;"
                 f"text-transform:uppercase;color:{TEXTO_PRINCIPAL}'>"
                 f"{_fam_sel} × {_donde}</span>"
-                f"<span style='font-size:11.5px;color:{GRIS_TEXTO}'>"
+                f"<span style='font-size: 12px;color:{GRIS_TEXTO}'>"
                 f"<span style='color:{_color_total};font-weight:600'>"
                 f"S/ {_val_sel:,.0f}</span> · {len(_det):,} registros</span></div>",
                 unsafe_allow_html=True,
@@ -807,7 +807,7 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
 
     def _titulo(texto, color):
         st.markdown(
-            f"<div style='font-size:9px;font-weight:600;"
+            f"<div style='font-size: 12px;font-weight:600;"
             f"color:{color};letter-spacing:.08em;"
             f"text-transform:uppercase;margin:4px 0 2px 0'>"
             f"{texto}</div>",
@@ -857,7 +857,7 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
         border-bottom-color: {_AZUL_TEXTO} !important; }}
     div[class*="st-key-hm_buscar_"] [data-testid="stTextInputRootElement"] input {{
         height: auto !important; padding: 2px 2px 4px 2px !important;
-        font-size: 11.5px !important; color: {TEXTO_PRINCIPAL} !important; }}
+        font-size: 12px !important; color: {TEXTO_PRINCIPAL} !important; }}
     div[class*="st-key-hm_buscar_"] [data-testid="stTextInputRootElement"] input::placeholder {{
         color: {GRIS_TEXTO_SUAVE} !important; opacity: 1 !important; }}
     </style>""", unsafe_allow_html=True)

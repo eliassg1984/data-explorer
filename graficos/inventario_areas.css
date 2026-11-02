@@ -7,7 +7,7 @@
 .iar-tabla td, .iar-tabla th { text-align: left; }
 .iar-tabla .num { text-align: right; }
 .iar-matriz table { table-layout: fixed; }
-.iar-matriz th { white-space: normal; line-height: 1.15; height: 38px; padding: 0 4px; font-size: 11px; }
+.iar-matriz th { white-space: normal; line-height: 1.15; height: 38px; padding: 0 4px; font-size: 12px; }
 .iar-matriz th:first-child { width: 170px; padding-left: 9px; text-align: left; }
 .iar-matriz td { height: 44px; padding: 0; }
 .iar-matriz td:first-child { padding-left: 9px; text-align: left; }

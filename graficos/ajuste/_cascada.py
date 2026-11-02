@@ -301,7 +301,7 @@ def _css():
         border-bottom-color: {AJUSTE_POS_TEXTO} !important; }}
     div[class*="st-key-ajcas_buscar_"] [data-testid="stTextInputRootElement"] input {{
         height: auto !important; padding: 2px 2px 4px 2px !important;
-        font-size: 11.5px !important; color: {TEXTO_PRINCIPAL} !important; }}
+        font-size: 12px !important; color: {TEXTO_PRINCIPAL} !important; }}
     div[class*="st-key-ajcas_buscar_"] [data-testid="stTextInputRootElement"] input::placeholder {{
         color: {GRIS_TEXTO_SUAVE} !important; opacity: 1 !important; }}
     /* ── SUBIR LA VISTA ───────────────────────────────────────────────
@@ -482,7 +482,7 @@ def _cobertura(d, est, col_area, col_sis, col_fis):
               if _dh is not None and col_area in _dh.columns else _n)
         _txt = (f"{_n} de {max(_m, _n)} áreas con stock"
                 f"&nbsp;&nbsp;·&nbsp;&nbsp;{_txt}")
-    return (f"<div style='text-align:right;font-size:11.5px;"
+    return (f"<div style='text-align:right;font-size: 12px;"
             f"color:{GRIS_TEXTO}' title='Las áreas se cuentan sobre los "
             f"últimos {_N_HISTORIAL} cortes. Una línea con stock tiene stock "
             f"en el sistema o en el conteo.'>{_txt}</div>")
@@ -593,7 +593,7 @@ def _titulo_tarjeta(texto, n, color):
     return (f"<div style='display:flex;align-items:baseline;gap:7px;"
             f"padding-left:2px'><span style='font-size:12px;font-weight:700;"
             f"letter-spacing:.05em;text-transform:uppercase;color:{color}'>"
-            f"{texto}</span><span style='font-size:11.5px;"
+            f"{texto}</span><span style='font-size: 12px;"
             f"color:{GRIS_TEXTO_SUAVE}'>{n:,} líneas</span></div>")
 
 

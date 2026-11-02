@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-784 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+785 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (260)
+**CSS y estilos** (261)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -327,6 +327,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#780** — Recetas base en el lenguaje entero de Costo de Carta, y «Ampliar» (⤢) en la lista y la ficha
 - **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
 - **#784** — Compras en la franja común (#782) y nada bajo 12 px
+- **#785** — Inventario en la franja común (#782) y nada bajo 12 px
 
 **Layout y alturas** (112)
 
@@ -677,7 +678,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 
-**Streamlit** (174)
+**Streamlit** (175)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -853,6 +854,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 - **#779** — Alza en el lenguaje entero de Costo de Carta: niveles, jerarquía y divulgación progresiva
 - **#781** — Recetas entera en el lenguaje de Costo de Carta, y los códigos a la vista
+- **#785** — Inventario en la franja común (#782) y nada bajo 12 px
 
 **Datos, R2 y DuckDB** (132)
 
@@ -58235,6 +58237,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - `test_sunat_vistas_pieza` y `test_sunat_control` montan la pieza con los 18 px de aire de
      su tarjeta desde 901 px, como `test_ventas_periodo` (#782).
 
+785. **Inventario en la franja común (#782) y nada bajo 12 px.**
+   Stock, Por tipo, Ajuste (Diferencias, Análisis, Evolución) y Movimientos (Req. y salidas,
+   Sin plato): de 16 a 191 textos de 9 a 11,5 px por vista, e indicadores en caja en Por tipo,
+   Diferencias, Req. y salidas y Sin plato.
+   - **Stock filtra** (subrayado); **Req. y salidas elige la medida** (ficha blanca; su regla
+     `.mv .mv-kpi.on` pesa más y hubo que nombrarla igual); Por tipo, Diferencias y Sin plato
+     son cifras fijas, sin caja. «Insumos de operación, aparte» conserva el ámbar en la cifra.
+   - 151 reglas en los `.css` de Stock, Ajuste, Movimientos y Destino; 26 en el CSS que escriben
+     los `.py` de `graficos/ajuste/`; los `font-size` de atributo de los SVG de Destino; y **el
+     atajo `font: 11px/1.4 …`** de `ajuste/diferencias.css` y `ajuste/pivote.css`, que el patrón
+     `font-size:` no veía (las tablas de Análisis y Evolución seguían en 11 px). Medido después:
+     quedan 5 textos de Streamlit en Análisis y 8 en Evolución, de `st.markdown`.
+   - De paso, en Vs porcionado (#781) las fechas del gráfico «Semana a semana» seguían en 10 px,
+     en línea en `recetas_revisar.js`.
+   - **En Sin plato la franja no llega al borde**: su contenedor recorta el margen negativo. Se
+     ve como una franja con aire a los costados; queda así.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58247,7 +58266,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#784**; la próxima toma el número siguiente.
+> última regla es la **#785**; la próxima toma el número siguiente.
 
 >
 

@@ -98,7 +98,7 @@ _CSS = f"""
 .dif-kpi {{ flex: 1 1 auto; padding: 5px 12px; border-right: 1px solid {GRIS_LINEA};
             display: flex; align-items: baseline; gap: 8px; min-width: 0; cursor: help; }}
 .dif-kpi:last-child {{ border-right: 0; }}
-.dif-kpi .r {{ font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+.dif-kpi .r {{ font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
                color: {GRIS_TEXTO}; font-weight: 600; white-space: nowrap;
                overflow: hidden; text-overflow: ellipsis; }}
 .dif-kpi .v {{ font-size: 14.5px; font-weight: 700; color: {TEXTO_PRINCIPAL};
@@ -110,30 +110,30 @@ _CSS = f"""
 .dif-neg {{ color: {AJUSTE_NEG_TEXTO} !important; }}
 .dif-pos {{ color: {AJUSTE_POS_TEXTO} !important; }}
 .dif-n {{ font-size: 15px; font-weight: 700; color: {ACENTO_TEXTO}; line-height: 1.25; }}
-.dif-s {{ font-size: 11.5px; color: {GRIS_TEXTO}; }}
+.dif-s {{ font-size: 12px; color: {GRIS_TEXTO}; }}
 .dif-monto {{ font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }}
 .dif-monto span {{ font-size: 12px; font-weight: 400; color: {GRIS_TEXTO}; margin-left: 6px; }}
-.dif-h {{ font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+.dif-h {{ font-size: 12px; letter-spacing: .05em; text-transform: uppercase;
           color: {GRIS_TEXTO}; font-weight: 600; margin: 4px 0 4px; }}
 .dif-pista {{ border: 1px solid {GRIS_LINEA}; border-radius: 8px; padding: 7px 10px;
               font-size: 12.5px; color: {GRIS_TEXTO_MEDIO}; line-height: 1.45; }}
 .dif-pista.f {{ border-color: {LAVANDA_BORDE}; background: {LAVANDA_SELECCION}; }}
 .dif-pista.receta.f {{ border-color: {AJUSTE_ALERTA_BORDE}; background: {AJUSTE_ALERTA_FONDO}; }}
 .dif-pista b {{ color: {TEXTO_PRINCIPAL}; font-size: 13px; }}
-.dif-fz {{ font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+.dif-fz {{ font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
            border-radius: 4px; padding: 0 5px; margin-left: 6px; vertical-align: 1px; }}
 .dif-fz.f {{ background: {ACENTO}; color: {BLANCO}; }}
 .dif-fz.p {{ border: 1px solid {GRIS_TEXTO_SUAVE}; color: {GRIS_TEXTO}; }}
 .dif-ecu {{ display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
             font-variant-numeric: tabular-nums; font-size: 12px; }}
 .dif-ecu .c {{ border: 1px solid {GRIS_LINEA}; border-radius: 7px; padding: 3px 7px; }}
-.dif-ecu .c i {{ display: block; font-style: normal; font-size: 10px; color: {GRIS_TEXTO}; }}
+.dif-ecu .c i {{ display: block; font-style: normal; font-size: 12px; color: {GRIS_TEXTO}; }}
 .dif-ecu .c b {{ font-size: 13.5px; color: {TEXTO_PRINCIPAL}; }}
 .dif-ecu .o {{ color: {GRIS_TEXTO}; font-weight: 600; }}
 .dif-ecu .c.dn {{ border-color: {AJUSTE_NEG}; }} .dif-ecu .c.dn b {{ color: {AJUSTE_NEG_TEXTO}; }}
 .dif-ecu .c.dp {{ border-color: {AJUSTE_POS}; }} .dif-ecu .c.dp b {{ color: {AJUSTE_POS_TEXTO}; }}
-.dif-ok {{ font-size: 11.5px; color: {AJUSTE_POS_TEXTO}; margin-top: 4px; }}
-.dif-nook {{ font-size: 11.5px; color: {AJUSTE_ALERTA_TEXTO}; margin-top: 4px; }}
+.dif-ok {{ font-size: 12px; color: {AJUSTE_POS_TEXTO}; margin-top: 4px; }}
+.dif-nook {{ font-size: 12px; color: {AJUSTE_ALERTA_TEXTO}; margin-top: 4px; }}
 .dif-dos {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
             gap: 14px; margin-top: 8px; }}
 .dif-mot {{ display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 1px 8px;
@@ -141,9 +141,9 @@ _CSS = f"""
             color: {GRIS_TEXTO_MEDIO}; }}
 .dif-mot .k {{ font-weight: 600; text-align: right; white-space: nowrap;
                font-variant-numeric: tabular-nums; }}
-.dif-mot .m {{ color: {GRIS_TEXTO_SUAVE}; font-size: 11px; text-align: right; white-space: nowrap; }}
+.dif-mot .m {{ color: {GRIS_TEXTO_SUAVE}; font-size: 12px; text-align: right; white-space: nowrap; }}
 .dif-t {{ font-size: 12px; font-weight: 700; color: {TEXTO_PRINCIPAL}; margin-bottom: 2px; }}
-.dif-nota {{ font-size: 11.5px; color: {GRIS_TEXTO}; }}
+.dif-nota {{ font-size: 12px; color: {GRIS_TEXTO}; }}
 /* Lo vendido y sin descontar al contar (#650): una tarjeta más de la fila,
    en ámbar -- hasta el 2026-10-18 era un renglón propio, y ocupaba dos. */
 .dif-kpi.al {{ background: {AJUSTE_ALERTA_FONDO}; }}
@@ -154,17 +154,17 @@ _CSS = f"""
 .dif-uso .n {{ font-weight: 600; color: {TEXTO_PRINCIPAL}; min-width: 0; }}
 .dif-uso .d {{ text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
                color: {GRIS_TEXTO_MEDIO}; }}
-.dif-uso .x {{ grid-column: 1 / -1; color: {GRIS_TEXTO}; font-size: 11.5px;
+.dif-uso .x {{ grid-column: 1 / -1; color: {GRIS_TEXTO}; font-size: 12px;
                display: flex; flex-wrap: wrap; gap: 3px 6px; align-items: center; }}
 .dif-et {{ border: 1px solid {GRIS_BORDE}; border-radius: 4px; padding: 0 5px;
-           font-size: 10.5px; white-space: nowrap; }}
+           font-size: 12px; white-space: nowrap; }}
 .dif-et.aqui {{ border-color: {LAVANDA_BORDE}; background: {LAVANDA_FONDO}; color: {ACENTO_TEXTO}; }}
 .dif-et.al {{ border-color: {AJUSTE_ALERTA_BORDE}; background: {AJUSTE_ALERTA_FONDO};
               color: {AJUSTE_ALERTA_TEXTO}; }}
 .dif-hist {{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px;
              align-items: end; height: 74px; }}
 .dif-hist div {{ display: grid; grid-template-rows: 1fr auto auto; height: 100%;
-                 text-align: center; font-size: 10.5px; color: {GRIS_TEXTO}; }}
+                 text-align: center; font-size: 12px; color: {GRIS_TEXTO}; }}
 .dif-hist i {{ align-self: end; justify-self: center; width: 60%; max-width: 28px;
                border-radius: 3px; }}
 .dif-hist .v {{ font-variant-numeric: tabular-nums; white-space: nowrap; }}
@@ -187,14 +187,14 @@ _CSS = f"""
 .dif-partes {{ font-size: 12px; font-variant-numeric: tabular-nums; margin: 2px 0 6px; }}
 .dif-partes .h, .dif-partes .f {{ display: grid; gap: 2px 8px; align-items: baseline;
     grid-template-columns: minmax(0, 1.5fr) repeat(5, minmax(0, .8fr)) minmax(0, .9fr); }}
-.dif-partes .h {{ color: {GRIS_TEXTO}; font-size: 10.5px; text-transform: uppercase;
+.dif-partes .h {{ color: {GRIS_TEXTO}; font-size: 12px; text-transform: uppercase;
     letter-spacing: .04em; border-bottom: 1px solid {GRIS_LINEA}; padding-bottom: 3px; }}
 .dif-partes .f {{ padding: 4px 0; border-bottom: 1px solid {GRIS_LINEA}; }}
 .dif-partes span {{ text-align: right; white-space: nowrap; }}
 .dif-partes .h span:first-child {{ text-align: left; }}
 .dif-partes .a {{ text-align: left; font-weight: 600; color: {TEXTO_PRINCIPAL};
     overflow: hidden; text-overflow: ellipsis; }}
-.dif-partes .x {{ grid-column: 1 / -1; text-align: left; color: {GRIS_TEXTO}; font-size: 11px;
+.dif-partes .x {{ grid-column: 1 / -1; text-align: left; color: {GRIS_TEXTO}; font-size: 12px;
     white-space: normal; }}
 .dif-partes .f.s {{ border-bottom: none; }}
 .dif-partes .t {{ font-weight: 700; }}
