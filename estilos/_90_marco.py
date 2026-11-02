@@ -175,6 +175,76 @@ CSS = """
     .st-key-persp_tiempo.st-key-persp_tiempo [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {
         color: var(--text-primary) !important;
     }
+    /* #800: lo mismo en Movimientos (Req. y salidas), desde el renglón de «Ver»: #796 — de Costo de Carta: sin el
+       rótulo «Ver», las perspectivas subrayadas y una raya de borde
+       a borde debajo. La pieza pone a la derecha «Detalle» y «Cómo se calcula». */
+    .st-key-persp_mov .persp-rot { display: none; }
+    .st-key-persp_mov.st-key-persp_mov {
+        border-bottom: 1px solid var(--border);
+        margin-left: -18px !important;
+        margin-right: -18px !important;
+        padding: 0 18px;
+    }
+    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] {
+        background: none;
+        padding: 0;
+        gap: 18px !important;
+    }
+    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] button {
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        border-bottom: 2px solid transparent !important;
+        padding: 0 !important;
+        margin-right: 18px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+    }
+    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] button[aria-checked="true"],
+    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {
+        background: transparent !important;
+        box-shadow: none;
+        border-bottom-color: var(--accent) !important;
+    }
+    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] button[aria-checked="true"] p,
+    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {
+        color: var(--text-primary) !important;
+    }
+    /* #800: lo mismo en Movimientos (Sin plato), desde el renglón de «Ver»: #796 — de Costo de Carta: sin el
+       rótulo «Ver», las perspectivas subrayadas y una raya de borde
+       a borde debajo. La pieza pone a la derecha «Detalle» y «Cómo se calcula». */
+    .st-key-persp_sin .persp-rot { display: none; }
+    .st-key-persp_sin.st-key-persp_sin {
+        border-bottom: 1px solid var(--border);
+        margin-left: -18px !important;
+        margin-right: -18px !important;
+        padding: 0 18px;
+    }
+    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] {
+        background: none;
+        padding: 0;
+        gap: 18px !important;
+    }
+    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button {
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        border-bottom: 2px solid transparent !important;
+        padding: 0 !important;
+        margin-right: 18px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+    }
+    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button[aria-checked="true"],
+    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {
+        background: transparent !important;
+        box-shadow: none;
+        border-bottom-color: var(--accent) !important;
+    }
+    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button[aria-checked="true"] p,
+    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {
+        color: var(--text-primary) !important;
+    }
     /* El −1rem de Streamlit bajo un markdown lo descentraba de la fecha. */
     .st-key-vt_mix_cab [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;

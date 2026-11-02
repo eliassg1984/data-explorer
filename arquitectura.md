@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-799 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+800 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1160,7 +1160,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (255)
+**Decisiones de diseño y UX** (256)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1417,6 +1417,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#796** — Stock en el lenguaje entero de Costo de Carta, y el código siempre a la vista
 - **#797** — «Qué faltó» con cantidad, unidad y código; y «Explorar», la tabla dinámica de Ajuste
 - **#799** — Ajuste › Evolución en el lenguaje de Costo de Carta: una zona por pestaña
+- **#800** — Movimientos en el lenguaje de Costo de Carta, y el código en Sin plato
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58497,6 +58498,17 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      sobrante se veía tranquilo.
    - ⤢ en la zona y en el costado; ↙ o `Esc` vuelven.
 
+800. **Movimientos en el lenguaje de Costo de Carta, y el código en Sin plato.**
+   Req. y salidas y Sin plato ya tenían la franja, las zonas y el panel (#772): faltaba la forma.
+   - Los renglones de «Ver» (Salidas | Requerimientos, Resumen | Análisis por área; Cierres |
+     Productos) son el nivel 2, subrayados y sin «Ver» (`_90_marco.py`, como #796 y #799).
+   - Las pestañas de la zona (Gráfico, Calendario, Tabla…; Cierres, Dónde se concentra…)
+     navegan: subrayadas (#795). Grano, «Contar por», «Por área | Por tipo | Por producto» y
+     los filtros de la lista siguen en la caja gris. La pieza es de cuatro (#772): Órdenes de
+     producción y Porcionamientos toman lo mismo.
+   - **El código del ítem, a pedido:** en «Los que más pesan» de Sin plato, y en la lista de
+     Productos también sin «Ampliar» (el `<small>` con código y familia estaba escondido).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58509,7 +58521,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#799**; la próxima toma el número siguiente.
+> última regla es la **#800**; la próxima toma el número siguiente.
 
 >
 

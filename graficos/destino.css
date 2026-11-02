@@ -49,3 +49,14 @@
 }
 .dst-kpi { border: 0; border-radius: 10px; background: transparent; padding: 4px 8px; box-shadow: none; }
 .dst-kpi b { font-size: 17px; font-weight: 500; }
+
+/* #800: las pestañas de la zona navegan: subrayadas, sin la caja gris (#795). */
+.destino .dst-tabs { background: none !important; padding: 0 !important; gap: 18px !important; border-radius: 0 !important; }
+.destino .dst-tabs button { background: none !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important; box-shadow: none !important; padding: 4px 0 !important; color: var(--text-secondary) !important; }
+.destino .dst-tabs button:hover { color: var(--accent-deep) !important; }
+.destino .dst-tabs button.on, .destino .dst-tabs button[aria-selected="true"] { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent) !important; }
+/* El código del Almacén, en gris al lado del nombre (#800, a pedido). */
+.dst-cod { font-size: 12px; color: var(--text-secondary); margin-left: 4px; }
+/* El código y la familia de cada producto a la vista también sin «Ampliar» (#800):
+   hasta hoy sólo salían en la ficha. */
+.dst-producto:not(.ampliada) .dst-lista td small { display: block; font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; }

@@ -50,3 +50,9 @@
 .mv .mv-kpi:hover { background: rgba(255, 255, 255, .55); }
 .mv .mv-kpi.on, .mv-kpi.on { border: 0; background: var(--bg-card); box-shadow: 0 1px 4px rgba(73, 56, 184, .16); }
 .mv-kpi b { font-size: 17px; font-weight: 500; }
+
+/* #800: las pestañas de la zona navegan: subrayadas, sin la caja gris (#795). */
+.mv .mv-tabs { background: none !important; padding: 0 !important; gap: 18px !important; border-radius: 0 !important; }
+.mv .mv-tabs button { background: none !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important; box-shadow: none !important; padding: 4px 0 !important; color: var(--text-secondary) !important; }
+.mv .mv-tabs button:hover { color: var(--accent-deep) !important; }
+.mv .mv-tabs button.on, .mv .mv-tabs button[aria-selected="true"] { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent) !important; }
