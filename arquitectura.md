@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-775 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+776 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (254)
+**CSS y estilos** (255)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -321,6 +321,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 - **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
+- **#776** — El marco de la opción B en toda la app: la navegación sobre lavanda y cada vista, su hoja
 
 **Layout y alturas** (110)
 
@@ -1137,7 +1138,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (244)
+**Decisiones de diseño y UX** (245)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1383,6 +1384,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
 - **#774** — Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de…
 - **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
+- **#776** — El marco de la opción B en toda la app: la navegación sobre lavanda y cada vista, su hoja
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58034,6 +58036,32 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    Lo vigilan `test_costo_carta.py` y `test_ficha_plato.py`: cifras, filtros secundarios,
    callbacks, Detalle, Ampliar/Soltar y ancho de 320 a 1323 px, con retorno a escritorio.
 
+776. **El marco de la opción B en toda la app: la navegación sobre lavanda y cada vista, su hoja.**
+   La #775 lo puso sólo con Costo de Carta en pantalla (`:root:has(.st-key-franjav_Recetas_
+   Carta_costeada .vista-en-pantalla)`), y la pila de Recetas tiene seis vistas: al bajar a
+   Alza, en la misma área, la franja pasaba de lavanda a blanca y la vista activa de pastilla
+   índigo a gris. Censo del 2026-11-01 a 1323×619: 1 de 41 vistas con ese marco.
+   - **`.stMain` y la franja van sobre `--marco-fondo`; la vista activa es pastilla
+     `--accent-deep`.** El marco de la #764 sigue debajo (márgenes, controles fijos con
+     `--marco-hoja`): sólo cambia quién es blanco.
+   - **La hoja es la SECCIÓN de la pila**, reconocida como en el encaje de `_27_pila.py`
+     (`[class*="st-key-"][class*="_sec_"]`), sin `:has()`. Costos y Documentos SUNAT no tienen
+     pila: nombran su contenedor (`ajuste_graf_card_izq_costos`, `compras_sunat_drill_wrap`).
+     Una sección dentro de otra (las perspectivas) no es otra hoja.
+   - **La hoja recorta con `overflow: clip`.** Sus tarjetas también son blancas y cuadradas
+     (`rec_card_carta`, medido): sin el recorte tapaban las esquinas redondeadas. `clip` y no
+     `hidden`, que crearía un scroll propio y soltaría los `sticky`.
+   - **`rec_card_carta` dejó de ser la hoja** (radio 0, sin sombra): lo es su sección.
+   - **Lo de ADENTRO de cada vista no cambió.** Conviven tres idiomas: Costo de Carta (#775),
+     las pantallas de octubre (#763-#774: indicadores sin caja, lista y ficha) y las tarjetas
+     con caja de antes (Alza, Recetas base, Cambios, Vs porcionado, Nuevo Costeo, Inicio,
+     Producción, Costos). Pasar cada una al lenguaje de la #775 es trabajo por vista, con su
+     inventario: el boceto lo pide así.
+   Y del mismo censo, en Costo de Carta: `.cc .cc-info { position:absolute }` mandaba TODAS las
+   «ⓘ» a la esquina de la hoja —la de «Cómo se calcula» y la del pie de la lista—, no sólo
+   las de los indicadores; ahora es `.cc-kpi-zona>.cc-info`. El buscador toma 240 px (149 le
+   cortaban el texto).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58046,7 +58074,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#772**; la próxima toma el número siguiente.
+> última regla es la **#776**; la próxima toma el número siguiente.
 
 >
 

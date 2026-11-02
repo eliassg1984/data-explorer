@@ -607,9 +607,11 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   `--barra-fecha`, `--barra-sello`). **Siempre a la vista desde la regla
   #764** (de la #473 a ese día aparecía con el cursor).
 
-**Y todo va sobre una hoja blanca** (regla #764, `estilos/_90_marco.py`): la
-hoja es `.stMain` con margen, lavanda alrededor, la franja es su borde de arriba
-y las tarjetas no llevan caja. Lo que muerde: lo fijo se ubica contra la ventana,
+**Y cada vista es una hoja blanca** (reglas #764 y #776, `estilos/_90_marco.py`):
+la franja va sobre el lavanda, con la vista activa en pastilla índigo, y cada
+sección de la pila —su key lleva `_sec_`— es su propia hoja, que recorta con
+`overflow: clip`; Costos y Documentos SUNAT, sin pila, nombran su contenedor.
+Hasta la #776 la hoja era `.stMain` entero y la franja su borde de arriba. Lo que muerde: lo fijo se ubica contra la ventana,
 así que un control de la franja suma `--marco-hoja` a su `top` y a su `right`; el
 contenedor de `.stMain` va en `overflow: clip`, porque con `hidden` un salto a una
 vista lo corría 52px; y un margen negativo calculado con `--cab-offset-contenido`
@@ -1997,6 +1999,8 @@ calendario es el nativo de siempre, ubicado sobre el hueco que mide la pieza:
 no copiar el calendario simplificado del boceto. Las cuentas y callbacks
 siguen en sus funciones anteriores. `test_ficha_plato.py` cubre además
 filtros secundarios, Detalle, Ampliar/Soltar y retorno de móvil a laptop.
+Desde la #776 el marco (navegación sobre lavanda, hoja por vista) es de toda la
+app; lo de adentro de las demás vistas sigue como estaba.
 
 **«Nuevo Costeo» también, desde el mismo día** (regla #697): la tabla de la
 receta y el precio son `graficos/nuevo_costeo.js` + `.css`; el buscador, el

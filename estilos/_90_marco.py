@@ -199,22 +199,51 @@ CSS = """
     }
     }
 
-    /* #775: Costo de Carta, opción B. La navegación queda sobre lavanda;
-       la hoja empieza en Carta | Combos. Sólo afecta esta vista. */
+    /* #776: el marco de la opción B en TODA la app (en la #775 era sólo de
+       Costo de Carta, y al bajar a Alza la franja cambiaba de color). La
+       navegación —área, vistas, hora del dato, Refrescar— queda sobre el
+       lavanda y cada vista es su propia hoja blanca, que empieza debajo de
+       la franja. Las vistas de la pila se reconocen como en el encaje de
+       `_27_pila.py`, por el infijo `_sec_` de su key; Costos y Documentos
+       SUNAT no tienen pila y nombran su contenedor. Sin `:has()` (#469). */
     @media (min-width: 901px) {
-    :root:has(.st-key-franjav_Recetas_Carta_costeada .vista-en-pantalla) .stMain {
+    :root:has(.st-key-compras_tabs_row) .stMain {
         background: var(--marco-fondo) !important;
         box-shadow: none !important;
         border-radius: 0 !important;
     }
-    :root:has(.st-key-franjav_Recetas_Carta_costeada .vista-en-pantalla) .st-key-nav_franja_rep {
+    .st-key-nav_franja_rep {
         background: var(--marco-fondo) !important;
         border-bottom: none !important;
     }
-    :root:has(.st-key-franjav_Recetas_Carta_costeada .vista-en-pantalla) .st-key-nav_franja_idx button.vista-en-pantalla {
+    .st-key-nav_franja_idx [data-testid="stButton"] button.vista-en-pantalla {
         background: var(--accent-deep) !important;
         color: var(--bg-card) !important;
         border-radius: 18px !important;
+    }
+    [class*="st-key-"][class*="_sec_"]:not([class*="st-key-pila_go_"]),
+    .st-key-compras_sunat_drill_wrap,
+    .st-key-ajuste_graf_card_izq_costos {
+        background: var(--bg-card) !important;
+        border-radius: var(--marco-radio) !important;
+        box-shadow: var(--marco-sombra) !important;
+        /* Las tarjetas de adentro también son blancas y cuadradas: sin el
+           recorte tapan las esquinas. `clip` y no `hidden`: no crea un
+           scroll propio, y los `sticky` siguen pegándose a la página. */
+        overflow: clip !important;
+    }
+    /* Una sección dentro de otra (las perspectivas) no es otra hoja. */
+    [class*="_sec_"] [class*="st-key-"][class*="_sec_"] {
+        background: transparent !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        overflow: visible !important;
+    }
+    /* La tarjeta de Costo de Carta era la hoja de la #775: ahora lo es su
+       sección, como en las demás. */
+    .st-key-rec_card_carta {
+        border-radius: 0 !important;
+        box-shadow: none !important;
     }
     }
     .st-key-rec_card_carta {
