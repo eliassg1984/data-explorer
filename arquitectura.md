@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-780 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+781 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (258)
 
@@ -674,7 +674,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 
-**Streamlit** (173)
+**Streamlit** (174)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -849,6 +849,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 - **#779** — Alza en el lenguaje entero de Costo de Carta: niveles, jerarquía y divulgación progresiva
+- **#781** — Recetas entera en el lenguaje de Costo de Carta, y los códigos a la vista
 
 **Datos, R2 y DuckDB** (132)
 
@@ -1144,7 +1145,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (247)
+**Decisiones de diseño y UX** (248)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1393,6 +1394,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#776** — El marco de la opción B en toda la app: la navegación sobre lavanda y cada vista, su hoja
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 - **#778** — Recetas entera en el lenguaje de la #775: franja de indicadores, sin cajas, nada bajo 12 px
+- **#781** — Recetas entera en el lenguaje de Costo de Carta, y los códigos a la vista
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58159,6 +58161,27 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      El plato a `width: 100 %` empujaba las cifras fuera de la vista: sólo desde 901 px. Y las
      barritas de la lista se esconden: no entraban junto a la cifra.
 
+781. **Recetas entera en el lenguaje de Costo de Carta, y los códigos a la vista.**
+   Con Cambios, Vs porcionado y Nuevo Costeo, las seis vistas de Recetas tienen la misma forma.
+   - **Los códigos** (a pedido: «¿puedo ver los códigos de los productos?»): en la ficha siempre
+     («cód. 0002881»), en la lista con «Detalle», y el buscador encuentra por código en Recetas
+     base, Cambios y Vs porcionado. Alza lo muestra también en el renglón del insumo elegido.
+   - **Cambios:** el título se fue y la fecha nativa (`rec_cambios_cab`) se ubica en la fila de
+     filtros, como en Alza (`recetas_cambios.js::medir`); nivel 2 con Todo | Recetas base |
+     Recetas de plato | Precios, «Detalle» y «Cómo se calcula» (de dónde sale cada tipo y qué es
+     un cambio grande); los usuarios en pastillas; el resumen de cada cambio sale con «Detalle».
+   - **Vs porcionado:** nivel 2 con las ventanas; nivel 3 con el período, «Por valor | A–Z» y el
+     buscador; el pop junta las cinco explicaciones que antes sólo salían al pasar el cursor por
+     cada indicador. En la ficha, «Recetas que lo piden», «Últimos porcionamientos» y «Del mismo
+     insumo» van plegados. La fecha del último porcionamiento de cada fila sale con «Detalle».
+   - **Nuevo Costeo:** sin título al lado del modo (`formulario_receta._cabecera()` ya no lo
+     recibe); el modo son pestañas con subrayado de borde a borde (`_90_marco.py`). **El elegido
+     lo dice `aria-checked="true"`:** en esta versión de Streamlit el botón no lleva `kind`, así
+     que la regla de `_80_cards` con `kind="segmented_controlActive"` nunca lo marcó. La receta
+     y el precio van sin caja, cada uno con su ⤢.
+   - **Celular:** en Vs porcionado y en la tabla de Nuevo Costeo, `flex: 1 1 0` en una columna
+     dejaba la zona en 0 px (la lista no se veía; el aviso de receta vacía tapaba el pie).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58171,7 +58194,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#780**; la próxima toma el número siguiente.
+> última regla es la **#781**; la próxima toma el número siguiente.
 
 >
 

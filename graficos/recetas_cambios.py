@@ -428,11 +428,10 @@ def render_cambios_recetas_base(df_rv=None, df_rb=None):
     nombrar los insumos, decir dónde se usa cada receta y qué le toca a cada
     plato."""
     with st.container(border=True, key="rec_card_cambios"):
+        # El nombre de la vista ya está en la franja; la pieza reserva el
+        # lugar del calendario nativo en su fila de filtros (#775, #781).
         cab = st.container(horizontal=True, gap="small",
                            vertical_alignment="center", key="rec_cambios_cab")
-        with cab:
-            st.markdown('<p class="chart-card-hdr">Cambios en recetas</p>',
-                        unsafe_allow_html=True)
         with st.spinner("Leyendo los cambios de las recetas y los precios…"):
             eds = ediciones_bases() or []
             aud = cambios_auditoria()

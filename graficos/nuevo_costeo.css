@@ -158,5 +158,31 @@ i.g { background: var(--serie-2); opacity: .55; }
 .ng-lineas td.num { text-align: right; }
 .ng-lineas .nc-ins { max-width: 210px; }
 .ng-und { font-size: 12px; color: var(--text-secondary); }
-/* #778: nada bajo 12 px (#777). Los campos conservan su caja: es lo que se
-   escribe. */
+/* ── #781: el lenguaje de Costo de Carta (#775) ──────────────────────────
+   Sin cajas alrededor de la receta y del precio (también en «Guardadas»): el
+   precio se separa con una línea. Los campos conservan su caja: es lo que se
+   escribe. Cada zona se amplía (⤢) al ancho de la tarjeta. Nada bajo 12 px
+   (#777). */
+.nc { font-size: 14px; }
+.nc-receta, .nc-precio { border: 0; border-radius: 0; background: transparent; }
+.nc-pie { border-top: 1px solid var(--border); background: transparent; padding: 8px 0; }
+.nc-precio { border-left: 1px solid var(--border); padding: 0 0 0 16px; }
+.nc-pcol { flex: 0 1 370px; min-width: 300px; position: relative; display: flex; flex-direction: column; min-height: 0; }
+.nc-pcol .nc-precio { flex: 1 1 auto; min-width: 0; }
+.nc-pamp { position: absolute; top: 0; right: 0; z-index: 1; }
+.nc-tabla th { background: var(--bg-card); }
+.nc-total b { font-size: 17px; font-weight: 500; }
+.amp { flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: none;
+  color: var(--text-secondary) !important; font-size: 16px !important; line-height: 28px; cursor: pointer; }
+.amp:hover { background: var(--marco-control); color: var(--accent-deep) !important; }
+.nc.amp-receta .nc-pcol, .nc.amp-precio .nc-receta { display: none; }
+.nc.amp-precio .nc-pcol { flex: 1 1 auto; }
+.nc.amp-precio .nc-precio { border-left: 0; padding-left: 0; }
+@media (max-width: 900px) {
+  .nc-pcol { flex: none; min-width: 0; }
+  /* La tabla con alto propio: con `flex: 1 1 0` medía 0 px y el aviso de la receta
+     vacía se montaba sobre el pie. */
+  .nc-zt, .nc-tabla { flex: none; }
+  .nc-tabla { max-height: 380px; }
+  .nc-precio { border-left: 0; padding: 16px 0 0; border-top: 1px solid var(--border); }
+}

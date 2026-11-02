@@ -95,7 +95,7 @@ function htmlEditor(d, st) {
   const p = st.pcts[cod] || 0;
   const precio = base
     ? `<label class="sa-precio"><span>S/</span><input type="number" step="0.01" min="0" data-acc="precio" data-cod="${esc(cod)}" value="${(base * (1 + p / 100)).toFixed(2)}" aria-label="Nuevo precio por ${esc(unid)}"><span>/ ${esc(unid)}</span></label>
-       <span class="sa-base">hoy ${dinero(base, 2)} / ${esc(unid)} · ${esc(fuente === 'promedio de almacén' ? 'prom. almacén' : fuente)}</span>`
+       <span class="sa-base">hoy ${dinero(base, 2)} / ${esc(unid)} · ${esc(fuente === 'promedio de almacén' ? 'prom. almacén' : fuente)}${st.detalle ? ` · cód. ${esc(cod)}` : ''}</span>`
     : `<span class="sa-base">${esc(fuente)}: sólo el %</span>`;
   return `<div class="sa-ins" aria-label="${esc(nombre)}">
     <div class="sa-step">
@@ -221,7 +221,7 @@ function htmlLista(d, st, filas, elegido) {
     const dif = f.mant - f.precio;
     return `<tr class="sa-fila${elegido && f.cod === elegido.cod ? ' sel' : ''}" data-acc="plato" data-cod="${esc(f.cod)}">
       <td class="sa-plato"><div><b title="${esc(f.plato)}">${esc(f.plato)}</b>${f.pH > 60 ? '<span class="sa-revisar" title="El costo de hoy ya pasa el 60 % del neto: casi seguro un error de receta o de factor. Revisarlo en Costo de Carta.">revisar costo</span>' : ''}</div>
-        <span>${esc(f.sub)} · S/ ${num(f.precio)}</span></td>
+        <span>${esc(f.sub)} · S/ ${num(f.precio)}${det ? ` · cód. ${esc(f.cod)}` : ''}</span></td>
       ${det ? `<td><div class="sa-seg">${f.partes.map(([i, s]) => `<i style="width:${Math.min(100, s / f.costo * 100)}%;background:${color(i)}"></i>`).join('')}</div>
         <span class="sa-sub" title="${dinero(f.peso, 2)} de un costo de ${dinero(f.costo, 2)}">${dinero(f.peso, 2)} · ${Math.round(f.peso / f.costo * 100)} % del costo</span></td>` : ''}
       <td class="sa-pct"><span class="hoy">${f.pH.toFixed(1)}</span> → <span class="pill ${nivel(f.pN)}">${pct(f.pN)}</span>${cruza ? `<em>${cruza}</em>` : ''}</td>
@@ -263,7 +263,7 @@ function htmlFicha(d, st, f) {
   const dif = (x) => (Math.abs(x - f.precio) < 0.005 ? 'sin cambio' : dinero(x - f.precio, 2, true));
   const absorber = f.vend ? `${dinero(-f.delta * f.vend, 0, true)} de margen en el período` : `${dinero(-f.delta, 2, true)} por plato`;
   const sube = Math.abs(f.mant - f.precio) < 0.005 ? 'el precio queda igual' : `el precio pasa a ${dinero(f.mant, 2)}`;
-  return `<div class="sa-fcab"><span>${esc(f.sub)} · ${f.vend ? `se vendieron ${num(f.vend)} en el período` : 'sin ventas en el período'}</span><div class="sa-ftit"><h3>${esc(f.plato)}</h3>${amp(st, 'ficha', 'la ficha')}</div></div>
+  return `<div class="sa-fcab"><span>${esc(f.sub)} · cód. ${esc(f.cod)} · ${f.vend ? `se vendieron ${num(f.vend)} en el período` : 'sin ventas en el período'}</span><div class="sa-ftit"><h3>${esc(f.plato)}</h3>${amp(st, 'ficha', 'la ficha')}</div></div>
     <div class="sa-cifras">
       <div><span class="sa-c-rot">Costo del plato · antes ${dinero(f.costo, 2)}</span><b class="sa-c-val ${tinta(f.delta)}">${dinero(f.nuevo, 2)}</b></div>
       <div><span class="sa-c-rot">% de costo · hoy ${pct(f.pH)}</span><b class="sa-c-val ${nivel(f.pN)}">${pct(f.pN)}</b></div>

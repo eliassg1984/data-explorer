@@ -53,17 +53,47 @@ function pasa(st, f) {
   if (st.filtro && st.filtro !== 'neg' && f.clase !== st.filtro) return false;
   if (st.q) {
     const q = sinTilde(st.q);
-    if (!sinTilde(f.corte).includes(q) && !sinTilde(f.grupo).includes(q) && !f.platos.some((p) => sinTilde(p[0]).includes(q))) return false;
+    if (!sinTilde(f.corte).includes(q) && !sinTilde(f.grupo).includes(q) && !String(f.cod).includes(st.q.trim()) && !f.platos.some((p) => sinTilde(p[0]).includes(q))) return false;
   }
   return true;
+}
+
+const TIPS = [
+  ['Piden más de lo porcionado', 'Las recetas de lo vendido piden más del doble de lo que se porcionó y se compró. «Faltaron»: lo que faltó porcionar, al precio promedio de hoy.'],
+  ['Ninguna receta lo usa', 'Se porcionó y ni una receta de venta o receta base activas, ni un directo de la carta, ni una venta, ni otro porcionamiento lo nombra.'],
+  ['Kardex en negativo al final', 'El corte terminó el período con stock debajo de cero en el kardex (todas las áreas): es lo que después sale como sobrante y faltante en el Ajuste.'],
+  ['Ya no se porciona', 'Sin receta y sin porcionamientos en los últimos 14 días del período: el código viejo de un cambio de receta.'],
+  ['Sale por notas de salida', 'Las notas de salida cubren al menos la mitad de lo porcionado: no es un tema de receta.'],
+];
+const amp = (st, id, que) => `<button type="button" class="amp" data-acc="ampliar" data-id="${id}" title="${st.amp === id ? 'Volver' : `Ampliar ${que}`}" aria-label="${st.amp === id ? 'Volver' : `Ampliar ${que}`}">${st.amp === id ? '↙' : '⤢'}</button>`;
+function plegable(st, id, tit, cuerpo) {
+  const ab = !!st.pleg[id];
+  return `<div class="pleg${ab ? ' abierto' : ''}"><button type="button" class="pleg-b" data-acc="pleg" data-id="${id}" aria-expanded="${ab}"><span>${tit}</span><i>▾</i></button><div class="pleg-c">${cuerpo}</div></div>`;
+}
+function abrirInfo(raiz, b) {
+  const st = raiz.__d.st, pop = raiz.querySelector('[data-zona="pop"]');
+  st.pop = b && st.pop !== b.dataset.id ? b.dataset.id : null;
+  if (!st.pop) { pop.hidden = true; return; }
+  pop.innerHTML = `<div class="pi-cab"><b>Cómo se calcula</b><button type="button" class="x" data-acc="cerrar-info" aria-label="Cerrar">×</button></div>`
+    + TIPS.map(([t, x]) => `<p><b>${esc(t)}:</b> ${esc(x)}</p>`).join('') + '<p>Un clic en un indicador deja sólo esos cortes; otro, todos.</p>';
+  pop.hidden = false;
+  const r = b.getBoundingClientRect(), base = raiz.getBoundingClientRect();
+  const ancho = Math.min(400, base.width - 16);
+  pop.style.width = `${ancho}px`;
+  pop.style.left = `${Math.max(8, Math.min(r.right - base.left - ancho, base.width - ancho - 8))}px`;
+  pop.style.top = `${r.bottom - base.top + 6}px`;
 }
 
 // ── Las partes ───────────────────────────────────────────────────────────
 function htmlCab(raiz) {
   const { data: d } = raiz.__d, v = ventana(raiz), anio = Number(v.fin.slice(0, 4));
-  return `<span class="rr-tit">Recetas vs porcionado</span>
-    <div class="seg" role="group">${d.ventanas.map((w) => `<button type="button" data-acc="dias" data-id="${w.dias}" class="${w.dias === v.dias ? 'on' : ''}">${esc(w.rot)}</button>`).join('')}</div>
-    <span class="rr-per">Del ${fecha(v.ini, anio)} al ${fecha(v.fin)} ${anio} · hasta el último pedido con venta</span>`;
+  return `<div class="tabs2" role="tablist">${d.ventanas.map((w) => `<button type="button" role="tab" data-acc="dias" data-id="${w.dias}" class="${w.dias === v.dias ? 'on' : ''}">${esc(w.rot)}</button>`).join('')}</div>
+    <div class="n2-der"><label class="switch"><input type="checkbox" data-acc="detalle" role="switch"${raiz.__d.st.detalle ? ' checked' : ''}>Detalle</label>
+      <button type="button" class="link" data-acc="info" data-id="calculo">Cómo se calcula</button></div>`;
+}
+function htmlPeriodo(raiz) {
+  const v = ventana(raiz), anio = Number(v.fin.slice(0, 4));
+  return `Del ${fecha(v.ini, anio)} al ${fecha(v.fin)} ${anio} · hasta el último pedido con venta`;
 }
 function htmlKpis(raiz) {
   const { st } = raiz.__d, t = ventana(raiz).filas;
@@ -162,16 +192,16 @@ function htmlFicha(raiz) {
   const hermanos = v.filas.filter((x) => x.grupo_cod === f.grupo_cod && x.cod !== f.cod);
   const cod = f.platos.map((p) => [p[0], d.codigos[String(p[0]).trim().toLowerCase()]]).find((p) => p[1]);
   return `
-    <div class="fi-cab"><span class="chip ch-${f.clase}" style="justify-self:start"><i></i>${esc(f.que)}</span><span class="fi-nom">${esc(f.corte)}</span><span class="fi-de">Sale de ${esc(f.grupo)} · último porcionamiento ${fecha(f.ultimo, anio)}</span></div>
+    <div class="fi-cab"><span class="chip ch-${f.clase}" style="justify-self:start"><i></i>${esc(f.que)}</span><div class="ftit"><h3 class="fi-nom">${esc(f.corte)}</h3>${amp(st, 'ficha', 'la ficha')}</div><span class="fi-de">Sale de ${esc(f.grupo)} · cód. ${esc(f.cod)} · último porcionamiento ${fecha(f.ultimo, anio)}</span></div>
     <div class="veredicto ${cls}">${ver}</div>
     <div class="bl"><div class="bl-t">La cuenta del período<span>en ${esc(un(u))}</span></div>
       <div class="cuenta">${conStock ? `<span>Stock al empezar (kardex)</span><span>${cant(f.stIni, u)}</span>` : ''}<span>${conStock ? '+ ' : ''}Porcionado</span><span>${cant(f.porc, u)}</span>
       ${f.comprado ? `<span>+ Comprado</span><span>${cant(f.comprado, u)}</span>` : ''}<span>− Piden las ventas</span><span>${cant(f.ped, u)}</span>
       ${conStock ? `<span class="t">= Debería quedar</span><span class="t">${cant(esperado, u)}</span><span>Stock al ${fecha(v.fin, anio)} (kardex)</span><span class="${negativo(f) ? 'rojo' : ''}">${cant(f.stFin, u)}</span>` : '<span class="gris">El kardex no se pudo leer: falta el stock.</span><span></span>'}</div></div>
     <div class="bl"><div class="bl-t">Semana a semana<span>${d.sems.length} semanas</span></div>${semanas(d, f)}<div class="ley"><span><i style="background:var(--accent)"></i>porcionado</span><span><i style="background:var(--danger)"></i>piden las ventas</span></div></div>
-    ${plat ? `<div class="bl"><div class="bl-t">Recetas que lo piden<span>en el período</span></div><div class="mini">${plat}</div></div>` : ''}
-    ${porcs ? `<div class="bl"><div class="bl-t">Últimos porcionamientos</div><div class="mini">${porcs}</div></div>` : ''}
-    ${hermanos.length ? `<div class="bl"><div class="bl-t">Del mismo insumo</div><div class="mini">${hermanos.map((h) => `<span title="${esc(h.corte)}">${esc(corto(h.corte))}</span><span class="d">${esc(h.que)}</span><span></span>`).join('')}</div></div>` : ''}
+    ${plat ? plegable(st, 'plat', `Recetas que lo piden · ${f.platos.length}`, `<div class="mini">${plat}</div>`) : ''}
+    ${porcs ? plegable(st, 'porcs', `Últimos porcionamientos · ${f.porcs.length}`, `<div class="mini">${porcs}</div>`) : ''}
+    ${hermanos.length ? plegable(st, 'herm', `Del mismo insumo · ${hermanos.length}`, `<div class="mini">${hermanos.map((h) => `<span title="${esc(h.corte)}">${esc(corto(h.corte))}</span><span class="d">${esc(h.que)}</span><span></span>`).join('')}</div>`) : ''}
     <div class="que-hacer"><b>Qué hacer</b>${QUE_HACER[f.clase] || ''}</div>
     ${cod ? `<div class="acc"><button type="button" class="btn" data-acc="carta" data-id="${esc(cod[1])}">Ver «${esc(cod[0])}» en Costo de Carta ›</button></div>` : ''}`;
 }
@@ -180,12 +210,20 @@ function htmlFicha(raiz) {
 function dibujar(raiz, solo) {
   const { st } = raiz.__d;
   if (!raiz.querySelector('.cuerpo')) {
-    raiz.innerHTML = `<div class="rr-cab" data-zona="cab"></div><div class="kpis" data-zona="kpis"></div>
-      <div class="cuerpo"><div class="caja lista"><div class="lcab"><input data-acc="buscar" placeholder="Buscar un corte, insumo o plato…" aria-label="Buscar un corte, insumo o plato">
-      <div class="seg" role="group" data-zona="orden"></div><span class="n" data-zona="n"></span></div><div class="filas" data-zona="filas"></div></div>
-      <aside class="caja ficha" data-zona="ficha" aria-label="Ficha del corte"></aside></div>`;
+    raiz.innerHTML = `<div class="n2" data-zona="cab"></div>
+      <div class="n3"><span class="per" data-zona="per"></span><div class="orden" role="group" data-zona="orden"></div>
+        <input class="buscar" data-acc="buscar" placeholder="Buscar corte, insumo, plato o código" aria-label="Buscar corte, insumo, plato o código"></div>
+      <div class="kpis" data-zona="kpis"></div>
+      <div class="cuerpo"><div class="lista"><div class="filas" data-zona="filas"></div>
+        <div class="lpie"><span class="n" data-zona="n"></span><span data-zona="ampl"></span></div></div>
+      <aside class="ficha" data-zona="ficha" aria-label="Ficha del corte"></aside></div>
+      <div class="pi" data-zona="pop" role="dialog" hidden></div>`;
   }
   const z = (n) => raiz.querySelector(`[data-zona="${n}"]`);
+  raiz.classList.toggle('detalle', !!st.detalle);
+  raiz.classList.toggle('amp-lista', st.amp === 'lista');
+  raiz.classList.toggle('amp-ficha', st.amp === 'ficha');
+  z('ampl').innerHTML = amp(st, 'lista', 'la lista');
   const v = ventana(raiz);
   if (st.sel === null || !v.filas.some((f) => f.cod === st.sel && pasa(st, f))) {
     const prim = v.filas.find((f) => pasa(st, f));
@@ -193,6 +231,7 @@ function dibujar(raiz, solo) {
   }
   if (solo !== 'sel') {
     z('cab').innerHTML = htmlCab(raiz);
+    z('per').textContent = htmlPeriodo(raiz);
     z('kpis').innerHTML = htmlKpis(raiz);
     z('orden').innerHTML = [['valor', 'Por valor'], ['nombre', 'A–Z']].map(([id, r]) => `<button type="button" data-acc="orden" data-id="${id}" class="${st.orden === id ? 'on' : ''}">${r}</button>`).join('');
   }
@@ -210,6 +249,10 @@ function enlazar(raiz) {
     const { st } = raiz.__d, id = b.dataset.id, acc = b.dataset.acc;
     if (acc === 'sel') { if (st.sel === id) return; st.sel = id; dibujar(raiz, 'sel'); raiz.querySelector('[data-zona="ficha"]').scrollTop = 0; return; }
     if (acc === 'carta') { raiz.__d.enviar('carta', { cod: id, n: Date.now() }); return; }
+    if (acc === 'info') { abrirInfo(raiz, b); return; }
+    if (acc === 'cerrar-info') { abrirInfo(raiz, null); return; }
+    if (acc === 'ampliar') { st.amp = st.amp === id ? null : id; dibujar(raiz); return; }
+    if (acc === 'pleg') { st.pleg[id] = !st.pleg[id]; guardar('rec_rev_pleg', st.pleg); dibujar(raiz, 'sel'); return; }
     if (acc === 'dias') st.dias = Number(id);
     else if (acc === 'filtro') { st.filtro = st.filtro === id ? null : id; st.sel = null; }
     else if (acc === 'orden') st.orden = id;
@@ -219,8 +262,19 @@ function enlazar(raiz) {
   };
   raiz.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-acc]');
+    if (raiz.__d.st.pop && !ev.target.closest('[data-zona="pop"]') && !(b && b.dataset.acc === 'info')) abrirInfo(raiz, null);
     if (!b || !raiz.contains(b) || b.tagName === 'INPUT') return;
     elegir(b);
+  });
+  raiz.addEventListener('change', (ev) => {
+    if (ev.target.dataset.acc !== 'detalle') return;
+    raiz.__d.st.detalle = ev.target.checked;
+    guardar('rec_rev_det', raiz.__d.st.detalle);
+    dibujar(raiz);
+  });
+  // En el documento: el redibujo se lleva el foco del botón ⤢.
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && raiz.__d.st.amp) { raiz.__d.st.amp = null; dibujar(raiz); }
   });
   raiz.addEventListener('keydown', (ev) => {
     if (ev.key !== 'Enter' && ev.key !== ' ') return;
@@ -243,7 +297,8 @@ export default function (component) {
     raiz = document.createElement('div');
     raiz.className = 'rr';
     parentElement.appendChild(raiz);
-    raiz.__d = { st: Object.assign({ dias: data.ventanas[0].dias, orden: 'valor' }, leer(CLAVE, {}), { filtro: null, q: '', sel: null }) };
+    raiz.__d = { st: Object.assign({ dias: data.ventanas[0].dias, orden: 'valor' }, leer(CLAVE, {}), { filtro: null, q: '', sel: null,
+      detalle: leer('rec_rev_det', false), pleg: leer('rec_rev_pleg', {}), amp: null, pop: null }) };
     enlazar(raiz);
   }
   raiz.__d.enviar = setTriggerValue;

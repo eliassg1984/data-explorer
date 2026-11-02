@@ -3185,29 +3185,25 @@ def _fragment_nueva_receta():
     card = st.container(key="form_receta_card_receta")
     if modo is None:
         with card:
-            _cabecera("Propuestas guardadas")
+            _cabecera()
             _render_guardadas()
         return
     with card:
-        _cabecera("Receta")
+        _cabecera()
     _render_armado(modo, card)
 
 
-def _cabecera(titulo):
-    """Título de la tarjeta izquierda y, a su derecha, qué se va a hacer:
-    Receta de venta · Combo · Modificar · Guardadas."""
-    # columnas-internas: el título a su ancho y el control a la derecha.
-    c_tit, c_tipo = st.columns([1, 2.6], vertical_alignment="center")
-    with c_tit:
-        st.markdown(f'<div class="fr-titulo">{html.escape(titulo)}</div>',
-                    unsafe_allow_html=True)
-    with c_tipo:
-        st.segmented_control(
-            "Tipo", ["Receta de venta", "Combo", "Modificar", "Guardadas"],
-            default="Receta de venta", key="form_receta_modo",
-            format_func=lambda m: f"{_ICONO_MODO[m]} {m}",
-            label_visibility="collapsed",
-        )
+def _cabecera():
+    """Qué se va a hacer: Receta de venta · Combo · Modificar · Guardadas.
+    Desde la #781 sin título al lado («Receta», «Propuestas guardadas»): la
+    vista ya se nombra en la franja, y el modo va como pestañas con
+    subrayado, el nivel 2 de Costo de Carta (`estilos/_90_marco.py`)."""
+    st.segmented_control(
+        "Tipo", ["Receta de venta", "Combo", "Modificar", "Guardadas"],
+        default="Receta de venta", key="form_receta_modo",
+        format_func=lambda m: f"{_ICONO_MODO[m]} {m}",
+        label_visibility="collapsed",
+    )
 
 
 # El ícono de cada modo en su control (regla #681). Sólo el RÓTULO: el

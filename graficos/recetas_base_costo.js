@@ -88,7 +88,7 @@ function dibujar(raiz) {
     let r = xs.filter(visible);
     if (S.area) r = r.filter((x) => x.area === S.area);
     if (S.prod === 'con') r = r.filter((x) => x.con_ordenes); else if (S.prod === 'sin') r = r.filter((x) => !x.con_ordenes);
-    if (S.q.trim()) { const b = sinTilde(S.q); r = r.filter((x) => sinTilde(x.nombre).includes(b)); }
+    if (S.q.trim()) { const b = sinTilde(S.q.trim()); r = r.filter((x) => sinTilde(x.nombre).includes(b) || String(x.cod).includes(S.q.trim())); }
     if (S.ind) { const t = IND.find((i) => i[0] === S.ind); r = r.filter(t[2]); }
     const k = { vendidos: (x) => -x.vendidos, usado: (x) => -x.usado, producido: (x) => -x.producido, cob: (x) => (x.cob == null ? 9 : x.cob), ultimo: (x) => -(x.ultimo || 0) }[S.orden];
     return r.sort((a, b) => k(a) - k(b) || a.nombre.localeCompare(b.nombre));
@@ -112,7 +112,7 @@ function dibujar(raiz) {
     if (b && raiz.getRootNode().activeElement === b) return;
     q('[data-zona="cab"]').innerHTML = `<label class="pill"><span>Período</span><select data-acc="vent" aria-label="Período de las ventas">${VENT.map(([k, r]) => `<option value="${k}"${S.vent === k ? ' selected' : ''}>${r}</option>`).join('')}</select></label>
       <label class="pill"><span>Área</span><select data-acc="area" aria-label="Área"><option value="">Todas</option>${X.areas.map((a) => `<option${S.area === a ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select></label>
-      <input class="buscar" data-acc="buscar" placeholder="Buscar receta" value="${esc(S.q)}" aria-label="Buscar receta">`;
+      <input class="buscar" data-acc="buscar" placeholder="Buscar receta o código" value="${esc(S.q)}" aria-label="Buscar receta o código">`;
   }
   function indicadores() {
     const base = xs.filter(visible).filter((x) => !S.area || x.area === S.area);
@@ -147,7 +147,7 @@ function dibujar(raiz) {
     const th = (k, t, tip) => `<th data-orden="${k}" class="${S.orden === k ? 'ord' : ''}" title="${esc(tip)}">${t}${S.orden === k ? ' ▾' : ''}</th>`;
     q('[data-zona="lista"]').innerHTML = `<table class="l"><thead><tr><th>Receta base</th>${det ? th('vendidos', 'Vendidos', 'Unidades vendidas de los platos que la llevan (directo o adentro de otra receta base)') + th('usado', 'Usado', 'Lo que usaron esas ventas, en la unidad de la receta') + th('producido', 'Producido', 'Lo que produjeron las órdenes procesadas') : ''}${th('cob', 'Prod. ÷ uso', `Producido ÷ usado. En ámbar debajo de ${fn(U.cob_baja * 100)} % o arriba de ${fn(U.cob_alta * 100)} %`)}${th('ultimo', 'Último costo', 'Costo por unidad de la última orden; la variación, de los últimos 12 meses')}${det ? '<th title="El costo de cada mes con órdenes, últimos 12">12 m</th>' : ''}</tr></thead><tbody>
       ${r.slice(0, 250).map((x) => `<tr data-cod="${esc(x.cod)}" class="${x.cod === S.sel ? 'on' : ''}">
-        <td><span class="nom" title="${esc(x.nombre)}">${esc(x.nombre)}</span><span class="sub">${esc(x.area || '—')} · ${esc(x.unid)}${x.ddProd ? '<span class="chip dd">DD como producto</span>' : ''}${x.activa ? '' : '<span class="chip inac">inactiva</span>'}</span></td>
+        <td><span class="nom" title="${esc(x.nombre)}">${esc(x.nombre)}</span><span class="sub">${esc(x.area || '—')} · ${esc(x.unid)}${det ? ` · cód. ${esc(x.cod)}` : ''}${x.ddProd ? '<span class="chip dd">DD como producto</span>' : ''}${x.activa ? '' : '<span class="chip inac">inactiva</span>'}</span></td>
         ${det ? `<td>${cant(x.vendidos)}<div class="sub">${x.platos ? `${fn(x.platos)} platos` : ''}</div></td>
         <td>${cant(x.usado)}</td>
         <td>${x.con_ordenes && !x.producido ? '0' : cant(x.producido)}<div class="sub">${x.con_ordenes ? `${fn(x.ordenes)} órd.` : ''}</div></td>` : ''}
@@ -269,7 +269,7 @@ function dibujar(raiz) {
     const cuerpo = { receta: pestReceta, prod: pestProducciones, donde: pestDonde, cambios: pestCambios }[S.tab](x);
     z.innerHTML = `<div class="fcab">
         ${S.pila.length ? `<button type="button" class="volver" data-volver="1">← volver a ${esc((F.get(S.pila[S.pila.length - 1]) || {}).nombre || '')}</button>` : ''}
-        <span class="fsub">${esc(x.area || '—')} · por ${esc(x.unid)}${x.activa ? '' : ' · inactiva'}</span>
+        <span class="fsub">${esc(x.area || '—')} · por ${esc(x.unid)} · cód. ${esc(x.cod)}${x.activa ? '' : ' · inactiva'}</span>
         <div class="ftit"><h3>${esc(x.nombre)}</h3>${amp('ficha', 'la ficha')}</div>
         <div class="cifs"><div class="cif"><span>Última orden</span><b>${soles(x.ultimo)}</b><small>${x.f_ultimo ? fecha(x.f_ultimo) : 'nunca'}</small></div>
           <div class="cif"><span>Receta hoy</span><b>${soles(x.costo_hoy)}</b><small>${x.brecha != null ? `${varTxt(x.brecha)} vs. la orden` : 'precios de hoy'}</small></div>

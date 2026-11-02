@@ -107,27 +107,100 @@ td.d, th.d { text-align: right; font-variant-numeric: tabular-nums; white-space:
 @media (max-width: 560px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-/* #778: el lenguaje de Costo de Carta (#775). Los indicadores son una franja
-   lavanda de borde a borde, sin cajas (la tarjeta tiene 18 px a los
-   costados); la lista y la ficha van sin caja, la ficha separada por una
-   línea; los segmentados son pestañas con subrayado; cifras de 17 px y nada
-   bajo 12 px (#777). Las cuentas y los eventos no cambian. */
-/* La franja de borde a borde, sólo desde 901 px: en el celular cada tarjeta
-   tiene otro aire y la grilla de indicadores es la de siempre. */
-@media (min-width: 901px) {
-.kpis { gap: 24px; margin: 0 -18px; padding: 6px 18px; background: var(--rail-fondo);
-  border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
-}
-.kpi { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 2px 0; }
-.kpi:hover { background: transparent; border-color: var(--border-lavender); }
-.kpi.on { background: transparent; border-color: var(--accent); }
-.kpi .v { font-size: 17px; font-weight: 500; }
-.caja { border: 0; border-radius: 0; background: transparent; }
-.ficha.caja { border-left: 1px solid var(--border); }
-.seg { background: transparent; padding: 0; gap: 16px; border-radius: 0; }
-.seg button { padding: 0; border-radius: 0; border-bottom: 2px solid transparent; box-shadow: none; }
-.seg button.on { background: transparent; box-shadow: none; border-bottom-color: var(--accent);
-  color: var(--text-primary) !important; }
-/* El buscador (`.filtros input`) le daba al checkbox 250 px de ancho y borde:
-   se veía un cuadrado suelto lejos de su texto. */
+/* ── #781: el lenguaje entero de Costo de Carta (#775) ──────────────────
+   Nivel 2 (Todo | Recetas base | Recetas de plato | Precios, con subrayado y
+   línea de borde a borde; Detalle y Cómo se calcula a la derecha), nivel 3
+   (la fecha nativa, el plato en foco, los usuarios, «sin costo» y el
+   buscador, en pastillas), la franja de indicadores sin cajas y, a la altura
+   que queda, la lista y la ficha; cada una se amplía (⤢). Espacio 8 / 12 /
+   16 / 24; nada bajo 12 px (#777). La tarjeta va sin aire (`_90_marco.py`). */
+.cr { --e1: 8px; --e2: 12px; --e3: 16px; --e4: 24px;
+  position: relative; display: flex; flex-direction: column; gap: 0; height: var(--alto-util, 620px); min-height: 0;
+  padding: 0 var(--e4) var(--e3); box-sizing: border-box; font-size: 14px; }
+.cr > * { flex: none; min-width: 0; }
+.n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; margin: 0 calc(-1 * var(--e4));
+  padding: 0 var(--e4); border-bottom: 1px solid var(--border); box-sizing: border-box; }
+.tabs2 { display: flex; align-items: stretch; gap: 20px; }
+.tabs2 button { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; padding: 0;
+  cursor: pointer; color: var(--text-secondary) !important; }
+.tabs2 button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent); }
+.tabs2 button i { font-style: normal; font-size: 12px; color: var(--text-muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+.n2-der { margin-left: auto; display: flex; align-items: center; gap: var(--e3); font-size: 13px; }
+.switch { display: flex; align-items: center; gap: var(--e1); cursor: pointer; }
+.switch input { appearance: none; position: relative; width: 26px; height: 14px; margin: 0; border-radius: 7px;
+  background: var(--text-muted); cursor: pointer; }
+.switch input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--bg-card); }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::before { left: 14px; }
+.link { border: 0; background: none; padding: 0; cursor: pointer; color: var(--accent-deep) !important; }
+
+.n3 { display: flex; align-items: center; gap: var(--e1); margin-top: var(--e2); min-height: 30px; }
+.fecha-lugar { width: var(--cr-fecha, 200px); height: 30px; flex: none; }
+.filtros { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--e1); }
+.rot { font-size: 13px; margin-left: 4px; }
+.chip-f { height: 30px; padding: 0 12px; border: 0; border-radius: 15px; background: var(--marco-control); font-size: 13px; }
+.chip-f:hover { background: var(--accent-tint); }
+.chip-f.on { background: var(--accent-tint); color: var(--accent-deep) !important; font-weight: 500; }
+.foco { height: 30px; border-radius: 15px; font-size: 13px; }
+.interruptor { font-size: 13px; margin-left: var(--e1); }
 .interruptor input { width: auto; height: auto; border: 0; padding: 0; background: none; }
+.filtros .buscar { margin-left: auto; flex: 0 1 260px; min-width: 140px; width: auto; height: 30px; padding: 0 14px; border: 0;
+  border-radius: 15px; background: var(--marco-control); font-size: 13px; }
+.filtros .buscar::placeholder { color: var(--text-secondary); opacity: 1; }
+
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: var(--e4); row-gap: var(--e1);
+  margin: var(--e2) calc(-1 * var(--e4)) 0; padding: var(--e1) var(--e4); background: var(--rail-fondo);
+  border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+.kpi { padding: 0 0 2px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; }
+.kpi:hover { background: transparent; border-bottom-color: var(--border-lavender); }
+.kpi.on { background: transparent; border-bottom-color: var(--accent); }
+.kpi .r { line-height: 16px; }
+.kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }
+.kpi .s { display: none; line-height: 16px; }
+.cr.detalle .kpi .s { display: block; }
+
+.cuerpo { flex: 1 1 0; height: auto; min-height: 0; display: flex; gap: var(--e3); margin-top: var(--e3); }
+.lista { flex: 0.92 1 0; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.filas { padding: 0 0 var(--e1); margin-left: -8px; }
+.f { padding: 8px; border: 0; }
+.f.sel { border: 0; }
+.f .n { font-weight: 500; }
+.f .res { display: none; }
+.cr.detalle .f .res { display: block; }
+.f .val { font-size: 13px; font-weight: 500; }
+.lpie { flex: none; display: flex; align-items: center; gap: 4px; height: 28px; font-size: 12px; color: var(--text-secondary); }
+.lpie-amp { margin-left: auto; }
+.ficha { flex: 1.5 1 0; min-width: 0; padding: 0 0 0 var(--e3); border: 0; border-left: 1px solid var(--border); border-radius: 0;
+  background: transparent; gap: var(--e2); }
+.ftit { display: flex; align-items: flex-start; gap: var(--e1); }
+.ftit .fi-nom { flex: 1; min-width: 0; margin: 2px 0 0; font-size: 18px; font-weight: 600; line-height: 26px; }
+.costos small { letter-spacing: 0; text-transform: none; color: var(--text-secondary); }
+.costos b { font-size: 22px; font-weight: 500; line-height: 30px; }
+.bl-t { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--text-primary); }
+
+.amp { flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: none;
+  color: var(--text-secondary) !important; font-size: 16px !important; line-height: 28px; cursor: pointer; }
+.amp:hover { background: var(--marco-control); color: var(--accent-deep) !important; }
+.cr.amp-lista .n3, .cr.amp-lista .kpis, .cr.amp-lista .ficha,
+.cr.amp-ficha .n3, .cr.amp-ficha .kpis, .cr.amp-ficha .lista { display: none; }
+.cr.amp-ficha .ficha { border-left: 0; padding-left: 0; }
+
+.pi { position: absolute; z-index: 60; box-sizing: border-box; padding: 14px 16px; border: 1.5px solid var(--accent); border-radius: 12px;
+  background: var(--bg-card); box-shadow: 0 8px 28px rgba(73, 56, 184, .18); display: flex; flex-direction: column; gap: var(--e1); }
+.pi[hidden] { display: none; }
+.pi-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--e1); }
+.pi-cab b { font-size: 16px; font-weight: 600; line-height: 22px; }
+.pi p { margin: 0; font-size: 13px; line-height: 19px; }
+.x { flex: none; border: 0; background: none; color: var(--text-muted) !important; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }
+
+@media (max-width: 900px) {
+  .cr { height: auto; padding: 0 var(--e3) var(--e3); }
+  .n2 { height: auto; min-height: 36px; flex-wrap: wrap; margin: 0; padding: 0; }
+  .n3 { flex-wrap: wrap; }
+  .kpis { margin: var(--e2) 0 0; padding: var(--e1) var(--e2); border-radius: 8px; column-gap: var(--e3); }
+  .cuerpo { flex-direction: column; flex: none; }
+  .lista { flex: none; }
+  .ficha { border-left: 0; padding: var(--e3) 0 0; border-top: 1px solid var(--border); }
+  .filtros .buscar { flex-basis: 100%; }
+}

@@ -106,7 +106,7 @@ function htmlPieTabla(d, st) {
     ? '<button type="button" class="nc-btn" data-acc="original">Volver al original</button>' : '';
   return `<span class="nc-pie-txt">${ls.length} ${ls.length === 1 ? 'línea' : 'líneas'}${cambios}</span>
     <span class="nc-pie-bot">${original}<button type="button" class="nc-btn" data-acc="vaciar" ${ls.length ? '' : 'disabled'}>Vaciar</button></span>
-    <span class="nc-total"><span>Costo ${d.combo ? 'del combo' : 'de la receta'}</span><b class="num">${dinero(costo)}</b></span>`;
+    <span class="nc-total"><span>Costo ${d.combo ? 'del combo' : 'de la receta'}</span><b class="num">${dinero(costo)}</b></span>${amp(st, 'receta', 'la receta')}`;
 }
 
 // ── El precio, los canales y lo que se abre al costado ───────────────────
@@ -169,12 +169,15 @@ function htmlPrecio(d, st) {
     ${botones.length ? `<div class="nc-pbot">${botones.join('')}</div>` : ''}`;
 }
 
+// Ampliar (⤢, #781): la receta o el precio toma el ancho de la tarjeta.
+const amp = (st, id, que) => `<button type="button" class="amp" data-acc="ampliar" data-id="${id}" title="${st.amp === id ? 'Volver' : `Ampliar ${que}`}" aria-label="${st.amp === id ? 'Volver' : `Ampliar ${que}`}">${st.amp === id ? '↙' : '⤢'}</button>`;
+
 // ── Dibujar ──────────────────────────────────────────────────────────────
 function dibujar(raiz, solo) {
   const { data: d, st } = raiz.__d;
   if (!raiz.querySelector('.nc-cuerpo')) {
     raiz.innerHTML = `<div class="nc-cuerpo"><div class="nc-receta"><div data-zona="tabla" class="nc-zt"></div><div class="nc-pie" data-zona="pie"></div></div>
-      <div class="nc-precio" data-zona="precio"></div></div>`;
+      <div class="nc-pcol"><div class="nc-pamp" data-zona="ampp"></div><div class="nc-precio" data-zona="precio"></div></div></div>`;
   }
   const z = (n) => raiz.querySelector(`[data-zona="${n}"]`);
   if (solo !== 'numeros') {
@@ -195,7 +198,10 @@ function dibujar(raiz, solo) {
       tr.querySelector('.nc-costo i').style.width = `${Math.max(2, c / max * 80)}px`;
     });
   }
+  raiz.classList.toggle('amp-receta', st.amp === 'receta');
+  raiz.classList.toggle('amp-precio', st.amp === 'precio');
   z('pie').innerHTML = htmlPieTabla(d, st);
+  z('ampp').innerHTML = amp(st, 'precio', 'el precio');
   const pr = z('precio');
   const foco = pr.contains(raiz.getRootNode().activeElement) ? raiz.getRootNode().activeElement : null;
   if (!foco) pr.innerHTML = htmlPrecio(d, st);
@@ -245,6 +251,10 @@ function recibir(raiz, d) {
 }
 
 function enlazar(raiz) {
+  // En el documento: el redibujo se lleva el foco del botón ⤢.
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && raiz.__d.st.amp) { raiz.__d.st.amp = null; dibujar(raiz); }
+  });
   raiz.addEventListener('input', (ev) => {
     const el = ev.target, campo = el.dataset.campo;
     if (!campo) return;
@@ -273,6 +283,7 @@ function enlazar(raiz) {
   });
   raiz.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-acc]');
+    if (b && b.dataset.acc === 'ampliar') { const st = raiz.__d.st; st.amp = st.amp === b.dataset.id ? null : b.dataset.id; dibujar(raiz); return; }
     const st = raiz.__d.st;
     const fila = ev.target.closest('tr[data-uid]');
     if (fila && !b && st.sel !== fila.dataset.uid) {

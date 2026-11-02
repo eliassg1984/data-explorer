@@ -2014,6 +2014,10 @@ fecha nativa se ubica como la de Costo de Carta. Es el modelo para las demás.
 **Recetas base, igual desde la #780.** Y **toda lista y toda ficha se amplía**
 (⤢, a pedido): toma la hoja debajo del nivel 2, ↙ o `Esc` vuelven; `Esc` se
 escucha en el `document`, porque el redibujo se lleva el foco.
+**Desde la #781 las seis vistas de Recetas** tienen esa forma, con el código de
+cada producto en la ficha (y en la lista con «Detalle»). Ojo con
+`st.segmented_control`: el elegido se marca con `aria-checked="true"`, no con
+`kind`.
 
 **«Nuevo Costeo» también, desde el mismo día** (regla #697): la tabla de la
 receta y el precio son `graficos/nuevo_costeo.js` + `.css`; el buscador, el

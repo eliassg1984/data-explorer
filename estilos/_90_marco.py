@@ -248,7 +248,9 @@ CSS = """
     }
     .st-key-rec_card_carta,
     .st-key-rec_card_alza,
-    .st-key-rec_card_costo_rb {
+    .st-key-rec_card_costo_rb,
+    .st-key-rec_card_cambios,
+    .st-key-rec_card_revisar {
         position: relative !important;
         padding: 0 !important;
         gap: 0 !important;
@@ -256,9 +258,10 @@ CSS = """
     }
     /* El calendario conserva su componente, estado y callbacks. Su fila
        nativa se coloca sobre el hueco que mide la pieza
-       (carta_costeada.js, recetas_alza.js #779). */
+       (carta_costeada.js, recetas_alza.js #779, recetas_cambios.js #781). */
     .st-key-rec_carta_cab,
-    .st-key-rec_alza_cab {
+    .st-key-rec_alza_cab,
+    .st-key-rec_cambios_cab {
         position: absolute !important;
         top: 46px;
         left: 24px;
@@ -271,7 +274,8 @@ CSS = """
         gap: 0 !important;
     }
     .st-key-rec_carta_cab_fecha,
-    .st-key-rec_alza_cab_fecha {
+    .st-key-rec_alza_cab_fecha,
+    .st-key-rec_cambios_cab_fecha {
         margin: 0 !important;
         padding: 0 !important;
     }
@@ -295,7 +299,60 @@ CSS = """
     }
     /* La rayita separaba el título de la fecha; el título ya no está. */
     .st-key-rec_carta_cab_fecha::after,
-    .st-key-rec_alza_cab_fecha::after {
+    .st-key-rec_alza_cab_fecha::after,
+    .st-key-rec_cambios_cab_fecha::after {
         display: none !important;
+    }
+    /* #781: Nuevo Costeo en el lenguaje de Costo de Carta. El modo (Receta
+       de venta | Combo | Modificar | Guardadas) es el nivel 2: pestañas con
+       subrayado y línea de borde a borde, a la izquierda; ya no hay título
+       al lado (la vista se nombra en la franja). Va acá y no en _80_cards:
+       gana a sus reglas del control de pista gris. */
+    .st-key-form_receta_card_receta {
+        padding: 0 24px 16px !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        gap: 12px !important;
+    }
+    .st-key-form_receta_modo {
+        width: calc(100% + 48px) !important;
+        max-width: none !important;
+        margin: 0 -24px !important;
+        padding: 0 24px !important;
+        border-bottom: 1px solid var(--border);
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] {
+        justify-content: flex-start !important;
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] > div {
+        gap: 20px !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] button {
+        min-height: 36px !important;
+        padding: 0 !important;
+        margin-bottom: -1px !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: var(--text-secondary) !important;
+    }
+    /* El elegido lo dice `aria-checked`: en esta versión de Streamlit el
+       botón no lleva `kind`, y la regla de `_80_cards` con
+       `kind="segmented_controlActive"` no lo marcaba. */
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] button[aria-checked="true"] {
+        border-bottom-color: var(--accent) !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] button[aria-checked="true"] p {
+        font-weight: 600 !important;
+    }
+    .st-key-form_receta_modo [data-testid="stButtonGroup"] button p {
+        font-size: 14px !important;
     }
 """

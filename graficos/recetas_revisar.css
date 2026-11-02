@@ -100,24 +100,105 @@
   .f { grid-template-columns: minmax(0, 1fr) 70px; }
   .f .ch { display: none; }
 }
-/* #778: el lenguaje de Costo de Carta (#775). Los indicadores son una franja
-   lavanda de borde a borde, sin cajas (la tarjeta tiene 18 px a los
-   costados); la lista y la ficha van sin caja, la ficha separada por una
-   línea; los segmentados son pestañas con subrayado; cifras de 17 px y nada
-   bajo 12 px (#777). Las cuentas y los eventos no cambian. */
-/* La franja de borde a borde, sólo desde 901 px: en el celular cada tarjeta
-   tiene otro aire y la grilla de indicadores es la de siempre. */
-@media (min-width: 901px) {
-.kpis { gap: 24px; margin: 0 -18px; padding: 6px 18px; background: var(--rail-fondo);
+/* ── #781: el lenguaje entero de Costo de Carta (#775) ──────────────────
+   Nivel 2 (las ventanas, con subrayado y línea de borde a borde; Detalle y
+   Cómo se calcula a la derecha), nivel 3 (el período, el orden y el
+   buscador), la franja de indicadores sin cajas y, a la altura que queda, la
+   lista y la ficha; cada una se amplía (⤢). Espacio 8 / 12 / 16 / 24; nada
+   bajo 12 px (#777). La tarjeta va sin aire (`_90_marco.py`). */
+.rr { --e1: 8px; --e2: 12px; --e3: 16px; --e4: 24px;
+  display: flex; flex-direction: column; gap: 0; height: var(--alto-util, 620px); min-height: 0;
+  padding: 0 var(--e4) var(--e3); box-sizing: border-box; font-size: 14px; }
+.rr > * { flex: none; min-width: 0; }
+.n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; margin: 0 calc(-1 * var(--e4));
+  padding: 0 var(--e4); border-bottom: 1px solid var(--border); box-sizing: border-box; }
+.tabs2 { display: flex; align-items: stretch; gap: 20px; }
+.tabs2 button { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; padding: 0;
+  cursor: pointer; color: var(--text-secondary) !important; }
+.tabs2 button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent); }
+.n2-der { margin-left: auto; display: flex; align-items: center; gap: var(--e3); font-size: 13px; }
+.switch { display: flex; align-items: center; gap: var(--e1); cursor: pointer; }
+.switch input { appearance: none; position: relative; width: 26px; height: 14px; margin: 0; border-radius: 7px;
+  background: var(--text-muted); cursor: pointer; }
+.switch input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--bg-card); }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::before { left: 14px; }
+.link { border: 0; background: none; padding: 0; cursor: pointer; color: var(--accent-deep) !important; }
+
+.n3 { display: flex; align-items: center; gap: var(--e2); margin-top: var(--e2); min-height: 30px; }
+.per { font-size: 13px; color: var(--text-secondary); }
+.orden { display: flex; gap: 4px; }
+.orden button { height: 30px; padding: 0 12px; border: 0; border-radius: 15px; background: var(--marco-control); cursor: pointer;
+  font-size: 13px; color: var(--text-secondary) !important; }
+.orden button.on { background: var(--accent-tint); color: var(--accent-deep) !important; font-weight: 500; }
+.buscar { margin-left: auto; flex: 0 1 260px; min-width: 140px; height: 30px; padding: 0 14px; border: 0; border-radius: 15px;
+  background: var(--marco-control); font-size: 13px; box-sizing: border-box; }
+.buscar::placeholder { color: var(--text-secondary); opacity: 1; }
+
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); column-gap: var(--e4); row-gap: var(--e1);
+  margin: var(--e2) calc(-1 * var(--e4)) 0; padding: var(--e1) var(--e4); background: var(--rail-fondo);
   border-top: 1px solid var(--marco-fondo); border-bottom: 1px solid var(--marco-fondo); }
+.kpi { padding: 0 0 2px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; }
+.kpi:hover { background: transparent; border-bottom-color: var(--border-lavender); }
+.kpi.on { background: transparent; border-bottom-color: var(--accent); }
+.kpi .r { line-height: 16px; }
+.kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }
+.kpi .s { display: none; line-height: 16px; }
+.rr.detalle .kpi .s { display: block; }
+
+.cuerpo { flex: 1 1 0; height: auto; min-height: 0; display: flex; gap: var(--e3); margin-top: var(--e3); }
+.lista { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.filas { padding: 0 0 var(--e1); margin-left: -8px; }
+.f { padding: 8px; border: 0; }
+.f.sel { border: 0; }
+.f .c b { font-weight: 500; font-size: 14px; }
+.f .v { font-weight: 500; }
+.f .u { visibility: hidden; }
+.rr.detalle .f .u { visibility: visible; }
+.lpie { flex: none; display: flex; align-items: center; justify-content: space-between; height: 28px; font-size: 12px; color: var(--text-secondary); }
+.ficha { flex: 0 0 380px; min-width: 0; padding: 0 0 0 var(--e3); border: 0; border-left: 1px solid var(--border); border-radius: 0;
+  background: transparent; gap: var(--e2); }
+.ftit { display: flex; align-items: flex-start; gap: var(--e1); }
+.ftit .fi-nom { flex: 1; min-width: 0; margin: 0; font-size: 18px; font-weight: 600; line-height: 26px; }
+.veredicto { font-size: 13px; line-height: 19px; border-left: 0; padding: 6px 12px; }
+.bl-t { font-size: 13px; }
+.pleg { border-top: 1px solid var(--line-soft); }
+.pleg-b { display: flex; align-items: center; justify-content: space-between; width: 100%; height: 32px; border: 0;
+  background: none; padding: 0; cursor: pointer; text-align: left; }
+.pleg-b i { font-style: normal; color: var(--accent-deep); }
+.pleg.abierto .pleg-b i { transform: rotate(180deg); }
+.pleg-c { display: none; padding-bottom: var(--e1); }
+.pleg.abierto .pleg-c { display: block; }
+.que-hacer { font-size: 13px; border: 0; background: var(--rail-fondo); }
+
+.amp { flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: none;
+  color: var(--text-secondary) !important; font-size: 16px !important; line-height: 28px; cursor: pointer; }
+.amp:hover { background: var(--marco-control); color: var(--accent-deep) !important; }
+.rr.amp-lista .n3, .rr.amp-lista .kpis, .rr.amp-lista .ficha,
+.rr.amp-ficha .n3, .rr.amp-ficha .kpis, .rr.amp-ficha .lista { display: none; }
+.rr.amp-ficha .ficha { flex: 1 1 0; border-left: 0; padding-left: 0; }
+
+.pi { position: absolute; z-index: 60; box-sizing: border-box; padding: 14px 16px; border: 1.5px solid var(--accent); border-radius: 12px;
+  background: var(--bg-card); box-shadow: 0 8px 28px rgba(73, 56, 184, .18); display: flex; flex-direction: column; gap: var(--e1); }
+.pi[hidden] { display: none; }
+.pi-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--e1); }
+.pi-cab b { font-size: 16px; font-weight: 600; line-height: 22px; }
+.pi p { margin: 0; font-size: 13px; line-height: 19px; }
+.pi p b { font-weight: 600; }
+.x { flex: none; border: 0; background: none; color: var(--text-muted) !important; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }
+
+@media (max-width: 1100px) {
+  .rr { height: auto; }
+  .cuerpo { flex: none; }
+  /* En columna, `flex: 1 1 0` deja la lista en 0 px: va con su alto. */
+  .lista { flex: none; height: 420px; }
+  .ficha { border-left: 0; padding: var(--e3) 0 0; border-top: 1px solid var(--border); }
 }
-.kpi { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 2px 0; }
-.kpi:hover { background: transparent; border-color: var(--border-lavender); }
-.kpi.on { background: transparent; border-color: var(--accent); }
-.kpi .v { font-size: 17px; font-weight: 500; }
-.caja { border: 0; border-radius: 0; background: transparent; }
-.ficha.caja { border-left: 1px solid var(--border); }
-.seg { background: transparent; padding: 0; gap: 16px; border-radius: 0; }
-.seg button { padding: 0; border-radius: 0; border-bottom: 2px solid transparent; box-shadow: none; }
-.seg button.on { background: transparent; box-shadow: none; border-bottom-color: var(--accent);
-  color: var(--text-primary) !important; }
+@media (max-width: 900px) {
+  .rr { padding: 0 var(--e3) var(--e3); }
+  .n2 { height: auto; min-height: 36px; flex-wrap: wrap; margin: 0; padding: 0; }
+  .n3 { flex-wrap: wrap; }
+  .kpis { margin: var(--e2) 0 0; padding: var(--e1) var(--e2); border-radius: 8px; column-gap: var(--e3); }
+  .buscar { flex-basis: 100%; }
+}

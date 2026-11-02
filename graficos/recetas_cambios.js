@@ -77,7 +77,7 @@ function base(raiz) {
   return d.items.filter((x) => (st.sinCosto || !x.sinCosto)
     && (!st.usr || x.usr === st.usr)
     && (!del || del.has(x.k))
-    && (!q || [x.nombre, x.grupo, ...(x.lineas || []).map((l) => l[0]), ...(x.platos || []).map((p) => p[1]), ...(x.usos || [])]
+    && (!q || [x.nombre, x.grupo, x.k, ...(x.cods || []), ...(x.lineas || []).map((l) => l[0]), ...(x.platos || []).map((p) => p[1]), ...(x.usos || [])]
       .some((s) => sinTilde(s).includes(q))));
 }
 function visibles(raiz) {
@@ -107,9 +107,10 @@ function htmlFiltros(raiz) {
   const us = [...new Set(d.items.map((x) => x.usr).filter(Boolean))].sort();
   const nSin = d.items.filter((x) => x.sinCosto).length;
   const foco = st.plato ? `<span class="foco" title="Lo que le toca a este plato: sus precios, su receta y las recetas base que lleva">Plato: ${esc(st.platoNombre || (d.platos[st.plato] || [st.plato])[0])}<button type="button" data-acc="soltar" aria-label="Quitar el filtro del plato">✕</button></span>` : '';
-  return `<input data-acc="buscar" placeholder="Buscar receta, plato o insumo…" aria-label="Buscar receta, plato o insumo" value="${esc(st.q)}">${foco}
+  return `${foco}
     ${us.length ? `<span class="rot">Usuario</span><button type="button" class="chip-f${!st.usr ? ' on' : ''}" data-acc="usr" data-id="">Todos</button>${us.map((u) => `<button type="button" class="chip-f${st.usr === u ? ' on' : ''}" data-acc="usr" data-id="${esc(u)}">${esc(u)}</button>`).join('')}` : ''}
-    ${nSin ? `<label class="interruptor" title="Propina, vales, anticipos: productos de venta que no tienen costo"><input type="checkbox" data-acc="sincosto"${st.sinCosto ? ' checked' : ''}> Incluir productos sin costo (${nSin})</label>` : ''}`;
+    ${nSin ? `<label class="interruptor" title="Propina, vales, anticipos: productos de venta que no tienen costo"><input type="checkbox" data-acc="sincosto"${st.sinCosto ? ' checked' : ''}> Incluir productos sin costo (${nSin})</label>` : ''}
+    <input class="buscar" data-acc="buscar" placeholder="Buscar receta, plato, insumo o código" aria-label="Buscar receta, plato, insumo o código" value="${esc(st.q)}">`;
 }
 
 function resumen(x) {
@@ -189,7 +190,7 @@ function htmlFicha(raiz) {
   if (x.tipo === 'base') meta = `Editada el ${corta(f)} a las ${hora(f)}${quien}${x.guardados > 1 ? ` · ${x.guardados} guardados` : ''}`;
   else if (x.tipo === 'plato') meta = x.aprox ? `Cambió entre la foto del ${corta(fecha(x.desde))} y la del ${corta(f)}` : `Guardada el ${corta(f)} a las ${hora(f)}${quien}`;
   else meta = x.usr ? `Cambiado el ${corta(f)} a las ${hora(f)}${quien}` : `Cambió entre dos fotos: llegó en la del ${corta(f)}`;
-  let h = `<div><div>${chipTipo(x.tipo)}<span class="fi-de">${esc(x.grupo || '')}</span></div><div class="fi-nom">${esc(x.nombre)}</div><div class="fi-de">${meta}</div></div>`;
+  let h = `<div><div>${chipTipo(x.tipo)}<span class="fi-de">${esc(x.grupo || '')}</span></div><div class="ftit"><h3 class="fi-nom">${esc(x.nombre)}</h3>${amp(st, 'ficha', 'la ficha')}</div><div class="fi-de">${meta}</div></div>`;
   if (x.tipo !== 'precio') {
     if (x.grande) h += `<div class="aviso">Cambio grande de costo: de ${soles(x.antes)} a ${soles(x.despues)}. Conviene revisar que no sea un error de digitación.</div>`;
     h += costos(x, x.tipo === 'base' ? 'por unidad de la receta, con los precios de antes' : 'por plato, con los precios de hoy');
@@ -217,16 +218,68 @@ function htmlFicha(raiz) {
   return h + historial(raiz, x);
 }
 
+// ── Ampliar (⤢) y las explicaciones (#781) ──────────────────────────────
+const amp = (st, id, que) => `<button type="button" class="amp" data-acc="ampliar" data-id="${id}" title="${st.amp === id ? 'Volver' : `Ampliar ${que}`}" aria-label="${st.amp === id ? 'Volver' : `Ampliar ${que}`}">${st.amp === id ? '↙' : '⤢'}</button>`;
+
+function abrirInfo(raiz, b) {
+  const { data: d, st } = raiz.__d;
+  const pop = raiz.querySelector('[data-zona="pop"]');
+  st.pop = b && st.pop !== b.dataset.id ? b.dataset.id : null;
+  if (!st.pop) { pop.hidden = true; return; }
+  const txt = [
+    'Recetas base: del log de ediciones del Almacén, con la hora y el usuario. Su costo va por unidad de la receta, con los precios de antes de cada edición.',
+    'Recetas de plato: el POS no guarda su historial; se comparan las fotos diarias, así que la hora es la de la foto (≈). Su costo va por plato, con los precios de hoy.',
+    `Precios: de la auditoría del POS${d.preciosDeFotos ? '; mientras no traiga los precios por canal, de las fotos diarias' : ''}. Un precio que sube baja el % de costo: va en verde.`,
+    `Cambio grande de costo: ±${d.grande[0] * 100} % y ±S/ ${d.grande[1]} a la vez. Conviene revisar que no sea un error de digitación.`,
+    'Un clic en un indicador deja sólo esos cambios; otro, todos.',
+  ];
+  pop.innerHTML = `<div class="pi-cab"><b>Cómo se calcula</b><button type="button" class="x" data-acc="cerrar-info" aria-label="Cerrar">×</button></div>${txt.map((t) => `<p>${esc(t)}</p>`).join('')}`;
+  pop.hidden = false;
+  const r = b.getBoundingClientRect(), base = raiz.getBoundingClientRect();
+  const ancho = Math.min(380, base.width - 16);
+  pop.style.width = `${ancho}px`;
+  pop.style.left = `${Math.max(8, Math.min(r.right - base.left - ancho, base.width - ancho - 8))}px`;
+  pop.style.top = `${r.bottom - base.top + 6}px`;
+}
+
+// El calendario es el nativo (`rec_cambios_cab`, de Streamlit): se ubica
+// sobre el hueco que deja la pieza en su fila de filtros, como en Costo de
+// Carta y Alza; ampliada una zona, se esconde.
+function medir(raiz) {
+  const cab = document.querySelector('.st-key-rec_cambios_cab'), slot = raiz.querySelector('.fecha-lugar');
+  if (!cab || !slot || !cab.offsetWidth) return;
+  const ancho = `${cab.offsetWidth + 4}px`;
+  if (raiz.style.getPropertyValue('--cr-fecha') !== ancho) raiz.style.setProperty('--cr-fecha', ancho);
+  const padre = cab.offsetParent;
+  if (!padre) return;
+  const a = slot.getBoundingClientRect(), p = padre.getBoundingClientRect();
+  const x = `${Math.round(a.left - p.left)}px`, y = `${Math.round(a.top - p.top + (a.height - cab.offsetHeight) / 2)}px`;
+  if (cab.style.left !== x) cab.style.left = x;
+  if (cab.style.top !== y) cab.style.top = y;
+  const vis = raiz.__d.st.amp ? 'hidden' : 'visible';
+  if (cab.style.visibility !== vis) cab.style.visibility = vis;
+}
+
 // ── Dibujar ──────────────────────────────────────────────────────────────
 function dibujar(raiz, solo) {
   const { st } = raiz.__d;
   if (!raiz.querySelector('.cuerpo')) {
-    raiz.innerHTML = `<div class="seg" role="tablist" data-zona="tabs"></div><div class="kpis" data-zona="kpis"></div>
-      <div class="filtros" data-zona="filtros"></div>
-      <div class="cuerpo"><div class="caja lista"><div class="lcab"><span data-zona="n"></span><span>Δ costo · Δ precio</span></div><div class="filas" data-zona="filas"></div></div>
-      <aside class="caja ficha" data-zona="ficha" aria-label="Ficha del cambio"></aside></div>`;
+    raiz.innerHTML = `<div class="n2"><div class="tabs2" role="tablist" data-zona="tabs"></div>
+        <div class="n2-der"><label class="switch"><input type="checkbox" data-acc="detalle" role="switch">Detalle</label>
+          <button type="button" class="link" data-acc="info" data-id="calculo">Cómo se calcula</button></div></div>
+      <div class="n3"><span class="fecha-lugar" aria-hidden="true"></span><div class="filtros" data-zona="filtros"></div></div>
+      <div class="kpis" data-zona="kpis"></div>
+      <div class="cuerpo"><div class="lista"><div class="filas" data-zona="filas"></div>
+        <div class="lpie"><span data-zona="n"></span><span>· Δ costo, Δ precio</span><span class="lpie-amp" data-zona="ampl"></span></div></div>
+      <aside class="ficha" data-zona="ficha" aria-label="Ficha del cambio"></aside></div>
+      <div class="pi" data-zona="pop" role="dialog" hidden></div>`;
   }
   const z = (n) => raiz.querySelector(`[data-zona="${n}"]`);
+  raiz.classList.toggle('detalle', !!st.detalle);
+  raiz.classList.toggle('amp-lista', st.amp === 'lista');
+  raiz.classList.toggle('amp-ficha', st.amp === 'ficha');
+  raiz.querySelector('[data-acc="detalle"]').checked = !!st.detalle;
+  z('ampl').innerHTML = amp(st, 'lista', 'la lista');
   const L = visibles(raiz);
   if (!L.some((x) => x.id === st.sel)) st.sel = L.length ? L[0].id : null;
   if (solo !== 'sel') {
@@ -241,6 +294,7 @@ function dibujar(raiz, solo) {
   if (solo === 'sel') z('filas').scrollTop = y;
   z('ficha').innerHTML = htmlFicha(raiz);
   z('ficha').scrollTop = 0;
+  medir(raiz);
 }
 
 function enlazar(raiz) {
@@ -258,12 +312,16 @@ function enlazar(raiz) {
     else if (acc === 'kpi') st.kpi = st.kpi === id || id === 'todos' ? null : id;
     else if (acc === 'usr') st.usr = id || null;
     else if (acc === 'soltar') { st.plato = null; st.platoNombre = null; }
+    else if (acc === 'info') { abrirInfo(raiz, b); return; }
+    else if (acc === 'cerrar-info') { abrirInfo(raiz, null); return; }
+    else if (acc === 'ampliar') { st.amp = st.amp === id ? null : id; dibujar(raiz); return; }
     else return;
     guardar(CLAVE, { tab: st.tab });
     dibujar(raiz);
   };
   raiz.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-acc]');
+    if (raiz.__d.st.pop && !ev.target.closest('[data-zona="pop"]') && !(b && b.dataset.acc === 'info')) abrirInfo(raiz, null);
     if (!b || !raiz.contains(b) || b.tagName === 'INPUT') return;
     elegir(b);
   });
@@ -278,10 +336,18 @@ function enlazar(raiz) {
     dibujar(raiz, 'buscar');
   });
   raiz.addEventListener('change', (ev) => {
-    if (ev.target.dataset.acc !== 'sincosto') return;
-    raiz.__d.st.sinCosto = ev.target.checked;
+    const a = ev.target.dataset.acc, st = raiz.__d.st;
+    if (a === 'sincosto') st.sinCosto = ev.target.checked;
+    else if (a === 'detalle') { st.detalle = ev.target.checked; guardar('rec_cambios_det', st.detalle); }
+    else return;
     dibujar(raiz);
   });
+  // En el documento: el redibujo se lleva el foco del botón ⤢.
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && raiz.__d.st.amp) { raiz.__d.st.amp = null; dibujar(raiz); }
+  });
+  window.addEventListener('resize', () => medir(raiz));
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => medir(raiz)).observe(raiz);
 }
 
 export default function (component) {
@@ -293,7 +359,8 @@ export default function (component) {
     raiz.className = 'cr';
     parentElement.appendChild(raiz);
     raiz.__d = { st: Object.assign({ tab: 'todo' }, leer(CLAVE, {}),
-      { kpi: null, usr: null, q: '', sinCosto: false, sel: null, plato: null, platoNombre: null, focoN: null }) };
+      { kpi: null, usr: null, q: '', sinCosto: false, sel: null, plato: null, platoNombre: null, focoN: null,
+        detalle: leer('rec_cambios_det', false), amp: null, pop: null }) };
     enlazar(raiz);
   }
   raiz.__d.data = data;
