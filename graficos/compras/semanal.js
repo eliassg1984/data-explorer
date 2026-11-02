@@ -949,6 +949,29 @@ function menuFamilias(F, st) {
     + (abierto ? `<div class="ms-l"><div class="ms-o">${P.todas.map(([f, v]) => `<label class="con-s"><input type="checkbox" data-acc="pagina" data-v="${esc(f)}"${el.has(f) || !el.size ? ' checked' : ''}><span>${esc(nomFam(f))}</span><small>${esc(s2(v).replace(/\.\d+$/, ''))}</small></label>`).join('')}</div><p class="mas">Vale para todas las vistas de Compras.</p></div>` : '') + '</div>';
 }
 const nomFam = (f) => { const x = String(f).toLowerCase(); return x.charAt(0).toUpperCase() + x.slice(1).replace(/ (con|sin|y|de) /g, (m) => m); };
+// Agrupar, Partir por y Contra: en el nivel 3, al lado de los filtros (#792).
+function menusVista(F, V, st) {
+  if (!V || V.vacio) return '';
+  const selGran = GRANOS.map(([k, t]) => `<option value="${k}"${k === st.gran ? ' selected' : ''}>Agrupar: ${t}</option>`).join('');
+  const selPart = (V.opsPartir || []).map((k) => `<option value="${k}"${k === st.partir ? ' selected' : ''}>Partir por: ${k}</option>`).join('');
+  const selCon = [['ano', 'Contra: año pasado'], ['ant', 'Contra: período anterior'], ['no', 'Sin comparar']].map(([k, t]) => `<option value="${k}"${k === st.contra ? ' selected' : ''}>${t}</option>`).join('');
+  return `<select class="men" data-sel="gran" aria-label="Agrupar">${selGran}</select>${V.partidaGran ? `<select class="men" data-sel="partir" aria-label="Partir por">${selPart}</select>` : ''}${F.C.length ? `<select class="men" data-sel="contra" aria-label="Contra qué comparar">${selCon}</select>` : ''}`;
+}
+// Nivel 2: qué se mira, y a la derecha «Cómo se calcula» (#792).
+const ICO_AMP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+const ICO_VOLVER = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>';
+const ampliar = (st, cual, rot) => `<button class="amp-b" data-acc="amp" data-v="${cual}" aria-pressed="${st.amp === cual}" title="${st.amp === cual ? 'Volver (Esc)' : `Ampliar ${rot}`}" aria-label="${st.amp === cual ? 'Volver' : `Ampliar ${rot}`}">${st.amp === cual ? ICO_VOLVER : ICO_AMP}</button>`;
+function nivel2(F, V, st) {
+  const zonas = [['graf', 'Gráfico'], ['tabla', 'Tabla'], ['docs', `Documentos${V && !V.vacio ? ` · ${num(new Set(V.dd.map((l) => l.compra)).size, 0)}` : ''}`]];
+  const como = st.como ? `<div class="pop-como" role="dialog"><p>Lo comprado en el rango, sin IGV salvo que «Más filtros» diga otra cosa, con las notas de crédito ya restadas.</p><dl>`
+    + '<dt>Compra</dt><dd>El valor comprado, contra el mismo tramo del año pasado o del período anterior. El período en curso se compara contra los mismos días.</dd>'
+    + '<dt>Documentos</dt><dd>Comprobantes distintos en el rango, y lo comprado por documento.</dd>'
+    + '<dt>Efecto del precio</dt><dd>Lo pagado menos lo que hubiera costado al precio habitual (la mediana de los 90 días anteriores), producto por producto, sin las compras para revisar.</dd>'
+    + '<dt>Para revisar</dt><dd>Una compra de S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o con decimales en una unidad entera.</dd>'
+    + '<dt>Documento</dt><dd>«Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito. Sólo esta tarjeta.</dd></dl><p>Es un cálculo propio, no un estándar.</p></div>' : '';
+  return `<div class="n2"><div class="tabs" role="tablist">${zonas.map(([k, t]) => `<button role="tab" class="${k === st.zona ? 'on' : ''}" data-acc="zona" data-v="${k}" aria-selected="${k === st.zona}">${t}</button>`).join('')}</div>`
+    + `<div class="n2-der"><span class="como"><button class="link" data-acc="como" aria-expanded="${!!st.como}">Cómo se calcula</button>${como}</span></div></div>`;
+}
 function cabecera(F, V, st) {
   const activos = FILTROS.filter(([k]) => st[k].length).length + (st.docu !== 'Todos' ? 1 : 0) + (st.montos !== 'Sin IGV' ? 1 : 0);
   const disp = { fam: F.hayFam && V.famOps.length && !F.familias, sub: F.haySub && V.subOps.length, prov: F.hayProv, prod: true };
@@ -957,12 +980,12 @@ function cabecera(F, V, st) {
   const seccion = ([k, rot]) => `<h4>${rot}${st[k].length ? ` · ${st[k].length} <button class="ms-x" data-acc="limpiar" data-v="${k}">quitar</button>` : ''}</h4><input class="ms-q" data-k="${k}" placeholder="Buscar…" value="${esc(st.q[k] || '')}" autocomplete="off"><div class="ms-o" data-k="${k}">${listaMenu(F, V, st, k)}</div>`;
   const famInt = disp.fam ? (() => { const s = st.fam, nom = (o) => F.famN[F.fams.indexOf(o)] || o, txt = !s.length ? 'Todas las familias' : s.length === 1 ? `Familia: ${nom(s[0])}` : `${s.length} familias`;
     return `<div class="ms"><button class="ms-b${s.length ? ' on' : ''}" data-acc="menu" data-v="fam" aria-expanded="${st.menu === 'fam'}">${esc(txt)} <i>▾</i></button>${st.menu === 'fam' ? `<div class="ms-l"><input class="ms-q" data-k="fam" placeholder="Buscar…" value="${esc(st.q.fam || '')}" autocomplete="off"><div class="ms-o" data-k="fam">${listaMenu(F, V, st, 'fam')}</div></div>` : ''}</div>`; })() : '';
+  const nMas = nFil + (st.docu !== 'Todos' ? 1 : 0) + (st.montos !== 'Sin IGV' ? 1 : 0);
   const fil = (F.familias ? menuFamilias(F, st) : famInt)
-    + `<div class="ms"><button class="ms-b${nFil ? ' on' : ''}" data-acc="menu" data-v="fil" aria-expanded="${st.menu === 'fil'}">Subfamilia, proveedor y producto${nFil ? ` · ${nFil}` : ''} <i>▾</i></button>${st.menu === 'fil' ? `<div class="ms-l ancho">${dentro.map(seccion).join('')}</div>` : ''}</div>`
-    + `<div class="ms"><button class="ms-b${st.docu !== 'Todos' || st.montos !== 'Sin IGV' ? ' on' : ''}" data-acc="menu" data-v="mas" aria-expanded="${st.menu === 'mas'}">${esc(st.docu)} · ${esc(st.montos.toLowerCase())} <i>▾</i></button>${st.menu === 'mas' ? `<div class="ms-l"><h4>Documento</h4><div class="seg chico">${DOCUS.map((k) => `<button class="${k === st.docu ? 'on' : ''}" data-acc="docu" data-v="${k}">${k}</button>`).join('')}</div><h4>Montos</h4><div class="seg chico">${MONTOS.map((k) => `<button class="${k === st.montos ? 'on' : ''}" data-acc="montos" data-v="${k}">${k}</button>`).join('')}</div><p class="mas">«Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito. Sólo esta tarjeta.</p></div>` : ''}</div>`;
-  return `<div class="cab"><h2 class="titulo">Compras por período</h2><span class="lugar-fecha" aria-hidden="true"></span>`
+    + `<div class="ms"><button class="ms-b${nMas ? ' on' : ''}" data-acc="menu" data-v="fil" aria-expanded="${st.menu === 'fil'}" title="Subfamilia, proveedor, producto, documento y montos">Más filtros${nMas ? ` · ${nMas}` : ''} <i>▾</i></button>${st.menu === 'fil' ? `<div class="ms-l ancho">${dentro.map(seccion).join('')}<h4>Documento</h4><div class="seg chico">${DOCUS.map((k) => `<button class="${k === st.docu ? 'on' : ''}" data-acc="docu" data-v="${k}">${k}</button>`).join('')}</div><h4>Montos</h4><div class="seg chico">${MONTOS.map((k) => `<button class="${k === st.montos ? 'on' : ''}" data-acc="montos" data-v="${k}">${k}</button>`).join('')}</div><p class="mas">«Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito. Sólo esta tarjeta.</p></div>` : ''}</div>`;
+  return `<div class="cab"><span class="lugar-fecha" aria-hidden="true"></span>`
     + `<button class="filtros-toggle" data-acc="panel-filtros" aria-expanded="${!!st.filtrosAbiertos}">Filtros${activos ? ` · ${activos} activo${activos === 1 ? '' : 's'}` : ''} <span aria-hidden="true">${st.filtrosAbiertos ? '▴' : '▾'}</span></button>`
-    + `<div class="fils">${fil}</div><span class="esp"></span><button class="excel" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div>`
+    + `<div class="fils">${fil}</div>${menusVista(F, V, st)}<span class="esp"></span><button class="excel" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div>`
     + `<div class="filtro-estado"><span>${esc(st.docu)} · ${esc(st.montos)}</span>`
     + FILTROS.filter(([k]) => st[k].length).map(([k, rot]) => `<button data-acc="limpiar" data-v="${k}" aria-label="Quitar filtro de ${rot}">${rot}: ${esc(st[k].length === 1 ? st[k][0] : st[k].length)} ×</button>`).join('')
     + (activos ? '<button data-acc="restablecer">Limpiar filtros</button>' : '') + '</div>';
@@ -1034,7 +1057,7 @@ function panelLista(F, V, st) {
     const P = F.familias, el = new Set(P.elegidas), fx = P.todas.filter(([f]) => el.size && !el.has(f)), v = suma(fx, (x) => x[1]);
     if (fx.length && Math.abs(v) >= 0.5) fuera = `<div class="fuera"><span>Fuera de esta cuenta: ${esc(fS0(v))} de ${esc(fx.slice(0, 2).map(([f]) => nomFam(f)).join(', '))}${fx.length > 2 ? '…' : ''}.</span><button class="quita" data-acc="pagina-todas">Sumarlas</button></div>`;
   }
-  return `<div class="pn-cab"><b>${tit}</b></div><div class="lista">${filas || '<p class="mas">Nada que mostrar.</p>'}</div>${ficha}${fuera}`;
+  return `<div class="pn-cab"><b>${tit}</b>${ampliar(st, 'panel', 'la lista')}</div><div class="lista">${filas || '<p class="mas">Nada que mostrar.</p>'}</div>${ficha}${fuera}`;
 }
 // ── Dibujar ──────────────────────────────────────────────────────────────
 function pintar() {
@@ -1046,18 +1069,13 @@ function pintar() {
   const V = calcular(F, st);
   G.V = V;
   raiz.dataset.filtrosAbiertos = String(!!st.filtrosAbiertos);
-  let html = cabecera(F, V, st);
+  raiz.classList.toggle('amp', !!st.amp);
+  let html = nivel2(F, V, st) + cabecera(F, V, st);
   if (V.vacio) {
     raiz.innerHTML = html + `<div class="vacio grande"><b>${esc(V.titulo)}</b> — sin compras que mostrar. Ampliá el rango de fechas o soltá algún filtro de la tarjeta.</div>`;
     return;
   }
   html += indicadores(F, V, st);
-  const zonas = [['graf', 'Gráfico'], ['tabla', 'Tabla'], ['docs', `Documentos · ${num(new Set(V.dd.map((l) => l.compra)).size, 0)}`]];
-  const selGran = GRANOS.map(([k, t]) => `<option value="${k}"${k === st.gran ? ' selected' : ''}>Agrupar: ${t}</option>`).join('');
-  const selPart = V.opsPartir.map((k) => `<option value="${k}"${k === st.partir ? ' selected' : ''}>Partir por: ${k}</option>`).join('');
-  const selCon = [['ano', 'Contra: año pasado'], ['ant', 'Contra: período anterior'], ['no', 'Sin comparar']].map(([k, t]) => `<option value="${k}"${k === st.contra ? ' selected' : ''}>${t}</option>`).join('');
-  html += `<div class="pie"><div class="seg" role="group" aria-label="Qué mirar">${zonas.map(([k, t]) => `<button class="${k === st.zona ? 'on' : ''}" data-acc="zona" data-v="${k}" aria-pressed="${k === st.zona}">${t}</button>`).join('')}</div><span class="esp"></span>`
-    + `<select class="men" data-sel="gran" aria-label="Agrupar">${selGran}</select>${V.partidaGran ? `<select class="men" data-sel="partir" aria-label="Partir por">${selPart}</select>` : ''}${F.C.length ? `<select class="men" data-sel="contra" aria-label="Contra qué comparar">${selCon}</select>` : ''}</div>`;
   const nomFoco = st.foco != null && V.ix.has(st.foco) ? (V.gran === 'Día' ? V.hov[V.ix.get(st.foco)] : (V.rotDe.get(st.foco) || [st.foco, st.foco])[1]).replace(/<[^>]+>/g, '') : null;
   const quitar = nomFoco ? `<button class="quita" data-acc="quita-foco">Ver todo el rango ✕</button>` : '';
   let izq, panel = panelLista(F, V, st);
@@ -1067,7 +1085,7 @@ function pintar() {
     const NOM = { valor: 'Compra', docs: 'Documentos', precio: 'Efecto del precio', revisar: 'Compras para revisar' };
     const SUBT = { valor: V.sufijo.replace(/^ · /, ''), docs: 'comprobantes distintos', precio: 'lo que subió arriba, lo que bajó abajo', revisar: 'valor de las líneas marcadas' };
     const hayPar = V.claves.some((k) => { const [a, b] = cobertura(k, V.gran, V.rango); return V.gran !== 'Por documento' && V.gran !== 'Día' && a < b; });
-    izq = `<div class="tit"><span class="t">${NOM[st.med]} ${esc(AGRUPADO[V.gran] === 'documento' ? 'por documento' : `por ${AGRUPADO[V.gran]}`)}<small> · ${esc(SUBT[st.med])}${hayPar ? ' · * período incompleto' : ''}</small></span>${quitar}<span class="esp"></span>${V.ghost.some((x) => x != null) && st.med === 'valor' ? `<span class="ley"><i></i>${st.contra === 'ano' ? 'año pasado' : 'período anterior'}</span>` : ''}</div>`
+    izq = `<div class="tit"><span class="t">${NOM[st.med]} ${esc(AGRUPADO[V.gran] === 'documento' ? 'por documento' : `por ${AGRUPADO[V.gran]}`)}<small> · ${esc(SUBT[st.med])}${hayPar ? ' · * período incompleto' : ''}</small></span>${quitar}<span class="esp"></span>${V.ghost.some((x) => x != null) && st.med === 'valor' ? `<span class="ley"><i></i>${st.contra === 'ano' ? 'año pasado' : 'período anterior'}</span>` : ''}${ampliar(st, 'izq', 'el gráfico')}</div>`
       + `<div class="graf" data-graf="1"><div class="tip" hidden></div></div>`;
     if (esMovil()) {
       izq += st.lectura != null && st.lectura < V.n ? `<div class="lectura" role="region" aria-label="Detalle del período"><button class="lectura-cerrar" data-acc="cerrar-lectura" aria-label="Cerrar detalle">×</button><div>${tip(F, V, st, st.lectura)}</div><button class="ver-documentos" data-acc="ver-barra" data-v="${st.lectura}">Ver documentos de este período</button></div>` : '<p class="ayuda-tocar">Toca una barra para ver su desglose.</p>';
@@ -1077,22 +1095,21 @@ function pintar() {
   } else if (st.zona === 'tabla') {
     const z = st.modo === 'Resumen del Período' ? resumenProveedores(F, V, st) : resumenTotal(F, V, st);
     G.zona = z;
-    izq = `<div class="tit"><div class="seg chico">${[['Resumen Total', 'Por período'], ['Resumen del Período', 'Por proveedor']].map(([k, t]) => `<button class="${k === st.modo ? 'on' : ''}" data-acc="modo" data-v="${k}">${t}</button>`).join('')}</div><span class="cap">${z.pie}</span></div><div class="zona">${z.html}</div>`;
+    izq = `<div class="tit"><div class="seg chico">${[['Resumen Total', 'Por período'], ['Resumen del Período', 'Por proveedor']].map(([k, t]) => `<button class="${k === st.modo ? 'on' : ''}" data-acc="modo" data-v="${k}">${t}</button>`).join('')}</div><span class="cap">${z.pie}</span>${ampliar(st, 'izq', 'la tabla')}</div><div class="zona">${z.html}</div>`;
   } else {
     const z = detalle(F, V, st);
     G.zona = z;
-    izq = `<div class="tit"><span class="cap">${z.pie}</span>${quitar}</div><div class="zona">${z.html}</div>`;
+    izq = `<div class="tit"><span class="cap">${z.pie}</span>${quitar}${ampliar(st, 'izq', 'los documentos')}</div><div class="zona">${z.html}</div>`;
     if (z.panel) panel = z.panel;
   }
-  html += `<div class="cuerpo"><div class="izq">${izq}</div><aside class="panel" aria-label="Lo que hay adentro">${panel}</aside></div>`;
+  html += `<div class="cuerpo" data-amp="${st.amp || ''}"><div class="izq">${izq}</div><aside class="panel" aria-label="Lo que hay adentro">${panel}</aside></div>`;
   const listas = [...raiz.querySelectorAll('.tl')].map((e) => e.scrollTop);
   const q = raiz.querySelector('.ms-q:focus');
   raiz.innerHTML = html;
   [...raiz.querySelectorAll('.tl')].forEach((e, i) => { if (listas[i]) e.scrollTop = listas[i]; });
   if (q) { const n = raiz.querySelector(`.ms-q[data-k="${q.dataset.k}"]`); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }
   // La fecha es un botón de Python en la misma página: la cabecera le deja su ancho.
-  const fb = document.querySelector('.st-key-cp_sem_fecha');
-  if (fb && fb.offsetWidth) raiz.style.setProperty('--cp-fecha', `${fb.offsetWidth + 8}px`);
+  ponerFecha(raiz);
   const cg = raiz.querySelector('[data-graf]');
   if (cg) {
     const W = cg.clientWidth || 800, H = esMovil() ? Math.max(230, Math.min(320, Math.round(window.innerHeight * 0.38))) : Math.max(150, cg.clientHeight || 300);
@@ -1127,13 +1144,31 @@ function excel() {
 }
 
 // ── Los clics ────────────────────────────────────────────────────────────
+function ponerFecha(raiz) {
+  const fb = document.querySelector('.st-key-cp_sem_fecha'), lg = raiz.querySelector('.lugar-fecha');
+  if (!fb) return;
+  const ver = !!(lg && lg.offsetWidth);
+  if (fb.style.visibility !== (ver ? '' : 'hidden')) fb.style.visibility = ver ? '' : 'hidden';
+  if (!ver || !fb.offsetWidth) return;
+  const w = `${fb.offsetWidth + 8}px`;
+  if (raiz.style.getPropertyValue('--cp-fecha') !== w) raiz.style.setProperty('--cp-fecha', w);
+  const pa = fb.offsetParent;
+  if (!pa) return;
+  const a = lg.getBoundingClientRect(), b = pa.getBoundingClientRect();
+  const x = `${Math.round(a.left - b.left)}px`, y = `${Math.round(a.top - b.top + (lg.offsetHeight > 2 ? (a.height - fb.offsetHeight) / 2 : -fb.offsetHeight / 2))}px`;
+  if (fb.style.left !== x) fb.style.left = x;
+  if (fb.style.top !== y) fb.style.top = y;
+}
 function accion(acc, val, el) {
   const st = G.st, V = G.V;
   if (acc === 'barra' && esMovil()) { st.lectura = +val; pintar(); return; }
   const verDocumentos = acc === 'ver-barra';
   if (verDocumentos) { acc = 'barra'; st.lectura = null; }
   if (acc !== 'menu' && acc !== 'filtro' && acc !== 'docu' && acc !== 'montos' && acc !== 'limpiar') st.menu = null;
-  if (acc === 'panel-filtros') st.filtrosAbiertos = !st.filtrosAbiertos;
+  if (acc !== 'como') st.como = false;
+  if (acc === 'como') st.como = !st.como;
+  else if (acc === 'amp') st.amp = st.amp === val ? null : val;
+  else if (acc === 'panel-filtros') st.filtrosAbiertos = !st.filtrosAbiertos;
   else if (acc === 'cerrar-lectura') st.lectura = null;
   else if (acc === 'restablecer') { FILTROS.forEach(([k]) => { st[k] = []; }); st.docu = 'Todos'; st.montos = 'Sin IGV'; }
   else if (acc === 'gran') st.gran = val;
@@ -1207,7 +1242,10 @@ function enlazar(raiz) {
   if (!G.docEnlazado) {
     G.docEnlazado = true;
     const avisar = () => { if (G.pagina) { const v = G.pagina; G.pagina = null; G.enviar?.('familias', v); } };
-    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && G.st && G.st.menu) { G.st.menu = null; pintar(); avisar(); } });
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape' || !G.st || !G.raiz || !G.raiz.isConnected) return;
+      if (G.st.menu) { G.st.menu = null; pintar(); avisar(); } else if (G.st.como) { G.st.como = false; pintar(); } else if (G.st.amp) { G.st.amp = null; pintar(); }
+    });
     document.addEventListener('pointerdown', (ev) => {
       if (!G.st || !G.st.menu) return;
       // Un control de la pieza lo cierra en su propio clic (redibujar acá

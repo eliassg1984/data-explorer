@@ -356,13 +356,13 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             self.assertLessEqual(pg.evaluate("document.querySelector('.cpp').getBoundingClientRect().bottom"), 680)
             # Con una tabla ancha: se desliza en su zona y no se mete en el panel.
             for z in ("tabla", "docs"):
-                pg.locator(f'.pie [data-v="{z}"]').click()
+                pg.locator(f'.tabs [data-v="{z}"]').click()
                 panel = pg.locator(".panel").bounding_box()
                 self.assertLessEqual(pg.evaluate("document.querySelector('.zona').getBoundingClientRect().right"), panel["x"])
                 self.assertEqual(pg.evaluate("getComputedStyle(document.querySelector('.zona')).overflowX"), "auto")
                 self.assertGreaterEqual(pg.evaluate("document.querySelector('.tb').offsetWidth"),
                                         pg.evaluate("parseInt(document.querySelector('.tb').style.minWidth)"))
-            pg.locator('.pie [data-v="graf"]').click()
+            pg.locator('.tabs [data-v="graf"]').click()
             # Sumar lo de afuera escribe el filtro de la página, y eso pide una corrida.
             pg.locator('[data-acc="pagina-todas"]').click()
             self.assertEqual(pg.evaluate("window.__avisos"), [["familias", ["ALIMENTOS", "VINOS", "GASTOS"]]])

@@ -300,3 +300,45 @@ button.fi:hover { background: var(--bg-hover); }
 .kpi:hover { background: rgba(255, 255, 255, .55); }
 .kpi.on { border: 0; background: var(--bg-card); box-shadow: 0 1px 4px rgba(73, 56, 184, .16); }
 .kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }
+
+/* #792: el lenguaje entero de Costo de Carta (#775), como Proveedor, Producto y
+   Precios (#790, #791). Nivel 2 arriba, subrayado y de borde a borde: Gráfico |
+   Tabla | Documentos y «Cómo se calcula». Nivel 3, la cabecera sin título, con
+   «Más filtros» y los menús de la vista. Los indicadores son MEDIDAS: sin
+   «Detalle», su renglón de abajo es la comparación y se queda. ⤢ deja el gráfico
+   (o la tabla) o la lista del costado solos debajo del nivel 2. */
+.titulo { display: none; }
+.n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; flex: none; margin: -12px -18px 0; padding: 0 18px;
+  border-bottom: 1px solid var(--border); font-size: 13px; }
+.tabs { display: flex; align-items: stretch; gap: 20px; min-width: 0; }
+.tabs button { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; padding: 0; cursor: pointer;
+  white-space: nowrap; color: var(--text-secondary) !important; font-size: 13px; }
+.tabs button:hover { color: var(--accent-deep) !important; }
+.tabs button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent); }
+.n2-der { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.como { position: relative; display: flex; align-items: center; }
+.link { border: 0; background: none; padding: 0; cursor: pointer; white-space: nowrap; color: var(--accent-deep) !important; font-size: 13px; }
+.pop-como { position: absolute; top: 26px; right: 0; z-index: 9; width: 420px; max-width: calc(100vw - 32px); max-height: 420px; overflow: auto;
+  overscroll-behavior: contain; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--bg-card); border-radius: 10px;
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--text-primary) 18%, transparent); font-size: 13px; line-height: 1.4; }
+.pop-como p { margin: 0; }
+.pop-como dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; }
+.pop-como dt { font-weight: 600; }
+.pop-como dd { margin: 0; color: var(--text-secondary); }
+.cab .men { height: 30px; }
+.cpp.amp .cab, .cpp.amp .kpis, .cpp.amp .filtro-estado { display: none; }
+.cuerpo[data-amp="izq"] .panel, .cuerpo[data-amp="panel"] .izq { display: none; }
+.cuerpo[data-amp="panel"] .panel { flex: 1 1 0; border-left: 0; padding-left: 0; }
+.amp-b { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--text-secondary) !important; cursor: pointer; }
+.amp-b:hover { background: var(--marco-control, var(--bg-hover)); color: var(--accent-deep) !important; }
+.amp-b svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.pn-cab { display: flex; align-items: center; gap: 8px; }
+.pn-cab > b { flex: 1; min-width: 0; }
+@media (max-width: 900px) {
+  .n2 { margin: 0; padding: 0; height: auto; min-height: 36px; flex-wrap: wrap; }
+  .tabs { overflow-x: auto; overscroll-behavior: contain; }
+  .tabs button, .link { min-height: 44px; }
+  .amp-b { display: none; }
+}
+

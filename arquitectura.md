@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-791 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+792 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1431,12 +1431,13 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#654** — «Análisis de diferencias» reconoce lo descontado desde un ÁREA a la que la receta ya no apunta
 - **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 
-**Sin tema asignado** (4)
+**Sin tema asignado** (5)
 
 - **#300** — Un riel que PINTA casilleros enteros dice de más cuando el rango es más fino que su escala:…
 - **#547** — Un plato de cortesía cobrado a S/ 0 no tiene neto cero: tiene un RESIDUO, y dividir por él da…
 - **#735** — Salidas por Área es una pieza propia de extremo a extremo, con cinco cuadros y la nota completa
 - **#756** — Costos: lo que va a Mayta se cuenta UNA vez, como salida, y no es venta
+- **#792** — Compras › Período en el lenguaje entero de Costo de Carta
 
 <!-- INDICE:FIN -->
 
@@ -58364,6 +58365,18 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - El resumen sin nada elegido va en dos plegables; lo plegado y «Detalle» se recuerdan
      (`cp_vol_*`). Precios no trae el código del Almacén: su lista viene por nombre.
 
+792. **Compras › Período en el lenguaje entero de Costo de Carta.**
+   - Nivel 2: Gráfico | Tabla | Documentos (antes una pastilla gris debajo de los indicadores) y
+     «Cómo se calcula». Sus indicadores son MEDIDAS (#782): no lleva «Detalle», el renglón de
+     abajo es la comparación y se queda.
+   - Nivel 3 sin título: fecha, familias, «Más filtros» —junta subfamilia, proveedor, producto,
+     Documento y Montos, que eran dos menús («Subfamilia, proveedor y producto» y «Todos · sin
+     igv»)— y Agrupar, Partir por y Contra, que bajaban en la fila de las pestañas.
+   - ⤢ en el título del gráfico, de la tabla o de los documentos, y en la lista del costado; ↙ o
+     `Esc` vuelven. El gráfico se vuelve a medir al ancho nuevo porque `pintar` lo dibuja después
+     de rehacer el HTML.
+   - La fecha la ubica la pieza (`ponerFecha`), como en Precios (#791).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58376,7 +58389,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#791**; la próxima toma el número siguiente.
+> última regla es la **#792**; la próxima toma el número siguiente.
 
 >
 
