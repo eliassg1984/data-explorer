@@ -286,7 +286,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # les deja en su cabecera (`lfPasarFecha`). El montaje del historial no dibuja.
     st.markdown("""<style>
     .st-key-cp_prov_nativa { position: relative; gap: 0 !important; }
-    .st-key-cp_prov_nativa_fecha { position: absolute; left: 130px; top: 8px; z-index: 5; width: auto !important; }
+    .st-key-cp_prov_nativa_fecha { position: absolute; left: 18px; top: 44px; z-index: 5; width: auto !important; }
     .st-key-cp_prov_nativa > [data-testid="stElementContainer"] { margin: 0 !important; }
     .st-key-cp_prov_nativa_fecha .st-key-cp_rank_fila { gap: 8px !important; align-items: center; flex-wrap: nowrap; }
     .st-key-cp_prov_pieza_ficha { position: absolute !important; width: 0 !important; height: 0 !important; overflow: hidden; }

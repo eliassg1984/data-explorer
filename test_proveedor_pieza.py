@@ -410,7 +410,7 @@ class LaPantalla(unittest.TestCase):
         self.assertEqual(self.pg.locator(".lf-kpi").count(), 4)
         self.assertIn("A quién le compras", self._texto(".lf-panel"))
         self.assertIn("ya no se les compró", self._texto(".lf-frase"))
-        self.assertEqual(self.pg.locator(".lf-izq .lf-seg button").count(), 4)
+        self.assertEqual(self.pg.locator(".lf-tabs button").count(), 4)
         self.assertIn("Fuera de esta cuenta", self._texto(".lf-fuera"))
 
     def test_no_pide_scroll_ni_se_sale(self):
@@ -452,16 +452,21 @@ class LaPantalla(unittest.TestCase):
         self.pg.locator(".lf-kpi").nth(3).click()
         self.assertIn("De quién dependes", self._texto(".lf-panel"))
         self.pg.locator(".lf-kpi").nth(3).click()
-        self.pg.locator(".lf-izq .lf-seg button", has_text="Ya no").click()
+        self.pg.locator(".lf-tabs button", has_text="Ya no").click()
         self.assertIn("Zeta", self._texto("tbody tr[data-acc]"))
         self.pg.locator("tbody tr[data-acc]").first.click()
         self.assertIn("No se le compró", self._texto(".lf-frase"))
 
     def test_ampliar_y_buscar_sin_perder_el_cursor(self):
-        self.pg.locator(".lf-izq .lf-pil", has_text="Ampliar").click()
-        self.assertEqual(self.pg.locator(".lf-panel").count(), 0)
+        # #789: «Detalle» suma columnas; ⤢ deja la lista sola y Esc vuelve.
+        self.assertEqual(self.pg.locator("thead th").count(), 4)
+        self.pg.locator(".lf-switch").click()
         self.assertGreater(self.pg.locator("thead th").count(), 7)
-        self.pg.locator(".lf-izq .lf-pil", has_text="Ver la ficha").click()
+        self.pg.locator(".lf-switch").click()
+        self.pg.locator(".lf-pie .lf-amp").click()
+        self.assertEqual(self.pg.locator(".lf-panel").count(), 0)
+        self.pg.keyboard.press("Escape")
+        self.assertEqual(self.pg.locator(".lf-panel").count(), 1)
         b = self.pg.locator(".lf-busca")
         b.click()
         self.pg.keyboard.type("alfa", delay=20)

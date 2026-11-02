@@ -369,7 +369,7 @@ class LaPantalla(unittest.TestCase):
             self.assertIn("No se compró", self._texto(".lf-frase"))
 
     def test_por_familia_abre_y_cierra(self):
-        self.pg.locator(".lf-izq .lf-seg button", has_text="Por familia").click()
+        self.pg.locator(".lf-tabs button", has_text="Por familia").click()
         self.assertEqual(self.pg.locator("tr.g0").count(), self.h[(self.h["fecha"] >= self.R0) & (self.h["fecha"] <= self.R1)]["fam"].nunique())
         self.pg.locator('select[data-sel="hasta"]').select_option("2")
         self.assertGreater(self.pg.locator('tbody tr[data-acc="fila"]').count(), 0)
@@ -385,9 +385,25 @@ class LaPantalla(unittest.TestCase):
         self.assertEqual(self.pg.evaluate("document.querySelector('.lf-busca').value"), "lomo")
         self.assertEqual(self.pg.locator('tbody tr[data-acc="fila"]').count(), 1)
         b.fill("")
-        self.pg.locator(".lf-izq .lf-pil", has_text="Ampliar").click()
+        # #789: «Detalle» suma columnas y el renglón de abajo de los indicadores;
+        # ⤢ deja la lista sola debajo del nivel 2, y Esc vuelve.
+        cols = self.pg.locator(".lf-t thead th").count()
+        self.assertFalse(self.pg.locator(".lf-kpi .d").first.is_visible())
+        self.pg.locator(".lf-switch").click()
+        self.assertGreater(self.pg.locator(".lf-t thead th").count(), cols)
+        self.assertTrue(self.pg.locator(".lf-kpi .d").first.is_visible())
+        self.pg.locator(".lf-switch").click()
+        self.assertEqual(self.pg.locator(".lf-t thead th").count(), cols)
+        self.pg.locator(".lf-pie .lf-amp").click()
         self.assertEqual(self.pg.locator(".lf-panel").count(), 0)
-        self.pg.locator(".lf-izq .lf-pil", has_text="Ver la ficha").click()
+        self.assertFalse(self.pg.locator(".lf-kpis").is_visible())
+        self.pg.keyboard.press("Escape")
+        self.assertEqual(self.pg.locator(".lf-panel").count(), 1)
+        self.assertTrue(self.pg.locator(".lf-kpis").is_visible())
+        self.pg.locator(".lf-link").click()
+        self.assertIn("Vs. hab.", self.pg.locator(".lf-pop-como").inner_text())
+        self.pg.keyboard.press("Escape")
+        self.assertEqual(self.pg.locator(".lf-pop-como").count(), 0)
         self.pg.get_by_role("button", name="Sumarlas").click()
         self.assertEqual(self.pg.evaluate("__pedidos"), [["familias", ["A", "B", "SERV"]]])
         with self.pg.expect_download() as d:

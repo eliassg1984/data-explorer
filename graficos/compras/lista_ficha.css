@@ -208,3 +208,70 @@
 .lf-kpi:hover { background: transparent; border-bottom-color: var(--border-lavender); }
 .lf-kpi.on { background: transparent; border-radius: 0; border-bottom-color: var(--accent); }
 .lf-kpi .v { font-size: 17px; font-weight: 500; line-height: 24px; }
+
+/* #789: el lenguaje entero de Costo de Carta (#775), como Recetas (#779-#781).
+   Nivel 2 arriba, subrayado y de borde a borde: cómo ver la lista, y a la
+   derecha «Detalle» y «Cómo se calcula». Nivel 3, la cabecera sin título (el
+   nombre ya está en la franja): la fecha, las familias, el buscador, el Excel.
+   Sin «Detalle», el renglón de abajo de cada indicador y las columnas de más
+   se esconden. ⤢ amplía la lista o la ficha a la hoja debajo del nivel 2. */
+.lf-main { padding-top: 0; }
+.lf-n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; flex: none; margin: 0 -18px;
+  padding: 0 18px; border-bottom: 1px solid var(--border); box-sizing: border-box; font-size: 13px; }
+.lf-tabs { display: flex; align-items: stretch; gap: 20px; min-width: 0; }
+.lf-tabs button { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; padding: 0;
+  cursor: pointer; white-space: nowrap; color: var(--text-secondary) !important; font-size: 13px; }
+.lf-tabs button:hover { color: var(--accent-deep) !important; }
+.lf-tabs button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent); }
+.lf-n2-der { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.lf-switch { display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+.lf-switch input { appearance: none; position: relative; width: 26px; height: 14px; margin: 0; border-radius: 7px;
+  background: var(--text-muted); cursor: pointer; }
+.lf-switch input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--bg-card); }
+.lf-switch input:checked { background: var(--accent); }
+.lf-switch input:checked::before { left: 14px; }
+.lf-como { position: relative; display: flex; align-items: center; }
+.lf-link { border: 0; background: none; padding: 0; cursor: pointer; white-space: nowrap; color: var(--accent-deep) !important; font-size: 13px; }
+.lf-pop.lf-pop-como { left: auto; right: 0; top: 26px; width: 420px; max-width: calc(100vw - 32px); gap: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.4; }
+.lf-pop-como h4 { margin: 0; font-size: 13px; font-weight: 600; }
+.lf-pop-como p { margin: 0 0 4px; font-size: 13px; color: var(--text-primary); }
+.lf-pop-como dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; }
+.lf-pop-como dt { font-weight: 600; }
+.lf-pop-como dd { margin: 0; color: var(--text-secondary); }
+.lf-cab .lf-men { height: 30px; }
+.lf-main:not(.det) .lf-kpi .d { display: none; }
+.lf-main.amp .lf-cab, .lf-main.amp .lf-kpis { display: none; }
+.lf-cuerpo[data-amp="izq"] .lf-izq, .lf-cuerpo[data-amp="panel"] .lf-panel { flex: 1 1 0; }
+.lf-pie { display: flex; align-items: center; gap: 8px; flex: none; min-height: 28px; }
+.lf-pie .lf-nota { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-amp { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--text-secondary) !important; cursor: pointer; }
+.lf-amp:hover { background: var(--marco-control, var(--bg-hover)); color: var(--accent-deep) !important; }
+.lf-amp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+/* Con «Detalle» la tabla pide su ancho y se desplaza en su zona; el nombre queda fijo. */
+.lf-main.det .lf-t { min-width: 1260px; }
+.lf-main.det .lf-t tr.tot td.l { z-index: 3; }
+.lf-main.det .lf-t th.l, .lf-main.det .lf-t td.l { position: sticky; left: 0; z-index: 1; background: var(--bg-card); }
+.lf-main.det .lf-t thead th.l { z-index: 4; background: var(--rail-fondo); }
+.lf-main.det .lf-t tr.on td.l { background: var(--accent-tint); }
+.lf-cod { display: block; font-size: 12px; color: var(--text-secondary); }
+.lf-t td.l.nm .lf-cod { display: inline; margin-left: 6px; }
+.lf-pleg { border-top: 1px solid var(--line-soft, var(--border)); flex: none; }
+.lf-pleg.abierto { display: flex; flex-direction: column; min-height: 0; }
+.lf-pleg.abierto.crece { flex: 1 1 0; }
+.lf-pleg-b { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; border: 0; background: none; padding: 0;
+  cursor: pointer; text-align: left; font-size: 13px; font-weight: 600; color: var(--text-primary) !important; }
+.lf-pleg-b span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-pleg-b b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.lf-pleg-b i { display: inline-flex; color: var(--accent-deep); transition: transform .12s; }
+.lf-pleg-b svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.lf-pleg.abierto .lf-pleg-b i { transform: rotate(180deg); }
+.lf-pleg-c { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; min-height: 0; flex: 1 1 auto; }
+.lf-pleg-c .lf-lista { flex: 1 1 0; }
+@media (max-width: 900px) {
+  .lf-n2 { margin: 0; padding: 0; height: auto; min-height: 36px; flex-wrap: wrap; row-gap: 0; }
+  .lf-tabs { overflow-x: auto; overscroll-behavior: contain; }
+  .lf-tabs button, .lf-link { min-height: 44px; }
+  .lf-amp { display: none; }
+}

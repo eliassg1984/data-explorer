@@ -64,13 +64,19 @@ function lfTip(raiz, i, n, html) {
 // La fecha y el filtro son de Python: se paran en el hueco que la pieza les deja.
 function lfPasarFecha(raiz, selector) {
   const fb = document.querySelector(selector), lg = raiz.querySelector('.lf-lugar');
-  if (!fb || !fb.offsetWidth || !lg) return;
+  if (!fb) return;
+  // Con la lista o la ficha ampliadas el nivel 3 no está: la fecha tampoco (#789).
+  const ver = !!(lg && lg.offsetWidth);
+  if (fb.style.visibility !== (ver ? '' : 'hidden')) fb.style.visibility = ver ? '' : 'hidden';
+  if (!ver || !fb.offsetWidth) return;
   const w = `${fb.offsetWidth + 8}px`;
   if (raiz.style.getPropertyValue('--lf-fecha') !== w) raiz.style.setProperty('--lf-fecha', w);
   const padre = fb.offsetParent;
-  if (!padre || !lg.offsetWidth) return;
-  const x = `${Math.round(lg.getBoundingClientRect().left - padre.getBoundingClientRect().left)}px`;
+  if (!padre) return;
+  const a = lg.getBoundingClientRect(), b = padre.getBoundingClientRect();
+  const x = `${Math.round(a.left - b.left)}px`, y = `${Math.round(a.top - b.top + (a.height - fb.offsetHeight) / 2)}px`;
   if (fb.style.left !== x) fb.style.left = x;
+  if (fb.style.top !== y) fb.style.top = y;
 }
 
 function lfMenuFamilias(pa, abierto, fmt, escapar) {
@@ -86,4 +92,47 @@ function lfFuera(pa, fmt, escapar) {
   const el = new Set(pa.elegidas), fuera = pa.todas.filter((x) => !el.has(x[0])), s = fuera.reduce((a, x) => a + x[2], 0);
   if (s <= 0.5) return '';
   return `<div class="lf-fuera"><span>Fuera de esta cuenta: ${fmt(s)} de ${escapar(fuera.slice(0, 2).map((x) => x[1]).join(', '))}${fuera.length > 2 ? '…' : ''}</span><button class="lf-quita" data-acc="sumar">Sumarlas</button></div>`;
+}
+
+// ── El lenguaje de Costo de Carta (#775, regla #789 en Compras) ────────────
+// Nivel 2 (subrayado, de borde a borde): cómo ver la lista, y a la derecha
+// «Detalle» y «Cómo se calcula». Nivel 3, la cabecera de siempre sin título:
+// la fecha, las familias, el buscador y el Excel. «Detalle» y lo plegado se
+// recuerdan en el navegador, por pieza.
+const LF_ICONO_AMP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+const LF_ICONO_VOLVER = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>';
+
+function lfLeer(clave, defecto) {
+  try { const v = localStorage.getItem(clave); return v == null ? defecto : JSON.parse(v); } catch (e) { return defecto; }
+}
+function lfGuardar(clave, valor) {
+  try { localStorage.setItem(clave, JSON.stringify(valor)); } catch (e) { /* sin almacenamiento: sólo esta vez */ }
+}
+
+// `tabs`: [[clave, texto, ayuda]]; `extra`: lo que va pegado a las pestañas.
+function lfNivel2(tabs, on, det, comoAbierto, comoHtml, extra) {
+  const e = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return `<div class="lf-n2"><div class="lf-tabs" role="tablist">${tabs.map(([k, t, tip]) => `<button role="tab" class="${on === k ? 'on' : ''}" data-acc="ver" data-v="${k}" aria-selected="${on === k}"${tip ? ` title="${e(tip)}"` : ''}>${e(t)}</button>`).join('')}</div>${extra || ''}`
+    + `<div class="lf-n2-der"><label class="lf-switch"><input type="checkbox" data-acc="detalle" role="switch"${det ? ' checked' : ''}>Detalle</label>`
+    + `<span class="lf-como"><button class="lf-link" data-acc="como" aria-expanded="${!!comoAbierto}">Cómo se calcula</button>${comoAbierto ? `<div class="lf-pop lf-pop-como" role="dialog">${comoHtml}</div>` : ''}</span></div></div>`;
+}
+
+function lfAmp(cual, on, rotulo) {
+  return `<button class="lf-amp" data-acc="amp" data-v="${cual}" aria-pressed="${!!on}" title="${on ? 'Volver (Esc)' : `Ampliar ${rotulo}`}" aria-label="${on ? 'Volver' : `Ampliar ${rotulo}`}">${on ? LF_ICONO_VOLVER : LF_ICONO_AMP}</button>`;
+}
+
+// Un plegable: el título siempre, el cuerpo si está abierto.
+function lfPleg(id, titulo, cuerpo, abierto, cifra) {
+  return `<div class="lf-pleg${abierto ? ' abierto' : ''}"><button class="lf-pleg-b" data-acc="pleg" data-v="${id}" aria-expanded="${!!abierto}"><span>${titulo}</span>${cifra ? `<b>${cifra}</b>` : ''}<i><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg></i></button>${abierto ? `<div class="lf-pleg-c">${cuerpo}</div>` : ''}</div>`;
+}
+
+// `Esc` vuelve de una zona ampliada o cierra el pop. Se escucha en el documento:
+// el redibujo reemplaza el botón que tenía el foco (#780).
+function lfEscape(G, pintar) {
+  if (G.escOk) return;
+  G.escOk = true;
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || !G.raiz || !G.raiz.isConnected) return;
+    if (G.st.como) { G.st.como = false; pintar(); } else if (G.st.amp) { G.st.amp = null; pintar(); }
+  });
 }

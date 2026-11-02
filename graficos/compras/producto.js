@@ -179,7 +179,7 @@ function leerFicha(data) {
   const L = data.lineas.map((ls) => ls.map((l, n) => ({
     d: base + l[RL.dia], prov: l[RL.prov], doc: l[RL.doc], cant: l[RL.cant] || 0, valor: l[RL.valor] || 0,
     ref: l[RL.ref], flag: FLAGS[l[RL.flag]] || '', sinDoc: !data.docs[l[RL.doc]], n })));
-  return { sello: data.sello, nombres: data.nombres, um: data.um, provs: data.provs, docs: data.docs, L,
+  return { sello: data.sello, nombres: data.nombres, cods: data.cods || [], um: data.um, provs: data.provs, docs: data.docs, L,
     porDoc: null };
 }
 function leerRank(data) {
@@ -215,6 +215,8 @@ function porDoc(F) {
 }
 
 const G = window.__cpProd || (window.__cpProd = { st: { kpi: 'todos', ver: 'todos', hasta: '1', ab: {}, q: '', sub: null, foco: null, amp: null, menu: null, tab: 'curva', gran: 'Mes', op: '3m', pw: '90', per: null, cprov: null, doc: null }, R: null, F: null });
+if (G.st.det == null) G.st.det = !!lfLeer('cp_prod_det', false);
+if (!G.st.pleg) G.st.pleg = lfLeer('cp_prod_pleg', {});
 
 // ── La ficha ─────────────────────────────────────────────────────────────
 function porDocumento(Ls) {
@@ -345,7 +347,7 @@ const nomS = (R, s) => R.noms[s] || s;
 // Lo que dicen los indicadores y la lista con el estado de hoy. Pura: la corre el test.
 function vista(R, F, st) {
   const q = st.q || '', okS = (p) => !st.sub || (p.fam === st.sub[0] && p.sub === st.sub[1]);
-  const ok = (p) => okS(p) && (!q || coincide(F.nombres[p.i], q));
+  const ok = (p) => okS(p) && (!q || coincide(`${F.nombres[p.i]} ${F.cods[p.i] || ''}`, q));
   const base = R.P.filter(ok), dej = R.DEJ.filter(ok).sort((a, b) => b.prev - a.prev);
   const vT = base.reduce((s, p) => s + p.valor, 0) || 1, prevT = base.reduce((s, p) => s + p.prev, 0) + dej.reduce((s, p) => s + p.prev, 0);
   const en80 = new Set(); let ac = 0;
@@ -392,22 +394,23 @@ function spark(i) {
 }
 
 function listaHtml(V) {
-  const { R, F, st } = G, s = st.sort, amp = st.amp === 'izq', arbol = st.ver === 'fam';
+  const { R, F, st } = G, s = st.sort, amp = !!st.det, arbol = st.ver === 'fam';
   const th = (k, t, ayuda, cls) => `<th class="${cls}"${ayuda ? ` title="${esc(ayuda)}"` : ''}><button data-acc="orden" data-v="${k}">${esc(t)}${s && s.col === k ? (s.dir > 0 ? ' ↑' : ' ↓') : ''}</button></th>`;
   const vMax = Math.max(1, ...V.vis.map((p) => p.valor));
   const filaPd = (p, pad) => {
     const nom = F.nombres[p.i];
     const ayudaAnt = p.est === 'nuevo' ? 'Primera compra' : p.est === 'vuelve' ? 'No se compró en el período anterior' : p.dej ? `Última compra: ${p.ult != null ? fCorta(p.ult) : '—'}` : `${soles(p.prev)} → ${soles(p.valor)} · ${fmtVar(p.var)}`;
-    return `<tr class="${p.i === st.foco ? 'on' : ''}" data-acc="fila" data-v="${p.i}"><td class="l nm" style="padding-left:${8 + pad}px" title="${esc(nom)}${p.nflag ? ' · tiene una compra para revisar' : ''}">${p.nflag ? '<i class="w">⚠</i> ' : ''}${esc(nom)}${p.dej ? `<span class="lf-chip">${p.n90} en 90 d</span>` : ''}</td>`
-      + `<td class="bv" style="--b:${(p.valor / vMax * 100).toFixed(1)}%">${soles(p.valor)}</td><td class="gris">${p.valor ? `${(p.valor / V.vT * 100).toFixed(1)} %` : '—'}</td>`
+    return `<tr class="${p.i === st.foco ? 'on' : ''}" data-acc="fila" data-v="${p.i}"><td class="l nm" style="padding-left:${8 + pad}px" title="${esc(nom)}${F.cods[p.i] ? ` · cód. ${esc(F.cods[p.i])}` : ''}${p.nflag ? ' · tiene una compra para revisar' : ''}">${p.nflag ? '<i class="w">⚠</i> ' : ''}${esc(nom)}${p.dej ? `<span class="lf-chip">${p.n90} en 90 d</span>` : ''}</td>`
+      + (amp ? `<td class="gris">${esc(F.cods[p.i] || '—')}</td>` : '')
+      + `<td class="bv" style="--b:${(p.valor / vMax * 100).toFixed(1)}%">${soles(p.valor)}</td>${amp ? `<td class="gris">${p.valor ? `${(p.valor / V.vT * 100).toFixed(1)} %` : '—'}</td>` : ''}`
       + `<td class="${p.est ? 'mar' : 'gris'}" title="${esc(ayudaAnt)}">${esc(p.est || solesG(p.valor - p.prev))}</td><td class="${colorPrecio(p.hab)}">${fmtVar(p.hab)}</td>`
-      + (amp ? `<td>${p.dej ? '—' : cant(p.cant, p.um)}</td><td>${precio(p.pp)}</td><td class="${colorPpv(p.ppv)}">${finito(p.ppv) && !p.dej ? solesG(p.ppv) : '—'}</td><td class="gris">${p.docs || '—'}</td><td class="gris">${provsDe(p) || '—'}</td><td class="gris">${p.ult != null ? fCorta(p.ult) : '—'}</td>` : '')
-      + `<td class="t"><svg viewBox="0 0 68 20" aria-hidden="true"><polyline points="${spark(p.i)}"></polyline></svg></td></tr>`;
+      + (amp ? `<td>${p.dej ? '—' : cant(p.cant, p.um)}</td><td>${precio(p.pp)}</td><td class="${colorPpv(p.ppv)}">${finito(p.ppv) && !p.dej ? solesG(p.ppv) : '—'}</td><td class="gris">${p.docs || '—'}</td><td class="gris">${provsDe(p) || '—'}</td><td class="gris">${p.ult != null ? fCorta(p.ult) : '—'}</td>`
+        + `<td class="t"><svg viewBox="0 0 68 20" aria-hidden="true"><polyline points="${spark(p.i)}"></polyline></svg></td>` : '') + '</tr>';
   };
   const grupo = (id, nom, xs, pad, cls, niv) => {
     const ab = abierto(id, niv), v = xs.reduce((a, p) => a + p.valor, 0), pr = xs.reduce((a, p) => a + p.prev, 0), vr = xs.reduce((a, p) => a + p.vref, 0), rc = xs.reduce((a, p) => a + p.refc, 0), hab = rc > 0 ? (vr / rc - 1) * 100 : null;
-    return `<tr class="${cls}" data-acc="grupo" data-v="${esc(id)}" data-n="${niv}"><td class="l" style="padding-left:${8 + pad}px" title="${esc(nom)}">${ab ? '▾' : '▸'} ${esc(nom)}</td><td class="bv" style="--b:${(v / V.vT * 100).toFixed(1)}%">${soles(v)}</td><td class="gris">${(v / V.vT * 100).toFixed(1)} %</td><td class="gris">${solesG(v - pr)}</td><td class="${colorPrecio(hab)}">${fmtVar(hab)}</td>`
-      + (amp ? `<td></td><td></td><td class="${colorPpv(vr - rc)}">${solesG(vr - rc)}</td><td></td><td></td><td></td>` : '') + '<td class="t"></td></tr>';
+    return `<tr class="${cls}" data-acc="grupo" data-v="${esc(id)}" data-n="${niv}"><td class="l" style="padding-left:${8 + pad}px" title="${esc(nom)}">${ab ? '▾' : '▸'} ${esc(nom)}</td>${amp ? '<td></td>' : ''}<td class="bv" style="--b:${(v / V.vT * 100).toFixed(1)}%">${soles(v)}</td>${amp ? `<td class="gris">${(v / V.vT * 100).toFixed(1)} %</td>` : ''}<td class="gris">${solesG(v - pr)}</td><td class="${colorPrecio(hab)}">${fmtVar(hab)}</td>`
+      + (amp ? `<td></td><td></td><td class="${colorPpv(vr - rc)}">${solesG(vr - rc)}</td><td></td><td></td><td></td><td class="t"></td>` : '') + '</tr>';
   };
   const abierto = (id, niv) => (st.ab[id] != null ? st.ab[id] : niv < +st.hasta);
   let cuerpo;
@@ -430,17 +433,29 @@ function listaHtml(V) {
   const tods = st.kpi === 'todos' && st.ver !== 'n80';
   const tv = V.vis.reduce((a, p) => a + p.valor, 0), tp = tods ? V.prevT : V.vis.reduce((a, p) => a + p.prev, 0), vr = V.vis.reduce((a, p) => a + (p.vref || 0), 0), rc = V.vis.reduce((a, p) => a + (p.refc || 0), 0), th2 = rc > 0 ? (vr / rc - 1) * 100 : null;
   const ayT = tods && V.dej.length ? `Con los ${V.dej.length} productos que se dejaron de comprar: ${soles(V.dej.reduce((a, p) => a + p.prev, 0))}` : '';
-  return `<div class="lf-scroll" data-tabla="lista"><table class="lf-t"><thead><tr>${th('nom', 'Producto', '', 'l')}${th('val', 'Compra', '', 'w-im')}${th('val', '%', '% sobre lo comprado', 'w-pc')}`
+  return `<div class="lf-scroll" data-tabla="lista"><table class="lf-t"><thead><tr>${th('nom', 'Producto', '', 'l')}${amp ? '<th class="w-pr">Código</th>' : ''}${th('val', 'Compra', '', 'w-im')}${amp ? th('val', '%', '% sobre lo comprado', 'w-pc') : ''}`
     + `${th('ant', 'Vs. antes', 'Contra el período anterior de igual largo. En soles y en gris: comprar más o menos no es bueno ni malo.', 'w-im')}${th('hab', 'Vs. hab.', 'El precio contra el habitual: la mediana de los 90 días anteriores, sin las compras para revisar', 'w-h')}`
-    + (amp ? '<th class="w-x">Cantidad</th><th class="w-pr">Precio</th><th class="w-pr" title="(Precio pagado − habitual) × cantidad">Efecto</th><th class="w-n">Compras</th><th class="w-n">Provs.</th><th class="w-pr">Última</th>' : '')
-    + '<th class="w-t" title="El precio ponderado de cada mes">13 meses</th></tr></thead><tbody>'
-    + `<tr class="tot"><td class="l">Total · ${ent(V.vis.length)} productos</td><td>${soles(tv)}</td><td>${Math.round(tv / V.vT * 100)} %</td><td title="${esc(ayT)}">${solesG(tv - tp)}</td><td class="${colorPrecio(th2)}">${fmtVar(th2)}</td>${amp ? `<td></td><td></td><td class="${colorPpv(vr - rc)}">${solesG(vr - rc)}</td><td></td><td></td><td></td>` : ''}<td></td></tr>`
-    + (cuerpo || `<tr><td colspan="${amp ? 12 : 6}" class="lf-vacio">Nada con ese filtro.</td></tr>`)
-    + `</tbody></table></div><p class="lf-nota">Sin IGV. «Vs. antes»: contra ${esc(tramo(R.R0 - R.DIAS, R.R0 - 1))}, en soles y en gris. «Vs. hab.»: el precio contra su habitual, en rojo o verde. ⚠: tiene una compra para revisar.</p>`;
+    + (amp ? '<th class="w-x">Cantidad</th><th class="w-pr">Precio</th><th class="w-pr" title="(Precio pagado − habitual) × cantidad">Efecto</th><th class="w-n">Compras</th><th class="w-n">Provs.</th><th class="w-pr">Última</th><th class="w-t" title="El precio ponderado de cada mes">13 meses</th>' : '')
+    + '</tr></thead><tbody>'
+    + `<tr class="tot"><td class="l">Total · ${ent(V.vis.length)} productos</td>${amp ? '<td></td>' : ''}<td>${soles(tv)}</td>${amp ? `<td>${Math.round(tv / V.vT * 100)} %</td>` : ''}<td title="${esc(ayT)}">${solesG(tv - tp)}</td><td class="${colorPrecio(th2)}">${fmtVar(th2)}</td>${amp ? `<td></td><td></td><td class="${colorPpv(vr - rc)}">${solesG(vr - rc)}</td><td></td><td></td><td></td><td></td>` : ''}</tr>`
+    + (cuerpo || `<tr><td colspan="${amp ? 14 : 4}" class="lf-vacio">Nada con ese filtro.</td></tr>`)
+    + `</tbody></table></div><div class="lf-pie"><p class="lf-nota">${ent(V.vis.length)} productos · sin IGV · contra ${esc(tramo(R.R0 - R.DIAS, R.R0 - 1))}${V.rev.length ? ' · ⚠ con una compra para revisar' : ''}</p>${lfAmp('izq', st.amp === 'izq', 'la lista')}</div>`;
 }
 function provsDe(p) {
   const { F, R } = G;
   return new Set(F.L[p.i].filter((l) => l.d >= R.R0 && l.d <= R.R1).map((l) => l.prov)).size;
+}
+
+function comoHtml(R) {
+  const ant = tramo(R.R0 - R.DIAS, R.R0 - 1);
+  return `<p>Lo comprado del ${fCorta(R.R0)} al ${fCorta(R.R1)}, sin IGV, contra los mismos ${R.DIAS} días anteriores (${esc(ant)}).</p><dl>`
+    + '<dt>Productos</dt><dd>Los comprados en el rango; «hacen el 80 %», los que suman el 80 % de lo comprado.</dd>'
+    + '<dt>Nuevos o vuelven</dt><dd>Sin compras en el período anterior; «por primera vez», sin ninguna antes.</dd>'
+    + '<dt>Se dejaron</dt><dd>Comprados en el período anterior y no en este. «Seguido»: 3 compras o más en los 90 días anteriores.</dd>'
+    + '<dt>Para revisar</dt><dd>Una compra de S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o con decimales en una unidad entera. No entra en ningún precio; sí en la cantidad y el valor.</dd>'
+    + '<dt>Vs. antes</dt><dd>En soles y en gris: comprar más o menos no es bueno ni malo.</dd>'
+    + '<dt>Vs. hab.</dt><dd>El precio ponderado (soles ÷ cantidad) contra el habitual: la mediana de los 90 días anteriores a cada compra. En rojo si subió, en verde si bajó.</dd>'
+    + '<dt>Efecto</dt><dd>(Precio pagado − habitual) × cantidad. Con «Detalle».</dd></dl><p>Es un cálculo propio, no un estándar.</p>';
 }
 
 function excel() {
@@ -455,8 +470,9 @@ function resumenHtml(V) {
   const { R, F, st } = G, ant = tramo(R.R0 - R.DIAS, R.R0 - 1);
   const item = (n, s, v, c, acc, val, on) => `<button class="lf-fi${on ? ' on' : ''}" data-acc="${acc}" data-v="${esc(val)}"><span class="n" title="${esc(n)}">${esc(n)}</span><small title="${esc(s)}">${esc(s)}</small><b class="${c}">${esc(v)}</b></button>`;
   const miga = `${st.sub ? nomS(R, st.sub[1]) : 'Todo lo comprado'} · ${fCorta(R.R0)} – ${fCorta(R.R1)}`;
-  const cab = (t) => `<div class="lf-fcab"><div class="lf-ftit"><span class="lf-miga">${esc(miga)}</span><h3>${esc(t)}</h3></div></div>`;
-  const lista = (t, xs) => `<div class="lf-bloque">${esc(t)}</div><div class="lf-lista">${xs}</div>`;
+  const cab = (t) => `<div class="lf-fcab"><div class="lf-ftit"><span class="lf-miga">${esc(miga)}</span><h3>${esc(t)}</h3></div>${lfAmp('panel', st.amp === 'panel', 'el resumen')}</div>`;
+  const pleg = (id, t, c, crece) => { const ab = st.pleg[id] !== false; return lfPleg(id, t, c, ab).replace('lf-pleg', `lf-pleg${crece && ab ? ' crece' : ''}`); };
+  const lista = (t, xs) => pleg(t, esc(t), `<div class="lf-lista">${xs}</div>`, true);
   if (st.kpi === 'nv') {
     return cab('Lo que apareció') + `<p class="lf-frase">${esc(`${V.nv.length} productos no se compraron en ${ant}: ${V.nu.length} por primera vez y ${V.nv.length - V.nu.length} que vuelven. Suman ${soles(V.nv.reduce((a, p) => a + p.valor, 0))}.`)}</p>`
       + lista('Los que más pesan', [...V.nv].sort((a, b) => b.valor - a.valor).slice(0, 40).map((p) => item(F.nombres[p.i], p.est, soles(p.valor), '', 'fila', p.i)).join(''));
@@ -473,7 +489,7 @@ function resumenHtml(V) {
   V.base.forEach((p) => { const k = `${p.fam}\u001f${p.sub}`; porS.set(k, (porS.get(k) || 0) + p.valor); });
   const fila = (n, v, cls) => `<span class="${cls || ''}">${esc(n)}</span><b class="${cls || ''}">${esc(v)}</b>`;
   return cab('En qué se va') + `<p class="lf-frase">${esc(`${V.en80.size} de ${ent(V.base.length)} productos hacen el 80 % de lo comprado. Compraste ${soles(Math.abs(T))} ${T < 0 ? 'menos' : 'más'} que en ${ant} (${fmtVar(varPct(V.vT, V.prevT))}).`)}</p>`
-    + `<div class="lf-bloque">De dónde sale la diferencia</div><div class="lf-dif">${fila(`Los mismos, se compró más · ${d.nMas}`, solesG(d.mas))}${fila(`Los mismos, se compró menos · ${d.nMen}`, solesG(d.men))}${fila(`Nuevos o vuelven · ${d.nNv}`, solesG(d.nv))}${fila(`Se dejaron de comprar · ${d.nDej}`, solesG(d.dej))}${fila('Total', solesG(T), 'tt')}</div>`
+    + pleg('dif', 'De dónde sale la diferencia', `<div class="lf-dif">${fila(`Los mismos, se compró más · ${d.nMas}`, solesG(d.mas))}${fila(`Los mismos, se compró menos · ${d.nMen}`, solesG(d.men))}${fila(`Nuevos o vuelven · ${d.nNv}`, solesG(d.nv))}${fila(`Se dejaron de comprar · ${d.nDej}`, solesG(d.dej))}${fila('Total', solesG(T), 'tt')}</div>`)
     + lista('Por subfamilia', [...porS].sort((a, b) => b[1] - a[1]).map(([k, v]) => { const [f, s2] = k.split('\u001f'); return item(nomS(R, s2), `${(v / V.vT * 100).toFixed(1)} %`, soles(v), '', 'sub', k, st.sub && st.sub[0] === f && st.sub[1] === s2); }).join(''))
     + lfFuera(R.pagina, soles, esc);
 }
@@ -561,8 +577,8 @@ function fichaHtml(V) {
   } else {
     zona = `<div class="cuerpo">${S ? tablaPeriodos(S, gran, um, per) : '<div class="nota-v">Sin curva.</div>'}</div><p class="lf-nota">Una fila por barra de la curva. Clic: sus compras.</p>`;
   }
-  return `<div class="lf-fcab"><div class="lf-ftit"><span class="lf-miga">${esc(nomS(R, fila.sub))} · ${esc(nomF(R, fila.fam))}</span><h3 title="${esc(nom)}">${esc(nom)}</h3><span class="lf-miga" title="${esc(subt.join(' · '))}">${esc(subt.join(' · '))}</span></div>`
-    + `<button class="lf-pil" data-acc="amp" data-v="panel">${st.amp === 'panel' ? 'Ver la lista' : 'Ampliar'}</button><button class="lf-quita" data-acc="soltar">Soltar</button></div>`
+  return `<div class="lf-fcab"><div class="lf-ftit"><span class="lf-miga">${esc(nomS(R, fila.sub))} · ${esc(nomF(R, fila.fam))}${F.cods[fila.i] ? ` · cód. ${esc(F.cods[fila.i])}` : ''}</span><h3 title="${esc(nom)}">${esc(nom)}</h3><span class="lf-miga" title="${esc(subt.join(' · '))}">${esc(subt.join(' · '))}</span></div>`
+    + `${lfAmp('panel', st.amp === 'panel', 'la ficha')}<button class="lf-quita" data-acc="soltar">Soltar</button></div>`
     + `<div class="lf-cifras">${cifras}</div>${fr.length ? `<p class="lf-frase">${esc(fr.join(' '))}</p>` : ''}<div class="lf-fl"><span class="lf-seg" role="group" aria-label="Qué mirar">${tabs}</span>${chips}</div><div class="lf-zona">${zona}</div>`;
 }
 
@@ -584,22 +600,22 @@ function pintarTip(k) {
 function pintar() {
   const { R, F, st } = G, raiz = G.raiz;
   if (!raiz) return;
+  if (!st.pleg) st.pleg = {};
   if (!R || !F || R.sello !== F.sello) { if (!raiz.innerHTML) raiz.innerHTML = '<div class="lf-vacio">Cargando…</div>'; return; }
   const V = vista(R, F, st);
   G.V = V;
   const yL = raiz.querySelector('[data-tabla="lista"]')?.scrollTop || 0, yF = raiz.querySelector('.ft-l')?.scrollTop || 0, yR = raiz.querySelector('.lf-lista')?.scrollTop || 0;
   const foco = raiz.querySelector('.lf-busca:focus'), sel = foco ? [foco.selectionStart, foco.selectionEnd] : null;
-  const verIzq = st.amp !== 'panel' || st.foco == null, verPanel = st.amp !== 'izq';
+  const verIzq = st.amp !== 'panel', verPanel = st.amp !== 'izq';
   const vers = [['todos', `Todos · ${ent(V.base.length)}`, ''], ['n80', `Hacen el 80 % · ${V.en80.size}`, 'Los que suman el 80 % de lo comprado'], ['fam', 'Por familia', 'Familia › Subfamilia › Producto']];
-  let h = `<div class="lf-main"><div class="lf-cab"><h2 class="lf-tit">Productos</h2><span class="lf-lugar" aria-hidden="true"></span>${lfMenuFamilias(R.pagina, st.menu === 'fam', soles, esc)}<span class="lf-esp"></span>`
-    + `<input class="lf-busca" type="search" value="${esc(st.q || '')}" placeholder="Buscar producto…" aria-label="Buscar producto"><button class="lf-pil" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div>`
+  const chip = (st.kpi !== 'todos' ? `<button class="lf-quita" data-acc="kpi" data-v="${st.kpi}">${{ nv: 'Nuevos o vuelven', dej: 'Se dejaron', rev: 'Para revisar' }[st.kpi]} ✕</button>` : '')
+    + (st.sub ? `<button class="lf-quita" data-acc="soltar-sub">${esc(nomS(R, st.sub[1]))} ✕</button>` : '');
+  const hasta = st.ver === 'fam' ? `<select class="lf-men" data-sel="hasta" aria-label="Abrir hasta">${[['0', 'Familia'], ['1', 'Subfamilia'], ['2', 'Producto']].map(([k, t]) => `<option value="${k}"${k === st.hasta ? ' selected' : ''}>Abrir hasta: ${t}</option>`).join('')}</select>` : '';
+  let h = `<div class="lf-main${st.det ? ' det' : ''}${st.amp ? ' amp' : ''}">${lfNivel2(vers, st.ver, st.det, st.como, comoHtml(R))}`
+    + `<div class="lf-cab"><span class="lf-lugar" aria-hidden="true"></span>${lfMenuFamilias(R.pagina, st.menu === 'fam', soles, esc)}${hasta}${chip}<span class="lf-esp"></span>`
+    + `<input class="lf-busca" type="search" value="${esc(st.q || '')}" placeholder="Buscar producto o código…" aria-label="Buscar producto o código"><button class="lf-pil" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div>`
     + `<div class="lf-kpis">${kpisHtml(V, R, F)}</div><div class="lf-cuerpo" data-amp="${st.amp || ''}">`;
-  if (verIzq) {
-    const chip = (st.kpi !== 'todos' ? `<button class="lf-quita" data-acc="kpi" data-v="${st.kpi}">${{ nv: 'Nuevos o vuelven', dej: 'Se dejaron', rev: 'Para revisar' }[st.kpi]} ✕</button>` : '')
-      + (st.sub ? `<button class="lf-quita" data-acc="soltar-sub">${esc(nomS(R, st.sub[1]))} ✕</button>` : '');
-    const hasta = st.ver === 'fam' ? `<select class="lf-men" data-sel="hasta" aria-label="Abrir hasta">${[['0', 'Familia'], ['1', 'Subfamilia'], ['2', 'Producto']].map(([k, t]) => `<option value="${k}"${k === st.hasta ? ' selected' : ''}>Abrir hasta: ${t}</option>`).join('')}</select>` : '';
-    h += `<div class="lf-izq"><div class="lf-fl"><span class="lf-seg" role="group" aria-label="Cómo ver la lista">${vers.map(([k, t, tip]) => `<button class="${st.ver === k ? 'on' : ''}" data-acc="ver" data-v="${k}" aria-pressed="${st.ver === k}" title="${esc(tip)}">${esc(t)}</button>`).join('')}</span>${hasta}${chip}<span class="lf-esp"></span><button class="lf-pil" data-acc="amp" data-v="izq">${st.amp === 'izq' ? 'Ver la ficha' : 'Ampliar'}</button></div>${listaHtml(V)}</div>`;
-  }
+  if (verIzq) h += `<div class="lf-izq">${listaHtml(V)}</div>`;
   if (verPanel) h += `<aside class="lf-panel" aria-label="Ficha">${st.foco != null ? fichaHtml(V) : resumenHtml(V)}</aside>`;
   raiz.innerHTML = `${h}</div></div>`;
   const pon = (q, y) => { const e = raiz.querySelector(q); if (e) e.scrollTop = y; };
@@ -618,7 +634,11 @@ function accion(acc, val, b) {
   const st = G.st;
   if (acc === 'menu') { st.menu = st.menu === val ? null : val; if (!st.menu) avisarFamilias(); pintar(); return; }
   if (st.menu) { st.menu = null; avisarFamilias(); }
-  if (acc === 'orden') {
+  if (acc !== 'como') st.como = false;
+  if (acc === 'detalle') { st.det = !!(b && b.checked); lfGuardar('cp_prod_det', st.det); }
+  else if (acc === 'como') st.como = !st.como;
+  else if (acc === 'pleg') { st.pleg = { ...st.pleg, [val]: st.pleg[val] === false }; lfGuardar('cp_prod_pleg', st.pleg); }
+  else if (acc === 'orden') {
     const s = st.sort, d0 = val === 'nom' ? 1 : -1;
     st.sort = !s || s.col !== val ? { col: val, dir: d0 } : s.dir === d0 ? { col: val, dir: -s.dir } : null;
   } else if (acc === 'fila') {
@@ -649,6 +669,7 @@ function enlazar(raiz) {
     const b = ev.target.closest('[data-acc]');
     if (!b || !raiz.contains(b) || b.disabled) {
       if (G.st.menu && !(ev.target.closest && ev.target.closest('.lf-ms'))) { G.st.menu = null; avisarFamilias(); pintar(); }
+      else if (G.st.como && !(ev.target.closest && ev.target.closest('.lf-como'))) { G.st.como = false; pintar(); }
       return;
     }
     accion(b.dataset.acc, b.dataset.v, b);
@@ -699,6 +720,7 @@ export default function (component) {
       raiz.className = 'lf cpd';
       parentElement.appendChild(raiz);
       enlazar(raiz);
+      lfEscape(G, pintar);
       // La fecha de Python sigue a su hueco si cambia el ancho.
       new ResizeObserver(() => lfPasarFecha(raiz, '.st-key-cp_prod_nativa_fecha')).observe(raiz);
     }

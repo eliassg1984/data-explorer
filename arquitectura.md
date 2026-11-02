@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-789 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+790 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (264)
+**CSS y estilos** (265)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -331,6 +331,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#786** — Producción en la franja común (#782) y nada bajo 12 px
 - **#787** — Costos e Inicio en la franja común (#782) y nada bajo 12 px
 - **#789** — Sin plato y Análisis de diferencias en la franja, y «Por hora» en el rango del enlace
+- **#790** — Compras › Proveedor y Producto en el lenguaje entero de Costo de Carta
 
 **Layout y alturas** (112)
 
@@ -1155,7 +1156,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (250)
+**Decisiones de diseño y UX** (251)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1407,6 +1408,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#781** — Recetas entera en el lenguaje de Costo de Carta, y los códigos a la vista
 - **#783** — La franja de Ventas abre el mismo panel de fecha que las tarjetas
 - **#788** — «Ampliar» en Mix, Meseros y Pedidos
+- **#790** — Compras › Proveedor y Producto en el lenguaje entero de Costo de Carta
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58321,6 +58323,31 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      Medido: con `desde=2026-10-01&hasta=2026-10-31` abre en «Mes pasado · octubre».
    - Medido en Chromium a 1323 px: las dos franjas van de 80 a 1315, lo mismo que la hoja.
 
+790. **Compras › Proveedor y Producto en el lenguaje entero de Costo de Carta.**
+   Como Recetas (#779-#781): la #784 les había cambiado la franja; ahora la forma. Las dos piezas
+   comparten `lista_ficha.js` y `.css`, así que los ladrillos viven ahí (`lfNivel2`, `lfAmp`,
+   `lfPleg`, `lfEscape`, `lfLeer`/`lfGuardar`).
+   - **Nivel 2** (subrayado, de borde a borde): las vistas de la lista —Todos | Hacen el 80 % |
+     Por familia; en Proveedor, Nuevos o vuelven y Ya no— que antes eran una pastilla gris sobre
+     la lista, y a la derecha «Detalle» y «Cómo se calcula» (un pop con lo que estaba repartido
+     en los `title` de cada indicador y en la nota de la lista).
+   - **Nivel 3**: la cabecera sin título (el nombre ya está en la franja): la fecha, las
+     familias, «Abrir hasta» y los filtros puestos, el buscador y el Excel.
+   - **«Ampliar» hacía dos cosas** —sumaba columnas y escondía la ficha— y pasan a ser dos:
+     «Detalle» (columnas de más y el renglón de abajo de los indicadores) y ⤢ al pie de la lista
+     o junto al nombre de la ficha, que deja esa zona sola debajo del nivel 2; ↙ o `Esc` vuelven.
+     Sin «Detalle» la lista es nombre, compra, vs. antes y precio. Con él la tabla pide 1.260 px,
+     se desplaza en su zona y el nombre queda fijo a la izquierda.
+   - **El código del Almacén** (a pedido, #781): `COD_PRODUCTO` viaja en `historial_pieza`
+     (`cods`, el más usado de cada producto); va en la ficha, en una columna con «Detalle», y el
+     buscador lo encuentra.
+   - **El resumen sin nada elegido va en plegables** («De dónde sale la diferencia», «Por
+     subfamilia», «Los que más subieron»…), abiertos de entrada; lo plegado y «Detalle» se
+     recuerdan en el navegador (`cp_prod_*`, `cp_prov_*`).
+   - **La fecha de Python sigue a su hueco también en alto**: `lfPasarFecha` sólo corría el
+     `left`, con el `top` fijo en 8 px; con el nivel 2 arriba quedaba encima de las pestañas.
+     Con una zona ampliada el nivel 3 no está, y la fecha se esconde.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58333,7 +58360,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#789**; la próxima toma el número siguiente.
+> última regla es la **#790**; la próxima toma el número siguiente.
 
 >
 

@@ -142,6 +142,8 @@ def _normalizar(d, col_prod, col_fam, col_subfam, col_valor, col_cant,
                   .to_numpy() if col_fecha else pd.NaT),
         "prov": _txt(col_prov),
         "docu": _txt(col_docu),
+        # El código del Almacén, para verlo en la ficha y buscar por él (#789).
+        "cod": _txt("COD_PRODUCTO" if "COD_PRODUCTO" in d.columns else None),
     })
     return b[b["fecha"].notna() & (b["prod"] != "")].reset_index(drop=True)
 
@@ -423,6 +425,15 @@ def sello_historial(hist):
     return f"{len(hist)}-{int(_h.sum()) & 0xFFFFFFFFFFFF:x}"
 
 
+def _codigos(h, nombres):
+    """El código de cada producto (el más usado si tuvo más de uno), o «»."""
+    if "cod" not in h.columns:
+        return [""] * len(nombres)
+    c = h[h["cod"] != ""][["prod", "cod"]]
+    return (moda_por_grupo(c, "prod", "cod").reindex(nombres).fillna("")
+            .astype(str).tolist() if len(c) else [""] * len(nombres))
+
+
 def historial_pieza(hist, sello):
     """El historial con su precio habitual y su marca (`h_ref`, para el
     resumen del rango) y lo que recibe la tarjeta de la FICHA. Pura.
@@ -461,7 +472,7 @@ def historial_pieza(hist, sello):
                     if _con else []))
     payload = {
         "parte": "ficha", "sello": sello, "base": _iso(base),
-        "nombres": nombres, "um": um.tolist(),
+        "nombres": nombres, "um": um.tolist(), "cods": _codigos(h, nombres),
         "provs": [nombre_propio(p) for p in provs],
         "docs": [str(_leg.get(x, "")) for x in docs],
         "lineas": lineas,
@@ -638,7 +649,7 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
     # su cabecera (`lfPasarFecha`). El montaje del historial no dibuja.
     st.markdown("""<style>
     .st-key-cp_prod_nativa { position: relative; gap: 0 !important; }
-    .st-key-cp_prod_nativa_fecha { position: absolute; left: 110px; top: 8px; z-index: 5; width: auto !important; }
+    .st-key-cp_prod_nativa_fecha { position: absolute; left: 18px; top: 44px; z-index: 5; width: auto !important; }
     .st-key-cp_prod_nativa > [data-testid="stElementContainer"] { margin: 0 !important; }
     .st-key-cp_prod_pieza_ficha { position: absolute !important; width: 0 !important; height: 0 !important; overflow: hidden; }
     .st-key-cp_prod_escala.st-key-cp_prod_escala button {
