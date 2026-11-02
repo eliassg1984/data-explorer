@@ -1297,7 +1297,9 @@ sumaba POR UNIDAD (FoodCost 24 % donde era 29 %).
   (`preparar(turno=True)` mueve `FEC REG DOCUMENTO` y deja la hora real en
   `FECHA EMISION`), no en cada vista. Todo lo que cuadre contra el POS por
   fecha de registro carga con `turno=False`, como `cuadrar_ventas.py`.
-  Regla #593.
+  Regla #593. Por eso el día 1 el parquet llega al mes nuevo por registro y
+  el mes viene vacío por turno: si «este mes» carga vacío, `app.py` abre el
+  mes anterior entero (`_mes_sin_venta`, regla #777).
 - **En un COMBO, `PRECIO COSTO` es el costo de la LÍNEA, no de la
   unidad** (la Degustación, las parrillas, los menús de evento:
   `TPRODUCTO.lCombinacion = 1`). El extractor lo llena con lo servido de
@@ -2000,7 +2002,9 @@ no copiar el calendario simplificado del boceto. Las cuentas y callbacks
 siguen en sus funciones anteriores. `test_ficha_plato.py` cubre además
 filtros secundarios, Detalle, Ampliar/Soltar y retorno de móvil a laptop.
 Desde la #776 el marco (navegación sobre lavanda, hoja por vista) es de toda la
-app; lo de adentro de las demás vistas sigue como estaba.
+app; lo de adentro de las demás vistas sigue como estaba. **La escala de letra
+(#777, a pedido):** cifras de indicador en 17 px y nada visible bajo 12 px,
+salvo la «ⓘ»; vale para toda vista que pase a este lenguaje.
 
 **«Nuevo Costeo» también, desde el mismo día** (regla #697): la tabla de la
 receta y el precio son `graficos/nuevo_costeo.js` + `.css`; el buscador, el

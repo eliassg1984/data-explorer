@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-776 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+777 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (255)
 
@@ -845,7 +845,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#731** — Un buscador que se redibuja debe leer el foco de SU shadow root
 - **#767** — Análisis de platos: una fila de controles y una zona por pestaña
 
-**Datos, R2 y DuckDB** (131)
+**Datos, R2 y DuckDB** (132)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -978,6 +978,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#753** — Las compras del mes nuevo procesadas antes de la apertura van a su mes: compras.parquet trae…
 - **#761** — Lo «Sin descargo» del POS suma en la venta y no se observa como «sin costo»
 - **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
+- **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 
 **SUNAT y SIRE** (77)
 
@@ -1138,7 +1139,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (245)
+**Decisiones de diseño y UX** (246)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1385,6 +1386,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#774** — Compras › Proveedor y Producto en una pantalla: dos cuentas corregidas y lo que se dejó de…
 - **#775** — Costo de Carta: opción B, zonas y divulgación progresiva, con el calendario de siempre
 - **#776** — El marco de la opción B en toda la app: la navegación sobre lavanda y cada vista, su hoja
+- **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58062,6 +58064,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    las de los indicadores; ahora es `.cc-kpi-zona>.cc-info`. El buscador toma 240 px (149 le
    cortaban el texto).
 
+777. **El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17.**
+   - **«Este mes» vacío.** Ventas carga por rango y abría del 1 del mes a hoy. El 1 de
+     noviembre de 2026 el parquet llegaba al 1-nov por REGISTRO —documentos de pasada la
+     medianoche—, pero por TURNO eran del 31-oct: la carga venía vacía, la página mostraba
+     «No se pudieron cargar los datos» y no dibujaba la fecha, así que no había por dónde
+     salir. Y «Por hora» abría en «Este mes · 1 nov», en cero. Ahora `app.py`, si la carga
+     de un rango que empieza el 1 del mes en curso viene vacía, escribe el mes anterior
+     entero por `estado_rango.aplicar_atajo` y vuelve a cargar; ese mismo mes pasa a ser
+     el default que publica (`_mes_sin_venta`), así que las tarjetas con rango propio
+     abren igual. Un mes con venta, aunque sea un día, se queda como está.
+   - **La letra, a pedido (2026-11-01):** las cifras de los indicadores en 17 px —lo de
+     Alza, la #775 las había puesto en 22— y NADA visible bajo 12 px, salvo la «ⓘ». La
+     #775 quedó con rótulos de 11 y 11,5: el censo de su boceto había medido que la letra
+     diminuta era lo que más cansaba (52 textos bajo 12 px contra 7 de la página de
+     referencia). En Costo de Carta, medido en Chromium, sólo quedaban «Canal» y «Grupo»
+     en 11,5. Toda vista que pase al lenguaje de la #775 sigue esta escala.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58074,7 +58093,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#776**; la próxima toma el número siguiente.
+> última regla es la **#777**; la próxima toma el número siguiente.
 
 >
 

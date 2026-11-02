@@ -237,8 +237,10 @@ _RECORRIDO = """([d, css]) => {
 
 @unittest.skipIf(_chromium() is None, "sin Playwright (requirements-dev.txt)")
 class EnElNavegador(unittest.TestCase):
-    def test_el_marco_sigue_a_la_vista_activa(self):
-        """La tarjeta sigue montada al navegar a otra vista de la pila."""
+    def test_el_marco_es_el_mismo_en_toda_la_pila(self):
+        """Regla #776: al bajar de Costo de Carta a Alza el marco no cambia —
+        el fondo sigue lavanda— y cada sección es su hoja blanca. Hasta la
+        #776 la franja volvía a blanca al salir de Costo de Carta."""
         from estilos._90_marco import CSS
         from navegacion import claves_vista
         clave = claves_vista("Recetas", "Carta costeada")[0]
@@ -248,17 +250,24 @@ class EnElNavegador(unittest.TestCase):
             except Exception as e:
                 self.skipTest(f"sin Chromium: {e}")
             pg = b.new_page(viewport={"width": 1000, "height": 619})
-            html = """<style>:root{--marco-fondo:lavender;--bg-card:white}
+            html = """<style>:root{--marco-fondo:rgb(238, 236, 247);--bg-card:white;--marco-radio:14px}
                 .stMain{background:var(--bg-card)}</style>
+                <div class=st-key-compras_tabs_row></div>
                 <div class=st-key-CLAVE_VISTA><button class=vista-en-pantalla>Carta</button></div>
-                <div class=stMain><div class=st-key-rec_card_carta></div></div>"""
+                <div class=stMain><div class=st-key-rec_sec_carta><div class=st-key-rec_card_carta></div></div>
+                <div class=st-key-rec_sec_alza></div></div>"""
             pg.set_content(html.replace("CLAVE_VISTA", clave))
             pg.add_style_tag(content=CSS)
-            color_carta = pg.locator(".stMain").evaluate("e=>getComputedStyle(e).backgroundColor")
+            fondo = "e=>getComputedStyle(e).backgroundColor"
+            en_carta = pg.locator(".stMain").evaluate(fondo)
             pg.evaluate("document.querySelector('button').classList.remove('vista-en-pantalla')")
-            color_otra = pg.locator(".stMain").evaluate("e=>getComputedStyle(e).backgroundColor")
-            self.assertNotEqual(color_carta, color_otra)
-            self.assertEqual(color_otra, "rgb(255, 255, 255)")
+            en_alza = pg.locator(".stMain").evaluate(fondo)
+            self.assertEqual(en_carta, "rgb(238, 236, 247)")
+            self.assertEqual(en_alza, en_carta)
+            for sec in (".st-key-rec_sec_carta", ".st-key-rec_sec_alza"):
+                hoja = pg.locator(sec).evaluate(
+                    "e=>[getComputedStyle(e).backgroundColor, getComputedStyle(e).borderTopLeftRadius]")
+                self.assertEqual(hoja, ["rgb(255, 255, 255)", "14px"], sec)
             b.close()
 
     def test_divulgacion_progresiva_y_ancho_de_laptop(self):

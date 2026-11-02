@@ -17,7 +17,8 @@ from data import (
 from tema import ADVERTENCIA_TEXTO
 from estilos import TAM_FUENTE, inject_css
 from estado_rango import (
-    clave_rango, asegurar_rango, debug_estado_rango, restaurar_eco,
+    clave_rango, asegurar_rango, aplicar_atajo, debug_estado_rango,
+    restaurar_eco,
 )
 try:
     from estado_rango import atajos_tarjeta
@@ -324,6 +325,7 @@ if cfg.get("tool"):
 #
 # Nombra el REPORTE porque a esta altura ya se sabe cuál es, y así el primer
 # texto de la pantalla dice también dónde estás — no sólo que hay que esperar.
+_mes_sin_venta = None   # el mes anterior, si el en curso vino vacío (#777)
 with perf.phase("cargar()"), st.spinner(f"Cargando {reporte}…"):            # ⚡ PERF
     _col_rango = cfg.get("carga_por_rango")
     if _col_rango:
@@ -353,6 +355,18 @@ with perf.phase("cargar()"), st.spinner(f"Cargando {reporte}…"):            # 
             _r_ini, _r_fin = st.session_state.get(
                 _k_rango_ok, (_hoy_c.replace(day=1), _hoy_c))
         df = cargar_rango(cfg["archivo"], _col_rango, _r_ini, _r_fin)
+        # EL DÍA 1, «ESTE MES» ESTÁ VACÍO (regla #777). El parquet trae
+        # documentos registrados pasada la medianoche, pero por turno son del
+        # mes anterior: el 1 de noviembre de 2026 Ventas abría con el aviso
+        # de «no se pudieron cargar los datos» y sin fecha para salir. Si el
+        # mes en curso no tiene venta, se abre el mes anterior entero.
+        if ((df is None or df.empty) and _r_ini.day == 1
+                and (_r_ini.year, _r_ini.month) == (_hoy_c.year, _hoy_c.month)):
+            _fin_ant = _r_ini - datetime.timedelta(days=1)
+            _mes_sin_venta = (_fin_ant.replace(day=1), _fin_ant)
+            aplicar_atajo(_k_rango, _mes_sin_venta, reporte=reporte,
+                          usa_carga_rango=True)
+            df = cargar_rango(cfg["archivo"], _col_rango, *_mes_sin_venta)
     else:
         df = cargar(cfg["archivo"])
 if df is None or df.empty:
@@ -585,6 +599,10 @@ if _franja_con_fecha and reporte in REPORTES_FECHA_EN_TARJETA_SUNAT:
 _ancla_mes = min(_hoy, fecha_max_full) if fecha_max_full else _hoy
 fecha_ini_default = _ancla_mes.replace(day=1)   # 01 del mes con datos
 fecha_fin_default = _ancla_mes                  # hoy, o el último día con datos
+# Y si el mes en curso vino sin venta, las tarjetas sin rango propio abren en
+# el mismo mes anterior que la carga: «Por hora» abría en «1 nov», en cero.
+if _mes_sin_venta:
+    fecha_ini_default, fecha_fin_default = _mes_sin_venta
 
 # EL MISMO MES, PERO ANCLADO AL PARQUET (2026-09-11). Es el default de las
 # tarjetas que abren en el mes en curso (hoy Proveedores, Producto y
