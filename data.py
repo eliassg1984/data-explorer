@@ -115,7 +115,8 @@ REPORTES = {
         "label_largo": "Inicio",
         "label_rail": "Inicio",
         "archivo": "ajusteinventario.parquet",
-        "archivos_extra": ("compras.parquet", "salidas.parquet"),
+        "archivos_extra": ("compras.parquet", definicion_compra.ARCHIVO_NOTAS,
+                           "salidas.parquet"),
         "icono": ":material/dashboard:",
         "fecha": None,
         "filtros_cat": [],
@@ -124,6 +125,11 @@ REPORTES = {
         "label_corto": "Compras",
         "area": "Compras",
         "archivo": "compras.parquet",
+        # `cargar` le resta las notas de crédito (regla #603): «Refrescar»
+        # las pide con las compras, o la factura llegaría nueva con las notas
+        # de la madrugada. Igual en todo reporte que pida compras.parquet;
+        # lo vigila test_definicion_compra.py.
+        "archivos_extra": (definicion_compra.ARCHIVO_NOTAS,),
         # Shortcode Material Symbols (no Bootstrap Icons — ver el comentario
         # grande más abajo de "El mapa de iconos..."). Confirmados contra
         # compras.parquet real (2026-08-22): valorizado = VALOR_COMPRA,
@@ -170,9 +176,10 @@ REPORTES = {
     # `graficos/sunat_reporte.py`. Regla #577.
     #
     # `archivo` es compras.parquet a propósito: es el lado "sistema" del
-    # cruce documento a documento, y el botón Refrescar lo pide. Lo de SUNAT
-    # no es un parquet que se refresque desde acá: lo trae la tarjeta con su
-    # propio botón de sincronizar.
+    # cruce documento a documento, y el botón Refrescar lo pide con las
+    # notas de crédito del Almacén, que el cruce suma como documentos
+    # (regla #604). Lo de SUNAT no se refresca desde acá: el registro lo
+    # sube cada madrugada `.github/workflows/sunat-registro.yml`.
     #
     # Sin `kpis`: los de Compras cuentan documentos DEL SISTEMA, y en este
     # reporte un «Documentos» sin apellido se leería como los de SUNAT. Lo
@@ -183,6 +190,7 @@ REPORTES = {
         "label_rail": "SUNAT",
         "area": "Compras",
         "archivo": "compras.parquet",
+        "archivos_extra": (definicion_compra.ARCHIVO_NOTAS,),
         "icono": ":material/fact_check:",
     },
     "Inventario Valorizado": {
@@ -379,7 +387,7 @@ REPORTES = {
                            "ordenesproduccion.parquet",
                            "paloteoinsumosnivel1.parquet", "recetabase.parquet",
                            "inventariovalorizado.parquet", "recetaventa.parquet",
-                           "compras.parquet"),
+                           "compras.parquet", definicion_compra.ARCHIVO_NOTAS),
         "icono": ":material/skillet:",
         "fecha": "Fecha Registro",
         "filtros_cat": ["Sub Almacen", "Nombre Familia"],
@@ -482,7 +490,8 @@ REPORTES = {
         # va, por lo mismo que en Recetas: regenerar el parquet más pesado
         # para refrescar una fila; se actualiza con su reporte.
         # Y el kardex, del que salen las semanas y quincenas.
-        "archivos_extra": ("compras.parquet", "salidas.parquet", kardex.ARCHIVO),
+        "archivos_extra": ("compras.parquet", definicion_compra.ARCHIVO_NOTAS,
+                           "salidas.parquet", kardex.ARCHIVO),
         "icono": ":material/calculate:",
         "fecha": None,
     },

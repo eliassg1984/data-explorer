@@ -12,8 +12,8 @@ Dos cosas, las dos sin secrets, sin red y sin navegador:
 
 2. El CABLEADO, leído del código con `ast`: que `data.cargar` reste las
    notas de compras para todos, que «Documentos SUNAT» pida el parquet sin
-   restarlas (cruza documento contra documento) y que ninguna vista lea el
-   parquet de notas por su cuenta.
+   restarlas (cruza documento contra documento), que ninguna vista lea el
+   parquet de notas por su cuenta y que «Refrescar» las pida con las compras.
 
 La cifra contra el Almacén de verdad la da
 `herramientas/cuadrar_compras.py` (necesita R2 y el SQL Server).
@@ -28,6 +28,7 @@ from pathlib import Path
 import pandas as pd
 
 import definicion_compra as dc
+from data import REPORTES
 
 # La consola de Windows (cp1252) revienta con UnicodeEncodeError en el
 # PRIMER print y el gate falla sin decir por qué — igual que los otros tests.
@@ -260,6 +261,13 @@ _pide_crudo = any(
 ok(_pide_crudo, "«Documentos SUNAT» pide compras SIN restar las notas",
    "cruza documento contra documento: una factura anulada que desaparece "
    "saldría «Solo SUNAT» siendo falso (regla #301)")
+
+_sin_notas = [n for n, cfg in REPORTES.items()
+              if "compras.parquet" in (cfg.get("archivo"), *cfg.get("archivos_extra", ()))
+              and dc.ARCHIVO_NOTAS not in cfg.get("archivos_extra", ())]
+ok(not _sin_notas, "«Refrescar» pide las notas con las compras, en todo reporte",
+   f"sin ellas: {_sin_notas} — `cargar` las resta, y la factura llegaría "
+   "nueva con las notas de la madrugada")
 
 def _lee_o_resta_notas(texto):
     # El sello identifica la caché, no lee ni vuelve a aplicar una nota.
