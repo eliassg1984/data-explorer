@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-812 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+813 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (267)
 
@@ -1452,7 +1452,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#654** — «Análisis de diferencias» reconoce lo descontado desde un ÁREA a la que la receta ya no apunta
 - **#664** — Ventas › Mix de carta: «% sin desc.» al lado de «% costo», el costo a precio de CARTA
 
-**Sin tema asignado** (8)
+**Sin tema asignado** (9)
 
 - **#300** — Un riel que PINTA casilleros enteros dice de más cuando el rango es más fino que su escala:…
 - **#547** — Un plato de cortesía cobrado a S/ 0 no tiene neto cero: tiene un RESIDUO, y dividir por él da…
@@ -1462,6 +1462,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#793** — Compras › Año pasado y Detalle docs. en el lenguaje entero de Costo de Carta
 - **#798** — Ajuste › Análisis de diferencias en el lenguaje de Costo de Carta
 - **#806** — Ventas › Mix y Por hora sin su título
+- **#813** — Los menús de Áreas y Familias de Diferencias abren hacia adentro
 
 <!-- INDICE:FIN -->
 
@@ -58676,6 +58677,11 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      sin alto, la trampa de la #746. Allí lleva alto propio.
    Los tests que eligen una opción pasan antes el cursor por su cápsula.
 
+813. **Los menús de Áreas y Familias de Diferencias abren hacia adentro.**
+   Con la #812 quedaron al borde derecho de la primera fila, y su menú, anclado a la
+   izquierda, se salía de la hoja (con captura). En esa fila se anclan a su borde derecho
+   (`.ajc-f1 .ajc-filters .ajc-options`). Un menú pegado a un borde abre hacia el otro.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58688,7 +58694,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#812**; la próxima toma el número siguiente.
+> última regla es la **#813**; la próxima toma el número siguiente.
 
 >
 

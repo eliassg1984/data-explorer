@@ -321,3 +321,6 @@
   .ajc-cons,.ajc-cons .ajc-scroll{flex:none;}
   .ajc-cons .ajc-scroll{max-height:440px;}
 }
+/* #813: Áreas y Familias quedaron al borde derecho de la primera fila (#812): sus menús
+   abren hacia adentro, anclados a su borde derecho, o se salían de la hoja. */
+.ajc-f1 .ajc-filters .ajc-options{left:auto;right:0;}
