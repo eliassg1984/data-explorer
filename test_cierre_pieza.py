@@ -277,6 +277,7 @@ class Navegador(unittest.TestCase):
         root.locator('[data-act="tab"][data-v="listas"]').click()
         root.locator('[data-act="prod"]').first.click()
         self.assertGreater(root.locator('.ajc-areas-de span').count(),0)
+        pg.keyboard.press('Escape')
         root.locator('.ajc-cap[data-cap="orden"]').hover();root.locator('[data-act="orden"][data-v="pareto"]').click()
         self.assertIn('acum.',root.locator('.ajc-lists').inner_text())
         self.assertEqual(pg.evaluate('Math.round(document.querySelector(".ajc-main").getBoundingClientRect().height)'),575)
@@ -340,25 +341,29 @@ class Navegador(unittest.TestCase):
         cl=pg.evaluate('__ajCierre.lista.cl')
         self.assertAlmostEqual(sum(c['v'] for c in cl.values()),por[por<0].sum(),places=6)
         self.assertEqual(sum(c['n'] for c in cl.values()),int((por<0).sum()))
-        root.locator('[data-act="clase"][data-v="una"]').first.click()
+        root.locator('.ajc-cls [data-act="clase"][data-v="una"]').click()
         self.assertEqual(root.locator('.ajc-lists [data-act="prod"]').count(),cl['una']['n'])
         root.locator('[data-act="clase"][data-v="todos"]').click()
-        # La ficha reemplaza a la lectura y vuelve con «Ver el cierre».
+        # La lectura va en la cápsula de los números; la ficha, en una ventana que no achica
+        # las listas (#814): ‹ › y las flechas recorren la misma lista, Esc cierra.
         root.locator('.ajc-cap[data-cap="lado"]').hover();root.locator('[data-act="lado"][data-v="ambos"]').click()
-        self.assertEqual(root.locator('.ajc-pn .ajc-frase').count(),1)
-        root.locator('.ajc-col.neg [data-act="prod"]').first.click()
-        self.assertEqual(root.locator('.ajc-pn .ajc-frase').count(),0)
-        self.assertEqual(root.locator('.ajc-pn .ajc-fn').count(),1)
-        root.locator('[data-act="soltar"]').click()
-        self.assertEqual(root.locator('.ajc-pn .ajc-frase').count(),1)
-        # «Ampliar» esconde el panel y le da el ancho a la zona.
-        antes=root.locator('.ajc-zona').bounding_box()['width']
-        root.locator('[data-act="ampl"]').click()
+        self.assertEqual(root.locator('.ajc-kcap .ajc-frase').count(),1)
         self.assertEqual(root.locator('.ajc-pn').count(),0)
-        self.assertGreater(root.locator('.ajc-zona').bounding_box()['width'],antes+200)
-        self.assertEqual(root.locator('.ajc-lists.dos .ajc-col').count(),2)
-        root.locator('[data-act="ampl"]').click()
-        self.assertEqual(root.locator('.ajc-pn').count(),1)
+        antes=root.locator('.ajc-zona').bounding_box()['width']
+        root.locator('.ajc-col.neg [data-act="prod"]').first.click()
+        self.assertEqual(root.locator('.ajc-ven .ajc-fn').count(),1)
+        self.assertEqual(root.locator('.ajc-zona').bounding_box()['width'],antes)
+        self.assertEqual(root.locator('.ajc-ven .ajc-fvals span').count(),pg.evaluate('__ajCierre.lista.rep.de'))
+        primero=pg.evaluate('__ajCierre.st.sel');f=pg.evaluate('__ajCierre.lista.f.map(r=>r.prod)')
+        pg.keyboard.press('ArrowRight')
+        if len(f)>1:self.assertEqual(pg.evaluate('__ajCierre.st.sel'),'f|'+f[1])
+        root.locator('[data-act="nav"][data-v="-1"]').click()
+        self.assertEqual(pg.evaluate('__ajCierre.st.sel'),primero)
+        pg.keyboard.press('Escape')
+        self.assertEqual(root.locator('.ajc-ven').count(),0)
+        root.locator('.ajc-col.neg [data-act="prod"]').first.click()
+        root.locator('.ajc-velo').click(position={'x':5,'y':5})
+        self.assertEqual(root.locator('.ajc-ven').count(),0)
         self.assertEqual(pg.evaluate('Math.round(document.querySelector(".ajc-main").getBoundingClientRect().height)'),575)
 
     def test_porque_manda_la_linea_de_mas_peso(self):
@@ -366,6 +371,7 @@ class Navegador(unittest.TestCase):
         # El de más peso no tiene código: su ficha no lleva a ninguna línea.
         root.locator('[data-act="prod"]').first.click()
         self.assertEqual(root.locator('[data-act="porque"]').count(),0)
+        pg.keyboard.press('Escape')
         root.locator('[data-act="prod"]',has_text='Nombre nuevo').click()
         b=root.locator('[data-act="porque"]').first;dest=json.loads(b.get_attribute('data-v'));b.click()
         env=pg.evaluate('__envios');self.assertEqual(len(env),1);k,v=env[0]

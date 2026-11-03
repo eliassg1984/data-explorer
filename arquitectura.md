@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-813 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+814 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (267)
 
@@ -1163,7 +1163,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (266)
+**Decisiones de diseño y UX** (267)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1431,6 +1431,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#810** — «Consolidado» entra en una pantalla, y Áreas de Análisis abre hacia abajo
 - **#811** — «Consolidado» por producto, con sus áreas plegadas; «Detalle histórico» en Cloud
 - **#812** — Diferencias con la «mixta»: números y pestañas a la vista, ajustes en cápsulas
+- **#814** — Diferencias, la opción 4: números en cápsula, contadores de la lista y la ficha en una ventana
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58682,6 +58683,32 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    izquierda, se salía de la hoja (con captura). En esa fila se anclan a su borde derecho
    (`.ajc-f1 .ajc-filters .ajc-options`). Un menú pegado a un borde abre hacia el otro.
 
+814. **Diferencias, la opción 4: números en cápsula, contadores de la lista y la ficha en una ventana.**
+   A pedido, sobre el boceto (https://claude.ai/artifact/B9ke9j4XqpNs2hqN9uLU1W, cuadro
+   «Opción 4»): Ajuste es para analizar, y el panel del costado ocupaba un tercio del ancho
+   para mostrar un producto a la vez. En `cierre.js`:
+   - **Los números en una cápsula** (`ckpicap`): muestra uno («Neto del cierre −S/ 948») y al
+     pasar el cursor despliega Faltó, Sobró, Neto y Operación con su explicación y, debajo,
+     la lectura del cierre (`clectura`), que dejó de tener panel propio. Dicen «del cierre»
+     porque no siguen a la búsqueda.
+   - **Los contadores son de la lista**: van en una zona con las dos listas (`.ajc-zl`), con
+     el rótulo «Filtrar la lista:» y un quinto, «Falta acá, sobra allá» (`cespejoset`), que
+     filtra los productos que faltan en un área y sobran en otra. Con una búsqueda o un
+     contador elegido, una línea dice qué recorta y que los números de arriba son del cierre
+     entero (`✕ Quitar`). El «1 contra 0» de la captura no era un error: «Se repiten» estaba
+     elegido y no se notaba.
+   - **La ficha va en una ventana** sobre la vista (`.ajc-ven`, con su velo): las listas no se
+     achican. ‹ › y ← → recorren la misma lista en su orden (`cnavegar`); Esc, el velo o
+     «✕ Cerrar» la cierran (escuchado en el `document`, #778). Las barras de los 6 cierres
+     llevan arriba su monto y su cantidad (`crepite` guarda `hq`, sólo con una unidad). Debajo,
+     los del otro lado **con nombre parecido**, con la regla de Análisis (#652:
+     `diferencias_ajuste.palabras` y `parecido`, portadas como `cpalabras`/`cparecido`, en las
+     dos direcciones): código, producto, cantidad, unidad y valorizado, sin interpretación.
+   - **Se fue «Ampliar»**: no hay panel que esconder. El costado queda sólo para el
+     historial de «Contra el anterior».
+   - **En el celular la zona de listas no puede tener `flex: 1 1 0`**: medía 0 y el pie se
+     montaba encima de las filas (la trampa de la #746).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58694,7 +58721,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#813**; la próxima toma el número siguiente.
+> última regla es la **#814**; la próxima toma el número siguiente.
 
 >
 
