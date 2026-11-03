@@ -263,3 +263,17 @@
   .ajc .ajc-lists.una .ajc-p{grid-template-columns:72px minmax(0,1fr) 84px 72px 42px;}
 }
 
+/* #810: el código alineado como cifra y del color del resto; los valores con rótulos
+   cortos; Área se despliega desde su cabecera (el panel se ubica `fixed` desde el JS,
+   porque la tabla se desliza y lo recortaría). */
+.ajc-ctab{min-width:0;}
+.ajc-ctab th,.ajc-ctab td{padding:0 6px;}
+.ajc-ctab td.ck-fam{max-width:110px;} .ajc-ctab td.ck-sub{max-width:140px;}
+.ajc-ctab td.ck-prod{max-width:230px;} .ajc-ctab td.ck-area{max-width:130px;}
+.ajc-ctab td:first-child{color:inherit;}
+.ajc-ctab td.ajc-cc{font-variant-numeric:tabular-nums;width:96px;}
+.ajc-ctab th.ajc-tharea{overflow:visible;}
+.ajc-thdd summary{min-height:0;padding:0;background:none;font-weight:600;}
+.ajc-thdd[open] summary,.ajc-thdd summary:hover{color:var(--accent-deep);}
+.ajc-thdd .ajc-options{font-weight:400;color:var(--text-primary);z-index:20;}
+@media(max-width:900px){.ajc-ctab{min-width:900px;}}

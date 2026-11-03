@@ -248,7 +248,7 @@ function cfilatabs(G,D){const {st}=D,X=G.lista;
   else if(st.tab==='lineas')medio=`${cseg('juntas',[['si','Áreas juntas'],['no','Áreas separadas']],st.juntas?'si':'no','Áreas')}${buscar}`;
   else if(st.tab==='familias')medio=`${cseg('vf',[['lista','Familias'],['areas','Áreas'],['cruce','Cruce']],st.vf,'Cómo ver')}${st.vf==='cruce'&&G.B.P.hay.stock?cseg('medida',[['val','Ajuste'],['stock','Stock']],st.medida,'Qué mide el cruce'):''}`;
   else if(st.tab==='cierres')medio=`${cseg('vg',[['graf','Gráfico'],['tabla','Tabla con parciales']],st.vg,'Gráfico o tabla')}${st.vg==='graf'?cleyenda(D):''}`;
-  return `<div class="ajc-fila">${tabs}${medio}<span class="ajc-push"></span><button type="button" class="ajc-amp" data-act="ampl" aria-pressed="${st.ampl}" title="${st.ampl ? 'Volver a poner el panel al costado' : 'Esconder el panel y usar todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${st.ampl ? 'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6' : 'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg>${st.ampl ? 'Con panel' : 'Ampliar'}</button></div>`;
+  return `<div class="ajc-fila">${tabs}${medio}<span class="ajc-push"></span>${st.tab==='listas'&&st.lado==='tabla'?'':`<button type="button" class="ajc-amp" data-act="ampl" aria-pressed="${st.ampl}" title="${st.ampl ? 'Volver a poner el panel al costado' : 'Esconder el panel y usar todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${st.ampl ? 'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6' : 'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg>${st.ampl ? 'Con panel' : 'Ampliar'}</button>`}</div>`;
 }
 // ── Abajo: qué productos ─────────────────────────────────────────────────
 const cbuscar=(r,q)=>!q||[r.cod,r.prod,r.fam,r.area,r.sub].join(' ').toLocaleLowerCase().includes(q.toLocaleLowerCase());
@@ -280,15 +280,18 @@ function cfilaprod(G,X,r,l,una){const {st}=G,key=`${l}|${r.prod}`,n=X.rep.n.get(
 // «Consolidado» (#808, a pedido): todas las líneas del cierre, producto por área, con
 // sus cantidades y valores, como la tabla de «Detalle docs.» de Compras. Agrupa por
 // familia, subfamilia o área con subtotales; se ordena por cualquier columna.
-const CCOLS=[['cod','Código','t'],['fam','Familia','t'],['sub','Subfamilia','t'],['prod','Producto','t'],['um','Unidad','t'],['area','Área','t'],
-  ['precio','Precio prom.','p'],['sis','Stock al cierre','q'],['dif','Ajuste','q'],['fis','Stock declarado','q'],['val','Ajuste valorizado','v'],['stock','Valorizado total','v']];
+// [clave, nombre (Excel y title), tipo, rótulo corto en pantalla] — #810: los valores con
+// rótulos cortos para que la tabla entre sin deslizarse de lado.
+const CCOLS=[['cod','Código','c','Código'],['fam','Familia','t','Familia'],['sub','Subfamilia','t','Subfamilia'],['prod','Producto','t','Producto'],['um','Unidad','t','Unid.'],['area','Área','t','Área'],
+  ['precio','Precio promedio (S/)','p','Precio'],['sis','Stock al cierre (sistema)','q','Sistema'],['dif','Ajuste (cantidad)','q','Ajuste'],['fis','Stock declarado (contado)','q','Contado'],['val','Ajuste valorizado (S/)','v','Ajuste S/'],['stock','Valorizado total (S/)','v','Total S/']];
 function cconsolidado(G,D){const {st}=D,q=st.q||'';
   const rs=D.scope.filter(r=>cbuscar(r,q)).map(r=>({...r,precio:Math.abs(r.dif)>CEPS?r.val/r.dif:Math.abs(r.fis)>CEPS?r.stock/r.fis:null}));
   const o=st.corden||{k:'val',d:1},sig=o.d;
   rs.sort((a,b)=>{const x=a[o.k],y=b[o.k];if(typeof x==='string'||typeof y==='string')return String(x??'').localeCompare(String(y??''),'es')*sig;return((x??-Infinity)-(y??-Infinity))*sig;});
-  const fmt=(t,v)=>t==='t'?cesc(t==='t'&&v!=null?v:'—'):t==='v'?csol(v):t==='p'?(v==null?'—':`S/ ${cn(v,2)}`):ccant(v);
+  // Familia, subfamilia y área como nombre, no en mayúsculas (#810); el producto, como viene.
+  const fmt=(t,v,k)=>t==='c'?cesc(v||'—'):t==='t'?cesc(v==null||v===''?'—':['fam','sub','area'].includes(k)?cnom(v):v):t==='v'?cn(v,0):t==='p'?(v==null?'—':cn(v,2)):ccant(v);
   const cls=(k,v)=>k==='val'||k==='dif'?(v<-CEPS?' neg':v>CEPS?' pos':''):'';
-  const fila=(r,sub=false)=>`<tr class="${sub?'ajc-sub':''}">${CCOLS.map(([k,,t])=>`<td class="${t==='t'?'':'n'}${cls(k,r[k])}">${fmt(t,r[k])}</td>`).join('')}</tr>`;
+  const fila=(r,sub=false)=>`<tr class="${sub?'ajc-sub':''}">${CCOLS.map(([k,,t])=>`<td class="ck-${k} ${t==='t'?'':t==='c'?'ajc-cc':'n'}${cls(k,r[k])}" title="${t==='t'?cesc(r[k]??''):''}">${fmt(t,r[k],k)}</td>`).join('')}</tr>`;
   const tot=(nom,g)=>({cod:'',fam:nom,sub:'',prod:`${cn(g.length)} líneas`,um:'',area:'',precio:null,sis:null,dif:null,fis:null,val:csum(g,'val'),stock:csum(g,'stock')});
   const agr=st.cagr||'';let cuerpo='';
   if(agr){const gs=[...cgroup(rs,r=>r[agr]||'—')].sort((a,b)=>csum(a[1],'val')-csum(b[1],'val'));
@@ -296,7 +299,12 @@ function cconsolidado(G,D){const {st}=D,q=st.q||'';
   else cuerpo=rs.slice(0,st.limite).map(r=>fila(r)).join('');
   G.nfilas=rs.length;
   G.exportar={nombre:'Consolidado',cabeza:CCOLS.map(c=>c[1]),filas:rs.map(r=>CCOLS.map(([k])=>r[k]??'')),decimales:6};
-  const th=CCOLS.map(([k,t,ti])=>`<th class="${ti==='t'?'':'n'}">${cbtn('corden',k,`${t}${o.k===k?(o.d>0?' ↑':' ↓'):''}`)}</th>`).join('');
+  const fl=o=>o.k===undefined?'':o.d>0?' ↑':' ↓',mk=k=>o.k===k?fl(o):'';
+  // Área se despliega hacia abajo (#810): ordenar y elegir áreas, con el MISMO filtro
+  // «Áreas» de la cabecera de la vista.
+  const todas=[...new Set((G.B.cortes[st.c]||[]).filter(r=>r.area&&r.area!=='---').map(r=>r.area))].sort(),va=st.areas||[];
+  const ddArea=`<details class="ajc-filter ajc-thdd" data-thdd="area"><summary title="Ordenar o elegir áreas">Área${va.length?` · ${va.length}`:''}${mk('area')}</summary><div class="ajc-options"><div>${cbtn('corden','area','A → Z')}${cbtn('todos','areas','Todas')}</div>${todas.map(v=>`<label><input type="checkbox" data-filter="areas" data-thdd="1" value="${cesc(v)}" ${va.includes(v)?'checked':''}>${cesc(cnom(v))}</label>`).join('')}</div></details>`;
+  const th=CCOLS.map(([k,t,ti,c])=>`<th class="${ti==='t'||ti==='c'?'':'n'}${k==='area'?' ajc-tharea':''}" title="${cesc(t)}">${k==='area'?ddArea:cbtn('corden',k,`${c}${mk(k)}`)}</th>`).join('');
   const T=tot('Total',rs);
   const pie=`<tr class="ajc-tot"><td colspan="6">Total · ${cn(rs.length)} líneas</td><td></td><td></td><td></td><td></td><td class="n${cls('val',T.val)}">${csol(T.val)}</td><td class="n">${csol(T.stock)}</td></tr>`;
   G.sub=`${cn(rs.length)} líneas · ajuste ${csol(T.val)} · valorizado ${csol(T.stock)}${rs.length>st.limite?` · se ven ${cn(Math.min(st.limite,rs.length))}`:''}`;
@@ -423,7 +431,8 @@ function cpintar(G){
   const main=G.root.querySelector('.ajc-main'),guardado=G.tabPintada===G.st.tab?[...main.querySelectorAll('.ajc-scroll')].map(e=>[e.scrollTop,e.scrollLeft]):[];
   const D=G.D=cdatos(G);G.lista=cdatoslista(G,D);
   const zona=czona(G,D),panel=D.st.tab==='comparar'&&D.st.elegido?chistoria(G,D):'';
-  main.innerHTML=`${cfilacorte(G,D)}${ckpis(D)}${cfilatabs(G,D)}<div class="ajc-cuerpo"><div class="ajc-zona">${zona}</div>${D.st.ampl?'':`<aside class="ajc-pn" aria-label="Lectura del cierre">${panel||cficha(G,D)||clectura(G,D)}</aside>`}</div>`;
+  // «Consolidado» es una tabla ancha: va sin el panel, a todo el ancho (#810).
+  main.innerHTML=`${cfilacorte(G,D)}${ckpis(D)}${cfilatabs(G,D)}<div class="ajc-cuerpo"><div class="ajc-zona">${zona}</div>${D.st.ampl||(D.st.tab==='listas'&&D.st.lado==='tabla')?'':`<aside class="ajc-pn" aria-label="Lectura del cierre">${panel||cficha(G,D)||clectura(G,D)}</aside>`}</div>`;
   main.querySelectorAll('.ajc-scroll').forEach((e,i)=>{if(guardado[i]){e.scrollTop=guardado[i][0];e.scrollLeft=guardado[i][1];}});
   G.tabPintada=G.st.tab;
   cgrafico(G);
@@ -463,11 +472,12 @@ function cenlazar(G){const root=G.root;
     cpintar(G);
   });
   root.addEventListener('change',ev=>{const el=ev.target,st=G.st,f=el.dataset.filter;
-    if(f){st[f]=el.checked?[...st[f],el.value]:st[f].filter(x=>x!==el.value);st.fam=null;st.area=null;st.sel=null;cpintar(G);root.querySelector(`input[data-filter="${f}"]`)?.closest('details').setAttribute('open','');return;}
+    if(f){st[f]=el.checked?[...st[f],el.value]:st[f].filter(x=>x!==el.value);st.fam=null;st.area=null;st.sel=null;const th=el.dataset.thdd;cpintar(G);root.querySelector(th?'details[data-thdd]':`input[data-filter="${f}"]`)?.closest('details')?.setAttribute('open','');return;}
     if(el.dataset.change==='corte'){ccambiarcorte(G,+el.value);cpintar(G);}
     else if(el.dataset.change==='prev'){st.prev=+el.value;st.elegido=null;cpintar(G);}
   });
   root.addEventListener('input',ev=>{const e=ev.target;if(e.dataset.input!=='buscar')return;const pos=e.selectionStart;G.st.q=e.value;G.st.limite=150;cpintar(G);const n=root.querySelector('.ajc-search');n.focus();if(pos!=null)n.setSelectionRange(pos,pos);});
+  root.addEventListener('toggle',ev=>{const d=ev.target;if(!d.matches?.('details[data-thdd]')||!d.open)return;const r=d.querySelector('summary').getBoundingClientRect(),o=d.querySelector('.ajc-options');o.style.position='fixed';o.style.top=`${Math.round(r.bottom+4)}px`;o.style.left=`${Math.round(Math.min(r.left,innerWidth-260))}px`;},true);
   root.addEventListener('keydown',ev=>{if(ev.key==='Escape')root.querySelectorAll('details[open]').forEach(d=>d.open=false);});
   root.addEventListener('scroll',ev=>{const e=ev.target,st=G.st;if(e.matches?.('.ajc-zona .ajc-scroll')&&e.scrollTop+e.clientHeight>e.scrollHeight-70&&st.limite<G.nfilas){st.limite+=150;cpintar(G);}},true);
 }

@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-809 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+810 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (267)
 
@@ -1163,7 +1163,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (263)
+**Decisiones de diseño y UX** (264)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1428,6 +1428,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#807** — La esquina de la franja: la hora con su rótulo, Filtros como Refrescar, y lo que no aplica…
 - **#808** — Diferencias › «Qué faltó» en un renglón, y «Consolidado»
 - **#809** — Ajuste › «Detalle histórico» (antes «Explorar»): la forma de Detalle docs
+- **#810** — «Consolidado» entra en una pantalla, y Áreas de Análisis abre hacia abajo
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58624,6 +58625,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - El id sigue siendo «Explorar» (enlaces, rail); cambió el rótulo. Abre en 3 meses, como
      la #797. Lo vigila `test_ajuste_historico_pieza.py`.
 
+810. **«Consolidado» entra en una pantalla, y Áreas de Análisis abre hacia abajo.**
+   A pedido, sobre la tabla de la #808:
+   - **Familia, subfamilia y área como nombres** (`cnom`: «Rb Alimentos Cocina»), no en
+     mayúsculas; el producto, como viene del Almacén.
+   - **El código, del color del resto y en cifras parejas** (`ajc-cc`): en gris parecía
+     corrido.
+   - **Área se despliega desde su encabezado**: ordenar y elegir áreas, con el MISMO filtro
+     «Áreas» de arriba. El panel va `position: fixed` (lo ubica el JS al abrirse) porque la
+     tabla se desliza y lo recortaría.
+   - **Rótulos cortos en los valores** (Precio, Sistema, Ajuste, Contado, Ajuste S/,
+     Total S/), con el nombre entero en el `title` y en el Excel; sin «S/» en cada celda.
+   - **Sin el panel «Lectura del cierre» ni «Ampliar»**: la tabla va a todo el ancho y los
+     textos largos se cortan con «…» (`ck-*`), así entra a 1323 px sin deslizarse.
+   - **Análisis › Áreas**: `.adf-filtro:nth-child(2) .adf-pop{right:0}` la anclaba a su borde
+     derecho y el menú crecía hacia la izquierda, debajo de la columna de reportes. Abre como
+     Familias.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58636,7 +58654,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#809**; la próxima toma el número siguiente.
+> última regla es la **#810**; la próxima toma el número siguiente.
 
 >
 
