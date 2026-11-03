@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-814 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+815 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (267)
 
@@ -451,7 +451,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
 - **#804** — La portada con el aire de la hoja
 
-**Plotly y figuras** (130)
+**Plotly y figuras** (131)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -583,6 +583,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#744** — La ficha del plato de «Costo de Carta» es una pieza propia: dice qué mueve el costo de hoy y…
 - **#751** — Producción › «Consumo según ventas» dice la cuenta de cada porcionamiento, deja elegir el…
 - **#768** — La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte
+- **#815** — Diferencias en tres niveles: dónde estoy · qué miro · los datos con sus ajustes
 
 **AgGrid y tablas** (99)
 
@@ -1163,7 +1164,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (267)
+**Decisiones de diseño y UX** (268)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1432,6 +1433,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#811** — «Consolidado» por producto, con sus áreas plegadas; «Detalle histórico» en Cloud
 - **#812** — Diferencias con la «mixta»: números y pestañas a la vista, ajustes en cápsulas
 - **#814** — Diferencias, la opción 4: números en cápsula, contadores de la lista y la ficha en una ventana
+- **#815** — Diferencias en tres niveles: dónde estoy · qué miro · los datos con sus ajustes
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58709,6 +58711,28 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - **En el celular la zona de listas no puede tener `flex: 1 1 0`**: medía 0 y el pie se
      montaba encima de las filas (la trampa de la #746).
 
+815. **Diferencias en tres niveles: dónde estoy · qué miro · los datos con sus ajustes.**
+   A pedido («que no se vea como un tablero de avión, pero con sus filtros y formas de
+   ver»), sobre el boceto (cuadros «Tres niveles» de
+   https://claude.ai/artifact/B9ke9j4XqpNs2hqN9uLU1W). Había cinco franjas antes de los
+   datos; las herramientas de análisis más usadas se quedan en tres, y pasar de ahí rompe el
+   orden de lectura. En `cierre.js`:
+   - **Qué miro, en una fila** (`cfilacorte`): las pestañas a la izquierda; a la derecha el
+     cierre, la cápsula de los números (#814) y **«Filtros · n»** (`cfiltros`), que junta
+     Áreas y Familias en un solo botón porque valen para toda la vista.
+   - **La barra de la lista** (`cbarra`), dentro de su zona: los contadores, la búsqueda como
+     pastilla («entra ✕», `quitarq`), una sola cápsula para cómo ver (`ccapm`: «Lado a lado ·
+     por monto», o con «Agrupar» en Consolidado), el buscador y Excel. Las otras pestañas
+     llevan la misma barra con sus ajustes. Se fue el renglón del alcance.
+   - **Separación por aire y tono**, no por líneas: 12 px entre niveles, controles en gris
+     neutro, índigo sólo en lo elegido y en el subrayado de la pestaña.
+   - **Para que la barra entre en un renglón a 1323 px**, los contadores van con nombre corto
+     («Todo», «Nuevos», «Falta y sobra») y el entero en su `title`, y el buscador mide 116 px
+     y crece a 190 al escribir. Ojo: una regla vieja le ponía `flex: 0 1 200px`, que le gana
+     al `width`: el ancho de un elemento flexible se cambia con su `flex-basis`.
+   - Los contadores no se encogían en el celular (`.ajc-cls` sin `min-width: 0`) y la página
+     medía 785 px de ancho.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58721,7 +58745,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#814**; la próxima toma el número siguiente.
+> última regla es la **#815**; la próxima toma el número siguiente.
 
 >
 

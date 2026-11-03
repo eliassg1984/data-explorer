@@ -369,3 +369,41 @@
   .ajc-velo{position:fixed;}
 }
 
+/* #815, tres niveles: dónde estoy (la franja) · qué miro (pestañas, cierre, números y
+   Filtros en una fila) · los datos con sus ajustes (la barra de la lista, en su zona).
+   Se separan por aire y tono, no por líneas: controles en gris neutro, índigo sólo en
+   lo elegido. */
+.ajc-main{gap:12px;}
+.ajc-fnav{gap:6px;min-height:40px;}
+.ajc-fnav .ajc-ses{margin-left:8px;}
+.ajc-fnav .ajc-ses select{max-width:240px;background:var(--rail-fondo);color:var(--text-primary);}
+.ajc-fnav .ajc-kcap-op,.ajc-fnav .ajc-filtros .ajc-options{left:auto;right:0;}
+.ajc .ajc-filtros summary{background:var(--rail-fondo);border-radius:999px;}
+.ajc-filtros .ajc-options{width:300px;max-height:420px;}
+.ajc-fsec{display:flex;flex-direction:column;border-top:1px solid var(--ajc-soft);padding-top:6px;margin-top:4px;}
+.ajc-fsec-t{display:flex;align-items:center;gap:6px;margin-bottom:2px;}
+.ajc-fsec-t b{font-weight:600;margin-right:auto;}
+.ajc .ajc-fsec-t button{min-height:24px;padding:0 8px;font-size:12px;border:0;background:var(--rail-fondo);}
+.ajc-barra{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:none;}
+.ajc-barra .ajc-cls{display:inline-flex;flex-wrap:wrap;gap:2px;flex:0 1 auto;min-width:0;max-width:100%;}
+.ajc .ajc-barra .ajc-cls .ajc-cl{border:0;background:transparent;box-shadow:none;height:30px;padding:0 10px;}
+.ajc .ajc-barra .ajc-cls .ajc-cl span{color:var(--text-primary);}
+.ajc .ajc-barra .ajc-cls .ajc-cl:hover{background:var(--bg-hover);}
+.ajc .ajc-barra .ajc-cls .ajc-cl.on{background:var(--accent-tint);box-shadow:none;}
+.ajc .ajc-barra .ajc-cls .ajc-cl.on span{color:var(--accent-deep);font-weight:600;}
+.ajc .ajc-qp{border:0;border-radius:999px;min-height:30px;padding:0 12px;background:var(--accent-tint);color:var(--accent-deep);font-weight:600;}
+.ajc-barra .ajc-cap-b,.ajc .ajc-barra .ajc-excel summary{background:var(--rail-fondo);}
+.ajc .ajc-barra .ajc-search{width:116px;flex:0 0 116px;min-width:0;border:0;background:var(--rail-fondo);transition:flex-basis .15s;}
+.ajc .ajc-barra .ajc-search:focus,.ajc .ajc-barra .ajc-search:not(:placeholder-shown){width:190px;flex-basis:190px;}
+.ajc .ajc-barra .ajc-cls .ajc-cl{padding:0 8px;}
+.ajc-barra .ajc-cap-op{left:auto;right:0;}
+.ajc-barra .ajc-excel .ajc-options{left:auto;right:0;}
+.ajc-cap-t{display:block;font-size:12px;color:var(--text-secondary);padding:4px 8px 2px;}
+.ajc-zl{padding-top:10px;gap:10px;}
+@media(max-width:900px){
+  .ajc-fnav{flex-wrap:wrap;}
+  .ajc-fnav .ajc-push{display:none;}
+  .ajc-fnav .ajc-ses{margin-left:0;}
+  .ajc .ajc-barra .ajc-search{flex:1 1 140px;}
+}
+

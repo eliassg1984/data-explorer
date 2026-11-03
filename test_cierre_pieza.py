@@ -278,7 +278,7 @@ class Navegador(unittest.TestCase):
         root.locator('[data-act="prod"]').first.click()
         self.assertGreater(root.locator('.ajc-areas-de span').count(),0)
         pg.keyboard.press('Escape')
-        root.locator('.ajc-cap[data-cap="orden"]').hover();root.locator('[data-act="orden"][data-v="pareto"]').click()
+        root.locator('.ajc-cap[data-cap="lado"]').hover();root.locator('[data-act="orden"][data-v="pareto"]').click()
         self.assertIn('acum.',root.locator('.ajc-lists').inner_text())
         self.assertEqual(pg.evaluate('Math.round(document.querySelector(".ajc-main").getBoundingClientRect().height)'),575)
         pg.set_viewport_size({'width':390,'height':844})
