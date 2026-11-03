@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-808 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+809 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (266)
+**CSS y estilos** (267)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -333,6 +333,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#789** — Sin plato y Análisis de diferencias en la franja, y «Por hora» en el rango del enlace
 - **#790** — Compras › Proveedor y Producto en el lenguaje entero de Costo de Carta
 - **#791** — Compras › Precios en el lenguaje entero de Costo de Carta
+- **#809** — Ajuste › «Detalle histórico» (antes «Explorar»): la forma de Detalle docs
 
 **Layout y alturas** (113)
 
@@ -1162,7 +1163,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (262)
+**Decisiones de diseño y UX** (263)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1426,6 +1427,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#805** — Inventario › Por tipo en el lenguaje de Costo de Carta
 - **#807** — La esquina de la franja: la hora con su rótulo, Filtros como Refrescar, y lo que no aplica…
 - **#808** — Diferencias › «Qué faltó» en un renglón, y «Consolidado»
+- **#809** — Ajuste › «Detalle histórico» (antes «Explorar»): la forma de Detalle docs
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58602,6 +58604,26 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    área con subtotales (`cconsolidado`). El precio promedio sale del ajuste (valor ÷ cantidad)
    o, sin ajuste, del stock declarado. Sigue al buscador y exporta lo que se ve.
 
+809. **Ajuste › «Detalle histórico» (antes «Explorar»): la forma de Detalle docs.**
+   A pedido: la tabla de AgGrid de la #797 pasó a ser una pieza propia
+   (`graficos/ajuste/historico.js` + `.css`, `_historico_datos.py`, `_historico_pieza.py`)
+   con la forma de Compras › Detalle docs.: **Conteos | Líneas | Tabla dinámica**, cuatro
+   indicadores que filtran (Conteos, Faltantes, Sobrantes, De S/ 100 o más), Familias y
+   Áreas como menús, buscador, Excel y, al costado, el resumen por área o la ficha del
+   conteo elegido. Lo que conviene saber:
+   - **Un conteo es una fecha × un área**, con la sesión (cierre o parcial) de
+     `cortes.sesiones_inventario`. La línea viaja una vez, sin sumar (`CAMPOS`).
+   - **El mes es el del cierre** (`cortes.fecha_operativa`), salvo que «Mes del cierre» diga
+     registro: va en la firma de la caché.
+   - **Las clases son las de Detalle docs.**: `documentos.css` se antepone a la hoja propia.
+     Tocar esa hoja cambia las dos vistas.
+   - **«Detalle» ensancha Líneas** (familia, subfamilia, stocks, precio, valorizado) y la tabla
+     se desliza de lado: con `table-layout: fixed` el producto se quedaba en cero.
+   - **Los menús se cierran con `click`, no con `pointerdown`**: redibujar al apretar dejaba
+     el clic en un botón que ya no existía (el Excel no bajaba con un menú abierto).
+   - El id sigue siendo «Explorar» (enlaces, rail); cambió el rótulo. Abre en 3 meses, como
+     la #797. Lo vigila `test_ajuste_historico_pieza.py`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58614,7 +58636,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#808**; la próxima toma el número siguiente.
+> última regla es la **#809**; la próxima toma el número siguiente.
 
 >
 

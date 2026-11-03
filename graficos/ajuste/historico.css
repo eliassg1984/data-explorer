@@ -1,0 +1,13 @@
+/* Ajuste › Detalle histórico (#809). Va DESPUÉS de compras/documentos.css: la forma
+   es la de Detalle docs.; acá sólo lo propio. */
+.ajh .ajh-cod { color: var(--text-secondary); font-size: 12px; }
+.ajh .ajh-bar { display: flex; gap: 6px; padding: 0 4px 6px; }
+.ajh .ajh-bar button { border: 0; border-radius: 6px; background: var(--rail-fondo); padding: 2px 8px; font-size: 12px; }
+.ajh .ajh-bar button:hover { background: var(--bg-hover); }
+.ajh .dc-t td.rojo, .ajh .dc-p td.rojo { color: var(--danger-text, var(--danger)); }
+.ajh .dc-t td.verde, .ajh .dc-p td.verde { color: var(--success-text, var(--success)); }
+.ajh .w-cd { width: 100px; } .ajh .w-st { width: 118px; }
+/* Con «Detalle», Líneas suma seis columnas: la tabla se desliza de lado y el producto
+   conserva su ancho (con `table-layout: fixed` se quedaba en cero). */
+.ajh.det .dc-izq [data-tabla="lineas"] .dc-t { min-width: 1460px; }
+.ajh.det .dc-izq [data-tabla="conteos"] .dc-t { min-width: 860px; }

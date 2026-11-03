@@ -129,7 +129,9 @@ _AJUSTE_RAIL_CATEGORIAS = rail_sin_tablas((
     # con fecha propia —sin ella recibía el histórico entero— y el código del
     # Almacén pegado al producto. El id no es «Tabla»: `rail_sin_tablas` la
     # escondería otra vez.
-    ("Datos",       (("Explorar",       "Explorar",      ":material/pivot_table_chart:"),
+    # Desde la #809 se llama «Detalle histórico» y es una pieza propia; el id
+    # sigue siendo «Explorar» (lo guardan los enlaces y el estado del rail).
+    ("Datos",       (("Explorar",       "Detalle histórico", ":material/pivot_table_chart:"),
                      ("Tabla",          "Tabla",         ":material/table_rows:"))),
 ))
 
@@ -376,33 +378,14 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 st.info("La tabla no está disponible en este contexto.")
 
     def _dib_explorar():
-        """La tabla dinámica de AgGrid (regla #797): agrupada Familia ›
-        Subfamilia › Producto › Unidad › Área, con su Modo pivote, sobre los
-        meses que elija su panel —abre en los últimos 3— y no sobre el
-        histórico. El producto lleva su código: «Producto · 0001234»."""
-        from graficos.ajuste._comun import ctx_meses, rango_meses, recortar_meses, selector_meses
-        with st.container(border=True, key="ajuste_graf_card_izq_explorar"):
-            if df_f is None or df_f.empty or not col_fecha:
-                st.info("No hay datos para explorar.")
-                return
-            # Abre en 3 meses: 12 son ~115 mil líneas y AgGrid tarda en armar el árbol.
-            ctx_m = ctx_meses("exp", df_f[col_fecha], defecto="mm3")
-            with st.container(horizontal=True, vertical_alignment="center", key="aj_exp_cab"):
-                selector_meses("ajf_exp", ctx_m)
-                st.caption("Para pivotear, arrastra columnas al panel de la derecha. "
-                           "Cada producto lleva su código.")
-            d_e = recortar_meses(df_f, col_fecha, rango_meses(ctx_m))
-            col_cod = _resolver(d_e, ["CODIGO PRODUCTO", "Codigo Producto", "COD PRODUCTO"])
-            if col_producto and col_cod:
-                cod = d_e[col_cod].astype(str).str.strip()
-                suf = (" · " + cod).where(~cod.isin(["", "nan", "None"]), "")
-                d_e = d_e.assign(**{col_producto: d_e[col_producto].astype(str).str.strip() + suf})
-            if d_e.empty:
-                st.info("Sin ajustes en los meses elegidos.")
-            elif tabla_cb is not None:
-                tabla_cb(d_e)
-            else:
-                st.info("La tabla no está disponible en este contexto.")
+        """«Detalle histórico» (regla #809; hasta ese día «Explorar», la tabla
+        dinámica de AgGrid de la #797): una pieza propia con la forma de Compras
+        › Detalle docs. — Conteos | Líneas | Tabla dinámica, indicadores que
+        filtran y la ficha del conteo al costado— sobre los meses que elija su
+        panel (abre en los últimos 3)."""
+        from graficos.ajuste import _historico_pieza
+        with st.container(key="ajuste_graf_card_izq_explorar"):
+            _historico_pieza.renderizar(df_f, col_fecha)
         recargar_si_cambio_mes()
 
     _DIBUJANTES = {
