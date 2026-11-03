@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-810 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+811 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (267)
 
@@ -1163,7 +1163,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (264)
+**Decisiones de diseño y UX** (265)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1429,6 +1429,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#808** — Diferencias › «Qué faltó» en un renglón, y «Consolidado»
 - **#809** — Ajuste › «Detalle histórico» (antes «Explorar»): la forma de Detalle docs
 - **#810** — «Consolidado» entra en una pantalla, y Áreas de Análisis abre hacia abajo
+- **#811** — «Consolidado» por producto, con sus áreas plegadas; «Detalle histórico» en Cloud
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58642,6 +58643,19 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      derecho y el menú crecía hacia la izquierda, debajo de la columna de reportes. Abre como
      Familias.
 
+811. **«Consolidado» por producto, con sus áreas plegadas; «Detalle histórico» en Cloud.**
+   - **Un renglón por producto** (código + unidad), a pedido: «el área no debe estar como
+     columna». Con más de un área, el clic (▸) abre sus áreas debajo, cada una con sus cifras
+     (`cprodcons`, `st.cabre`); con una sola, el área va en gris junto al nombre. Agrupado por
+     familia, subfamilia o área, los subtotales cuentan productos. El Excel sigue por línea,
+     con su área. Se fue el desplegable del encabezado Área de la #810: filtra el «Áreas» de
+     arriba.
+   - **«Detalle histórico» moría en Cloud con un KeyError** (`_historico_datos.armar`): las
+     fechas se buscaban en un dict armado con `unique()`, que en pandas 2.2 devuelve
+     Timestamps mientras `to_numpy()` da datetime64 — no son la misma clave. En la laptop
+     (pandas 3) andaba. Ahora la posición sale de `pd.factorize(sort=True)`. Es la regla de la
+     #481 con otra cara: lo que pasa en local no prueba la nube.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58654,7 +58668,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#810**; la próxima toma el número siguiente.
+> última regla es la **#811**; la próxima toma el número siguiente.
 
 >
 

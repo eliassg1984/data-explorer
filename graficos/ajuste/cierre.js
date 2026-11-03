@@ -282,32 +282,41 @@ function cfilaprod(G,X,r,l,una){const {st}=G,key=`${l}|${r.prod}`,n=X.rep.n.get(
 // familia, subfamilia o área con subtotales; se ordena por cualquier columna.
 // [clave, nombre (Excel y title), tipo, rótulo corto en pantalla] — #810: los valores con
 // rótulos cortos para que la tabla entre sin deslizarse de lado.
-const CCOLS=[['cod','Código','c','Código'],['fam','Familia','t','Familia'],['sub','Subfamilia','t','Subfamilia'],['prod','Producto','t','Producto'],['um','Unidad','t','Unid.'],['area','Área','t','Área'],
+const CCOLS=[['cod','Código','c','Código'],['fam','Familia','t','Familia'],['sub','Subfamilia','t','Subfamilia'],['prod','Producto','t','Producto'],['um','Unidad','t','Unid.'],
   ['precio','Precio promedio (S/)','p','Precio'],['sis','Stock al cierre (sistema)','q','Sistema'],['dif','Ajuste (cantidad)','q','Ajuste'],['fis','Stock declarado (contado)','q','Contado'],['val','Ajuste valorizado (S/)','v','Ajuste S/'],['stock','Valorizado total (S/)','v','Total S/']];
+const CNUM=['sis','dif','fis','val','stock'];
+const cprecio=r=>Math.abs(r.dif)>CEPS?r.val/r.dif:Math.abs(r.fis)>CEPS?r.stock/r.fis:null;
+// Un renglón por PRODUCTO (#811, a pedido: «el área no debe estar como columna»). Con más
+// de un área, ▸ abre sus áreas debajo, cada una con sus cifras. El Excel sigue por línea.
+function cprodcons(g){const r0=g[0],o={key:JSON.stringify([r0.cod||r0.prod,r0.um]),cod:r0.cod,fam:r0.fam,sub:r0.sub,prod:r0.prod,um:r0.um,lineas:g,areas:[...new Set(g.map(r=>r.area))]};
+  for(const k of CNUM)o[k]=csum(g,k);o.precio=cprecio(o);return o;}
 function cconsolidado(G,D){const {st}=D,q=st.q||'';
-  const rs=D.scope.filter(r=>cbuscar(r,q)).map(r=>({...r,precio:Math.abs(r.dif)>CEPS?r.val/r.dif:Math.abs(r.fis)>CEPS?r.stock/r.fis:null}));
-  const o=st.corden||{k:'val',d:1},sig=o.d;
-  rs.sort((a,b)=>{const x=a[o.k],y=b[o.k];if(typeof x==='string'||typeof y==='string')return String(x??'').localeCompare(String(y??''),'es')*sig;return((x??-Infinity)-(y??-Infinity))*sig;});
-  // Familia, subfamilia y área como nombre, no en mayúsculas (#810); el producto, como viene.
-  const fmt=(t,v,k)=>t==='c'?cesc(v||'—'):t==='t'?cesc(v==null||v===''?'—':['fam','sub','area'].includes(k)?cnom(v):v):t==='v'?cn(v,0):t==='p'?(v==null?'—':cn(v,2)):ccant(v);
+  const rs=D.scope.filter(r=>cbuscar(r,q)).map(r=>({...r,precio:cprecio(r)}));
+  const o=st.corden||{k:'val',d:1},sig=o.d,ab=new Set(st.cabre||[]);
+  const ord=(a,b)=>{const x=a[o.k],y=b[o.k];if(typeof x==='string'||typeof y==='string')return String(x??'').localeCompare(String(y??''),'es')*sig;return((x??-Infinity)-(y??-Infinity))*sig;};
+  const prods=g=>[...cgroup(g,r=>JSON.stringify([r.cod||r.prod,r.um])).values()].map(cprodcons).sort(ord);
+  // Familia y subfamilia como nombre, no en mayúsculas (#810); el producto, como viene.
+  const fmt=(t,v,k)=>t==='c'?cesc(v||'—'):t==='t'?cesc(v==null||v===''?'—':['fam','sub'].includes(k)?cnom(v):v):t==='v'?cn(v,0):t==='p'?(v==null?'—':cn(v,2)):ccant(v);
   const cls=(k,v)=>k==='val'||k==='dif'?(v<-CEPS?' neg':v>CEPS?' pos':''):'';
-  const fila=(r,sub=false)=>`<tr class="${sub?'ajc-sub':''}">${CCOLS.map(([k,,t])=>`<td class="ck-${k} ${t==='t'?'':t==='c'?'ajc-cc':'n'}${cls(k,r[k])}" title="${t==='t'?cesc(r[k]??''):''}">${fmt(t,r[k],k)}</td>`).join('')}</tr>`;
-  const tot=(nom,g)=>({cod:'',fam:nom,sub:'',prod:`${cn(g.length)} líneas`,um:'',area:'',precio:null,sis:null,dif:null,fis:null,val:csum(g,'val'),stock:csum(g,'stock')});
-  const agr=st.cagr||'';let cuerpo='';
+  const celdas=(r,prod)=>CCOLS.map(([k,,t])=>`<td class="ck-${k} ${t==='t'?'':t==='c'?'ajc-cc':'n'}${cls(k,r[k])}" title="${t==='t'&&k!=='prod'?cesc(r[k]??''):''}">${k==='prod'?prod:fmt(t,r[k],k)}</td>`).join('');
+  const filaProd=p=>{const varias=p.areas.length>1,abierto=varias&&ab.has(p.key);
+    const nom=`${varias?`<span class="ajc-tg">${abierto?'▾':'▸'}</span>`:'<span class="ajc-tg"></span>'}<span class="ajc-cn" title="${cesc(p.prod)}">${cesc(p.prod)}</span><small class="ajc-car">${varias?`${p.areas.length} áreas`:cesc(cnom(p.areas[0]))}</small>`;
+    let h=`<tr class="ajc-pr${varias?' abre':''}${abierto?' on':''}"${varias?` data-act="cabre" data-v="${cesc(p.key)}"`:''}>${celdas(p,nom)}</tr>`;
+    if(abierto)for(const r of [...p.lineas].sort((a,b)=>a.val-b.val))h+=`<tr class="ajc-ar">${celdas({...r,cod:'',fam:'',sub:''},`<span class="ajc-tg"></span><span class="ajc-cn">${cesc(cnom(r.area))}</span>`).replace(/<td class="ck-(cod|fam|sub) [^"]*"[^>]*>—<\/td>/g,'<td></td>')}</tr>`;
+    return h;};
+  const tot=(nom,g,np)=>{const t={cod:'',fam:nom,sub:'',um:'',precio:null,sis:null,dif:null,fis:null,val:csum(g,'val'),stock:csum(g,'stock')};return `<tr class="ajc-sub">${celdas(t,`${cn(np)} productos`)}</tr>`;};
+  const agr=st.cagr||'';let cuerpo='',n=0,nprod=0;
   if(agr){const gs=[...cgroup(rs,r=>r[agr]||'—')].sort((a,b)=>csum(a[1],'val')-csum(b[1],'val'));
-    let n=0;for(const [k,g] of gs){cuerpo+=fila(tot(k,g),true);for(const r of g){if(n++>=st.limite)break;cuerpo+=fila(r);}if(n>=st.limite)break;}}
-  else cuerpo=rs.slice(0,st.limite).map(r=>fila(r)).join('');
-  G.nfilas=rs.length;
-  G.exportar={nombre:'Consolidado',cabeza:CCOLS.map(c=>c[1]),filas:rs.map(r=>CCOLS.map(([k])=>r[k]??'')),decimales:6};
-  const fl=o=>o.k===undefined?'':o.d>0?' ↑':' ↓',mk=k=>o.k===k?fl(o):'';
-  // Área se despliega hacia abajo (#810): ordenar y elegir áreas, con el MISMO filtro
-  // «Áreas» de la cabecera de la vista.
-  const todas=[...new Set((G.B.cortes[st.c]||[]).filter(r=>r.area&&r.area!=='---').map(r=>r.area))].sort(),va=st.areas||[];
-  const ddArea=`<details class="ajc-filter ajc-thdd" data-thdd="area"><summary title="Ordenar o elegir áreas">Área${va.length?` · ${va.length}`:''}${mk('area')}</summary><div class="ajc-options"><div>${cbtn('corden','area','A → Z')}${cbtn('todos','areas','Todas')}</div>${todas.map(v=>`<label><input type="checkbox" data-filter="areas" data-thdd="1" value="${cesc(v)}" ${va.includes(v)?'checked':''}>${cesc(cnom(v))}</label>`).join('')}</div></details>`;
-  const th=CCOLS.map(([k,t,ti,c])=>`<th class="${ti==='t'||ti==='c'?'':'n'}${k==='area'?' ajc-tharea':''}" title="${cesc(t)}">${k==='area'?ddArea:cbtn('corden',k,`${c}${mk(k)}`)}</th>`).join('');
-  const T=tot('Total',rs);
-  const pie=`<tr class="ajc-tot"><td colspan="6">Total · ${cn(rs.length)} líneas</td><td></td><td></td><td></td><td></td><td class="n${cls('val',T.val)}">${csol(T.val)}</td><td class="n">${csol(T.stock)}</td></tr>`;
-  G.sub=`${cn(rs.length)} líneas · ajuste ${csol(T.val)} · valorizado ${csol(T.stock)}${rs.length>st.limite?` · se ven ${cn(Math.min(st.limite,rs.length))}`:''}`;
+    for(const [k,g] of gs){const ps=prods(g);nprod+=ps.length;if(n>=st.limite)continue;cuerpo+=tot(agr==='area'?cnom(k):cnom(k),g,ps.length);for(const p of ps){if(n++>=st.limite)break;cuerpo+=filaProd(p);}}}
+  else{const ps=prods(rs);nprod=ps.length;cuerpo=ps.slice(0,st.limite).map(filaProd).join('');}
+  G.nfilas=nprod;
+  const LX=[...CCOLS.slice(0,5),['area','Área','t'],...CCOLS.slice(5)];
+  G.exportar={nombre:'Consolidado',cabeza:LX.map(c=>c[1]),filas:rs.map(r=>LX.map(([k])=>r[k]??'')),decimales:6};
+  const mk=k=>o.k===k?(o.d>0?' ↑':' ↓'):'';
+  const th=CCOLS.map(([k,t,ti,c])=>`<th class="${ti==='t'||ti==='c'?'':'n'}" title="${cesc(t)}">${cbtn('corden',k,`${c}${mk(k)}`)}</th>`).join('');
+  const T={val:csum(rs,'val'),stock:csum(rs,'stock')};
+  const pie=`<tr class="ajc-tot"><td colspan="5">Total · ${cn(nprod)} productos · ${cn(rs.length)} líneas</td><td></td><td></td><td></td><td></td><td class="n${cls('val',T.val)}">${csol(T.val)}</td><td class="n">${csol(T.stock)}</td></tr>`;
+  G.sub=`${cn(nprod)} productos · ajuste ${csol(T.val)} · valorizado ${csol(T.stock)}${nprod>st.limite?` · se ven ${cn(Math.min(st.limite,nprod))}`:''} · ▸ abre las áreas`;
   G.pieExtra=cseg('cagr',[['','Sin agrupar'],['fam','Por familia'],['sub','Por subfamilia'],['area','Por área']],agr,'Agrupar');
   return `<div class="ajc-cons"><div class="ajc-scroll"><table class="ajc-ctab"><thead><tr>${th}</tr></thead><tbody>${pie}${cuerpo}</tbody></table></div></div>`;
 }
@@ -458,6 +467,7 @@ function cenlazar(G){const root=G.root;
     else if(act==='lado'){st.lado=v;st.limite=150;}
     else if(act==='corden'){const o=st.corden||{k:'val',d:1};st.corden={k:v,d:o.k===v?-o.d:(['cod','fam','sub','prod','um','area'].includes(v)?1:-1)};}
     else if(act==='cagr'){st.cagr=v;st.limite=150;}
+    else if(act==='cabre'){const x=new Set(st.cabre||[]);if(x.has(v))x.delete(v);else x.add(v);st.cabre=[...x];}
     else if(act==='clase'){st.clase=v;st.limite=150;st.tab='listas';if(st.lado==='s')st.lado='ambos';}
     else if(act==='prod')st.sel=st.sel===v?null:v;
     else if(act==='soltar')st.sel=null;
@@ -477,7 +487,6 @@ function cenlazar(G){const root=G.root;
     else if(el.dataset.change==='prev'){st.prev=+el.value;st.elegido=null;cpintar(G);}
   });
   root.addEventListener('input',ev=>{const e=ev.target;if(e.dataset.input!=='buscar')return;const pos=e.selectionStart;G.st.q=e.value;G.st.limite=150;cpintar(G);const n=root.querySelector('.ajc-search');n.focus();if(pos!=null)n.setSelectionRange(pos,pos);});
-  root.addEventListener('toggle',ev=>{const d=ev.target;if(!d.matches?.('details[data-thdd]')||!d.open)return;const r=d.querySelector('summary').getBoundingClientRect(),o=d.querySelector('.ajc-options');o.style.position='fixed';o.style.top=`${Math.round(r.bottom+4)}px`;o.style.left=`${Math.round(Math.min(r.left,innerWidth-260))}px`;},true);
   root.addEventListener('keydown',ev=>{if(ev.key==='Escape')root.querySelectorAll('details[open]').forEach(d=>d.open=false);});
   root.addEventListener('scroll',ev=>{const e=ev.target,st=G.st;if(e.matches?.('.ajc-zona .ajc-scroll')&&e.scrollTop+e.clientHeight>e.scrollHeight-70&&st.limite<G.nfilas){st.limite+=150;cpintar(G);}},true);
 }

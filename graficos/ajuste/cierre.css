@@ -277,3 +277,13 @@
 .ajc-thdd[open] summary,.ajc-thdd summary:hover{color:var(--accent-deep);}
 .ajc-thdd .ajc-options{font-weight:400;color:var(--text-primary);z-index:20;}
 @media(max-width:900px){.ajc-ctab{min-width:900px;}}
+/* #811: un renglón por producto; ▸ abre sus áreas debajo, sangradas y en gris claro. */
+.ajc-ctab tr.abre{cursor:pointer;}
+.ajc-ctab tr.abre:hover td{background:var(--bg-hover);}
+.ajc-ctab tr.ajc-pr.on td{background:var(--accent-tint);}
+.ajc-ctab td.ck-prod{max-width:300px;}
+.ajc-ctab .ajc-tg{display:inline-block;width:14px;font-size:12px;color:var(--accent-deep);}
+.ajc-ctab .ajc-car{display:inline;margin-left:8px;font-size:12px;color:var(--text-secondary);}
+.ajc-ctab tr.ajc-ar td{background:color-mix(in srgb,var(--rail-fondo) 45%,var(--bg-card));}
+.ajc-ctab tr.ajc-ar td.ck-prod{padding-left:26px;color:var(--text-secondary);}
+

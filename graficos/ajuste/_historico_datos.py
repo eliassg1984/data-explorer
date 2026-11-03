@@ -26,8 +26,10 @@ def armar(df, contexto=None, operativo=True):
              else pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns]"))
     d = df.loc[fecha.notna()]
     f = fecha.loc[d.index].dt.normalize()
-    fechas = sorted(f.unique())
-    fi = {v: i for i, v in enumerate(fechas)}
+    # Por posición, no con un dict: en pandas 2.2 (Cloud) `unique()` da Timestamps y
+    # `to_numpy()` datetime64, que no se encuentran como claves (KeyError, #811).
+    codigos, unicas = pd.factorize(f, sort=True)
+    fechas = [pd.Timestamp(x) for x in unicas]
     # La sesión de cada fecha («Cierre de octubre», «Parcial · 15-17 set»).
     ses = {}
     for s in sesiones_inventario(f):
@@ -48,8 +50,8 @@ def armar(df, contexto=None, operativo=True):
         nums[k] = s.to_numpy()
     def num(v):
         return float(v) if np.isfinite(v) else None
-    filas = [[fi[a], *(int(x) for x in ids_), *(num(x) for x in ns)]
-             for a, ids_, ns in zip(f.to_numpy(),
+    filas = [[int(a), *(int(x) for x in ids_), *(num(x) for x in ns)]
+             for a, ids_, ns in zip(codigos,
                                     zip(*(ids[k] for k in ("fam", "sub", "area", "prod", "cod", "um"))),
                                     zip(*(nums[k] for k in ("sis", "fis", "dif", "val", "stock"))))]
     p = {"dic": dic,
