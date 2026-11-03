@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-807 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+808 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (266)
 
@@ -1162,7 +1162,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (261)
+**Decisiones de diseño y UX** (262)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1425,6 +1425,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#804** — La portada con el aire de la hoja
 - **#805** — Inventario › Por tipo en el lenguaje de Costo de Carta
 - **#807** — La esquina de la franja: la hora con su rótulo, Filtros como Refrescar, y lo que no aplica…
+- **#808** — Diferencias › «Qué faltó» en un renglón, y «Consolidado»
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58590,6 +58591,17 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      era el mismo control dos veces. La pieza abre sus controles al borde si no hay fecha
      (`ubicarCabecera`). Por hora conserva la suya: es un rango PROPIO (#531), no un duplicado.
 
+808. **Diferencias › «Qué faltó» en un renglón, y «Consolidado».**
+   A pedido («lo veo muy cargado»): cada producto es UNA línea en el orden Código, Producto,
+   (Área), Cantidad, Ajuste y, al extremo derecho, los 6 cierres y «Faltó». El código dejó de ir
+   en un segundo renglón (`cfilaprod` y su cabecera `cab`, en `cierre.js`). Y «Lado a lado |
+   Faltantes | Sobrantes» suma **«Consolidado»**: todas las líneas del cierre (producto × área)
+   como tabla, al estilo de «Detalle docs.» de Compras — código, familia, subfamilia, producto,
+   unidad, área, precio promedio, stock al cierre, ajuste, stock declarado, ajuste valorizado y
+   valorizado total —, ordenable por cualquier columna y agrupable por familia, subfamilia o
+   área con subtotales (`cconsolidado`). El precio promedio sale del ajuste (valor ÷ cantidad)
+   o, sin ajuste, del stock declarado. Sigue al buscador y exporta lo que se ve.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58602,7 +58614,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#807**; la próxima toma el número siguiente.
+> última regla es la **#808**; la próxima toma el número siguiente.
 
 >
 

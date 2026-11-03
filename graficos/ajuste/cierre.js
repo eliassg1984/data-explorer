@@ -243,7 +243,7 @@ function cfilatabs(G,D){const {st}=D,X=G.lista;
   const tabs=`<nav class="ajc-tabs" role="tablist">${ctabs.map(([t,n])=>`<button type="button" role="tab" data-act="tab" data-v="${t}" aria-selected="${st.tab===t}" class="${st.tab===t?'selected':''}">${n}</button>`).join('')}</nav>`;
   let medio='';
   const buscar=`<input class="ajc-search" type="search" aria-label="Buscar producto o área" placeholder="Buscar producto o área" value="${cesc(st.q)}" data-input="buscar">`;
-  if(st.tab==='listas')medio=`${cseg('lado',[['ambos','Lado a lado'],['f',`Faltantes ${csol(X.tf)}`],['s',`Sobrantes ${csol(X.ts)}`]],st.lado,'Qué lista')}${buscar}`;
+  if(st.tab==='listas')medio=`${cseg('lado',[['ambos','Lado a lado'],['f',`Faltantes ${csol(X.tf)}`],['s',`Sobrantes ${csol(X.ts)}`],['tabla','Consolidado']],st.lado,'Qué lista')}${buscar}`;
   else if(st.tab==='comparar')medio=buscar;
   else if(st.tab==='lineas')medio=`${cseg('juntas',[['si','Áreas juntas'],['no','Áreas separadas']],st.juntas?'si':'no','Áreas')}${buscar}`;
   else if(st.tab==='familias')medio=`${cseg('vf',[['lista','Familias'],['areas','Áreas'],['cruce','Cruce']],st.vf,'Cómo ver')}${st.vf==='cruce'&&G.B.P.hay.stock?cseg('medida',[['val','Ajuste'],['stock','Stock']],st.medida,'Qué mide el cruce'):''}`;
@@ -275,14 +275,41 @@ function cbarritas(h){const mx=Math.max(1,...h.map(v=>Math.abs(v||0)));
 function cfilaprod(G,X,r,l,una){const {st}=G,key=`${l}|${r.prod}`,n=X.rep.n.get(r.prod)||0,pp=X.par&&X.par[l].get(r.prod);
   const qty=r.dif==null?'varias unidades':`${ccant(r.dif)} ${r.um}`;
   const medio=X.par?`<span class="ajc-acum" title="El % de este producto sobre el neto de su lado, y el acumulado">${pp?`${cp(pp.pct)} · acum. ${cp(pp.acum)}`:'—'}</span>`:`<span class="ajc-6" title="Los últimos ${X.rep.de} cierres">${cbarritas(X.rep.h.get(r.prod)||[])}</span>`;
-  return `<button type="button" class="ajc-p${st.sel===key?' on':''}" data-act="prod" data-v="${cesc(key)}" aria-pressed="${st.sel===key}" title="${cesc(`${r.prod} · ${cnom(r.area)} · ${qty}`)}"><span class="ajc-pnom"><span>${cesc(r.prod)}</span>${r.cod?`<small class="ajc-cod">cód. ${cesc(r.cod)}</small>`:''}</span>${una?`<span class="ajc-pa">${cesc(cnom(r.area))}</span>`:''}<span class="ajc-pq">${cesc(qty)}</span>${medio}<span class="ajc-rep${l==='f'&&n>=3?' fuerte':''}">${l==='f'?`${n} de ${X.rep.de}`:''}</span><b class="${l==='f'?'neg':'pos'}">${csol(r.val)}</b></button>`;
+  return `<button type="button" class="ajc-p${st.sel===key?' on':''}" data-act="prod" data-v="${cesc(key)}" aria-pressed="${st.sel===key}" title="${cesc(`${r.cod?r.cod+' · ':''}${r.prod} · ${cnom(r.area)} · ${qty}`)}"><span class="ajc-pc">${cesc(r.cod||'—')}</span><span class="ajc-pnom">${cesc(r.prod)}</span>${una?`<span class="ajc-pa">${cesc(cnom(r.area))}</span>`:''}<span class="ajc-pq">${cesc(qty)}</span><b class="${l==='f'?'neg':'pos'}">${csol(r.val)}</b>${medio}<span class="ajc-rep${l==='f'&&n>=3?' fuerte':''}">${l==='f'?`${n} de ${X.rep.de}`:''}</span></button>`;
+}
+// «Consolidado» (#808, a pedido): todas las líneas del cierre, producto por área, con
+// sus cantidades y valores, como la tabla de «Detalle docs.» de Compras. Agrupa por
+// familia, subfamilia o área con subtotales; se ordena por cualquier columna.
+const CCOLS=[['cod','Código','t'],['fam','Familia','t'],['sub','Subfamilia','t'],['prod','Producto','t'],['um','Unidad','t'],['area','Área','t'],
+  ['precio','Precio prom.','p'],['sis','Stock al cierre','q'],['dif','Ajuste','q'],['fis','Stock declarado','q'],['val','Ajuste valorizado','v'],['stock','Valorizado total','v']];
+function cconsolidado(G,D){const {st}=D,q=st.q||'';
+  const rs=D.scope.filter(r=>cbuscar(r,q)).map(r=>({...r,precio:Math.abs(r.dif)>CEPS?r.val/r.dif:Math.abs(r.fis)>CEPS?r.stock/r.fis:null}));
+  const o=st.corden||{k:'val',d:1},sig=o.d;
+  rs.sort((a,b)=>{const x=a[o.k],y=b[o.k];if(typeof x==='string'||typeof y==='string')return String(x??'').localeCompare(String(y??''),'es')*sig;return((x??-Infinity)-(y??-Infinity))*sig;});
+  const fmt=(t,v)=>t==='t'?cesc(t==='t'&&v!=null?v:'—'):t==='v'?csol(v):t==='p'?(v==null?'—':`S/ ${cn(v,2)}`):ccant(v);
+  const cls=(k,v)=>k==='val'||k==='dif'?(v<-CEPS?' neg':v>CEPS?' pos':''):'';
+  const fila=(r,sub=false)=>`<tr class="${sub?'ajc-sub':''}">${CCOLS.map(([k,,t])=>`<td class="${t==='t'?'':'n'}${cls(k,r[k])}">${fmt(t,r[k])}</td>`).join('')}</tr>`;
+  const tot=(nom,g)=>({cod:'',fam:nom,sub:'',prod:`${cn(g.length)} líneas`,um:'',area:'',precio:null,sis:null,dif:null,fis:null,val:csum(g,'val'),stock:csum(g,'stock')});
+  const agr=st.cagr||'';let cuerpo='';
+  if(agr){const gs=[...cgroup(rs,r=>r[agr]||'—')].sort((a,b)=>csum(a[1],'val')-csum(b[1],'val'));
+    let n=0;for(const [k,g] of gs){cuerpo+=fila(tot(k,g),true);for(const r of g){if(n++>=st.limite)break;cuerpo+=fila(r);}if(n>=st.limite)break;}}
+  else cuerpo=rs.slice(0,st.limite).map(r=>fila(r)).join('');
+  G.nfilas=rs.length;
+  G.exportar={nombre:'Consolidado',cabeza:CCOLS.map(c=>c[1]),filas:rs.map(r=>CCOLS.map(([k])=>r[k]??'')),decimales:6};
+  const th=CCOLS.map(([k,t,ti])=>`<th class="${ti==='t'?'':'n'}">${cbtn('corden',k,`${t}${o.k===k?(o.d>0?' ↑':' ↓'):''}`)}</th>`).join('');
+  const T=tot('Total',rs);
+  const pie=`<tr class="ajc-tot"><td colspan="6">Total · ${cn(rs.length)} líneas</td><td></td><td></td><td></td><td></td><td class="n${cls('val',T.val)}">${csol(T.val)}</td><td class="n">${csol(T.stock)}</td></tr>`;
+  G.sub=`${cn(rs.length)} líneas · ajuste ${csol(T.val)} · valorizado ${csol(T.stock)}${rs.length>st.limite?` · se ven ${cn(Math.min(st.limite,rs.length))}`:''}`;
+  G.pieExtra=cseg('cagr',[['','Sin agrupar'],['fam','Por familia'],['sub','Por subfamilia'],['area','Por área']],agr,'Agrupar');
+  return `<div class="ajc-cons"><div class="ajc-scroll"><table class="ajc-ctab"><thead><tr>${th}</tr></thead><tbody>${pie}${cuerpo}</tbody></table></div></div>`;
 }
 function clistashtml(G,D){const {st}=D,X=G.lista,{B}=G;
+  if(st.lado==='tabla')return cconsolidado(G,D);
   G.exportar={nombre:'Listas',cabeza:cprodheads,filas:X.L.map(cprodvals),decimales:6};
   const chip=(id,rot,n,v,tip)=>`<button type="button" class="ajc-cl${st.clase===id?' on':''}" data-act="clase" data-v="${id}" aria-pressed="${st.clase===id}" title="${cesc(tip)}"><span>${cesc(rot)} · ${cn(n)}</span><b class="neg">${csol(v)}</b></button>`;
   const cl=X.cl,nf=X.L.filter(r=>r.val<0).length;
   const chips=st.lado==='s'?'':`<div class="ajc-cls">${chip('todos','Todo lo que faltó',nf,X.tf,'Por producto, con las áreas juntas')}${chip('rein','Se repiten',cl.rein.n,cl.rein.v,`Faltaron en 3 o más de los últimos ${X.rep.de} cierres: apunta a un proceso más que a un descuido del mes`)}${chip('oper','Operación',cl.oper.n,cl.oper.v,'Leña, carbón, limpieza: ninguna receta los descarga, y su consumo aparece recién al contar')}${chip('una','Sólo este cierre',cl.una.n,cl.una.v,`No faltaron en ninguno de los otros ${Math.max(0,X.rep.de-1)} cierres: por ahí conviene empezar`)}</div>`;
-  const cab=(una,l)=>`<div class="ajc-p cab"><span class="ajc-pnom">Producto</span>${una?'<span class="ajc-pa">Área</span>':''}<span class="ajc-pq">Cantidad</span><span class="${X.par?'ajc-acum':'ajc-6'}">${X.par?'Pareto':`${X.rep.de} cierres`}</span><span class="ajc-rep">${l==='f'?'Faltó':''}</span><b>Ajuste</b></div>`;
+  const cab=(una,l)=>`<div class="ajc-p cab"><span class="ajc-pc">Código</span><span class="ajc-pnom">Producto</span>${una?'<span class="ajc-pa">Área</span>':''}<span class="ajc-pq">Cantidad</span><b>Ajuste</b><span class="${X.par?'ajc-acum':'ajc-6'}">${X.par?'Pareto':`${X.rep.de} cierres`}</span><span class="ajc-rep">${l==='f'?'Faltó':''}</span></div>`;
   const filas=(ps,l,una)=>ps.slice(0,st.limite).map(r=>cfilaprod(G,X,r,l,una)).join('')||'<p class="ajc-pie">Ninguno con estos filtros.</p>';
   const col=(l,rot,ps,total,cls)=>`<section class="ajc-col ${cls}"><h4><span>${rot} <small>· ${cn(ps.length)} productos</small></span><b class="${cls}">${csol(total)}</b></h4><div class="ajc-scroll">${cab(false,l)}${filas(ps,l,false)}</div></section>`;
   const tfVista=st.clase==='todos'?X.tf:csum(X.f,'val');
@@ -372,7 +399,7 @@ function czona(G,D){const {st}=D;
   else if(st.vf==='areas')contenido=`<div class="ajc-scroll ajc-detail">${ctabareas(G,D)}</div>`;
   else contenido=`<div class="ajc-scroll">${D.rs.length?cfamilias(G,D):'<p class="ajc-pie">No hay líneas para estos filtros.</p>'}</div>`;
   // En las listas, lo que no entra llega al deslizar: el pie es para la frase.
-  const mas=st.tab!=='listas'&&G.nfilas>st.limite;
+  const mas=(st.tab!=='listas'||st.lado==='tabla')&&G.nfilas>st.limite;
   const pie=G.sub||G.pieExtra||mas?`<footer>${G.pieExtra}<span title="${cesc(G.sub)}">${cesc(G.sub)}</span>${mas?cbtn('mas','',`Ver más (${Math.min(st.limite,G.nfilas)} / ${G.nfilas})`):''}</footer>`:'';
   return `${contenido||'<p class="ajc-pie">No hay diferencias para este detalle.</p>'}${pie}`;
 }
@@ -420,6 +447,8 @@ function cenlazar(G){const root=G.root;
     else if(act==='limpiar'){st.fam=null;st.area=null;st.sel=null;}
     else if(act==='tab'){st.tab=v;st.limite=150;st.elegido=null;}
     else if(act==='lado'){st.lado=v;st.limite=150;}
+    else if(act==='corden'){const o=st.corden||{k:'val',d:1};st.corden={k:v,d:o.k===v?-o.d:(['cod','fam','sub','prod','um','area'].includes(v)?1:-1)};}
+    else if(act==='cagr'){st.cagr=v;st.limite=150;}
     else if(act==='clase'){st.clase=v;st.limite=150;st.tab='listas';if(st.lado==='s')st.lado='ambos';}
     else if(act==='prod')st.sel=st.sel===v?null:v;
     else if(act==='soltar')st.sel=null;

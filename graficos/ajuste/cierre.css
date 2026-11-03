@@ -232,3 +232,34 @@
   .ajc .ajc-lists.una .ajc-6,.ajc .ajc-lists.una .ajc-acum{display:none;}
 }
 
+/* #808: menos carga, a pedido. Una línea por producto: Código, Producto, Cantidad,
+   Ajuste y, al extremo derecho, los 6 cierres y «Faltó». El código en su columna,
+   en gris, y no en un segundo renglón. */
+.ajc .ajc-p{min-height:30px;height:auto;padding-top:2px;padding-bottom:2px;}
+.ajc .ajc-p.cab{min-height:26px;}
+.ajc-pnom{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ajc-pc{font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ajc .ajc-lists.dos .ajc-p{grid-template-columns:78px minmax(0,1fr) 92px 72px 52px 42px;}
+.ajc .ajc-lists.dos.pareto .ajc-p{grid-template-columns:78px minmax(0,1fr) 92px 72px 112px 42px;}
+.ajc .ajc-lists.una .ajc-p{grid-template-columns:84px minmax(0,2.4fr) minmax(0,.9fr) 104px 84px 52px 46px;}
+.ajc .ajc-lists.una.pareto .ajc-p{grid-template-columns:84px minmax(0,2.4fr) minmax(0,.8fr) 104px 84px 112px 46px;}
+.ajc .ajc-p > b{text-align:right;}
+.ajc-6{opacity:.75;}
+/* Consolidado: la tabla de todas las líneas, como «Detalle docs.» de Compras. */
+.ajc-cons{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
+.ajc-cons .ajc-scroll{flex:1 1 0;min-height:0;overflow:auto;overscroll-behavior:contain;border:1px solid var(--border);border-radius:8px;}
+.ajc-ctab{width:100%;min-width:1180px;border-collapse:separate;border-spacing:0;font-size:12.5px;white-space:nowrap;}
+.ajc-ctab th,.ajc-ctab td{padding:0 8px;height:28px;border-top:1px solid var(--ajc-soft,var(--border));text-align:left;overflow:hidden;text-overflow:ellipsis;max-width:260px;}
+.ajc-ctab thead th{position:sticky;top:0;z-index:2;background:var(--rail-fondo);border-top:0;font-size:12px;color:var(--text-secondary);}
+.ajc-ctab thead th button{border:0;background:none;padding:0;font:inherit;font-weight:600;color:inherit;cursor:pointer;}
+.ajc-ctab .n{text-align:right;font-variant-numeric:tabular-nums;}
+.ajc-ctab td.neg{color:var(--danger-text);} .ajc-ctab td.pos{color:var(--success-text);}
+.ajc-ctab tr.ajc-tot td{position:sticky;top:28px;z-index:1;background:var(--bg-card);font-weight:700;border-bottom:1px solid var(--border);}
+.ajc-ctab tr.ajc-sub td{background:var(--rail-fondo);font-weight:600;}
+.ajc-ctab td:first-child{color:var(--text-secondary);}
+@media(max-width:900px){
+  .ajc .ajc-lists.dos .ajc-p{grid-template-columns:72px minmax(0,1fr) 84px 72px 42px;}
+  .ajc .ajc-lists.dos .ajc-6,.ajc .ajc-lists.dos .ajc-acum{display:none;}
+  .ajc .ajc-lists.una .ajc-p{grid-template-columns:72px minmax(0,1fr) 84px 72px 42px;}
+}
+
