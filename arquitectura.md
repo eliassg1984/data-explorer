@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-815 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+816 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (267)
 
@@ -451,7 +451,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
 - **#804** — La portada con el aire de la hoja
 
-**Plotly y figuras** (131)
+**Plotly y figuras** (132)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -584,6 +584,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#751** — Producción › «Consumo según ventas» dice la cuenta de cada porcionamiento, deja elegir el…
 - **#768** — La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte
 - **#815** — Diferencias en tres niveles: dónde estoy · qué miro · los datos con sus ajustes
+- **#816** — Diferencias: el código a la izquierda, «6 cierres» a pedido y la cuenta de cada área en la…
 
 **AgGrid y tablas** (99)
 
@@ -1164,7 +1165,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (268)
+**Decisiones de diseño y UX** (269)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1434,6 +1435,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#812** — Diferencias con la «mixta»: números y pestañas a la vista, ajustes en cápsulas
 - **#814** — Diferencias, la opción 4: números en cápsula, contadores de la lista y la ficha en una ventana
 - **#815** — Diferencias en tres niveles: dónde estoy · qué miro · los datos con sus ajustes
+- **#816** — Diferencias: el código a la izquierda, «6 cierres» a pedido y la cuenta de cada área en la…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58733,6 +58735,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - Los contadores no se encogían en el celular (`.ajc-cls` sin `min-width: 0`) y la página
      medía 785 px de ancho.
 
+816. **Diferencias: el código a la izquierda, «6 cierres» a pedido y la cuenta de cada área en la ficha.**
+   A pedido, con captura:
+   - **El código se veía corrido**: cada fila de la lista es un `<button>`, y un botón centra
+     lo de adentro. El código y el nombre van con `text-align: left` (`.ajc-p .ajc-pc`).
+   - **«6 cierres» y «Faltó» sólo con su interruptor** (`det6`, «6 cierres» en la barra de la
+     lista, recordado en `localStorage`): la lista abre con código, producto, cantidad y
+     ajuste (`.ajc-lists.sin6`). Con «Pareto» se sigue viendo su columna, que es el orden.
+     Para que la barra siga en un renglón, «cómo ver» dice el orden sólo si no es el de
+     siempre («Lado a lado», o «Lado a lado · Pareto»).
+   - **La ficha dice cómo se llegó a la cantidad** (`ccuenta`): por área, lo que decía el
+     sistema al cierre (el conteo anterior más lo que entró, menos lo que salió), lo que se
+     contó —lo que queda en el inventario—, el ajuste y su valor; con un total si hay varias
+     áreas de la misma unidad.
+   - **En el celular un número no se parte**: con `overflow-wrap: anywhere`, «−1,349.951 KILOS»
+     quedaba en «−1,349.95» y «1 KILOS», otro número. Allí se parte sólo entre palabras y la
+     cantidad de cada barra se esconde (queda el monto).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58745,7 +58764,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#815**; la próxima toma el número siguiente.
+> última regla es la **#816**; la próxima toma el número siguiente.
 
 >
 

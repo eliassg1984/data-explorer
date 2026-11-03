@@ -349,9 +349,19 @@ class Navegador(unittest.TestCase):
         root.locator('.ajc-cap[data-cap="lado"]').hover();root.locator('[data-act="lado"][data-v="ambos"]').click()
         self.assertEqual(root.locator('.ajc-kcap .ajc-frase').count(),1)
         self.assertEqual(root.locator('.ajc-pn').count(),0)
+        # «6 cierres» y «Faltó» sólo con su interruptor (#816).
+        self.assertEqual(root.locator('.ajc-lists .ajc-6').count(),0)
+        root.locator('[data-act="det6"]').click()
+        self.assertGreater(root.locator('.ajc-lists .ajc-6').count(),0)
+        self.assertGreater(root.locator('.ajc-lists .ajc-rep').count(),0)
+        root.locator('[data-act="det6"]').click()
+        self.assertEqual(root.locator('.ajc-lists .ajc-rep').count(),0)
         antes=root.locator('.ajc-zona').bounding_box()['width']
         root.locator('.ajc-col.neg [data-act="prod"]').first.click()
         self.assertEqual(root.locator('.ajc-ven .ajc-fn').count(),1)
+        # Cómo se llegó a la cantidad: sistema, contado y ajuste por área (#816).
+        self.assertGreater(root.locator('.ajc-ven .ajc-cuenta .ar').count(),0)
+        self.assertIn('Decía el sistema',root.locator('.ajc-ven .ajc-cuenta').inner_text())
         self.assertEqual(root.locator('.ajc-zona').bounding_box()['width'],antes)
         self.assertEqual(root.locator('.ajc-ven .ajc-fvals span').count(),pg.evaluate('__ajCierre.lista.rep.de'))
         primero=pg.evaluate('__ajCierre.st.sel');f=pg.evaluate('__ajCierre.lista.f.map(r=>r.prod)')

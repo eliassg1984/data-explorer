@@ -407,3 +407,36 @@
   .ajc .ajc-barra .ajc-search{flex:1 1 140px;}
 }
 
+/* #816: el código a la izquierda (la fila es un <button>, que centra lo de adentro);
+   «6 cierres» y «Faltó» sólo con su interruptor; la ficha, con la cuenta de cada área. */
+.ajc .ajc-p .ajc-pc,.ajc .ajc-p .ajc-pnom{text-align:left;}
+.ajc .ajc-lists.dos.sin6 .ajc-p{grid-template-columns:84px minmax(0,1fr) 116px 86px;}
+.ajc .ajc-lists.dos.sin6.pareto .ajc-p{grid-template-columns:84px minmax(0,1fr) 100px 80px 112px;}
+.ajc .ajc-lists.una.sin6 .ajc-p{grid-template-columns:90px minmax(0,2.4fr) minmax(0,.9fr) 116px 90px;}
+.ajc .ajc-lists.una.sin6.pareto .ajc-p{grid-template-columns:90px minmax(0,2.4fr) minmax(0,.8fr) 104px 84px 112px;}
+.ajc .ajc-sw{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;min-height:30px;padding:0 8px;font-size:12.5px;color:var(--text-secondary);white-space:nowrap;}
+.ajc .ajc-sw:hover{background:var(--bg-hover);}
+.ajc-sw i{position:relative;width:26px;height:15px;border-radius:999px;background:var(--border);flex:none;transition:background .15s;}
+.ajc-sw i::after{content:"";position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:var(--bg-card);transition:left .15s;}
+.ajc .ajc-sw.on{color:var(--accent-deep);}
+.ajc-sw.on i{background:var(--accent);}
+.ajc-sw.on i::after{left:13px;}
+.ajc .ajc-barra .ajc-search{width:104px;flex-basis:104px;}
+.ajc-cuenta{display:grid;grid-template-columns:minmax(0,1fr) 92px 82px 82px 78px;gap:3px 10px;max-height:none;align-items:baseline;}
+.ajc-cuenta>span,.ajc-cuenta>b{display:block;white-space:nowrap;}
+.ajc-cuenta .cab{font-size:12px;color:var(--text-secondary);cursor:help;}
+.ajc-cuenta .n{text-align:right;font-variant-numeric:tabular-nums;}
+.ajc-cuenta .ar{overflow:hidden;text-overflow:ellipsis;}
+.ajc-cuenta .tot,.ajc-cuenta .tot~span,.ajc-cuenta .tot~b{font-weight:600;}
+.ajc-cuenta small{font-size:12px;color:var(--text-secondary);}
+@media(max-width:900px){
+  .ajc .ajc-lists.sin6 .ajc-p{grid-template-columns:72px minmax(0,1fr) 84px 72px;}
+  .ajc-cuenta{grid-template-columns:minmax(0,1fr) 66px 60px 60px 62px;gap:3px 6px;font-size:12px;}
+  /* En el celular las cifras no entran en un renglón: se parten, no se pisan. */
+  /* Sólo entre palabras: partir un número a la mitad («−1,349.95» y «1 KILOS») lo vuelve otro. */
+  .ajc-cuenta>span,.ajc-cuenta>b{white-space:normal;}
+  .ajc-fvals{gap:2px;}
+  .ajc-fvals b{white-space:normal;text-align:center;line-height:1.2;}
+  .ajc-fvals small{display:none;}
+}
+
