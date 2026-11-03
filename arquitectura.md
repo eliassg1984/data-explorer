@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-811 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+812 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (267)
 
@@ -1163,7 +1163,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (265)
+**Decisiones de diseño y UX** (266)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1430,6 +1430,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#809** — Ajuste › «Detalle histórico» (antes «Explorar»): la forma de Detalle docs
 - **#810** — «Consolidado» entra en una pantalla, y Áreas de Análisis abre hacia abajo
 - **#811** — «Consolidado» por producto, con sus áreas plegadas; «Detalle histórico» en Cloud
+- **#812** — Diferencias con la «mixta»: números y pestañas a la vista, ajustes en cápsulas
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58656,6 +58657,25 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      (pandas 3) andaba. Ahora la posición sale de `pd.factorize(sort=True)`. Es la regla de la
      #481 con otra cara: lo que pasa en local no prueba la nube.
 
+812. **Diferencias con la «mixta»: números y pestañas a la vista, ajustes en cápsulas.**
+   A pedido («lo veo muy cargado»), elegida sobre un boceto con tres formas
+   (https://claude.ai/artifact/B9ke9j4XqpNs2hqN9uLU1W). Lo que cambió en `cierre.js`:
+   - **Se fue la franja de cuatro indicadores** (`ckpis`). Faltó, Sobró, Neto y Operación (o
+     Sin compensar) van en UNA línea junto al cierre (`ckpislinea`), sin caja: son la
+     respuesta del cierre y se leen sin pasar el cursor. La explicación de cada uno, en su
+     `title`; la del cierre (registros, áreas con stock), en la ⓘ.
+   - **Las pestañas, subrayadas y a la vista** (#795: llevan a otra cosa).
+   - **Los ajustes son cápsulas** (`ccap`): muestran lo elegido y despliegan las demás
+     opciones hacia abajo con el cursor o el foco (`:hover`/`:focus-within`, sin JS): qué
+     lista, el orden o el agrupar (subieron del pie), áreas juntas, cómo ver y qué mide el
+     cruce, gráfico o tabla. Áreas y Familias siguen como menús en la primera fila; Excel y
+     Ampliar, en la segunda.
+   - **Descartada la versión con todo plegado**: esconder los números detrás de un gesto
+     esconde el resultado, y las pestañas plegadas no se descubren.
+   - **En el celular «Consolidado» medía 0 px de alto** (#808): `flex: 1 1 0` en una caja
+     sin alto, la trampa de la #746. Allí lleva alto propio.
+   Los tests que eligen una opción pasan antes el cursor por su cápsula.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58668,7 +58688,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#811**; la próxima toma el número siguiente.
+> última regla es la **#812**; la próxima toma el número siguiente.
 
 >
 

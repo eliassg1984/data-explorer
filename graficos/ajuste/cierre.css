@@ -287,3 +287,37 @@
 .ajc-ctab tr.ajc-ar td{background:color-mix(in srgb,var(--rail-fondo) 45%,var(--bg-card));}
 .ajc-ctab tr.ajc-ar td.ck-prod{padding-left:26px;color:var(--text-secondary);}
 
+/* #812, la «mixta» del boceto: los números del cierre en una línea junto al cierre;
+   las pestañas a la vista; los ajustes en cápsulas que se despliegan hacia abajo con
+   el cursor o el foco. Sin la franja de indicadores, la tabla gana su alto. */
+.ajc-f1{gap:10px;}
+.ajc-klin{display:flex;align-items:baseline;gap:18px;margin-left:8px;padding-left:14px;border-left:1px solid var(--ajc-line);min-width:0;white-space:nowrap;}
+.ajc-kl{display:inline-flex;align-items:baseline;gap:6px;}
+.ajc-kl>span{font-size:12px;color:var(--text-secondary);}
+.ajc-kl>b{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+.ajc-ki{font-size:12px;color:var(--text-secondary);cursor:help;}
+.ajc-f2{border-bottom:1px solid var(--ajc-line);gap:6px;min-height:38px;}
+.ajc-f2 .ajc-tabs{align-self:stretch;}
+.ajc-sep{width:1px;height:20px;background:var(--ajc-line);margin:0 4px;flex:none;}
+.ajc-cap{position:relative;flex:none;}
+.ajc .ajc-cap-b{border:0;border-radius:999px;background:var(--rail-fondo);min-height:30px;padding:0 12px 0 14px;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-size:12.5px;}
+.ajc-cap-b i{font-style:normal;font-size:12px;color:var(--text-secondary);}
+.ajc-cap-op{display:none;position:absolute;top:100%;left:0;z-index:9;min-width:200px;padding:6px;border-top:4px solid transparent;background:var(--bg-card);background-clip:padding-box;border-radius:14px;box-shadow:0 10px 30px color-mix(in srgb,var(--text-primary) 16%,transparent);flex-direction:column;gap:4px;}
+.ajc-cap:hover .ajc-cap-op,.ajc-cap:focus-within .ajc-cap-op{display:flex;}
+.ajc .ajc-cap-op button{border:0;border-radius:999px;min-height:32px;padding:0 14px;text-align:left;white-space:nowrap;background:transparent;}
+.ajc .ajc-cap-op button:hover{background:var(--bg-hover);}
+.ajc .ajc-cap-op button.selected{background:var(--accent-tint);color:var(--accent-deep);font-weight:600;}
+.ajc-f2 .ajc-search{width:190px;}
+/* Las pestañas, subrayadas (#795): llevan a otra cosa. Las cápsulas son los ajustes. */
+.ajc-f2 .ajc-tabs{background:none;padding:0;border-radius:0;gap:4px;}
+.ajc .ajc-f2 .ajc-tabs button{border-radius:0;background:none;box-shadow:none;padding:0 10px;min-height:36px;border-bottom:2px solid transparent;margin-bottom:-1px;}
+.ajc .ajc-f2 .ajc-tabs button:hover{color:var(--accent-deep);background:none;}
+.ajc .ajc-f2 .ajc-tabs button.selected{background:none;box-shadow:none;border-bottom-color:var(--accent);color:var(--accent-deep);font-weight:600;}
+@media(max-width:900px){
+  .ajc-klin{order:3;flex-basis:100%;flex-wrap:wrap;gap:4px 14px;margin-left:0;padding-left:0;border-left:0;}
+  .ajc-f2{flex-wrap:wrap;}
+  /* Una tabla con flex: 1 1 0 en una caja sin alto mide 0 px (#746): en el celular,
+     «Consolidado» lleva alto propio. */
+  .ajc-cons,.ajc-cons .ajc-scroll{flex:none;}
+  .ajc-cons .ajc-scroll{max-height:440px;}
+}
