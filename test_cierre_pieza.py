@@ -359,9 +359,13 @@ class Navegador(unittest.TestCase):
         cl=pg.evaluate('__ajCierre.lista.cl')
         self.assertAlmostEqual(sum(c['v'] for c in cl.values()),por[por<0].sum(),places=6)
         self.assertEqual(sum(c['n'] for c in cl.values()),int((por<0).sum()))
-        root.locator('.ajc-cls [data-act="clase"][data-v="una"]').click()
-        self.assertEqual(root.locator('.ajc-lists [data-act="prod"]').count(),cl['una']['n'])
-        root.locator('[data-act="clase"][data-v="todos"]').click()
+        # #819: la pestaña se llama «Productos» y no hay contadores que recorten la lista por
+        # tipo; los tipos se leen en la cápsula de los números, sin filtrar nada.
+        self.assertEqual(root.locator('[data-act="tab"][data-v="listas"]').inner_text().strip(),'Productos')
+        self.assertNotIn('Qué faltó',root.inner_text())
+        self.assertEqual(root.locator('.ajc-cl, .ajc-cls, [data-act="clase"]').count(),0)
+        self.assertEqual(root.locator('.ajc-lists [data-act="prod"]').count(),int((por<0).sum()))
+        self.assertEqual(root.locator('.ajc-kcap .ajc-bl').count(),root.locator('.ajc-kcap div.ajc-bl').count())
         # La lectura va en la cápsula de los números; la ficha, en una ventana que no achica
         # las listas (#814): ‹ › y las flechas recorren la misma lista, Esc cierra.
         root.locator('.ajc-cap[data-cap="lado"]').hover();root.locator('[data-act="lado"][data-v="ambos"]').click()

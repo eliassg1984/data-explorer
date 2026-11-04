@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-818 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+819 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (268)
+**CSS y estilos** (269)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -335,6 +335,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#791** — Compras › Precios en el lenguaje entero de Costo de Carta
 - **#809** — Ajuste › «Detalle histórico» (antes «Explorar»): la forma de Detalle docs
 - **#818** — Las listas de Diferencias con la forma de la tabla de Compras › Período
+- **#819** — Diferencias: la pestaña se llama «Productos» y no lleva contadores por tipo
 
 **Layout y alturas** (113)
 
@@ -1166,7 +1167,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (270)
+**Decisiones de diseño y UX** (271)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1438,6 +1439,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#815** — Diferencias en tres niveles: dónde estoy · qué miro · los datos con sus ajustes
 - **#816** — Diferencias: el código a la izquierda, «6 cierres» a pedido y la cuenta de cada área en la…
 - **#817** — La franja: la ruta con su menú, en vez de las pestañas sueltas
+- **#819** — Diferencias: la pestaña se llama «Productos» y no lleva contadores por tipo
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58802,6 +58804,25 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    La tabla de Compras › Período es el modelo para las demás tablas propias: cada pieza tiene la
    suya con su CSS, y por eso unas quedaron limpias y otras no.
 
+819. **Diferencias: la pestaña se llama «Productos» y no lleva contadores por tipo.**
+   A pedido, después de preguntar qué contaba cada uno («creo que están repetidos»). Encima de
+   las listas había cinco contadores que las recortaban —Todo, Se repiten, Operación, Nuevos y
+   Falta y sobra— y se fueron todos:
+   - **«Todo» repetía el total**: su monto era el del pie de Faltantes, en la misma pantalla, y
+     desde la #818 ese pie ya sigue a lo elegido.
+   - **Los tres del medio parecían partes y no sumaban**: el grupo de los que faltaron en 2 de
+     los 6 cierres (`ctipo` → `otros`) no tenía contador. En el cierre de octubre de 2026,
+     224 + 32 + 62 = 318 de 379 productos.
+   - **«Falta y sobra» era otra pregunta** (dónde, no por qué): se cruzaba con los demás, no
+     tenía monto y era el único que recortaba también los sobrantes.
+   Los tipos no se pierden: se leen en la cápsula de los números (`clectura`), ahora como texto
+   —sus renglones eran botones que ponían el mismo filtro, y sin contador no habría por dónde
+   quitarlo—, y el «Faltó n de 6» de cada fila sigue con su interruptor. Se fueron con ellos
+   `st.clase`, la acción `clase`, `cespejoset` y su CSS (`.ajc-cls`, `.ajc-cl`); `ctipo` queda
+   para la lectura, y `X.cl` para el test que comprueba que los tipos sumen el faltante.
+   **«Qué faltó» pasa a «Productos»**: la pestaña muestra también lo que sobró, y las demás se
+   llaman por lo que listan (Familias y áreas, 12 cierres, Líneas). El id sigue siendo `listas`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58814,7 +58835,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#818**; la próxima toma el número siguiente.
+> última regla es la **#819**; la próxima toma el número siguiente.
 
 >
 

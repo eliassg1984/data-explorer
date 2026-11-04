@@ -274,7 +274,7 @@ Pruebas de Chromium sin red. Ver regla #720. Desde la #748 abre con todas
 las familias y los insumos de operación aparte; el test cubre además
 «dentro de ±S/ 5», los últimos 12 cierres con la tabla de parciales y el
 salto «¿Por qué? →» a «Análisis de diferencias» (`_cierre.al_porque`, el
-único trigger). Desde la #769 la vista es una pantalla: «Qué faltó» abre con
+único trigger). Desde la #769 la vista es una pantalla: «Productos» (#819) abre con
 faltantes y sobrantes lado a lado, cada uno con su suma; lectura o ficha al
 costado, «Ampliar» y lo demás en pestañas. El test cubre las sumas con el
 buscador, que los cuatro tipos de faltante sumen el total, la ficha y «Ampliar».
@@ -1457,7 +1457,7 @@ celular, en Chromium.
 
 ## «Diferencias del cierre»: una pantalla, las dos listas en paralelo
 
-Desde el 2026-10-31 (regla #769; pieza propia desde la #720). Abre en «Qué faltó»
+Desde el 2026-10-31 (regla #769; pieza propia desde la #720). Abre en «Productos»
 con faltantes y sobrantes lado a lado, al costado la lectura del cierre o la ficha
 del producto, y lo demás en pestañas. Lo que muerde:
 
@@ -1471,6 +1471,9 @@ del producto, y lo demás en pestañas. Lo que muerde:
 - **Las listas tienen la forma de la tabla de Compras › Período** (#818): sobre blanco,
   un renglón de encabezado con el lado, montos sin color y el total al pie en lavanda
   (`.ajc-ptot`), que es lo único con color. Es el modelo para las demás tablas propias.
+- **Sin contadores encima de las listas** (#819): «Todo» repetía el total del pie y los
+  tipos (se repiten, operación, nuevos, falta y sobra) no sumaban. Se leen en la cápsula
+  de los números, como texto: no filtran.
 
 ## Movimientos: «Contar por», calendario y Sin plato con Destino adentro
 
