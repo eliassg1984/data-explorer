@@ -134,7 +134,36 @@ _SCRIPT_CAPAS = """<script>
   // Un rerun que cambie este iframe deja al anterior colgado del documento:
   // se lo desengancha antes de enganchar el nuevo.
   try { if (w.__capasApagar) w.__capasApagar(); } catch (e) {}
+  // EL MENÚ DE LA RUTA (regla #817). Un atributo en <html>, no una clase ni un
+  // `:hover` dentro de un `:has()` (#469). Se cierra con un respiro, para poder
+  // bajar el cursor de la ruta al menú sin que se cierre en el camino.
+  var cerrarT = null;
+  function enMenu(n) { return !!(n && n.closest && (n.closest(".franja-ruta") || n.closest(".st-key-nav_franja_idx"))); }
+  function ubicar() {
+    var c = doc.querySelector(".franja-ruta .fr-vista"), f = doc.querySelector(".st-key-nav_franja_rep");
+    if (!c || !f) return;
+    var x = Math.max(8, Math.round(c.getBoundingClientRect().left - f.getBoundingClientRect().left - 14)) + "px";
+    if (raiz.style.getPropertyValue("--fr-x") !== x) raiz.style.setProperty("--fr-x", x);
+  }
+  function abrirMenu() { clearTimeout(cerrarT); if (!raiz.hasAttribute("data-franja-menu")) { ubicar(); raiz.setAttribute("data-franja-menu", ""); } }
+  function cerrarMenu(ya) { clearTimeout(cerrarT); if (ya) raiz.removeAttribute("data-franja-menu");
+    else cerrarT = setTimeout(function () { raiz.removeAttribute("data-franja-menu"); }, 220); }
+  function sobreMenu(ev) { if (enMenu(ev.target)) abrirMenu(); }
+  function fueraMenu(ev) { if (enMenu(ev.target) && !enMenu(ev.relatedTarget)) cerrarMenu(false); }
+  function clicMenu(ev) {
+    var t = ev.target;
+    if (t && t.closest && t.closest(".st-key-nav_franja_idx button")) { cerrarMenu(true); return; }
+    if (t && t.closest && t.closest(".franja-ruta")) {
+      if (raiz.hasAttribute("data-franja-menu")) cerrarMenu(true); else abrirMenu();
+    } else if (!enMenu(t)) cerrarMenu(true);
+  }
+  function teclaMenu(ev) {
+    if (ev.key === "Escape") cerrarMenu(true);
+    else if ((ev.key === "Enter" || ev.key === " ") && ev.target && ev.target.closest && ev.target.closest(".franja-ruta")) { ev.preventDefault(); abrirMenu(); }
+  }
   var EVENTOS = [["mouseover", pronto], ["mouseout", pronto],
+                 ["mouseover", sobreMenu], ["mouseout", fueraMenu],
+                 ["click", clicMenu], ["keydown", teclaMenu],
                  ["focusin", pronto], ["focusout", pronto],
                  ["click", despues], ["keyup", despues]];
   EVENTOS.forEach(function (e) { doc.addEventListener(e[0], e[1], true); });
@@ -251,7 +280,7 @@ def _kpis_franja(info):
     return pares or None
 
 
-def _html_barra_contexto(nombre, icono):
+def _html_barra_contexto(nombre, icono, ruta=None):
     """El comienzo de la franja superior desde 901px (2026-09-19, regla
     #472): ícono y nombre del ÁREA, o del reporte si no está en una.
 
@@ -274,6 +303,18 @@ def _html_barra_contexto(nombre, icono):
     if icono:
         partes.append(f'<span class="barra-ico" aria-hidden="true">{html.escape(icono)}</span>')
     partes.append(f'<span class="barra-nom">{html.escape(nombre)}</span>')
+    # La ruta (regla #817): «› Ajuste › Diferencias ▾». El grupo sólo si el área
+    # tiene varios reportes y no se llama como el área; la vista abre el menú.
+    # El temporizador de `graficos/base.py::_render_rail` los reescribe al bajar.
+    if ruta is not None:
+        grupo, vista = ruta
+        partes.append(
+            '<span class="franja-ruta" role="button" tabindex="0" aria-haspopup="menu" '
+            'title="Cambiar de vista">'
+            f'<span class="fr-sep">›</span><span class="fr-grupo">{html.escape(grupo)}</span>'
+            '<span class="fr-sep fr-sep2">›</span>'
+            f'<span class="fr-vista"><span class="fr-txt">{html.escape(vista)}</span>'
+            '<i aria-hidden="true">▾</i></span></span>')
     partes.append('</div>')
     return "".join(partes)
 
@@ -423,6 +464,54 @@ ROTULO_PESTANA = {
     ("Ventas", "Control de pedidos"): "Pedidos",
     ("Costos", "Costo de ventas"): "Costo de ventas",
     ("Costos", "Consistencia de datos"): "Consistencia",
+}
+
+
+# Qué muestra cada vista, en una línea: la dice el menú de la ruta de la franja
+# (regla #817). Toda vista con rótulo corto lleva la suya
+# (`test_graficos.py::_pruebas_pestanas_franja`).
+DESCRIPCION_VISTA = {
+    ("Resumen ejecutivo", "Resumen ejecutivo"): "El mes: venta, presupuesto y lo que hay que revisar",
+    ("Resumen ejecutivo", "Pendientes del período"): "Lo que quedó sin explicar o sin cargar",
+    ("Compras", "Compras por período"): "Lo comprado por mes, semana o día",
+    ("Compras", "Proveedor"): "Cuánto y a qué precio a cada proveedor",
+    ("Compras", "Producto"): "Cuánto y a qué precio cada producto",
+    ("Compras", "Vs año pasado"): "La compra contra el mismo período de antes",
+    ("Compras", "Volatilidad"): "Cómo se movieron los precios",
+    ("Compras", "Documentos por proveedor"): "Cada documento con sus líneas",
+    ("Documentos SUNAT", "Cruce con SUNAT"): "Lo de SUNAT contra lo cargado en el Almacén",
+    ("Documentos SUNAT", "Proveedores y fechas"): "Cuándo factura cada proveedor",
+    ("Documentos SUNAT", "Documentos"): "Cada comprobante, con su estado",
+    ("Documentos SUNAT", "Control"): "Si la app tiene todo lo presentado a SUNAT",
+    ("Inventario Valorizado", "Stock"): "Lo que hay hoy, por producto y por área",
+    ("Inventario Valorizado", "Movimientos"): "Cómo cambió el stock entre conteos",
+    ("Ajuste de Inventario", "Ajuste del cierre"): "Qué faltó y sobró en el cierre",
+    ("Ajuste de Inventario", "Diferencias"): "Por qué no cuadra cada línea",
+    ("Ajuste de Inventario", "Evolución del ajuste"): "El ajuste, cierre a cierre",
+    ("Ajuste de Inventario", "Explorar"): "Las líneas de los conteos, para consultar",
+    ("Movimientos", "Requerimientos y salidas"): "Requerimientos y notas de salida",
+    ("Movimientos", "Sin plato por cierre"): "Lo que salió sin un plato que lo explique",
+    ("Producción", "Porcionamientos"): "La merma de cada porcionamiento",
+    ("Producción", "Proveedor por kg útil"): "Cuánto cuesta el kilo que queda, por proveedor",
+    ("Producción", "Merma para revisar"): "Porcionamientos con pesos o mermas raras",
+    ("Producción", "Producción"): "Las órdenes de producción y su valor",
+    ("Producción", "Consumo según recetas"): "Lo que pidieron las ventas, hasta el insumo",
+    ("Producción", "Flujo del producto"): "El camino de un producto, de la compra al plato",
+    ("Recetas", "Carta costeada"): "El costo de cada plato, por canal",
+    ("Recetas", "Alza de insumo"): "Qué pasa si sube un insumo",
+    ("Recetas", "Costo de recetas base"): "El costo de cada receta base",
+    ("Recetas", "Cambios en recetas base"): "Qué cambió en las recetas y cuándo",
+    ("Recetas", "Revisar recetas"): "Las recetas contra lo que se porciona",
+    ("Recetas", "Nueva receta"): "Costear un plato nuevo o un cambio",
+    ("Ventas", "Resumen ejecutivo"): "La venta por período, con clientes y ticket",
+    ("Ventas", "Mix de carta"): "Qué se vende y cuánto deja",
+    ("Ventas", "Mapa por hora"): "Cuándo se vende, hora por hora",
+    ("Ventas", "Comparativo vs Año Pasado"): "La venta contra el año pasado",
+    ("Ventas", "Análisis de platos"): "El ranking de platos y cómo se movió",
+    ("Ventas", "Meseros"): "Propinas y venta por mesero",
+    ("Ventas", "Control de pedidos"): "Anulaciones, transferencias y tiempos",
+    ("Costos", "Costo de ventas"): "Consumo carta contra el costo del Sistema",
+    ("Costos", "Consistencia de datos"): "Los controles del maestro de productos",
 }
 
 
@@ -1226,33 +1315,54 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     _nombre_barra = _area_act or _info_act.get("label_largo") or reporte_activo
     _ico_barra = (visibles[_miembros_act[0]].get("icono") if _area_act
                   else _info_act.get("icono"))
-    _arbol_barra = _html_barra_contexto(_nombre_barra, _ico_barra)
+    # 2026-11-04 — LA RUTA CON SU MENÚ (regla #817, a pedido, sobre un boceto):
+    # la franja dice «Inventario › Ajuste › Diferencias ▾» y las vistas del área
+    # van en un menú, una columna por reporte, cada una con su línea de qué
+    # muestra. Son los MISMOS botones de antes, con sus keys: el temporizador
+    # los sigue marcando y haciendo saltar sin rerun, y escribe la ruta al bajar.
+    # Cerrado, el menú no se ve (`estilos/_90_marco.py`); lo abre `_SCRIPT_CAPAS`
+    # con `<html data-franja-menu>`.
+    _pestanas = [(m, _vistas_de(m)) for m in _miembros_act]
+    _pestanas = [(m, par) for m, par in _pestanas if par and par[1]]
+    _ruta = None
+    if _pestanas:
+        _pm = next((par for m, par in _pestanas if m == reporte_activo), _pestanas[0][1])
+        _sk0, _vs0 = _pm
+        _sel = st.session_state.get(_sk0)
+        _v0 = next((v for v in _vs0 if v[0] == _sel), _vs0[0])
+        _m0 = reporte_activo if any(m == reporte_activo for m, _ in _pestanas) else _pestanas[0][0]
+        _rot0 = visibles[_m0].get("label_rail") or visibles[_m0].get("label_corto") or _m0
+        _ruta = ("" if len(_pestanas) == 1 or _rot0 == _nombre_barra else _rot0,
+                 ROTULO_PESTANA.get((_m0, _v0[0]), _v0[1]))
+    _arbol_barra = _html_barra_contexto(_nombre_barra, _ico_barra, _ruta)
     with st.container(key="nav_franja_rep"):
         st.markdown(_arbol_barra, unsafe_allow_html=True)
-        _pestanas = [(m, _vistas_de(m)) for m in _miembros_act]
-        _pestanas = [(m, par) for m, par in _pestanas if par and par[1]]
         if _pestanas:
             with st.container(key="nav_franja_idx", horizontal=True, gap="small"):
                 for _i, (_m, (_sk, _vs)) in enumerate(_pestanas):
-                    # Con más de un reporte, cada tramo lleva su nombre
-                    # corto: «Por familia» de Ajuste y «Por área» de Stock
-                    # serían ambiguos sin él. Salvo el que se llama como
-                    # el área, que ya se lee al principio: «Compras ·
-                    # Compras» le quitaba 60px a las pestañas de Compras,
-                    # que a 1323px no entraban por poco.
+                    # Una columna por reporte, con su nombre corto: «Por
+                    # familia» de Ajuste y «Por área» de Stock serían ambiguos
+                    # sin él. `data-ruta` es lo que la ruta dice del grupo:
+                    # nada si el área tiene uno solo o se llama como él.
                     _rot_m = (visibles[_m].get("label_rail")
                               or visibles[_m].get("label_corto") or _m)
-                    if len(_pestanas) > 1 and (_i or _rot_m != _nombre_barra):
-                        st.markdown(
-                            ('<span class="franja-sep"></span>' if _i else "")
-                            + f'<span class="franja-miembro">{html.escape(_rot_m)}</span>',
-                            unsafe_allow_html=True)
-                    for _oid, _rot, *_ in _vs:
-                        st.button(
-                            ROTULO_PESTANA.get((_m, _oid), _rot),
-                            key=claves_vista(_m, _oid)[0],
-                            on_click=_ir_a_vista, args=(_m, _sk, _oid),
-                        )
+                    _en_ruta = "" if len(_pestanas) == 1 or _rot_m == _nombre_barra else _rot_m
+                    with st.container(key=f"nav_franja_g{_i}"):
+                        if len(_pestanas) > 1:
+                            st.markdown(
+                                f'<span class="franja-miembro" data-ruta="{html.escape(_en_ruta)}">'
+                                f'{html.escape(_rot_m)}</span>', unsafe_allow_html=True)
+                        for _oid, _rot, *_ in _vs:
+                            st.button(
+                                ROTULO_PESTANA.get((_m, _oid), _rot),
+                                key=claves_vista(_m, _oid)[0],
+                                on_click=_ir_a_vista, args=(_m, _sk, _oid),
+                                help=None,
+                            )
+                            _desc = DESCRIPCION_VISTA.get((_m, _oid))
+                            if _desc:
+                                st.markdown(f'<span class="franja-desc">{html.escape(_desc)}</span>',
+                                            unsafe_allow_html=True)
         for nombre, info in visibles.items():
             st.button(
                 info.get("label_corto") or nombre, key=f"franjarep_{_slug(nombre)}",

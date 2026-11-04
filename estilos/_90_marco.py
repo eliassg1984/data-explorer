@@ -536,4 +536,86 @@ CSS = """
     .st-key-form_receta_modo [data-testid="stButtonGroup"] button p {
         font-size: 14px !important;
     }
+
+    /* ── LA RUTA CON SU MENÚ (2026-11-04, regla #817) ────────────────────
+       La franja dice «Inventario › Ajuste › Diferencias ▾»; las vistas del
+       área van en un menú que abre `_SCRIPT_CAPAS` (`<html data-franja-menu>`):
+       una columna por reporte, cada vista con su línea de qué muestra. Son
+       los botones de siempre (`nav_franja_idx`), así que el temporizador los
+       sigue marcando. Sólo desde 901px: más abajo la franja es otra. */
+    @media (min-width: 901px) {
+        .franja-ruta {
+            display: inline-flex; align-items: center; gap: 8px;
+            margin-left: 10px; cursor: pointer; white-space: nowrap;
+        }
+        .franja-ruta .fr-sep { color: var(--text-muted); }
+        .franja-ruta .fr-grupo { font-size: 13px; color: var(--text-secondary); }
+        .franja-ruta .fr-grupo:empty, .franja-ruta .fr-grupo:empty + .fr-sep2 { display: none; }
+        .franja-ruta .fr-vista {
+            display: inline-flex; align-items: center; gap: 8px; height: 32px;
+            padding: 0 14px; border-radius: 999px; background: var(--accent-deep);
+            color: var(--bg-card); font-size: 13px; font-weight: 600;
+        }
+        .franja-ruta .fr-vista i { font-style: normal; font-size: 12px; opacity: .8; }
+        .franja-ruta:hover .fr-vista, .franja-ruta:focus-visible .fr-vista { filter: brightness(1.08); }
+        /* Cerrada: el menú no está. */
+        .st-key-nav_franja_rep .st-key-nav_franja_idx { display: none !important; }
+        /* La franja recorta lo que se le sale (`overflow: hidden`): abierta, no. */
+        :root[data-franja-menu] .st-key-nav_franja_rep { overflow: visible !important; }
+        /* Abierta: el panel bajo la ruta, una columna por reporte. */
+        :root[data-franja-menu] .st-key-nav_franja_rep .st-key-nav_franja_idx {
+            display: flex !important;
+            position: absolute !important;
+            top: calc(100% - 4px) !important;
+            left: var(--fr-x, 160px) !important;
+            z-index: 1100 !important;
+            flex: none !important;
+            width: auto !important;
+            max-width: calc(100vw - var(--fr-x, 160px) - 40px) !important;
+            height: auto !important;
+            overflow: visible !important;
+            align-items: flex-start !important;
+            gap: 14px !important;
+            margin: 0 !important;
+            padding: 14px !important;
+            background: var(--bg-card) !important;
+            border-radius: 14px !important;
+            box-shadow: 0 14px 36px color-mix(in srgb, var(--text-primary) 18%, transparent) !important;
+        }
+        .st-key-nav_franja_idx [class*="st-key-nav_franja_g"] {
+            display: flex !important; flex-direction: column !important;
+            gap: 0 !important; width: 230px !important; flex: none !important;
+        }
+        .st-key-nav_franja_idx [class*="st-key-nav_franja_g"] [data-testid="stElementContainer"],
+        .st-key-nav_franja_idx [class*="st-key-nav_franja_g"] [data-testid="stButton"] { width: 100% !important; }
+        .st-key-nav_franja_idx .franja-miembro {
+            display: block; font-size: 12px; color: var(--text-muted);
+            padding: 0 10px 6px;
+        }
+        .st-key-nav_franja_idx .franja-desc {
+            display: block; font-size: 12px; line-height: 1.3; color: var(--text-secondary);
+            padding: 0 10px 8px; margin-top: -2px; white-space: normal;
+        }
+        .st-key-nav_franja_idx [data-testid="stButton"] button {
+            width: 100% !important; justify-content: flex-start !important;
+            height: auto !important; min-height: 28px !important;
+            padding: 4px 10px 0 !important; border-radius: 8px 8px 0 0 !important;
+            color: var(--text-primary) !important; background: transparent !important;
+        }
+        .st-key-nav_franja_idx [data-testid="stButton"] button p {
+            font-size: 13px !important; font-weight: 600 !important;
+            text-align: left !important; width: 100% !important;
+        }
+        .st-key-nav_franja_idx [data-testid="stButton"] button > div,
+        .st-key-nav_franja_idx [data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
+            justify-content: flex-start !important; text-align: left !important; width: 100% !important;
+        }
+        .st-key-nav_franja_idx [data-testid="stButton"] button:hover {
+            background: var(--accent-tint) !important; color: var(--accent-deep) !important;
+        }
+        .st-key-nav_franja_idx [data-testid="stButton"] button.vista-en-pantalla {
+            background: var(--accent-tint) !important; color: var(--accent-deep) !important;
+            box-shadow: none !important; border-radius: 8px 8px 0 0 !important;
+        }
+    }
 """

@@ -5348,6 +5348,11 @@ def _pruebas_pestanas_franja():
           f"sin vista: {sobran}")
     faltan = sorted(vistas - set(navegacion.ROTULO_PESTANA))
     check("cada vista tiene su rótulo corto", not faltan, f"faltan: {faltan}")
+    # El menú de la ruta dice qué muestra cada vista (regla #817).
+    sin_desc = sorted(vistas - set(navegacion.DESCRIPCION_VISTA))
+    check("cada vista tiene su línea en el menú de la ruta", not sin_desc, f"faltan: {sin_desc}")
+    sobra_desc = sorted(set(navegacion.DESCRIPCION_VISTA) - vistas)
+    check("cada línea del menú es de una vista que existe", not sobra_desc, f"sin vista: {sobra_desc}")
 
     nombres = list(data.REPORTES)
     for area, ms in navegacion._areas_de(data.REPORTES).items():

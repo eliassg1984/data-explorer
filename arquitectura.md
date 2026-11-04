@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-816 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+817 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (267)
 
@@ -1165,7 +1165,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (269)
+**Decisiones de diseño y UX** (270)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1436,6 +1436,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#814** — Diferencias, la opción 4: números en cápsula, contadores de la lista y la ficha en una ventana
 - **#815** — Diferencias en tres niveles: dónde estoy · qué miro · los datos con sus ajustes
 - **#816** — Diferencias: el código a la izquierda, «6 cierres» a pedido y la cuenta de cada área en la…
+- **#817** — La franja: la ruta con su menú, en vez de las pestañas sueltas
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58752,6 +58753,25 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      quedaba en «−1,349.95» y «1 KILOS», otro número. Allí se parte sólo entre palabras y la
      cantidad de cada barra se esconde (queda el monto).
 
+817. **La franja: la ruta con su menú, en vez de las pestañas sueltas.**
+   A pedido («que no se vean estáticas, como relieves del mural»), elegida entre cuatro formas
+   sobre un boceto (https://claude.ai/artifact/DJ923jixF7uvBctLiEvxzi, con Inventario, Costos y
+   Producción). Desde 901px:
+   - **La franja dice la ruta** (`_html_barra_contexto(..., ruta)`): el área, el reporte si el
+     área tiene varios y no se llama como él, y la vista en pantalla como pastilla con ▾
+     («Inventario › Ajuste › Diferencias ▾», «Costos › Costo de ventas ▾», «Compras › Período ▾»).
+   - **Las vistas van en un menú**: una columna por reporte (`nav_franja_g<i>`), cada vista con
+     su línea de qué muestra (`DESCRIPCION_VISTA`, exigida para toda vista como el rótulo
+     corto). Son los MISMOS botones con las mismas keys: el temporizador de `_render_rail` los
+     sigue marcando y haciendo saltar sin rerun, y ahora además reescribe la ruta (sólo si
+     cambió, #469). Elegir una de otro reporte sigue por `_ir_a_vista`.
+   - **Lo abre `_SCRIPT_CAPAS`**: el cursor sobre la ruta o el menú (se cierra con 220 ms de
+     respiro para bajar del uno al otro), un clic, Enter; Esc o un clic afuera lo cierran. Es un
+     atributo en `<html>` (`data-franja-menu`), no un `:hover` dentro de un `:has()`.
+   - **La franja recorta lo que se le sale** (`overflow: hidden`): abierto el menú, no. Sin eso el
+     panel quedaba detrás de la hoja, con una tira asomando.
+   - El botón de Streamlit centra su texto: en el menú van a la izquierda, con su línea.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58764,7 +58784,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#816**; la próxima toma el número siguiente.
+> última regla es la **#817**; la próxima toma el número siguiente.
 
 >
 

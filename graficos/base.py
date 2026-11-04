@@ -1668,6 +1668,16 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                       // página.
                       var tira = b.closest('.st-key-nav_franja_idx');
                       if (!tira) return;
+                      // La ruta de la franja (regla #817): «› Ajuste ›
+                      // Diferencias ▾». Sólo si cambió (#469).
+                      var rt = doc.querySelector('.franja-ruta .fr-txt'),
+                          rg = doc.querySelector('.franja-ruta .fr-grupo'),
+                          col = b.closest('[class*="st-key-nav_franja_g"]'),
+                          mi = col && col.querySelector('.franja-miembro'),
+                          gtxt = mi ? (mi.getAttribute('data-ruta') || '') : '',
+                          vtxt = (b.innerText || '').trim();
+                      if (rt && vtxt && rt.textContent !== vtxt) rt.textContent = vtxt;
+                      if (rg && rg.textContent !== gtxt) rg.textContent = gtxt;
                       var rb = b.getBoundingClientRect(),
                           rt = tira.getBoundingClientRect();
                       if (rb.left < rt.left) tira.scrollLeft -= rt.left - rb.left + 24;

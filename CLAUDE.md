@@ -606,6 +606,13 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   derecha, cada uno a la izquierda del anterior (`--barra-f`,
   `--barra-fecha`, `--barra-sello`). **Siempre a la vista desde la regla
   #764** (de la #473 a ese día aparecía con el cursor).
+  **Desde la #817 las pestañas van en un menú**: la franja dice la RUTA
+  («Inventario › Ajuste › Diferencias ▾») y el cursor o un clic sobre ella
+  abren las vistas del área, una columna por reporte, cada una con su línea de
+  `navegacion.py::DESCRIPCION_VISTA`. Son los mismos botones con las mismas
+  keys (el temporizador los marca, los hace saltar y reescribe la ruta al
+  bajar); el menú lo abre `_SCRIPT_CAPAS` con `<html data-franja-menu>`, y la
+  franja deja de recortar (`overflow`) mientras está abierto.
 
 **Y cada vista es una hoja blanca** (reglas #764 y #776, `estilos/_90_marco.py`):
 la franja va sobre el lavanda, con la vista activa en pastilla índigo, y cada
@@ -654,7 +661,8 @@ Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
   de `_render_rail`**, igual que la lista de la columna: `navegacion.py`
   las dibuja fuera del fragment y le da sus keys con `claves_vista`
   (también las filas del panel del área). **Toda vista nueva lleva un
-  rótulo corto en `navegacion.py::ROTULO_PESTANA`** —lo exige
+  rótulo corto en `navegacion.py::ROTULO_PESTANA`** y su línea en
+  `DESCRIPCION_VISTA` (#817) —lo exige
   `test_graficos.py::_pruebas_pestanas_franja`; a 1323px entran todas las
   áreas salvo Inventario, que se desliza de lado— y un ícono (tercer
   elemento de su tupla): lo muestran la columna entre 769 y 900px y,
