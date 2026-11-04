@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-817 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+818 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (267)
+**CSS y estilos** (268)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -334,6 +334,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#790** — Compras › Proveedor y Producto en el lenguaje entero de Costo de Carta
 - **#791** — Compras › Precios en el lenguaje entero de Costo de Carta
 - **#809** — Ajuste › «Detalle histórico» (antes «Explorar»): la forma de Detalle docs
+- **#818** — Las listas de Diferencias con la forma de la tabla de Compras › Período
 
 **Layout y alturas** (113)
 
@@ -58772,6 +58773,35 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      panel quedaba detrás de la hoja, con una tira asomando.
    - El botón de Streamlit centra su texto: en el menú van a la izquierda, con su línea.
 
+818. **Las listas de Diferencias con la forma de la tabla de Compras › Período.**
+   Hecha a pedido, con dos capturas lado a lado («me parece más limpia la de compras»). Las dos
+   tablas tenían casi la misma letra y el mismo alto de fila: la diferencia era de color y de
+   marco. En `cierre.js` (`clistashtml`, `cfilaprod`) y al final de `cierre.css`:
+   - **Sobre blanco**: se fue la caja con borde y fondo lavanda de la zona (`.ajc-zl`), que
+     agrisaba cada fila. Vale también para Consolidado, que tiene su propio borde.
+   - **Un solo renglón de encabezado**, en banda (`--bg-primary`) con texto índigo, como el
+     `.th` de `semanal.css`. El lado va ahí, con un punto de color (`ajc-dot`), en lugar de
+     «Producto»: se fueron el `h4` de encima y las barras de 3 px roja y verde, que eran lo más
+     fuerte de la pantalla.
+   - **Los montos en tinta normal.** En una lista de faltantes todos son negativos: ~60 cifras
+     en rojo y negrita repetían lo que dice el encabezado. El color queda en el total y en lo que
+     sí distingue (el «4 de 4» de los que se repiten).
+   - **El total al pie** (`.ajc-ptot`, lavanda, como el `.tt` de Compras), justo debajo de la
+     última fila: con la lista en `flex: 1` caía al fondo de la zona, lejos de dos filas. Por eso
+     `.ajc-col > .ajc-scroll` va en `flex: 0 1 auto`. Su rótulo ocupa las columnas de código y
+     producto (`grid-column: span 2`), y las demás celdas son las mismas clases vacías, para
+     esconderse igual en el celular.
+   - **La suma sale de las filas de la lista** (`csum(ps)`), todas y no sólo las dibujadas. El
+     encabezado de Sobrantes usaba `X.ts`, el total de TODOS los sobrantes: con «Falta y sobra»
+     elegido la lista mostraba unos y la suma decía otra cosa.
+   - **El código entero, con los ceros de la izquierda en gris claro** (`ccod`, `.ajc-z`), y los
+     dígitos en el color del resto, como en Consolidado (#810). La búsqueda y el Excel no
+     cambian: el texto del código es el mismo.
+   - **La unidad corta en pantalla** (`cum`: kg, L, und, como `consumo.js::corta`); la entera
+     sigue en el `title` y en el Excel. «KILOS» en mayúsculas pesaba más que la cifra.
+   La tabla de Compras › Período es el modelo para las demás tablas propias: cada pieza tiene la
+   suya con su CSS, y por eso unas quedaron limpias y otras no.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58784,7 +58814,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#817**; la próxima toma el número siguiente.
+> última regla es la **#818**; la próxima toma el número siguiente.
 
 >
 

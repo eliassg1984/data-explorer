@@ -439,4 +439,26 @@
   .ajc-fvals b{white-space:normal;text-align:center;line-height:1.2;}
   .ajc-fvals small{display:none;}
 }
+/* #818 — Las listas de «Qué faltó» con la forma de la tabla de Compras › Período
+   (semanal.css: .th, .tf, .tt). Sobre blanco: se fue la caja con fondo de la zona. Un
+   renglón de encabezado en banda, con texto índigo; los montos en tinta normal; el total al
+   pie en lavanda, y el color sólo ahí. Se fueron las barras de 3 px de cada lado: ahora es
+   un punto junto al nombre. Va al final porque pisa reglas de arriba. */
+.ajc .ajc-zl{border:0;border-radius:0;background:transparent;padding:0;}
+.ajc .ajc-col,.ajc .ajc-col.neg,.ajc .ajc-col.pos{border-top:0;}
+/* La lista mide lo que sus filas y el total va justo debajo, no al fondo de la zona. */
+.ajc .ajc-col>.ajc-scroll{flex:0 1 auto;}
+.ajc .ajc-lists .ajc-p.cab{background:var(--bg-primary);border-radius:6px 6px 0 0;border-bottom:1px solid var(--border);min-height:30px;color:var(--accent-deep);font-weight:500;}
+.ajc .ajc-lists .ajc-p.cab>span{color:var(--accent-deep);}
+/* El código en el color del resto, como en Consolidado (#810); sus ceros, en gris claro. */
+.ajc .ajc-lists .ajc-p .ajc-pc{color:var(--text-primary);}
+.ajc .ajc-lists .ajc-p>b{font-weight:400;color:var(--text-primary);}
+.ajc .ajc-lists .ajc-p.cab>b{font-weight:500;color:var(--accent-deep);}
+.ajc-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px;}
+.ajc-dot.neg{background:var(--danger);}.ajc-dot.pos{background:var(--success);}
+.ajc .ajc-lists .ajc-p.ajc-ptot{flex:none;background:var(--accent-light);color:var(--accent-deep);font-weight:700;border-bottom:0;border-radius:0 0 6px 6px;min-height:30px;cursor:default;}
+.ajc .ajc-lists .ajc-p.ajc-ptot>b{font-weight:700;}
+.ajc .ajc-lists .ajc-p.ajc-ptot>b.neg{color:var(--danger-text);}.ajc .ajc-lists .ajc-p.ajc-ptot>b.pos{color:var(--success-text);}
+.ajc-ptl{grid-column:span 2;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ajc-z{font-style:normal;color:var(--text-muted);}
 

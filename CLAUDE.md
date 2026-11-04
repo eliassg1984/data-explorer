@@ -1468,6 +1468,9 @@ del producto, y lo demás en pestañas. Lo que muerde:
 - **Los tipos de faltante suman el faltante** (`ctipo`): si se agrega uno, se reparte
   de lo que hay.
 - **La pieza se pone su propio aire** (`.ajc-main`): no tiene tarjeta que se lo dé (#764).
+- **Las listas tienen la forma de la tabla de Compras › Período** (#818): sobre blanco,
+  un renglón de encabezado con el lado, montos sin color y el total al pie en lavanda
+  (`.ajc-ptot`), que es lo único con color. Es el modelo para las demás tablas propias.
 
 ## Movimientos: «Contar por», calendario y Sin plato con Destino adentro
 

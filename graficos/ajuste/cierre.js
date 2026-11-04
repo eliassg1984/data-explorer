@@ -114,6 +114,11 @@ const cint=v=>v==null?'—':`${Math.round(v)<0?'−':Math.round(v)>0?'+':''}${cn
 const cnn=(n,t)=>`${cn(n)} ${t}${n===1?'':'s'}`;
 const cpct=(a,b)=>b?`${Math.round(100*a/b)} %`:'—';
 const ccant=v=>v==null?'—':Number(v).toLocaleString('en-US',{maximumFractionDigits:3});
+// #818: la unidad corta en pantalla, como Consumo (consumo.js::corta); la entera queda en el
+// title y en el Excel. Y el código entero, con los ceros de la izquierda en gris claro: no
+// distinguen un producto de otro, y en cada fila eran seis caracteres de ruido.
+const cum=u=>{const s=String(u??'').trim();return {KILOS:'kg',LITROS:'L',UND:'und',UNIDAD:'und',PORCION:'porc'}[s.toUpperCase()]||s.toLowerCase();};
+const ccod=c=>{const s=String(c??''),z=(s.match(/^0+(?=.)/)||[''])[0];return z?`<i class="ajc-z">${z}</i>${cesc(s.slice(z.length))}`:cesc(s);};
 const CMENOR=new Set(['de','del','y','e','la','las','el','los','con','sin','a','x']);
 const cnom=s=>/^\d+ áreas$/.test(String(s??''))?String(s):String(s??'').toLocaleLowerCase('es').split(/(\s+)/).map((w,i)=>i&&CMENOR.has(w)?w:w.charAt(0).toLocaleUpperCase('es')+w.slice(1)).join('');
 const CCORTO={'ALIMENTOS':'Alimentos','VINOS Y ESPUMANTES':'Vinos','ENVASES Y EMBALAJES':'Envases','BEBIDAS CON ALCOHOL':'Con alcohol','BEBIDAS SIN ALCOHOL':'Sin alcohol','COSTOS PRODUCCION':'Operación'};
@@ -303,9 +308,9 @@ function cdatoslista(G,D){const {st}=D,{B}=G,rep=crepite(G);
 function cbarritas(h){const mx=Math.max(1,...h.map(v=>Math.abs(v||0)));
   return h.map(v=>{const a=Math.max(v==null?0:1.5,Math.abs(v||0)/mx*10);return `<span class="ajc-b"><i class="${v==null?'':v<-1?'neg':v>1?'pos':'cero'}" style="top:${(v||0)<0?11:11-a}px;height:${a}px"></i></span>`;}).join('');}
 function cfilaprod(G,X,r,l,una){const {st}=G,det=!!st.det6,key=`${l}|${r.prod}`,n=X.rep.n.get(r.prod)||0,pp=X.par&&X.par[l].get(r.prod);
-  const qty=r.dif==null?'varias unidades':`${ccant(r.dif)} ${r.um}`;
+  const qty=r.dif==null?'varias unidades':`${ccant(r.dif)} ${r.um}`,qtyC=r.dif==null?qty:`${ccant(r.dif)} ${cum(r.um)}`;
   const medio=X.par?`<span class="ajc-acum" title="El % de este producto sobre el neto de su lado, y el acumulado">${pp?`${cp(pp.pct)} · acum. ${cp(pp.acum)}`:'—'}</span>`:`<span class="ajc-6" title="Los últimos ${X.rep.de} cierres">${cbarritas(X.rep.h.get(r.prod)||[])}</span>`;
-  return `<button type="button" class="ajc-p${st.sel===key?' on':''}" data-act="prod" data-v="${cesc(key)}" aria-pressed="${st.sel===key}" title="${cesc(`${r.cod?r.cod+' · ':''}${r.prod} · ${cnom(r.area)} · ${qty}`)}"><span class="ajc-pc">${cesc(r.cod||'—')}</span><span class="ajc-pnom">${cesc(r.prod)}</span>${una?`<span class="ajc-pa">${cesc(cnom(r.area))}</span>`:''}<span class="ajc-pq">${cesc(qty)}</span><b class="${l==='f'?'neg':'pos'}">${csol(r.val)}</b>${det||X.par?medio:''}${det?`<span class="ajc-rep${l==='f'&&n>=3?' fuerte':''}">${l==='f'?`${n} de ${X.rep.de}`:''}</span>`:''}</button>`;
+  return `<button type="button" class="ajc-p${st.sel===key?' on':''}" data-act="prod" data-v="${cesc(key)}" aria-pressed="${st.sel===key}" title="${cesc(`${r.cod?r.cod+' · ':''}${r.prod} · ${cnom(r.area)} · ${qty}`)}"><span class="ajc-pc">${r.cod?ccod(r.cod):'—'}</span><span class="ajc-pnom">${cesc(r.prod)}</span>${una?`<span class="ajc-pa">${cesc(cnom(r.area))}</span>`:''}<span class="ajc-pq">${cesc(qtyC)}</span><b>${csol(r.val)}</b>${det||X.par?medio:''}${det?`<span class="ajc-rep${l==='f'&&n>=3?' fuerte':''}">${l==='f'?`${n} de ${X.rep.de}`:''}</span>`:''}</button>`;
 }
 // «Consolidado» (#808, a pedido): todas las líneas del cierre, producto por área, con
 // sus cantidades y valores, como la tabla de «Detalle docs.» de Compras. Agrupa por
@@ -326,7 +331,7 @@ function cconsolidado(G,D){const {st}=D,q=st.q||'';
   const ord=(a,b)=>{const x=a[o.k],y=b[o.k];if(typeof x==='string'||typeof y==='string')return String(x??'').localeCompare(String(y??''),'es')*sig;return((x??-Infinity)-(y??-Infinity))*sig;};
   const prods=g=>[...cgroup(g,r=>JSON.stringify([r.cod||r.prod,r.um])).values()].map(cprodcons).sort(ord);
   // Familia y subfamilia como nombre, no en mayúsculas (#810); el producto, como viene.
-  const fmt=(t,v,k)=>t==='c'?cesc(v||'—'):t==='t'?cesc(v==null||v===''?'—':['fam','sub'].includes(k)?cnom(v):v):t==='v'?cn(v,0):t==='p'?(v==null?'—':cn(v,2)):ccant(v);
+  const fmt=(t,v,k)=>t==='c'?(v?ccod(v):'—'):t==='t'?cesc(v==null||v===''?'—':['fam','sub'].includes(k)?cnom(v):k==='um'?cum(v):v):t==='v'?cn(v,0):t==='p'?(v==null?'—':cn(v,2)):ccant(v);
   const cls=(k,v)=>k==='val'||k==='dif'?(v<-CEPS?' neg':v>CEPS?' pos':''):'';
   const celdas=(r,prod)=>CCOLS.map(([k,,t])=>`<td class="ck-${k} ${t==='t'?'':t==='c'?'ajc-cc':'n'}${cls(k,r[k])}" title="${t==='t'&&k!=='prod'?cesc(r[k]??''):''}">${k==='prod'?prod:fmt(t,r[k],k)}</td>`).join('');
   const filaProd=p=>{const varias=p.areas.length>1,abierto=varias&&ab.has(p.key);
@@ -356,12 +361,18 @@ function clistashtml(G,D){const {st}=D,X=G.lista,{B}=G;
   const cl=X.cl,nf=X.L.filter(r=>r.val<0).length;
   const espejo=`<button type="button" class="ajc-cl${st.clase==='espejo'?' on':''}" data-act="clase" data-v="espejo" aria-pressed="${st.clase==='espejo'}" title="${cesc(`Falta acá, sobra allá: productos que faltan en un área y sobran en otra (${csol(X.esp.falto)} / ${csol(X.esp.sobro)})`)}"><span>Falta y sobra · ${cn(X.esp.n)}</span></button>`;
   const chips=st.lado==='s'?'':`<span class="ajc-cls">${chip('todos','Todo',nf,X.tf,'Todo lo que faltó: por producto, con las áreas juntas')}${chip('rein','Se repiten',cl.rein.n,cl.rein.v,`Faltaron en 3 o más de los últimos ${X.rep.de} cierres: apunta a un proceso más que a un descuido del mes`)}${chip('oper','Operación',cl.oper.n,cl.oper.v,'Leña, carbón, limpieza: ninguna receta los descarga, y su consumo aparece recién al contar')}${chip('una','Nuevos',cl.una.n,cl.una.v,`Sólo este cierre: no faltaron en ninguno de los otros ${Math.max(0,X.rep.de-1)} cierres. Por ahí conviene empezar`)}${espejo}</span>`;
-  const cab=(una,l)=>`<div class="ajc-p cab"><span class="ajc-pc">Código</span><span class="ajc-pnom">Producto</span>${una?'<span class="ajc-pa">Área</span>':''}<span class="ajc-pq">Cantidad</span><b>Ajuste</b>${st.det6||X.par?`<span class="${X.par?'ajc-acum':'ajc-6'}">${X.par?'Pareto':`${X.rep.de} cierres`}</span>`:''}${st.det6?`<span class="ajc-rep">${l==='f'?'Faltó':''}</span>`:''}</div>`;
+  // #818, con la forma de la tabla de Compras › Período: UN renglón de encabezado (el lado,
+  // con su punto de color, en lugar de «Producto»), los montos en tinta normal —el lado ya
+  // lo dicen el punto y el «−»— y el total al pie, que es lo único con color.
+  const extra=(l,cab)=>`${st.det6||X.par?`<span class="${X.par?'ajc-acum':'ajc-6'}">${cab?(X.par?'Pareto':`${X.rep.de} cierres`):''}</span>`:''}${st.det6?`<span class="ajc-rep">${cab&&l==='f'?'Faltó':''}</span>`:''}`;
+  const cab=(una,l)=>`<div class="ajc-p cab"><span class="ajc-pc">Código</span><span class="ajc-pnom"><i class="ajc-dot ${l==='f'?'neg':'pos'}"></i>${l==='f'?'Faltantes':'Sobrantes'}</span>${una?'<span class="ajc-pa">Área</span>':''}<span class="ajc-pq">Cantidad</span><b>Ajuste</b>${extra(l,true)}</div>`;
   const filas=(ps,l,una)=>ps.slice(0,st.limite).map(r=>cfilaprod(G,X,r,l,una)).join('')||'<p class="ajc-pie">Ninguno con estos filtros.</p>';
-  const col=(l,rot,ps,total,cls)=>`<section class="ajc-col ${cls}"><h4><span>${rot} <small>· ${cnn(ps.length,'producto')}</small></span><b class="${cls}">${csol(total)}</b></h4><div class="ajc-scroll">${cab(false,l)}${filas(ps,l,false)}</div></section>`;
-  const tfVista=st.clase==='todos'?X.tf:csum(X.f,'val');
-  const cuerpo=st.lado==='ambos'?col('f','Faltantes',X.f,tfVista,'neg')+col('s','Sobrantes',X.s,X.ts,'pos')
-    :`<section class="ajc-col"><div class="ajc-scroll">${cab(true,st.lado)}${st.lado==='s'?filas(X.s,'s',true):filas(X.f,'f',true)}</div></section>`;
+  // La suma sale de TODAS las filas de la lista, no de las dibujadas (#769), y sigue al
+  // buscador y al contador elegido.
+  const pie=(una,l,ps)=>`<div class="ajc-p ajc-ptot"><span class="ajc-ptl">Total · ${cnn(ps.length,'producto')}</span>${una?'<span class="ajc-pa"></span>':''}<span class="ajc-pq"></span><b class="${l==='f'?'neg':'pos'}">${csol(csum(ps,'val'))}</b>${extra(l,false)}</div>`;
+  const col=(l,ps,una,cls)=>`<section class="ajc-col${cls?` ${cls}`:''}"><div class="ajc-scroll">${cab(una,l)}${filas(ps,l,una)}</div>${pie(una,l,ps)}</section>`;
+  const cuerpo=st.lado==='ambos'?col('f',X.f,false,'neg')+col('s',X.s,false,'pos')
+    :col(st.lado,st.lado==='s'?X.s:X.f,true,'');
   G.nfilas=Math.max(st.lado==='s'?0:X.f.length,st.lado==='f'?0:X.s.length);
   const n80=ps=>{const vs=ps.map(r=>Math.abs(r.val)).sort((a,b)=>b-a),t=vs.reduce((a,v)=>a+v,0);let acc=0,n=0;for(const v of vs){n++;acc+=v;if(acc/t>=.8-CEPS)break;}return {n,de:vs.length};};
   const a=n80(X.f),b=n80(X.s),comp=cmetricas(D.scope,B.P.hay).falto-X.tfTodo;

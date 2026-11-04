@@ -321,21 +321,39 @@ class Navegador(unittest.TestCase):
         # Abre con las dos listas, cada una con su suma.
         self.assertEqual(pg.evaluate('__ajCierre.st.lado'),'ambos')
         self.assertEqual(root.locator('.ajc-lists.dos .ajc-col').count(),2)
-        self.assertIn(sol(por[por<0].sum()),root.locator('.ajc-col.neg h4').inner_text())
-        self.assertIn(sol(por[por>0].sum()),root.locator('.ajc-col.pos h4').inner_text())
+        self.assertIn(sol(por[por<0].sum()),root.locator('.ajc-col.neg .ajc-ptot').inner_text())
+        self.assertIn(sol(por[por>0].sum()),root.locator('.ajc-col.pos .ajc-ptot').inner_text())
         self.assertEqual(root.locator('.ajc-col.neg [data-act="prod"]').count(),int((por<0).sum()))
         self.assertEqual(root.locator('.ajc-col.pos [data-act="prod"]').count(),int((por>0).sum()))
+        # #818, la forma de la tabla de Compras: un solo renglón de encabezado con el lado, el
+        # total al pie (lo único con color), los montos sin color, el código entero con sus
+        # ceros aparte y la unidad corta.
+        self.assertEqual(root.locator('.ajc-lists h4').count(),0)
+        self.assertIn('Faltantes',root.locator('.ajc-col.neg .ajc-p.cab').inner_text())
+        self.assertIn('Sobrantes',root.locator('.ajc-col.pos .ajc-p.cab').inner_text())
+        self.assertIn(f'Total · {int((por<0).sum())} producto',root.locator('.ajc-col.neg .ajc-ptot').inner_text())
+        self.assertEqual(root.locator('.ajc-col.neg .ajc-ptot b.neg').count(),1)
+        self.assertEqual(root.locator('.ajc-lists [data-act="prod"] b.neg, .ajc-lists [data-act="prod"] b.pos').count(),0)
+        arroz=root.locator('[data-act="prod"]',has_text='Arroz').first
+        self.assertEqual(arroz.locator('.ajc-pc').text_content(),'000')
+        self.assertEqual(arroz.locator('.ajc-pc .ajc-z').text_content(),'00')
+        self.assertIn(' kg',arroz.locator('.ajc-pq').text_content());self.assertNotIn('Kg',arroz.locator('.ajc-pq').text_content())
+        self.assertIn('Kg',arroz.get_attribute('title'))
+        # El total va justo debajo de la última fila, no al fondo de la zona.
+        ult=root.locator('.ajc-col.neg [data-act="prod"]').last.bounding_box();tot=root.locator('.ajc-col.neg .ajc-ptot').bounding_box()
+        self.assertLess(abs(tot['y']-(ult['y']+ult['height'])),2)
         # Las sumas siguen al buscador, por nombre.
         root.locator('.ajc-search').fill('Arroz')
         self.assertIn('Arroz',root.locator('.ajc-lists').inner_text())
         self.assertNotIn('Carne',root.locator('.ajc-lists').inner_text())
-        v=por['Arroz'];self.assertIn(sol(v),root.locator('.ajc-col.neg h4' if v<0 else '.ajc-col.pos h4').inner_text())
+        v=por['Arroz'];self.assertIn(sol(v),root.locator('.ajc-col.neg .ajc-ptot' if v<0 else '.ajc-col.pos .ajc-ptot').inner_text())
         self.assertIn(sol(v),root.locator('[data-act="lado"][data-v="%s"]'%('f' if v<0 else 's')).inner_text())
         root.locator('.ajc-search').fill('')
         # Una lista sola: con su área y su cantidad.
         root.locator('.ajc-cap[data-cap="lado"]').hover();root.locator('[data-act="lado"][data-v="s"]').click()
         self.assertEqual(root.locator('.ajc-lists.una').count(),1)
         self.assertEqual(root.locator('.ajc-cl').count(),0)
+        self.assertIn(sol(por[por>0].sum()),root.locator('.ajc-lists.una .ajc-ptot').inner_text())
         root.locator('.ajc-cap[data-cap="lado"]').hover();root.locator('[data-act="lado"][data-v="f"]').click()
         # Los tipos de faltante suman el faltante entero.
         cl=pg.evaluate('__ajCierre.lista.cl')
