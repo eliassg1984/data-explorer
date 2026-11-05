@@ -617,7 +617,8 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   bajar); el menú lo abre `_SCRIPT_CAPAS` con `<html data-franja-menu>`, y la
   franja deja de recortar (`overflow`) mientras está abierto.
 
-**Y cada vista es una hoja blanca** (reglas #764 y #776, `estilos/_90_marco.py`):
+**Y cada vista es una hoja blanca** (reglas #764, #776 y #825, `estilos/_90_marco.py`),
+que termina a 8 px del borde de abajo como a los costados, con sus cuatro esquinas a la vista:
 la franja va sobre el lavanda, con la vista activa en pastilla índigo, y cada
 sección de la pila —su key lleva `_sec_`— es su propia hoja, que recorta con
 `overflow: clip`; Costos y Documentos SUNAT, sin pila, nombran su contenedor.

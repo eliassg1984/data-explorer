@@ -29,6 +29,24 @@ CSS = """
         --marco-der: calc(var(--marco-hoja) + 8px);
         /* En la hoja la tarjeta no lleva margen: esos 16px son de contenido. */
         --margen-tarjeta: 0px;
+        /* #825: cada hoja termina a 8 px del borde de abajo, como a los
+           costados, y se le ven las cuatro esquinas (era el remate de
+           Documentos SUNAT, que el usuario prefirió). Con los 8 px de aire
+           del block-container, más los 8 de la ventana, quedaban 16. */
+        --aire-inferior: 0px;
+    }
+    /* Las dos vistas sin pila miden lo mismo que una sección de la pila: sin
+       esto, la hoja terminaba donde terminaba el contenido (en Documentos
+       SUNAT, unos 30 px antes; en Costos, según el mes). */
+    .st-key-compras_sunat_drill_wrap,
+    .st-key-ajuste_graf_card_izq_costos {
+        min-height: var(--pila-seccion-min) !important;
+    }
+    /* Stock: su franja de «Ver» ocupa 46 px con el gap, y la regla general de
+       las perspectivas (`_80_cards.py`, 44 px) le gana al 40 que pedía para sí:
+       la hoja se pasaba 2 px del borde (medido, #825). */
+    .st-key-inv_sec_persp_stock.st-key-inv_sec_persp_stock {
+        --persp-alto: 46px;
     }
     /* `clip` y no el `hidden` de Streamlit: al saltar a una vista, el navegador
        también scrollea a los antepasados que puede, y éste se corría 52px y

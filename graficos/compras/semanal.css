@@ -5,14 +5,15 @@
    root. Ningún selector :has, por la regla #469.
 
    La pieza mide una pantalla (`--alto-util`) menos el padding de su
-   tarjeta (16 + 16) y el gap que cobra el contenedor de la fecha, que
-   flota pero sigue en el flujo (16, medido): la tarjeta entera entra en la pantalla y sólo las TABLAS se
+   tarjeta (16 + 16): la tarjeta entera entra en la pantalla y sólo las TABLAS se
    deslizan por dentro (regla #382). El botón de la fecha es de Python y
    va encima, arriba a la derecha (`estilos/_80_cards.py`); la cabecera le
    deja su ancho (`--cp-fecha`, que mide el JS). */
 
 .cpp { --cp-fecha: 210px; position: relative; display: flex; flex-direction: column; gap: 6px;
-  height: calc(var(--alto-util, 600px) - 16px); min-height: 480px; color: var(--text-primary); font-size: 12px; line-height: 1.4;
+  /* -32 desde la #825: restaba 16 y la tarjeta medía 16 px más que la pantalla
+     (el contenedor de la fecha ya no cobra gap: mide 0). */
+  height: calc(var(--alto-util, 600px) - 32px); min-height: 480px; color: var(--text-primary); font-size: 12px; line-height: 1.4;
   min-width: 0; box-sizing: border-box; }
 .cpp * { box-sizing: border-box; }
 .cpp button, .cpp input { font: inherit; color: inherit; }

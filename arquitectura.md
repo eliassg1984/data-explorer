@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-824 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+825 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (272)
+**CSS y estilos** (273)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -339,6 +339,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#820** — Adentro de una pieza propia, el modo diseño baja al nodo de verdad
 - **#821** — Diferencias con íconos: la barra de la lista, el filtro y el neto con su panel al costado
 - **#822** — Refrescar al pie del rail, con la hora del dato en su nombre al cursor
+- **#825** — Cada hoja termina a 8 px del borde de abajo, como a los costados
 
 **Layout y alturas** (113)
 
@@ -1007,7 +1008,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 - **#823** — La franja de Ajuste no tiene «Filtros»: Evolución y la Tabla dinámica traen el suyo
 
-**SUNAT y SIRE** (81)
+**SUNAT y SIRE** (82)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1090,6 +1091,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#794** — Documentos SUNAT en el lenguaje de Costo de Carta: franja, pastillas y subrayados
 - **#795** — Pestañas subrayadas, ajustes en la caja gris: un criterio para toda la app
 - **#802** — Costos en el lenguaje de Costo de Carta: con esta, toda la app
+- **#825** — Cada hoja termina a 8 px del borde de abajo, como a los costados
 
 **Fechas, rangos y cortes** (26)
 
@@ -58922,6 +58924,24 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    Por ahora sólo Diferencias: las fechas que dibuja Python (Evolución, Análisis, Compras…)
    siguen en su tarjeta.
 
+825. **Cada hoja termina a 8 px del borde de abajo, como a los costados.**
+   A pedido, comparando dos capturas: en Documentos SUNAT la hoja terminaba antes del borde y
+   se le veían las cuatro esquinas; en las vistas de la pila se cortaba contra la ventana. Se
+   eligió el remate de SUNAT con el margen de los costados. En `estilos/_90_marco.py`, desde
+   901 px:
+   - **`--aire-inferior: 0px`**: con sus 8 px, más los 8 de la ventana, las secciones de la pila
+     dejaban 16 de lavanda abajo y el doble que a los costados. Ahora cada sección mide lo
+     visible menos nada, y termina en el borde de `.stMain`, a 8 px de la ventana. La siguiente
+     vista sigue empezando por debajo: el encaje no cambia. Python (`graficos/alturas.py`)
+     sigue contando 8 para las figuras; la prueba de sincronía compara `_00_base.py`.
+   - **Documentos SUNAT y Costos**, sin pila, toman el mismo alto mínimo
+     (`--pila-seccion-min`): terminaban donde terminaba el contenido.
+   - **Dos vistas que se pasaban**, encontradas midiendo todos los reportes en la app (a
+     1323×619): Compras › Período restaba 16 px a su pieza y su tarjeta lleva 16 + 16 de relleno
+     (`semanal.css`, ahora −32: se cortaba desde siempre); Stock pedía `--persp-alto: 40px`, pero
+     la regla general de las perspectivas (44) le ganaba por venir después, y su franja ocupa 46.
+     Movimientos por Tipo mide más de una pantalla a propósito y se recorre por dentro.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58934,7 +58954,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#824**; la próxima toma el número siguiente.
+> última regla es la **#825**; la próxima toma el número siguiente.
 
 >
 
