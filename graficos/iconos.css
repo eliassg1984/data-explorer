@@ -1,0 +1,20 @@
+/* Los íconos de las piezas propias y su nombre al pasar el cursor (regla #821).
+   Va antepuesto a la hoja de cada pieza, que puede afinarlo con su propio prefijo
+   (una regla `.pieza button` le gana a `.ib`). Colores sólo por variable. */
+.ico{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.ico.chico{width:14px;height:14px;}
+/* Botón de ícono: 32 px de toque con un dibujo de 20 (WCAG 2.2 pide 24 como mínimo). */
+.ib{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:1px;min-width:32px;height:32px;padding:0 6px;border:0;border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer;list-style:none;}
+.ib::-webkit-details-marker{display:none;}
+.ib:hover{background:var(--bg-hover);color:var(--accent-deep);}
+.ib.on,.ib[aria-expanded="true"],details[open]>.ib{background:var(--accent-light);color:var(--accent-deep);}
+/* El número de lo que está puesto (filtros elegidos), arriba a la derecha del ícono. */
+.ib-n{position:absolute;top:2px;right:1px;min-width:15px;height:15px;padding:0 4px;border-radius:999px;background:var(--accent);color:var(--bg-card);font-size:10px;font-weight:700;line-height:15px;text-align:center;}
+/* El nombre al pasar el cursor, como en Gmail: oscuro, chico, con un respiro antes
+   para que no parpadee al cruzar la barra. `\n` en el texto parte el renglón. */
+[data-tip]{position:relative;}
+[data-tip]::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);z-index:40;padding:5px 9px;border-radius:5px;background:var(--text-primary);color:var(--bg-card);font-size:12px;font-weight:500;line-height:1.35;white-space:pre;text-align:left;opacity:0;pointer-events:none;transition:opacity .12s;}
+[data-tip][data-tip-der]::after{left:auto;right:0;transform:none;}
+[data-tip]:hover::after,[data-tip]:focus-visible::after{opacity:1;transition-delay:.4s;}
+[data-tip][aria-expanded="true"]::after,details[open]>[data-tip]::after{opacity:0;}
+@media (prefers-reduced-motion:reduce){[data-tip]::after{transition:none;}}

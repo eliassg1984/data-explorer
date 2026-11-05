@@ -16,8 +16,11 @@ from ._cierre_datos import armar
 _DIR = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "ajuste_cierre",
-    css=css_movil((_DIR / "cierre.css").read_text(encoding="utf-8")),
+    # El vocabulario de íconos (#821) va antes: la pieza lo usa y puede afinarlo.
+    css=css_movil((_DIR.parent / "iconos.css").read_text(encoding="utf-8")
+                  + (_DIR / "cierre.css").read_text(encoding="utf-8")),
     js=js_movil((_DIR.parent / "_xlsx.js").read_text(encoding="utf-8")
+       + (_DIR.parent / "iconos.js").read_text(encoding="utf-8")
        + (_DIR / "cierre.js").read_text(encoding="utf-8")),
 )
 K_PIEZA = "aj_cierre_pieza"

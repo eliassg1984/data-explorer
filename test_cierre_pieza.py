@@ -20,8 +20,9 @@ from graficos.ajuste._pareto import _pareto_datos
 from graficos.ajuste._productos import filas_productos
 
 ROOT = Path(__file__).parent
-JS = (ROOT / "graficos/ajuste/cierre.js").read_text(encoding="utf-8")
-CSS = (ROOT / "graficos/ajuste/cierre.css").read_text(encoding="utf-8")
+# Como la compone `_cierre.py`: el vocabulario de íconos (#821) antes que la pieza.
+JS = (ROOT / "graficos/iconos.js").read_text(encoding="utf-8") + (ROOT / "graficos/ajuste/cierre.js").read_text(encoding="utf-8")
+CSS = (ROOT / "graficos/iconos.css").read_text(encoding="utf-8") + (ROOT / "graficos/ajuste/cierre.css").read_text(encoding="utf-8")
 
 
 def inventario():
@@ -278,7 +279,7 @@ class Navegador(unittest.TestCase):
         root.locator('[data-act="prod"]').first.click()
         self.assertGreater(root.locator('.ajc-areas-de span').count(),0)
         pg.keyboard.press('Escape')
-        root.locator('.ajc-cap[data-cap="lado"]').hover();root.locator('[data-act="orden"][data-v="pareto"]').click()
+        root.locator('.ajc-vista summary').click();root.locator('[data-act="orden"][data-v="pareto"]').click()
         self.assertIn('acum.',root.locator('.ajc-lists').inner_text())
         self.assertEqual(pg.evaluate('Math.round(document.querySelector(".ajc-main").getBoundingClientRect().height)'),575)
         pg.set_viewport_size({'width':390,'height':844})
@@ -347,14 +348,14 @@ class Navegador(unittest.TestCase):
         self.assertIn('Arroz',root.locator('.ajc-lists').inner_text())
         self.assertNotIn('Carne',root.locator('.ajc-lists').inner_text())
         v=por['Arroz'];self.assertIn(sol(v),root.locator('.ajc-col.neg .ajc-ptot' if v<0 else '.ajc-col.pos .ajc-ptot').inner_text())
-        self.assertIn(sol(v),root.locator('[data-act="lado"][data-v="%s"]'%('f' if v<0 else 's')).inner_text())
+        self.assertIn(sol(v),root.locator('[data-act="lado"][data-v="%s"]'%('f' if v<0 else 's')).text_content())
         root.locator('.ajc-search').fill('')
         # Una lista sola: con su área y su cantidad.
-        root.locator('.ajc-cap[data-cap="lado"]').hover();root.locator('[data-act="lado"][data-v="s"]').click()
+        root.locator('.ajc-vista summary').click();root.locator('[data-act="lado"][data-v="s"]').click()
         self.assertEqual(root.locator('.ajc-lists.una').count(),1)
         self.assertEqual(root.locator('.ajc-cl').count(),0)
         self.assertIn(sol(por[por>0].sum()),root.locator('.ajc-lists.una .ajc-ptot').inner_text())
-        root.locator('.ajc-cap[data-cap="lado"]').hover();root.locator('[data-act="lado"][data-v="f"]').click()
+        root.locator('.ajc-vista summary').click();root.locator('[data-act="lado"][data-v="f"]').click()
         # Los tipos de faltante suman el faltante entero.
         cl=pg.evaluate('__ajCierre.lista.cl')
         self.assertAlmostEqual(sum(c['v'] for c in cl.values()),por[por<0].sum(),places=6)
@@ -365,18 +366,59 @@ class Navegador(unittest.TestCase):
         self.assertNotIn('Qué faltó',root.inner_text())
         self.assertEqual(root.locator('.ajc-cl, .ajc-cls, [data-act="clase"]').count(),0)
         self.assertEqual(root.locator('.ajc-lists [data-act="prod"]').count(),int((por<0).sum()))
-        self.assertEqual(root.locator('.ajc-kcap .ajc-bl').count(),root.locator('.ajc-kcap div.ajc-bl').count())
+        # #821: la barra con íconos —el buscador a la izquierda, con su lupa; la vista y
+        # descargar a la derecha, cada uno con su nombre al cursor— y el filtro de la vista
+        # como ícono con su número.
+        barra=root.locator('.ajc-barra').first
+        self.assertEqual(barra.locator('.ajc-buscar .ico').count(),1)
+        self.assertEqual(barra.locator('.ajc-search').get_attribute('placeholder'),'Buscar producto o área')
+        self.assertLess(barra.locator('.ajc-buscar').bounding_box()['x'],barra.locator('.ajc-vista').bounding_box()['x'])
+        self.assertIn('sólo faltantes',barra.locator('.ajc-vista summary').get_attribute('data-tip'))
+        self.assertEqual(barra.locator('.ajc-excel summary').get_attribute('aria-label'),'Descargar Excel')
+        self.assertEqual(root.locator('.ajc-sw, .ajc-qp, .ajc-kcap').count(),0)
+        filtro=root.locator('.ajc-filtros > summary')
+        self.assertEqual(filtro.get_attribute('aria-label'),'Filtros de esta vista')
+        self.assertEqual(root.locator('.ajc-filtros .ib-n').count(),0)
+        filtro.click();root.locator('.ajc-filtros input[data-filter="fams"]').first.check()
+        self.assertEqual(root.locator('.ajc-filtros .ib-n').inner_text(),'1')
+        self.assertIn('Familias: ',root.locator('.ajc-filtros > summary').get_attribute('data-tip'))
+        root.locator('.ajc-filtros [data-act="todos"][data-v="fams"]').click();pg.keyboard.press('Escape')
+        # El neto a la vista con el ícono de los números y nada más; un clic abre el panel al
+        # costado con los cuatro números, cada uno con su explicación plegada.
+        neto=root.locator('.ajc-neto')
+        self.assertEqual(neto.locator('.ico').count(),1)
+        self.assertNotIn('Neto',neto.inner_text())
+        self.assertLess(neto.bounding_box()['width'],140)
+        self.assertEqual(root.locator('.ajc-cajon.cerrado').count(),1)
+        neto.click()
+        caj=root.locator('.ajc-cajon');self.assertTrue(caj.is_visible())
+        self.assertEqual(neto.get_attribute('aria-expanded'),'true')
+        self.assertEqual(caj.locator('.ajc-kd').count(),4)
+        self.assertFalse(caj.locator('.ajc-kd p').first.is_visible())
+        caj.locator('.ajc-kd summary').first.click()
+        self.assertTrue(caj.locator('.ajc-kd p').first.is_visible())
+        # Lo abierto en el panel queda abierto aunque la lista se redibuje.
+        root.locator('.ajc-search').fill('Arroz');root.locator('.ajc-search').fill('')
+        self.assertTrue(root.locator('.ajc-cajon .ajc-kd p').first.is_visible())
+        # Fijo: las listas se corren y no quedan debajo del panel.
+        ancho=root.locator('.ajc-cuerpo').bounding_box()['width']
+        root.locator('.ajc-cajon [data-act="numfijo"]').click()
+        self.assertTrue(pg.evaluate('document.querySelector(".ajc").classList.contains("ajc-fijo")'))
+        self.assertLess(root.locator('.ajc-cuerpo').bounding_box()['width'],ancho-280)
+        root.locator('.ajc-cajon [data-act="numfijo"]').click()
+        root.locator('.ajc-cajon [data-act="numcerrar"]').click()
+        self.assertEqual(root.locator('.ajc-cajon.cerrado').count(),1)
         # La lectura va en la cápsula de los números; la ficha, en una ventana que no achica
         # las listas (#814): ‹ › y las flechas recorren la misma lista, Esc cierra.
-        root.locator('.ajc-cap[data-cap="lado"]').hover();root.locator('[data-act="lado"][data-v="ambos"]').click()
-        self.assertEqual(root.locator('.ajc-kcap .ajc-frase').count(),1)
+        root.locator('.ajc-vista summary').click();root.locator('[data-act="lado"][data-v="ambos"]').click()
+        self.assertEqual(root.locator('.ajc-cajon .ajc-frase').count(),1)
         self.assertEqual(root.locator('.ajc-pn').count(),0)
         # «6 cierres» y «Faltó» sólo con su interruptor (#816).
         self.assertEqual(root.locator('.ajc-lists .ajc-6').count(),0)
-        root.locator('[data-act="det6"]').click()
+        root.locator('.ajc-vista summary').click();root.locator('[data-act="det6"]').click()
         self.assertGreater(root.locator('.ajc-lists .ajc-6').count(),0)
         self.assertGreater(root.locator('.ajc-lists .ajc-rep').count(),0)
-        root.locator('[data-act="det6"]').click()
+        root.locator('.ajc-vista summary').click();root.locator('[data-act="det6"]').click()
         self.assertEqual(root.locator('.ajc-lists .ajc-rep').count(),0)
         antes=root.locator('.ajc-zona').bounding_box()['width']
         root.locator('.ajc-col.neg [data-act="prod"]').first.click()

@@ -66,7 +66,7 @@ from graficos.compras import _periodo_serie
 # test_graficos.py las prueba una por una como `_aj._graf_*` — por eso
 # entran al namespace del paquete y no solo al del modulo que las define.
 from graficos.ajuste._comun import (  # noqa: F401
-    CLAVE_MES, FAMILIAS_DE_ENTRADA, MES_OPERATIVO, MES_REGISTRO, _fmt_corte,
+    CLAVE_MES, FAMILIAS_DE_ENTRADA, K_FAM_DET, K_FAM_EVO, MES_OPERATIVO, MES_REGISTRO, _fmt_corte,
     _layout_aj, mes_operativo_activo, recargar_si_cambio_mes,
 )
 from graficos.ajuste._evolucion import (  # noqa: F401
@@ -222,8 +222,12 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # 2025 son -S/ 594k en 138 filas, que con un rango que lo incluya
     # aplastan la serie entera contra el cero. Es un default, no un piso
     # (#501).
-    sembrar_seleccion(df_full, col_familia, "ajuste_graf_filtro_familia",
-                      list(FAMILIAS_DE_ENTRADA))
+    # Desde la #823 cada una de las dos vistas que la usaban tiene su clave; una
+    # sesión vieja trae su elección de la franja a las dos.
+    for _k in (K_FAM_EVO, K_FAM_DET):
+        sembrar_seleccion(df_full, col_familia, _k,
+                          list(st.session_state.get("ajuste_graf_filtro_familia")
+                               or FAMILIAS_DE_ENTRADA))
     # SÓLO FAMILIA desde el 2026-09-23. El Área se mudó a la fila del título
     # de cada vista de Tiempo, a pedido («añadamos un filtro de áreas, en la
     # misma fila del título»), con su propia clave: Evolución y Detalle son
@@ -239,11 +243,9 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # se ve donde aplica: `_comun.rotulo_familias_pagina`, en esas dos vistas.
     if col_familia and df_full is not None and col_familia in df_full.columns:
         st.session_state["_aj_fam_total"] = int(df_full[col_familia].dropna().astype(str).nunique())
-    with compartimento_filtros(0):
-        st.caption("Sólo para Evolución y la Tabla dinámica: las demás vistas "
-                   "de Ajuste tienen su propio filtro de familias.")
-        _, fam_sel = filtro_pills(df_full, col_familia,
-                                  "ajuste_graf_filtro_familia", "Familia")
+    # SIN «Filtros» EN LA FRANJA desde la #823: su Familia sólo la leían Evolución
+    # y la Tabla dinámica, y en las demás vistas era un botón que no filtraba. Va
+    # adentro de esas dos (`_comun.filtro_familias_vista`), con su clave cada una.
 
     if ambito == "Histórico":
         base = df_full if df_full is not None else df_f

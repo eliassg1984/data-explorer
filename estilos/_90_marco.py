@@ -285,8 +285,24 @@ CSS = """
         font-size: 12.5px !important;
     }
     /* La familia de «Filtros» dicha donde aplica (Ajuste › Evolución y Tabla dinámica). */
-    .aj-fam-pag { font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
-    .aj-fam-pag span { color: var(--text-muted); }
+    /* El filtro de familias de Evolución y de la Tabla dinámica, dentro de su
+       tarjeta (#823): un control más de la fila del título, de 30 px. */
+    .st-key-famvista_ajuste_evo_filtro_familia [data-testid="stPopover"] button,
+    .st-key-famvista_ajuste_det_filtro_familia [data-testid="stPopover"] button {
+        height: 30px !important;
+        min-height: 30px !important;
+        padding: 0 12px !important;
+        border: none !important;
+        border-radius: 999px !important;
+        background: var(--rail-fondo) !important;
+        color: var(--text-primary) !important;
+        font-size: 12.5px !important;
+        box-shadow: none !important;
+    }
+    .st-key-famvista_ajuste_evo_filtro_familia [data-testid="stPopover"] button p,
+    .st-key-famvista_ajuste_det_filtro_familia [data-testid="stPopover"] button p {
+        font-size: 12.5px !important;
+    }
     /* Mix sin su fecha (#807): el renglón queda para los controles de la pieza. */
     .vt-mix-hueco { height: 36px; }
     /* El −1rem de Streamlit bajo un markdown lo descentraba de la fecha. */
@@ -341,13 +357,107 @@ CSS = """
     /* Sus controles: rellenos, sin borde, y corridos lo que la hoja se aparta
        de la ventana. `--marco-der` es el borde derecho de la hoja más su aire.
        Los selectores con la clase repetida son los de `_50_fecha.py`. */
+    /* #822: Refrescar baja al PIE DEL RAIL, encima del pestillo y con su mismo
+       centro (`--icono-x`), como un ícono de 32 px. Lo que decía la franja
+       —«Datos al 04/11 · 03:00» y el botón con su texto— pasa a su nombre al
+       pasar el cursor: `--sello-tip`, que escribe `inject_sello_actualizacion`
+       en <html>. La señal permanente del dato atrasado, que era el sello en
+       ámbar, es ahora un punto ámbar en el ícono (más el aviso de arriba de la
+       vista, que no cambia). La franja se queda con la ruta y lo de la vista:
+       ya no reserva nada para Refrescar ni para la hora (`--barra-act`,
+       `--barra-sello`). Abajo de 901 px sigue donde estaba. */
+    :root {
+        --barra-act: 0px;
+        --barra-sello: 0px !important;
+    }
+    #sello-actualizacion {
+        display: none !important;
+    }
     .st-key-rail_refresh {
-        top: calc(var(--marco-hoja) + (var(--franja-rep-alto) - 30px) / 2) !important;
-        right: calc(var(--marco-der) + var(--barra-f)) !important;
+        position: fixed !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: 52px !important;
+        left: calc(var(--icono-x) - 16px) !important;
+        width: 32px !important;
+        height: 32px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        z-index: 1000013 !important;
+    }
+    .st-key-rail_refresh button {
+        position: relative !important;
+        width: 32px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        padding: 0 !important;
+        justify-content: center !important;
+        border: none !important;
+        border-radius: 8px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: var(--text-secondary) !important;
+        overflow: visible !important;
+    }
+    .st-key-rail_refresh button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    /* Sólo el ícono: el texto «Refrescar» queda para el nombre al cursor. */
+    .st-key-rail_refresh button p {
+        font-size: 0 !important;
+        gap: 0 !important;
+    }
+    .st-key-rail_refresh button p span[role="img"] {
+        font-size: 20px !important;
+    }
+    .st-key-rail_refresh button::after {
+        content: "Refrescar\\A" var(--sello-tip, "");
+        position: absolute;
+        top: 50%;
+        left: calc(100% + 10px);
+        /* Los ítems del rail le ponen `right` y `bottom` a su `::after` (su
+           nombre debajo del ícono): sin anularlos, la caja medía 18x10 px. */
+        right: auto;
+        bottom: auto;
+        width: max-content;
+        height: auto;
+        transform: translateY(-50%);
+        padding: 5px 9px;
+        border-radius: 5px;
+        background: var(--text-primary);
+        color: var(--bg-card);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.35;
+        white-space: pre;
+        text-align: left;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .12s;
+        z-index: 1000020;
+    }
+    .st-key-rail_refresh button:hover::after,
+    .st-key-rail_refresh button:focus-visible::after {
+        opacity: 1;
+        transition-delay: .4s;
+    }
+    :root:has(#sello-actualizacion.sello-viejo) .st-key-rail_refresh button::before {
+        content: "";
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        bottom: auto;
+        left: auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--warning);
+        box-shadow: 0 0 0 2px var(--bg-primary);
     }
     #sello-actualizacion {
         top: calc(var(--marco-hoja) + (var(--franja-rep-alto) - 30px) / 2) !important;
-        right: calc(var(--marco-der) + var(--barra-f) + 96px + 8px
+        right: calc(var(--marco-der) + var(--barra-f) + var(--barra-act, 0px)
                     + var(--barra-fecha)) !important;
     }
     .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
@@ -358,9 +468,8 @@ CSS = """
     }
     .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
         top: calc(var(--marco-hoja) + (var(--franja-rep-alto) - 30px) / 2) !important;
-        right: calc(var(--marco-der) + var(--barra-f) + 96px + 8px) !important;
+        right: calc(var(--marco-der) + var(--barra-f) + var(--barra-act, 0px)) !important;
     }
-    .st-key-rail_refresh button,
     .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla [data-testid="stPopover"] button,
     .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
         height: 30px !important;
@@ -372,7 +481,6 @@ CSS = """
         color: var(--text-primary) !important;
         font-weight: 400 !important;
     }
-    .st-key-rail_refresh button:hover,
     .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover,
     .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill [data-testid="stPopover"] button:hover {
         border: none !important;

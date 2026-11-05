@@ -126,9 +126,11 @@ const ccorto=f=>CCORTO[String(f).trim().toUpperCase()]||cnom(String(f).split(' '
 // demás se llaman por lo que listan.
 const ctabs=[['listas','Productos'],['familias','Familias y áreas'],['cierres','12 cierres'],['comparar','Contra el anterior'],['lineas','Líneas']];
 
+// El panel de los números fijo es una preferencia: se recuerda como «6 cierres».
+const clsFijo=()=>{try{return localStorage.getItem('aj_dif_fijo')==='1';}catch(e){return false;}};
 function cinicial(P){const cruce=P.perspectiva==='Familia × Área';return {c:P.inicial,prev:cprev(P,P.inicial),fams:[],areas:[],fam:null,area:null,
   vf:cruce?'cruce':'lista',medida:'val',vg:'graf',tab:cruce?'familias':'listas',orden:'monto',juntas:true,lado:'ambos',sel:null,ampl:false,
-  q:'',status:'Recurrente',limite:150,abiertos:[],elegido:null,ordenTabla:{}};}
+  numOpen:clsFijo(),numFijo:clsFijo(),numAb:[],q:'',status:'Recurrente',limite:150,abiertos:[],elegido:null,ordenTabla:{}};}
 const cfoco=st=>r=>(!st.fam||r.fam===st.fam)&&(!st.area||r.area===st.area);
 function cdatos(G){const {st,B}=G,P=B.P;
   const clave=JSON.stringify([st.c,st.prev,st.fams,st.areas,st.fam,st.area]);
@@ -243,47 +245,76 @@ function cfilacorte(G,D){
   const {P}=G.B,{st}=D,base=G.B.cortes[st.c]||[],areas=[...new Set(base.filter(r=>r.val!==0&&r.area&&r.area!=='---').map(r=>r.area))].sort();
   const ses=P.sesiones[st.c],cob=new Set(D.scope.filter(r=>r.flags&1).map(r=>r.area)).size,ops=P.sesiones.map((s,i)=>[i,`${s.corto} · ${s.etiqueta_anio}`]);
   const foco=[st.fam&&cnom(st.fam),st.area&&cnom(st.area)].filter(Boolean).join(' · ');
-  const nota=ses?`${ses.nombre} · contado el ${ses.etiqueta_anio} · ${ses.n_dias} ${ses.n_dias===1?'día':'días'} · ${ses.juntas} ${ses.juntas===1?'conteo':'conteos'} · ${cn(D.rs.length)} registros · ${cn(cob)} áreas con stock${P.sin_fecha?` · ${cn(P.sin_fecha)} líneas sin fecha excluidas`:''}`:'Sin sesiones disponibles';
   const tabs=`<nav class="ajc-tabs" role="tablist">${ctabs.map(([t,n])=>`<button type="button" role="tab" data-act="tab" data-v="${t}" aria-selected="${st.tab===t}" class="${st.tab===t?'selected':''}">${n}</button>`).join('')}</nav>`;
   return `<div class="ajc-fila ajc-f2 ajc-fnav">${tabs}<span class="ajc-push"></span><span class="ajc-ses">${cbtn('mover',-1,'‹',false,'Corte anterior','ajc-flecha')}${cselect('corte',ops,st.c,'Corte')}${cbtn('mover',1,'›',false,'Corte siguiente','ajc-flecha')}</span>
-    ${ses?ckpicap(G,D,nota):'<span class="ajc-note">Sin sesiones disponibles</span>'}${cfiltros(G,areas)}${foco?`<span class="ajc-chip">${cesc(foco)}${cbtn('limpiar','','✕',false,'Quitar el foco')}</span>`:''}</div>`;
+    ${ses?cneto(G,D):'<span class="ajc-note">Sin sesiones disponibles</span>'}${cfiltros(G,areas)}${foco?`<span class="ajc-chip">${cesc(foco)}${cbtn('limpiar','','✕',false,'Quitar el foco')}</span>`:''}</div>`;
 }
+function cnota(G,D){const {P}=G.B,ses=P.sesiones[D.st.c],cob=new Set(D.scope.filter(r=>r.flags&1).map(r=>r.area)).size;
+  return ses?`${ses.nombre} · contado el ${ses.etiqueta_anio} · ${ses.n_dias} ${ses.n_dias===1?'día':'días'} · ${ses.juntas} ${ses.juntas===1?'conteo':'conteos'} · ${cn(D.rs.length)} registros · ${cn(cob)} áreas con stock${P.sin_fecha?` · ${cn(P.sin_fecha)} líneas sin fecha excluidas`:''}`:'Sin sesiones disponibles';}
 // Áreas y Familias en UN botón (#815): valen para toda la vista, y juntos ocupan la mitad.
 function cfiltros(G,areas){const {P}=G.B,st=G.st,n=(st.areas.length?1:0)+(st.fams.length?1:0);
   const sec=(k,label,opciones)=>`<div class="ajc-fsec"><div class="ajc-fsec-t"><b>${cesc(label)}</b>${cbtn('todos',k,'Todas')}${k==='fams'?cbtn('inicial',k,'Las cinco de antes','','Alimentos, bebidas, vinos y envases: el filtro con que abría hasta la regla #748'):''}</div>${opciones.map(v=>`<label><input type="checkbox" data-filter="${k}" value="${cesc(v)}" ${st[k].includes(v)?'checked':''}>${cesc(cnom(v)||'Sin nombre')}</label>`).join('')}</div>`;
-  const tip=[st.areas.length?`Áreas: ${st.areas.map(cnom).join(', ')}`:'',st.fams.length?`Familias: ${st.fams.map(cnom).join(', ')}`:''].filter(Boolean).join(' · ')||'Áreas y familias: todas';
-  return `<details class="ajc-filter ajc-filtros"><summary title="${cesc(tip)}">Filtros${n?` · ${n}`:''}</summary><div class="ajc-options"><small>Valen para toda la vista.</small>${sec('areas','Áreas',areas)}${sec('fams','Familias',P.dic.fam)}</div></details>`;
+  const lis=a=>!a.length?'todas':a.length>3?`${a.length} elegidas`:a.map(cnom).join(', ');
+  const tip=`Filtros de esta vista\nÁreas: ${lis(st.areas)}\nFamilias: ${lis(st.fams)}`;
+  return `<details class="ajc-menu ajc-filtros"><summary class="ib" aria-label="Filtros de esta vista" data-tip="${cesc(tip)}" data-tip-der>${icono('filtro')}${n?`<span class="ib-n">${n}</span>`:''}</summary><div class="ajc-options"><small>Valen para toda la vista.</small>${sec('areas','Áreas',areas)}${sec('fams','Familias',P.dic.fam)}</div></details>`;
 }
-// Los números del cierre en una CÁPSULA (#814, a pedido: Ajuste es para analizar). Muestra
-// uno —el elegido— y al pasar el cursor despliega los cuatro con su explicación y, debajo,
-// la lectura del cierre, que dejó de ocupar un panel al costado. Son del cierre entero: no
-// siguen a la búsqueda, y por eso lo dicen («del cierre»).
-function ckpicap(G,D,nota){const {mc,mo}=D,st=G.st,sel=st.kpiv||'saldo';
-  const it=[['falto','Faltó',mc.falto,'neg',D.hayOper?'sin los insumos de operación':'suma de las líneas negativas',''],
-    ['sobro','Sobró',mc.sobro,'pos','suele ser stock que estaba en negativo',''],
-    ['saldo','Neto',mc.saldo,cclase(mc.saldo),`sin compensar ${csol(mc.total)} · ${cpct(mc.tol,mc.lineas)} dentro de ±S/ 5`,''],
-    D.hayOper?['oper','Operación, aparte',mo.saldo,'op','ninguna receta los descarga',' ajc-aparte']:['total','Sin compensar',mc.total,'','faltó + sobró','']];
-  const el=it.find(x=>x[0]===sel)||it[2];
-  const op=it.map(([id,r,v,cls,sub,ex])=>`<button type="button" data-act="kpiv" data-v="${id}" class="ajc-kci${id===el[0]?' selected':''}${ex}" aria-pressed="${id===el[0]}"><span><small>${cesc(r)}</small><b class="${cls}">${csol(v)}</b></span><small>${cesc(sub)}</small></button>`).join('');
-  return `<span class="ajc-cap ajc-kcap" data-cap="kpi" role="group" aria-label="Números del cierre"><button type="button" class="ajc-cap-b ajc-kcap-b" aria-haspopup="true"><small>${cesc(el[1].split(',')[0])} del cierre</small><b class="${el[3]}">${csol(el[2])}</b><i aria-hidden="true">▾</i></button><span class="ajc-cap-op ajc-kcap-op">${op}<span class="ajc-kcap-l">${clectura(G,D)}<small class="ajc-kcap-n">${cesc(nota)}</small></span></span></span>`;
+// Los números del cierre (#821, la opción A del boceto con «sólo cifra»): a la vista
+// queda el neto, con el ícono de los números; un clic abre al costado los cuatro y,
+// plegados, la explicación de cada uno, la lectura del cierre y por qué faltó. Hasta la
+// #820 era una cápsula que al pasar el cursor lo mostraba todo junto: mucho texto de
+// una vez. Son del cierre entero: no siguen a la búsqueda.
+function cneto(G,D){const {mc}=D,st=G.st,abierto=!!st.numOpen;
+  const tip=`Neto del cierre: ${csol(mc.saldo)}\n${abierto?'Cerrar':'Abrir'} los números al costado`;
+  return `<button type="button" class="ajc-neto" data-act="numeros" aria-expanded="${abierto}" aria-controls="ajc-cajon" aria-label="Números del cierre" data-tip="${cesc(tip)}" data-tip-der>${icono('numeros')}<b class="${cclase(mc.saldo)}">${csol(mc.saldo)}</b></button>`;
 }
-// ── Nivel 3: la barra de la lista. Todo lo que cambia la lista, junto a la lista (#815):
-//    los contadores, la búsqueda como pastilla, cómo ver, el buscador y Excel. ───────────
-// Una cápsula con varias secciones: «Lado a lado · por monto» es UN ajuste de cómo se ve.
-const ccapm=(id,secs,label)=>`<span class="ajc-cap" data-cap="${id}" role="group" aria-label="${cesc(label)}"><button type="button" class="ajc-cap-b" aria-haspopup="true" title="${cesc(label)}">${cesc(secs.map(([, , ops,sel,corto],i)=>i&&sel===ops[0][0]?'':(corto||ops.find(([v])=>v===sel)||ops[0])[1]).filter(Boolean).join(' · '))}<i aria-hidden="true">▾</i></button><span class="ajc-cap-op">${secs.map(([tit,act,ops,sel])=>`<small class="ajc-cap-t">${cesc(tit)}</small>${ops.map(([v,t])=>cbtn(act,v,t,v===sel)).join('')}`).join('')}</span></span>`;
-function cbarra(G,D,izq=''){const {st}=D,X=G.lista;
-  let caps='',buscar=`<input class="ajc-search" type="search" aria-label="Buscar producto o área" placeholder="Buscar…" value="${cesc(st.q)}" data-input="buscar">`;
-  if(st.tab==='listas'){const NOMBRE={ambos:'Lado a lado',f:'Faltantes',s:'Sobrantes',tabla:'Consolidado'};
-    const lado=['Qué lista','lado',[['ambos','Lado a lado'],['f',`Faltantes ${csol(X.tf)}`],['s',`Sobrantes ${csol(X.ts)}`],['tabla','Consolidado']],st.lado,[st.lado,NOMBRE[st.lado]]];
-    caps=ccapm('lado',[lado,st.lado==='tabla'?['Agrupar','cagr',[['','Sin agrupar'],['fam','Por familia'],['sub','Por subfamilia'],['area','Por área']],st.cagr||'']:['Orden','orden',[['monto','Por monto'],['pareto','Pareto']],st.orden]],'Cómo ver la lista');}
-  else if(st.tab==='lineas')caps=ccap('juntas',[['si','Áreas juntas'],['no','Áreas separadas']],st.juntas?'si':'no','Áreas');
-  else if(st.tab==='familias'){caps=`${ccap('vf',[['lista','Familias'],['areas','Áreas'],['cruce','Cruce']],st.vf,'Cómo ver')}${st.vf==='cruce'&&G.B.P.hay.stock?ccap('medida',[['val','Ajuste'],['stock','Stock']],st.medida,'Qué mide el cruce'):''}`;buscar='';}
-  else if(st.tab==='cierres'){caps=ccap('vg',[['graf','Gráfico'],['tabla','Tabla con parciales']],st.vg,'Gráfico o tabla');buscar=st.vg==='graf'?cleyenda(D):'';}
-  // La búsqueda es una pastilla más: recorta las listas y los contadores, no los números del cierre.
-  const qp=st.q&&st.tab==='listas'?`<button type="button" class="ajc-qp" data-act="quitarq" title="La búsqueda recorta las listas y los contadores; los números del cierre no cambian. Clic para quitarla.">«${cesc(st.q)}» ✕</button>`:'';
-  const excel=`<details class="ajc-filter ajc-excel"><summary>Excel</summary><div class="ajc-options">${cbtn('excel','resumen','El resumen: familias y cortes')}${cbtn('excel','detalle','Lo que se ve en esta pestaña')}</div></details>`;
-  const sw=st.tab==='listas'&&st.lado!=='tabla'?`<button type="button" class="ajc-sw${st.det6?' on':''}" data-act="det6" role="switch" aria-checked="${!!st.det6}" title="Mostrar los últimos ${X.rep.de} cierres de cada producto y cuántas veces faltó"><i aria-hidden="true"></i>${X.rep.de} cierres</button>`:'';
-  return `<div class="ajc-barra">${qp}${izq}<span class="ajc-push"></span>${sw}${caps}${buscar}${excel}</div>`;
+function cnumeros(G,D,nota){const {mc,mo}=D,st=G.st,X=G.lista,cl=X.cls,t=X.tfTodo,rep=X.rep.de,e=cespejos(D.scope);
+  const pc=v=>t?`${Math.round(100*v/t)} %`:'—',ab=new Set(st.numAb||[]),ses=G.B.P.sesiones[st.c];
+  const det=(k,cls,cab,cuerpo)=>`<details class="${cls}" data-k="${k}"${ab.has(k)?' open':''}><summary>${cab}</summary>${cuerpo}</details>`;
+  const kd=(k,r,v,c,x,ex='')=>det(k,`ajc-kd${k==='neto'?' sel':''}${ex}`,`<span class="ajc-kr">${cesc(r)}</span><b class="${c}">${csol(v)}</b>${icono('info','chico')}`,`<p>${cesc(x)}</p>`);
+  // «Operación» nombraba dos números distintos: el neto por línea (el de acá) y lo que
+  // faltó por producto (el de «Por qué faltó»). Cada uno con su nombre (#821).
+  const nums=kd('falto','Faltó',mc.falto,'neg',D.hayOper?'Alimentos y bebidas, sin los insumos de operación: la suma de las líneas que faltaron.':'La suma de las líneas que faltaron.')
+    +kd('sobro','Sobró',mc.sobro,'pos','Suele ser stock que estaba en negativo en el sistema, no mercadería que apareció.')
+    +kd('neto','Neto',mc.saldo,cclase(mc.saldo),`Faltó más sobró. Sin compensar (todo en positivo) son ${csol(mc.total)}, y el ${cpct(mc.tol,mc.lineas)} de las líneas quedó dentro de ±S/ 5.`)
+    +(D.hayOper?kd('oper','Operación, neto',mo.saldo,'op','Leña, carbón, aceite, limpieza: ninguna receta los descarga, así que su consumo aparece recién al contar. Va aparte.',' ajc-aparte')
+      :kd('total','Sin compensar',mc.total,'','Faltó y sobró sumados en positivo: cuánto se movió, sin que lo que sobró tape lo que faltó.'));
+  const hay=Math.abs(t)>.5,opSob=mo.saldo-cl.oper.v,chev=icono('chev','chico ajc-chev');
+  const tipo=(k,r,v,x)=>det(k,'ajc-tipo',`<span>${cesc(r)}</span><b>${cesc(v)}</b>${chev}`,`<p>${cesc(x)}</p>`);
+  const tipos=(hay?tipo('t-rein','Se repite',pc(cl.rein.v),`${cnn(cl.rein.n,'producto')} faltaron en 3 o más de los últimos ${rep} cierres (${csol(cl.rein.v)}): apunta a un proceso más que a un descuido del mes.`):'')
+    +(hay&&cl.oper.n?tipo('t-oper','Faltó en operación',csol(cl.oper.v),`Por producto.${Math.abs(opSob)>.5?` Con lo que sobró en operación (${csol(opSob)}) da el neto de operación de arriba.`:''}`):'')
+    +(hay?tipo('t-una','Sólo este cierre',pc(cl.una.v),`${cnn(cl.una.n,'producto')} (${csol(cl.una.v)}) que no faltaron en ninguno de los otros ${Math.max(0,rep-1)} cierres: por ahí conviene empezar.`):'')
+    +(e.n?tipo('t-esp','Falta acá y sobra allá',cn(e.n),`Productos que faltan en un área y sobran en otra: ${csol(e.falto)} contra ${csol(e.sobro)}.`):'');
+  const fijo=!!st.numFijo;
+  const cab=`<div class="ajc-cajon-cab"><b>Números del cierre<small>${cesc(ses?`${ses.corto} · ${ses.etiqueta_anio}`:'')}</small></b>`
+    +`<button type="button" class="ib${fijo?' on':''}" data-act="numfijo" aria-pressed="${fijo}" aria-label="Dejar fijo el panel" data-tip="${fijo?'Soltar: vuelve a ir encima de las listas':'Dejarlo fijo: las listas se corren'}" data-tip-der>${icono('fijar')}</button>`
+    +`<button type="button" class="ib" data-act="numcerrar" aria-label="Cerrar los números" data-tip="Cerrar" data-tip-der>${icono('cerrar')}</button></div>`;
+  return `<aside class="ajc-cajon${st.numOpen?'':' cerrado'}" id="ajc-cajon" aria-label="Números del cierre">${cab}${nums}`
+    +det('lec','ajc-bl2',`${chev}Lectura del cierre`,`<p class="ajc-frase">${cfrase(G,D)}</p><small class="ajc-kcap-n">${cesc(nota)}</small>`)
+    +(tipos?det('por','ajc-bl2',`${chev}Por qué faltó`,tipos):'')+'</aside>';
+}
+// ── Nivel 3: la barra de la lista. Todo lo que cambia la lista, junto a la lista (#815).
+//    Desde la #821, como la barra de una lista de Gmail: a la izquierda el buscador con la
+//    lupa adentro; a la derecha cómo se ve (un ícono cuyo dibujo dice la vista puesta) y
+//    descargar. Lo elegido se dice en texto adentro del menú y en el nombre al cursor. ───
+const CLADO={ambos:['Lado a lado','ambos'],f:['Sólo faltantes','una'],s:['Sólo sobrantes','una'],tabla:['Consolidado','tabla']};
+const CAGR=[['','Sin agrupar'],['fam','Por familia'],['sub','Por subfamilia'],['area','Por área']];
+function cvista(G,D){const {st}=D,X=G.lista,tabla=st.lado==='tabla';
+  const op=(act,v,t,sel,ico)=>`<button type="button" class="ajc-op" role="menuitemradio" aria-checked="${sel}" data-act="${act}" data-v="${cesc(v)}">${ico?icono(ico):`<i>${sel?'✓':''}</i>`}${cesc(t)}</button>`;
+  const lados=Object.entries(CLADO).map(([v,[t,ic]])=>op('lado',v,v==='f'?`${t} · ${csol(X.tf)}`:v==='s'?`${t} · ${csol(X.ts)}`:t,st.lado===v,ic)).join('');
+  const resto=tabla?`<small class="ajc-cap-t">Agrupar</small>${CAGR.map(([v,t])=>op('cagr',v,t,(st.cagr||'')===v)).join('')}`
+    :`<small class="ajc-cap-t">Orden</small>${op('orden','monto','Por monto',st.orden!=='pareto')}${op('orden','pareto','Pareto',st.orden==='pareto')}<hr><button type="button" class="ajc-op" role="menuitemcheckbox" aria-checked="${!!st.det6}" data-act="det6"><span class="ajc-casilla"></span>Mostrar los últimos ${X.rep.de} cierres</button>`;
+  const tip=`Vista: ${CLADO[st.lado][0].toLowerCase()}`+(tabla?(st.cagr?` · ${(CAGR.find(([v])=>v===st.cagr)||['',''])[1].toLowerCase()}`:'')
+    :`${st.orden==='pareto'?' · Pareto':''}${st.det6?` · con ${X.rep.de} cierres`:''}`);
+  return `<details class="ajc-menu ajc-vista"><summary class="ib" aria-label="Vista de la lista" data-tip="${cesc(tip)}" data-tip-der>${icono(CLADO[st.lado][1])}${icono('caret','chico')}</summary><div class="ajc-options" role="menu"><small class="ajc-cap-t">Qué lista</small>${lados}${resto}</div></details>`;
+}
+function cbarra(G,D){const {st}=D,tq='Buscar producto o área';
+  let buscar=`<label class="ajc-buscar">${icono('lupa')}<input class="ajc-search" type="search" aria-label="${tq}" placeholder="${tq}" value="${cesc(st.q)}" data-input="buscar"></label>`,der='';
+  if(st.tab==='listas')der=cvista(G,D);
+  else if(st.tab==='lineas')der=ccap('juntas',[['si','Áreas juntas'],['no','Áreas separadas']],st.juntas?'si':'no','Áreas');
+  else if(st.tab==='familias'){der=`${ccap('vf',[['lista','Familias'],['areas','Áreas'],['cruce','Cruce']],st.vf,'Cómo ver')}${st.vf==='cruce'&&G.B.P.hay.stock?ccap('medida',[['val','Ajuste'],['stock','Stock']],st.medida,'Qué mide el cruce'):''}`;buscar='';}
+  else if(st.tab==='cierres'){der=ccap('vg',[['graf','Gráfico'],['tabla','Tabla con parciales']],st.vg,'Gráfico o tabla');buscar=st.vg==='graf'?cleyenda(D):'';}
+  const excel=`<details class="ajc-menu ajc-excel"><summary class="ib" aria-label="Descargar Excel" data-tip="Descargar Excel" data-tip-der>${icono('bajar')}</summary><div class="ajc-options">${cbtn('excel','resumen','El resumen: familias y cortes')}${cbtn('excel','detalle','Lo que se ve en esta pestaña')}</div></details>`;
+  return `<div class="ajc-barra">${buscar}<span class="ajc-push"></span>${der}${excel}</div>`;
 }
 // ── Abajo: qué productos ─────────────────────────────────────────────────
 const cbuscar=(r,q)=>!q||[r.cod,r.prod,r.fam,r.area,r.sub].join(' ').toLocaleLowerCase().includes(q.toLocaleLowerCase());
@@ -421,16 +452,6 @@ function cficha(G,D){const {st}=D,X=G.lista,{B}=G;if(st.tab!=='listas'||!st.sel)
     <div class="ajc-fs">Últimos ${de} cierres</div><div class="ajc-fvals">${vals}</div><div class="ajc-fh"><i class="eje" style="top:${eje}%"></i>${barras}</div><div class="ajc-fm">${X.rep.nombres.map(n=>`<span>${cesc(mes(n))}</span>`).join('')}</div>
     ${parecidos}${destino?`<button type="button" class="ajc-porque" data-act="porque" data-v="${cesc(JSON.stringify({...destino,lado:l}))}">¿Por qué? Ver en Análisis →</button>`:''}`;
 }
-function clectura(G,D){const X=G.lista,cl=X.cls,e=cespejos(D.scope),t=X.tfTodo,pc=v=>t?`${Math.round(100*v/t)} %`:'—',rep=X.rep.de;
-  // Se leen, no filtran (#819): los contadores que recortaban la lista por tipo se fueron.
-  const bl=(tit,txt)=>`<div class="ajc-bl"><b>${cesc(tit)}</b><span>${cesc(txt)}</span></div>`;
-  const hay=Math.abs(t)>.5;
-  return `<p class="ajc-frase">${cfrase(G,D)}</p>
-    ${hay?bl(`Se repite: ${pc(cl.rein.v)}`,`${cn(cl.rein.n)} productos faltaron en 3 o más de los últimos ${rep} cierres (${csol(cl.rein.v)}).`):''}
-    ${hay&&cl.oper.n?bl(`Operación: ${csol(cl.oper.v)}`,'Ninguna receta los descarga: su consumo aparece recién al contar.'):''}
-    ${hay?bl(`Sólo este cierre: ${pc(cl.una.v)}`,`${cn(cl.una.n)} productos (${csol(cl.una.v)}): por ahí conviene empezar.`):''}
-    ${e.n?bl(`Falta acá y sobra allá: ${cn(e.n)}`,`${csol(e.falto)} / ${csol(e.sobro)}.`):''}`;
-}
 function ctabcomparar(G,D){
   const {st}=D,clave=JSON.stringify([st.c,st.prev,st.fams,st.areas,st.fam,st.area]);
   if(!G.B.compare.has(clave)){if(G.B.compare.size>10)G.B.compare.clear();G.B.compare.set(clave,ccomparar(D.scope,D.prev,D.hist));}
@@ -507,7 +528,9 @@ function cpintar(G){
   // La ficha de un producto va en una ventana encima de la vista (#814): las listas no se
   // achican. El costado queda sólo para el historial de «Contra el anterior».
   const ven=D.st.tab==='listas'&&D.st.lado!=='tabla'&&D.st.sel?cficha(G,D):'';
-  main.innerHTML=`${cfilacorte(G,D)}<div class="ajc-cuerpo"><div class="ajc-zona">${zona}</div>${panel?`<aside class="ajc-pn" aria-label="Historial">${panel}</aside>`:''}</div>${ven?`<button type="button" class="ajc-velo" data-act="soltar" aria-label="Cerrar la ficha"></button><div class="ajc-ven" role="dialog" aria-label="Ficha del producto">${ven}</div>`:''}`;
+  const cajon=G.B.P.sesiones[D.st.c]?cnumeros(G,D,cnota(G,D)):'';
+  G.root.classList.toggle('ajc-fijo',!!(cajon&&D.st.numOpen&&D.st.numFijo));
+  main.innerHTML=`${cfilacorte(G,D)}<div class="ajc-cuerpo"><div class="ajc-zona">${zona}</div>${panel?`<aside class="ajc-pn" aria-label="Historial">${panel}</aside>`:''}</div>${cajon}${ven?`<button type="button" class="ajc-velo" data-act="soltar" aria-label="Cerrar la ficha"></button><div class="ajc-ven" role="dialog" aria-label="Ficha del producto">${ven}</div>`:''}`;
   main.querySelectorAll('.ajc-scroll').forEach((e,i)=>{if(guardado[i]){e.scrollTop=guardado[i][0];e.scrollLeft=guardado[i][1];}});
   G.tabPintada=G.st.tab;
   cgrafico(G);
@@ -517,9 +540,11 @@ function cnavegar(G,d){const st=G.st;if(!st.sel)return false;const i=st.sel.inde
   if(!L.length)return false;const k=L.findIndex(x=>x.prod===prod),n=L[((k<0?0:k)+d+L.length)%L.length];st.sel=`${l}|${n.prod}`;return true;}
 function ccambiarcorte(G,i){const {st}=G,P=G.B.P;if(!(i>=0&&i<P.sesiones.length))return;st.c=i;st.prev=cprev(P,i);st.area=null;st.elegido=null;st.sel=null;st.limite=150;
   const areas=new Set((G.B.cortes[i]||[]).filter(r=>r.val!==0&&r.area&&r.area!=='---').map(r=>r.area));st.areas=st.areas.filter(a=>areas.has(a));}
+// Un clic afuera pliega los menús, no lo abierto en el panel de los números (#821).
+const cplegar=root=>root.querySelectorAll('details[open]').forEach(d=>{if(!d.closest('.ajc-cajon'))d.open=false;});
 function cenlazar(G){const root=G.root;
   root.addEventListener('click',ev=>{const b=ev.target.closest('[data-act]');
-    if(!ev.target.closest('details'))root.querySelectorAll('details[open]').forEach(d=>d.open=false);
+    if(!ev.target.closest('details'))cplegar(root);
     if(!b||!root.contains(b))return;const {act,v}=b.dataset,st=G.st;
     if(act==='vf'){st.vf=v;st.limite=150;if(v!=='cruce')st.medida='val';}
     else if(act==='corte'||act==='mover')ccambiarcorte(G,act==='corte'?+v:st.c+(+v));
@@ -539,7 +564,9 @@ function cenlazar(G){const root=G.root;
     else if(act==='cabre'){const x=new Set(st.cabre||[]);if(x.has(v))x.delete(v);else x.add(v);st.cabre=[...x];}
     else if(act==='prod')st.sel=st.sel===v?null:v;
     else if(act==='soltar')st.sel=null;
-    else if(act==='kpiv')st.kpiv=v;
+    else if(act==='numeros')st.numOpen=!st.numOpen;
+    else if(act==='numcerrar')st.numOpen=false;
+    else if(act==='numfijo'){st.numFijo=!st.numFijo;try{localStorage.setItem('aj_dif_fijo',st.numFijo?'1':'0');}catch(e){/* sólo esta vez */}}
     else if(act==='det6'){st.det6=!st.det6;try{localStorage.setItem('aj_dif_6',st.det6?'1':'0');}catch(e){/* sólo esta vez */}}
     else if(act==='quitar'){st.q='';st.limite=150;}
     else if(act==='quitarq'){st.q='';st.limite=150;}
@@ -560,21 +587,28 @@ function cenlazar(G){const root=G.root;
     else if(el.dataset.change==='prev'){st.prev=+el.value;st.elegido=null;cpintar(G);}
   });
   root.addEventListener('input',ev=>{const e=ev.target;if(e.dataset.input!=='buscar')return;const pos=e.selectionStart;G.st.q=e.value;G.st.limite=150;cpintar(G);const n=root.querySelector('.ajc-search');n.focus();if(pos!=null)n.setSelectionRange(pos,pos);});
-  root.addEventListener('keydown',ev=>{if(ev.key==='Escape')root.querySelectorAll('details[open]').forEach(d=>d.open=false);});
+  root.addEventListener('keydown',ev=>{if(ev.key!=='Escape')return;if(root.querySelector('details.ajc-menu[open]')){cplegar(root);return;}
+    if(G.st.numOpen&&!G.st.numFijo&&!G.st.sel){G.st.numOpen=false;cpintar(G);}});
+  // Lo que se abre en el panel queda abierto al redibujar (otro clic en la lista).
+  root.addEventListener('toggle',ev=>{const d=ev.target;if(!d.matches?.('.ajc-cajon details[data-k]'))return;const s=new Set(G.st.numAb||[]);d.open?s.add(d.dataset.k):s.delete(d.dataset.k);G.st.numAb=[...s];},true);
   root.addEventListener('scroll',ev=>{const e=ev.target,st=G.st;if(e.matches?.('.ajc-zona .ajc-scroll')&&e.scrollTop+e.clientHeight>e.scrollHeight-70&&st.limite<G.nfilas){st.limite+=150;cpintar(G);}},true);
 }
 window.__ajCierreDatos={leer:cleer,metricas:cmetricas,resumen:cresumen,matriz:cmatriz,productos:cproductos,pareto:cpareto,areasPareto:careasPareto,listas:clistas,espejos:cespejos,comparar:ccomparar,grupos:cgrupos};
 window.__ajCierreUI={inicial:cinicial,pintar:cpintar,exportar:cexportar,serie:cserie};
 export default function(component){const {data:P,parentElement,setTriggerValue}=component;if(!P)return;
-  const old=window.__ajCierre;old?.observer?.disconnect();old?.abort?.abort();
+  const old=window.__ajCierre;old?.observer?.disconnect();old?.vista?.disconnect();old?.abort?.abort();
   const mismo=old?.B.P.sello===P.sello,st=mismo&&old.st&&'lado' in old.st?old.st:cinicial(P);
   if(st.det6===undefined){try{st.det6=localStorage.getItem('aj_dif_6')==='1';}catch(e){st.det6=false;}}
   if(old&&old.semilla!==P.perspectiva){st.vf=P.perspectiva==='Familia × Área'?'cruce':'lista';if(st.vf==='cruce')st.tab='familias';}
   let root=parentElement.querySelector('.ajc');if(root)root.remove();root=document.createElement('div');root.className='ajc';root.innerHTML='<section class="ajc-main"></section>';parentElement.appendChild(root);
   const B=mismo?old.B:cleer(P);B.oper=new Set(P.operacion||[]);
   const G={root,st,B,semilla:P.perspectiva,enviar:setTriggerValue,abort:new AbortController()};window.__ajCierre=G;cenlazar(G);cpintar(G);
+  // La fecha de la vista sube a la franja (#824) mientras la vista está en pantalla y
+  // hay franja: desde 901 px y dentro de la app (en la prueba, sin franja, no sube).
+  G.vista=new IntersectionObserver(es=>{const e=es[es.length-1],arriba=e.isIntersecting&&e.intersectionRatio>=.5&&!!document.querySelector('.st-key-nav_franja_rep')&&matchMedia('(min-width: 901px)').matches;
+    if(root.classList.contains('ajc-arriba')!==arriba)root.classList.toggle('ajc-arriba',arriba);},{threshold:[0,.5,1]});G.vista.observe(root);
   let ancho=0;G.observer=new ResizeObserver(es=>{const w=Math.round(es[0].contentRect.width);if(w&&w!==ancho){ancho=w;cgrafico(G);}});G.observer.observe(root.querySelector('.ajc-main'));
-  document.addEventListener('pointerdown',ev=>{if(!ev.composedPath().includes(root))root.querySelectorAll('details[open]').forEach(d=>d.open=false);},{signal:G.abort.signal});
+  document.addEventListener('pointerdown',ev=>{if(!ev.composedPath().includes(root))cplegar(root);},{signal:G.abort.signal});
   document.addEventListener('keydown',ev=>{if(!root.isConnected||!G.st.sel||!root.querySelector('.ajc-ven'))return;const t=ev.composedPath()[0];if(t&&t.matches?.('input,select,textarea'))return;
     if(ev.key==='Escape'){G.st.sel=null;cpintar(G);}else if(ev.key==='ArrowLeft'||ev.key==='ArrowRight'){ev.preventDefault();if(cnavegar(G,ev.key==='ArrowLeft'?-1:1))cpintar(G);}},{signal:G.abort.signal});
 }

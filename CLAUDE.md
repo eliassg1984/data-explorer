@@ -595,6 +595,9 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   - **Oculta**: el botón de arriba (`rail_vis_oculto`) la esconde y deja
     una pestaña de 24px; el cursor sobre la pestaña la hace asomar ENCIMA
     del contenido.
+  - **Refrescar va al pie** (regla #822), encima del pestillo: un ícono cuyo
+    nombre al cursor dice «Refrescar» y la hora del dato (`--sello-tip`); un
+    punto ámbar, si el dato está atrasado. La franja ya no dibuja la hora.
 
   Hasta el 2026-09-29 la columna plegada era una tira de 68px sin nombres
   que se desplegaba ENTERA con el cursor; ese asomado se fue.
@@ -1472,8 +1475,12 @@ del producto, y lo demás en pestañas. Lo que muerde:
   un renglón de encabezado con el lado, montos sin color y el total al pie en lavanda
   (`.ajc-ptot`), que es lo único con color. Es el modelo para las demás tablas propias.
 - **Sin contadores encima de las listas** (#819): «Todo» repetía el total del pie y los
-  tipos (se repiten, operación, nuevos, falta y sobra) no sumaban. Se leen en la cápsula
+  tipos (se repiten, operación, nuevos, falta y sobra) no sumaban. Se leen en el panel
   de los números, como texto: no filtran.
+- **Íconos con su nombre al cursor** (#821): buscador a la izquierda, «Vista» y descargar a
+  la derecha, el filtro con su número, y el neto chico con el panel de los números al
+  costado (`cnumeros`). Los íconos salen de `graficos/iconos.js` y `graficos/iconos.css`,
+  compartidos: una pieza nueva no dibuja los suyos.
 
 ## Movimientos: «Contar por», calendario y Sin plato con Destino adentro
 
@@ -2168,6 +2175,11 @@ Desde el 2026-10-11 (regla #632) la franja de Ajuste no tiene fecha. Las
 tres vistas de arriba (Por familia, Familia × Área, Distribución) eligen una
 **sesión de inventario**; las dos de abajo (Evolución, tabla dinámica),
 **meses**. Lo que ya mordió:
+
+- **La franja de Ajuste no tiene «Filtros»** (#823): Evolución y la Tabla
+  dinámica traen su filtro de familias en la fila del título, cada una con su
+  clave (`graficos/ajuste/_comun.py::filtro_familias_vista`). Y la fecha de
+  Diferencias sube a la franja mientras la vista está en pantalla (#824).
 
 - **Una sesión es un cierre o un parcial** (`cortes.sesiones_inventario`).
   Cierre de mes = lo registrado del 1 al 7 del mes siguiente —definición

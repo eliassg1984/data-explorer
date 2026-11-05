@@ -1009,7 +1009,9 @@ def boton_refresco():
     pulsado = st.button(
         ":material/refresh: Refrescar",
         key="rail_refresh",
-        help=f"Actualizar datos de «{reporte_activo}»",
+        # Sin `help=` (#822): desde 901 px es un ícono al pie del rail y su
+        # nombre al cursor —con la hora del dato— lo pone `estilos/_90_marco.py`;
+        # el tooltip de Streamlit saldría encima del nuestro.
     )
 
     if not pulsado:

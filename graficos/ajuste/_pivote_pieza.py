@@ -6,7 +6,7 @@ import pickle
 import streamlit as st
 import tema
 from . import _pivote_datos as datos
-from ._comun import ctx_meses, mes_operativo_activo, rango_meses, recortar_meses, rotulo_familias_pagina, selector_meses
+from ._comun import ctx_meses, mes_operativo_activo, rango_meses, recortar_meses, K_FAM_DET, filtro_familias_vista, selector_meses
 
 _DIR=Path(__file__).parent
 _CSS=(_DIR/'pivote.css').read_text(encoding='utf-8')
@@ -24,7 +24,7 @@ def renderizar(d,col_fecha,col_familia,col_area,col_ajuste_val,col_producto,col_
     with st.container(border=True,key='ajuste_graf_card_izq_detalle'):
         with st.container(key='ajdet_fecha_nativa'):
             ct,cf=st.columns([3,1.45],vertical_alignment='center')
-            with ct:st.markdown(rotulo_familias_pagina(),unsafe_allow_html=True)  # sin título; la familia de Filtros (#807)
+            d=filtro_familias_vista(ct,d,col_familia,K_FAM_DET)  # sin título; su filtro de familias (#823)
             ctx=ctx_meses('det',d[col_fecha])
             with cf:selector_meses('ajf_det',ctx)
         d=recortar_meses(d,col_fecha,rango_meses(ctx))
@@ -37,7 +37,7 @@ def renderizar(d,col_fecha,col_familia,col_area,col_ajuste_val,col_producto,col_
         contexto={
             'Rango':str(rango_meses(ctx)),
             'Fecha del mes':'Mes operativo' if operativo else 'Fecha de registro',
-            'Familias de la página':', '.join(ss.get('ajuste_graf_filtro_familia') or []) or 'Todas',
+            'Familias de la vista':', '.join(ss.get(K_FAM_DET) or []) or 'Todas',
             'Fuente':'Ajuste de inventario; cantidades y soles originales, sin redondear.'}
         firma=hashlib.sha256(pickle.dumps((d,cols,operativo,contexto),protocol=5)).hexdigest()
         cache=ss.get('_ajdet_740_cache')

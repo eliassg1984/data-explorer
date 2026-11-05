@@ -916,14 +916,32 @@ def css_filtros_vista(prefijo_ctrl, prefijo_corte):
 """
 
 
-def rotulo_familias_pagina():
-    """«Familias: 5 de 8 · de Filtros»: la Familia del compartimento de la franja,
-    dicha en las dos vistas que la leen (Evolución y la Tabla dinámica, #807).
-    El botón de «Filtros» ya no lleva la cuenta: en las demás vistas no aplica."""
-    sel = st.session_state.get("ajuste_graf_filtro_familia") or []
+K_FAM_EVO = "ajuste_evo_filtro_familia"
+K_FAM_DET = "ajuste_det_filtro_familia"
+"""Las familias de Evolución y de la Tabla dinámica, una clave por vista (#823)."""
+
+
+def filtro_familias_vista(contenedor, d, col_familia, clave):
+    """El filtro de familias de una vista, dentro de su tarjeta (#823).
+
+    Hasta la #822 Evolución y la Tabla dinámica leían la Familia del «Filtros»
+    de la franja, que en las demás vistas de Ajuste no hacía nada: en
+    Diferencias había dos botones «Filtros» y el de arriba no filtraba. Ahora
+    cada una trae el suyo, como el Área (#505), y la franja no tiene filtros.
+    Va ANTES de recortar los meses: las opciones son todas las familias del
+    parquet, y `filtro_pills` borra de lo elegido lo que no está en ellas.
+    Devuelve `d` recortado a lo elegido."""
+    if d is None or not col_familia or col_familia not in d.columns:
+        return d
+    sel = st.session_state.get(clave) or []
     tot = st.session_state.get("_aj_fam_total") or 0
-    txt = (f"Familias: {len(sel)} de {tot}" if sel and tot and len(sel) < tot
-           else "Familias: todas")
-    return (f'<div class="aj-fam-pag" title="Se cambia en «Filtros», arriba a la derecha">'
-            f'{txt} <span>· de Filtros</span></div>')
+    txt = (f"Familias · {len(sel)} de {tot}" if sel and tot and len(sel) < tot
+           else "Familias · todas")
+    # La key por vista es para el CSS (`estilos/_90_marco.py`): el botón mide como
+    # los demás controles de la fila del título.
+    with contenedor, st.container(key=f"famvista_{clave}"):
+        with st.popover(f":material/tune: {txt}"):
+            st.caption("Valen para esta vista.")
+            d, _ = filtro_pills(d, col_familia, clave, "Familia")
+    return d
 

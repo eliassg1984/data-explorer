@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-820 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+824 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (270)
+**CSS y estilos** (272)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -337,6 +337,8 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#818** — Las listas de Diferencias con la forma de la tabla de Compras › Período
 - **#819** — Diferencias: la pestaña se llama «Productos» y no lleva contadores por tipo
 - **#820** — Adentro de una pieza propia, el modo diseño baja al nodo de verdad
+- **#821** — Diferencias con íconos: la barra de la lista, el filtro y el neto con su panel al costado
+- **#822** — Refrescar al pie del rail, con la hora del dato en su nombre al cursor
 
 **Layout y alturas** (113)
 
@@ -869,7 +871,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#781** — Recetas entera en el lenguaje de Costo de Carta, y los códigos a la vista
 - **#785** — Inventario en la franja común (#782) y nada bajo 12 px
 
-**Datos, R2 y DuckDB** (132)
+**Datos, R2 y DuckDB** (133)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -1003,6 +1005,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#761** — Lo «Sin descargo» del POS suma en la venta y no se observa como «sin costo»
 - **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
+- **#823** — La franja de Ajuste no tiene «Filtros»: Evolución y la Tabla dinámica traen el suyo
 
 **SUNAT y SIRE** (81)
 
@@ -1169,7 +1172,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 - **#820** — Adentro de una pieza propia, el modo diseño baja al nodo de verdad
 
-**Decisiones de diseño y UX** (271)
+**Decisiones de diseño y UX** (274)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1442,6 +1445,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#816** — Diferencias: el código a la izquierda, «6 cierres» a pedido y la cuenta de cada área en la…
 - **#817** — La franja: la ruta con su menú, en vez de las pestañas sueltas
 - **#819** — Diferencias: la pestaña se llama «Productos» y no lleva contadores por tipo
+- **#821** — Diferencias con íconos: la barra de la lista, el filtro y el neto con su panel al costado
+- **#823** — La franja de Ajuste no tiene «Filtros»: Evolución y la Tabla dinámica traen el suyo
+- **#824** — La fecha de Diferencias sube a la franja mientras la vista está en pantalla
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58853,6 +58859,69 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    lado le quedaban unos 10 px y se leía una letra por renglón. Probado en Chromium sobre Costo de
    Carta: la segunda cifra se movió 40×25 px, la pieza no, y un ítem del rail se fija como antes.
 
+821. **Diferencias con íconos: la barra de la lista, el filtro y el neto con su panel al costado.**
+   A pedido, sobre un boceto con «hoy» y «propuesta» lado a lado
+   (https://claude.ai/artifact/H3hJ8x9awsag1BwU4iKyNx): la app se usa a diario, así que una
+   ACCIÓN puede ser un ícono solo, siempre con su nombre al pasar el cursor (`data-tip`) y para
+   los lectores de pantalla (`aria-label`). El ESTADO —la pestaña, el cierre, la cifra— sigue en
+   texto. En `cierre.js` (`cbarra`, `cvista`, `cfiltros`, `cneto`, `cnumeros`) y al final de
+   `cierre.css`:
+   - **El vocabulario de íconos es UNO, compartido**: `graficos/iconos.js` (`ICONOS`, `icono()`)
+     y `graficos/iconos.css` (`.ico`, `.ib`, `.ib-n` y el nombre al cursor), antepuestos a la
+     pieza en `_cierre.py` y en la prueba. Una pieza nueva que necesite «descargar» usa éste.
+     `.ajc button` le gana a `.ib`: la pieza repite lo necesario con su prefijo.
+   - **La barra de la lista, como la de Gmail**: el buscador a la izquierda, con la lupa adentro
+     (ocupa el hueco que dejaron los contadores de la #819); a la derecha «Vista» —un ícono cuyo
+     dibujo dice la vista puesta, con un menú: qué lista, el orden o el agrupado y la casilla de
+     los últimos cierres, que antes era un interruptor suelto— y «Descargar Excel».
+   - **El filtro de la vista es un ícono con su número**; el nombre al cursor dice cuáles.
+   - **El neto queda a la vista con el ícono de los números y la cifra en 14 px**, sin cápsula:
+     92 px contra 226. Un clic abre al costado el panel (`.ajc-cajon`) con los cuatro números,
+     cada uno con su explicación plegada, y plegadas también la lectura del cierre y «Por qué
+     faltó». Con el alfiler queda fijo y la lista se corre (`.ajc-fijo`, recordado en
+     `localStorage`). Hasta acá era una cápsula que al pasar el cursor lo mostraba todo junto:
+     «es mucho texto de una vez». El panel está siempre en el DOM (cerrado, `display: none`),
+     y lo abierto adentro sobrevive al redibujo (`st.numAb`, por el evento `toggle`); un clic
+     afuera pliega los menús pero no el panel (`cplegar`).
+   - **«Operación» nombraba dos números distintos**: el neto de operación por línea (−S/ 6.401 en
+     octubre de 2026) y lo que faltó en operación por producto (−S/ 6.452). La diferencia es lo
+     que sobró en productos de operación. Se llaman «Operación, neto» y «Faltó en operación».
+   - **Un texto dentro de un `<details>` cerrado no tiene `innerText`**: la prueba lo lee con
+     `text_content()`.
+
+822. **Refrescar al pie del rail, con la hora del dato en su nombre al cursor.**
+   A pedido, con el mismo boceto de la #821. Desde 901 px el botón deja la franja y va encima
+   del pestillo, con su mismo centro (`--icono-x`), como un ícono de 32 px. «Refrescar» y
+   «Datos al 04/11 · 03:00» son su nombre al pasar el cursor: un `::after` que lee
+   `--sello-tip`, que `inject_sello_actualizacion` escribe en `<html>` sólo si cambió (tocar
+   el estilo de `<html>` recalcula la página entera). La franja ya no dibuja la hora
+   (`#sello-actualizacion` en `display: none`) ni le reserva nada a Refrescar
+   (`--barra-act`, `--barra-sello`). La señal permanente del dato atrasado, que era el sello
+   en ámbar, es un punto ámbar en el ícono; el aviso de arriba de la vista no cambia, y ya
+   decía «Refrescar al pie del rail». Sin `help=`: el tooltip de Streamlit saldría encima del
+   nuestro. Lo que mordió: los ítems del rail le ponen `right` y `bottom` a su `::after`
+   (su nombre debajo del ícono) y la caja del nombre medía 18×10 px; se anulan con `auto`.
+   Abajo de 901 px sigue donde estaba. CSS en `estilos/_90_marco.py`.
+
+823. **La franja de Ajuste no tiene «Filtros»: Evolución y la Tabla dinámica traen el suyo.**
+   A pedido («¿es necesario que tenga dos filtros visibles?»). Su única opción, Familia, sólo
+   la leían Evolución y la Tabla dinámica; en Diferencias había dos botones «Filtros» y el de
+   arriba no filtraba nada. Ahora cada una lo trae en la fila de su título, con su clave
+   (`K_FAM_EVO`, `K_FAM_DET`), como el Área (#505): `graficos/ajuste/_comun.py::filtro_familias_vista`,
+   un popover con las pastillas de siempre. Va ANTES de recortar los meses: las opciones son
+   todas las familias del parquet, y `filtro_pills` borra de lo elegido lo que no está en
+   ellas. Una sesión vieja siembra las dos claves con lo que tenía en la franja.
+
+824. **La fecha de Diferencias sube a la franja mientras la vista está en pantalla.**
+   Con la franja de Ajuste libre (#822, #823), el cierre con sus ‹ › se ubica arriba a la
+   derecha, al lado de la ruta: la franja lo dice como «la fecha de Diferencias», y al bajar
+   a otra vista vuelve a su fila. La marca `ajc-arriba` la pone un IntersectionObserver de
+   la pieza (la mitad de la pieza a la vista, desde 901 px y sólo si hay franja: en la prueba
+   no hay, y no sube). Es `position: fixed` adentro del shadow root: se ubica contra la
+   ventana porque ningún ancestro tiene `transform`; si alguno lo tuviera, se iría con él.
+   Por ahora sólo Diferencias: las fechas que dibuja Python (Evolución, Análisis, Compras…)
+   siguen en su tarjeta.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58865,7 +58934,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#820**; la próxima toma el número siguiente.
+> última regla es la **#824**; la próxima toma el número siguiente.
 
 >
 

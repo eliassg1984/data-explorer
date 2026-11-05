@@ -365,7 +365,7 @@ CSS = """
        foco. La salida espera a que el cursor se haya ido de verdad. */
     :root:has(.st-key-rail_vis_oculto) :is(.st-key-compras_tabs_row,
         .st-key-rail_rotulo_rep, .st-key-rail_pestillo_abierto,
-        .st-key-rail_pestillo_plegado) {
+        .st-key-rail_pestillo_plegado, .st-key-rail_refresh) {
         opacity: 0 !important;
         visibility: hidden !important;
         transition: opacity 120ms linear 160ms,
@@ -384,7 +384,7 @@ CSS = """
        explícito, no un borde que se cruza de camino a otra cosa. */
     :root[data-capa-col]:has(.st-key-rail_vis_oculto) :is(.st-key-compras_tabs_row,
         .st-key-rail_rotulo_rep, .st-key-rail_pestillo_abierto,
-        .st-key-rail_pestillo_plegado),
+        .st-key-rail_pestillo_plegado, .st-key-rail_refresh),
     :root[data-capa-col]:has(.st-key-rail_vis_oculto):has(.st-key-rail_pestillo_abierto)
         .st-key-nav_rail_lateral {
         opacity: 1 !important;
@@ -1074,7 +1074,7 @@ CSS = """
         --barra-f: 16px;
         --barra-fecha: 0px;
         --barra-sello: 230px;
-        --barra-der: calc(var(--barra-f) + 96px + 8px + var(--barra-fecha)
+        --barra-der: calc(var(--barra-f) + var(--barra-act, 0px) + var(--barra-fecha)
                           + var(--barra-sello) + 16px);
     }
     :root:has(.st-key-chips_ajuste_tabla) {

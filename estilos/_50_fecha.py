@@ -205,7 +205,7 @@ html[data-vt-sin-fecha] .st-key-fecha_ajuste_pill { visibility: hidden !importan
                que arranca ahi. El hueco libre a la izquierda del grupo
                centrado son 324px y el pill mide 210: entra con aire. */
             left: auto !important;
-            right: calc(var(--barra-f) + 96px + 8px) !important;
+            right: calc(var(--barra-f) + var(--barra-act, 0px)) !important;
         }
         /* ANCHO FIJO, no fit-content. Los chips se anclan a la derecha del
            pill con un left: en px (más abajo), y eso solo funciona si el
@@ -461,7 +461,7 @@ html[data-vt-sin-fecha] .st-key-fecha_ajuste_pill { visibility: hidden !importan
     @media (min-width: 901px) {
         #sello-actualizacion {
             top: calc((var(--franja-rep-alto) - 30px) / 2) !important;
-            right: calc(var(--barra-f) + 96px + 8px
+            right: calc(var(--barra-f) + var(--barra-act, 0px)
                         + var(--barra-fecha)) !important;
         }
         #sello-actualizacion .sello-rotulo {

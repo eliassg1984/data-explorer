@@ -292,6 +292,15 @@ def inject_sello_actualizacion(rotulo, valor, color=None):
         el.classList.toggle('sello-viejo', """ + _viejo + """);
         el.querySelector('.sello-rotulo').textContent = """ + _r + """;
         el.querySelector('.sello-valor').textContent = """ + _v + """;
+        /* #822: desde 901 px la hora no se dibuja en la franja: va en el nombre
+           al cursor de Refrescar, al pie del rail, que la lee de `--sello-tip`
+           (`estilos/_90_marco.py`). Se escribe sólo si cambió: tocar el estilo
+           de <html> recalcula la página entera. */
+        var tip = JSON.stringify(""" + _r + """ + ' ' + """ + _v + """);
+        var raiz = doc.documentElement;
+        if (raiz.style.getPropertyValue('--sello-tip') !== tip) {
+            raiz.style.setProperty('--sello-tip', tip);
+        }
     })();
     </script>
     """, height=0)
