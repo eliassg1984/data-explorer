@@ -664,12 +664,49 @@ CSS = """
         font-size: 14px !important;
     }
 
+    /* Cada fecha de Ajuste conserva su widget y sigue a la vista del rail. */
+    @media (min-width: 901px) {
+        [data-ajuste-vista] {
+            --ajuste-fecha-top: calc(var(--marco-hoja, 8px) + (var(--franja-rep-alto, 44px) - 30px) / 2);
+            --ajuste-fecha-right: calc(var(--marco-der, 16px) + 6px);
+        }
+        [data-ajuste-vista] .st-key-aj_sec_persp_cierre {
+            --ajuste-cierre-fecha-display: none;
+        }
+        [data-ajuste-vista="aj_sec_persp_cierre"] .st-key-aj_sec_persp_cierre {
+            --ajuste-cierre-fecha-display: inline-flex;
+            --ajuste-cierre-fecha-pos: fixed;
+        }
+        [data-ajuste-vista] :is(.st-key-ajses_dif_fila, .st-key-ajf_evo_fila, .st-key-ajf_det_fila, .st-key-ajf_exp_fila) {
+            display: none !important;
+        }
+        [data-ajuste-vista="aj_sec_diferencias"] .st-key-ajses_dif_fila,
+        [data-ajuste-vista="aj_sec_persp_tiempo"] :is(.st-key-ajf_evo_fila, .st-key-ajf_det_fila),
+        [data-ajuste-vista="aj_sec_explorar"] .st-key-ajf_exp_fila {
+            display: flex !important;
+            position: fixed !important;
+            top: var(--ajuste-fecha-top) !important;
+            right: var(--ajuste-fecha-right) !important;
+            width: max-content !important;
+            z-index: 1000012 !important;
+        }
+        [data-ajuste-vista] :is(.st-key-ajses_dif_fila, .st-key-ajf_evo_fila, .st-key-ajf_det_fila, .st-key-ajf_exp_fila)
+            [data-testid="stPopover"] button[data-testid="stPopoverButton"] {
+            height: 30px !important;
+            min-height: 30px !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+            color: var(--text-primary) !important;
+        }
+    }
+
     /* ── LA RUTA CON SU MENÚ (2026-11-04, regla #817) ────────────────────
        La franja dice «Inventario › Ajuste › Diferencias ▾»; las vistas del
        área van en un menú que abre `_SCRIPT_CAPAS` (`<html data-franja-menu>`):
        una columna por reporte, cada vista con su línea de qué muestra. Son
        los botones de siempre (`nav_franja_idx`), así que el temporizador los
        sigue marcando. Sólo desde 901px: más abajo la franja es otra. */
+    .st-key-nav_franja_idx .st-key-nav_franja_secciones { display: none !important; }
     @media (min-width: 901px) {
         .franja-ruta {
             display: inline-flex; align-items: center; gap: 8px;
@@ -684,7 +721,8 @@ CSS = """
             color: var(--bg-card); font-size: 13px; font-weight: 600;
         }
         .franja-ruta .fr-vista i { font-style: normal; font-size: 12px; opacity: .8; }
-        .franja-ruta:hover .fr-vista, .franja-ruta:focus-visible .fr-vista { filter: brightness(1.08); }
+        .franja-ruta:not([data-franja-compacta]):hover .fr-vista,
+        .franja-ruta:focus-visible .fr-vista { filter: brightness(1.08); }
         /* Cerrada: el menú no está. */
         .st-key-nav_franja_rep .st-key-nav_franja_idx { display: none !important; }
         /* La franja recorta lo que se le sale (`overflow: hidden`): abierta, no. */
@@ -743,6 +781,60 @@ CSS = """
         .st-key-nav_franja_idx [data-testid="stButton"] button.vista-en-pantalla {
             background: var(--accent-tint) !important; color: var(--accent-deep) !important;
             box-shadow: none !important; border-radius: 8px 8px 0 0 !important;
+        }
+
+        /* Inventario: un desplegable por nivel, con los mismos destinos nativos. */
+        .franja-ruta[data-franja-compacta] { cursor: default; }
+        .franja-ruta[data-franja-compacta] button {
+            display: inline-flex; align-items: center; gap: 7px;
+            height: 30px; padding: 0 10px; border-radius: 8px;
+            border: 1px solid var(--border); background: var(--bg-card);
+            color: var(--text-primary); font: inherit; font-size: 13px;
+            font-weight: 500; cursor: pointer;
+        }
+        .franja-ruta[data-franja-compacta] .fr-grupo { color: inherit; }
+        .franja-ruta[data-franja-compacta] i { font-style: normal; font-size: 12px; color: var(--text-secondary); }
+        .franja-ruta[data-franja-compacta] button:hover,
+        .franja-ruta[data-franja-compacta] button[aria-expanded="true"] {
+            background: var(--accent-tint);
+            color: var(--accent-deep);
+        }
+        :root[data-franja-menu^="inventario-"] .st-key-nav_franja_rep .st-key-nav_franja_idx {
+            display: block !important;
+            box-sizing: border-box !important;
+            width: 172px !important;
+            padding: 5px !important;
+            border-radius: 9px !important;
+        }
+        :root[data-franja-menu^="inventario-"] .st-key-nav_franja_idx [class*="st-key-nav_franja_g"] {
+            display: none !important;
+        }
+        :root[data-franja-menu="inventario-vistas"] .st-key-nav_franja_idx [data-franja-columna] {
+            display: flex !important;
+            width: 100% !important;
+        }
+        :root[data-franja-menu="inventario-vistas"] .st-key-nav_franja_idx .franja-miembro {
+            display: none !important;
+        }
+        :root[data-franja-menu="inventario-secciones"] .st-key-nav_franja_idx .st-key-nav_franja_secciones {
+            display: block !important;
+        }
+        .st-key-nav_franja_idx [data-testid="stMarkdownContainer"] .franja-secciones {
+            display: grid !important;
+        }
+        :root[data-franja-menu="inventario-vistas"] .st-key-nav_franja_idx [data-testid="stButton"] button,
+        .st-key-nav_franja_idx .franja-seccion {
+            width: 100% !important; min-height: 32px !important;
+            padding: 5px 9px !important; border-radius: 6px !important;
+        }
+        .st-key-nav_franja_idx .franja-seccion {
+            display: block; border: 0; text-align: left; cursor: pointer;
+            font-family: inherit; font-size: 13px; font-weight: 500;
+            color: var(--text-primary); background: transparent;
+        }
+        .st-key-nav_franja_idx .franja-seccion:hover,
+        .st-key-nav_franja_idx .franja-seccion[aria-current="true"] {
+            color: var(--accent-deep); background: var(--accent-tint);
         }
     }
 """

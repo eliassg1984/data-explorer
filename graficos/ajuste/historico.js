@@ -1,7 +1,7 @@
 /* Ajuste › Detalle histórico (#809). La forma de Compras › Detalle docs.: Conteos |
    Líneas | Tabla dinámica, cuatro indicadores que filtran y, al costado, el resumen o
    la ficha del conteo. Usa las clases `dc-*` de documentos.css, que va antes en la
-   hoja. Los meses son el botón de Python, puesto en el hueco `.dc-lugar`. */
+   hoja. Los meses los elige el selector nativo del reporte. */
 const AJH=(()=>{
   const CAMPOS=['Familia','Subfamilia','Producto','Área','Unidad','Mes','Sesión','Fecha'];
   const METRICAS=['Ajuste valorizado','Ajuste (cantidad)','Valorizado total','Líneas'];
@@ -123,11 +123,6 @@ const AJH=(()=>{
       +'<dt>Indicadores</dt><dd>Filtran las líneas. Con una búsqueda, cuentan sólo lo que coincide; la ficha muestra el conteo entero.</dd></dl><p>Es un cálculo propio, no un estándar.</p></div>':'';
     return`<div class="dc-n2"><div class="dc-tabs" role="tablist">${[['Conteos',`Conteos · ${n.toLocaleString('en-US')}`],['Líneas',`Líneas · ${nL.toLocaleString('en-US')}`],['Tabla dinámica','Tabla dinámica']].map(([k,t])=>`<button role="tab" data-a="modo" data-v="${k}" class="${s.modo===k?'on':''}" aria-selected="${s.modo===k}">${esc(t)}</button>`).join('')}</div>`
       +`<div class="dc-n2-der"><label class="dc-switch"><input type="checkbox" data-a="det" role="switch"${s.det?' checked':''}>Detalle</label><span class="dc-como"><button class="dc-link" data-a="como" aria-expanded="${!!s.como}">Cómo se calcula</button>${como}</span></div></div>`;}
-  function pasarFecha(G){const fb=document.querySelector('.st-key-ajh_nativa_fecha'),lg=G.root.querySelector('.dc-lugar');if(!fb)return;
-    const ver=!!(lg&&lg.offsetWidth);if(fb.style.visibility!==(ver?'':'hidden'))fb.style.visibility=ver?'':'hidden';if(!ver||!fb.offsetWidth)return;
-    const w=`${fb.offsetWidth+8}px`;if(G.root.style.getPropertyValue('--dc-fecha')!==w)G.root.style.setProperty('--dc-fecha',w);
-    const padre=fb.offsetParent;if(!padre)return;const a=lg.getBoundingClientRect(),b=padre.getBoundingClientRect();
-    const x=`${Math.round(a.left-b.left)}px`,y=`${Math.round(a.top-b.top+(a.height-fb.offsetHeight)/2)}px`;if(fb.style.left!==x)fb.style.left=x;if(fb.style.top!==y)fb.style.top=y;}
   let G0=null;
   function pintar(G){const{P,s,root}=G;G0=G;G.D=calcular(P,s,G.cache);const D=G.D;if(!D.ficha)s.conteo=null;
     root.classList.toggle('amp',!!s.amp);root.classList.toggle('det',!!s.det);
@@ -135,7 +130,7 @@ const AJH=(()=>{
     const pos=G.resetScroll?[]:[...root.querySelectorAll('[data-tabla]')].map(e=>[e.dataset.tabla,e.scrollTop,e.scrollLeft]);G.resetScroll=false;G.tablas={};
     const piv=s.modo==='Tabla dinámica',verIzq=s.amp!=='panel',verPanel=s.amp!=='izq'&&(!piv||!!D.ficha||s.amp==='panel');
     const chips=[...(s.areas?.length===1?[`<button class="dc-quita" data-a="areauna" data-v="${s.areas[0]}">${esc(P.dic.area[s.areas[0]])} ✕</button>`]:[]),...(s.kpi!=='todos'?[`<button class="dc-quita" data-a="kpi" data-v="${s.kpi}">${esc({falta:'Faltantes',sobra:'Sobrantes',grande:'De S/ 100 o más'}[s.kpi])} ✕</button>`]:[])].join('');
-    let h=`<section class="dc-card dc-main">${nivel2(G,D.conteos.length,D.rs.length)}<div class="dc-cab"><span class="dc-lugar" aria-hidden="true"></span>${menu(G,'fam','Familias',P.dic.fam,s.fams)}${menu(G,'area','Áreas',P.dic.area,s.areas)}${chips}<span class="dc-esp"></span><input class="dc-busca" data-input="q" type="search" value="${esc(s.q)}" placeholder="Código, producto o área…" aria-label="Buscar líneas"><button class="dc-pil" data-a="excel" ${D.rs.length?'':'disabled'} title="Baja lo que se ve">Excel ↓</button></div><div class="dc-kpis">${kpisHtml(G)}</div><div class="dc-cuerpo" data-amp="${s.amp||''}">`;
+    let h=`<section class="dc-card dc-main">${nivel2(G,D.conteos.length,D.rs.length)}<div class="dc-cab">${menu(G,'fam','Familias',P.dic.fam,s.fams)}${menu(G,'area','Áreas',P.dic.area,s.areas)}${chips}<span class="dc-esp"></span><input class="dc-busca" data-input="q" type="search" value="${esc(s.q)}" placeholder="Código, producto o área…" aria-label="Buscar líneas"><button class="dc-pil" data-a="excel" ${D.rs.length?'':'disabled'} title="Baja lo que se ve">Excel ↓</button></div><div class="dc-kpis">${kpisHtml(G)}</div><div class="dc-cuerpo" data-amp="${s.amp||''}">`;
     if(verIzq){h+=`<div class="dc-izq${!verPanel?' full':''}"><div class="dc-fl"><span class="dc-esp"></span>`
         +(piv?`<select class="dc-men" data-select="metrica" aria-label="Qué se suma">${METRICAS.map(m=>op(m,m,s.metrica)).join('')}</select><button class="dc-pil" data-a="config" aria-expanded="${s.config}">Configurar tabla ${s.config?'▴':'▾'}</button>`:'')
         +ampB(s,'izq',piv?'la tabla':'la lista')+'</div>';
@@ -148,7 +143,7 @@ const AJH=(()=>{
     G.ro?.disconnect();const cfg=root.querySelector('.dc-config'),main=root.querySelector('.dc-main');
     if(cfg){const ub=()=>{if(window.innerWidth<=900){cfg.style.top='';cfg.style.maxHeight='';return;}const b=root.querySelector('[data-a=config]').getBoundingClientRect(),m=main.getBoundingClientRect(),top=b.bottom-m.top+6;cfg.style.top=top+'px';cfg.style.maxHeight=Math.max(100,m.height-top-18)+'px';};G.ro=new ResizeObserver(ub);G.ro.observe(main);ub();}
     if(fc){const e=root.querySelector('[data-input=q]');e.focus({preventScroll:true});e.setSelectionRange(...fc);}
-    pasarFecha(G);}
+  }
   function exportar(G){const{P,s,D}=G,hoja=(nombre,cols,rs)=>({nombre,cabeza:cols.map(c=>c[1]),decimales:6,filas:rs.map(r=>cols.map(([k])=>r[k]??''))});
     const todas=[['fecha','Fecha'],['sesion','Sesión'],['cod','Código'],['famN','Familia'],['subN','Subfamilia'],['prod','Producto'],['umN','Unidad'],['areaN','Área'],['precio','Precio prom.'],['sis','Stock al cierre'],['dif','Ajuste'],['fis','Stock declarado'],['val','Ajuste valorizado'],['stock','Valorizado total']];
     const ls=lineasTabla(D.rs,P).map((r,i)=>({...r,sesion:P.sesiones[D.rs[i].f],umN:P.dic.um[D.rs[i].um]}));
@@ -198,7 +193,6 @@ const AJH=(()=>{
     document.addEventListener('click',e=>{if(!s.menu||e.composedPath().some(n=>n.classList?.contains('dc-ms')))return;s.menu=null;pintar(G);},{signal});
     // Esc se escucha en el document: el redibujo se lleva el foco (#778).
     document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!root.isConnected)return;if(s.menu)s.menu=null;else if(s.como)s.como=false;else if(s.amp)s.amp=null;else return;pintar(G);},{signal});
-    const tick=setInterval(()=>{if(root.isConnected)pasarFecha(G);},400);signal.addEventListener('abort',()=>clearInterval(tick));
     pintar(G);return()=>{G.abort.abort();G.ro?.disconnect();};}
   return{inicial,leer,calcular,pivot,valor,conteos,exportar,montar};
 })();

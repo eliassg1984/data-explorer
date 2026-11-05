@@ -1639,6 +1639,8 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                   var ACT = {json.dumps(_btns_act, ensure_ascii=False)};
                   var raiz = doc.querySelector('[data-testid="stMain"]');
                   if (!raiz) return;
+                  var FECHA_AJUSTE = {json.dumps(state_key == "ajuste_graf_tipo")};
+                  if (!FECHA_AJUSTE) raiz.removeAttribute('data-ajuste-vista');
 
                   function boton(k) {{
                     return doc.querySelector('[class*="st-key-' + k + '"] button');
@@ -1754,6 +1756,10 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                       doc.documentElement.classList.toggle(
                         'rails-scrolled',
                         !!primera && mejor.sec !== MAPA[0].sec);
+                      // La fecha y el rótulo de la franja siguen la misma vista.
+                      if (FECHA_AJUSTE && raiz.dataset.ajusteVista !== mejor.sec) {{
+                        raiz.dataset.ajusteVista = mejor.sec;
+                      }}
                       marcar(mejor.btns);
                     }}
 

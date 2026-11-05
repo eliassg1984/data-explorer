@@ -24,14 +24,17 @@ def renderizar(df_full,col_fecha,col_familia,col_area,col_ajuste_val,col_product
     opciones=sorted(df_full[col_familia].dropna().astype(str).unique().tolist()) if col_familia and col_familia in df_full else []
     dif.sembrar_seleccion(pd.DataFrame({col_familia or 'f':opciones}),col_familia or 'f',dif.K_FAM,list(dif.FAMILIAS_DE_ENTRADA))
     familias=[f for f in (ss.get(dif.K_FAM) or []) if f in opciones]
-    st.markdown(dif.CSS_TITULOS_DRILL+'<style>.st-key-ajdif_nativa{gap:0!important}.st-key-ajdif_sesion_nativa{height:36px;min-height:36px;margin:0!important}@media(max-width:750px){.st-key-ajdif_sesion_nativa{height:auto!important}}</style>',unsafe_allow_html=True)
+    st.markdown(dif.CSS_TITULOS_DRILL+'<style>.st-key-ajdif_nativa{gap:0!important}</style>',
+                unsafe_allow_html=True)
     with st.container(border=True,key=dif.CARD),st.container(key='ajdif_nativa'):
-        with st.container(key='ajdif_sesion_nativa'):
-            ct,cs=st.columns([3,1.3],vertical_alignment='center')
-            # Sin título (#798): el nombre está en la franja, como en el resto de la app.
-            with ct:st.markdown('<div class="inv-rank-tit"></div>',unsafe_allow_html=True)
-            with cs:
-                if sesiones:dif.selector_sesion('ajses_dif',dif.K_SES,sesiones,stats=dif.stats_de_vista(df_full,sesiones,col_fecha,col_area,col_ajuste_val,col_producto,col_familia,[]),familias_txt='todas las familias',pie=['Las cifras del selector corresponden a todas las familias.','Cada línea se compara con su conteo anterior en esa área, que puede ser un parcial.'])
+        if sesiones:
+            stats = dif.stats_de_vista(df_full, sesiones, col_fecha, col_area,
+                                       col_ajuste_val, col_producto, col_familia, [])
+            dif.selector_sesion(
+                'ajses_dif', dif.K_SES, sesiones, stats=stats,
+                familias_txt='todas las familias',
+                pie=['Las cifras del selector corresponden a todas las familias.',
+                     'Cada línea se compara con su conteo anterior en esa área, que puede ser un parcial.'])
         s=dif.sesion_vigente(dif.K_SES,sesiones) if sesiones else None
         if s is None:st.info('Sin sesiones de inventario.');return
         with st.spinner('Cruzando el conteo con el kardex y las recetas…'):r=data.diferencias_ajuste_sesion(s['clave'])

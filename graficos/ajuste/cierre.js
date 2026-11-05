@@ -226,8 +226,9 @@ function cfilacorte(G,D){
   const ses=P.sesiones[st.c],cob=new Set(D.scope.filter(r=>r.flags&1).map(r=>r.area)).size,ops=P.sesiones.map((s,i)=>[i,`${s.corto} · ${s.etiqueta_anio}`]);
   const foco=[st.fam&&cnom(st.fam),st.area&&cnom(st.area)].filter(Boolean).join(' · ');
   const tabs=`<nav class="ajc-tabs" role="tablist">${ctabs.map(([t,n])=>`<button type="button" role="tab" data-act="tab" data-v="${t}" aria-selected="${st.tab===t}" class="${st.tab===t?'selected':''}">${n}</button>`).join('')}</nav>`;
-  return `<div class="ajc-fila ajc-f2 ajc-fnav">${tabs}<span class="ajc-push"></span><span class="ajc-ses">${cbtn('mover',-1,'‹',false,'Corte anterior','ajc-flecha')}${cselect('corte',ops,st.c,'Corte')}${cbtn('mover',1,'›',false,'Corte siguiente','ajc-flecha')}</span>
-    ${ses?cneto(G,D):'<span class="ajc-note">Sin sesiones disponibles</span>'}${cfiltros(G,areas)}${foco?`<span class="ajc-chip">${cesc(foco)}${cbtn('limpiar','','✕',false,'Quitar el foco')}</span>`:''}</div>`;
+  return `<div class="ajc-fila ajc-f2 ajc-fnav">${tabs}<span class="ajc-push"></span><span class="ajc-ses">${cselect('corte',ops,st.c,'Corte')}</span>
+    <div class="ajc-acciones">${st.tab==='listas'?cvista(G,D):''}${cexcel()}${ses?cneto(G,D):'<span class="ajc-note">Sin sesiones disponibles</span>'}${cfiltros(G,areas)}</div>
+    ${foco?`<span class="ajc-chip">${cesc(foco)}${cbtn('limpiar','','✕',false,'Quitar el foco')}</span>`:''}</div>`;
 }
 function cnota(G,D){const {P}=G.B,ses=P.sesiones[D.st.c],cob=new Set(D.scope.filter(r=>r.flags&1).map(r=>r.area)).size;
   return ses?`${ses.nombre} · contado el ${ses.etiqueta_anio} · ${ses.n_dias} ${ses.n_dias===1?'día':'días'} · ${ses.juntas} ${ses.juntas===1?'conteo':'conteos'} · ${cn(D.rs.length)} registros · ${cn(cob)} áreas con stock${P.sin_fecha?` · ${cn(P.sin_fecha)} líneas sin fecha excluidas`:''}`:'Sin sesiones disponibles';}
@@ -272,10 +273,7 @@ function cnumeros(G,D,nota){const {mc,mo}=D,st=G.st,X=G.lista,cl=X.cls,t=X.tfTod
     +det('lec','ajc-bl2',`${chev}Lectura del cierre`,`<p class="ajc-frase">${cfrase(G,D)}</p><small class="ajc-kcap-n">${cesc(nota)}</small>`)
     +(tipos?det('por','ajc-bl2',`${chev}Por qué faltó`,tipos):'')+'</aside>';
 }
-// ── Nivel 3: la barra de la lista. Todo lo que cambia la lista, junto a la lista (#815).
-//    Desde la #821, como la barra de una lista de Gmail: a la izquierda el buscador con la
-//    lupa adentro; a la derecha cómo se ve (un ícono cuyo dibujo dice la vista puesta) y
-//    descargar. Lo elegido se dice en texto adentro del menú y en el nombre al cursor. ───
+// ── Vista y descarga junto a las pestañas; la búsqueda queda con los datos. ───
 const CLADO={ambos:['Lado a lado','ambos'],f:['Sólo faltantes','una'],s:['Sólo sobrantes','una'],tabla:['Consolidado','tabla']};
 const CAGR=[['','Sin agrupar'],['fam','Por familia'],['sub','Por subfamilia'],['area','Por área']];
 function cvista(G,D){const {st}=D,X=G.lista,tabla=st.lado==='tabla';
@@ -287,13 +285,14 @@ function cvista(G,D){const {st}=D,X=G.lista,tabla=st.lado==='tabla';
     :`${st.orden==='pareto'?' · Pareto':''}${st.det6?` · con ${X.rep.de} cierres`:''}`);
   return `<details class="ajc-menu ajc-vista"><summary class="ib" aria-label="Vista de la lista" data-tip="${cesc(tip)}" data-tip-der>${icono(CLADO[st.lado][1])}${icono('caret','chico')}</summary><div class="ajc-options" role="menu"><small class="ajc-cap-t">Qué lista</small>${lados}${resto}</div></details>`;
 }
+function cexcel(){
+  return `<details class="ajc-menu ajc-excel"><summary class="ib" aria-label="Descargar Excel" data-tip="Descargar Excel" data-tip-der>${icono('bajar')}</summary><div class="ajc-options">${cbtn('excel','resumen','El resumen: familias y cortes')}${cbtn('excel','detalle','Lo que se ve en esta pestaña')}</div></details>`;
+}
 function cbarra(G,D){const {st}=D,tq='Buscar producto o área';
   let buscar=`<label class="ajc-buscar">${icono('lupa')}<input class="ajc-search" type="search" aria-label="${tq}" placeholder="${tq}" value="${cesc(st.q)}" data-input="buscar"></label>`,der='';
-  if(st.tab==='listas')der=cvista(G,D);
-  else if(st.tab==='lineas')der=ccap('juntas',[['si','Áreas juntas'],['no','Áreas separadas']],st.juntas?'si':'no','Áreas');
+  if(st.tab==='lineas')der=ccap('juntas',[['si','Áreas juntas'],['no','Áreas separadas']],st.juntas?'si':'no','Áreas');
   else if(st.tab==='familias'){der=`${ccap('vf',[['lista','Familias'],['areas','Áreas'],['cruce','Cruce']],st.vf,'Cómo ver')}${st.vf==='cruce'&&G.B.P.hay.stock?ccap('medida',[['val','Ajuste'],['stock','Stock']],st.medida,'Qué mide el cruce'):''}`;buscar='';}
-  const excel=`<details class="ajc-menu ajc-excel"><summary class="ib" aria-label="Descargar Excel" data-tip="Descargar Excel" data-tip-der>${icono('bajar')}</summary><div class="ajc-options">${cbtn('excel','resumen','El resumen: familias y cortes')}${cbtn('excel','detalle','Lo que se ve en esta pestaña')}</div></details>`;
-  return `<div class="ajc-barra">${buscar}<span class="ajc-push"></span>${der}${excel}</div>`;
+  return `<div class="ajc-barra">${buscar}${der?`<span class="ajc-push"></span>${der}`:''}</div>`;
 }
 // ── Abajo: qué productos ─────────────────────────────────────────────────
 const cbuscar=(r,q)=>!q||[r.cod,r.prod,r.fam,r.area,r.sub].join(' ').toLocaleLowerCase().includes(q.toLocaleLowerCase());
@@ -379,7 +378,7 @@ function clistashtml(G,D){const {st}=D,X=G.lista,{B}=G;
   // La suma sale de TODAS las filas de la lista, no de las dibujadas (#769), y sigue al
   // buscador y al contador elegido.
   const pie=(una,l,ps)=>`<div class="ajc-p ajc-ptot"><span class="ajc-ptl">Total · ${cnn(ps.length,'producto')}</span>${una?'<span class="ajc-pa"></span>':''}<span class="ajc-pq"></span><b class="${l==='f'?'neg':'pos'}">${csol(csum(ps,'val'))}</b>${extra(l,false)}</div>`;
-  const col=(l,ps,una,cls)=>`<section class="ajc-col${cls?` ${cls}`:''}"><div class="ajc-scroll">${cab(una,l)}${filas(ps,l,una)}</div>${pie(una,l,ps)}</section>`;
+  const col=(l,ps,una,cls)=>`<section class="ajc-col${cls?` ${cls}`:''}"><div class="ajc-scroll">${cab(una,l)}${filas(ps,l,una)}</div><div class="ajc-espacio-total" aria-hidden="true"></div>${pie(una,l,ps)}</section>`;
   const cuerpo=st.lado==='ambos'?col('f',X.f,false,'neg')+col('s',X.s,false,'pos')
     :col(st.lado,st.lado==='s'?X.s:X.f,true,'');
   G.nfilas=Math.max(st.lado==='s'?0:X.f.length,st.lado==='f'?0:X.s.length);
@@ -524,7 +523,6 @@ function cenlazar(G){const root=G.root;
     if(!ev.target.closest('details'))cplegar(root);
     if(!b||!root.contains(b))return;const {act,v}=b.dataset,st=G.st;
     if(act==='vf'){st.vf=v;st.limite=150;if(v!=='cruce')st.medida='val';}
-    else if(act==='corte'||act==='mover')ccambiarcorte(G,act==='corte'?+v:st.c+(+v));
     // Elegir una familia, un área o una celda lleva a sus productos.
     else if(act==='familia'){st.fam=st.fam===v&&!st.area?null:v;st.area=null;if(st.fam)st.tab='listas';st.sel=null;}
     else if(act==='celda'){const [f,a]=JSON.parse(v);if(st.fam===f&&st.area===a){st.fam=null;st.area=null;}else{st.fam=f;st.area=a;st.tab='listas';}st.sel=null;}
@@ -580,10 +578,6 @@ export default function(component){const {data:P,parentElement,setTriggerValue}=
   let root=parentElement.querySelector('.ajc');if(root)root.remove();root=document.createElement('div');root.className='ajc';root.innerHTML='<section class="ajc-main"></section>';parentElement.appendChild(root);
   const B=mismo?old.B:cleer(P);B.oper=new Set(P.operacion||[]);
   const G={root,st,B,semilla:P.perspectiva,enviar:setTriggerValue,abort:new AbortController()};window.__ajCierre=G;cenlazar(G);cpintar(G);
-  // La fecha de la vista sube a la franja (#824) mientras la vista está en pantalla y
-  // hay franja: desde 901 px y dentro de la app (en la prueba, sin franja, no sube).
-  G.vista=new IntersectionObserver(es=>{const e=es[es.length-1],arriba=e.isIntersecting&&e.intersectionRatio>=.5&&!!document.querySelector('.st-key-nav_franja_rep')&&matchMedia('(min-width: 901px)').matches;
-    if(root.classList.contains('ajc-arriba')!==arriba)root.classList.toggle('ajc-arriba',arriba);},{threshold:[0,.5,1]});G.vista.observe(root);
   document.addEventListener('pointerdown',ev=>{if(!ev.composedPath().includes(root))cplegar(root);},{signal:G.abort.signal});
   document.addEventListener('keydown',ev=>{if(!root.isConnected||!G.st.sel||!root.querySelector('.ajc-ven'))return;const t=ev.composedPath()[0];if(t&&t.matches?.('input,select,textarea'))return;
     if(ev.key==='Escape'){G.st.sel=null;cpintar(G);}else if(ev.key==='ArrowLeft'||ev.key==='ArrowRight'){ev.preventDefault();if(cnavegar(G,ev.key==='ArrowLeft'?-1:1))cpintar(G);}},{signal:G.abort.signal});

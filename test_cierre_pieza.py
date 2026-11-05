@@ -312,7 +312,8 @@ class Navegador(unittest.TestCase):
         # (Mismo `sello`: el montaje nuevo reusa el estado del anterior.)
         pg.evaluate('P=>{__ajCierre.st.tab="cierres";__montarCierre({data:P,parentElement:document.querySelector("#montar"),setTriggerValue:()=>{}})}',p)
         self.assertEqual(pg.evaluate('__ajCierre.st.tab'),'listas')
-        root.locator('[data-act="mover"][data-v="-1"]').click()
+        self.assertEqual(root.locator('.ajc-ses button').count(), 0)
+        root.locator('select[data-change="corte"]').select_option(str(i-1))
         self.assertEqual(pg.evaluate('__ajCierre.st.c'),i-1)
 
     def test_lado_a_lado_con_sus_sumas_clases_ficha_y_ampliar(self):
@@ -342,9 +343,12 @@ class Navegador(unittest.TestCase):
         self.assertEqual(arroz.locator('.ajc-pc .ajc-z').text_content(),'00')
         self.assertIn(' kg',arroz.locator('.ajc-pq').text_content());self.assertNotIn('Kg',arroz.locator('.ajc-pq').text_content())
         self.assertIn('Kg',arroz.get_attribute('title'))
-        # El total va justo debajo de la última fila, no al fondo de la zona.
-        ult=root.locator('.ajc-col.neg [data-act="prod"]').last.bounding_box();tot=root.locator('.ajc-col.neg .ajc-ptot').bounding_box()
-        self.assertLess(abs(tot['y']-(ult['y']+ult['height'])),2)
+        # Cada lista deja una fila de aire entre el último producto y el total.
+        for lado in ('neg', 'pos'):
+            columna = root.locator(f'.ajc-col.{lado}')
+            ultima = columna.locator('[data-act="prod"]').last.bounding_box()
+            total = columna.locator('.ajc-ptot').bounding_box()
+            self.assertAlmostEqual(total['y'] - (ultima['y'] + ultima['height']), 30, delta=2)
         # Las sumas siguen al buscador, por nombre.
         root.locator('.ajc-search').fill('Arroz')
         self.assertIn('Arroz',root.locator('.ajc-lists').inner_text())
@@ -368,15 +372,15 @@ class Navegador(unittest.TestCase):
         self.assertNotIn('Qué faltó',root.inner_text())
         self.assertEqual(root.locator('.ajc-cl, .ajc-cls, [data-act="clase"]').count(),0)
         self.assertEqual(root.locator('.ajc-lists [data-act="prod"]').count(),int((por<0).sum()))
-        # #821: la barra con íconos —el buscador a la izquierda, con su lupa; la vista y
-        # descargar a la derecha, cada uno con su nombre al cursor— y el filtro de la vista
-        # como ícono con su número.
+        # La búsqueda va con los datos; Vista y Excel suben a la fila de pestañas.
         barra=root.locator('.ajc-barra').first
+        acciones = root.locator('.ajc-fnav .ajc-acciones')
         self.assertEqual(barra.locator('.ajc-buscar .ico').count(),1)
         self.assertEqual(barra.locator('.ajc-search').get_attribute('placeholder'),'Buscar producto o área')
-        self.assertLess(barra.locator('.ajc-buscar').bounding_box()['x'],barra.locator('.ajc-vista').bounding_box()['x'])
-        self.assertIn('sólo faltantes',barra.locator('.ajc-vista summary').get_attribute('data-tip'))
-        self.assertEqual(barra.locator('.ajc-excel summary').get_attribute('aria-label'),'Descargar Excel')
+        self.assertEqual(barra.locator('.ajc-vista, .ajc-excel').count(), 0)
+        self.assertLess(acciones.bounding_box()['y'], barra.bounding_box()['y'])
+        self.assertIn('sólo faltantes',acciones.locator('.ajc-vista summary').get_attribute('data-tip'))
+        self.assertEqual(acciones.locator('.ajc-excel summary').get_attribute('aria-label'),'Descargar Excel')
         self.assertEqual(root.locator('.ajc-sw, .ajc-qp, .ajc-kcap').count(),0)
         filtro=root.locator('.ajc-filtros > summary')
         self.assertEqual(filtro.get_attribute('aria-label'),'Filtros de esta vista')

@@ -495,7 +495,7 @@ def datos_panel_sesion(sesiones, actual, marcadas, multi, con_multi, solo,
 def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None,
                     stats=None, familias_txt="las familias de esta vista",
                     pie=None, meta=None):
-    """‹ [sesión] › y su panel (`panel_sesion.js`). `prefijo` es el de TODAS
+    """Selector de sesión y su panel (`panel_sesion.js`). `prefijo` es el de TODAS
     sus keys (`ajses_<vista>`); `stats`, lo de `stats_de_vista`; `pie` y
     `meta`, ver `datos_panel_sesion`."""
     if not sesiones:
@@ -533,12 +533,14 @@ def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None,
         elif tipo == "multi" and k_multi:
             _poner_multi(k_multi, k_varias, k, bool(a.get("v")))
 
+    flechas = prefijo != "ajses_dif"
     with st.container(key=f"{prefijo}_fila", horizontal=True, gap="small",
                       vertical_alignment="center"):
-        st.button("‹", key=f"{prefijo}_ant", disabled=not hay_ant,
-                  help=("Con varias sesiones las flechas se apagan" if multi
-                        else "Sesión anterior"),
-                  on_click=_paso_sesion, args=(k, orden, visibles, -1))
+        if flechas:
+            st.button("‹", key=f"{prefijo}_ant", disabled=not hay_ant,
+                      help=("Con varias sesiones las flechas se apagan" if multi
+                            else "Sesión anterior"),
+                      on_click=_paso_sesion, args=(k, orden, visibles, -1))
         with st.popover(etiqueta, key=f"{prefijo}_pop"):
             _PANEL_SESION(
                 key=k_panel,
@@ -546,10 +548,11 @@ def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None,
                     sesiones, actual, {x["clave"] for x in elegidas}, multi,
                     bool(k_multi), solo, stats, familias_txt, pie, meta),
                 on_accion_change=_al_accion, width="content")
-        st.button("›", key=f"{prefijo}_sig", disabled=not hay_sig,
-                  help=("Con varias sesiones las flechas se apagan" if multi
-                        else "Sesión siguiente"),
-                  on_click=_paso_sesion, args=(k, orden, visibles, 1))
+        if flechas:
+            st.button("›", key=f"{prefijo}_sig", disabled=not hay_sig,
+                      help=("Con varias sesiones las flechas se apagan" if multi
+                            else "Sesión siguiente"),
+                      on_click=_paso_sesion, args=(k, orden, visibles, 1))
 
 
 def _periodo_pivote_ajuste(fechas, gran):

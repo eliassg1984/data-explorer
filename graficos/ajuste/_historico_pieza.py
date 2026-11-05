@@ -26,8 +26,7 @@ def renderizar(d, col_fecha):
         return
     ss = st.session_state
     st.markdown('''<style>
-    .st-key-ajh_nativa{position:relative;gap:0!important}
-    .st-key-ajh_nativa_fecha{position:absolute;left:12px;top:52px;z-index:5;width:auto!important}
+    .st-key-ajh_nativa{gap:0!important}
     .st-key-ajh_nativa>[data-testid="stElementContainer"]{margin:0!important}
     </style>''', unsafe_allow_html=True)
     # Abre en 3 meses: 12 son ~115 mil líneas (#797).
@@ -43,6 +42,5 @@ def renderizar(d, col_fecha):
         cache = (firma, datos.armar(d_e, contexto, mes_operativo_activo()))
         ss['_ajh_809_cache'] = cache
     with st.container(key='ajh_nativa'):
-        with st.container(key='ajh_nativa_fecha'):
-            selector_meses('ajf_exp', ctx)
+        selector_meses('ajf_exp', ctx)
         _PIEZA(key='ajuste_historico_pieza', data=cache[1], width='stretch')

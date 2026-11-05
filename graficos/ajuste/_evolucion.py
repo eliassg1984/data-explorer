@@ -748,9 +748,10 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         # orden de ejecucion es el orden en que se leen los valores.
         # Sin título desde la #799: el nombre está en la franja, y los totales
         # del rango van en la de indicadores de la pieza. Quedan los controles.
-        c_fecha, c_area, c_gran, c_tit = st.columns(
-            # columnas-internas: meses | area | grano | aire
-            [1.45, 0.95, 1.1, 3.7],
+        c_fecha = st.container()
+        c_area, c_gran, c_tit = st.columns(
+            # columnas-internas: area | grano | aire
+            [0.95, 1.1, 3.7],
             vertical_alignment="center")
         with c_gran:
             # Una sesión vieja puede traer «Semana» guardada (regla #585):

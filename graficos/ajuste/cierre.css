@@ -26,7 +26,6 @@
 .ajc-ses select{max-width:300px;border:0;border-radius:8px;background:var(--accent-tint);color:var(--accent-deep);font-weight:500;min-height:30px;}
 .ajc-ses label{display:flex;align-items:center;gap:6px;font-size:0;}
 .ajc-ses label select{font-size:13px;}
-.ajc .ajc-flecha{width:30px;min-height:30px;padding:0;border:0;background:var(--rail-fondo);color:var(--text-primary);}
 .ajc-note{color:var(--text-secondary);font-size:12px;flex-shrink:0;white-space:nowrap;}
 .ajc-frase{margin:0;font-size:12.5px;line-height:1.38;flex-shrink:0;}
 .ajc-frase b{font-weight:650;}
@@ -345,11 +344,10 @@
 .ajc-fsec-t b{font-weight:600;margin-right:auto;}
 .ajc .ajc-fsec-t button{min-height:24px;padding:0 8px;font-size:12px;border:0;background:var(--rail-fondo);}
 .ajc-barra{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:none;}
-.ajc-barra .ajc-cap-b,.ajc .ajc-barra .ajc-excel summary{background:var(--rail-fondo);}
+.ajc-barra .ajc-cap-b,.ajc .ajc-acciones .ajc-excel summary{background:var(--rail-fondo);}
 .ajc .ajc-barra .ajc-search{width:116px;flex:0 0 116px;min-width:0;border:0;background:var(--rail-fondo);transition:flex-basis .15s;}
 .ajc .ajc-barra .ajc-search:focus,.ajc .ajc-barra .ajc-search:not(:placeholder-shown){width:190px;flex-basis:190px;}
 .ajc-barra .ajc-cap-op{left:auto;right:0;}
-.ajc-barra .ajc-excel .ajc-options{left:auto;right:0;}
 .ajc-cap-t{display:block;font-size:12px;color:var(--text-secondary);padding:4px 8px 2px;}
 .ajc-zl{padding-top:10px;gap:10px;}
 @media(max-width:900px){
@@ -391,8 +389,9 @@
    un punto junto al nombre. Va al final porque pisa reglas de arriba. */
 .ajc .ajc-zl{border:0;border-radius:0;background:transparent;padding:0;}
 .ajc .ajc-col,.ajc .ajc-col.neg,.ajc .ajc-col.pos{border-top:0;}
-/* La lista mide lo que sus filas y el total va justo debajo, no al fondo de la zona. */
+/* El total queda debajo de la lista, separado por una fila fuera del scroll. */
 .ajc .ajc-col>.ajc-scroll{flex:0 1 auto;}
+.ajc-espacio-total{flex:0 0 30px;}
 .ajc .ajc-lists .ajc-p.cab{background:var(--bg-primary);border-radius:6px 6px 0 0;border-bottom:1px solid var(--border);min-height:30px;color:var(--accent-deep);font-weight:500;}
 .ajc .ajc-lists .ajc-p.cab>span{color:var(--accent-deep);}
 /* El código en el color del resto, como en Consolidado (#810); sus ceros, en gris claro. */
@@ -418,6 +417,7 @@
 .ajc-menu>summary{list-style:none;}
 .ajc-menu>summary::-webkit-details-marker{display:none;}
 .ajc-menu .ajc-options{left:auto;right:0;}
+.ajc-acciones{display:flex;align-items:center;gap:6px;flex:none;}
 .ajc-vista .ajc-options{min-width:250px;padding:6px;max-height:none;}
 .ajc .ajc-op{display:flex;align-items:center;gap:8px;width:100%;min-height:0;padding:7px 10px;border:0;border-radius:6px;background:transparent;text-align:left;white-space:nowrap;}
 .ajc .ajc-op:hover{background:var(--bg-hover);}
@@ -468,17 +468,13 @@
   .ajc-cajon{position:static;width:auto;margin:8px 0;box-shadow:none;}
   .ajc.ajc-fijo .ajc-cuerpo{margin-right:0;}
   .ajc-buscar{flex:1 1 160px;}
+  .ajc-acciones{position:relative;margin-inline-start:auto;}
+  .ajc-acciones>.ajc-menu{position:static;}
+  .ajc-acciones>.ajc-menu .ajc-options{max-width:min(300px,calc(100vw - 24px));}
 }
 
-/* #824 — La fecha de la vista sube a la franja. Mientras Diferencias está en pantalla
-   (la marca `ajc-arriba` la pone un IntersectionObserver de la pieza), el cierre con sus
-   ‹ › se ubica arriba a la derecha, al lado de la ruta: la franja lo dice como «la fecha
-   de Diferencias», y al bajar a otra vista vuelve a su fila. Desde 901 px; abajo, en la
-   fila. Lo fijo se ubica contra la ventana: suma `--marco-hoja` y `--marco-der` (#776).
-   La franja de Ajuste ya no tiene nada a la derecha: ni Filtros (#823) ni Refrescar ni
-   la hora (#822). */
+/* La franja indica por variables qué fecha se muestra. Cruzan el shadow root. */
 @media(min-width:901px){
-  .ajc.ajc-arriba .ajc-ses{position:fixed;z-index:1000012;margin:0;top:calc(var(--marco-hoja,8px) + (var(--franja-rep-alto,44px) - 30px) / 2);right:calc(var(--marco-der,16px) + 6px);}
-  .ajc.ajc-arriba .ajc-ses select{background:var(--bg-card);border:1px solid var(--ajc-line);color:var(--text-primary);}
-  .ajc.ajc-arriba .ajc-ses .ajc-flecha{background:var(--bg-card);}
+  .ajc-fnav .ajc-ses{display:var(--ajuste-cierre-fecha-display,inline-flex);position:var(--ajuste-cierre-fecha-pos,static);z-index:1000012;margin:0;top:var(--ajuste-fecha-top);right:var(--ajuste-fecha-right);}
+  .ajc-fnav .ajc-ses select{background:var(--bg-card);border:1px solid var(--ajc-line);}
 }
