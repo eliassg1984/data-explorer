@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-826 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+827 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (274)
 
@@ -1095,7 +1095,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#825** — Cada hoja termina a 8 px del borde de abajo, como a los costados
 - **#826** — El margen de abajo de cada hoja es de 24 px
 
-**Fechas, rangos y cortes** (26)
+**Fechas, rangos y cortes** (27)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -1123,6 +1123,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#747** — Stock › «Movimientos por Tipo» se lee con DOS relojes: abre «De conteo a conteo» y el…
 - **#771** — Compras › Año pasado en una pantalla: los indicadores son las partes de la diferencia
 - **#783** — La franja de Ventas abre el mismo panel de fecha que las tarjetas
+- **#827** — «12 cierres» se fue de Diferencias a Evolución: el grano «Cierre» de la Serie
 
 **Asistente IA** (5)
 
@@ -1176,7 +1177,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 - **#820** — Adentro de una pieza propia, el modo diseño baja al nodo de verdad
 
-**Decisiones de diseño y UX** (274)
+**Decisiones de diseño y UX** (275)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1452,6 +1453,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#821** — Diferencias con íconos: la barra de la lista, el filtro y el neto con su panel al costado
 - **#823** — La franja de Ajuste no tiene «Filtros»: Evolución y la Tabla dinámica traen el suyo
 - **#824** — La fecha de Diferencias sube a la franja mientras la vista está en pantalla
+- **#827** — «12 cierres» se fue de Diferencias a Evolución: el grano «Cierre» de la Serie
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -58954,6 +58956,44 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    Período, Stock y Documentos SUNAT. Se eligió 24 y no los 32 de SUNAT: en una tabla larga,
    como la de Diferencias, 32 se comía casi una fila por pantalla.
 
+827. **«12 cierres» se fue de Diferencias a Evolución: el grano «Cierre» de la Serie.**
+   A pedido (2026-11-05): la pestaña «12 cierres» de «Diferencias del cierre» (#748) era una
+   serie en el tiempo —faltó, sobró y neto de los últimos doce cierres— y Evolución (#692) ya
+   contestaba eso con «Corte», mejor equipada: matriz por familia, «¿Es mucho?», orígenes. No
+   se sumó como tercera perspectiva («Serie | Tabla dinámica | 12 cierres»): habrían quedado
+   dos series vecinas. La Serie absorbió las cuatro cosas que sólo tenía «12 cierres»:
+   - **«Cierre» reemplaza a «Corte» en la Serie** (`_evolucion.GRANOS_SERIE`). Un período es
+     una SESIÓN de `cortes.sesiones_inventario` —lo contado del 1 al 7 del mes siguiente,
+     junto—, no una racha de días: con «Corte», el cierre de setiembre 2026 (contado el 1 y el
+     6 de octubre) salía en dos barras. Las sesiones salen del parquet ENTERO
+     (`periodos_ajuste(..., sesiones=)`): con un área elegida quedan menos días y las rachas
+     partirían una sesión. La Tabla dinámica sigue con «Corte»: `GRANOS`, que `_pivote.py`
+     importa, no cambió. Una sesión guardada con «Corte» abre en «Cierre».
+   - **Los parciales, a pedido.** Viajan marcados (`parcial`) y la pieza los esconde hasta que
+     se aprieta «Parciales · n»; `vistaPeriodos` recorta todo lo que va alineado a los
+     períodos (familias, % del sistema, negativo, orígenes). Un parcial cuenta pocas áreas, y
+     su neto chico se leía como una mejora.
+   - **La operación va aparte** (`es_operacion`, con `sin_plato.FAMILIA_OPERACION`): la serie,
+     el sistema en negativo, el % del sistema y los orígenes se calculan SIN ella, y la pieza
+     la dibuja rayada en el tramo de afuera de cada barra, con su indicador, su renglón en el
+     panel y su columna en la Tabla. Evolución abre con cinco de las seis familias, sin la
+     operación; quien la sumaba al filtro veía otro neto que Diferencias para el mismo cierre.
+     Ahora no: setiembre 2026 da −S/ 196 en las dos, y −S/ 12.454 de operación aparte (los
+     −S/ 12.650 de antes, juntos). Si la operación es lo único del filtro, ella es la serie. La
+     matriz trae todas las familias, con el total sin operación y la operación debajo, como
+     «Familias y áreas».
+   - **La calidad del conteo, en la Tabla** (`calidad_por_periodo`): áreas que contaron,
+     líneas con stock, exactas y dentro de ±S/ 5, con la cuenta de `cierre.js::cmetricas`, de
+     todas las familias del filtro (mide el conteo, no lo que se perdió). La nota del kardex
+     de la Tabla la cuenta la pieza sobre lo que está a la vista (`notaKardex`): la de Python
+     (`nota_kardex`) contaba todo y, con los parciales escondidos, decía «1 de 23 conteos» bajo
+     doce filas.
+   Lo que Diferencias perdió es el clic en una barra para cambiar de cierre: lo hacen ‹ › y el
+   selector. `cserie` sigue, sólo para la hoja «Cortes» del Excel del resumen, y un estado con
+   la pestaña vieja abre en «Productos». `htmlAbajo`, sin uso desde la #799, se borró. Lo vigila
+   `test_ajuste_evolucion_pieza.py`: cada cierre contra pandas con las mismas filas que
+   Diferencias, y la pieza en Chromium (parciales, operación, Tabla, matriz, celular).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58966,7 +59006,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#826**; la próxima toma el número siguiente.
+> última regla es la **#827**; la próxima toma el número siguiente.
 
 >
 

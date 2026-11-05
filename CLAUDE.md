@@ -65,7 +65,7 @@ a escritorio y cabeceras nativas sin solapes). El detalle vive en
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py && python test_ajuste_historico_pieza.py && python test_sunat_documentos_pieza.py && python test_sunat_vistas_pieza.py && python test_sunat_control.py && python test_ficha_plato.py && python test_ventas_alcance.py && python test_ventas_mix_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py && python test_ajuste_historico_pieza.py && python test_sunat_documentos_pieza.py && python test_sunat_vistas_pieza.py && python test_sunat_control.py && python test_ficha_plato.py && python test_ventas_alcance.py && python test_ventas_mix_pieza.py && python test_ajuste_evolucion_pieza.py
 python test_navegacion_retorno.py && python test_movil.py
 ```
 
@@ -272,9 +272,9 @@ código/área/unidad, ausencia y cero/cero como Sin base, recurrencias sin
 cortes futuros, filtros independientes y Excel numérico con seis decimales.
 Pruebas de Chromium sin red. Ver regla #720. Desde la #748 abre con todas
 las familias y los insumos de operación aparte; el test cubre además
-«dentro de ±S/ 5», los últimos 12 cierres con la tabla de parciales y el
-salto «¿Por qué? →» a «Análisis de diferencias» (`_cierre.al_porque`, el
-único trigger). Desde la #769 la vista es una pantalla: «Productos» (#819) abre con
+«dentro de ±S/ 5» y el salto «¿Por qué? →» a «Análisis de diferencias»
+(`_cierre.al_porque`, el único trigger). Los últimos 12 cierres se fueron a
+Evolución con la #827 (ver `test_ajuste_evolucion_pieza.py`). Desde la #769 la vista es una pantalla: «Productos» (#819) abre con
 faltantes y sobrantes lado a lado, cada uno con su suma; lectura o ficha al
 costado, «Ampliar» y lo demás en pestañas. El test cubre las sumas con el
 buscador, que los cuatro tipos de faltante sumen el total, la ficha y «Ampliar».
@@ -1482,6 +1482,11 @@ del producto, y lo demás en pestañas. Lo que muerde:
   la derecha, el filtro con su número, y el neto chico con el panel de los números al
   costado (`cnumeros`). Los íconos salen de `graficos/iconos.js` y `graficos/iconos.css`,
   compartidos: una pieza nueva no dibuja los suyos.
+- **La serie en el tiempo no va acá** (#827): «12 cierres» pasó a Evolución, con el
+  grano «Cierre» (`_evolucion.GRANOS_SERIE`: una sesión de `cortes.sesiones_inventario`
+  por período, los parciales a pedido y la operación aparte, como acá). Así el neto de un
+  cierre es el mismo en las dos vistas; si se toca la operación en una, se toca en la
+  otra. La Tabla dinámica sigue con «Corte» (`GRANOS`).
 
 ## Movimientos: «Contar por», calendario y Sin plato con Destino adentro
 
@@ -2725,6 +2730,13 @@ unidades distintas, ceros y ausencia de registros, búsqueda por código,
 estado, tandas en árbol y detalle, comparación, Excel y móvil. La firma y
 las cuentas de `_pivote.py` permanecen; sólo la fecha vuelve a Python.
 Regla #740.
+
+`test_ajuste_evolucion_pieza.py` vigila Ajuste › Evolución con el grano «Cierre»
+(#827, lo que fue «12 cierres» de Diferencias): un período por sesión de
+inventario, cada cierre contra pandas con las mismas filas que Diferencias (neto sin
+la operación, la operación aparte, la calidad del conteo) y, en Chromium, los
+parciales a pedido, la operación en barras, indicador, panel, Tabla y matriz, y el
+celular.
 
 `test_ajuste_historico_pieza.py` vigila Ajuste › «Detalle histórico» (id «Explorar»)
 como pieza propia con la forma de Detalle docs.: conteos (fecha × área), indicadores y

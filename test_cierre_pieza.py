@@ -1,6 +1,7 @@
 """Cierre nativo: mismas cuentas y comparación conservadora, sin red (#720).
-Desde la #748: la operación aparte, los últimos 12 cierres, «dentro de
-±S/ 5» y el salto «¿Por qué?» a «Análisis de diferencias». Desde la #769:
+Desde la #748: la operación aparte, «dentro de ±S/ 5» y el salto «¿Por
+qué?» a «Análisis de diferencias» (los últimos 12 cierres, de la #748 a la
+#827; hoy en Evolución, grano «Cierre»). Desde la #769:
 una pantalla, con faltantes y sobrantes lado a lado, la lectura o la ficha al
 costado y «Ampliar»."""
 import io
@@ -286,7 +287,7 @@ class Navegador(unittest.TestCase):
         self.assertLessEqual(pg.evaluate('document.documentElement.scrollWidth'),390)
         pg.set_viewport_size({'width':1323,'height':619})
 
-    def test_operacion_aparte_tolerancia_y_doce_cierres(self):
+    def test_operacion_aparte_tolerancia_y_sin_doce_cierres(self):
         d=self.d.copy();d.loc[d['NOMBRE PRODUCTO']=='Envase','FAMILIA']='COSTOS PRODUCCION'
         p=datos.armar(d);self.mount(p);pg=self.pg;root=pg.locator('.ajc')
         i=p['inicial'];ds=d[d.FECHA==pd.Timestamp('2026-03-02')];op=ds.FAMILIA=='COSTOS PRODUCCION'
@@ -300,18 +301,19 @@ class Navegador(unittest.TestCase):
         self.assertIn('insumos de operación',root.locator('.ajc-frase').inner_text())
         root.locator('[data-act="tab"][data-v="familias"]').click()
         self.assertIn('Todo el cierre',root.locator('.ajc-familias').inner_text())
-        root.locator('[data-act="tab"][data-v="cierres"]').click()
+        # «12 cierres» se fue a Evolución, grano «Cierre» (#827): la serie queda
+        # sólo para la hoja «Cortes» del Excel del resumen, con los parciales.
+        self.assertEqual(root.locator('[data-act="tab"][data-v="cierres"]').count(),0)
+        self.assertEqual(root.locator('.ajc-graf, rect.toque').count(),0)
         S=pg.evaluate('__ajCierreUI.serie(__ajCierre)')
         cierres=[j for j,s in enumerate(p['sesiones']) if s['tipo']=='cierre' and j<=i]
-        self.assertEqual([r['i'] for r in S['cierres']],cierres[-12:])
         self.assertEqual([r['i'] for r in S['tabla']],list(range(i,cierres[-12:][0]-1,-1)))
-        self.assertEqual(root.locator('rect.toque').count(),len(S['cierres']))
-        root.locator('rect.toque').first.dispatch_event('click')
-        self.assertEqual(pg.evaluate('__ajCierre.st.c'),S['cierres'][0]['i'])
-        root.locator('.ajc-cap[data-cap="vg"]').hover();root.locator('[data-act="vg"][data-v="tabla"]').click()
-        self.assertIn('parcial',root.locator('.ajc-main').inner_text().lower())
-        root.locator('[data-act="mover"][data-v="1"]').click()
-        self.assertEqual(pg.evaluate('__ajCierre.st.c'),S['cierres'][0]['i']+1)
+        # Un estado de antes, con la pestaña que ya no está, abre en «Productos».
+        # (Mismo `sello`: el montaje nuevo reusa el estado del anterior.)
+        pg.evaluate('P=>{__ajCierre.st.tab="cierres";__montarCierre({data:P,parentElement:document.querySelector("#montar"),setTriggerValue:()=>{}})}',p)
+        self.assertEqual(pg.evaluate('__ajCierre.st.tab'),'listas')
+        root.locator('[data-act="mover"][data-v="-1"]').click()
+        self.assertEqual(pg.evaluate('__ajCierre.st.c'),i-1)
 
     def test_lado_a_lado_con_sus_sumas_clases_ficha_y_ampliar(self):
         self.mount();pg=self.pg;root=pg.locator('.ajc')

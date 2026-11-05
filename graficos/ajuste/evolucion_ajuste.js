@@ -76,12 +76,44 @@ function mediana(xs) {
   return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
 }
 
+// ── #827: cierre a cierre, los parciales a pedido y la operación aparte ──
+// Lo que fue la pestaña «12 cierres» de «Diferencias del cierre». Con el grano
+// «Cierre» cada período es una SESIÓN (lo contado del 1 al 7 del mes
+// siguiente, junto); los parciales viajan marcados y se ven con su botón.
+// Cómo se nombra un período, según el grano y lo que hay a la vista.
+function unidad(d, n) {
+  const [uno, varios] = d.gran === 'Mes' ? ['mes', 'meses']
+    : d.gran !== 'Cierre' ? ['corte', 'cortes']
+      : d.periodos.some((p) => p.parcial) ? ['conteo', 'conteos'] : ['cierre', 'cierres'];
+  return n === 1 ? uno : varios;
+}
+const tabFam = (d) => `Familia × ${d.gran === 'Mes' ? 'mes' : d.gran === 'Cierre' ? 'cierre' : 'corte'}`;
+// El primer renglón de la ficha de una columna: «Cierre de set 26», «Parcial · 20 set».
+const nombrePer = (d, p) => (p.parcial ? `Parcial · ${p.eje}` : d.gran === 'Cierre' ? `Cierre de ${p.eje}` : p.eje);
+// Sin los parciales: todo lo que viaja alineado a los períodos se recorta igual.
+function vistaPeriodos(d, ui) {
+  if (ui.parciales || !d.periodos.some((p) => p.parcial)) return d;
+  const keep = d.periodos.map((p, i) => (p.parcial ? -1 : i)).filter((i) => i >= 0);
+  const pick = (a) => (Array.isArray(a) ? keep.map((i) => a[i]) : a);
+  const sistema = {};
+  for (const [k, v] of Object.entries(d.sistema || {})) sistema[k] = pick(v);
+  return {
+    ...d, periodos: pick(d.periodos), neg: pick(d.neg), origen: pick(d.origen), sistema,
+    familias: d.familias.map((f) => ({ ...f, s: pick(f.s), f: pick(f.f) })),
+    consumo: d.consumo && Array.isArray(d.consumo.pct) ? { ...d.consumo, pct: pick(d.consumo.pct) } : d.consumo,
+  };
+}
+// La familia de los insumos de operación, si va aparte (Python manda su id).
+const esOp = (d, id) => !!d.oper && String(id).trim().toUpperCase() === String(d.oper).trim().toUpperCase();
+const opNeto = (p) => (hay(p.os) || hay(p.of) ? (p.os || 0) + (p.of || 0) : null);
+
 // ── la serie ────────────────────────────────────────────────────────────
 function htmlSerie(d, ui) {
   const H = d.alto.graf, padT = 18, padB = 18;
   const P = d.periodos;
-  const maxS = Math.max(1, ...P.map((p) => p.s || 0));
-  const maxF = Math.max(1, ...P.map((p) => -(p.f || 0)));
+  // La operación va en el tramo de AFUERA de cada barra (#827): entra en la escala.
+  const maxS = Math.max(1, ...P.map((p) => (p.s || 0) + (p.os || 0)));
+  const maxF = Math.max(1, ...P.map((p) => -(p.f || 0) - (p.of || 0)));
   const K = (H - padT - padB) / (maxS + maxF);
   const TOP = padT + maxS * K;
   const ifoco = P.findIndex((p) => p.k === ui.foco);
@@ -98,15 +130,14 @@ function htmlSerie(d, ui) {
     const pa = partes(d, i);
     const restoS = pa.s.sin + CHIPS.filter((o) => !visible(ui, d, o)).reduce((a, o) => a + (pa.s[o] || 0), 0);
     const restoF = pa.f.sin + CARO.filter((o) => !visible(ui, d, o)).reduce((a, o) => a + (pa.f[o] || 0), 0);
-    const sup = ['neg', 'ven', 'pro', 'reg'].filter((o) => visible(ui, d, o))
-      .map((o) => [pa.s[o], colorDe(d, o, 's')]).concat([[restoS, d.col.pos]]).filter(([v]) => v * K >= 0.6);
+    const sup = [[p.os || 0, null, 'op']].concat(['neg', 'ven', 'pro', 'reg'].filter((o) => visible(ui, d, o))
+      .map((o) => [pa.s[o], colorDe(d, o, 's')])).concat([[restoS, d.col.pos]]).filter(([v]) => v * K >= 0.6);
     const inf = [[-restoF, d.col.neg]].concat(['reg', 'pro', 'ven'].filter((o) => visible(ui, d, o)).reverse()
-      .map((o) => [-pa.f[o], colorDe(d, o, 'f')])).filter(([v]) => v * K >= 0.6);
+      .map((o) => [-pa.f[o], colorDe(d, o, 'f')])).concat([[-(p.of || 0), null, 'op']]).filter(([v]) => v * K >= 0.6);
     const apag = ifoco >= 0 && ifoco !== i;
-    let barras = `<div class="sup" style="bottom:${H - TOP}px">` +
-      sup.map(([v, c]) => `<i style="height:${(v * K).toFixed(1)}px;background:${c}"></i>`).join('') + '</div>' +
-      `<div class="inf" style="top:${TOP}px">` +
-      inf.map(([v, c]) => `<i style="height:${(v * K).toFixed(1)}px;background:${c}"></i>`).join('') + '</div>';
+    const seg = ([v, c, cls]) => `<i${cls ? ` class="${cls}"` : ''} style="height:${(v * K).toFixed(1)}px${c ? `;background:${c}` : ''}"></i>`;
+    let barras = `<div class="sup" style="bottom:${H - TOP}px">` + sup.map(seg).join('') + '</div>' +
+      `<div class="inf" style="top:${TOP}px">` + inf.map(seg).join('') + '</div>';
     if (hay(p.n)) {
       const y = TOP - p.n * K;
       pts.push(`${x.toFixed(2)},${y.toFixed(1)}`);
@@ -120,17 +151,20 @@ function htmlSerie(d, ui) {
       kpts.push(`${x.toFixed(2)},${yk.toFixed(1)}`);
       if (p.dkx) barras += `<b class="kx" style="top:${(yk - 3).toFixed(1)}px"></b>`;
     }
-    const tip = [p.eje, hay(p.n) ? `Sobrante ${soles(p.s)} · Faltante ${soles(p.f)} · Neto ${soles(p.n)}` : 'Sin conteo']
+    const on = opNeto(p);
+    const tip = [nombrePer(d, p), hay(p.n) ? `Sobrante ${soles(p.s)} · Faltante ${soles(p.f)} · Neto ${soles(p.n)}` : 'Sin conteo']
+      .concat(hay(on) ? [`Operación, aparte: sobró ${soles(p.os)} · faltó ${soles(p.of)} · neto ${soles(on)}`] : [])
       .concat(d.kardex && hay(p.n) ? [`Kardex: ${!hay(p.kx) ? 'sin dato' : p.dkx ? soles(p.kx) + ' · difiere' : 'igual'}`] : [])
+      .concat(p.q ? [`${p.q[0]} áreas contaron · ${p.q[1].toLocaleString('en-US')} líneas con stock`] : [])
       .concat(hay(p.contado) ? [`Valor contado: ${soles(p.contado)}`] : []).join('\n');
-    cols += `<button type="button" class="col${i === ifoco ? ' foco' : ''}${apag ? ' apag' : ''}" data-act="mes" data-arg="${i}"` +
+    cols += `<button type="button" class="col${i === ifoco ? ' foco' : ''}${apag ? ' apag' : ''}${p.parcial ? ' parcial' : ''}" data-act="mes" data-arg="${i}"` +
       ` aria-pressed="${i === ifoco}" title="${esc(tip)}">${barras}</button>`;
   });
   // Con muchos cortes («16-18 ago 26» mide ~75 px) los rótulos se pisan: uno
   // de cada `paso`, más el último y el elegido, como `_marcas_eje` del
   // gráfico de Plotly que esto reemplazó. El de cada columna, al pasar.
   const paso = Math.max(1, Math.ceil(n / 12));
-  const ejes = P.map((p, i) => `<span class="${i === ifoco ? 'foco' : ''}">${
+  const ejes = P.map((p, i) => `<span class="${i === ifoco ? 'foco' : ''}${p.parcial ? ' parcial' : ''}">${
     i % paso === 0 || i === n - 1 || i === ifoco ? esc(p.eje) : ''}</span>`).join('');
   return `<div class="serie" style="height:${H + 18}px">` +
     `<div class="cero" style="top:${TOP}px"></div>` +
@@ -165,6 +199,8 @@ function htmlExplicar(d, ui) {
     .concat(CHIPS.filter((o) => visible(ui, d, o)).map((o) => [NOM[o], colorDe(d, o, 's')]))
     .map(([t, c]) => `<span><i style="background:${c}"></i>${esc(t)}</span>`).join('') +
     '<span><i class="raya"></i>Neto</span>' +
+    (d.oper ? '<span title="Leña, carbón, limpieza: ninguna receta los descarga, así que su consumo aparece recién al contar. No entran en el neto."><i class="op"></i>Operación, aparte</span>' : '') +
+    (d.periodos.some((p) => p.parcial) ? '<span title="Un parcial cuenta pocas áreas: su neto chico no es una mejora."><i class="parc"></i>Parcial</span>' : '') +
     (d.kardex ? `<span title="${esc(d.ayuda_kx)}"><i class="puntos"></i>Kardex</span>` : '');
   return '<div class="explicar"><div class="chips" role="group" aria-label="Explicar con">' +
     '<span class="tit">Explicar con</span>' +
@@ -191,8 +227,9 @@ function htmlPanel(d, ui) {
   const sobr = ['sin', 'neg'].concat(conOrigen ? ['reg', 'pro', 'ven'] : []).map((o) => fila(o, ss(o), 's')).join('');
   // La familia que más pesa y cuánto se movió.
   let frase = '';
-  if (d.familias.length) {
-    const fam = d.familias.map((f) => {
+  const famsFrase = d.familias.filter((f) => !esOp(d, f.id));
+  if (famsFrase.length) {
+    const fam = famsFrase.map((f) => {
       const n = sum(idx.map((j) => (f.s[j] || 0) + (f.f[j] || 0)));
       const m = sum(idx.map((j) => (f.s[j] || 0) - (f.f[j] || 0)));
       return [f.nombre, n, m];
@@ -206,7 +243,7 @@ function htmlPanel(d, ui) {
     const cs = idx.map((j) => T[j]).filter(Boolean);
     if (cs.length) {
       const c = [0, 1, 2, 3, 4].map((m) => sum(cs.map((x) => x[m])));
-      const base = (i < 0 ? `${cs.length} ${d.gran === 'Mes' ? 'cierres' : 'sesiones'} · ` : d.gran === 'Mes' ? 'cierre · ' : '') +
+      const base = (i < 0 ? `${cs.length} ${d.gran === 'Mes' ? 'cierres' : unidad(d, cs.length)} · ` : d.gran === 'Mes' ? 'cierre · ' : '') +
         `el sistema decía ${soles(c[0]).replace('+', '')}`;
       sis = '<div class="sis"><div class="cab"><span>DEL VALOR DEL SISTEMA</span>' +
         `<b class="${c[1] + c[2] < 0 ? 'neg' : 'pos'}">${c[0] > 0 ? pc((100 * (c[1] + c[2])) / c[0]) : '—'}</b></div>` +
@@ -223,14 +260,21 @@ function htmlPanel(d, ui) {
   }
   const cons = d.consumo_estado === 'listo' ? d.consumo : null;
   const pctC = cons && i >= 0 && hay(cons.pct[i]) ? `<div class="consumo">del consumo del mes <b>${pc(cons.pct[i])}</b></div>` : '';
-  const titulo = i >= 0 ? P[i].eje : `Los ${P.length} ${d.gran === 'Mes' ? 'meses' : 'cortes'}`;
+  const titulo = i >= 0 ? nombrePer(d, P[i]) : `Los ${P.length} ${unidad(d, P.length)}`;
+  const OS = tot((j) => P[j].os), OF = tot((j) => P[j].of);
+  const oper = d.oper
+    ? `<span class="t sep">OPERACIÓN · APARTE</span><span class="v t sep">${soles(OS + OF)}</span>` +
+      `<span class="o"><i class="op"></i>Faltante</span><span class="v">${soles(OF)}</span>` +
+      `<span class="o"><i class="op"></i>Sobrante</span><span class="v">${soles(OS)}</span>` : '';
+  const q = i >= 0 ? P[i].q : null;
+  const conteo = q ? `<div class="conteo" title="Líneas con stock: el sistema o lo contado distinto de cero">${q[0]} áreas · ${q[1].toLocaleString('en-US')} líneas · ${pc(q[3]).replace('+', '')} dentro de ±S/ 5</div>` : '';
   return '<aside class="panel" aria-label="Detalle del período">' +
     `<div class="cab"><h3>${esc(titulo)}</h3>` +
     (i >= 0 ? '<button type="button" class="soltar" data-act="soltar">Ver todos</button>' : '') + '</div>' +
     `<div class="neto ${N < 0 ? 'neg' : 'pos'}">${soles(N)}</div>${pctC}` +
     (frase ? `<div class="frase">${frase}</div>` : '') +
     `<div class="g"><span class="t">FALTANTE</span><span class="v t">${soles(F)}</span>${falt}` +
-    `<span class="t sep">SOBRANTE</span><span class="v t sep">${soles(S)}</span>${sobr}</div>` +
+    `<span class="t sep">SOBRANTE</span><span class="v t sep">${soles(S)}</span>${sobr}${oper}</div>` + conteo +
     (conOrigen ? '' : '<div class="nota">Los demás orígenes salen al prenderlos en «Explicar con».</div>') +
     sis + '</aside>';
 }
@@ -246,15 +290,19 @@ function htmlMatriz(d, ui) {
   const P = d.periodos, n = P.length;
   const ifoco = P.findIndex((p) => p.k === ui.foco);
   const modo = ui.modo === 'pct' && d.sistema && d.sistema.TOTAL ? 'pct' : 'soles';
-  const filas = d.familias.map((f) => ({ id: f.id, nombre: f.nombre, s: f.s, f: f.f }));
+  // Con la operación aparte (#827), el total es el de la serie —sin ella— y
+  // la operación va debajo, como en «Familias y áreas» de Diferencias.
+  const main = d.familias.filter((f) => !esOp(d, f.id)), ops = d.familias.filter((f) => esOp(d, f.id));
+  const filas = main.map((f) => ({ id: f.id, nombre: f.nombre, s: f.s, f: f.f }));
   filas.push({
-    id: 'TOTAL', nombre: 'Total', total: true,
-    s: P.map((_, j) => (d.familias.some((f) => hay(f.s[j])) ? sum(d.familias.map((f) => f.s[j])) : null)),
-    f: P.map((_, j) => (d.familias.some((f) => hay(f.f[j])) ? sum(d.familias.map((f) => f.f[j])) : null)),
+    id: 'TOTAL', nombre: ops.length ? 'Total sin operación' : 'Total', total: true,
+    s: P.map((_, j) => (main.some((f) => hay(f.s[j])) ? sum(main.map((f) => f.s[j])) : null)),
+    f: P.map((_, j) => (main.some((f) => hay(f.f[j])) ? sum(main.map((f) => f.f[j])) : null)),
   });
+  ops.forEach((f) => filas.push({ id: f.id, nombre: f.nombre, op: true, s: f.s, f: f.f }));
   const marco = (j) => (j === ifoco ? ' foco' : '');
   let h = '<div class="mz" style="--mz-n:' + n + ';min-width:' + (226 + n * 54) + 'px">';
-  h += '<span></span>' + P.map((p, j) => `<span class="h${marco(j)}">${esc(p.eje)}</span>`).join('') + `<span class="h r">${n} ${d.gran === 'Mes' ? 'meses' : 'cortes'}</span>`;
+  h += '<span></span>' + P.map((p, j) => `<span class="h${marco(j)}">${esc(p.eje)}</span>`).join('') + `<span class="h r">${n} ${unidad(d, n)}</span>`;
   filas.forEach((r, fi) => {
     const abre = ui.abierta === r.id;
     let vals, tot, tip, fmt;
@@ -275,7 +323,8 @@ function htmlMatriz(d, ui) {
       tip = (j) => `${r.nombre} · ${P[j].eje}: sobró ${soles(r.s[j])}, faltó ${soles(r.f[j])}, neto ${soles(vals[j])}`;
     }
     const max = Math.max(1, ...vals.filter(hay).map(Math.abs));
-    h += `<button type="button" class="fam${r.total ? ' total' : ''}${abre ? ' abierta' : ''}" data-act="fam" data-arg="${esc(r.id)}" aria-expanded="${abre}">` +
+    h += `<button type="button" class="fam${r.total ? ' total' : ''}${r.op ? ' op' : ''}${abre ? ' abierta' : ''}" data-act="fam" data-arg="${esc(r.id)}" aria-expanded="${abre}"` +
+      `${r.op ? ' title="Aparte: insumos de operación (leña, carbón, limpieza). No entran en el total de arriba."' : ''}>` +
       `<span class="fl" aria-hidden="true">${abre ? '▾' : '▸'}</span><span class="nm">${esc(r.nombre)}</span></button>`;
     h += vals.map((v, j) => {
       const ver = hay(v) && (abre || Math.abs(v) >= 0.6 * max);
@@ -360,54 +409,49 @@ function htmlEsMucho(d, ui) {
   return h + `<div class="mcols">${cols}</div></div>`;
 }
 
+// En cuántos períodos A LA VISTA el kardex dice otra cosa (#827). Hasta ese día
+// la armaba Python (`_evolucion.nota_kardex`, `nota_kx`) sobre todos los
+// períodos: con los parciales escondidos decía «1 de 23 conteos» bajo 12 filas.
+function notaKardex(d) {
+  if (!d.kardex) return '';
+  const m = d.periodos.filter((p) => hay(p.kx)).length, n = d.periodos.filter((p) => p.dkx).length;
+  if (!m) return '';
+  return n
+    ? ` · <span class="kxn alerta" title="${esc(d.ayuda_kx)}">el kardex difiere en ${n} de ${m} ${unidad(d, m)}</span>`
+    : ` · <span class="kxn" title="${esc(d.ayuda_kx)}">igual al kardex</span>`;
+}
+
 // ── la tabla de resumen ─────────────────────────────────────────────────
 function htmlTabla(d, ui) {
   const P = d.periodos;
   const td = (v, cls = '') => `<td class="n ${cls}">${hay(v) ? 'S/ ' + Math.round(v).toLocaleString('en-US') : '—'}</td>`;
+  // La calidad del conteo (#827, la tabla que tenía «12 cierres»): áreas que
+  // contaron, líneas con stock, exactas y dentro de ±S/ 5.
+  const hayQ = P.some((p) => p.q);
+  const pq = (v) => (hay(v) ? pc(v).replace('+', '') : '—');
+  const tq = (q) => (!hayQ ? '' : !q ? '<td class="n suave">—</td>'.repeat(4)
+    : `<td class="n">${q[0]}</td><td class="n">${q[1].toLocaleString('en-US')}</td><td class="n">${pq(q[2])}</td><td class="n">${pq(q[3])}</td>`);
+  const lin = sum(P.map((p) => (p.q ? p.q[1] : 0)));
+  const pondera = (m) => (lin ? sum(P.map((p) => (p.q && hay(p.q[m]) ? p.q[1] * p.q[m] : 0))) / lin : null);
   const kx = (p) => (!d.kardex ? '' : !hay(p.kx) ? '<td class="n suave" title="Sin dato del kardex">—</td>'
     : p.dkx ? `<td class="n alerta" title="Difiere del neto en S/ ${Math.round(p.kx - (p.n || 0)).toLocaleString('en-US')}">S/ ${Math.round(p.kx).toLocaleString('en-US')}</td>`
       : `<td class="n suave" title="Igual al neto">S/ ${Math.round(p.kx).toLocaleString('en-US')}</td>`);
-  const filas = P.slice().reverse().map((p) => `<tr class="${p.k === ui.foco ? 'foco' : ''}">` +
-    `<td>${esc(p.eje)}${hay(p.n) ? '' : ' <span class="suave">sin conteo</span>'}</td>` +
-    td(p.s, 'pos') + td(p.f, 'neg') + td(p.n, 'neto') + kx(p) + td(p.contado, 'suave') + '</tr>').join('');
+  const filas = P.slice().reverse().map((p) => `<tr class="${p.k === ui.foco ? 'foco' : ''}${p.parcial ? ' parcial' : ''}">` +
+    `<td>${esc(p.parcial ? nombrePer(d, p) : p.eje)}${hay(p.n) ? '' : ' <span class="suave">sin conteo</span>'}</td>` +
+    td(p.s, 'pos') + td(p.f, 'neg') + td(p.n, 'neto') + (d.oper ? td(opNeto(p), 'op') : '') + kx(p) + tq(p.q) + td(p.contado, 'suave') + '</tr>').join('');
   const T = (k) => sum(P.map((p) => p[k]));
+  const ayudaQ = 'Líneas con stock: el sistema o lo contado distinto de cero (cero y cero no prueba un recuento)';
   return '<div class="tabla"><table><thead><tr><th>Período</th><th class="n">Sobrante</th><th class="n">Faltante</th><th class="n">Neto</th>' +
+    (d.oper ? '<th class="n" title="Insumos de operación (leña, carbón, limpieza): van aparte, no entran en el neto">Operación</th>' : '') +
     (d.kardex ? `<th class="n" title="${esc(d.ayuda_kx)}">Kardex</th>` : '') +
+    (hayQ ? `<th class="n" title="Áreas que contaron algo con stock">Áreas</th><th class="n" title="${ayudaQ}">Líneas</th>` +
+      `<th class="n" title="Líneas con stock sin diferencia valorizada">Exactas</th><th class="n" title="Líneas con stock cuya diferencia es de S/ 5 o menos">±S/ 5</th>` : '') +
     '<th class="n" title="Stock declarado × precio de lo que se contó. Contexto: en un mes con varias sesiones cuenta el stock más de una vez">Valor contado</th></tr></thead>' +
     `<tbody>${filas}</tbody><tfoot><tr><td>Total del rango</td>${td(T('s'), 'pos')}${td(T('f'), 'neg')}${td(T('n'), 'neto')}` +
-    (d.kardex ? '<td></td>' : '') + `${td(T('contado'), 'suave')}</tr></tfoot></table></div>`;
+    (d.oper ? td(T('os') + T('of'), 'op') : '') + (d.kardex ? '<td></td>' : '') +
+    (hayQ ? `<td></td><td class="n">${lin.toLocaleString('en-US')}</td><td class="n">${pq(pondera(2))}</td><td class="n">${pq(pondera(3))}</td>` : '') +
+    `${td(T('contado'), 'suave')}</tr></tfoot></table></div>`;
 }
-
-// ── el hueco de abajo ───────────────────────────────────────────────────
-function htmlAbajo(d, ui) {
-  const tabs = [];
-  if (d.familias.length) tabs.push(['fam', d.gran === 'Mes' ? 'Familia × mes' : 'Familia × corte']);
-  tabs.push(['pct', '¿Es mucho?'], ['tabla', 'Tabla']);
-  if (!tabs.some(([k]) => k === ui.abajo)) ui.abajo = tabs[0][0];
-  const sel = tabs.map(([k, t]) => `<button type="button" data-act="abajo" data-arg="${k}" aria-pressed="${ui.abajo === k}" class="${ui.abajo === k ? 'on' : ''}">${t}</button>`).join('');
-  let extra = '', cuerpo = '';
-  if (ui.abajo === 'fam') {
-    const modos = d.sistema && d.sistema.TOTAL
-      ? '<span class="seg mini" role="group" aria-label="Medir la matriz">' + [['soles', 'En soles'], ['pct', '% del sistema']].map(([k, t]) =>
-        `<button type="button" data-act="modo" data-arg="${k}" aria-pressed="${ui.modo === k}" class="${ui.modo === k ? 'on' : ''}">${t}</button>`).join('') + '</span>' : '';
-    const txt = ui.modo === 'pct' ? 'ajuste ÷ lo que el sistema decía · sin productos en negativo' : 'color = neto · la cifra, sólo donde se sale de lo normal';
-    extra = `${modos}<span class="ayuda">${txt} · clic en una familia</span>`;
-    cuerpo = `<div class="mz-marco">${htmlMatriz(d, ui)}</div>`;
-  } else if (ui.abajo === 'pct') {
-    const c = d.consumo_estado === 'listo' ? d.consumo : null;
-    extra = c && hay(c.ci)
-      ? '<span class="ayuda"><i class="bh"></i>lo habitual <i class="bf"></i>todavía normal <i class="med"></i>mediana ' + pc(c.med) +
-        ' · el neto como % del consumo operativo del mes</span>'
-      : '<span class="ayuda">el neto como % del consumo operativo del mes</span>';
-    cuerpo = htmlEsMucho(d, ui);
-  } else {
-    extra = `<span class="ayuda">del más nuevo al más viejo${d.nota_kx ? ' · ' + d.nota_kx : ''}</span>`;
-    cuerpo = htmlTabla(d, ui);
-  }
-  return `<div class="abajo"><div class="cab"><span class="seg" role="group" aria-label="Debajo de la serie">${sel}</span>${extra}</div>` +
-    `<div class="hueco" style="height:${d.alto.abajo}px">${cuerpo}</div></div>`;
-}
-
 
 // ── #799: la franja, las pestañas, la ficha de la familia ───────────────
 // El boceto aprobado (https://claude.ai/artifact/9yhcARxuLTYEFpJaQk4Baq): Serie
@@ -432,28 +476,41 @@ function htmlKpis(d) {
     curva = `<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polyline points="${netos.map((v, i) => `${(i * 100 / (netos.length - 1)).toFixed(1)},${(27 - (v - lo) / r * 24).toFixed(1)}`).join(' ')}"/></svg>`;
   }
   const k = (rot, val, cls, sub, extra = '') => `<div class="ev-kpi">${extra}<span class="r">${esc(rot)}</span><span class="v ${cls}">${val}</span><span class="d">${esc(sub)}</span></div>`;
-  const nCierres = cs.length ? `${cs.length} ${d.gran === 'Mes' ? 'cierres' : 'sesiones'}` : `${P.length} ${d.gran === 'Mes' ? 'meses' : 'cortes'}`;
+  const nCierres = cs.length ? `${cs.length} ${d.gran === 'Mes' ? 'cierres' : unidad(d, cs.length)}` : `${P.length} ${unidad(d, P.length)}`;
+  const ON = sum(P.map((p) => p.os)) + sum(P.map((p) => p.of));
   return '<div class="ev-kpis">' +
     k(`Neto · ${nCierres}`, soles(N), N < 0 ? 'neg' : 'pos', c[0] > 0 ? `${pc((100 * (c[1] + c[2])) / c[0])} del valor del sistema` : 'sobrante más faltante', curva) +
     k('Faltante', soles(F), 'neg', c[0] > 0 ? `${pc((100 * c[1]) / c[0])} · contado en cero ${pc((100 * c[3]) / c[0])}` : 'lo que faltó al contar') +
     k('Sobrante', soles(S), 'pos', S > 0 && neg > 0 ? `${Math.round((100 * neg) / S)} % era sistema en negativo` : 'lo que sobró al contar') +
+    (d.oper ? k('Operación · aparte', soles(ON), 'op', 'no entra en el neto') : '') +
     (c[0] > 0 ? k('Valor del sistema', soles(c[0]).replace('+', ''), '', 'lo que el sistema decía al contar') : '') + '</div>';
 }
 
 function htmlTabs(d, ui) {
   const tabs = [['serie', 'Serie']];
-  if (d.familias.length) tabs.push(['fam', d.gran === 'Mes' ? 'Familia × mes' : 'Familia × corte']);
+  if (d.familias.length) tabs.push(['fam', tabFam(d)]);
   tabs.push(['pct', '¿Es mucho?'], ['tabla', 'Tabla']);
   if (!tabs.some(([t]) => t === ui.zona)) ui.zona = 'serie';
   return '<div class="ev-tabs" role="tablist" aria-label="Qué se ve">' + tabs.map(([t, n]) =>
     `<button type="button" role="tab" data-act="zona" data-arg="${t}" aria-selected="${ui.zona === t}" class="${ui.zona === t ? 'on' : ''}">${n}</button>`).join('') + '</div>';
 }
 
+// Los parciales, a pedido (#827): de entrada, cierre a cierre. Recibe los datos
+// ENTEROS, para contarlos aunque estén escondidos.
+function htmlParciales(d0, ui) {
+  const n = d0.periodos.filter((p) => p.parcial).length;
+  if (d0.gran !== 'Cierre' || !n) return '';
+  const on = !!ui.parciales;
+  return `<button type="button" class="ev-parc${on ? ' on' : ''}" data-act="parciales" aria-pressed="${on}" ` +
+    `title="${on ? 'Volver a ver sólo los cierres de mes' : 'Sumar los conteos parciales del rango: cuentan pocas áreas, y su neto chico no es una mejora'}">` +
+    `<i aria-hidden="true">${on ? '✓' : ''}</i>Parciales · ${n}</button>`;
+}
+
 // La ficha de una familia (opción B): sus dos lados mes a mes y su peso.
 function fichaFam(d, ui) {
   const P = d.periodos;
   const r = ui.abierta === 'TOTAL'
-    ? { id: 'TOTAL', nombre: 'Todas las familias', s: P.map((p) => p.s), f: P.map((p) => p.f) }
+    ? { id: 'TOTAL', nombre: d.oper ? 'Todas, sin operación' : 'Todas las familias', s: P.map((p) => p.s), f: P.map((p) => p.f) }
     : d.familias.find((f) => f.id === ui.abierta);
   if (!r) return '';
   const S = sum(r.s), F = sum(r.f), N = S + F, mov = S - F;
@@ -466,7 +523,7 @@ function fichaFam(d, ui) {
   const peor = netos.length ? netos.reduce((a, b) => (b[0] < a[0] ? b : a)) : null;
   const totN = sum(P.map((p) => p.n));
   const frase = peor
-    ? `${esc(r.nombre)}: neto ${soles(N)} sobre ${soles(mov).replace('+', '')} movidos${hay(totN) && Math.abs(totN) > 0.5 && r.id !== 'TOTAL' ? ` (${Math.round((100 * N) / totN)} % del neto del rango)` : ''}. El peor ${d.gran === 'Mes' ? 'mes' : 'corte'}: ${esc(P[peor[1]].eje)}, ${soles(peor[0])}.`
+    ? `${esc(r.nombre)}: neto ${soles(N)} sobre ${soles(mov).replace('+', '')} movidos${hay(totN) && Math.abs(totN) > 0.5 && r.id !== 'TOTAL' ? ` (${Math.round((100 * N) / totN)} % del neto del rango)` : ''}. El peor ${unidad(d, 1)}: ${esc(P[peor[1]].eje)}, ${soles(peor[0])}.`
     : 'Sin movimientos en el rango.';
   let sis = '';
   const sx = d.sistema && d.sistema[r.id];
@@ -504,7 +561,7 @@ function htmlZona(d, ui) {
       : '<span class="ayuda">el neto como % del consumo operativo del mes</span>';
     cuerpo = htmlEsMucho(d, ui);
   } else {
-    extra = `<span class="ayuda">del más nuevo al más viejo${d.nota_kx ? ' · ' + d.nota_kx : ''}</span>`;
+    extra = `<span class="ayuda">del más nuevo al más viejo${notaKardex(d)}</span>`;
     cuerpo = htmlTabla(d, ui);
   }
   return `<div class="abajo"><div class="cab">${extra}</div><div class="hueco" style="height:${d.alto.abajo}px">${cuerpo}</div></div>`;
@@ -512,7 +569,9 @@ function htmlZona(d, ui) {
 
 // ── dibujar y escuchar ──────────────────────────────────────────────────
 function dibujar(raiz) {
-  const { data: d, ui } = raiz.__st;
+  const { data: d0, ui } = raiz.__st;
+  const d = vistaPeriodos(d0, ui);
+  raiz.__st.vista = d;
   if (ui.foco && !d.periodos.some((p) => p.k === ui.foco)) ui.foco = null;
   if (ui.abierta && !(ui.abierta === 'TOTAL' || d.familias.some((f) => f.id === ui.abierta))) ui.abierta = null;
   const hex = (c) => { const m = /^#?([0-9a-f]{6})$/i.exec(c || ''); if (!m) return '0 0 0'; const n = parseInt(m[1], 16); return `${n >> 16} ${(n >> 8) & 255} ${n & 255}`; };
@@ -523,6 +582,7 @@ function dibujar(raiz) {
   raiz.style.setProperty('--ev-post', d.col.post);
   raiz.style.setProperty('--ev-negt', d.col.negt);
   raiz.style.setProperty('--ev-alerta', d.col.alerta);
+  raiz.style.setProperty('--ev-op', d.col.op || d.col.alerta);
   const mz = raiz.querySelector('.mz-marco');
   const scroll = mz ? [mz.scrollTop, mz.scrollLeft] : null;
   // Una zona a todo el alto (#799): el alto de la serie y el de abajo se suman.
@@ -532,7 +592,7 @@ function dibujar(raiz) {
   const panel = conFicha ? fichaFam(d, ui) : htmlPanel(d, ui).replace('</h3>', `</h3><span class="ev-esp"></span>${ampB(ui, 'panel', 'la lectura')}`);
   raiz.classList.toggle('amp-izq', ui.amp === 'izq');
   raiz.classList.toggle('amp-panel', ui.amp === 'panel');
-  raiz.innerHTML = htmlKpis(d) + '<div class="ev-fila">' + htmlTabs(d, ui) + '<span class="ev-esp"></span>' + ampB(ui, 'izq', 'la zona') + '</div>' +
+  raiz.innerHTML = htmlKpis(d) + '<div class="ev-fila">' + htmlTabs(d, ui) + '<span class="ev-esp"></span>' + htmlParciales(d0, ui) + ampB(ui, 'izq', 'la zona') + '</div>' +
     `<div class="cuerpo ev-uno" style="height:${Hz - 40}px"><div class="izq">` + htmlZona(dz, ui) + '</div>' + panel + '</div>';
   const mz2 = raiz.querySelector('.mz-marco');
   if (mz2 && scroll) { mz2.scrollTop = scroll[0]; mz2.scrollLeft = scroll[1]; }
@@ -555,11 +615,12 @@ function enlazar(raiz) {
     const arg = b.dataset.arg;
     switch (b.dataset.act) {
       case 'mes': {
-        const k = raiz.__st.data.periodos[Number(arg)].k;
+        const k = (raiz.__st.vista || raiz.__st.data).periodos[Number(arg)].k;
         ui.foco = ui.foco === k ? null : k;
         break;
       }
       case 'soltar': ui.foco = null; break;
+      case 'parciales': ui.parciales = !ui.parciales; break;
       case 'chip': ui.on = { ...ui.on, [arg]: !ui.on[arg] }; break;
       case 'quitar': ui.on = {}; break;
       case 'abajo': case 'zona': ui.zona = arg; break;
@@ -580,7 +641,7 @@ export default function (component) {
     raiz = document.createElement('div');
     raiz.className = 'ev';
     parentElement.appendChild(raiz);
-    raiz.__st = { ui: { foco: null, on: {}, zona: 'serie', abierta: null, modo: 'soles', lado: 'n', amp: null } };
+    raiz.__st = { ui: { foco: null, on: {}, zona: 'serie', abierta: null, modo: 'soles', lado: 'n', amp: null, parciales: false } };
     enlazar(raiz);
     // `Esc` vuelve de una zona ampliada; se escucha en el documento: el redibujo se lleva el foco (#780).
     document.addEventListener('keydown', (e) => {

@@ -6320,6 +6320,61 @@ def _pruebas_evolucion_ajuste():
     check("Corte: una sesión por racha de días",
           len(orden_c), 2)
 
+    # «CIERRE» (regla #827, lo que era «12 cierres» de Diferencias): un
+    # período por SESIÓN —lo contado del 1 al 7 del mes siguiente, junto—,
+    # rotulado con el mes que cierra, y los parciales marcados.
+    d_ci = pd.DataFrame({
+        "F": pd.to_datetime(["2026-09-01", "2026-09-06", "2026-09-20",
+                             "2026-10-01", "2026-10-06"]),
+        "FAM": ["A", "COSTOS PRODUCCION", "A", "A", "COSTOS PRODUCCION "],
+        "AREA": ["X", "Y", "X", "X", "Y"],
+        "AV": [-10.0, -4.0, 3.0, -6.0, 2.0],
+        "STOCK AL CIERRE": [5.0, 2.0, 0.0, 3.0, 1.0],
+        "STOCK DECLARADO": [4.0, 0.0, 0.0, 3.0, 1.0],
+    })
+    dp_ci, orden_ci = _ev.periodos_ajuste(d_ci, "F", "Cierre")
+    check("Cierre: el 1 y el 6 de octubre son UN cierre, el de setiembre",
+          orden_ci[["_clave", "eje", "tipo"]].values.tolist(),
+          [["cierre_2026-08", "ago", "cierre"],
+           ["parcial_2026-09-20", "20 set", "parcial"],
+           ["cierre_2026-09", "set", "cierre"]])
+    from cortes import sesiones_inventario as _ses_inv
+    _, orden_x = _ev.periodos_ajuste(
+        d_ci[d_ci["AREA"] == "X"], "F", "Cierre",
+        sesiones=_ses_inv(d_ci["F"]))
+    check("Cierre: con un área elegida, las sesiones son las del parquet entero",
+          orden_x["_clave"].tolist(),
+          ["cierre_2026-08", "parcial_2026-09-20", "cierre_2026-09"])
+    check("los granos de la serie son Cierre y Mes; los de la tabla, Corte y Mes",
+          (_ev.GRANOS_SERIE, _ev.GRANOS), (("Cierre", "Mes"), ("Corte", "Mes")))
+    m_op = _ev.es_operacion(dp_ci, "FAM")
+    check("la operación se reconoce sin mirar mayúsculas ni espacios",
+          m_op.tolist(), [False, True, False, False, True])
+    check("calidad del conteo: áreas, líneas con stock, % exactas, % ±S/ 5",
+          _ev.calidad_por_periodo(dp_ci, "AV", "AREA"),
+          {"cierre_2026-08": [2, 2, 0.0, 50.0],
+           "parcial_2026-09-20": [0, 0, None, None],
+           "cierre_2026-09": [2, 2, 0.0, 50.0]})
+    s_ci = _ev.serie_ajuste(dp_ci[~m_op.values], orden_ci, "AV")
+    pz_ci = _ev.datos_pieza(
+        s_ci, None, "Cierre",
+        oper=_ev.serie_ajuste(dp_ci[m_op.values], orden_ci, "AV"),
+        oper_id="COSTOS PRODUCCION",
+        calidad=_ev.calidad_por_periodo(dp_ci, "AV", "AREA"))
+    check("pieza por cierre: el neto SIN operación y la operación aparte",
+          [(p["k"], p["n"], p["os"], p["of"], p["parcial"])
+           for p in pz_ci["periodos"]],
+          [("cierre_2026-08", -10.0, 0.0, -4.0, False),
+           ("parcial_2026-09-20", 3.0, None, None, True),
+           ("cierre_2026-09", -6.0, 2.0, 0.0, False)])
+    check("pieza por cierre: la familia de la operación y la calidad",
+          (pz_ci["oper"], pz_ci["periodos"][0]["q"]),
+          ("COSTOS PRODUCCION", [2, 2, 0.0, 50.0]))
+    check("pieza sin operación aparte: sin `oper` ni tramos",
+          (_ev.datos_pieza(s_ci, None, "Cierre")["oper"],
+           _ev.datos_pieza(s_ci, None, "Cierre")["periodos"][0]["os"]),
+          (None, None))
+
     # MES OPERATIVO (regla #613): el cierre registrado del 1 al 7 es del mes
     # anterior, con su hora; el del 8 en adelante, del suyo. Era «del 1 al
     # 6» hasta que el usuario definió el cierre de mes (regla #632).
@@ -13104,6 +13159,10 @@ def main():
                 df, "FECHA APERTURA INVENTARIO", "Mes"),
                 "AJUSTE VALORIZADO", "VALORIZADO TOTAL", col_grupo="FAMILIA"),
             "Mes"), ()),
+        ("evolucion · pieza por cierre, con su tipo (#827)",
+         lambda: _aj.datos_pieza(_aj.serie_ajuste(*_aj.periodos_ajuste(
+             df, "FECHA APERTURA INVENTARIO", "Cierre"),
+             "AJUSTE VALORIZADO", "VALORIZADO TOTAL"), None, "Cierre"), ()),
         ("evolucion · pieza por corte sin valorizado (rama else)",
          lambda: _aj.datos_pieza(_aj.serie_ajuste(*_aj.periodos_ajuste(
              df_min, "FECHA APERTURA INVENTARIO", "Corte"),

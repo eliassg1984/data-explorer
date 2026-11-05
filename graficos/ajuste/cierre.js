@@ -123,13 +123,14 @@ const cnom=s=>/^\d+ áreas$/.test(String(s??''))?String(s):String(s??'').toLocal
 const CCORTO={'ALIMENTOS':'Alimentos','VINOS Y ESPUMANTES':'Vinos','ENVASES Y EMBALAJES':'Envases','BEBIDAS CON ALCOHOL':'Con alcohol','BEBIDAS SIN ALCOHOL':'Sin alcohol','COSTOS PRODUCCION':'Operación'};
 const ccorto=f=>CCORTO[String(f).trim().toUpperCase()]||cnom(String(f).split(' ')[0]);
 // #819: «Productos», no «Qué faltó»: la pestaña muestra también lo que sobró, y las
-// demás se llaman por lo que listan.
-const ctabs=[['listas','Productos'],['familias','Familias y áreas'],['cierres','12 cierres'],['comparar','Contra el anterior'],['lineas','Líneas']];
+// demás se llaman por lo que listan. «12 cierres» se fue a Evolución (#827): era una
+// serie en el tiempo, y Evolución con «Cierre» dice lo mismo y más.
+const ctabs=[['listas','Productos'],['familias','Familias y áreas'],['comparar','Contra el anterior'],['lineas','Líneas']];
 
 // El panel de los números fijo es una preferencia: se recuerda como «6 cierres».
 const clsFijo=()=>{try{return localStorage.getItem('aj_dif_fijo')==='1';}catch(e){return false;}};
 function cinicial(P){const cruce=P.perspectiva==='Familia × Área';return {c:P.inicial,prev:cprev(P,P.inicial),fams:[],areas:[],fam:null,area:null,
-  vf:cruce?'cruce':'lista',medida:'val',vg:'graf',tab:cruce?'familias':'listas',orden:'monto',juntas:true,lado:'ambos',sel:null,ampl:false,
+  vf:cruce?'cruce':'lista',medida:'val',tab:cruce?'familias':'listas',orden:'monto',juntas:true,lado:'ambos',sel:null,ampl:false,
   numOpen:clsFijo(),numFijo:clsFijo(),numAb:[],q:'',status:'Recurrente',limite:150,abiertos:[],elegido:null,ordenTabla:{}};}
 const cfoco=st=>r=>(!st.fam||r.fam===st.fam)&&(!st.area||r.area===st.area);
 function cdatos(G){const {st,B}=G,P=B.P;
@@ -144,8 +145,9 @@ function cdatos(G){const {st,B}=G,P=B.P;
     hayOper:B.oper.size>0&&(!st.fams.length||st.fams.some(f=>B.oper.has(f)))};
   if(B.cache.size>30)B.cache.clear();B.cache.set(clave,datos);return {...datos,st};
 }
-// Los últimos 12 cierres hasta el corte elegido, con los filtros y el foco;
-// y la tabla con los parciales del mismo tramo.
+// Los últimos 12 cierres hasta el corte elegido, con los filtros y el foco, y la
+// tabla con los parciales del mismo tramo. Desde la #827 sólo la usa la hoja «Cortes»
+// del Excel del resumen: el gráfico y su tabla viven en Evolución, grano «Cierre».
 function cserie(G){const {st,B}=G,P=B.P,clave=JSON.stringify(['serie',st.c,st.fams,st.areas,st.fam,st.area]);
   if(B.cache.has(clave))return B.cache.get(clave);
   const idx=P.sesiones.map((s,i)=>i).filter(i=>i<=st.c&&P.sesiones[i].tipo==='cierre').slice(-12),desde=idx.length?idx[0]:st.c,foco=cfoco(st);
@@ -217,28 +219,6 @@ function cfamilias(G,D){const {B}=G,P=B.P,{st}=D;
   const heads=['Familia','Faltó','Sobró','Neto','±S/ 5','Exactas','80 %'];
   return `<table class="ajc-familias"><thead><tr>${heads.map((t,i)=>`<th title="${i===4?'Líneas con stock cuya diferencia es de S/ 5 o menos':i===6?'Cuántos productos explican el 80 % de la diferencia':''}">${cbtn('ordentab',`familias|${i}`,t+' ↕')}</th>`).join('')}</tr></thead>
     <tbody>${carta.map(r=>fila(r)).join('')}${total(oper.length?'Alimentos y bebidas':'Total de los filtros',oper.length?D.mc:D.m)}${aparte}</tbody></table>`;
-}
-function ccortes(G,D){const {st}=D,S=cserie(G);
-  if(st.vg==='tabla'){
-    return `<div class="ajc-scroll">${ctabla(['Corte','Faltó','Sobró','Neto','Áreas','Líneas','Exactas','±S/ 5'],S.tabla.map(r=>`<tr class="${r.s.tipo==='cierre'?'':'ajc-parcial'}${r.i===st.c?' chosen':''}"><td>${cbtn('corte',r.i,r.s.corto.replace(/ \d{4}$/,''),r.i===st.c)}<small>${cesc(r.s.etiqueta_anio)}</small></td>
-      <td class="neg">${cint(r.m.falto)}</td><td class="pos">${cint(r.m.sobro)}</td><td><b>${cint(r.m.saldo)}</b></td><td>${r.areas}</td><td>${cn(r.m.lineas)}</td><td>${cp(r.m.exact)}</td><td>${cpct(r.m.tol,r.m.lineas)}</td></tr>`),'ajc-compacta')}</div>
-      <p class="ajc-pie">Todas las familias de los filtros. Un parcial cuenta pocas áreas: un neto chico en un parcial no es una mejora, y las áreas y líneas con stock lo dicen.</p>`;}
-  return `<div class="ajc-graf" data-k="graf" aria-label="Faltó y sobró de los últimos 12 cierres"></div>`;
-}
-const cleyenda=D=>`<div class="ajc-ley"><span><i class="pos"></i>Sobró</span><span><i class="neg"></i>Faltó</span><span><i class="pto"></i>Neto</span>${D.hayOper?'<span><i class="op"></i>Insumos de operación</span>':''}</div>`;
-function cgrafico(G){const caja=G.root.querySelector('[data-k=graf]');if(!caja)return;
-  const W=Math.round(caja.clientWidth),H=Math.round(caja.clientHeight)||220;if(!W)return;
-  const S=cserie(G).cierres,n=S.length;if(!n){caja.innerHTML='<p class="ajc-pie">Sin cierres para estos filtros.</p>';return;}
-  const vals=S.flatMap(r=>[r.c.sobro,r.c.falto,r.o.saldo,0]),hi=Math.max(...vals),lo=Math.min(...vals),T=22,B=30,an=(W-8)/n;
-  const y=v=>T+(hi-v)/((hi-lo)||1)*(H-T-B);
-  let s=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Faltó y sobró de los últimos ${n} cierres">`;
-  S.forEach((r,j)=>{const x=4+an*j,w=an*.34,x1=x+an*.14,x2=x1+w+2,[m,a]=r.s.corto.replace(/^Cierre /,'').split(' ');
-    if(r.i===G.st.c)s+=`<rect class="sel" x="${x+1}" y="${T-6}" width="${an-2}" height="${H-T-B+10}" rx="6"/><text class="etq" x="${x+an/2}" y="${Math.max(11,y(r.c.sobro)-5)}" text-anchor="middle">${cesc(csol(r.c.saldo))}</text>`;
-    s+=`<rect class="pos" x="${x1}" y="${y(r.c.sobro)}" width="${w}" height="${Math.max(1,y(0)-y(r.c.sobro))}" rx="2"/><rect class="neg" x="${x1}" y="${y(0)}" width="${w}" height="${Math.max(1,y(r.c.falto)-y(0))}" rx="2"/>`;
-    if(Math.abs(r.o.saldo)>.5)s+=`<rect class="op" x="${x2}" y="${Math.min(y(0),y(r.o.saldo))}" width="${w*.7}" height="${Math.max(1,Math.abs(y(r.o.saldo)-y(0)))}" rx="2"/>`;
-    s+=`<circle class="pto" cx="${x1+w/2}" cy="${y(r.c.saldo)}" r="3.2"/><text x="${x+an/2}" y="${H-16}" text-anchor="middle">${cesc(m||'')}</text><text x="${x+an/2}" y="${H-4}" text-anchor="middle">${cesc((a||'').slice(2))}</text>`;
-    s+=`<rect class="toque" data-act="corte" data-v="${r.i}" data-j="${j}" x="${x}" y="0" width="${an}" height="${H}"><title>${cesc(`${r.s.corto} · ${r.s.etiqueta_anio}\nFaltó ${csol(r.c.falto)} · sobró ${csol(r.c.sobro)} · neto ${csol(r.c.saldo)}\n${r.areas} áreas, ${cn(r.c.lineas)} líneas${Math.abs(r.o.saldo)>.5?`\nOperación ${csol(r.o.saldo)}`:''}`)}</title></rect>`;});
-  caja.innerHTML=s+`<line class="cero" x1="4" x2="${W-4}" y1="${y(0)}" y2="${y(0)}"/></svg>`;
 }
 // ── Arriba: el cierre, los indicadores y las pestañas ────────────────────
 function cfilacorte(G,D){
@@ -312,7 +292,6 @@ function cbarra(G,D){const {st}=D,tq='Buscar producto o área';
   if(st.tab==='listas')der=cvista(G,D);
   else if(st.tab==='lineas')der=ccap('juntas',[['si','Áreas juntas'],['no','Áreas separadas']],st.juntas?'si':'no','Áreas');
   else if(st.tab==='familias'){der=`${ccap('vf',[['lista','Familias'],['areas','Áreas'],['cruce','Cruce']],st.vf,'Cómo ver')}${st.vf==='cruce'&&G.B.P.hay.stock?ccap('medida',[['val','Ajuste'],['stock','Stock']],st.medida,'Qué mide el cruce'):''}`;buscar='';}
-  else if(st.tab==='cierres'){der=ccap('vg',[['graf','Gráfico'],['tabla','Tabla con parciales']],st.vg,'Gráfico o tabla');buscar=st.vg==='graf'?cleyenda(D):'';}
   const excel=`<details class="ajc-menu ajc-excel"><summary class="ib" aria-label="Descargar Excel" data-tip="Descargar Excel" data-tip-der>${icono('bajar')}</summary><div class="ajc-options">${cbtn('excel','resumen','El resumen: familias y cortes')}${cbtn('excel','detalle','Lo que se ve en esta pestaña')}</div></details>`;
   return `<div class="ajc-barra">${buscar}<span class="ajc-push"></span>${der}${excel}</div>`;
 }
@@ -496,7 +475,6 @@ function czona(G,D){const {st}=D;
   if(st.tab==='listas')contenido=clistashtml(G,D);
   else if(st.tab==='comparar')contenido=ctabcomparar(G,D);
   else if(st.tab==='lineas')contenido=ctablineas(G,D);
-  else if(st.tab==='cierres'){contenido=ccortes(G,D);if(st.vg==='tabla')G.sub='Todas las familias de los filtros.';}
   else if(st.vf==='areas')contenido=`<div class="ajc-scroll ajc-detail">${ctabareas(G,D)}</div>`;
   else contenido=`<div class="ajc-scroll">${D.rs.length?cfamilias(G,D):'<p class="ajc-pie">No hay líneas para estos filtros.</p>'}</div>`;
   if(st.tab!=='listas')contenido=cbarra(G,D)+contenido;
@@ -533,7 +511,6 @@ function cpintar(G){
   main.innerHTML=`${cfilacorte(G,D)}<div class="ajc-cuerpo"><div class="ajc-zona">${zona}</div>${panel?`<aside class="ajc-pn" aria-label="Historial">${panel}</aside>`:''}</div>${cajon}${ven?`<button type="button" class="ajc-velo" data-act="soltar" aria-label="Cerrar la ficha"></button><div class="ajc-ven" role="dialog" aria-label="Ficha del producto">${ven}</div>`:''}`;
   main.querySelectorAll('.ajc-scroll').forEach((e,i)=>{if(guardado[i]){e.scrollTop=guardado[i][0];e.scrollLeft=guardado[i][1];}});
   G.tabPintada=G.st.tab;
-  cgrafico(G);
 }
 // ‹ › de la ventana: el producto anterior o siguiente de la MISMA lista, en su orden.
 function cnavegar(G,d){const st=G.st;if(!st.sel)return false;const i=st.sel.indexOf('|'),l=st.sel.slice(0,i),prod=st.sel.slice(i+1),L=cnavlista(G.lista,l);
@@ -548,7 +525,6 @@ function cenlazar(G){const root=G.root;
     if(!b||!root.contains(b))return;const {act,v}=b.dataset,st=G.st;
     if(act==='vf'){st.vf=v;st.limite=150;if(v!=='cruce')st.medida='val';}
     else if(act==='corte'||act==='mover')ccambiarcorte(G,act==='corte'?+v:st.c+(+v));
-    else if(act==='vg')st.vg=v;
     // Elegir una familia, un área o una celda lleva a sus productos.
     else if(act==='familia'){st.fam=st.fam===v&&!st.area?null:v;st.area=null;if(st.fam)st.tab='listas';st.sel=null;}
     else if(act==='celda'){const [f,a]=JSON.parse(v);if(st.fam===f&&st.area===a){st.fam=null;st.area=null;}else{st.fam=f;st.area=a;st.tab='listas';}st.sel=null;}
@@ -596,8 +572,9 @@ function cenlazar(G){const root=G.root;
 window.__ajCierreDatos={leer:cleer,metricas:cmetricas,resumen:cresumen,matriz:cmatriz,productos:cproductos,pareto:cpareto,areasPareto:careasPareto,listas:clistas,espejos:cespejos,comparar:ccomparar,grupos:cgrupos};
 window.__ajCierreUI={inicial:cinicial,pintar:cpintar,exportar:cexportar,serie:cserie};
 export default function(component){const {data:P,parentElement,setTriggerValue}=component;if(!P)return;
-  const old=window.__ajCierre;old?.observer?.disconnect();old?.vista?.disconnect();old?.abort?.abort();
+  const old=window.__ajCierre;old?.vista?.disconnect();old?.abort?.abort();
   const mismo=old?.B.P.sello===P.sello,st=mismo&&old.st&&'lado' in old.st?old.st:cinicial(P);
+  if(!ctabs.some(([t])=>t===st.tab))st.tab='listas';
   if(st.det6===undefined){try{st.det6=localStorage.getItem('aj_dif_6')==='1';}catch(e){st.det6=false;}}
   if(old&&old.semilla!==P.perspectiva){st.vf=P.perspectiva==='Familia × Área'?'cruce':'lista';if(st.vf==='cruce')st.tab='familias';}
   let root=parentElement.querySelector('.ajc');if(root)root.remove();root=document.createElement('div');root.className='ajc';root.innerHTML='<section class="ajc-main"></section>';parentElement.appendChild(root);
@@ -607,7 +584,6 @@ export default function(component){const {data:P,parentElement,setTriggerValue}=
   // hay franja: desde 901 px y dentro de la app (en la prueba, sin franja, no sube).
   G.vista=new IntersectionObserver(es=>{const e=es[es.length-1],arriba=e.isIntersecting&&e.intersectionRatio>=.5&&!!document.querySelector('.st-key-nav_franja_rep')&&matchMedia('(min-width: 901px)').matches;
     if(root.classList.contains('ajc-arriba')!==arriba)root.classList.toggle('ajc-arriba',arriba);},{threshold:[0,.5,1]});G.vista.observe(root);
-  let ancho=0;G.observer=new ResizeObserver(es=>{const w=Math.round(es[0].contentRect.width);if(w&&w!==ancho){ancho=w;cgrafico(G);}});G.observer.observe(root.querySelector('.ajc-main'));
   document.addEventListener('pointerdown',ev=>{if(!ev.composedPath().includes(root))cplegar(root);},{signal:G.abort.signal});
   document.addEventListener('keydown',ev=>{if(!root.isConnected||!G.st.sel||!root.querySelector('.ajc-ven'))return;const t=ev.composedPath()[0];if(t&&t.matches?.('input,select,textarea'))return;
     if(ev.key==='Escape'){G.st.sel=null;cpintar(G);}else if(ev.key==='ArrowLeft'||ev.key==='ArrowRight'){ev.preventDefault();if(cnavegar(G,ev.key==='ArrowLeft'?-1:1))cpintar(G);}},{signal:G.abort.signal});

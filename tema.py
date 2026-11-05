@@ -211,6 +211,12 @@ AJUSTE_ORIGEN_REG = "#8eb0d6"
 """Registro, traslado o código: otra área, nombre parecido, factura sin
 ingresar, requerimiento sin procesar, salida habitual, revierte."""
 
+AJUSTE_OPERACION = "#ee9a5c"
+"""Insumos de operación (leña, carbón, limpieza) en Ajuste › Evolución,
+APARTE de la serie (regla #827): el tramo de afuera de cada barra, rayado.
+Naranja, como en «Diferencias del cierre» (`--warning`): no es un origen
+ni una familia más, es lo que ninguna receta descarga."""
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # LAVANDA DE FOCO

@@ -56,8 +56,10 @@ import data
 import definicion_venta
 import diferencias_ajuste
 from cortes import sesiones_inventario
+from sin_plato import FAMILIA_OPERACION
 from tema import (
-    AJUSTE_ALERTA_TEXTO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_ORIGEN_NEG,
+    AJUSTE_ALERTA_TEXTO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_OPERACION,
+    AJUSTE_ORIGEN_NEG,
     AJUSTE_ORIGEN_PRO, AJUSTE_ORIGEN_REG, AJUSTE_ORIGEN_VEN, AJUSTE_POS,
     AJUSTE_POS_TEXTO, GRIS_TEXTO_SUAVE, TEXTO_PRINCIPAL,
 )
@@ -75,7 +77,16 @@ from utils import fmt_k
 # conteo anterior. Por semana, el eje juntaba barras separadas por una o
 # por ocho semanas como si fueran vecinas, una sesión que cruzaba el lunes
 # salía partida en dos, y lo demás era «Corte» con un rótulo peor.
+# Son los granos de la Tabla dinámica (`_pivote.py`), que los importa.
 GRANOS = ("Corte", "Mes")
+
+# Los de la Serie desde la regla #827: «Cierre» en vez de «Corte». Un corte
+# es una racha de días seguidos; un cierre, la SESIÓN de
+# `cortes.sesiones_inventario` —lo contado del 1 al 7 del mes siguiente,
+# junto—, la misma unidad que «Diferencias del cierre». Con «Corte», el
+# cierre de setiembre 2026 (contado el 1 y el 6 de octubre) salía en dos
+# barras. Los parciales viajan marcados y la pieza los muestra a pedido.
+GRANOS_SERIE = ("Cierre", "Mes")
 
 _K_GRAN = "ajuste_evo_gran"
 
@@ -97,7 +108,40 @@ AYUDA_KARDEX = (
 
 # ── DATOS (puros: sin Streamlit, los prueba test_graficos.py) ────────────
 
-def periodos_ajuste(d, col_fecha, gran, operativo=False):
+def _periodos_cierre(d, col_fecha, sesiones):
+    """`periodos_ajuste` con gran «Cierre» (regla #827): un periodo por
+    SESIÓN de inventario, con su `tipo` («cierre» o «parcial») en `orden`.
+
+    `sesiones` son las del parquet ENTERO (`cortes.sesiones_inventario`):
+    con un área o una familia elegida quedan menos días, y las rachas de lo
+    que queda pueden partir una sesión en dos. Sin ellas, se arman de `d`.
+    El rótulo de un cierre es su MES («set 26», el que cierra, aunque se
+    haya contado en octubre); el de un parcial, sus días («20 set»)."""
+    cols = ["_clave", "etq", "eje", "anio", "tipo"]
+    if sesiones is None:
+        sesiones = sesiones_inventario(d[col_fecha])
+    por_dia = {dia: s["clave"] for s in sesiones for dia in s["dias"]}
+    clave = d[col_fecha].dt.date.map(por_dia)
+    d = d[clave.notna().values].copy()
+    d["_clave"] = clave[clave.notna()].astype(str).values
+    presentes = set(d["_clave"])
+    filas = []
+    for s in sesiones:
+        if s["clave"] not in presentes:
+            continue
+        y, m = s["mes"]
+        if s["tipo"] == "cierre":
+            filas.append((s["clave"], _MESES_ABR_ES[m - 1], int(y), "cierre"))
+        else:
+            filas.append((s["clave"], s["etiqueta"], int(s["fin"].year), "parcial"))
+    orden = pd.DataFrame(filas, columns=["_clave", "etq", "anio", "tipo"])
+    varios_anios = orden["anio"].nunique() > 1
+    orden["eje"] = [f"{e} {str(a)[2:]}" if varios_anios else e
+                    for e, a in zip(orden["etq"], orden["anio"])]
+    return d, orden[cols].reset_index(drop=True)
+
+
+def periodos_ajuste(d, col_fecha, gran, operativo=False, sesiones=None):
     """Asigna a cada fila su periodo y arma la lista ORDENADA de periodos.
 
     Devuelve `(d_con_clave, orden)`: `d` con la columna `_clave`, y un
@@ -114,13 +158,20 @@ def periodos_ajuste(d, col_fecha, gran, operativo=False):
     `operativo`: el «Mes» de cada fila es su mes OPERATIVO —un cierre
     registrado del 1 al 6 es del mes anterior— (regla #613). Los cortes
     siguen con sus días de verdad.
+
+    Con gran «Cierre» (regla #827) cada periodo es una sesión de inventario
+    y `orden` trae además `tipo`: ver `_periodos_cierre`, que usa
+    `sesiones` (las del parquet entero) si se las pasa.
     """
     d = d.copy()
     d[col_fecha] = pd.to_datetime(d[col_fecha], errors="coerce")
     d = d.dropna(subset=[col_fecha])
     cols = ["_clave", "etq", "eje", "anio"]
     if d.empty:
-        return d.assign(_clave=pd.Series(dtype=str)), pd.DataFrame(columns=cols)
+        return d.assign(_clave=pd.Series(dtype=str)), pd.DataFrame(
+            columns=cols + (["tipo"] if gran == "Cierre" else []))
+    if gran == "Cierre":
+        return _periodos_cierre(d, col_fecha, sesiones)
 
     f_mes = fechas_del_mes(d[col_fecha], operativo and gran == "Mes")
     clave, etq = _periodo_pivote_ajuste(f_mes, gran)
@@ -168,7 +219,9 @@ def serie_ajuste(d, orden, col_ajuste_val, col_valorizado=None, col_grupo=None,
     Se agrupa por COLUMNAS con nombre y se devuelve por nombre: una clave
     suelta en el groupby da otra forma en pandas 2 que en 3 (regla #481).
     """
-    base = ["_clave", "etq", "eje", "anio"]
+    # `tipo` («cierre» | «parcial») sólo viene con el grano «Cierre» (#827).
+    base = ["_clave", "etq", "eje", "anio"] + (
+        ["tipo"] if "tipo" in orden.columns else [])
     medidas = ["sobrante", "faltante", "neto", "contado"]
     v = pd.to_numeric(d[col_ajuste_val], errors="coerce").fillna(0.0)
     x = pd.DataFrame({
@@ -235,8 +288,8 @@ def nota_kardex(s, gran):
         return (f" · <span style='color:{GRIS_TEXTO_SUAVE}' "
                 f"title='{AYUDA_KARDEX}'>igual al kardex</span>")
     m = int(s["kardex"].notna().sum())
-    unidad = ("cortes" if m > 1 else "corte") if gran == "Corte" else (
-        "meses" if m > 1 else "mes")
+    unidad = {"Corte": ("corte", "cortes"), "Cierre": ("conteo", "conteos")}.get(
+        gran, ("mes", "meses"))[m > 1]
     return (f" · <span style='color:{AJUSTE_ALERTA_TEXTO};font-weight:600;"
             f"cursor:help' title='{AYUDA_KARDEX}'>el kardex difiere en {n} "
             f"de {m} {unidad}</span>")
@@ -302,6 +355,64 @@ def negativo_por_periodo(dp, col_ajuste_val):
     x = pd.DataFrame({"_clave": dp["_clave"].values, "v": v.where(m, 0.0).values})
     g = x.groupby("_clave", as_index=False)["v"].sum()
     return {k: round(float(v_), 2) for k, v_ in zip(g["_clave"], g["v"])}
+
+
+def es_operacion(d, col_familia):
+    """Las filas de los insumos de operación —leña, carbón, limpieza:
+    `sin_plato.FAMILIA_OPERACION`—, que ninguna receta descarga y cuyo
+    consumo aparece recién al contar. Van APARTE, no afuera (reglas #748 y
+    #827): con ellos adentro, el neto de setiembre 2026 era −S/ 12.650
+    contra −S/ 196 de alimentos y bebidas."""
+    if d is None or not col_familia or col_familia not in d.columns:
+        return pd.Series(False, index=getattr(d, "index", None), dtype=bool)
+    f = d[col_familia].astype(object).where(d[col_familia].notna(), "")
+    return f.astype(str).str.strip().str.upper() == FAMILIA_OPERACION
+
+
+# Desde cuántos soles una línea contada «está bien» (regla #748): el «dentro
+# de ±S/ 5» de «Diferencias del cierre» (`cierre.js::CTOL`).
+TOL_CONTEO = 5.0
+
+
+def calidad_por_periodo(dp, col_ajuste_val, col_area=None):
+    """La calidad del CONTEO por periodo (regla #827): `{clave: [áreas,
+    líneas, % exactas, % dentro de ±S/ 5]}`.
+
+    Es la tabla que tenía la pestaña «12 cierres» de «Diferencias del
+    cierre», con la cuenta de `cierre.js::cmetricas`: sólo las líneas CON
+    STOCK —el sistema o lo contado distinto de cero; cero/cero no prueba un
+    recuento—; «exacta» es sin diferencia valorizada, y las áreas son las que
+    contaron alguna. Va con TODAS las familias de los filtros, operación
+    incluida: mide el conteo, no lo que se perdió. Un parcial cuenta pocas
+    áreas, y es lo que dice que su neto chico no es una mejora."""
+    if dp is None or dp.empty:
+        return {}
+    v = _num(dp[col_ajuste_val])
+    if COL_SISTEMA in dp.columns and COL_CONTADO in dp.columns:
+        con = (_num(dp[COL_SISTEMA]).abs() > 1e-9) | (_num(dp[COL_CONTADO]).abs() > 1e-9)
+    else:
+        con = pd.Series(True, index=dp.index)
+    if col_area and col_area in dp.columns:
+        area = (dp[col_area].astype(object).where(dp[col_area].notna(), "")
+                .astype(str).str.strip())
+    else:
+        area = pd.Series("", index=dp.index)
+    x = pd.DataFrame({
+        "_clave": dp["_clave"].values, "con": con.values,
+        "exacta": (con & (v.abs() <= 1e-9)).values,
+        "tol": (con & (v.abs() <= TOL_CONTEO)).values,
+        "area": area.values,
+    })
+    g = x.groupby("_clave", as_index=False)[["con", "exacta", "tol"]].sum()
+    areas = (x[x["con"] & (x["area"] != "")]
+             .groupby("_clave")["area"].nunique().to_dict())
+    out = {}
+    for r in g.to_dict("records"):
+        n = int(r["con"])
+        out[r["_clave"]] = [int(areas.get(r["_clave"], 0)), n,
+                            round(100.0 * r["exacta"] / n, 2) if n else None,
+                            round(100.0 * r["tol"] / n, 2) if n else None]
+    return out
 
 
 def sistema_por_periodo(dp, col_fecha, col_ajuste_val, col_grupo, gran):
@@ -449,21 +560,33 @@ def pct_consumo(neto_por_clave, consumo_por_clave, cerrados):
 
 def datos_pieza(s, sf, gran, *, sistema=None, negativo=None, origen=None,
                 origen_estado="no", consumo=None, consumo_estado="no",
-                consumo_nota=""):
+                consumo_nota="", oper=None, oper_id=None, calidad=None):
     """Lo que recibe `evolucion_ajuste.js`. Pura (la prueba
     `test_graficos.py`): los periodos con sus tres medidas, las familias en
     el orden de la matriz, el % del sistema, el sistema en negativo y, si
     ya se pidieron, los posibles orígenes y el % del consumo. Un periodo sin
-    conteo va con `None`: es un dato («no se contó»), no un cero."""
+    conteo va con `None`: es un dato («no se contó»), no un cero.
+
+    Desde la regla #827: con `oper` (la serie de los insumos de operación,
+    `serie_ajuste` sobre sus filas) `s` es la serie SIN ellos y cada periodo
+    lleva aparte su sobrante y su faltante (`os`, `of`); `oper_id` es su
+    familia en la matriz. `calidad` es `calidad_por_periodo` (`q`), y un
+    periodo del grano «Cierre» dice si es un parcial."""
     def _v(x):
         return None if x is None or pd.isna(x) else round(float(x), 2)
 
     kx = con_kardex(s)
     dif = difiere_kardex(s) if kx else pd.Series(False, index=s.index)
+    op = oper.set_index("_clave") if oper is not None and len(oper) else None
+    calidad = calidad or {}
     periodos = [{
         "k": r["_clave"], "eje": r["eje"], "s": _v(r["sobrante"]),
         "f": _v(r["faltante"]), "n": _v(r["neto"]), "contado": _v(r["contado"]),
         "kx": _v(r["kardex"]) if kx else None, "dkx": bool(dif.loc[i]),
+        "parcial": r.get("tipo") == "parcial",
+        "os": _v(op["sobrante"].get(r["_clave"])) if op is not None else None,
+        "of": _v(op["faltante"].get(r["_clave"])) if op is not None else None,
+        "q": calidad.get(r["_clave"]),
     } for i, r in s.iterrows()]
     claves = [p["k"] for p in periodos]
     familias = []
@@ -479,6 +602,7 @@ def datos_pieza(s, sf, gran, *, sistema=None, negativo=None, origen=None,
         sis[g] = [por.get(k) for k in claves]
     return {
         "gran": gran, "kardex": kx, "periodos": periodos, "familias": familias,
+        "oper": oper_id if op is not None else None,
         "sistema": sis,
         "neg": [round(float((negativo or {}).get(k, 0.0)), 2) for k in claves],
         "origen": ([(origen or {}).get(k) for k in claves]
@@ -631,13 +755,16 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         with c_gran:
             # Una sesión vieja puede traer «Semana» guardada (regla #585):
             # un valor que no está en las opciones no se dibuja marcado.
-            if st.session_state.get(_K_GRAN) not in (None, *GRANOS):
+            # «Corte» pasó a ser «Cierre» (regla #827): se conserva la elección.
+            if st.session_state.get(_K_GRAN) == "Corte":
+                st.session_state[_K_GRAN] = "Cierre"
+            if st.session_state.get(_K_GRAN) not in (None, *GRANOS_SERIE):
                 del st.session_state[_K_GRAN]
             gran = st.segmented_control(
-                "Agrupar por", GRANOS, default="Mes", key=_K_GRAN,
+                "Agrupar por", GRANOS_SERIE, default="Mes", key=_K_GRAN,
                 label_visibility="collapsed",
-                help="Agrupa la serie y la matriz por mes o por sesión de "
-                     "inventario («Corte»).",
+                help="Agrupa la serie y la matriz por mes o cierre a cierre "
+                     "(los parciales, a pedido, en la propia vista).",
             ) or "Mes"
         d = filtro_familias_vista(c_tit, d, col_familia, K_FAM_EVO)
         ctx_m = ctx_meses("evo", d[col_fecha])
@@ -651,7 +778,16 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
             "Área": st.session_state.get(_K_AREA)})
 
         operativo = mes_operativo_activo()
-        dp, orden = periodos_ajuste(d, col_fecha, gran, operativo=operativo)
+        # Las sesiones salen del parquet ENTERO (regla #827): con un área o
+        # una familia elegida quedan menos días, y una sesión no puede
+        # partirse según el filtro.
+        sesiones = None
+        if gran == "Cierre":
+            base_ses = d_full if d_full is not None and col_fecha in d_full.columns else d
+            sesiones = sesiones_inventario(
+                pd.to_datetime(base_ses[col_fecha], errors="coerce"))
+        dp, orden = periodos_ajuste(d, col_fecha, gran, operativo=operativo,
+                                    sesiones=sesiones)
         if orden.empty:
             with c_tit:
                 st.markdown("<div style='font-size:14px;font-weight:600'>"
@@ -659,10 +795,20 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
             st.info("Sin datos en el rango y el área seleccionados.")
             return
 
-        s = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
-                         col_kardex=col_kardex)
-
         hay_fam = bool(col_familia and col_familia in dp.columns)
+        # LOS INSUMOS DE OPERACIÓN VAN APARTE (regla #827), como en
+        # «Diferencias del cierre» (#748): la serie, el negativo, el % del
+        # sistema y los orígenes son SIN ellos, y la pieza los dibuja en su
+        # propio tramo de cada barra. Sólo si hay algo más: con la operación
+        # sola en el filtro, ella es la serie. La matriz las trae a todas.
+        m_op = es_operacion(dp, col_familia).to_numpy()
+        aparte = bool(m_op.any() and (~m_op).any())
+        dp_main = dp[~m_op] if aparte else dp
+        s = serie_ajuste(dp_main, orden, col_ajuste_val, col_valorizado,
+                         col_kardex=col_kardex)
+        s_op = serie_ajuste(dp[m_op], orden, col_ajuste_val) if aparte else None
+        oper_id = str(dp.loc[m_op, col_familia].iloc[0]) if aparte else None
+
         sf = (serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
                            col_grupo=col_familia) if hay_fam else None)
         # Con un área elegida, los orígenes se filtran por las áreas que
@@ -672,6 +818,8 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                  else None)
         familias = (sorted(dp[col_familia].dropna().astype(str).unique())
                     if hay_fam else None)
+        fams_origen = ([f for f in familias if f.strip().upper() != FAMILIA_OPERACION]
+                       if aparte else familias)
 
         # LOS POSIBLES ORÍGENES, sólo si alguien prendió uno. El cálculo de
         # todas las sesiones del rango se guarda en la sesión del usuario:
@@ -691,7 +839,7 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
             if guardado and guardado[0] == llave:
                 origen = origenes_por_periodo(
                     guardado[1], dict(zip(fechas.dt.date, dp["_clave"])),
-                    familias, areas)
+                    fams_origen, areas)
                 origen_estado = "listo"
                 if guardado[2]:
                     st.caption(f"{guardado[2]} sesión(es) sin «Análisis de "
@@ -723,24 +871,31 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                 consumo_estado, consumo_nota = "error", (
                     f"No se pudo calcular el consumo ({e}).")
 
+        sistema = None
+        if tiene_sistema(dp):
+            sistema = sistema_por_periodo(dp, col_fecha, col_ajuste_val,
+                                          col_familia if hay_fam else None, gran)
+            if aparte:
+                # El total, como la serie: sin la operación (cada familia,
+                # la suya, para la matriz en «% del sistema»).
+                sistema["TOTAL"] = sistema_por_periodo(
+                    dp_main, col_fecha, col_ajuste_val, None, gran).get("TOTAL", {})
+
         _PIEZA(key=_K_PIEZA, data={
             **datos_pieza(
-                s, sf, gran,
-                sistema=(sistema_por_periodo(dp, col_fecha, col_ajuste_val,
-                                             col_familia if hay_fam else None, gran)
-                         if tiene_sistema(dp) else None),
-                negativo=negativo_por_periodo(dp, col_ajuste_val),
+                s, sf, gran, sistema=sistema,
+                negativo=negativo_por_periodo(dp_main, col_ajuste_val),
                 origen=origen, origen_estado=origen_estado,
                 consumo=consumo, consumo_estado=consumo_estado,
-                consumo_nota=consumo_nota),
-            "nota_kx": nota_kardex(s, gran).strip(" ·"),
+                consumo_nota=consumo_nota, oper=s_op, oper_id=oper_id,
+                calidad=calidad_por_periodo(dp, col_ajuste_val, col_area)),
             "ayuda_kx": AYUDA_KARDEX,
             "alto": {"graf": alturas.EVO_GRAFICO, "abajo": alturas.EVO_ABAJO},
             "col": {"pos": AJUSTE_POS, "neg": AJUSTE_NEG,
                     "post": AJUSTE_POS_TEXTO, "negt": AJUSTE_NEG_TEXTO,
                     "alerta": AJUSTE_ALERTA_TEXTO, "ven": AJUSTE_ORIGEN_VEN,
                     "pro": AJUSTE_ORIGEN_PRO, "reg": AJUSTE_ORIGEN_REG,
-                    "gneg": AJUSTE_ORIGEN_NEG},
+                    "gneg": AJUSTE_ORIGEN_NEG, "op": AJUSTE_OPERACION},
         }, on_pedir_change=_al_pedir, width="stretch")
         if pendiente:
             por_sesion, faltan = _calcular_origen(pendiente[0])
