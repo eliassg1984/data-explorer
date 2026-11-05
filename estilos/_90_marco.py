@@ -29,11 +29,12 @@ CSS = """
         --marco-der: calc(var(--marco-hoja) + 8px);
         /* En la hoja la tarjeta no lleva margen: esos 16px son de contenido. */
         --margen-tarjeta: 0px;
-        /* #825: cada hoja termina a 8 px del borde de abajo, como a los
-           costados, y se le ven las cuatro esquinas (era el remate de
-           Documentos SUNAT, que el usuario prefirió). Con los 8 px de aire
-           del block-container, más los 8 de la ventana, quedaban 16. */
-        --aire-inferior: 0px;
+        /* #826: cada hoja termina a 24 px del borde de abajo —estos 16 más
+           los 8 de la ventana— y se le ven las cuatro esquinas: el remate de
+           Documentos SUNAT, que el usuario prefirió porque da aire abajo. En
+           la #825 eran 8, como a los costados, y casi no se distinguía de un
+           corte. Las tarjetas toman su alto de esta cuenta y se acortan solas. */
+        --aire-inferior: 16px;
     }
     /* Las dos vistas sin pila miden lo mismo que una sección de la pila: sin
        esto, la hoja terminaba donde terminaba el contenido (en Documentos

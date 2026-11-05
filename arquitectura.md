@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-825 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+826 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (273)
+**CSS y estilos** (274)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -340,6 +340,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#821** — Diferencias con íconos: la barra de la lista, el filtro y el neto con su panel al costado
 - **#822** — Refrescar al pie del rail, con la hora del dato en su nombre al cursor
 - **#825** — Cada hoja termina a 8 px del borde de abajo, como a los costados
+- **#826** — El margen de abajo de cada hoja es de 24 px
 
 **Layout y alturas** (113)
 
@@ -1008,7 +1009,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 - **#823** — La franja de Ajuste no tiene «Filtros»: Evolución y la Tabla dinámica traen el suyo
 
-**SUNAT y SIRE** (82)
+**SUNAT y SIRE** (83)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1092,6 +1093,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#795** — Pestañas subrayadas, ajustes en la caja gris: un criterio para toda la app
 - **#802** — Costos en el lenguaje de Costo de Carta: con esta, toda la app
 - **#825** — Cada hoja termina a 8 px del borde de abajo, como a los costados
+- **#826** — El margen de abajo de cada hoja es de 24 px
 
 **Fechas, rangos y cortes** (26)
 
@@ -58942,6 +58944,16 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      la regla general de las perspectivas (44) le ganaba por venir después, y su franja ocupa 46.
      Movimientos por Tipo mide más de una pantalla a propósito y se recorre por dentro.
 
+826. **El margen de abajo de cada hoja es de 24 px.**
+   La #825 lo dejó en 8, como a los costados, y casi no se distinguía de un corte: lo que el
+   usuario prefería del remate de Documentos SUNAT era el AIRE abajo («daba más espacio»), que
+   allá salía de que el contenido era corto. Ahora `--aire-inferior` vale 16 px desde 901 px:
+   con los 8 de la ventana, 24 de lavanda abajo. Todas las tarjetas toman su alto de esa
+   cuenta (`--alto-util`, `--pila-seccion-min`), así que se acortaron solas, 16 px respecto de
+   la #825 (a 1323×619: de 559 a 543), SUNAT y Costos incluidas; medido en Ajuste, Compras ›
+   Período, Stock y Documentos SUNAT. Se eligió 24 y no los 32 de SUNAT: en una tabla larga,
+   como la de Diferencias, 32 se comía casi una fila por pantalla.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58954,7 +58966,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#825**; la próxima toma el número siguiente.
+> última regla es la **#826**; la próxima toma el número siguiente.
 
 >
 
