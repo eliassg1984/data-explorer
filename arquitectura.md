@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-819 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+820 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (269)
+**CSS y estilos** (270)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -336,6 +336,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#809** — Ajuste › «Detalle histórico» (antes «Explorar»): la forma de Detalle docs
 - **#818** — Las listas de Diferencias con la forma de la tabla de Compras › Período
 - **#819** — Diferencias: la pestaña se llama «Productos» y no lleva contadores por tipo
+- **#820** — Adentro de una pieza propia, el modo diseño baja al nodo de verdad
 
 **Layout y alturas** (113)
 
@@ -1124,7 +1125,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
 - **#643** — El asistente IA suma los requerimientos como la página: sin anulados ni líneas sin producto,…
 
-**Herramientas de desarrollo** (40)
+**Herramientas de desarrollo** (41)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -1166,6 +1167,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
+- **#820** — Adentro de una pieza propia, el modo diseño baja al nodo de verdad
 
 **Decisiones de diseño y UX** (271)
 
@@ -58823,6 +58825,34 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    **«Qué faltó» pasa a «Productos»**: la pestaña muestra también lo que sobró, y las demás se
    llaman por lo que listan (Familias y áreas, 12 cierres, Líneas). El id sigue siendo `listas`.
 
+820. **Adentro de una pieza propia, el modo diseño baja al nodo de verdad.**
+   Reportado como «se perdió mover las cosas internas de la tarjeta». El modo diseño
+   (`?debug=1&diseno=1`) no se tocaba desde el 2026-09-26, y desde la #695 casi toda vista es un
+   `st.components.v2`, que dibuja adentro de un shadow root abierto. Tres cosas del DOM de siempre
+   no cruzan ese borde, y cada una apagaba una parte (`inyecciones/_diseno_js.py`):
+   - **El evento llega retargeteado al host**: el `e.target` del `mousemove` y del `contextmenu`
+     es la pieza entera. Clic derecho sobre «S/ 73,104» de Costo de Carta fijaba
+     `rec_carta_pieza`, y «Mover» corría los 1235×692 px de la vista. El nodo de verdad es
+     `e.composedPath()[0]`: el inspector lo pasa en `__inspectorUltimo.elementoProfundo`, aparte
+     de `elementoOriginal`, que sigue siendo el de la etiqueta y del «copiar para IA».
+   - **El `parentElement` del primer nodo de adentro es null** (su padre es el ShadowRoot): el
+     sub-pin (#157) subía buscando una clase de autor y se cortaba ahí. `padreCompuesto` salta al
+     `host`.
+   - **Un `querySelector` desde afuera no ve nada de adentro**: el sub fijado no se volvía a
+     encontrar en el tick siguiente y el panel caía a «perdido». `qsaProfundo` busca también en
+     los shadow roots que cuelgan de la key; un mock de «Insertar» anclado adentro se busca en la
+     raíz de su ancla (`buscarMock`), o se reinsertaba en cada tick.
+   Y uno que fuera de las piezas casi no pasaba: **adentro las clases se repiten** —las cuatro
+   cifras de los indicadores son `.cc-kpi-val`—, así que el sub guarda también CUÁL (`idx`, y el
+   id `key .clase [n]`). Sin él, señalar la segunda cifra movía la primera.
+   El CSS copiado de algo de adentro sale con la clase sola y dice que va en el `.css` de la pieza
+   (estilos/ no entra al shadow root), con el selector que hoy la estiliza (`reglaEnPieza`, para
+   encontrarlo con un grep) y cuántos elementos llevan esa clase: el bloque los toca a todos.
+   «Mover» pasa a `inline-block` lo que es inline, porque `transform` no aplica a un `<span>`
+   suelto. Y la cabecera del panel lleva el nombre en su propio renglón: con los seis botones al
+   lado le quedaban unos 10 px y se leía una letra por renglón. Probado en Chromium sobre Costo de
+   Carta: la segunda cifra se movió 40×25 px, la pieza no, y un ítem del rail se fija como antes.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -58835,7 +58865,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#819**; la próxima toma el número siguiente.
+> última regla es la **#820**; la próxima toma el número siguiente.
 
 >
 

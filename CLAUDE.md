@@ -2558,6 +2558,10 @@ para girar una franja/línea insertada a vertical sin pelear con el
 slider), o **inserta** texto/línea/barra/espacio de mentira para ver
 "cómo se vería" algo que todavía no existe.
 
+**Adentro de una pieza propia también** (regla #820): el clic derecho fija el nodo
+de verdad aunque viva en el shadow root de un `st.components.v2`, «Mover» corre sólo
+ese nodo y el CSS copiado va en el `.css` de la pieza, no en `estilos/`.
+
 **Las tablas AgGrid tienen su propia sección, «Tabla (AgGrid)»**, y hace
 falta porque el resto del panel escribe `style` inline sobre UN nodo — con
 eso se estila una celda, no una tabla. Aparece con clic derecho sobre

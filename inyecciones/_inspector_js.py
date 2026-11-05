@@ -1620,6 +1620,21 @@ JS = """
                 var el = e.target;
                 var etiqueta = null;
                 var cursor = el;
+                // Pieza propia (st.components.v2, reglas #695 en adelante):
+                // dibuja adentro de un shadow root, y el evento llega al
+                // documento RETARGETEADO al host — `e.target` es la pieza
+                // entera. El nodo de verdad es el primero del camino
+                // compuesto. La etiqueta y la key siguen saliendo del host
+                // (`closest` no entra al shadow root); el nodo de adentro lo
+                // usan el resaltado y el modo diseno (`elementoProfundo`).
+                // Sin esto, clic derecho sobre una cifra de Costo de Carta
+                // fijaba la vista entera y «Mover» la corria toda.
+                var profundo = null;
+                try {
+                    var camino = e.composedPath ? e.composedPath() : null;
+                    if (camino && camino.length && camino[0] !== e.target
+                        && camino[0].nodeType === 1) profundo = camino[0];
+                } catch (_cp) { profundo = null; }
 
                 var agInfo = null;
                 try { agInfo = agGridInfo(e.clientX, e.clientY); } catch(err) { agInfo = null; }
@@ -1651,7 +1666,14 @@ JS = """
                     try { fj = franjaEnCoords(e.clientX, e.clientY); } catch(err) { fj = null; }
                     if (fj) { el = fj.el; etiqueta = fj.etiqueta; }
                 }
-                if (etiqueta) resaltarEl(el, etiqueta);
+                if (etiqueta && profundo) {
+                    var pTxt = (profundo.textContent || '').trim().replace(/ +/g, ' ');
+                    var pCls = (profundo.className || '').toString().trim().split(' ').join('.');
+                    etiqueta += '\\n[pieza] adentro: ' + profundo.tagName.toLowerCase()
+                        + (pCls ? '.' + pCls : '')
+                        + (pTxt ? ' «' + (pTxt.length > 40 ? pTxt.slice(0, 37) + '...' : pTxt) + '»' : '');
+                }
+                if (etiqueta) resaltarEl(profundo || el, etiqueta);
                 else resaltarEl(null, null);
             }
 
@@ -1724,7 +1746,8 @@ JS = """
                                ancla: ancla, pesos: pesos,
                                pseudoBefore: pBefore, pseudoAfter: pAfter },
                     elemento: (ctxCont ? ctxCont.el : el),
-                    elementoOriginal: el
+                    elementoOriginal: el,
+                    elementoProfundo: profundo
                 };
                 var pre = doc.getElementById('el-inspector-text');
                 if (pre) pre.textContent = etiquetaFinal;

@@ -180,6 +180,90 @@ JS = """
             return !/^st[A-Z]/.test(c);                 // stMarkdown, stVerticalBlock, ...
         }
 
+        // ── Piezas propias: su DOM vive en un shadow root (2026-11-04) ───
+        // Desde la regla #695 casi toda vista es un `st.components.v2`, que
+        // dibuja DENTRO de un shadow root abierto. Tres cosas del DOM de
+        // siempre no lo cruzan: el `parentElement` del primer nodo de
+        // adentro es null (su padre es el ShadowRoot), un `querySelector`
+        // desde afuera no ve nada de adentro y el evento llega retargeteado
+        // al host. Con eso el sub-pin (regla #157) no bajaba nunca: clic
+        // derecho sobre «S/ 73,104» de Costo de Carta fijaba la pieza
+        // entera y «Mover» corria los 1235x692 px de la vista. Estos
+        // ayudantes cruzan el borde; el inspector pasa el nodo de verdad en
+        // `__inspectorUltimo.elementoProfundo`.
+        function padreCompuesto(n) {
+            if (!n) return null;
+            if (n.parentElement) return n.parentElement;
+            var p = n.parentNode;
+            return (p && p.host) ? p.host : null;
+        }
+        function selClase(c) {
+            return '.' + ((win.CSS && win.CSS.escape) ? win.CSS.escape(c) : c);
+        }
+        // `base` y los shadow roots que cuelgan de el (una pieza adentro de
+        // otra tambien). Corre en cada tick con un sub-pin puesto: barrer
+        // los 9.000 nodos de Costo de Carta cuesta ~1 ms.
+        function raicesDe(base) {
+            var out = [base];
+            if (base.shadowRoot) out.push(base.shadowRoot);
+            for (var i = 0; i < out.length && out.length < 40; i++) {
+                var todos = out[i].querySelectorAll('*');
+                for (var j = 0; j < todos.length; j++) {
+                    if (todos[j].shadowRoot) out.push(todos[j].shadowRoot);
+                }
+            }
+            return out;
+        }
+        // Primero lo de afuera y despues cada shadow root, en ese orden:
+        // el indice de un sub-pin se cuenta igual al fijarlo y al buscarlo.
+        function qsaProfundo(base, sel) {
+            var out = [], rs = raicesDe(base);
+            for (var i = 0; i < rs.length; i++) {
+                var ns = rs[i].querySelectorAll(sel);
+                for (var j = 0; j < ns.length; j++) out.push(ns[j]);
+            }
+            return out;
+        }
+        function enPieza(el) {
+            var r = (el && el.getRootNode) ? el.getRootNode() : null;
+            return !!(r && r !== doc && r.host);
+        }
+        // id de un sub-pin por clase: `key .clase`, y ` [n]` (desde 1) si no
+        // es el primero que la lleva. En una pieza las filas, las cifras de
+        // los indicadores y los renglones de la ficha comparten clase: sin
+        // el indice, todo pin bajaba al PRIMERO y no al que se senalo.
+        function idSubClase(key, clase, idx) {
+            return key + ' .' + clase + (idx ? ' [' + (idx + 1) + ']' : '');
+        }
+        function resolverSubClase(base, clase, idx) {
+            if (!base || !clase) return null;
+            return qsaProfundo(base, selClase(clase))[idx || 0] || null;
+        }
+        // La regla de la pieza que ya estiliza esa clase: el CSS copiado
+        // va en el `.css` de la pieza, y con el selector de hoy se lo
+        // encuentra con un grep en vez de adivinar el archivo.
+        function reglaEnPieza(elemento, clase) {
+            var raiz = elemento.getRootNode ? elemento.getRootNode() : null;
+            if (!raiz || raiz === doc) return '';
+            var hojas = [];
+            try {
+                hojas = Array.prototype.slice.call(raiz.styleSheets || [])
+                    .concat(Array.prototype.slice.call(raiz.adoptedStyleSheets || []));
+            } catch (e) { hojas = []; }
+            var buscado = '.' + clase;
+            for (var i = 0; i < hojas.length; i++) {
+                var reglas = null;
+                try { reglas = hojas[i].cssRules; } catch (e) { continue; }
+                for (var j = 0; reglas && j < reglas.length; j++) {
+                    var s = reglas[j].selectorText || '';
+                    var p = s.indexOf(buscado);
+                    var sig = p === -1 ? '' : s.charAt(p + buscado.length);
+                    if (p !== -1 && !/[A-Za-z0-9_-]/.test(sig)) return s;
+                }
+            }
+            return '';
+        }
+
         // ── Resolver una key al elemento REAL, nunca a un mock ────────────
         // El motivo original (regla #258) era "Copia": conservaba las clases
         // `st-key-*` del original para verse igual, y eso dejaba DOS nodos
@@ -220,7 +304,9 @@ JS = """
             var base = porKeyReal(key);
             if (!base) return [];
             var out = [], vistas = {};
-            var cand = base.querySelectorAll('[class]');
+            // Profundo: en una pieza propia todo lo de autor esta adentro
+            // del shadow root, y sin cruzarlo el arbol salia sin hojas.
+            var cand = qsaProfundo(base, '[class]');
             for (var i = 0; i < cand.length && out.length < 12; i++) {
                 var n = cand[i];
                 if (n.ownerSVGElement || (n.tagName || '').toLowerCase() === 'svg') continue;
@@ -233,10 +319,10 @@ JS = """
                 // utiles fuera del tope de 12. El asa del autor para un
                 // grafico es su contenedor con key, no el DOM de Plotly.
                 if (n.closest && n.closest('.js-plotly-plot')) continue;
-                var cur = n.parentElement, propio = true;
+                var cur = padreCompuesto(n), propio = true;
                 while (cur && cur !== base) {
                     if (/st-key-[A-Za-z0-9_]+/.test((cur.className || '').toString())) { propio = false; break; }
-                    cur = cur.parentElement;
+                    cur = padreCompuesto(cur);
                 }
                 if (!propio || cur !== base) continue;
                 var cls = n.classList || [];
@@ -338,8 +424,9 @@ JS = """
             // `el: null` si el hijo no esta => panelPerdido, igual que con la
             // key. Caer de vuelta al contenedor seria peor: aplicaria los
             // cambios del hijo a la tarjeta entera sin que nadie lo pida.
-            return { key: key, sub: sub.clase, id: key + ' .' + sub.clase,
-                     el: base ? base.querySelector('.' + sub.clase) : null };
+            return { key: key, sub: sub.clase, subIdx: sub.idx || 0,
+                     id: idSubClase(key, sub.clase, sub.idx),
+                     el: resolverSubClase(base, sub.clase, sub.idx) };
         }
 
         function elementoActivo() {
@@ -347,7 +434,7 @@ JS = """
             // en el momento del evento, nunca confia en una referencia
             // capturada cuando se construyeron los controles.
             var r = elementoPineado();
-            return (r && r.el) ? { el: r.el, key: r.key, sub: r.sub, id: r.id,
+            return (r && r.el) ? { el: r.el, key: r.key, sub: r.sub, subIdx: r.subIdx || 0, id: r.id,
                                    subTexto: r.subTexto,
                                    registro: registroPara(r.id) } : null;
         }
@@ -361,7 +448,13 @@ JS = """
             var sep = id.indexOf(' .');
             if (sep === -1) return porKeyReal(id);
             var base = porKeyReal(id.slice(0, sep));
-            return base ? base.querySelector('.' + id.slice(sep + 2)) : null;
+            var clase = id.slice(sep + 2), idx = 0;
+            var corchete = clase.indexOf(' [');
+            if (corchete !== -1) {
+                idx = (parseInt(clase.slice(corchete + 2), 10) || 1) - 1;
+                clase = clase.slice(0, corchete);
+            }
+            return resolverSubClase(base, clase, idx);
         }
 
         function grupoMiembros() {
@@ -420,13 +513,18 @@ JS = """
             }
             // Sin coincidencia de texto: subir hasta el primer hijo con
             // clase de autor (el camino viejo, el de `.cp-rank-tit`).
+            // Cruza el borde del shadow root de una pieza (padreCompuesto) y
+            // guarda CUAL de los que llevan esa clase se senalo (`idx`).
             var cur = nodo;
             while (cur && cur !== base) {
                 var cls = cur.classList || [];
                 for (i = 0; i < cls.length; i++) {
-                    if (esClaseDeAutor(cls[i])) return { key: key, clase: cls[i] };
+                    if (esClaseDeAutor(cls[i])) {
+                        var pos = qsaProfundo(base, selClase(cls[i])).indexOf(cur);
+                        return { key: key, clase: cls[i], idx: pos > 0 ? pos : 0 };
+                    }
                 }
-                cur = cur.parentElement;
+                cur = padreCompuesto(cur);
             }
             return null;
         }
@@ -506,7 +604,9 @@ JS = """
             // sub. El nodo que el usuario senalo de verdad es
             // `elementoOriginal`, y es el unico que sabe si apunto al
             // titulo o a un tick del grafico.
-            var nodo = u ? (u.elementoOriginal || u.elemento) : null;
+            // Y adentro de una pieza propia ni siquiera `elementoOriginal`
+            // sirve: es el HOST del shadow root. El de adentro viene aparte.
+            var nodo = u ? (u.elementoProfundo || u.elementoOriginal || u.elemento) : null;
             if (!win.__inspectorPinned || !u || !nodo || !u.key) {
                 // Soltar el pin habilita volver a fijar EL MISMO nodo y que
                 // se recalcule igual (si no, el guard de abajo lo saltea).
@@ -555,7 +655,7 @@ JS = """
             while (cur && cur !== doc.body && out.length < 12) {
                 var m = /st-key-([A-Za-z0-9_]+)/.exec((cur.className || '').toString());
                 if (m && out.indexOf(m[1]) === -1) out.push(m[1]);
-                cur = cur.parentElement;
+                cur = padreCompuesto(cur);
             }
             return out;
         }
@@ -674,7 +774,9 @@ JS = """
             // Con sub-pin el ancla es el HIJO, no la tarjeta: insertar "antes"
             // de un titulo y "antes" de la tarjeta que lo contiene son dos
             // lugares distintos, y el pin ya dice cual de los dos se eligio.
-            if (ancla && m.anclaSub) ancla = ancla.querySelector('.' + m.anclaSub);
+            // Profundo y con su indice: el hijo puede estar adentro de una
+            // pieza propia, y ser el tercero que lleva esa clase.
+            if (ancla && m.anclaSub) ancla = resolverSubClase(ancla, m.anclaSub, m.anclaIdx);
             if (!ancla || !ancla.parentNode) return null;
             // 'despues' se encadena detras del ULTIMO hermano ya insertado:
             // sin esto, agregar titulo y despues linea los deja al reves
@@ -685,7 +787,8 @@ JS = """
             for (var i = 0; i < ms.length && ms[i].key !== m.key; i++) {
                 if (ms[i].anclaKey !== m.anclaKey || ms[i].posicion !== 'despues') continue;
                 if ((ms[i].anclaSub || '') !== (m.anclaSub || '')) continue;
-                var prev = doc.querySelector('.st-key-' + ms[i].key);
+                if ((ms[i].anclaIdx || 0) !== (m.anclaIdx || 0)) continue;
+                var prev = buscarMock(ms[i]);
                 if (prev && prev.parentNode === ancla.parentNode) ancla = prev;
             }
             return ancla;
@@ -715,7 +818,10 @@ JS = """
         function reponerMocks() {
             var ms = win.__disenoState.mocks;
             for (var i = 0; i < ms.length; i++) {
-                if (!doc.querySelector('.st-key-' + ms[i].key)) insertarMock(ms[i]);
+                // `buscarMock` y no un querySelector del documento: uno
+                // insertado adentro de una pieza propia no se ve desde
+                // afuera, y sin esto se volvia a insertar en cada tick.
+                if (!buscarMock(ms[i])) insertarMock(ms[i]);
             }
         }
 
@@ -728,6 +834,7 @@ JS = """
                 tipo: tipo,
                 anclaKey: res.key,
                 anclaSub: res.sub,
+                anclaIdx: res.subIdx || 0,
                 posicion: win.__disenoState.mockPos,
                 texto: 'Texto de prueba'
             };
@@ -741,7 +848,7 @@ JS = """
             // del resto del layout a simple vista. Scroll + un flash en
             // Advertencia (no Acento: ese es el color de la propia Barra y
             // del contorno de selección — usarlo se confundiría con ambos).
-            var nuevo = doc.querySelector('.st-key-' + m.key);
+            var nuevo = buscarMock(m);
             if (nuevo) {
                 nuevo.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 nuevo.style.setProperty('outline', '3px solid ' + colorPaleta('Advertencia'), 'important');
@@ -755,8 +862,22 @@ JS = """
             sync();
         }
 
+        // Un mock anclado adentro de una pieza propia vive en su shadow
+        // root: se lo busca en la raiz de su ancla, no en el documento.
+        function buscarMock(m) {
+            var sel = '.st-key-' + m.key;
+            var n = doc.querySelector(sel);
+            if (n || !m.anclaSub) return n;
+            var base = porKeyReal(m.anclaKey);
+            var a = base ? resolverSubClase(base, m.anclaSub, m.anclaIdx) : null;
+            var raiz = (a && a.getRootNode) ? a.getRootNode() : null;
+            return (raiz && raiz !== doc && raiz.querySelector) ? raiz.querySelector(sel) : null;
+        }
+
         function quitarMock(key) {
-            var n = doc.querySelector('.st-key-' + key);
+            var mq = null;
+            win.__disenoState.mocks.forEach(function(m) { if (m.key === key) mq = m; });
+            var n = mq ? buscarMock(mq) : doc.querySelector('.st-key-' + key);
             if (n && n.parentNode) n.parentNode.removeChild(n);
             win.__disenoState.mocks = win.__disenoState.mocks.filter(function(m) {
                 return m.key !== key;
@@ -1508,11 +1629,24 @@ JS = """
         function aplicarTransform(elemento, registro) {
             var t = registro.transformState;
             if (t.translateX || t.translateY || t.rotateDeg) {
+                // `transform` no aplica a una caja INLINE (un <span> suelto):
+                // el estilo queda puesto y no se mueve nada. Adentro de las
+                // piezas propias casi toda cifra es un <span>, asi que se lo
+                // pasa a inline-block mientras dure el movimiento — y el
+                // bloque copiado lo lleva (construirBloqueCSS).
+                if (!registro.transformInline && win.getComputedStyle(elemento).display === 'inline') {
+                    registro.transformInline = true;
+                }
+                if (registro.transformInline) elemento.style.setProperty('display', 'inline-block', 'important');
                 elemento.style.setProperty('transform',
                     'translate(' + t.translateX + 'px,' + t.translateY + 'px) rotate(' + t.rotateDeg + 'deg)',
                     'important');
             } else {
                 elemento.style.removeProperty('transform');
+                if (registro.transformInline) {
+                    elemento.style.removeProperty('display');
+                    registro.transformInline = false;
+                }
             }
         }
 
@@ -2912,7 +3046,12 @@ JS = """
             // en estilos/ hace exactamente lo que se vio en pantalla. Sin
             // esto el bloque copiado moveria la tarjeta entera — el mismo
             // "pegarlo no hace lo que probe" que motivo la regla #154.
-            var ancla = 'div[class*="st-key-' + key + '"]' + (sub ? ' .' + sub : '');
+            // Adentro de una pieza propia el ancla es la clase sola: el
+            // `.css` de la pieza vive en su shadow root, donde no hay ningun
+            // `st-key-*` por encima, y estilos/ no entra ahi.
+            var dentroPieza = !!sub && enPieza(elemento);
+            var ancla = dentroPieza ? '.' + sub
+                : 'div[class*="st-key-' + key + '"]' + (sub ? ' .' + sub : '');
             var destinos = destinosDeEstilo(elemento);
             var redirigido = destinos[0] !== elemento;
             // Mismo criterio que destinosDeEstilo: pills de un stButtonGroup
@@ -2943,6 +3082,7 @@ JS = """
                 // El mover/rotar siempre va sobre el elemento mismo (igual
                 // que aplicarTransform), nunca redirigido.
                 geo.transform = 'translate(' + t.translateX + 'px,' + t.translateY + 'px) rotate(' + t.rotateDeg + 'deg)';
+                if (registro.transformInline && !geo.display) geo.display = 'inline-block';
             }
 
             // Agrupar por selector (no por grupo geo/boton/texto): cuando
@@ -2986,6 +3126,18 @@ JS = """
                 : '';
 
             var encabezado = '/* copiado del modo diseño — ' + key + (sub ? ' .' + sub : '') + ' */';
+            if (dentroPieza) {
+                var hoy = reglaEnPieza(elemento, sub);
+                encabezado += '\\n/* Va en el .css de la PIEZA (shadow root), no en estilos/'
+                    + (hoy ? ': hoy la estiliza «' + hoy + '»' : '') + '. */';
+            }
+            if (sub) {
+                var conLaClase = qsaProfundo(porKeyReal(key) || elemento, selClase(sub)).length;
+                if (conLaClase > 1) {
+                    encabezado += '\\n/* La clase .' + sub + ' la llevan ' + conLaClase
+                        + ' elementos: este bloque los toca a TODOS, no solo al que se probo. */';
+                }
+            }
             return encabezado + '\\n' + bloques.join('\\n\\n') + pie
                    + (notaFila ? '\\n\\n' + notaFila : '');
         }
@@ -3164,12 +3316,15 @@ JS = """
             panel.innerHTML = '';
 
             var header = doc.createElement('div');
-            header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #2a2a35';
+            // El nombre en su propio renglon y los botones debajo: con los
+            // seis botones al lado (⊞ ⊘ ⇤ ▣ – Soltar) al nombre le quedaban
+            // ~10 px y se leia una letra por renglon.
+            header.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #2a2a35';
             var headerKey = doc.createElement('div');
-            headerKey.style.cssText = 'font-size:11px;color:#9385ec;word-break:break-all;font-family:"Courier New",monospace;flex:1;min-width:0';
+            headerKey.style.cssText = 'font-size:11px;color:#9385ec;word-break:break-all;font-family:"Courier New",monospace;flex:1 0 100%;min-width:0';
             headerKey.textContent = res.subTexto
                 ? (key + ' «' + res.subTexto.txt + '»')
-                : (res.sub ? (key + ' .' + res.sub) : key);
+                : (res.sub ? res.id : key);
             var btnSoltar = doc.createElement('button');
             btnSoltar.textContent = 'Soltar';
             btnSoltar.style.cssText = 'background:#2A2A35;color:#fff;border:0;border-radius:4px;padding:4px 8px;font:600 11px sans-serif;cursor:pointer;flex:0 0 auto';
@@ -3254,6 +3409,15 @@ JS = """
             header.appendChild(botonColapsar());
             header.appendChild(btnSoltar);
             panel.appendChild(header);
+            // Adentro de una pieza propia el CSS global no llega: lo que se
+            // pruebe aca se pega en el `.css` de la pieza. Decirlo antes de
+            // que alguien pegue el bloque en estilos/ y "no haga nada".
+            if (enPieza(elemento)) {
+                var notaPieza = doc.createElement('div');
+                notaPieza.style.cssText = 'margin:-4px 0 10px;padding:6px 8px;background:#1c1c24;border-left:2px solid #7fb2e5;border-radius:4px;font:11px/1.45 sans-serif;color:#b9b9c4';
+                notaPieza.textContent = 'Adentro de una pieza propia: lo que copies va en el .css de la pieza, no en estilos/.';
+                panel.appendChild(notaPieza);
+            }
 
             // Jerarquía: árbol vertical, RAÍZ primero (inverso de
             // cadenaKeysDiseno, que camina de la hoja al body) — se lee de
