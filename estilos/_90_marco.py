@@ -706,6 +706,80 @@ CSS = """
         }
     }
 
+    /* Precios presenta los filtros compartidos en su propia barra. */
+    :root:has([data-compras-vista="compras_sec_volatilidad"] [data-precios-filtros]) {
+        --barra-f: 0px;
+    }
+    [data-compras-vista="compras_sec_volatilidad"]:has([data-precios-filtros]) .st-key-chips_ajuste_tabla {
+        display: none !important;
+    }
+
+    /* Compras conserva los popovers y rangos de cada vista. Sólo el de la
+       sección en pantalla sube a la franja, a la izquierda de Filtros. */
+    @media (min-width: 901px) {
+        [data-compras-vista] :is(
+            .st-key-cp_sem_escala, .st-key-cp_rank_escala, .st-key-cp_prod_escala,
+            .st-key-cp_vol_escala, .st-key-cp_vap_f_escala, .st-key-cp_docs_escala
+        ),
+        [data-compras-vista] .st-key-compras_sec_tabla .st-key-tabla_fila_hdr {
+            display: none !important;
+        }
+        [data-compras-vista="compras_sec_semanal"] .st-key-cp_sem_escala,
+        [data-compras-vista="compras_sec_proveedor"] .st-key-cp_rank_escala,
+        [data-compras-vista="compras_sec_producto"] .st-key-cp_prod_escala,
+        [data-compras-vista="compras_sec_volatilidad"] .st-key-cp_vol_escala,
+        [data-compras-vista="compras_sec_vs_ano_pasado"] .st-key-cp_vap_f_escala,
+        [data-compras-vista="compras_sec_documentos"] .st-key-cp_docs_escala,
+        [data-compras-vista="compras_sec_tabla"] .st-key-compras_sec_tabla .st-key-tabla_fila_hdr {
+            display: flex !important;
+            position: fixed !important;
+            inset: calc(var(--marco-hoja, 8px) + (var(--franja-rep-alto, 44px) - 30px) / 2)
+                calc(var(--marco-der, 16px) + var(--barra-f, 120px) + var(--barra-act, 0px)) auto auto !important;
+            width: max-content !important;
+            visibility: visible !important;
+            z-index: 1000012 !important;
+        }
+        /* Los anclajes nativos no deben encerrar el popover en la capa de
+           la tarjeta. En Proveedor el anclaje sigue alojando su filtro. */
+        [data-compras-vista] :is(
+            .st-key-cp_sem_fecha, .st-key-cp_prov_nativa_fecha, .st-key-cp_prod_nativa_fecha,
+            .st-key-cp_vol_fecha, .st-key-cp_vap_nativa_fecha, .st-key-cp_docs_nativa_fecha
+        ) {
+            z-index: auto !important;
+        }
+        [data-compras-vista] .st-key-cp_prov_nativa_fecha .st-key-cp_prov_pop_float {
+            position: relative;
+            z-index: 5;
+        }
+        [data-compras-vista] :is(.lugar-fecha, .cp-lugar, .vap-lugar, .dc-lugar),
+        [data-compras-vista] .st-key-compras_sec_producto .lf-lugar {
+            display: none !important;
+        }
+        [data-compras-vista] .cpp .cab {
+            padding-right: 0;
+        }
+        [data-compras-vista] .st-key-cp_vol_pieza_wrap {
+            --cp-fecha-slot: none;
+        }
+        [data-compras-vista] :is(
+            .st-key-cp_sem_escala, .st-key-cp_rank_escala, .st-key-cp_prod_escala,
+            .st-key-cp_vol_escala, .st-key-cp_vap_f_escala, .st-key-cp_docs_escala
+        ) button[data-testid="stPopoverButton"] {
+            height: 30px !important;
+            min-height: 30px !important;
+            border-radius: 8px !important;
+            background: var(--marco-control) !important;
+            box-shadow: none !important;
+            color: var(--text-primary) !important;
+        }
+        [data-compras-vista] :is(
+            .st-key-cp_sem_escala, .st-key-cp_rank_escala, .st-key-cp_prod_escala,
+            .st-key-cp_vol_escala, .st-key-cp_vap_f_escala, .st-key-cp_docs_escala
+        ) button[data-testid="stPopoverButton"]:hover {
+            background: var(--accent-tint) !important;
+        }
+    }
+
     /* ── LA RUTA CON SU MENÚ (2026-11-04, regla #817) ────────────────────
        La franja dice «Inventario › Ajuste › Diferencias ▾»; las vistas del
        área van en un menú que abre `_SCRIPT_CAPAS` (`<html data-franja-menu>`):

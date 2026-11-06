@@ -150,7 +150,11 @@ const VCOL=['var(--serie-0)','var(--serie-1)','var(--serie-2)','var(--serie-3)',
 const MESES_C=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
 function pleer(B){
   if(B.PR!==undefined)return B.PR;const X=B.P.precios;if(!X){B.PR=null;return null;}
-  const base=vdia(X.base),L=X.filas.map(r=>{const p=X.prods[r[0]];return {p:r[0],nom:p[0],fam:p[1],sub:p[2],um:p[3],d:base+r[1],prov:r[2],doc:r[3],c:r[4]||0,v:r[5]||0,ref:r[6],fl:r[7]||0};});
+  const base=vdia(X.base),L=X.filas.map((r,i)=>{
+    const p=X.prods[r[0]];
+    return {p:r[0],nom:p[0],fam:p[1],sub:p[2],um:p[3],d:base+r[1],prov:r[2],doc:r[3],c:r[4]||0,v:r[5]||0,
+      ref:r[6],fl:r[7]||0,u:r[8]??null,unidad:X.ums?.[r[8]]??p[3],hora:r[9]||0,i};
+  });
   const por=new Map();for(const l of L){if(!por.has(l.p))por.set(l.p,[]);por.get(l.p).push(l);}
   for(const a of por.values())a.sort((x,y)=>x.d-y.d);
   B.PR={L,por,provs:X.provs,docs:X.docs,prods:X.prods,desde:base};return B.PR;
@@ -160,8 +164,9 @@ const paño=n=>{const t=new Date(n*VDIA),y=t.getUTCFullYear(),m=t.getUTCMonth(),
 const pmeses=fin=>{const t=new Date(fin*VDIA),y=t.getUTCFullYear(),m=t.getUTCMonth(),o=[];for(let i=12;i>=0;i--){const a=Date.UTC(y,m-i,1)/VDIA,b=Date.UTC(y,m-i+1,0)/VDIA,x=new Date(a*VDIA);o.push([a,b,`${MESES_C[x.getUTCMonth()]} ${String(x.getUTCFullYear()).slice(2)}`]);}return o;};
 // Una fila por producto del rango: las cuentas de `producto._resumen`.
 function pfilas(B,st){
-  const PR=pleer(B);if(!PR)return {rows:[],sube:[],baja:[],rev:[],n80:0,total:0};
-  const [R0,R1]=B.planes[st.op]||B.planes['12m'],dias=R1-R0+1,con=st.contra||'hab';
+  const PR=pleer(B),[R0,R1]=B.planes[st.op]||B.planes['12m'];
+  if(!PR)return {rows:[],sube:[],baja:[],rev:[],n80:0,total:0,up:0,dn:0,R0,R1,meses:[]};
+  const dias=R1-R0+1,con=st.contra||'hab';
   const [bA,bB]=con==='ant'?[R0-dias,R0-1]:con==='ano'?[paño(R0),paño(R1)]:[null,null],hayB=con==='hab'||bA>=PR.desde;
   const meses=pmeses(R1),met=new Map();
   for(const r of vbase(B,st.op).rank)met.set(String(r.nombre).trim(),r);
@@ -183,6 +188,7 @@ function pfilas(B,st){
 window.__cvCalc.precios=pfilas;
 function vinicial(op='12m'){return {op,q:'',orden:'volatilidad',verVol:false,verDisp:false,verImpacto:false,prod:null,u:null,
   gran:'Semana',sel:null,foco:null,finSem:null,finCompra:null,prov:null,tab:'Compras',modo:'Elegida',limite:150,ayuda:false,
+  vista:'resumen',verPor:'semana',cmpPagina:0,cmpCol:null,cmpDir:-1,cmpCompra:'fecha',cmpCompraDir:-1,
   contra:'hab',ver:'80',kpi:'todos',ord:{k:'im',d:-1},p:null,ptab:'curva',pgran:'Compra',amp:null,tr:null,off:{},menu:null};}
 const pcv=v=>!vok(v)?'':v>.5?'rojo':v<-.5?'verde':'';
 const ps0=v=>vok(v)?`${v<-.5?'−':''}S/ ${vnum(Math.abs(v))}`:'—';
@@ -192,11 +198,145 @@ const pq=v=>vok(v)?new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).form
 const ppc=x=>!vok(x)?'—':Math.abs(x)<.0005?'0 %':`${x>0?'+':'−'}${vnum(Math.abs(x*100),Math.abs(x)<.1?1:0)} %`;
 const pfc=n=>{const t=new Date(n*VDIA);return `${t.getUTCDate()} ${MESES_C[t.getUTCMonth()]}`;};
 const pn=(n,t='producto')=>`${n} ${t}${n===1?'':'s'}`;
+const pnormal=s=>s.toLocaleLowerCase('es').normalize('NFD').replace(/\p{Diacritic}/gu,'');
+const pbuscar=q=>pnormal(q.trim()).split(/\s+/).filter(Boolean);
+function pcoincide(nombre,q){
+  if(!q.length)return true;
+  const n=pnormal(nombre);
+  return q.every(palabra=>n.includes(palabra));
+}
+const pmodos={compra:'Compra',semana:'Semana',quincena:'Quincena',mes:'Mes'};
+const pporPagina=40;
+const pordenFecha=(a,b)=>a.d-b.d||a.hora-b.hora||a.i-b.i;
+const pvalida=l=>pok(l)&&l.v>0;
+const punitario=l=>l?.c>0?l.v/l.c:null;
+const pvariacion=(l,ant)=>ant&&pvalida(l)?punitario(l)/punitario(ant)-1:null;
+
+function ptramos(R0,R1,modo){
+  const t=new Date(R0*VDIA),y=t.getUTCFullYear(),m=t.getUTCMonth();
+  const mes=(a,b,c)=>Date.UTC(a,b,c)/VDIA;
+  let inicio=modo==='semana'?vlunes(R0):mes(y,m,modo==='quincena'&&t.getUTCDate()>15?16:1);
+  const tramos=[];
+  while(inicio<=R1){
+    const d=new Date(inicio*VDIA),a=d.getUTCFullYear(),b=d.getUTCMonth();
+    const primera=modo==='quincena'&&d.getUTCDate()===1;
+    const siguiente=modo==='semana'?inicio+7:mes(a,b+(primera?0:1),primera?16:1);
+    const desde=Math.max(inicio,R0),hasta=Math.min(siguiente-1,R1);
+    const completo=modo==='mes'&&desde===inicio&&hasta===siguiente-1;
+    const etiqueta=completo?`${MESES_C[b]} ${a}`:pfc(desde)+(desde===hasta?'':` – ${pfc(hasta)}`);
+    tramos.push({inicio,desde,hasta,etiqueta});
+    inicio=siguiente;
+  }
+  return tramos;
+}
+
+function pcomparar(B,st){
+  const PR=pleer(B),[R0,R1]=B.planes[st.op]||B.planes['12m'];
+  const compra=st.verPor==='compra',tramos=compra?[]:ptramos(R0,R1,st.verPor),filas=[];
+  const consulta=pbuscar(st.q||'');
+  for(const ls of PR?.por.values()||[]){
+    if(!pcoincide(ls[0].nom,consulta))continue;
+    const unidades=new Map();
+    for(const l of ls){
+      if(l.d>R1||(!compra&&!pvalida(l)))continue;
+      if(!unidades.has(l.u))unidades.set(l.u,[]);
+      unidades.get(l.u).push(l);
+    }
+    for(const grupo of unidades.values()){
+      if(!grupo.some(l=>l.d>=R0))continue;
+      grupo.sort(pordenFecha);
+      let ant=null;
+      if(compra){
+        for(const l of grupo){
+          if(l.d>=R0)filas.push({l,ant,dv:pvariacion(l,ant)});
+          if(pvalida(l))ant=l;
+        }
+      }else{
+        let i=0;
+        const puntos=tramos.map(t=>{
+          while(i<grupo.length&&grupo[i].d<t.inicio)ant=grupo[i++];
+          const previo=ant;
+          let cierre=null;
+          while(i<grupo.length&&grupo[i].d<=t.hasta){
+            ant=grupo[i++];
+            if(ant.d>=t.desde)cierre=ant;
+          }
+          return cierre?{l:cierre,ant:previo,dv:pvariacion(cierre,previo)}:null;
+        });
+        filas.push({l:grupo[0],puntos});
+      }
+    }
+  }
+  const col=tramos.findIndex(t=>t.inicio===st.cmpCol);
+  const indice=col<0?tramos.length-1:col;
+  const ordenar=(a,b,d)=>a==null||b==null?Number(a==null)-Number(b==null):(a-b)*d;
+  filas.sort((a,b)=>{
+    if(compra){
+      if(st.cmpCompra==='variacion'){
+        const dif=ordenar(a.dv,b.dv,st.cmpCompraDir);
+        if(dif)return dif;
+      }
+      return pordenFecha(a.l,b.l)*(st.cmpCompra==='fecha'?st.cmpCompraDir:-1);
+    }
+    return ordenar(a.puntos[indice]?.dv,b.puntos[indice]?.dv,col<0?-1:st.cmpDir)||
+      a.l.nom.localeCompare(b.l.nom,'es')||a.l.unidad.localeCompare(b.l.unidad,'es');
+  });
+  return {PR,R0,R1,compra,tramos,filas,indice,direccion:col<0?-1:st.cmpDir};
+}
+window.__cvCalc.comparacion=pcomparar;
+
+function pmarcaCambio(dv){
+  if(!vok(dv))return '<span class="tenue">—</span>';
+  if(Math.abs(dv)<.0005)return '<span class="cp-cambio">0 %</span>';
+  return `<span class="cp-cambio ${dv>0?'rojo':'verde'}">${dv>0?'↑':'↓'} ${vnum(Math.abs(dv)*100,1)} %</span>`;
+}
+function pnombreUnidad(l){
+  return `${vesc(l.nom)}<small>${vesc(l.sub)} · ${l.unidad?`por ${vesc(l.unidad)}`:'sin unidad'}</small>`;
+}
+const pprecio=l=>l&&punitario(l)!=null?`S/ ${pp2(punitario(l))}`:'—';
+function ptablaComparacion(G){
+  const {st}=G,D=pcomparar(G.B,st);
+  G.comparacion=D;
+  const {PR,R0,R1,compra,tramos,filas,indice,direccion}=D;
+  const paginas=Math.max(1,Math.ceil(filas.length/pporPagina));
+  st.cmpPagina=Math.min(st.cmpPagina,paginas-1);
+  const visibles=filas.slice(st.cmpPagina*pporPagina,(st.cmpPagina+1)*pporPagina);
+  const ordenar=(rot,acc,v,d)=>`<th scope="col"${d?` aria-sort="${d>0?'ascending':'descending'}"`:''}><button type="button" data-acc="${acc}" data-v="${v}">${vesc(rot)}${d?(d>0?' ↑':' ↓'):''}</button></th>`;
+  const cabeza=compra?`${ordenar('Fecha','pcsort','fecha',st.cmpCompra==='fecha'?st.cmpCompraDir:0)}<th scope="col">Producto</th><th scope="col">Proveedor</th><th scope="col">Documento</th><th scope="col">Cantidad</th><th scope="col">Precio anterior</th><th scope="col">Precio pagado</th>${ordenar('Variación','pcsort','variacion',st.cmpCompra==='variacion'?st.cmpCompraDir:0)}`:
+    `<th scope="col" class="cp-cmp-producto">Producto</th>${tramos.map((t,i)=>ordenar(t.etiqueta,'pcperiodo',t.inicio,indice===i?direccion:0)).join('')}`;
+  const cuerpo=compra?visibles.map(({l,ant,dv})=>`<tr><td>${pfc(l.d)}</td><th scope="row">${pnombreUnidad(l)}</th><td>${vesc(PR.provs[l.prov])}</td><td>${vesc(PR.docs[l.doc])}</td><td>${pq(l.c)} ${vesc(l.unidad)}</td><td>${pprecio(ant)}${ant?`<small>${pfc(ant.d)}</small>`:''}</td><td>${pprecio(l)}</td><td>${l.fl?'<span class="nar">Para revisar</span>':pmarcaCambio(dv)}</td></tr>`).join(''):
+    visibles.map(({l,puntos})=>`<tr><th scope="row" class="cp-cmp-producto">${pnombreUnidad(l)}</th>${puntos.map((p,i)=>`<td${indice===i?' class="cp-cmp-orden"':''}>${p?`<span title="${vesc(`Cierre del ${pfc(p.l.d)} · ${PR.docs[p.l.doc]}`)}">${pprecio(p.l)}</span><small>${pmarcaCambio(p.dv)}</small>`:'<span class="tenue">Sin compras</span>'}</td>`).join('')}</tr>`).join('');
+  const texto=compra?'Precio pagado y cambio frente a la compra válida anterior del producto.':
+    st.verPor==='quincena'?'Del 1 al 15 y del 16 a fin de mes. Cada cierre se compara con la quincena anterior con compras.':
+      'Último precio de compra y cambio frente al cierre anterior con compras.';
+  const n=filas.length,productos=new Set(filas.map(f=>f.l.p)).size;
+  const detalle=compra?pn(n,'compra'):pn(productos)+(n===productos?'':` · ${n} filas por unidad`);
+  return `<header class="cp-cmp-cab"><div><h3>Comparación por ${pmodos[st.verPor].toLowerCase()}</h3><p>${texto}</p></div><div class="cp-cmp-modos"><span>Ver por</span><div class="cp-seg" role="group" aria-label="Ver por">${Object.entries(pmodos).map(([k,v])=>`<button type="button" class="${k===st.verPor?'on':''}" data-acc="pcmodo" data-v="${k}" aria-pressed="${k===st.verPor}">${v}</button>`).join('')}</div></div></header>
+    <div class="cp-cmp-scroll" role="region" aria-label="Tabla de comparación" tabindex="0"><table class="${compra?'cp-cmp-compras':'cp-cmp-grid'}"><thead><tr>${cabeza}</tr></thead><tbody>${cuerpo||`<tr><td colspan="${compra?8:tramos.length+1}">Sin compras para esta selección.</td></tr>`}</tbody></table></div>
+    <footer class="cp-cmp-pie"><span>${detalle} · ${vfecha(R0)} – ${vfecha(R1)} · sin IGV</span>${paginas>1?`<div class="cp-cmp-pag"><button type="button" class="cp-pil" data-acc="pcpag" data-v="-1" aria-label="Página anterior"${st.cmpPagina===0?' disabled':''}>‹</button><span>${st.cmpPagina+1} de ${paginas}</span><button type="button" class="cp-pil" data-acc="pcpag" data-v="1" aria-label="Página siguiente"${st.cmpPagina+1===paginas?' disabled':''}>›</button></div>`:''}</footer>`;
+}
 const pcontra={hab:'contra su precio habitual',ant:'contra el período anterior',ano:'contra el año pasado'};
 const pcurvaK=h=>{if(!h?.length)return '';const a=Math.min(...h),b=Math.max(...h),r=b-a||1;return `<svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><polyline points="${h.map((v,i)=>`${(i*100/(h.length-1)).toFixed(1)},${(31-(v-a)/r*28).toFixed(1)}`).join(' ')}"/></svg>`;};
 const pmini=s=>{const ix=s.map((x,i)=>[x,i]).filter(x=>x[0]!=null);if(!ix.length)return '';const v=ix.map(x=>x[0]),a=Math.min(...v),b=Math.max(...v),r=b-a,y=x=>r?18-(x-a)/r*16:10;return `<svg viewBox="0 0 68 20" aria-hidden="true"><polyline points="${ix.map(([x,i])=>`${(2+i*64/(s.length-1)).toFixed(1)},${y(x).toFixed(1)}`).join(' ')}"/></svg>`;};
-function pmenuFam(B,st){const P=B.P.familias;if(!P)return '';const el=new Set(P.elegidas),n=P.elegidas.length||P.todas.length,ab=st.menu==='fam';
-  return `<div class="cp-ms"><button class="cp-pil" data-acc="pmenu" data-v="fam" aria-expanded="${ab}">${n===P.todas.length?'Todas las familias':`Familias: ${n} de ${P.todas.length}`} ▾</button>${ab?`<div class="cp-pop">${P.todas.map(([f,v])=>`<label><input type="checkbox" data-acc="pfam" value="${vesc(f)}"${el.has(f)||!el.size?' checked':''}><span>${vesc(f.charAt(0)+f.slice(1).toLowerCase())}</span><small>${vesc(ps0(v))}</small></label>`).join('')}<p>Vale para todas las vistas de Compras.</p></div>`:''}</div>`;}
+function psubfamilias(P,familias){
+  return [...new Set(familias.flatMap(f=>P.subfamilias?.[f]||[]))].sort((a,b)=>a.localeCompare(b,'es'));
+}
+function pseleccion(G){
+  return G.pagina||{familias:G.B.P.familias.elegidas,subfamilias:G.B.P.filtros?.Subfamilia||[]};
+}
+function pfiltros(G){
+  const P=G.B.P.familias;
+  if(!P)return '';
+  const {familias,subfamilias}=pseleccion(G);
+  const menu=(k,rot,todas,sel,ayuda)=>{
+    const abierto=G.st.menu===k;
+    const etiqueta=sel.length===1?sel[0]:sel.length&&sel.length!==todas.length?`${sel.length} de ${todas.length}`:'Todas';
+    const mostrar=s=>vesc(s.charAt(0)+s.slice(1).toLowerCase());
+    return `<div class="cp-ms"><button type="button" class="cp-pil" data-acc="pmenu" data-v="${k}" aria-expanded="${abierto}"><span>${rot} · ${mostrar(etiqueta)}</span> ▾</button>${abierto?`<div class="cp-pop"><div class="cp-filtro-opciones">${todas.map(f=>`<label><input type="checkbox" data-acc="${k==='fam'?'pfam':'psub'}" value="${vesc(f)}"${!sel.length||sel.includes(f)?' checked':''}><span>${mostrar(f)}</span></label>`).join('')||`<p>${ayuda}</p>`}</div><button type="button" class="cp-pil" data-acc="pfiltrar">Aplicar</button></div>`:''}</div>`;
+  };
+  return menu('fam','Familia',P.todas.map(x=>x[0]),familias,'Sin familias disponibles.')+
+    (P.subfamilias?menu('sub','Subfamilia',psubfamilias(P,familias),subfamilias,'Elige una familia para ver sus subfamilias.'):'');
+}
 function pkpis(G,C){const {st,B}=G,neto=C.up+C.dn,PR=pleer(B),m=C.meses||[];
   if(!G.efMes||G.efKey!==B.P.sello+st.op){G.efKey=B.P.sello+st.op;G.efMes={net:[],up:[],dn:[]};for(const [a,b] of m){let n=0,u=0,d=0;for(const l of PR.L)if(l.d>=a&&l.d<=b&&pok(l)&&l.ref!=null){const e=l.v-l.ref*l.c;n+=e;if(e>0)u+=e;else d+=e;}G.efMes.net.push(n);G.efMes.up.push(u);G.efMes.dn.push(d);}}
   const k=(id,rot,val,cls,sub,h,tip)=>`<button class="cp-kpi${st.kpi===id?' on':''}" data-acc="pkpi" data-v="${id}" aria-pressed="${st.kpi===id}" title="${vesc(tip)}">${pcurvaK(h)}<span class="r">${vesc(rot)}</span><span class="v ${cls}">${vesc(val)}</span><span class="d">${vesc(sub)}</span></button>`;
@@ -205,9 +345,9 @@ function pkpis(G,C){const {st,B}=G,neto=C.up+C.dn,PR=pleer(B),m=C.meses||[];
     +k('sube','Subieron',pd0(C.up),'rojo',`${pn(C.sube.length)} · el mayor ${may(C.sube,Math.max)}`,G.efMes.up,'Un clic deja sólo estos.')
     +k('baja','Bajaron',pd0(C.dn),'verde',`${pn(C.baja.length)} · el mayor ${may(C.baja,Math.min)}`,G.efMes.dn,'Un clic deja sólo estos.')
     +k('rev','Para revisar',pn(C.rev.length),C.rev.length?'nar':'',`${pn(vsuma(C.rev,'nfl'),'compra')} con precio raro, fuera de la cuenta`,null,'Una compra de S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o con decimales en una unidad que se cuenta entera.');}
-function plista(G,C){const {st}=G,q=(st.q||'').trim().toLocaleLowerCase('es');
+function plista(G,C){const {st}=G,q=pbuscar(st.q||'');
   let vis=C.rows.filter(r=>st.kpi==='todos'||(st.kpi==='sube'?r.im!=null&&r.im>=1:st.kpi==='baja'?r.im!=null&&r.im<=-1:r.nfl>0));
-  if(q)vis=vis.filter(r=>q.split(/\s+/).every(w=>r.n.toLocaleLowerCase('es').normalize('NFD').replace(/[̀-ͯ]/g,'').includes(w.normalize('NFD').replace(/[̀-ͯ]/g,''))));
+  if(q.length)vis=vis.filter(r=>pcoincide(r.n,q));
   else if(st.ver==='80'&&st.kpi==='todos')vis=vis.filter(r=>r.a80);
   const o=st.ord,kv=r=>({n:r.n,pp:r.pp,pct:r.pct,mv:r.disp,vo:r.vol,va:r.val,im:r.im}[o.k]);
   vis=[...vis].sort((a,b)=>{const x=kv(a),y=kv(b);if(x==null&&y==null)return b.val-a.val;if(x==null)return 1;if(y==null)return -1;return (typeof x==='string'?x.localeCompare(y):x-y)*o.d;});
@@ -215,7 +355,10 @@ function plista(G,C){const {st}=G,q=(st.q||'').trim().toLocaleLowerCase('es');
   const h=(k,t,tip='')=>`<button data-acc="pord" data-v="${k}" title="${vesc(tip)}">${vesc(t)}${o.k===k?(o.d>0?' ↑':' ↓'):''}</button>`;
   const fila=r=>`<tr class="${st.p===r.p?'chosen':''}"><td class="i" title="${vesc(r.n)}"><button class="cp-tn" data-acc="pprod" data-v="${r.p}"><span>${vesc(r.n)}</span></button></td><td>${pp2(r.pp)}</td><td>${pp2(r.ref)}</td><td class="${pcv(r.im)}">${ppc(r.pct)}</td><td class="fuerte ${pcv(r.im)}">${r.im==null?'—':pd0(r.im)}</td>${amp?`<td class="tenue" title="${r.disp==null?'Menos de cinco compras en el rango':`Mín – máx: ${pp2(r.min)} – ${pp2(r.max)}`}">${r.disp==null?'—':`±${vnum(r.disp*100)} %`}</td><td class="tenue">${r.min==null?'—':r.min===r.max?pp2(r.min):`${pp2(r.min)} – ${pp2(r.max)}`}</td><td class="tenue">${r.vol?`${vnum(r.vol)} %`:'—'}</td><td>${pq(r.cOk)} ${vesc(r.um)}</td><td>${ps0(r.val)}</td><td>${r.nl}</td><td class="t">${pmini(r.serie)}${r.nfl?'<i class="cp-punto" title="Con compras para revisar"></i>':''}</td>`:''}</tr>`;
   const tI=vis.reduce((s,r)=>s+(r.im||0),0);
-  return `<div class="cp-wrap"><table><thead><tr><th class="i">${h('n','Producto')}</th><th class="w-pr">${h('pp','Ahora','Precio ponderado del rango: soles ÷ cantidad, sin las compras para revisar')}</th><th class="w-pr">Contra</th><th class="w-pc">${h('pct','%')}</th><th class="w-im">${h('im','Impacto')}</th>${amp?`<th class="w-mv">${h('mv','Se mueve','Dispersión: cuánto se aleja el precio de cada compra de su promedio. Pide cinco compras.')}</th><th class="w-mm">Mín – máx</th><th class="w-x">${h('vo','En semanas','Volatilidad: suma de los cambios de precio de una semana a otra, en %')}</th><th class="w-x">Cantidad</th><th class="w-x">${h('va','Valor')}</th><th class="w-mv">Compras</th><th class="w-t">13 meses</th>`:''}</tr></thead><tbody><tr class="tot"><td class="i">Total · ${pn(vis.length)}</td><td></td><td></td><td></td><td class="fuerte ${pcv(tI)}">${pd0(tI)}</td>${amp?`<td></td><td></td><td></td><td></td><td>${ps0(vsuma(vis,'val'))}</td><td></td><td></td>`:''}</tr>${vis.slice(0,st.limite).map(fila).join('')}</tbody></table>${vis.length?'':'<p class="cp-aviso">Nada que mostrar con estos filtros.</p>'}</div><div class="cp-pie"><p class="cp-pie-n">${pn(vis.length)} · sin IGV · ${vesc(pcontra[st.contra])}</p>${vamp('lista',st.amp==='lista','la lista')}</div>`;}
+  return `<div class="cp-wrap"><table><thead><tr><th class="i">${h('n','Producto')}</th>
+    <th class="w-pr">${h('pp','Promedio del período','Precio por unidad en las fechas seleccionadas. Se divide el importe sin IGV entre la cantidad comprada y se excluyen las compras para revisar.')}</th>
+    <th class="w-pr" title="Precio por unidad de la base elegida en el selector de comparación.">Precio de referencia</th>
+    <th class="w-pc">${h('pct','%')}</th><th class="w-im">${h('im','Impacto')}</th>${amp?`<th class="w-mv">${h('mv','Se mueve','Dispersión: cuánto se aleja el precio de cada compra de su promedio. Pide cinco compras.')}</th><th class="w-mm">Mín – máx</th><th class="w-x">${h('vo','En semanas','Volatilidad: suma de los cambios de precio de una semana a otra, en %')}</th><th class="w-x">Cantidad</th><th class="w-x">${h('va','Valor')}</th><th class="w-mv">Compras</th><th class="w-t">13 meses</th>`:''}</tr></thead><tbody><tr class="tot"><td class="i">Total · ${pn(vis.length)}</td><td></td><td></td><td></td><td class="fuerte ${pcv(tI)}">${pd0(tI)}</td>${amp?`<td></td><td></td><td></td><td></td><td>${ps0(vsuma(vis,'val'))}</td><td></td><td></td>`:''}</tr>${vis.slice(0,st.limite).map(fila).join('')}</tbody></table>${vis.length?'':'<p class="cp-aviso">Nada que mostrar con estos filtros.</p>'}</div><div class="cp-pie"><p class="cp-pie-n">${pn(vis.length)} · sin IGV · ${vesc(pcontra[st.contra])}</p>${vamp('lista',st.amp==='lista','la lista')}</div>`;}
 function pficha(G,C){const {st,B}=G,PR=pleer(B),P=st.p!=null?C.rows.find(r=>r.p===st.p):null,cif=(r,v,s='',c='')=>`<div class="cp-cf"><span>${vesc(r)}</span><b class="${c}">${vesc(v)}</b><small>${vesc(s)}</small></div>`;
   if(!P){const top=(a,f)=>[...a].sort(f).slice(0,5).map(r=>`<button class="cp-fi" data-acc="pprod" data-v="${r.p}"><span class="n" title="${vesc(r.n)}">${vesc(r.n)}</span><small>${ppc(r.pct)}</small><b class="${pcv(r.im)}">${pd0(r.im)}</b></button>`).join('');
     const may=[...C.sube].sort((a,b)=>b.im-a.im)[0],fr=st.kpi==='rev'?'Estas compras tienen un precio a 2,5 veces su habitual o a menos de 0,4, o decimales en una unidad entera: suelen ser errores de tipeo o de unidad, y no entran en ningún precio.':`${pn(C.sube.length)} ${C.sube.length===1?'subió':'subieron'} ${pcontra[st.contra]} y ${C.sube.length===1?'costó':'costaron'} ${ps0(C.up)} de más; ${C.baja.length} ${C.baja.length===1?'bajó y ahorró':'bajaron y ahorraron'} ${ps0(-C.dn)}.${may?` El que más pesa: ${may.n}, ${pd0(may.im)}.`:''}`;
@@ -226,7 +369,7 @@ function pficha(G,C){const {st,B}=G,PR=pleer(B),P=st.p!=null?C.rows.find(r=>r.p=
   let body;
   if(st.ptab==='curva')body=pcurva(G,P,hl);else if(st.ptab==='prov')body=pprovs(G,P);else if(st.ptab==='comp')body=pcompras(G,P,hl);else if(st.ptab==='sem')body=psemanas(G,P);else body=pgasto(G,P);
   return `<div class="cp-fcab"><div class="cp-ftit"><span class="cp-miga">${vesc(P.fam)} › ${vesc(P.sub)}</span><h3 title="${vesc(P.n)}">${vesc(P.n)}</h3><span class="cp-miga">${P.nl} compras en el rango · ${ps0(P.val)}</span></div>${vamp('ficha',st.amp==='ficha','la ficha')}<button class="cp-quita" data-acc="psoltar">Soltar</button></div>
-    <div class="cp-cifras">${cif('Precio ahora',`S/ ${pp2(P.pp)}`,`por ${P.um}`)}${cif('Contra',`S/ ${pp2(P.ref)}`,({hab:'su habitual',ant:'período anterior',ano:'año pasado'})[st.contra])}${cif('Impacto',P.im==null?'—':pd0(P.im),ppc(P.pct),pcv(P.im))}${cif('Mín – máx',P.min==null?'—':`${pp2(P.min)} – ${pp2(P.max)}`,P.disp!=null?`se mueve ±${vnum(P.disp*100)} % · ${vnum(P.vol)} % en semanas`:P.vol?`${vnum(P.vol)} % en semanas · menos de 5 compras`:'')}</div>
+    <div class="cp-cifras">${cif('Promedio',`S/ ${pp2(P.pp)}`,`por ${P.um} en el período`)}${cif('Referencia',`S/ ${pp2(P.ref)}`,({hab:'precio habitual',ant:'período anterior',ano:'año pasado'})[st.contra])}${cif('Impacto',P.im==null?'—':pd0(P.im),ppc(P.pct),pcv(P.im))}${cif('Mín – máx',P.min==null?'—':`${pp2(P.min)} – ${pp2(P.max)}`,P.disp!=null?`se mueve ±${vnum(P.disp*100)} % · ${vnum(P.vol)} % en semanas`:P.vol?`${vnum(P.vol)} % en semanas · menos de 5 compras`:'')}</div>
     <p class="cp-frase">${vesc(fr)}</p><div class="cp-fl"><div class="cp-seg" role="group" aria-label="Qué mirar">${tabs.map(([k,t])=>`<button class="${st.ptab===k?'on':''}" data-acc="ptab" data-v="${k}" aria-pressed="${st.ptab===k}">${t}</button>`).join('')}</div></div><div class="cp-zona">${body}</div>`;}
 function pcurva(G,P,hl){const {st,B}=G,PR=pleer(B),esC=st.pgran==='Compra',off=st.off[P.p]||[],R1=(B.planes[st.op]||B.planes['12m'])[1];
   const provOrd=[...new Set([...P.rg].sort((a,b)=>b.v-a.v).map(l=>l.prov))],colP=k=>VCOL[Math.max(0,provOrd.indexOf(k))%VCOL.length];
@@ -269,13 +412,27 @@ function pgasto(G,P){const {B,st}=G,R=vbase(B,st.op),id=B.P.prods.findIndex(x=>S
   const hist=(B.prods.get(id)||[]).filter(r=>r.u===info.u),[a,b]=R.rango,ip=a-(b-a+1),p=vcambio(vrango(hist,a,b),vrango(hist,ip,a-1),ip>=vdia(B.P.historia[0]));G.D={puente:p};
   return p.precio==null?'<p class="cp-aviso">Sin base comparable en el período anterior.</p>':`<div class="cv-bridge-plot"></div><p class="cp-nota">Cuánto del cambio del gasto contra el período anterior es cantidad y cuánto es precio: ${pd0(p.cantidad)} y ${pd0(p.precio)}.</p>`;}
 function vpintar(G){
-  const {root,B,st}=G,C=pfilas(B,st);G.C=C;
+  const {root,B,st}=G,comparacion=st.vista==='comparacion';
+  root.classList.toggle('det',!comparacion&&!!st.det);
+  root.classList.toggle('amp',!comparacion&&!!st.amp);
+  root.querySelectorAll('[data-acc=pvista]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===st.vista)));
+  root.querySelector('[data-acc=pcontra]').hidden=comparacion;
+  root.querySelector('.cp-cab-din').innerHTML=pfiltros(G)+(!comparacion&&st.kpi!=='todos'?`<button class="cp-quita" data-acc="pkpi" data-v="${st.kpi}">${({sube:'Subieron',baja:'Bajaron',rev:'Para revisar'})[st.kpi]} ✕</button>`:'');
+  const n2=root.querySelector('.cp-n2'),kpis=root.querySelector('.cp-kpis'),cuerpo=root.querySelector('.cp-cuerpo'),cmp=root.querySelector('.cp-comparacion');
+  n2.hidden=kpis.hidden=cuerpo.hidden=comparacion;
+  cmp.hidden=!comparacion;
+  if(comparacion){
+    const x=cmp.querySelector('.cp-cmp-scroll')?.scrollLeft||0;
+    cmp.innerHTML=ptablaComparacion(G);
+    cmp.querySelector('.cp-cmp-scroll').scrollLeft=x;
+    vponerFecha(G);
+    return;
+  }
+  const C=pfilas(B,st);G.C=C;
   if(st.p!=null&&!C.rows.some(r=>r.p===st.p))st.p=null;
   const y=root.querySelector('.cp-wrap')?.scrollTop||0;
-  root.classList.toggle('det',!!st.det);root.classList.toggle('amp',!!st.amp);
-  root.querySelector('.cp-n2').innerHTML=vnivel2(G,C);
-  root.querySelector('.cp-cab-din').innerHTML=pmenuFam(B,st)+(st.kpi!=='todos'?`<button class="cp-quita" data-acc="pkpi" data-v="${st.kpi}">${({sube:'Subieron',baja:'Bajaron',rev:'Para revisar'})[st.kpi]} ✕</button>`:'');
-  root.querySelector('.cp-kpis').innerHTML=pkpis(G,C);
+  n2.innerHTML=vnivel2(G,C);
+  kpis.innerHTML=pkpis(G,C);
   const iz=root.querySelector('.cp-izq'),fi=root.querySelector('.cp-ficha');iz.hidden=st.amp==='ficha';fi.hidden=st.amp==='lista';
   iz.innerHTML=plista(G,C);fi.innerHTML=pficha(G,C);
   root.querySelector('.cp-cuerpo').dataset.amp=st.amp||'';
@@ -292,14 +449,31 @@ function vponerFecha(G){const fb=document.querySelector('.st-key-cp_vol_fecha'),
 function vnivel2(G,C){const {st}=G,tabs=[['80',`Los que hacen el 80 % · ${C.n80}`,'Los que suman el 80 % de lo comprado'],['todos',`Todos · ${C.rows.length}`,'Todos los productos comprados en el rango']];
   return `<div class="cp-tabs" role="tablist">${tabs.map(([k,t,tp])=>`<button role="tab" class="${st.ver===k?'on':''}" data-acc="pver" data-v="${k}" aria-selected="${st.ver===k}" title="${vesc(tp)}">${vesc(t)}</button>`).join('')}</div>`
     +`<div class="cp-n2-der"><label class="cp-switch"><input type="checkbox" data-acc="pdet" role="switch"${st.det?' checked':''}>Detalle</label><span class="cp-como"><button class="cp-link" data-acc="pcomo" aria-expanded="${!!st.como}">Cómo se calcula</button>${st.como?`<div class="cp-pop cp-pop-como" role="dialog"><p>Del ${pfc(C.R0)} al ${pfc(C.R1)}, sin IGV, ${vesc(pcontra[st.contra])}.</p><dl>`
-    +'<dt>Precio ahora</dt><dd>El ponderado del rango: soles ÷ cantidad, sin las compras para revisar.</dd>'
-    +'<dt>Contra</dt><dd>Su precio habitual (la mediana de los 90 días anteriores a cada compra), el del período anterior o el del año pasado, según el menú.</dd>'
+    +'<dt>Promedio del período</dt><dd>El importe sin IGV dividido entre la cantidad comprada en las fechas seleccionadas. Se excluyen las compras para revisar.</dd>'
+    +'<dt>Precio de referencia</dt><dd>Según el selector de comparación, se usa el precio habitual, el promedio del período inmediatamente anterior de igual duración o el promedio de las mismas fechas del año pasado. Para el habitual, se toma la mediana de los 90 días previos a cada compra y se promedian esas referencias según la cantidad comprada.</dd>'
     +'<dt>Impacto</dt><dd>Lo pagado menos lo que hubiera costado al precio de referencia, producto por producto. «Efecto del precio» es su suma.</dd>'
     +'<dt>Para revisar</dt><dd>Una compra de S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o con decimales en una unidad entera: no entra en la cuenta.</dd>'
     +'<dt>Se mueve</dt><dd>Dispersión: desvío ÷ promedio de los precios de cada compra; pide cinco compras. Con «Detalle».</dd>'
     +'<dt>En semanas</dt><dd>Volatilidad: la suma de los cambios de precio de una semana a otra, en %. Con «Detalle».</dd></dl><p>Es un cálculo propio, no un estándar.</p></div>':''}</span></div>`;}
 function ppintarFicha(G){const fi=G.root.querySelector('.cp-ficha');fi.innerHTML=pficha(G,G.C);G.root.querySelectorAll('.cp-izq tr').forEach(tr=>{const b=tr.querySelector('[data-acc=pprod]');if(b)tr.classList.toggle('chosen',+b.dataset.v===G.st.p);});vpuentePlot(G);}
+function pexcelComparacion(G){
+  const {PR,R0,R1,compra,tramos,filas}=G.comparacion;
+  const base=l=>[l.nom,l.fam,l.sub,l.unidad];
+  const pct=x=>x==null?null:x*100;
+  const nombre=compra?'Por compra':`Por ${pmodos[G.st.verPor].toLowerCase()}`;
+  const cabeza=compra?
+    ['Fecha','Producto','Familia','Subfamilia','Unidad','Proveedor','Documento','Cantidad','Fecha anterior','Precio anterior','Precio pagado','Variación %','Para revisar']:
+    ['Producto','Familia','Subfamilia','Unidad',...tramos.flatMap(t=>[`${t.etiqueta} · precio`,`${t.etiqueta} · variación %`])];
+  const datos=compra?filas.map(({l,ant,dv})=>[vfecha(l.d),...base(l),PR.provs[l.prov],PR.docs[l.doc],l.c,
+    ant?vfecha(ant.d):null,punitario(ant),punitario(l),pct(dv),l.fl?'Sí':'No']):
+    filas.map(({l,puntos})=>[...base(l),...puntos.flatMap(p=>p?[punitario(p.l),pct(p.dv)]:[null,null])]);
+  const contexto=[['Rango',`${vfecha(R0)} – ${vfecha(R1)}`],['Ver por',pmodos[G.st.verPor]],['Moneda','Soles sin IGV'],
+    ['Buscar',G.st.q],...Object.entries(G.B.P.filtros||{}).map(([k,v])=>[k,v.join(' / ')||'Todas'])];
+  bajar(`Precios_${archivo(nombre)}.xlsx`,libro([{nombre,cabeza,filas:datos,decimales:6},
+    {nombre:'Contexto',cabeza:['Dato','Valor'],filas:contexto}]));
+}
 function vexcel(G){
+  if(G.st.vista==='comparacion'){pexcelComparacion(G);return;}
   const {B,st,C}=G,vis=G.vis||[],PR=pleer(B),P=st.p!=null?C.rows.find(r=>r.p===st.p):null;
   const hojas=[{nombre:'Precios',cabeza:['Producto','Familia','Subfamilia','Unidad','Precio ahora','Precio contra','Cambio %','Impacto S/','Se mueve (dispersión)','En semanas (volatilidad)','Mínimo','Máximo','Cantidad','Valor S/','Compras','Para revisar'],
     filas:vis.map(r=>[r.n,r.fam,r.sub,r.um,r.pp,r.ref,r.pct==null?null:r.pct*100,r.im,r.disp,r.vol,r.min,r.max,r.cOk,r.val,r.nl,r.nfl]),decimales:6}];
@@ -309,7 +483,13 @@ function vexcel(G){
   hojas.push({nombre:'Contexto',cabeza:['Dato','Valor'],filas});
   bajar(`Precios_${archivo(P?P.n:'productos')}.xlsx`,libro(hojas));
 }
-function pavisar(G){if(G.pagina){const v=G.pagina;G.pagina=null;G.enviar?.('familias',v);}}
+function pavisar(G){
+  const v=G.pagina;
+  if(!v)return;
+  G.pagina=null;
+  if(G.B.P.familias?.subfamilias)G.enviar?.('filtros',v);
+  else G.enviar?.('familias',v.familias);
+}
 function vconectar(G){
   const {root}=G,signal=G.abort.signal;
   root.addEventListener('click',ev=>{
@@ -319,7 +499,16 @@ function vconectar(G){
     if(!e||!root.contains(e)||e.matches('input,select'))return;
     const {acc,v}=e.dataset,{st}=G;
     if(acc!=='pcomo')st.como=false;
-    if(acc==='pcomo'){st.como=!st.como;}
+    if(acc==='pvista'){st.vista=v;st.amp=null;st.tr=null;}
+    else if(acc==='pcmodo'){st.verPor=v;st.cmpCol=null;st.cmpPagina=0;root.querySelector('.cp-cmp-scroll').scrollLeft=0;}
+    else if(acc==='pcperiodo'){
+      const x=Number(v),seleccion=G.comparacion.tramos[G.comparacion.indice]?.inicio;
+      st.cmpDir=seleccion===x?-G.comparacion.direccion:-1;
+      st.cmpCol=x;st.cmpPagina=0;
+    }
+    else if(acc==='pcsort'){st.cmpCompraDir=st.cmpCompra===v?-st.cmpCompraDir:-1;st.cmpCompra=v;st.cmpPagina=0;}
+    else if(acc==='pcpag'){st.cmpPagina+=Number(v);}
+    else if(acc==='pcomo'){st.como=!st.como;}
     else if(acc==='ppleg'){st.pleg={...(st.pleg||{}),[v]:(st.pleg||{})[v]===false};vguardarLS('cp_vol_pleg',st.pleg);ppintarFicha(G);return;}
     else if(acc==='pkpi'){st.kpi=st.kpi===v?'todos':v;st.ord=st.kpi==='baja'?{k:'im',d:1}:{k:'im',d:-1};st.p=null;st.limite=150;}
     else if(acc==='pver'){st.ver=v;st.limite=150;}
@@ -332,15 +521,30 @@ function vconectar(G){
     else if(acc==='ptramo'){st.tr=null;ppintarFicha(G);return;}
     else if(acc==='pley'){const k=+v,o=st.off[st.p]||[];st.off[st.p]=o.includes(k)?o.filter(x=>x!==k):[...o,k];st.tr=null;ppintarFicha(G);return;}
     else if(acc==='pmenu'){st.menu=st.menu===v?null:v;if(!st.menu)pavisar(G);}
+    else if(acc==='pfiltrar'){st.menu=null;pavisar(G);}
     else if(acc==='excel'){vexcel(G);return;}
     else return;
     vpintar(G);
+    if(['pcmodo','pcperiodo','pcsort','pcpag'].includes(acc)){
+      const b=root.querySelector(`[data-acc="${acc}"][data-v="${v}"]:not([disabled])`);
+      (b||root.querySelector('.cp-cmp-scroll'))?.focus({preventScroll:true});
+    }
   });
-  root.addEventListener('input',ev=>{if(ev.target.dataset.acc==='q'){G.st.q=ev.target.value;G.st.limite=150;vpintar(G);}});
+  root.addEventListener('input',ev=>{if(ev.target.dataset.acc==='q'){G.st.q=ev.target.value;G.st.limite=150;G.st.cmpPagina=0;vpintar(G);}});
   root.addEventListener('change',ev=>{
     const e=ev.target,{acc}=e.dataset,{st,B}=G;
     if(acc==='pcontra'){st.contra=e.value;vpintar(G);}
-    else if(acc==='pfam'){const P=B.P.familias,el=P.elegidas.length?P.elegidas:P.todas.map(x=>x[0]);P.elegidas=e.checked?[...el,e.value]:el.filter(x=>x!==e.value);G.pagina=P.elegidas.slice();vpintar(G);}
+    else if(acc==='pfam'||acc==='psub'){
+      const P=B.P.familias,{familias,subfamilias}=pseleccion(G);
+      const cambiar=(sel,todas)=>{const marcadas=sel.length?sel:todas;return e.checked?[...new Set([...marcadas,e.value])]:marcadas.filter(x=>x!==e.value);};
+      const fam=acc==='pfam'?cambiar(familias,P.todas.map(x=>x[0])):familias;
+      const disponibles=psubfamilias(P,fam);
+      const sub=acc==='psub'?cambiar(subfamilias,disponibles):subfamilias.filter(s=>disponibles.includes(s));
+      G.pagina={familias:fam,subfamilias:sub};
+      st.cmpPagina=0;
+      vpintar(G);
+      [...root.querySelectorAll(`[data-acc="${acc}"]`)].find(input=>input.value===e.value)?.focus({preventScroll:true});
+    }
   });
   root.addEventListener('scroll',ev=>{const el=ev.target;if(!el.matches?.('.cp-wrap'))return;if(el.scrollTop+el.clientHeight>=el.scrollHeight-80&&G.st.limite<(G.vis?.length||0)){G.st.limite+=150;vpintar(G);}},true);
   // El gráfico: el detalle al pasar el cursor y el tramo arrastrado, sin redibujar.
@@ -359,22 +563,24 @@ function vconectar(G){
 window.__cvUI={inicial:vinicial,pintar:vpintar};
 export default function(component){
   const {data:P,parentElement,setTriggerValue}=component;if(!P)return;
-  let G=window.__cpVol,st=G?.st||vinicial(P.inicial);
+  let G=window.__cpVol;
+  const st={...vinicial(P.inicial),...G?.st};
   if(st.det==null)st.det=!!vleerLS('cp_vol_det',false);if(!st.pleg)st.pleg=vleerLS('cp_vol_pleg',{});
   G?.abort?.abort();G?.observer?.disconnect();
   if(G&&G.B.P.sello!==P.sello){
     const nombre=G.B.P.precios?.prods?.[st.p]?.[0],id=P.precios?.prods?P.precios.prods.findIndex(x=>x[0]===nombre):-1;st.p=id<0?null:id;
-    st.tr=null;st.off={};st.op=P.inicial||st.op;st.limite=150;
+    st.tr=null;st.off={};st.op=P.inicial||st.op;st.limite=150;st.cmpPagina=0;
   }
   let root=parentElement.querySelector('.cvol');
   if(!root){root=document.createElement('div');root.className='cvol';
-    root.innerHTML=`<div class="cp-n2"></div><div class="cp-cab"><span class="cp-lugar" aria-hidden="true"></span><span class="cp-cab-din"></span><select class="cp-men" data-acc="pcontra" aria-label="Contra qué precio"><option value="hab">Contra: su precio habitual</option><option value="ant">Contra: el período anterior</option><option value="ano">Contra: el año pasado</option></select><span class="cp-esp"></span><input class="cp-busca" type="search" data-acc="q" placeholder="Buscar producto…" aria-label="Buscar producto"><button class="cp-pil" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div><div class="cp-kpis"></div><div class="cp-cuerpo"><section class="cp-izq"></section><aside class="cp-ficha" aria-label="Ficha"></aside></div>`;
+    root.innerHTML=`<div class="cp-vistas" role="group" aria-label="Vista de precios"><button type="button" data-acc="pvista" data-v="resumen">Resumen</button><button type="button" data-acc="pvista" data-v="comparacion">Comparación</button></div><div class="cp-cab"><span class="cp-lugar" aria-hidden="true"></span><span class="cp-cab-din"></span><select class="cp-men" data-acc="pcontra" aria-label="Contra qué precio"><option value="hab">Contra: su precio habitual</option><option value="ant">Contra: el período anterior</option><option value="ano">Contra: el año pasado</option></select><span class="cp-esp"></span><input class="cp-busca" type="search" data-acc="q" placeholder="Buscar producto…" aria-label="Buscar producto"><button class="cp-pil" data-acc="excel" title="Exportar a Excel">Excel ↓</button></div><div class="cp-n2"></div><div class="cp-kpis"></div><div class="cp-cuerpo"><section class="cp-izq"></section><aside class="cp-ficha" aria-label="Ficha"></aside></div><section class="cp-comparacion" aria-label="Comparación" hidden></section>`;
     parentElement.appendChild(root);}
-  const nuevo=!G||G.root!==root;
   G={root,st,B:G?.B.P.sello===P.sello?G.B:vleer(P),abort:new AbortController(),enviar:setTriggerValue};window.__cpVol=G;
+  const anfitrion=parentElement.getRootNode().host||parentElement;
+  anfitrion.closest('.st-key-cp_vol_pieza_wrap')?.toggleAttribute('data-precios-filtros',!!P.familias?.subfamilias);
   root.querySelector('[data-acc=q]').value=st.q||'';root.querySelector('[data-acc=pcontra]').value=st.contra;
   const fb=document.querySelector('.st-key-cp_vol_fecha');if(fb&&fb.offsetWidth)root.style.setProperty('--cp-fecha',`${fb.offsetWidth+8}px`);
   vconectar(G);vpintar(G);
   let ancho=root.clientWidth;
-  G.observer=new ResizeObserver(()=>{vponerFecha(G);if(Math.abs(root.clientWidth-ancho)<2)return;ancho=root.clientWidth;if(root.isConnected)vpuentePlot(G);});G.observer.observe(root);
+  G.observer=new ResizeObserver(()=>{vponerFecha(G);if(Math.abs(root.clientWidth-ancho)<2)return;ancho=root.clientWidth;if(root.isConnected&&st.vista!=='comparacion')vpuentePlot(G);});G.observer.observe(root);
 }

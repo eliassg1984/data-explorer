@@ -52,7 +52,7 @@ def precios(fuente, cols, rango):
     from graficos.compras.producto import _con_referencia, _normalizar, _um_corta
     b = _normalizar(fuente, cols["prod"], cols.get("fam"), cols.get("sub"), cols["valor"],
                     cols.get("cant"), cols.get("um"), cols["fecha"], cols.get("prov"),
-                    cols.get("doc"))
+                    cols.get("doc"), conservar_hora=True)
     h = _con_referencia(b)
     r0, r1 = (pd.Timestamp(x) for x in rango)
     lo = min(r0 - pd.DateOffset(years=1), r1 - pd.DateOffset(months=13), r0 - (r1 - r0)) - pd.Timedelta(days=8)
@@ -64,17 +64,22 @@ def precios(fuente, cols, rango):
     g = w.groupby("prod").agg(fam=("fam", "first"), sub=("sub", "first"))
     um = w[w["um"] != ""].groupby("prod")["um"].agg(lambda s: s.mode().iat[0])
     base = w["fecha"].min()
+    unidades = w["um"].str.upper()
+    ums = sorted(set(unidades))
+    iu = {u: i for i, u in enumerate(ums)}
     marca = {"": 0, "um": 1, "precio": 2}
 
     def n(v, dec):
         return None if v != v else round(float(v), dec)
 
-    filas = [[ip[p], int((f - base).days), iv[v], id_[dc], n(c, 3), n(x, 2), n(r, 4), marca.get(fl, 0)]
-             for p, f, v, dc, c, x, r, fl in zip(w["prod"], w["fecha"], w["prov"], w["docu"], w["cant"],
-                                                 w["valor"], w["ref"], w["flag"])]
+    filas = [[ip[p], int((f - base).days), iv[v], id_[dc], n(c, 3), n(x, 2), n(r, 4),
+              marca.get(fl, 0), iu[u], int(round(hora * 1000))]
+             for p, f, v, dc, c, x, r, fl, u, hora in zip(
+                 w["prod"], w["fecha"], w["prov"], w["docu"], w["cant"], w["valor"],
+                 w["ref"], w["flag"], unidades, w["hora"])]
     _con = [x for x in docs if x]
     leg = dict(zip(_con, documento_legible(pd.Series(_con, dtype=object)) if _con else []))
-    return {"base": str(base.date()), "filas": filas,
+    return {"base": str(base.date()), "filas": filas, "ums": [_um_corta(u) if u else "" for u in ums],
             "prods": [[p, nombre_propio(g["fam"][p]), nombre_propio(g["sub"][p]),
                        _um_corta(um[p]) if p in um.index else ""] for p in prods],
             "provs": [nombre_propio(p) if p else "Sin proveedor" for p in provs],

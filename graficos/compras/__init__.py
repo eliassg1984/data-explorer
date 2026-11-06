@@ -838,12 +838,22 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # (`compras_vol_card_*`), como las de Producto. Hasta ese día era
             # `ajuste_graf_card_izq_vol`, una sola superficie. Regla #415.
             with st.container(key="compras_vol_drill_wrap"):
+                opciones = None
+                if col_fam and col_fam in _ops_src.columns:
+                    nombres = sorted(_ops_src[col_fam].dropna().astype(str).unique())
+                    opciones = {"todas": [[f, 0] for f in nombres if f.strip()], "elegidas": fam_sel}
+                if opciones is not None and col_subfam and col_subfam in _ops_src.columns:
+                    pares = _ops_src[[col_fam, col_subfam]].dropna().astype(str).drop_duplicates()
+                    opciones["subfamilias"] = {
+                        f: sorted(s for s in grupo[col_subfam] if s.strip())
+                        for f, grupo in pares.groupby(col_fam)
+                    }
                 _compras_volatilidad_drill(_d_sec("compras_sec_volatilidad"),
                                            col_prod, col_prov, col_punit, col_fecha,
                                            col_valor, col_cant, col_um, col_moneda,
                                            d_full=d_full, col_docu=col_docu,
                                            col_fam=col_fam, col_subfam=col_subfam,
-                                           familias=_familias_de("compras_sec_volatilidad"))
+                                           familias=opciones)
 
     def _dib_semanal():
             # Drill "Semanal": una barra por período + el detalle del

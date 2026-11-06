@@ -112,7 +112,7 @@ def _sin_gritar(nombre):
 
 
 def _normalizar(d, col_prod, col_fam, col_subfam, col_valor, col_cant,
-                col_um, col_fecha, col_prov, col_docu):
+                col_um, col_fecha, col_prov, col_docu, *, conservar_hora=False):
     """El df del drill con nombres FIJOS (prod, fam, sub, valor, cant, um,
     fecha, prov, docu). Las familias y subfamilias vacías se unifican en
     «Sin familia» / «Sin subfamilia» en vez de descartarse: si no, sus
@@ -131,6 +131,8 @@ def _normalizar(d, col_prod, col_fam, col_subfam, col_valor, col_cant,
                 dtype=float)
         return np.zeros(n)
 
+    fechas = pd.to_datetime(d[col_fecha], errors="coerce") if col_fecha else None
+    dias = fechas.dt.normalize() if fechas is not None else None
     b = pd.DataFrame({
         "prod": _txt(col_prod),
         "fam": _txt(col_fam, "Sin familia"),
@@ -138,13 +140,14 @@ def _normalizar(d, col_prod, col_fam, col_subfam, col_valor, col_cant,
         "valor": _num(col_valor),
         "cant": _num(col_cant),
         "um": _txt(col_um),
-        "fecha": (pd.to_datetime(d[col_fecha], errors="coerce").dt.normalize()
-                  .to_numpy() if col_fecha else pd.NaT),
+        "fecha": dias.to_numpy() if dias is not None else pd.NaT,
         "prov": _txt(col_prov),
         "docu": _txt(col_docu),
         # El código del Almacén, para verlo en la ficha y buscar por él (#789).
         "cod": _txt("COD_PRODUCTO" if "COD_PRODUCTO" in d.columns else None),
     })
+    if conservar_hora and fechas is not None:
+        b["hora"] = (fechas - dias).dt.total_seconds().fillna(0).to_numpy()
     return b[b["fecha"].notna() & (b["prod"] != "")].reset_index(drop=True)
 
 

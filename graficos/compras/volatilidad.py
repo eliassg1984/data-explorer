@@ -19,7 +19,7 @@ from tema import (
 )
 from graficos.base import (
     _compras_layout,
-    preservar_widgets, selector_fecha_tarjeta,
+    poner_seleccion, preservar_widgets, selector_fecha_tarjeta,
 )
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.compras._comun import CATEGORIA_SEC, cambiar_familias
@@ -837,6 +837,31 @@ _PIEZA = st.components.v2.component(
 _K_CACHE = "_cp_vol_pieza_cache"
 
 
+def _seleccion_precios(peticion, opciones):
+    """Valida ambos filtros contra las opciones compartidas de Compras."""
+    if not isinstance(peticion, dict) or not opciones:
+        return None
+    familias, subs = peticion.get("familias"), peticion.get("subfamilias")
+    disponibles = {f for f, _ in opciones["todas"]}
+    if not isinstance(familias, list) or not all(isinstance(f, str) and f in disponibles for f in familias):
+        return None
+    mapa = opciones.get("subfamilias", {})
+    permitidas = {s for f in familias for s in mapa.get(f, ())}
+    if not isinstance(subs, list) or not all(isinstance(s, str) and s in permitidas for s in subs):
+        return None
+    return list(dict.fromkeys(familias)), list(dict.fromkeys(subs))
+
+
+def _cambiar_filtros_precios(opciones):
+    seleccion = _seleccion_precios((st.session_state.get("cp_vol_pieza") or {}).get("filtros"), opciones)
+    if seleccion is None:
+        return
+    claves = ("compras_graf_filtro_fam", "compras_graf_filtro_sub")
+    for clave, valores in zip(claves, seleccion):
+        poner_seleccion(clave, valores)
+    st.session_state["_cp_vol_atajo_pendiente"] = True
+
+
 @st.fragment
 def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                                col_valor, col_cant, col_um, col_moneda=None,
@@ -877,5 +902,6 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             st.info("Sin fechas válidas para comparar precios.")
             return
         _PIEZA(key="cp_vol_pieza", data=mensaje, width="stretch",
+               on_filtros_change=lambda: _cambiar_filtros_precios(familias),
                on_familias_change=lambda: cambiar_familias(
                    "cp_vol_pieza", "_cp_vol_atajo_pendiente", familias))

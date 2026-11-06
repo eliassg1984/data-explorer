@@ -86,6 +86,13 @@ def ref(d, rango):
 
 
 class Contrato(unittest.TestCase):
+    def test_validacion_de_familia_y_subfamilia(self):
+        opciones = {"todas": [["UNO", 0], ["DOS", 0]], "subfamilias": {"UNO": ["A"], "DOS": ["B"]}}
+        self.assertEqual(vol._seleccion_precios({"familias": ["UNO"], "subfamilias": ["A"]}, opciones),
+                         (["UNO"], ["A"]))
+        self.assertIsNone(vol._seleccion_precios({"familias": ["UNO"], "subfamilias": ["B"]}, opciones))
+        self.assertIsNone(vol._seleccion_precios({"familias": [], "subfamilias": ["A"]}, opciones))
+
     def test_lineas_precision_moneda_sello_y_fecha_con_hora(self):
         d = compras()
         P = armar(d)
@@ -95,8 +102,8 @@ class Contrato(unittest.TestCase):
         self.assertAlmostEqual(sum(r[8] for r in P['lineas']), d[d.moneda!='02']['valor'].sum(), places=4)
         self.assertEqual(len({r[1] for r in P['lineas']}), 4)
         self.assertIn('const VL = { dia:0, hora:1, prod:2, prov:3, doc:4, um:5, precio:6, cant:7, valor:8 };', JS)
-        # A Python sólo vuelve la fecha y el filtro de familias de la página.
-        self.assertEqual(re.findall(r"enviar\?\.\('(\w+)'", JS), ['familias'])
+        # Al servidor sólo vuelven los filtros compartidos de la página.
+        self.assertEqual(re.findall(r"enviar\?\.\('(\w+)'", JS), ['filtros', 'familias'])
         self.assertNotRegex(JS + CSS, r'#[0-9a-fA-F]{6}\b')
         d.loc[0, 'precio'] += .01
         self.assertNotEqual(P['sello'], armar(d)['sello'])
@@ -282,6 +289,64 @@ class Navegador(unittest.TestCase):
         P2=datos.armar(reciente,reciente,COLS_F,(r0,r1),periodo.HEREDA)
         C=self.pg.evaluate('''P=>{const B=__cvCalc.leer(P),st={...__cvUI.inicial(P.inicial),contra:'ano'};return __cvCalc.precios(B,st).rows.map(r=>r.im)}''',P2)
         self.assertTrue(all(x is None for x in C))
+
+    def test_comparacion_por_compra_y_cierres_por_unidad(self):
+        registros = [
+            ('2026-09-24', 'KG', 10, 'Anterior'),
+            ('2026-10-04 17:00', 'KG', 12, 'Tarde'),
+            ('2026-10-04 08:00', 'KG', 11, 'Mañana'),
+            ('2026-10-08', 'CAJA', 40, 'Caja'),
+            ('2026-10-12', 'KG', 13, 'Cierre octubre'),
+            ('2026-10-20', 'KG', 99, 'Marcada'),
+            ('2026-11-04', 'KG', 15, 'Cierre noviembre'),
+        ]
+        d = pd.DataFrame([dict(fecha=pd.Timestamp(f), prod='Limón', prov='Proveedor', precio=p,
+                               cant=1, valor=p, um=u, doc=doc, moneda='01', fam='UNO', sub='A')
+                          for f, u, p, doc in registros])
+        rango = (pd.Timestamp('2026-10-01'), pd.Timestamp('2026-11-05'))
+        familias = {'todas': [['UNO', 0], ['DOS', 0]], 'elegidas': ['UNO'],
+                    'subfamilias': {'UNO': ['A', 'B'], 'DOS': ['C']}}
+        P = datos.armar(d, d, COLS_F, rango, periodo.HEREDA, familias=familias)
+        for linea in P['precios']['filas']:
+            if linea[5] == 99:
+                linea[7] = 2
+        self.mount(P)
+        root = self.pg.locator('.cvol')
+        root.locator('[data-acc="pvista"][data-v="comparacion"]').click()
+        tabla = root.locator('.cp-cmp-scroll table')
+        self.assertEqual(tabla.locator('tbody tr').count(), 2)
+        self.assertEqual(tabla.locator('thead th').count(), 7)
+        root.locator('[data-acc="pcmodo"][data-v="quincena"]').click()
+        fila = tabla.locator('tbody tr').filter(has_text='por kg')
+        self.assertEqual(fila.locator('td').count(), 3)
+        self.assertIn('30.0 %', fila.locator('td').nth(0).inner_text())
+        self.assertIn('Sin compras', fila.locator('td').nth(1).inner_text())
+        self.assertIn('15.4 %', fila.locator('td').nth(2).inner_text())
+        root.locator('[data-acc="pcmodo"][data-v="mes"]').click()
+        self.assertEqual(tabla.locator('thead th').count(), 3)
+        self.assertIn('oct 2026', tabla.locator('thead').inner_text())
+        root.locator('[data-acc="pcmodo"][data-v="compra"]').click()
+        self.assertEqual(tabla.locator('tbody tr').count(), 6)
+        tarde = tabla.locator('tbody tr').filter(has_text='Tarde')
+        self.assertIn('S/ 11.00', tarde.locator('td').nth(4).inner_text())
+        self.assertIn('Para revisar', tabla.locator('tbody tr').filter(has_text='Marcada').inner_text())
+        self.assertIn('S/ 13.00', tabla.locator('tbody tr').filter(has_text='Cierre noviembre').inner_text())
+        root.locator('[data-acc="q"]').fill('limon')
+        self.assertEqual(tabla.locator('tbody tr').count(), 6)
+        root.locator('[data-acc="pcsort"][data-v="variacion"]').click()
+        self.assertIn('Cierre noviembre', tabla.locator('tbody tr').first.inner_text())
+        with self.pg.expect_download() as dl:
+            root.locator('[data-acc="excel"]').click()
+        with zipfile.ZipFile(dl.value.path()) as z:
+            self.assertIn('Por compra', z.read('xl/workbook.xml').decode())
+        root.locator('[data-acc="pmenu"][data-v="sub"]').click()
+        root.locator('[data-acc="psub"][value="B"]').uncheck()
+        root.locator('[data-acc="pfiltrar"]').click()
+        self.assertEqual(self.pg.evaluate('window.__avisos'),
+                         [['filtros', {'familias': ['UNO'], 'subfamilias': ['A']}]])
+        root.locator('[data-acc="pvista"][data-v="resumen"]').click()
+        self.assertEqual(root.locator('[data-acc="q"]').input_value(), 'limon')
+        self.assertTrue(root.locator('.cp-kpis').is_visible())
 
     def test_ui_ficha_curva_tramo_pestanas_excel_y_remontaje(self):
         d=con_familias()

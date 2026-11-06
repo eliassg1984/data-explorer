@@ -1639,8 +1639,13 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                   var ACT = {json.dumps(_btns_act, ensure_ascii=False)};
                   var raiz = doc.querySelector('[data-testid="stMain"]');
                   if (!raiz) return;
-                  var FECHA_AJUSTE = {json.dumps(state_key == "ajuste_graf_tipo")};
-                  if (!FECHA_AJUSTE) raiz.removeAttribute('data-ajuste-vista');
+                  var FECHA_VISTA = {json.dumps({
+                      "ajuste_graf_tipo": "data-ajuste-vista",
+                      "compras_graf_tipo": "data-compras-vista",
+                  }.get(state_key))};
+                  ['data-ajuste-vista', 'data-compras-vista'].forEach(function (atributo) {{
+                    if (atributo !== FECHA_VISTA) raiz.removeAttribute(atributo);
+                  }});
 
                   function boton(k) {{
                     return doc.querySelector('[class*="st-key-' + k + '"] button');
@@ -1764,8 +1769,8 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                         'rails-scrolled',
                         !!primera && mejor.sec !== MAPA[0].sec);
                       // La fecha y el rótulo de la franja siguen la misma vista.
-                      if (FECHA_AJUSTE && raiz.dataset.ajusteVista !== mejor.sec) {{
-                        raiz.dataset.ajusteVista = mejor.sec;
+                      if (FECHA_VISTA && raiz.getAttribute(FECHA_VISTA) !== mejor.sec) {{
+                        raiz.setAttribute(FECHA_VISTA, mejor.sec);
                       }}
                       marcar(mejor.btns);
                     }}
