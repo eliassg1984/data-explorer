@@ -67,8 +67,8 @@ from graficos.base import publicar_contexto_ia
 from graficos import alturas
 from graficos.ajuste._comun import (
     FAMILIAS_DE_ENTRADA, _MESES_ABR_ES, _periodo_pivote_ajuste,
-    css_filtros_vista, ctx_meses, fechas_del_mes, filtro_area_en_titulo,
-    mes_operativo_activo, rango_meses, recortar_meses, K_FAM_EVO, filtro_familias_vista, selector_meses,
+    areas_con_ajuste, ctx_meses, fechas_del_mes, mes_operativo_activo,
+    rango_meses, recortar_meses, K_FAM_EVO, selector_meses,
 )
 from utils import fmt_k
 
@@ -646,6 +646,40 @@ _PIEZA = st.components.v2.component(
 )
 _K_PIEZA = "ajevo_pieza"
 _K_AREA = "ajuste_evo_filtro_area"
+_CSS_FILTROS = """
+<style>
+.st-key-ajevo_filtros.st-key-ajevo_filtros button[data-testid="stPopoverButton"] {
+    width:max-content !important; height:32px; min-height:32px; min-width:32px !important;
+    padding:0 7px !important; border:0 !important; border-radius:8px !important;
+    background:transparent !important; color:var(--text-secondary) !important;
+}
+.st-key-ajevo_filtros.st-key-ajevo_filtros button[data-testid="stPopoverButton"]:hover,
+.st-key-ajevo_filtros.st-key-ajevo_filtros button[data-testid="stPopoverButton"][aria-expanded="true"] {
+    background:var(--accent-light) !important; color:var(--accent-deep) !important;
+}
+.st-key-ajevo_filtros button[data-testid="stPopoverButton"] p > span[role="img"] {
+    font-size:18px;
+}
+.st-key-ajevo_filtros button[data-testid="stPopoverButton"] [data-testid="stIconMaterial"] {
+    display:none !important;
+}
+.st-key-ajevo_filtros_panel {
+    width:min(270px, calc(100vw - 56px)) !important; max-height:390px;
+    overflow-y:auto; overscroll-behavior:contain; padding-inline-end:4px;
+}
+.st-key-ajevo_filtros_panel :is(.st-key-ajevo_filtros_areas, .st-key-ajevo_filtros_familias) {
+    border-top:1px solid var(--line-soft); padding-top:6px;
+}
+.st-key-ajevo_filtros_panel [data-testid="stCheckbox"] {
+    min-height:34px; display:flex; align-items:center;
+}
+.st-key-ajevo_filtros_panel [data-testid="stCheckbox"] p {font-size:13px; text-transform:none !important;}
+.st-key-ajevo_filtros_panel [data-testid="stButton"] button {
+    min-height:24px; padding:0 8px; border:0; border-radius:8px; background:var(--rail-fondo);
+}
+.st-key-ajevo_filtros_panel [data-testid="stButton"] button p {font-size:12px; white-space:nowrap;}
+</style>
+"""
 # Lo que ya se pidió en esta sesión: los orígenes y el consumo se calculan
 # desde el primer pedido y quedan para las corridas siguientes.
 _K_QUIERE_ORIGEN = "ajuste_evo_quiere_origen"
@@ -653,6 +687,63 @@ _K_QUIERE_CONSUMO = "ajuste_evo_quiere_consumo"
 # `(llave, [(sesión, suma)], faltan)`: los orígenes ya calculados para las
 # sesiones de la llave (sus claves, el sello del parquet y la versión).
 _K_ORIGEN_RES = "ajuste_evo_origen_res"
+
+
+def _seleccion_filtro(clave, opciones):
+    previa = st.session_state.get(clave) or []
+    vigente = [valor for valor in previa if valor in opciones]
+    if previa != vigente:
+        st.session_state[clave] = vigente
+    return vigente
+
+
+def _marcar_filtro(clave, valor, widget):
+    elegidas = set(st.session_state.get(clave) or [])
+    if st.session_state[widget]:
+        elegidas.add(valor)
+    else:
+        elegidas.discard(valor)
+    st.session_state[clave] = sorted(elegidas)
+
+
+def _seccion_filtros(tipo, titulo, clave, opciones, elegidas, preseleccion=None):
+    ss = st.session_state
+    with st.container(key=f"ajevo_filtros_{tipo}", gap=None):
+        with st.container(horizontal=True, horizontal_alignment="distribute",
+                          vertical_alignment="center", gap="small"):
+            st.markdown(f"**{titulo}**")
+            st.button("Todas", key=f"ajevo_todas_{tipo}",
+                      on_click=ss.__setitem__, args=(clave, []))
+            if preseleccion:
+                st.button("Las cinco de antes", key="ajevo_familias_iniciales",
+                          on_click=ss.__setitem__, args=(clave, preseleccion))
+        for valor in opciones:
+            widget = f"ajevo_filtro_{tipo}_{valor}"
+            marcada = valor in elegidas
+            if ss.get(widget) != marcada:
+                ss[widget] = marcada
+            st.checkbox(valor.title(), key=widget, on_change=_marcar_filtro,
+                        args=(clave, valor, widget))
+        if not opciones:
+            st.caption("Sin opciones para este rango.")
+
+
+def _panel_filtros(op_areas, op_familias, areas, familias):
+    def resumen(elegidas):
+        if len(elegidas) > 3:
+            return f"{len(elegidas)} elegidas"
+        return ", ".join(valor.title() for valor in elegidas) or "todas"
+
+    n = int(bool(areas)) + int(bool(familias))
+    ayuda = f"Filtros de esta vista\n\nÁreas: {resumen(areas)}\n\nFamilias: {resumen(familias)}"
+    rotulo = f":material/tune: {n}" if n else ":material/tune:"
+    with st.popover(rotulo, key="ajevo_filtros", help=ayuda):
+        with st.container(key="ajevo_filtros_panel", gap=None):
+            st.caption("Valen para toda la vista.")
+            _seccion_filtros("areas", "Áreas", _K_AREA, op_areas, areas)
+            iniciales = [valor for valor in FAMILIAS_DE_ENTRADA if valor in op_familias]
+            _seccion_filtros("familias", "Familias", K_FAM_EVO, op_familias, familias,
+                             preseleccion=iniciales)
 
 
 def _al_pedir():
@@ -738,8 +829,7 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         st.info("Sin columna de fecha: no se puede armar la evolución.")
         return
 
-    st.markdown(f"<style>{css_filtros_vista('ajevo_ctrl_', 'ajevo_corte_')}"
-                "</style>", unsafe_allow_html=True)
+    st.markdown(_CSS_FILTROS, unsafe_allow_html=True)
 
     # Sin techo de alto (`estilos/_80_cards.py`): si la ventana es más baja
     # que una laptop, lo que sobra lo scrollea la PÁGINA y no la tarjeta.
@@ -749,11 +839,9 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         # Sin título desde la #799: el nombre está en la franja, y los totales
         # del rango van en la de indicadores de la pieza. Quedan los controles.
         c_fecha = st.container()
-        c_area, c_gran, c_tit = st.columns(
-            # columnas-internas: area | grano | aire
-            [0.95, 1.1, 3.7],
-            vertical_alignment="center")
-        with c_gran:
+        controles = st.container(horizontal=True, horizontal_alignment="distribute",
+                                 vertical_alignment="center")
+        with controles:
             # Una sesión vieja puede traer «Semana» guardada (regla #585):
             # un valor que no está en las opciones no se dibuja marcado.
             # «Corte» pasó a ser «Cierre» (regla #827): se conserva la elección.
@@ -767,16 +855,25 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                 help="Agrupa la serie y la matriz por mes o cierre a cierre "
                      "(los parciales, a pedido, en la propia vista).",
             ) or "Mes"
-        d = filtro_familias_vista(c_tit, d, col_familia, K_FAM_EVO)
+        op_familias = (sorted(d[col_familia].dropna().astype(str).unique())
+                       if col_familia and col_familia in d.columns else [])
+        familias_elegidas = _seleccion_filtro(K_FAM_EVO, op_familias)
+        if familias_elegidas:
+            d = d[d[col_familia].astype(str).isin(familias_elegidas)]
         ctx_m = ctx_meses("evo", d[col_fecha])
         with c_fecha:
             selector_meses("ajf_evo", ctx_m)
         d = recortar_meses(d, col_fecha, rango_meses(ctx_m))
-        d = filtro_area_en_titulo(c_area, d, col_area, col_ajuste_val,
-                                  _K_AREA, "ajevo_ctrl_area")
+        op_areas = areas_con_ajuste(d, col_area, col_ajuste_val)
+        areas_elegidas = _seleccion_filtro(_K_AREA, op_areas)
+        with controles:
+            _panel_filtros(op_areas, op_familias, areas_elegidas, familias_elegidas)
+        if col_area and col_area in d.columns:
+            d = d.assign(**{col_area: d[col_area].astype(str).str.strip()})
+            if areas_elegidas:
+                d = d[d[col_area].isin(areas_elegidas)]
         publicar_contexto_ia("Ajuste de Inventario", d, {
-            "Familia": st.session_state.get(K_FAM_EVO),
-            "Área": st.session_state.get(_K_AREA)})
+            "Familia": familias_elegidas, "Área": areas_elegidas})
 
         operativo = mes_operativo_activo()
         # Las sesiones salen del parquet ENTERO (regla #827): con un área o
@@ -790,9 +887,7 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         dp, orden = periodos_ajuste(d, col_fecha, gran, operativo=operativo,
                                     sesiones=sesiones)
         if orden.empty:
-            with c_tit:
-                st.markdown("<div style='font-size:14px;font-weight:600'>"
-                            "Sobrante, faltante y neto</div>", unsafe_allow_html=True)
+            st.markdown("**Sobrante, faltante y neto**")
             st.info("Sin datos en el rango y el área seleccionados.")
             return
 
@@ -812,10 +907,10 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
 
         sf = (serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
                            col_grupo=col_familia) if hay_fam else None)
-        # Con un área elegida, los orígenes se filtran por las áreas que
-        # quedaron en `dp`; sin ninguna, todas.
+        # Con áreas elegidas, los orígenes se filtran por las que quedaron
+        # en `dp`; sin ninguna, todas.
         areas = (sorted(dp[col_area].dropna().astype(str).str.strip().unique())
-                 if st.session_state.get(_K_AREA) and col_area in dp.columns
+                 if areas_elegidas and col_area in dp.columns
                  else None)
         familias = (sorted(dp[col_familia].dropna().astype(str).unique())
                     if hay_fam else None)
