@@ -134,9 +134,8 @@ _SCRIPT_CAPAS = """<script>
   // Un rerun que cambie este iframe deja al anterior colgado del documento:
   // se lo desengancha antes de enganchar el nuevo.
   try { if (w.__capasApagar) w.__capasApagar(); } catch (e) {}
-  // EL MENÚ DE LA RUTA (regla #817). Un atributo en <html>, no una clase ni un
-  // `:hover` dentro de un `:has()` (#469). Se cierra con un respiro, para poder
-  // bajar el cursor de la ruta al menú sin que se cierre en el camino.
+  // Ruta integrada (#817): un menú por nivel, abierto por clic.
+  // Los destinos siguen siendo los botones nativos de cada reporte.
   var cerrarT = null;
   var disparadorCompacto = null;
   var rutaCompacta = ".franja-ruta[data-franja-compacta]";
@@ -145,8 +144,10 @@ _SCRIPT_CAPAS = """<script>
     var c = disparador || doc.querySelector(".franja-ruta .fr-vista");
     var f = doc.querySelector(".st-key-nav_franja_rep");
     if (!c || !f) return;
-    var x = Math.max(8, Math.round(c.getBoundingClientRect().left - f.getBoundingClientRect().left
-                                  - (disparador ? 0 : 14))) + "px";
+    var fc = f.getBoundingClientRect(), cc = c.getBoundingClientRect();
+    var limite = Math.max(8, Math.min(fc.width, w.innerWidth - fc.left) - 212);
+    var x = Math.max(8, Math.min(limite, Math.round(cc.left - fc.left
+                                  - (disparador ? 0 : 14)))) + "px";
     if (raiz.style.getPropertyValue("--fr-x") !== x) raiz.style.setProperty("--fr-x", x);
   }
   function abrirMenu() { clearTimeout(cerrarT); if (!raiz.hasAttribute("data-franja-menu")) { ubicar(); raiz.setAttribute("data-franja-menu", ""); } }
@@ -185,7 +186,7 @@ _SCRIPT_CAPAS = """<script>
     disparadorCompacto = disparador;
     disparador.setAttribute("aria-expanded", "true");
     ubicar(disparador);
-    raiz.setAttribute("data-franja-menu", grupo === null ? "inventario-secciones" : "inventario-vistas");
+    raiz.setAttribute("data-franja-menu", grupo === null ? "ruta-secciones" : "ruta-vistas");
     if (enfocar && destino) destino.focus();
   }
   function sobreMenu(ev) {
@@ -199,6 +200,14 @@ _SCRIPT_CAPAS = """<script>
     var seccion = t && t.closest && t.closest(".franja-seccion");
     if (seccion) {
       var grupo = doc.querySelector(rutaCompacta + ' [data-franja-abrir="secciones"]');
+      var miembro = Array.from(doc.querySelectorAll(".franja-miembro")).find(function (m) {
+        return m.dataset.ruta === seccion.dataset.grupo;
+      });
+      var ultima = miembro && ((w.__franjaUltimas || {})[miembro.dataset.reporte]
+                               || miembro.dataset.franjaDestino);
+      var caja = ultima && doc.getElementsByClassName("st-key-" + ultima)[0];
+      var destino = caja && caja.querySelector("button");
+      if (destino) { cerrarMenu(true); destino.click(); return; }
       abrirCompacto(grupo, seccion.dataset.grupo, true);
       return;
     }
@@ -210,12 +219,14 @@ _SCRIPT_CAPAS = """<script>
     }
     if (t && t.closest && t.closest(".st-key-nav_franja_idx button")) { cerrarMenu(true); return; }
     if (t && t.closest && t.closest(".franja-ruta")) {
+      if (t.closest(rutaCompacta)) return;
       if (raiz.hasAttribute("data-franja-menu")) cerrarMenu(true); else abrirMenu();
     } else if (!enMenu(t)) cerrarMenu(true);
   }
   function grupoDelDisparador(disparador) {
     if (disparador.dataset.franjaAbrir === "secciones") return null;
-    return disparador.closest(rutaCompacta).querySelector(".fr-grupo").textContent;
+    var grupo = disparador.closest(rutaCompacta).querySelector(".fr-grupo");
+    return grupo ? grupo.textContent : "";
   }
   function teclaMenu(ev) {
     var disparador = ev.target && ev.target.closest && ev.target.closest(rutaCompacta + " [data-franja-abrir]");
@@ -229,6 +240,17 @@ _SCRIPT_CAPAS = """<script>
         ev.preventDefault();
         abrirCompacto(disparador, grupoDelDisparador(disparador), true);
       }
+    }
+    else if (ev.target && ev.target.closest && ev.target.closest(".st-key-nav_franja_idx")
+             && /^(ArrowDown|ArrowUp|Home|End)$/.test(ev.key)) {
+      var opciones = Array.from(doc.querySelectorAll(".st-key-nav_franja_idx button"))
+        .filter(function (b) { return b.getClientRects().length && !b.disabled; });
+      if (!opciones.length) return;
+      ev.preventDefault();
+      var i = opciones.indexOf(ev.target.closest("button"));
+      var siguiente = ev.key === "Home" ? 0 : ev.key === "End" ? opciones.length - 1
+        : (i + (ev.key === "ArrowDown" ? 1 : -1) + opciones.length) % opciones.length;
+      opciones[siguiente].focus();
     }
     else if ((ev.key === "Enter" || ev.key === " ") && ev.target && ev.target.closest && ev.target.closest(".franja-ruta")) { ev.preventDefault(); abrirMenu(); }
   }
@@ -374,21 +396,27 @@ def _html_barra_contexto(nombre, icono, ruta=None, *, menu_compacto=False):
     partes = ['<div class="barra-ctx">']
     if icono:
         partes.append(f'<span class="barra-ico" aria-hidden="true">{html.escape(icono)}</span>')
-    partes.append(f'<span class="barra-nom">{html.escape(nombre)}</span>')
-    # La ruta (regla #817): «› Ajuste › Diferencias ▾». El grupo sólo si el área
-    # tiene varios reportes y no se llama como el área; la vista abre el menú.
+    grupo_en_nombre = bool(menu_compacto and ruta and ruta[0] == nombre)
+    if not grupo_en_nombre:
+        partes.append(f'<span class="barra-nom">{html.escape(nombre)}</span>')
+    # La ruta (regla #817): «› Ajuste ▾ › Diferencias ▾». El grupo sólo si el área
+    # tiene varios reportes; si coincide con su nombre, ese nombre abre el menú.
     # El temporizador de `graficos/base.py::_render_rail` los reescribe al bajar.
     if ruta is not None and menu_compacto:
         grupo, vista = map(html.escape, ruta)
+        partes.append('<span class="franja-ruta" data-franja-compacta'
+                      + (' data-franja-nombre' if grupo_en_nombre else '') + '>')
+        if grupo:
+            if not grupo_en_nombre:
+                partes.append('<span class="fr-sep" aria-hidden="true">›</span>')
+            partes.append(
+                '<button type="button" class="fr-grupo-boton" data-franja-abrir="secciones" '
+                'aria-haspopup="true" aria-expanded="false"><span class="fr-grupo">'
+                f'{grupo}</span><i aria-hidden="true">▾</i></button>')
         partes.append(
-            '<span class="franja-ruta" data-franja-compacta>'
-            '<span class="fr-sep" aria-hidden="true">›</span>'
-            '<button type="button" class="fr-grupo-boton" data-franja-abrir="secciones" '
-            'aria-expanded="false"><span class="fr-grupo">'
-            f'{grupo}</span><i aria-hidden="true">▾</i></button>'
             '<span class="fr-sep" aria-hidden="true">›</span>'
             '<button type="button" class="fr-vista" data-franja-abrir="vistas" '
-            'aria-expanded="false"><span class="fr-txt">'
+            'aria-haspopup="true" aria-expanded="false"><span class="fr-txt">'
             f'{vista}</span><i aria-hidden="true">▾</i></button></span>')
     elif ruta is not None:
         grupo, vista = ruta
@@ -519,7 +547,7 @@ ROTULO_PESTANA = {
     ("Documentos SUNAT", "Proveedores y fechas"): "Fechas",
     ("Documentos SUNAT", "Documentos"): "Documentos",
     ("Documentos SUNAT", "Control"): "Control",
-    ("Inventario Valorizado", "Stock"): "Stock",
+    ("Inventario Valorizado", "Stock"): "Existencias",
     ("Inventario Valorizado", "Movimientos"): "Por tipo",
     ("Ajuste de Inventario", "Ajuste del cierre"): "Diferencias",
     ("Ajuste de Inventario", "Diferencias"): "Análisis",
@@ -1418,17 +1446,18 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         _v0 = next((v for v in _vs0 if v[0] == _sel), _vs0[0])
         _m0 = reporte_activo if any(m == reporte_activo for m, _ in _pestanas) else _pestanas[0][0]
         _rot0 = visibles[_m0].get("label_rail") or visibles[_m0].get("label_corto") or _m0
-        _ruta = ("" if len(_pestanas) == 1 or _rot0 == _nombre_barra else _rot0,
+        _ruta = ("" if len(_pestanas) == 1 else _rot0,
                  ROTULO_PESTANA.get((_m0, _v0[0]), _v0[1]))
-    # Inventario abre la lista de secciones y luego las vistas de una sola.
-    _menu_compacto = _area_act == "Inventario" and len(_pestanas) > 1
+    # Todos los reportes comparten la ruta integrada. Un solo grupo necesita
+    # únicamente el selector de vistas; con varios, cada nivel tiene su menú.
+    _menu_compacto = bool(_pestanas)
     _arbol_barra = _html_barra_contexto(_nombre_barra, _ico_barra, _ruta,
                                        menu_compacto=_menu_compacto)
     with st.container(key="nav_franja_rep"):
         st.markdown(_arbol_barra, unsafe_allow_html=True)
         if _pestanas:
             with st.container(key="nav_franja_idx", horizontal=True, gap="small"):
-                if _menu_compacto:
+                if len(_pestanas) > 1:
                     with st.container(key="nav_franja_secciones"):
                         _opciones = []
                         for _m, _ in _pestanas:
@@ -1444,15 +1473,18 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                     # Una columna por reporte, con su nombre corto: «Por
                     # familia» de Ajuste y «Por área» de Stock serían ambiguos
                     # sin él. `data-ruta` es lo que la ruta dice del grupo:
-                    # nada si el área tiene uno solo o se llama como él.
+                    # nada si el área tiene un solo reporte.
                     _rot_m = (visibles[_m].get("label_rail")
                               or visibles[_m].get("label_corto") or _m)
-                    _en_ruta = "" if len(_pestanas) == 1 or _rot_m == _nombre_barra else _rot_m
+                    _en_ruta = "" if len(_pestanas) == 1 else _rot_m
+                    _seleccion = st.session_state.get(_sk)
+                    _ultima = next((v[0] for v in _vs if v[0] == _seleccion), _vs[0][0])
                     with st.container(key=f"nav_franja_g{_i}"):
-                        if len(_pestanas) > 1:
-                            st.markdown(
-                                f'<span class="franja-miembro" data-ruta="{html.escape(_en_ruta)}">'
-                                f'{html.escape(_rot_m)}</span>', unsafe_allow_html=True)
+                        st.markdown(
+                            f'<span class="franja-miembro" data-ruta="{html.escape(_en_ruta)}" '
+                            f'data-reporte="{html.escape(_m)}" '
+                            f'data-franja-destino="{claves_vista(_m, _ultima)[0]}">'
+                            f'{html.escape(_rot_m)}</span>', unsafe_allow_html=True)
                         for _oid, _rot, *_ in _vs:
                             st.button(
                                 ROTULO_PESTANA.get((_m, _oid), _rot),

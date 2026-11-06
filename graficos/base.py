@@ -1680,6 +1680,13 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                           vtxt = (b.innerText || '').trim();
                       if (rt && vtxt && rt.textContent !== vtxt) rt.textContent = vtxt;
                       if (rg && rg.textContent !== gtxt) rg.textContent = gtxt;
+                      // También recuerda saltos sin rerun: elegir otro grupo
+                      // en la ruta puede volver a este botón nativo.
+                      var fk = keys.find(function (k) {{ return k.indexOf('franjav_') === 0; }});
+                      if (mi && mi.dataset.reporte && fk) {{
+                        w.__franjaUltimas = w.__franjaUltimas || {{}};
+                        w.__franjaUltimas[mi.dataset.reporte] = fk;
+                      }}
                       var rb = b.getBoundingClientRect(),
                           rt = tira.getBoundingClientRect();
                       if (rb.left < rt.left) tira.scrollLeft -= rt.left - rb.left + 24;

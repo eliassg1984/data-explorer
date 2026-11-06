@@ -723,12 +723,12 @@ CSS = """
         .franja-ruta .fr-grupo:empty, .franja-ruta .fr-grupo:empty + .fr-sep2 { display: none; }
         .franja-ruta .fr-vista {
             display: inline-flex; align-items: center; gap: 8px; height: 32px;
-            padding: 0 14px; border-radius: 999px; background: var(--accent-deep);
-            color: var(--bg-card); font-size: 13px; font-weight: 600;
+            padding: 0 7px; border-radius: 7px; background: transparent;
+            color: var(--text-primary); font-size: 13px; font-weight: 500;
         }
         .franja-ruta .fr-vista i { font-style: normal; font-size: 12px; opacity: .8; }
         .franja-ruta:not([data-franja-compacta]):hover .fr-vista,
-        .franja-ruta:focus-visible .fr-vista { filter: brightness(1.08); }
+        .franja-ruta:focus-visible .fr-vista { background: var(--accent-tint); }
         /* Cerrada: el menú no está. */
         .st-key-nav_franja_rep .st-key-nav_franja_idx { display: none !important; }
         /* La franja recorta lo que se le sale (`overflow: hidden`): abierta, no. */
@@ -789,49 +789,68 @@ CSS = """
             box-shadow: none !important; border-radius: 8px 8px 0 0 !important;
         }
 
-        /* Inventario: un desplegable por nivel, con los mismos destinos nativos. */
+        /* Ruta integrada en todos los reportes: grupo discreto, vista en tinta
+           y lavanda al interactuar. Conserva los destinos nativos. */
         .franja-ruta[data-franja-compacta] { cursor: default; }
         .franja-ruta[data-franja-compacta] button {
             display: inline-flex; align-items: center; gap: 7px;
-            height: 30px; padding: 0 10px; border-radius: 8px;
-            border: 1px solid var(--border); background: var(--bg-card);
+            height: 30px; padding: 0 7px; border-radius: 7px;
+            border: 0; background: transparent;
             color: var(--text-primary); font: inherit; font-size: 13px;
             font-weight: 500; cursor: pointer;
         }
-        .franja-ruta[data-franja-compacta] .fr-grupo { color: inherit; }
+        .franja-ruta[data-franja-compacta] .fr-grupo-boton { font-weight: 400; }
+        .franja-ruta[data-franja-compacta] .fr-grupo { color: var(--text-secondary); }
+        .franja-ruta[data-franja-nombre] { margin-left: 0; }
+        .franja-ruta[data-franja-nombre] .fr-grupo { color: var(--text-primary); font-weight: 500; }
         .franja-ruta[data-franja-compacta] i { font-style: normal; font-size: 12px; color: var(--text-secondary); }
         .franja-ruta[data-franja-compacta] button:hover,
         .franja-ruta[data-franja-compacta] button[aria-expanded="true"] {
             background: var(--accent-tint);
             color: var(--accent-deep);
         }
-        :root[data-franja-menu^="inventario-"] .st-key-nav_franja_rep .st-key-nav_franja_idx {
+        :root[data-franja-menu^="ruta-"] .st-key-nav_franja_rep .st-key-nav_franja_idx {
             display: block !important;
             box-sizing: border-box !important;
-            width: 172px !important;
+            width: 196px !important;
             padding: 5px !important;
             border-radius: 9px !important;
+            border: 1px solid var(--border);
+            max-height: calc(100dvh - 96px) !important;
+            overflow-y: auto !important;
+            box-shadow: 0 8px 24px color-mix(in srgb, var(--text-primary) 12%, transparent) !important;
         }
-        :root[data-franja-menu^="inventario-"] .st-key-nav_franja_idx [class*="st-key-nav_franja_g"] {
+        :root[data-franja-menu^="ruta-"] .st-key-nav_franja_idx [class*="st-key-nav_franja_g"] {
             display: none !important;
         }
-        :root[data-franja-menu="inventario-vistas"] .st-key-nav_franja_idx [data-franja-columna] {
+        :root[data-franja-menu="ruta-vistas"] .st-key-nav_franja_idx [data-franja-columna] {
             display: flex !important;
             width: 100% !important;
         }
-        :root[data-franja-menu="inventario-vistas"] .st-key-nav_franja_idx .franja-miembro {
+        :root[data-franja-menu="ruta-vistas"] .st-key-nav_franja_idx .franja-miembro {
             display: none !important;
         }
-        :root[data-franja-menu="inventario-secciones"] .st-key-nav_franja_idx .st-key-nav_franja_secciones {
+        :root[data-franja-menu="ruta-secciones"] .st-key-nav_franja_idx .st-key-nav_franja_secciones {
             display: block !important;
+        }
+        .st-key-nav_franja_idx .st-key-nav_franja_secciones [data-testid="stMarkdownContainer"] {
+            width: 100% !important;
         }
         .st-key-nav_franja_idx [data-testid="stMarkdownContainer"] .franja-secciones {
             display: grid !important;
         }
-        :root[data-franja-menu="inventario-vistas"] .st-key-nav_franja_idx [data-testid="stButton"] button,
+        :root[data-franja-menu="ruta-vistas"] .st-key-nav_franja_idx [data-testid="stButton"] button,
         .st-key-nav_franja_idx .franja-seccion {
             width: 100% !important; min-height: 32px !important;
-            padding: 5px 9px !important; border-radius: 6px !important;
+            padding: 5px 28px 5px 9px !important; border-radius: 6px !important;
+            position: relative;
+        }
+        :root[data-franja-menu="ruta-vistas"] .st-key-nav_franja_idx [data-testid="stButton"] button p {
+            font-weight: 400 !important;
+        }
+        .st-key-nav_franja_idx .franja-seccion[aria-current="true"]::after,
+        :root[data-franja-menu="ruta-vistas"] .st-key-nav_franja_idx button.vista-en-pantalla::after {
+            content: "✓"; position: absolute; right: 9px; color: var(--accent-deep);
         }
         .st-key-nav_franja_idx .franja-seccion {
             display: block; border: 0; text-align: left; cursor: pointer;

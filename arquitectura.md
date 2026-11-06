@@ -58774,20 +58774,29 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    A pedido («que no se vean estáticas, como relieves del mural»), elegida entre cuatro formas
    sobre un boceto (https://claude.ai/artifact/DJ923jixF7uvBctLiEvxzi, con Inventario, Costos y
    Producción). Desde 901px:
-   - **La franja dice la ruta** (`_html_barra_contexto(..., ruta)`): el área, el reporte si el
-     área tiene varios y no se llama como él, y la vista en pantalla como pastilla con ▾
-     («Inventario › Ajuste › Diferencias ▾», «Costos › Costo de ventas ▾», «Compras › Período ▾»).
-   - **Las vistas van en un menú**: una columna por reporte (`nav_franja_g<i>`), cada vista con
-     su línea de qué muestra (`DESCRIPCION_VISTA`, exigida para toda vista como el rótulo
-     corto). Son los MISMOS botones con las mismas keys: el temporizador de `_render_rail` los
-     sigue marcando y haciendo saltar sin rerun, y ahora además reescribe la ruta (sólo si
-     cambió, #469). Elegir una de otro reporte sigue por `_ir_a_vista`.
-   - **Lo abre `_SCRIPT_CAPAS`**: el cursor sobre la ruta o el menú (se cierra con 220 ms de
-     respiro para bajar del uno al otro), un clic, Enter; Esc o un clic afuera lo cierran. Es un
-     atributo en `<html>` (`data-franja-menu`), no un `:hover` dentro de un `:has()`.
+   - **Actualizada el 2026-11-06 a «Ruta integrada» en todos los reportes.**
+     `_html_barra_contexto(..., menu_compacto=True)` muestra el grupo en tinta secundaria y
+     la vista en tinta normal, sin cajas; sólo hover y apertura tienen fondo lavanda. El grupo
+     se omite si hay un solo reporte. Si coincide con el área, su nombre hace de selector sin
+     repetirse («Compras ▾ › Período ▾»). «Stock › Existencias» conserva el ID interno `Stock`.
+   - **Un desplegable por nivel.** El primero lista los reportes del área; el segundo muestra
+     únicamente las vistas del actual, sin las descripciones extensas. `DESCRIPCION_VISTA`
+     conserva sus entradas como referencia. Las columnas `nav_franja_g<i>` y las keys de los
+     botones nativos siguen intactas: el temporizador de `_render_rail` los marca, salta sin
+     rerun y actualiza la ruta sólo si cambió (#469).
+   - **Elegir grupo recupera su última vista.** `_render_rail` recuerda en la ventana el botón
+     `franjav_` marcado, también en saltos sin rerun. `_SCRIPT_CAPAS` pulsa ese botón nativo;
+     si no hay memoria, usa la selección de sesión o la primera vista. No crea otro estado
+     para fechas, filtros ni perspectivas. Los cambios de reporte siguen por `_ir_a_vista`.
+   - **Apertura por clic o teclado**, un menú a la vez. Flecha abajo abre y enfoca; dentro del
+     menú, arriba/abajo e Inicio/Fin recorren opciones. Esc devuelve el foco al disparador;
+     clic afuera cierra. `data-franja-menu="ruta-secciones|ruta-vistas"` gobierna el panel,
+     sin `:hover` dentro de un `:has()`. `test_navegacion_ruta.py` recorre los destinos reales,
+     el regreso por grupo y el teclado. Hasta 900px se conserva la navegación móvil.
    - **La franja recorta lo que se le sale** (`overflow: hidden`): abierto el menú, no. Sin eso el
      panel quedaba detrás de la hoja, con una tira asomando.
-   - El botón de Streamlit centra su texto: en el menú van a la izquierda, con su línea.
+   - El botón de Streamlit centra su texto: en el menú va a la izquierda, con selección tenue
+     y marca de verificación. El panel se ajusta al borde de la ventana y al alto disponible.
 
 818. **Las listas de Diferencias con la forma de la tabla de Compras › Período.**
    Hecha a pedido, con dos capturas lado a lado («me parece más limpia la de compras»). Las dos
