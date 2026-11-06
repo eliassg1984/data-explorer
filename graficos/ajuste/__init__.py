@@ -50,7 +50,7 @@ from tema import (
     AJUSTE_SOB_FONDO, AJUSTE_SOB_BORDE,
 )
 from graficos.base import (
-    compartimento_filtros, contar_filtros, dibujar_perspectiva, filtro_pills,
+    compartimento_filtros, contar_filtros, eleccion_compartida, filtro_pills,
     sembrar_seleccion,
     _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
     pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
@@ -343,7 +343,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         vista_diferencias(df_full, col_fecha, col_familia, col_area,
                           col_ajuste_val, col_producto)
 
-    def _dib_evolucion():
+    def _dib_evolucion(controles=None):
         """Evolución dibuja su propia tarjeta (serie + matriz, regla #692),
         así que no va en `_en_tarjeta`. Recibe `d`: el parquet entero con los
         chips; los meses los elige ella (regla #632). `df_full`, sin filtros,
@@ -354,8 +354,30 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             return
         vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                                col_ajuste_val, col_valorizado,
-                               col_kardex=col_kardex, d_full=df_full)
+                               col_kardex=col_kardex, d_full=df_full,
+                               controles=controles)
         recargar_si_cambio_mes()
+
+    def _dib_tiempo():
+        # La perspectiva y los controles de la serie comparten cabecera.
+        # Las claves de elección son las mismas que en dibujar_perspectiva.
+        with st.container(key="aj_tiempo_vista", gap=None):
+            with st.container(key="aj_tiempo_cabecera", horizontal=True,
+                              horizontal_alignment="distribute",
+                              vertical_alignment="center", gap="small"):
+                with st.container(key="persp_tiempo", horizontal=True,
+                                  vertical_alignment="center", width="content"):
+                    k, rotulo, opciones = EJES_TIEMPO[0]
+                    perspectiva = eleccion_compartida(
+                        k, rotulo, opciones, opciones[0], "pspw_tiempo_0")
+                if perspectiva == "Serie":
+                    controles = st.container(key="ajevo_controles", horizontal=True,
+                                             vertical_alignment="center", gap="small",
+                                             width="content")
+            if perspectiva == "Serie":
+                _dib_evolucion(controles)
+            else:
+                _dib_detalle()
 
     def _dib_detalle():
         """La tabla por producto, con su propio grano (#504). Mismo `d`."""
@@ -392,8 +414,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
 
     _DIBUJANTES = {
         "aj_sec_persp_cierre": lambda: vista_cierre(df_full),
-        "aj_sec_persp_tiempo": lambda: dibujar_perspectiva(
-            "tiempo", EJES_TIEMPO, PERSPECTIVAS_TIEMPO, _DIBUJANTES),
+        "aj_sec_persp_tiempo": _dib_tiempo,
         "aj_sec_cascada":      _dib_cascada,
         "aj_sec_heatmap":      _dib_heatmap,
         "aj_sec_diferencias":  _dib_diferencias,

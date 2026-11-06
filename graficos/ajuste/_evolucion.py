@@ -678,6 +678,12 @@ _CSS_FILTROS = """
     min-height:24px; padding:0 8px; border:0; border-radius:8px; background:var(--rail-fondo);
 }
 .st-key-ajevo_filtros_panel [data-testid="stButton"] button p {font-size:12px; white-space:nowrap;}
+@media (min-width:901px) {
+    .st-key-ajuste_graf_card_izq_evo {
+        padding-top:8px !important; gap:0 !important;
+    }
+    .st-key-ajevo_fecha {height:0 !important; min-height:0 !important;}
+}
 </style>
 """
 # Lo que ya se pidió en esta sesión: los orígenes y el consumo se calculan
@@ -810,7 +816,7 @@ def _calcular_origen(ses):
 
 def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                            col_ajuste_val, col_valorizado, col_kardex=None,
-                           d_full=None):
+                           d_full=None, controles=None):
     """UNA tarjeta: la serie y, debajo, quien la explica (regla #504).
 
     Desde el 2026-10-21 (regla #692) es el boceto aprobado: la serie en rojo
@@ -838,9 +844,10 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         # orden de ejecucion es el orden en que se leen los valores.
         # Sin título desde la #799: el nombre está en la franja, y los totales
         # del rango van en la de indicadores de la pieza. Quedan los controles.
-        c_fecha = st.container()
-        controles = st.container(horizontal=True, horizontal_alignment="distribute",
-                                 vertical_alignment="center")
+        c_fecha = st.container(key="ajevo_fecha", gap=None)
+        if controles is None:
+            controles = st.container(horizontal=True, horizontal_alignment="distribute",
+                                     vertical_alignment="center")
         with controles:
             # Una sesión vieja puede traer «Semana» guardada (regla #585):
             # un valor que no está en las opciones no se dibuja marcado.

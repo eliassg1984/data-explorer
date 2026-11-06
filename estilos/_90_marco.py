@@ -163,11 +163,17 @@ CSS = """
        rótulo «Ver», las perspectivas subrayadas y una raya de borde
        a borde debajo. La pieza pone a la derecha «Detalle» y «Cómo se calcula». */
     .st-key-persp_tiempo .persp-rot { display: none; }
-    .st-key-persp_tiempo.st-key-persp_tiempo {
+    .st-key-aj_tiempo_cabecera {
         border-bottom: 1px solid var(--border);
-        margin-left: -18px !important;
-        margin-right: -18px !important;
-        padding: 0 18px;
+        padding: 6px 18px 0 !important;
+        min-height: 44px;
+    }
+    .st-key-persp_tiempo.st-key-persp_tiempo {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    .st-key-ajevo_controles {
+        gap: 12px !important;
     }
     .st-key-persp_tiempo.st-key-persp_tiempo [data-testid="stButtonGroup"] {
         background: none;
@@ -181,8 +187,8 @@ CSS = """
         border-bottom: 2px solid transparent !important;
         padding: 0 !important;
         margin-right: 18px !important;
-        height: 32px !important;
-        min-height: 32px !important;
+        height: 38px !important;
+        min-height: 38px !important;
     }
     .st-key-persp_tiempo.st-key-persp_tiempo [data-testid="stButtonGroup"] button[aria-checked="true"],
     .st-key-persp_tiempo.st-key-persp_tiempo [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {
@@ -835,6 +841,19 @@ CSS = """
         .st-key-nav_franja_idx .franja-seccion:hover,
         .st-key-nav_franja_idx .franja-seccion[aria-current="true"] {
             color: var(--accent-deep); background: var(--accent-tint);
+        }
+    }
+    @media (max-width: 900px) {
+        html body .st-key-aj_tiempo_cabecera {
+            gap: 8px !important; align-items: stretch !important;
+            padding-bottom: 8px; border-bottom: 1px solid var(--border);
+        }
+        html body .st-key-aj_tiempo_cabecera > [data-testid="stLayoutWrapper"] {
+            width: 100% !important; flex: 0 0 auto !important;
+        }
+        html body .st-key-ajevo_controles {
+            flex-direction: row !important; justify-content: space-between !important;
+            align-items: center !important; gap: 8px !important; width: 100% !important;
         }
     }
 """
