@@ -805,14 +805,15 @@ CSS = """
 
         /* Ruta integrada en todos los reportes: grupo discreto, vista en tinta
            y lavanda al interactuar. Conserva los destinos nativos. */
-        /* Los niveles comparten ancho; las flechas ocupan su propio espacio. */
+        /* Los niveles reservan el mismo ancho y las flechas su propio sitio.
+           El área puede crecer para que sus 17px no recorten nombres largos. */
         .barra-ctx[data-barra-compacta] {
             --franja-nivel-ancho: 120px;
             gap: 0;
         }
         .barra-ctx[data-barra-compacta] .barra-reporte {
             display: inline-flex; align-items: center; justify-content: center;
-            gap: 10px; width: var(--franja-nivel-ancho); flex: 0 0 var(--franja-nivel-ancho);
+            gap: 10px; width: max-content; min-width: var(--franja-nivel-ancho); flex: 0 0 auto;
             box-sizing: border-box; padding: 0 7px;
         }
         .barra-ctx[data-barra-compacta] .barra-nom {
@@ -837,7 +838,15 @@ CSS = """
         .franja-ruta[data-franja-compacta] .fr-grupo-boton { font-weight: 400; }
         .franja-ruta[data-franja-compacta] .fr-grupo { color: var(--text-secondary); }
         .franja-ruta[data-franja-nombre] { margin-left: 0; }
-        .franja-ruta[data-franja-nombre] .fr-grupo { color: var(--text-primary); font-weight: 500; }
+        .franja-ruta[data-franja-nombre] .fr-grupo-boton {
+            width: max-content; min-width: var(--franja-nivel-ancho); flex: 0 0 auto;
+        }
+        /* Cuando el área abre su menú, el nombre vive en este botón y no
+           en .barra-nom: conserva la misma presentación en ambas rutas. */
+        .franja-ruta[data-franja-nombre] .fr-grupo {
+            border-radius: 0; padding: 0;
+            color: var(--text-primary); font-size: 17px; font-weight: 600;
+        }
         .franja-ruta[data-franja-compacta] i { font-style: normal; font-size: 12px; color: var(--text-secondary); }
         .franja-ruta[data-franja-compacta] button:hover,
         .franja-ruta[data-franja-compacta] button[aria-expanded="true"] {

@@ -12,7 +12,7 @@
     min-height: 28px !important;
     max-height: 28px !important;
     margin: 0 -18px -16px !important;
-    padding: 0 18px !important;
+    padding: 0 18px 0 8px !important;
     align-items: flex-end !important;
     background: var(--marco-fondo) !important;
     border-bottom: 1px solid var(--border);
@@ -22,11 +22,18 @@
   .st-key-persp_sin .persp-rot {
     display: none;
   }
+  /* Esconder sólo el texto dejaba su caja vacía y el gap de la fila antes
+     de la primera pestaña. El primer elemento es el rótulo de la vista. */
+  .st-key-persp_stock > [data-testid="stElementContainer"]:first-child,
+  .st-key-persp_mov > [data-testid="stElementContainer"]:first-child,
+  .st-key-persp_sin > [data-testid="stElementContainer"]:first-child {
+    display: none !important;
+  }
   .st-key-persp_stock [data-testid="stElementContainer"] {
     height: auto;
   }
   .st-key-aj_tiempo_cabecera {
-    padding: 0 18px !important;
+    padding: 0 18px 0 8px !important;
     min-height: 30px;
     align-items: flex-end !important;
     background: var(--marco-fondo);
@@ -46,6 +53,7 @@
     --persp-alto: 30px;
   }
   .st-key-form_receta_modo {
+    padding-left: 8px !important;
     background: var(--marco-fondo);
   }
   .st-key-form_receta_modo.st-key-form_receta_modo
@@ -96,11 +104,12 @@
   /* Cabeceras de las piezas propias. Tienen controles a la derecha de
      30–32 px: se conserva ese alto y las carpetas se alinean abajo. */
   :is(.cc .cc-cab, .rb > .n2, .cr > .n2, .rr > .n2,
-      .sa > .sa-n2, .ajc .ajc-fnav, .dc > .dc-n2) {
+      .sa .sa-n2, .ajc .ajc-fnav, .dc .dc-n2) {
     align-items: flex-end;
     gap: 12px;
     min-height: 32px;
     height: 32px;
+    padding-left: 8px;
     background: var(--marco-fondo);
     border-bottom: 1px solid var(--border);
     box-sizing: border-box;
@@ -108,7 +117,7 @@
   .ajc .ajc-fnav {
     height: auto;
     margin: -8px -18px 0;
-    padding: 0 18px;
+    padding: 0 18px 0 8px;
   }
   :is(.cc-der, .n2-der, .sa-n2-der, .dc-n2-der) {
     align-self: center;

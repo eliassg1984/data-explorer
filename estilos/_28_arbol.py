@@ -930,16 +930,13 @@ CSS = """
         white-space: nowrap;
         overflow: hidden;
     }
-    .barra-ico {
-        font-family: "Material Symbols Rounded";
-        font-feature-settings: "liga";
-        font-size: 20px;
-        line-height: 1;
-        color: var(--accent);
-        flex: 0 0 auto;
+    .st-key-nav_franja_rep .barra-ico {
+        display: none;
     }
-    .barra-nom {
-        font-size: 15px;
+    .st-key-nav_franja_rep .barra-nom {
+        border-radius: 0;
+        padding: 0;
+        font-size: 17px;
         font-weight: 600;
         color: var(--text-primary);
         flex: 0 0 auto;
