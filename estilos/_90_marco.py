@@ -706,12 +706,58 @@ CSS = """
         }
     }
 
-    /* Precios presenta los filtros compartidos en su propia barra. */
-    :root:has([data-compras-vista="compras_sec_volatilidad"] [data-precios-filtros]) {
-        --barra-f: 0px;
+    /* Un popover de familia y subfamilia por tarjeta de Compras. */
+    [class*="st-key-cp_filtro_vista_"] {
+        padding-inline: 10px;
     }
-    [data-compras-vista="compras_sec_volatilidad"]:has([data-precios-filtros]) .st-key-chips_ajuste_tabla {
+    [class*="st-key-cp_filtro_vista_"] button[data-testid="stPopoverButton"] {
+        width: max-content !important;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        padding: 0 7px !important;
+        border: 0 !important;
+        border-radius: 8px !important;
+        background: var(--rail-fondo) !important;
+        color: var(--text-secondary) !important;
+    }
+    [class*="st-key-cp_filtro_vista_"] button[data-testid="stPopoverButton"]:is(:hover, [aria-expanded="true"]) {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    [class*="st-key-cp_filtro_vista_"] button[data-testid="stPopoverButton"] p > span[role="img"] {
+        font-size: 18px;
+    }
+    [class*="st-key-cp_filtro_vista_"] button[data-testid="stPopoverButton"] [data-testid="stIconMaterial"] {
         display: none !important;
+    }
+    [class*="st-key-cp_panel_filtro_"] {
+        width: min(330px, calc(100vw - 64px)) !important;
+        max-height: min(400px, 65vh);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+    @media (max-width: 900px) {
+        [class*="st-key-cp_filtro_vista_"] button[data-testid="stPopoverButton"] {
+            min-height: 44px !important;
+            min-width: 44px !important;
+        }
+    }
+    @media (min-width: 901px) {
+        [class*="st-key-cp_con_filtro_"] {
+            --cp-reserva-filtro: 56px;
+            position: relative;
+        }
+        [class*="st-key-cp_filtro_vista_"] {
+            position: absolute !important;
+            top: 4px;
+            right: 14px;
+            width: max-content !important;
+            padding: 0;
+            z-index: 8;
+        }
+        [data-compras-vista] {
+            --barra-f: 0px;
+        }
     }
 
     /* Compras conserva los popovers y rangos de cada vista. Sólo el de la

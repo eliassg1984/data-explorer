@@ -316,7 +316,7 @@ button.fi:hover { background: var(--bg-hover); }
   white-space: nowrap; color: var(--text-secondary) !important; font-size: 13px; }
 .tabs button:hover { color: var(--accent-deep) !important; }
 .tabs button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent); }
-.n2-der { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.n2-der { margin-left: auto; display: flex; align-items: center; gap: 16px; padding-inline-end: var(--cp-reserva-filtro, 0px); }
 .como { position: relative; display: flex; align-items: center; }
 .link { border: 0; background: none; padding: 0; cursor: pointer; white-space: nowrap; color: var(--accent-deep) !important; font-size: 13px; }
 .pop-como { position: absolute; top: 26px; right: 0; z-index: 9; width: 420px; max-width: calc(100vw - 32px); max-height: 420px; overflow: auto;

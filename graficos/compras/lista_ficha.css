@@ -223,7 +223,7 @@
   cursor: pointer; white-space: nowrap; color: var(--text-secondary) !important; font-size: 13px; }
 .lf-tabs button:hover { color: var(--accent-deep) !important; }
 .lf-tabs button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent); }
-.lf-n2-der { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.lf-n2-der { margin-left: auto; display: flex; align-items: center; gap: 16px; padding-inline-end: var(--cp-reserva-filtro, 0px); }
 .lf-switch { display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
 .lf-switch input { appearance: none; position: relative; width: 26px; height: 14px; margin: 0; border-radius: 7px;
   background: var(--text-muted); cursor: pointer; }

@@ -533,7 +533,7 @@ def armar_ranking(res_p, res_f, res_s, nombres, rango, ultimo, prev_total,
     }
     if familias:
         salida["pagina"] = {"todas": [[f, nombre_propio(f), v] for f, v in familias["todas"]],
-                            "elegidas": list(familias["elegidas"])}
+                            "elegidas": list(familias["elegidas"]), "en_panel": familias.get("en_panel", False)}
     return salida
 
 

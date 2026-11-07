@@ -8,6 +8,7 @@ import streamlit as st
 
 from graficos.base import rango_tarjeta
 from ._comun import CATEGORIA_SEC, base_normalizada, cambiar_familias, selector_fecha_tarjeta
+from ._filtros_vista import filtros_vista
 from . import documentos_datos as datos
 
 _DIR=Path(__file__).parent
@@ -36,8 +37,7 @@ def renderizar(d,cols,extra=None,d_historia=None,familias=None):
     rango=rango_tarjeta(CATEGORIA_SEC['compras_sec_documentos'])
     if rango is None or any(f is None for f in rango):
         fechas=b.fecha.dropna();rango=(fechas.min(),fechas.max()) if len(fechas) else None
-    contexto={'Familias de la página':ss.get('compras_graf_filtro_fam') or [],
-              'Subfamilias de la página':ss.get('compras_graf_filtro_sub') or [],
+    contexto={**filtros_vista('compras_sec_documentos'),
               'Proveedores del ranking':top}
     hist=d_historia if d_historia is not None and extra else None
     bh=base_normalizada(hist,*cols) if hist is not None else b

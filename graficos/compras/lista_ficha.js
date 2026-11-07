@@ -80,7 +80,7 @@ function lfPasarFecha(raiz, selector) {
 }
 
 function lfMenuFamilias(pa, abierto, fmt, escapar) {
-  if (!pa || !pa.todas || !pa.todas.length) return '';
+  if (!pa || pa.en_panel || !pa.todas || !pa.todas.length) return '';
   const el = new Set(pa.elegidas), n = pa.elegidas.length || pa.todas.length;
   return `<div class="lf-ms"><button class="lf-pil" data-acc="menu" data-v="fam" aria-expanded="${abierto}">${n === pa.todas.length ? 'Todas las familias' : `Familias: ${n} de ${pa.todas.length}`} ▾</button>`
     + (abierto ? `<div class="lf-pop">${pa.todas.map(([r, nom, v]) => `<label><input type="checkbox" data-pfam value="${escapar(r)}"${el.has(r) || !el.size ? ' checked' : ''}><span>${escapar(nom)}</span><small>${fmt(v)}</small></label>`).join('')}<p>Vale para todas las vistas de Compras.</p></div>` : '')
@@ -91,7 +91,8 @@ function lfFuera(pa, fmt, escapar) {
   if (!pa || !pa.todas || !pa.elegidas.length) return '';
   const el = new Set(pa.elegidas), fuera = pa.todas.filter((x) => !el.has(x[0])), s = fuera.reduce((a, x) => a + x[2], 0);
   if (s <= 0.5) return '';
-  return `<div class="lf-fuera"><span>Fuera de esta cuenta: ${fmt(s)} de ${escapar(fuera.slice(0, 2).map((x) => x[1]).join(', '))}${fuera.length > 2 ? '…' : ''}</span><button class="lf-quita" data-acc="sumar">Sumarlas</button></div>`;
+  const sumar = pa.en_panel ? '' : '<button class="lf-quita" data-acc="sumar">Sumarlas</button>';
+  return `<div class="lf-fuera"><span>Fuera de esta cuenta: ${fmt(s)} de ${escapar(fuera.slice(0, 2).map((x) => x[1]).join(', '))}${fuera.length > 2 ? '…' : ''}</span>${sumar}</div>`;
 }
 
 // ── El lenguaje de Costo de Carta (#775, regla #789 en Compras) ────────────

@@ -186,7 +186,7 @@
   white-space: nowrap; color: var(--text-secondary) !important; font-size: 13px; }
 .dc-tabs button:hover { color: var(--accent-deep) !important; }
 .dc-tabs button.on { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent); }
-.dc-n2-der { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.dc-n2-der { margin-left: auto; display: flex; align-items: center; gap: 16px; padding-inline-end: var(--cp-reserva-filtro, 0px); }
 .dc-switch { display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
 .dc-switch input { appearance: none; position: relative; width: 26px; height: 14px; margin: 0; border-radius: 7px; background: var(--text-muted); cursor: pointer; }
 .dc-switch input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg-card); }

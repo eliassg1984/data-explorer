@@ -576,8 +576,6 @@ export default function(component){
     root.innerHTML=`<div class="cp-vistas" role="group" aria-label="Vista de precios"><button type="button" data-acc="pvista" data-v="resumen">Resumen</button><button type="button" data-acc="pvista" data-v="comparacion">Comparación</button></div><div class="cp-cab"><span class="cp-lugar" aria-hidden="true"></span><span class="cp-cab-din"></span><select class="cp-men" data-acc="pcontra" aria-label="Contra qué precio"><option value="hab">Contra: su precio habitual</option><option value="ant">Contra: el período anterior</option><option value="ano">Contra: el año pasado</option></select><span class="cp-esp"></span><input class="cp-busca" type="search" data-acc="q" placeholder="Buscar producto…" aria-label="Buscar producto"><button class="cp-pil" data-acc="excel" title="Exportar a Excel">Excel ↓</button></div><div class="cp-n2"></div><div class="cp-kpis"></div><div class="cp-cuerpo"><section class="cp-izq"></section><aside class="cp-ficha" aria-label="Ficha"></aside></div><section class="cp-comparacion" aria-label="Comparación" hidden></section>`;
     parentElement.appendChild(root);}
   G={root,st,B:G?.B.P.sello===P.sello?G.B:vleer(P),abort:new AbortController(),enviar:setTriggerValue};window.__cpVol=G;
-  const anfitrion=parentElement.getRootNode().host||parentElement;
-  anfitrion.closest('.st-key-cp_vol_pieza_wrap')?.toggleAttribute('data-precios-filtros',!!P.familias?.subfamilias);
   root.querySelector('[data-acc=q]').value=st.q||'';root.querySelector('[data-acc=pcontra]').value=st.contra;
   const fb=document.querySelector('.st-key-cp_vol_fecha');if(fb&&fb.offsetWidth)root.style.setProperty('--cp-fecha',`${fb.offsetWidth+8}px`);
   vconectar(G);vpintar(G);

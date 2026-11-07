@@ -630,6 +630,8 @@ def cambiar_familias(k_pieza, k_pendiente, familias):
     """El menú de familias de una pieza escribe el filtro de la página, que es de
     Python y manda sobre las demás vistas: pide una corrida completa con la misma
     escalada de la fecha. Sólo lo que Python ofreció (regla #770)."""
+    if (familias or {}).get("en_panel"):
+        return
     v = (st.session_state.get(k_pieza) or {}).get("familias")
     validas = {f for f, _ in ((familias or {}).get("todas") or [])}
     if not isinstance(v, list) or not all(x in validas for x in v):

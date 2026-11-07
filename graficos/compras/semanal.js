@@ -309,6 +309,7 @@ function detalleConNotas(dd, ncd, lblDe) {
 // las selecciones que dejaron de ofrecerse, como `seleccion_multiple`).
 function calcular(F, st) {
   const V = {};
+  if (F.familias?.en_panel) { st.fam = []; st.sub = []; }
   const docu = F.hayTipo ? st.docu : 'Todos';
   const okTipo = (t) => docu === 'Todos' || (docu === 'Facturas' ? t === 'F' : t === 'G');
   const conIgv = st.montos === 'Con IGV' && F.hayIgv;
@@ -974,15 +975,16 @@ function nivel2(F, V, st) {
 }
 function cabecera(F, V, st) {
   const activos = FILTROS.filter(([k]) => st[k].length).length + (st.docu !== 'Todos' ? 1 : 0) + (st.montos !== 'Sin IGV' ? 1 : 0);
-  const disp = { fam: F.hayFam && V.famOps.length && !F.familias, sub: F.haySub && V.subOps.length, prov: F.hayProv, prod: true };
+  const local = !!F.familias?.en_panel;
+  const disp = { fam: F.hayFam && V.famOps.length && !F.familias, sub: !local && F.haySub && V.subOps.length, prov: F.hayProv, prod: true };
   const dentro = FILTROS.filter(([k]) => disp[k] && k !== 'fam');
   const nFil = dentro.filter(([k]) => st[k].length).length;
   const seccion = ([k, rot]) => `<h4>${rot}${st[k].length ? ` · ${st[k].length} <button class="ms-x" data-acc="limpiar" data-v="${k}">quitar</button>` : ''}</h4><input class="ms-q" data-k="${k}" placeholder="Buscar…" value="${esc(st.q[k] || '')}" autocomplete="off"><div class="ms-o" data-k="${k}">${listaMenu(F, V, st, k)}</div>`;
   const famInt = disp.fam ? (() => { const s = st.fam, nom = (o) => F.famN[F.fams.indexOf(o)] || o, txt = !s.length ? 'Todas las familias' : s.length === 1 ? `Familia: ${nom(s[0])}` : `${s.length} familias`;
     return `<div class="ms"><button class="ms-b${s.length ? ' on' : ''}" data-acc="menu" data-v="fam" aria-expanded="${st.menu === 'fam'}">${esc(txt)} <i>▾</i></button>${st.menu === 'fam' ? `<div class="ms-l"><input class="ms-q" data-k="fam" placeholder="Buscar…" value="${esc(st.q.fam || '')}" autocomplete="off"><div class="ms-o" data-k="fam">${listaMenu(F, V, st, 'fam')}</div></div>` : ''}</div>`; })() : '';
   const nMas = nFil + (st.docu !== 'Todos' ? 1 : 0) + (st.montos !== 'Sin IGV' ? 1 : 0);
-  const fil = (F.familias ? menuFamilias(F, st) : famInt)
-    + `<div class="ms"><button class="ms-b${nMas ? ' on' : ''}" data-acc="menu" data-v="fil" aria-expanded="${st.menu === 'fil'}" title="Subfamilia, proveedor, producto, documento y montos">Más filtros${nMas ? ` · ${nMas}` : ''} <i>▾</i></button>${st.menu === 'fil' ? `<div class="ms-l ancho">${dentro.map(seccion).join('')}<h4>Documento</h4><div class="seg chico">${DOCUS.map((k) => `<button class="${k === st.docu ? 'on' : ''}" data-acc="docu" data-v="${k}">${k}</button>`).join('')}</div><h4>Montos</h4><div class="seg chico">${MONTOS.map((k) => `<button class="${k === st.montos ? 'on' : ''}" data-acc="montos" data-v="${k}">${k}</button>`).join('')}</div><p class="mas">«Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito. Sólo esta tarjeta.</p></div>` : ''}</div>`;
+  const fil = (local ? '' : F.familias ? menuFamilias(F, st) : famInt)
+    + `<div class="ms"><button class="ms-b${nMas ? ' on' : ''}" data-acc="menu" data-v="fil" aria-expanded="${st.menu === 'fil'}" title="${local ? '' : 'Subfamilia, '}Proveedor, producto, documento y montos">Más filtros${nMas ? ` · ${nMas}` : ''} <i>▾</i></button>${st.menu === 'fil' ? `<div class="ms-l ancho">${dentro.map(seccion).join('')}<h4>Documento</h4><div class="seg chico">${DOCUS.map((k) => `<button class="${k === st.docu ? 'on' : ''}" data-acc="docu" data-v="${k}">${k}</button>`).join('')}</div><h4>Montos</h4><div class="seg chico">${MONTOS.map((k) => `<button class="${k === st.montos ? 'on' : ''}" data-acc="montos" data-v="${k}">${k}</button>`).join('')}</div><p class="mas">«Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito. Sólo esta tarjeta.</p></div>` : ''}</div>`;
   return `<div class="cab"><span class="lugar-fecha" aria-hidden="true"></span>`
     + `<button class="filtros-toggle" data-acc="panel-filtros" aria-expanded="${!!st.filtrosAbiertos}">Filtros${activos ? ` · ${activos} activo${activos === 1 ? '' : 's'}` : ''} <span aria-hidden="true">${st.filtrosAbiertos ? '▴' : '▾'}</span></button>`
     + `<div class="fils">${fil}</div>${menusVista(F, V, st)}<span class="esp"></span><button class="excel" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div>`
@@ -1055,7 +1057,8 @@ function panelLista(F, V, st) {
   let fuera = '';
   if (F.familias && st.item == null) {
     const P = F.familias, el = new Set(P.elegidas), fx = P.todas.filter(([f]) => el.size && !el.has(f)), v = suma(fx, (x) => x[1]);
-    if (fx.length && Math.abs(v) >= 0.5) fuera = `<div class="fuera"><span>Fuera de esta cuenta: ${esc(fS0(v))} de ${esc(fx.slice(0, 2).map(([f]) => nomFam(f)).join(', '))}${fx.length > 2 ? '…' : ''}.</span><button class="quita" data-acc="pagina-todas">Sumarlas</button></div>`;
+    const sumar = P.en_panel ? '' : '<button class="quita" data-acc="pagina-todas">Sumarlas</button>';
+    if (fx.length && Math.abs(v) >= 0.5) fuera = `<div class="fuera"><span>Fuera de esta cuenta: ${esc(fS0(v))} de ${esc(fx.slice(0, 2).map(([f]) => nomFam(f)).join(', '))}${fx.length > 2 ? '…' : ''}.</span>${sumar}</div>`;
   }
   return `<div class="pn-cab"><b>${tit}</b>${ampliar(st, 'panel', 'la lista')}</div><div class="lista">${filas || '<p class="mas">Nada que mostrar.</p>'}</div>${ficha}${fuera}`;
 }

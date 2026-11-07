@@ -17,6 +17,7 @@ import franja_fecha
 from estado_rango import atajos_meses
 from graficos.base import preservar_widgets, rango_tarjeta
 from ._comun import cambiar_familias, selector_fecha_tarjeta
+from ._filtros_vista import filtros_vista
 from ._etiquetas_proveedor import nombre_propio
 from . import vs_ano_datos as datos
 
@@ -68,8 +69,8 @@ def renderizar(d, cols, d_full=None, familias=None, d_todas=None):
         preservar_widgets(_KEYS_WIDGET)
         st.rerun(scope='app')
     fuente = d_todas if d_todas is not None else d_full if d_full is not None else d
-    contexto = {'Familias de la página': [nombre_propio(x) for x in ss.get('compras_graf_filtro_fam') or []],
-                'Subfamilias de la página': [nombre_propio(x) for x in ss.get('compras_graf_filtro_sub') or []]}
+    contexto = {rotulo: [nombre_propio(x) for x in valores]
+                for rotulo, valores in filtros_vista('compras_sec_vs_ano_pasado').items()}
     firma = (datos.huella(fuente, cols), tuple(cols.items()), str(contexto))
     cache = ss.get('_compras_ano_pieza_cache')
     if cache is None or cache[0] != firma:
@@ -83,7 +84,8 @@ def renderizar(d, cols, d_full=None, familias=None, d_todas=None):
     else:
         P['venta'], P['venta_pendiente'] = None, True
     if familias:
-        P['pagina'] = dict(todas=[[f, nombre_propio(f)] for f, _ in familias['todas']], elegidas=list(familias['elegidas']))
+        P['pagina'] = dict(todas=[[f, nombre_propio(f)] for f, _ in familias['todas']],
+                           elegidas=list(familias['elegidas']), en_panel=familias.get('en_panel', False))
     P['sello'] = datos.sellar(P)
     with st.container(key='cp_vap_nativa'):
         if ctx:

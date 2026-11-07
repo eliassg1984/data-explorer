@@ -23,6 +23,7 @@ from graficos.base import (
 )
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.compras._comun import CATEGORIA_SEC, cambiar_familias
+from graficos.compras._filtros_vista import filtros_vista
 from graficos import periodo
 from graficos import alturas
 
@@ -886,9 +887,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         cols = dict(prod=col_prod, prov=col_prov, precio=col_punit, fecha=col_fecha,
                     valor=col_valor, cant=col_cant, um=col_um, moneda=col_moneda, doc=col_docu,
                     fam=col_fam, sub=col_subfam)
-        filtros = {rot: [str(v) for v in (st.session_state.get(k) or [])]
-                   for rot, k in (("Familia", "compras_graf_filtro_fam"),
-                                  ("Subfamilia", "compras_graf_filtro_sub"))}
+        filtros = filtros_vista("compras_sec_volatilidad")
         firma = (id(d), d.shape, id(d_full), None if d_full is None else d_full.shape,
                  str(rango), tuple(cols.items()), repr(filtros), repr(familias))
         cache = st.session_state.get(_K_CACHE)

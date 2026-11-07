@@ -172,7 +172,7 @@ def armar_rank(rango, seleccion, sello, familias=None):
     }
     if familias:
         p["pagina"] = {"todas": [[f, nombre_propio(f), v] for f, v in familias["todas"]],
-                       "elegidas": list(familias["elegidas"])}
+                       "elegidas": list(familias["elegidas"]), "en_panel": familias.get("en_panel", False)}
     return p
 
 

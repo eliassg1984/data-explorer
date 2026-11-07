@@ -97,6 +97,7 @@ def armar(base,top_provs,*,col_docu=True,col_punit=True,contexto=None,rango=None
     if con_mas:
         P['familias']=[nombre_propio(f) for f in familias]
     if pagina:
-        P['pagina']=dict(todas=[[f,nombre_propio(f),v] for f,v in pagina['todas']],elegidas=list(pagina['elegidas']))
+        P['pagina'] = dict(todas=[[f, nombre_propio(f), v] for f, v in pagina['todas']],
+                           elegidas=list(pagina['elegidas']), en_panel=pagina.get('en_panel', False))
     P['sello']=hashlib.sha256(json.dumps(P,sort_keys=True,ensure_ascii=False,allow_nan=False,separators=(',',':')).encode()).hexdigest()
     return P

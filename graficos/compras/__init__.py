@@ -35,11 +35,13 @@ import data
 from tema import SERIE_PRINCIPAL, TEXTO_PRINCIPAL, BLANCO
 from utils import _norm, fmt_k
 from graficos.base import (
-    compartimento_filtros, contar_filtros, filtro_pills,
     _compras_layout, _compras_truncar, _render_rail,
     _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
-    recortar_por_tarjeta, sembrar_seleccion, seccion_perezosa,
+    recortar_por_tarjeta, seccion_perezosa,
     renderizar_graficos_genericos,
+)
+from graficos.compras._filtros_vista import (
+    filtros_vista, panel_filtros_vista, preparar_filtros_vista, recortar_filtros_vista,
 )
 from graficos.compras._comun import (  # noqa: F401  (re-export)
     # `CATEGORIA_SEC` la consumen los cinco drills Y este dispatcher; se
@@ -135,14 +137,15 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
     un numero y la tarjeta de al lado otro, sin nada que explique la
     diferencia. Cada bloque de aca abajo pide EL DF DE SU VISTA.
 
-    `d_full` es el mismo df SIN el filtro de fecha: de ahi sale el PERIODO
+    `d_full` es el histórico de cada vista, obtenido por nombre si es callable.
+    De ahi sale el PERIODO
     ANTERIOR con el que se comparan los KPIs. Sin el no habria flecha — el
     df de una vista es exactamente su rango vigente y no tiene con que
     compararse.
     """
     kpis, estados = {}, {}
 
-    def _prev_de(dv):
+    def _prev_de(dv, historico):
         """El periodo ANTERIOR de `dv`: mismo largo, pegado por atras.
 
         Se deriva del PROPIO `dv` y no del contexto de la franja: asi la
@@ -150,16 +153,16 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
         este helper sepa de donde salio.
         """
         if not (col_fecha and dv is not None and col_fecha in dv.columns
-                and d_full is not None):
+                and historico is not None):
             return None
         _f = pd.to_datetime(dv[col_fecha], errors="coerce").dropna()
         if not len(_f):
             return None
         _ini, _fin = _f.min(), _f.max()
         _largo = _fin - _ini
-        _ff = pd.to_datetime(d_full[col_fecha], errors="coerce")
-        prev = d_full[(_ff >= _ini - _largo - pd.Timedelta(days=1))
-                      & (_ff < _ini)]
+        _ff = pd.to_datetime(historico[col_fecha], errors="coerce")
+        prev = historico[(_ff >= _ini - _largo - pd.Timedelta(days=1))
+                         & (_ff < _ini)]
         return None if prev.empty else prev
 
     def _vista(nombre):
@@ -174,7 +177,8 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
         if (dv is None or getattr(dv, "empty", True) or not col_valor
                 or col_valor not in dv.columns):
             return None, None, None
-        return dv, pd.to_numeric(dv[col_valor], errors="coerce"), _prev_de(dv)
+        historico = d_full(nombre) if callable(d_full) else d_full
+        return dv, pd.to_numeric(dv[col_valor], errors="coerce"), _prev_de(dv, historico)
 
     def _suma(df_, col, clave):
         """Lo que sumo UN grupo puntual en ese df."""
@@ -508,159 +512,38 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    # ── Filtros Familia / Subfamilia: compartimento único de la franja ───
-    # LAS OPCIONES SALEN DEL HISTÓRICO, NO DEL RANGO (2026-09-02, a pedido).
-    #
-    # Hasta hoy la lista se armaba con `df_f`, o sea con lo que dejaba pasar
-    # la píldora de fecha, y eso tenía una consecuencia que nadie había
-    # medido: al angostar el rango, una familia elegida podía dejar de estar
-    # entre las opciones, y Streamlit la borra de la selección EN SILENCIO —
-    # sin excepción, sin aviso, y sin devolverla cuando el rango se vuelve a
-    # ampliar. Medido paso a paso en el navegador:
-    #   · rango 4–24 ago → 8 familias ofrecidas; elegidas ENVASES + VINOS.
-    #   · rango 24 ago (un día) → 3 ofrecidas; la selección queda en ENVASES.
-    #   · rango 4–24 ago otra vez → 8 ofrecidas, la selección sigue en
-    #     ENVASES. VINOS se perdió para siempre.
-    # Lo único que lo delataba era el contador del compartimento pasando de
-    # 2 a 1.
-    #
-    # Con el histórico como fuente la lista deja de moverse, así que no hay
-    # nada que se pueda caer. El precio, asumido a sabiendas: ahora se puede
-    # elegir una familia que no compró NADA en el rango y la vista sale
-    # vacía. Eso ya tiene su cartel unas líneas más abajo, y es un estado
-    # que el usuario provocó y puede deshacer — muy distinto de un filtro
-    # que se borra solo.
-    #
-    # `df_full` puede no llegar (llamadores viejos): ahí cae a `df_f` y el
-    # comportamiento es el de antes.
-    fam_sel, sub_sel = [], []
+    # Las opciones salen del histórico, independientemente del rango de cada vista.
     _ops_src = df_full if df_full is not None else df_f
-    # De entrada, las cuatro familias del negocio (ver _FAMILIAS_DE_ENTRADA).
-    sembrar_seleccion(_ops_src, col_fam, "compras_graf_filtro_fam",
-                      _FAMILIAS_DE_ENTRADA)
-    # Documento y Montos ya no están acá: desde el 2026-10-10 son de la
-    # tarjeta de «Compras por período» (regla #624).
-    _n_filtros = contar_filtros("compras_graf_filtro_fam",
-                                "compras_graf_filtro_sub")
-    with compartimento_filtros(_n_filtros):
-        _, fam_sel = filtro_pills(_ops_src, col_fam,
-                                  "compras_graf_filtro_fam", "Familia")
-        # CASCADA: Subfamilia sólo ofrece las que quedan bajo la Familia
-        # elegida. Por eso el df recortado va aparte y no se reusa el que
-        # devuelve el filtro de arriba — ése ya viene filtrado, pero el
-        # recorte tiene que hacerse con la selección de ESTE rerun.
-        #
-        # Y desde el 2026-09-02 la cascada es EXIGENTE: sin Familia no hay
-        # lista. Antes el rango de fechas la acotaba de hecho (con la franja
-        # en un día eran 3 chips); al pasar las opciones al histórico esa
-        # cota desapareció y el bloque saltó a 95 chips — medido: 1.688px de
-        # subfamilias dentro de un panel de 420 con scroll, o sea 1.943px de
-        # recorrido para un filtro que se usa de pasada. Noventa y cinco
-        # opciones sin buscador no son un filtro, son una lista.
-        #
-        # No se esconde el bloque entero: queda el rótulo con un caption que
-        # dice qué hacer. Un compartimento que aparece y desaparece según lo
-        # que elegiste arriba se lee como que la app perdió el filtro.
-        _d_sub = _ops_src
-        if fam_sel and col_fam:
-            _d_sub = _d_sub[_d_sub[col_fam].astype(str).isin(fam_sel)]
-            _, sub_sel = filtro_pills(_d_sub, col_subfam,
-                                      "compras_graf_filtro_sub", "Subfamilia")
-        elif col_subfam and col_subfam in _ops_src.columns:
-            # La clave se borra a mano y no se deja morir sola. Streamlit
-            # recolecta el estado de un widget que dejó de dibujarse, pero
-            # `contar_filtros` (arriba, en la etiqueta del compartimento) lee
-            # session_state ANTES de que eso pase: sin este `pop`, al soltar
-            # la Familia el badge diría "1" durante un rerun por una
-            # Subfamilia que ya no filtra nada.
-            st.session_state.pop("compras_graf_filtro_sub", None)
-            st.markdown('<div class="filtro-rotulo">Subfamilia</div>',
-                        unsafe_allow_html=True)
-            st.caption("Elegí una Familia para ver sus subfamilias.")
+    _op_fam = sorted(_ops_src[col_fam].dropna().astype(str).unique()) if col_fam in _ops_src.columns else []
+    _mapa_sub = {}
+    if col_fam in _ops_src.columns and col_subfam in _ops_src.columns:
+        pares = _ops_src[[col_fam, col_subfam]].dropna().astype(str).drop_duplicates()
+        _mapa_sub = {f: tuple(grupo[col_subfam]) for f, grupo in pares.groupby(col_fam)}
+    _selecciones = {clave: preparar_filtros_vista(clave, _op_fam, _mapa_sub, _FAMILIAS_DE_ENTRADA)
+                    for clave, _ in _PILA}
+    _cache_hist, _cache_sec = {}, {}
 
-    d = df_f
-    if fam_sel and col_fam:
-        d = d[d[col_fam].astype(str).isin(fam_sel)]
-    if sub_sel and col_subfam:
-        d = d[d[col_subfam].astype(str).isin(sub_sel)]
+    def _hist_sec(clave):
+        seleccion = _selecciones.get(clave, ((), ()))
+        if seleccion not in _cache_hist:
+            _cache_hist[seleccion] = recortar_filtros_vista(_ops_src, col_fam, col_subfam, seleccion)
+        return _cache_hist[seleccion]
 
-    # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
-    # Todos los documentos y sin IGV: Documento y Montos son sólo de la
-    # tarjeta de «Compras por período» (regla #624).
-    publicar_contexto_ia("Compras", d,
-                         {"Familia": fam_sel, "Subfamilia": sub_sel})
+    def _d_sec(clave):
+        categoria = CATEGORIA_SEC.get(clave)
+        seleccion = _selecciones.get(clave, ((), ()))
+        cache_key = (categoria, seleccion)
+        if cache_key not in _cache_sec:
+            _cache_sec[cache_key] = (
+                recortar_por_tarjeta(_hist_sec(clave), col_fecha, categoria) if categoria
+                else recortar_filtros_vista(df_f, col_fam, col_subfam, seleccion)
+            )
+        return _cache_sec[cache_key]
 
-    # Data SIN filtro de fecha (para el toggle "Todo el histórico" del Panel B
-    # del drill Proveedor). Se le aplican los mismos chips Familia/Subfamilia,
-    # que no son de fecha. Si no llega df_full, cae a df_f (mismo comportamiento).
-    d_full = df_full if df_full is not None else df_f
-    if fam_sel and col_fam and col_fam in d_full.columns:
-        d_full = d_full[d_full[col_fam].astype(str).isin(fam_sel)]
-    if sub_sel and col_subfam and col_subfam in d_full.columns:
-        d_full = d_full[d_full[col_subfam].astype(str).isin(sub_sel)]
-
-    # ── DOCUMENTO Y MONTOS: SÓLO «COMPRAS POR PERÍODO» (regla #624) ───────
-    # Del 2026-10-08 al 10 se aplicaban acá, a TODAS las vistas (regla
-    # #621). Se bajaron a la tarjeta, a pedido, y las demás miden todos los
-    # documentos y sin IGV. Esa tarjeta recibe `col_igv` y `col_tipo_doc` y
-    # hace el filtro y la suma por su cuenta (`semanal.py`).
-
-    # ── EL `d` DE CADA SECCIÓN ────────────────────────────────────────────
-    # Desde el 2026-09-08 cada sección de la pila tiene su propio rango de
-    # fecha (ver `CATEGORIA_SEC`), así que ya no hay UN `d` para todos.
-    #
-    # EL RECORTE PASA ACÁ Y NO ADENTRO DE CADA DRILL, y eso es lo que hizo
-    # barato el cambio: los cinco drills reciben un `d` y lo usan en cientos
-    # de líneas cada uno. Cambiándoles la FUENTE —de "el df que ya filtró
-    # `app.py`" a "el df del rango de esta tarjeta"— siguen recibiendo
-    # exactamente lo que esperan y no hubo que tocarles el cuerpo.
-    # `proveedor.py` solo son 1.786 líneas.
-    #
-    # Se parte de `d_full` (chips SÍ, fecha NO) y no de `d` (chips + rango
-    # canónico): recortar sobre `d` sería una INTERSECCIÓN de dos rangos, o
-    # sea que una tarjeta nunca podría ampliar más allá de lo que dejó pasar
-    # `app.py`. Ese techo invisible es justo lo que hoy le pasa a la sección
-    # Tabla con su propio selector de período.
-    #
-    # Una sección SIN categoría (Vs año pasado, Tabla) se queda con `d`, el
-    # de siempre: su control de fecha es el desplegable de
-    # `graficos/periodo.py`, que ya era por tarjeta.
-    _cache_sec = {}
-
-    def _d_sec(clave_sec):
-        """El `d` de una sección, memoizado por render.
-
-        La memoización no es prematura: `_kpis_vistas` pide el df de las
-        seis vistas y después cada `seccion_perezosa` vuelve a pedir el
-        suyo, así que sin caché el mismo recorte corre dos veces. Sobre
-        `d_full` (~44k filas) cada uno cuesta unos 16 ms.
-        """
-        _cat = CATEGORIA_SEC.get(clave_sec)
-        if not _cat:
-            return d
-        if _cat not in _cache_sec:
-            _cache_sec[_cat] = recortar_por_tarjeta(d_full, col_fecha, _cat)
-        return _cache_sec[_cat]
-
-    # Vista del rail → sección de la pila. Sale de `_PILA`, que es la que ya
-    # aparea las dos cosas: una tabla aparte se desincronizaría.
-    _SEC_DE_VISTA = {_vista: _clave for _clave, _vista in _PILA}
+    _SEC_DE_VISTA = {vista: clave for clave, vista in _PILA}
 
     def _df_de_vista(nombre):
-        """El df de una VISTA del rail, para su KPI.
-
-        Una vista que no esté en `_PILA` cae a `d`. Hoy no queda ninguna:
-        la única, «Documentos SUNAT», pasó a ser un reporte propio el
-        2026-09-30 (regla #577).
-        """
         return _d_sec(_SEC_DE_VISTA.get(nombre))
-
-    _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
-
-    opciones = ["Compras por período", "Proveedor", "Producto",
-                "Vs año pasado", "Volatilidad", "Tabla",
-                "Documentos por proveedor"]
-
 
     # Rail vertical fijo al borde DERECHO (componente compartido _render_rail):
     # selector de tipo de gráfico agrupado por categoría. El activo se marca
@@ -673,81 +556,14 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # porque el punto de color se DERIVA de el —es lo que garantiza que el
     # punto no diga verde donde el numero decia rojo— pero ya no se dibuja.
     # Ver regla #465.
-    _kpis_rail, _estados_rail = _kpis_vistas(_df_de_vista, d_full, col_valor,
-                                    col_prov, col_fam, col_prod,
-                                    col_punit, col_docu, col_fecha)
+    _kpis_rail, _estados_rail = _kpis_vistas(
+        _df_de_vista, lambda vista: _hist_sec(_SEC_DE_VISTA.get(vista)), col_valor,
+        col_prov, col_fam, col_prod, col_punit, col_docu, col_fecha)
     graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo",
                         secciones=_PILA, estados=_estados_rail,
                         kpis=_kpis_rail)
-    if graf not in opciones:
-        graf = opciones[0]
-
-    # ── Quien dibuja el selector de fecha ────────────────────────────────
-    # ACA VIVIA UNA RECONCILIACION, y se fue el 2026-09-06 con el
-    # calendario de la franja. Existia porque la franja de `app.py` se
-    # dibuja mucho antes que este rail y `_render_contenido` es un
-    # `@st.fragment`: un clic aca NO re-ejecuta `app.py`, asi que en ese
-    # rerun parcial la franja seguia con la decision de la vista ANTERIOR
-    # —entrando a SUNAT, dos widgets con la misma key; saliendo, ninguno—
-    # y habia que forzar un rerun completo al cruzar esa frontera.
-    #
-    # Sin fecha en la franja de Compras no hay frontera que cruzar: el
-    # unico que podia dibujar el pill era Documentos SUNAT, y lo dibujaba
-    # dentro de su propia tarjeta (desde el 2026-09-30 es otro reporte, y
-    # en Compras no lo dibuja nadie — regla #577). Que la negociacion desaparezca —en vez
-    # de quedar con un lado fijo en `False`— es lo que evita el bucle: la
-    # condicion vieja era "los dos coinciden", y con la franja SIEMPRE en
-    # `False` cualquier vista que no fuera SUNAT la cumplia en cada render.
-
-    # ── Vistas que eran un DESTINO propio ────────────────────────────────
-    # Acá se despachaba «Documentos SUNAT», la única vista de Compras que no
-    # vivía en la pila: dibujaba el pill de fecha entero dentro de su tarjeta
-    # y no miraba los chips. Desde el 2026-09-30 es un reporte propio, con su
-    # botón en la columna de reportes (`graficos/sunat_reporte.py`, regla
-    # #577), y el drill sigue en `documentos_sunat.py` de este paquete.
-
-    # ── SIN FILAS TRAS LOS CHIPS: un CARTEL, no una salida ───────────────
-    # Desde el 2026-09-02 este cartel es alcanzable a propósito: las
-    # opciones de Familia/Subfamilia salen del histórico, así que se puede
-    # elegir una que no compró nada en el rango de la píldora. Por eso el
-    # texto nombra a los DOS filtros y no sólo "los filtros".
-    #
-    # TRES ACTOS DE LA MISMA GUARDA, y conviene leerlos juntos:
-    #
-    #   1. Vivía ARRIBA DE TODO. Cortar antes del rail apagaba la pantalla
-    #      ENTERA y se llevaba puesta a «Documentos SUNAT», que no mira `d`
-    #      (recibe `df_full` para que los chips no la toquen, regla #301):
-    #      61 comprobantes esperando y la página en blanco. Regla #329.
-    #   2. Bajó hasta acá (2026-09-06) y dejó el rail vivo… pero seguía
-    #      terminando en `return`, o sea que se llevaba LA PILA ENTERA.
-    #   3. 2026-09-07, reportado con captura desde la vista Semanal: el
-    #      `return` ya no está. Dos motivos medidos, no de gusto:
-    #
-    #      · DOS de las seis secciones NO dependen de `d`. «Vs año pasado»
-    #        (ventana propia, abre en "Todo") y «Volatilidad» (abre en 12
-    #        meses) calculan sobre `d_full` — con el rango vacío siguen
-    #        mostrando el histórico entero. Apagarlas era la #329 otra vez,
-    #        un piso más abajo.
-    #      · Y sobre todo: LA SALIDA ESTABA ADENTRO DE LO QUE SE APAGABA.
-    #        Desde que la franja no tiene calendario (2026-09-06) el único
-    #        control de rango son los selectores de fecha de las CABECERAS
-    #        de las tarjetas. Sin pila no hay cabeceras, así que el cartel
-    #        decía "ampliá el rango desde cualquier tarjeta" con la pantalla
-    #        vacía detrás: un callejón sin salida del que sólo se volvía
-    #        soltando el filtro de Familia a ciegas. Ver regla #354.
-    #
-    # Lo que hay debajo tolera un `d` vacío — se verificó sección por
-    # sección en el navegador. Y el CARTEL TAMBIÉN SE FUE DE ACÁ: ahora lo
-    # dibuja cada sección DENTRO de su tarjeta, junto al selector de fecha
-    # de la cabecera, que es el control con el que se arregla.
-    #
-    # No es sólo prolijidad: un `st.info` suelto arriba de la pila NO CABE.
-    # El jalón de `-104px` que sube la primera tarjeta bajo la franja
-    # (`estilos/_20_compras_rail.py`) está medido contra los CINCO bloques
-    # de alto cero que hay entre el borde del contenedor y esa tarjeta; un
-    # sexto bloque con alto de verdad se lo come el jalón y el cartel sale
-    # ENCIMA de la tarjeta. Medido en el navegador el 2026-09-07, con el
-    # cartel pisando el título "Ranking de proveedores".
+    clave_activa = _SEC_DE_VISTA.get(graf, _PILA[0][0])
+    publicar_contexto_ia("Compras", _d_sec(clave_activa), filtros_vista(clave_activa))
 
     # ══ LA PILA ══════════════════════════════════════════════════════════
     # Las vistas de Compras no se reemplazan: se apilan y se leen bajando.
@@ -785,169 +601,84 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # el fragment necesita poder llamarlas MÁS TARDE, en su propio rerun,
     # cuando el cuerpo del dispatcher ya terminó.
 
+    def _familias_de(clave):
+        categoria = CATEGORIA_SEC.get(clave)
+        base = recortar_por_tarjeta(_ops_src, col_fecha, categoria) if categoria else _ops_src
+        familias, subfamilias = _selecciones[clave]
+        base = recortar_filtros_vista(base, col_fam, col_subfam, ((), subfamilias))
+        opciones = familias_de_tarjeta(base, col_fam, col_valor, familias)
+        if opciones is not None:
+            opciones["en_panel"] = True
+        return opciones
+
     def _dib_proveedor():
-            # Drill Proveedor→productos→proveedores del prod. Sin borde externo:
-            # cada uno de sus 4 bloques internos lleva el suyo.
-            with st.container(key="compras_prov_drill_wrap"):
-                _compras_proveedor_drill(_d_sec("compras_sec_proveedor"),
-                                         col_prov, col_prod, col_cant, col_valor,
-                                         col_punit, col_um, col_fecha, col_docu,
-                                         d_full=d_full,
-                                         familias=_familias_de("compras_sec_proveedor"))
+        clave = "compras_sec_proveedor"
+        with st.container(key="compras_prov_drill_wrap"):
+            _compras_proveedor_drill(
+                _d_sec(clave), col_prov, col_prod, col_cant, col_valor,
+                col_punit, col_um, col_fecha, col_docu,
+                d_full=_hist_sec(clave), familias=_familias_de(clave))
 
     def _dib_producto():
-            with st.container(key="compras_prod_drill_wrap"):
-                _compras_producto_drill(_d_sec("compras_sec_producto"),
-                                        col_prod, col_fam, col_valor, col_cant,
-                                        col_punit, col_um, col_fecha, col_prov,
-                                        d_full=d_full, col_subfam=col_subfam,
-                                        col_docu=col_docu,
-                                        familias=_familias_de("compras_sec_producto"))
+        clave = "compras_sec_producto"
+        with st.container(key="compras_prod_drill_wrap"):
+            _compras_producto_drill(
+                _d_sec(clave), col_prod, col_fam, col_valor, col_cant,
+                col_punit, col_um, col_fecha, col_prov,
+                d_full=_hist_sec(clave), col_subfam=col_subfam,
+                col_docu=col_docu, familias=_familias_de(clave))
 
     def _dib_vs_ano_pasado():
-            # Serie mensual + puente precio/cantidad + tabla de detalle. Es el
-            # ÚNICO drill que recibe `d_full` además de `d`: su ventana de tiempo
-            # es propia (arranca en "Todo") y el año pasado lo calcula
-            # desplazando 12 meses su propio histórico, así que necesita el
-            # histórico entero aunque la franja esté en un rango corto. Ver el
-            # docstring del módulo, decisiones 1 y 2.
-            #
-            # Viaja SIN el filtro de familias, que aplica el navegador: así dice
-            # lo que queda fuera y con cuánto se compara (regla #771). El de
-            # subfamilias sí se aplica acá.
-            _vap_todas = (_ops_src[_ops_src[col_subfam].isin(sub_sel)]
-                          if sub_sel and col_subfam in _ops_src.columns else _ops_src)
-            with st.container(key="compras_vap_drill_wrap"):
-                _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha,
-                                             col_valor, col_fam=col_fam,
-                                             col_subfam=col_subfam, col_um=col_um,
-                                             d_full=d_full, d_todas=_vap_todas,
-                                             familias=familias_de_tarjeta(
-                                                 _ops_src, col_fam, col_valor, fam_sel))
-
-    def _familias_de(sec):
-        # El filtro de la página, con lo que suma cada familia en el rango de la
-        # tarjeta: `_ops_src` es el df sin ese filtro (regla #770).
-        return familias_de_tarjeta(
-            recortar_por_tarjeta(_ops_src, col_fecha, CATEGORIA_SEC[sec]),
-            col_fam, col_valor, fam_sel)
+        clave = "compras_sec_vs_ano_pasado"
+        # El navegador aplica Familia y conserva el contexto de lo excluido.
+        todas = recortar_filtros_vista(_ops_src, col_fam, col_subfam, ((), _selecciones[clave][1]))
+        with st.container(key="compras_vap_drill_wrap"):
+            _compras_vs_ano_pasado_drill(
+                _d_sec(clave), col_prod, col_cant, col_fecha, col_valor,
+                col_fam=col_fam, col_subfam=col_subfam, col_um=col_um,
+                d_full=_hist_sec(clave), d_todas=todas, familias=_familias_de(clave))
 
     def _dib_volatilidad():
-            # Sin borde externo (2026-09-13, a pedido): sus TRES bloques
-            # —ranking, velas, compras de la semana— son tarjetas propias
-            # (`compras_vol_card_*`), como las de Producto. Hasta ese día era
-            # `ajuste_graf_card_izq_vol`, una sola superficie. Regla #415.
-            with st.container(key="compras_vol_drill_wrap"):
-                opciones = None
-                if col_fam and col_fam in _ops_src.columns:
-                    nombres = sorted(_ops_src[col_fam].dropna().astype(str).unique())
-                    opciones = {"todas": [[f, 0] for f in nombres if f.strip()], "elegidas": fam_sel}
-                if opciones is not None and col_subfam and col_subfam in _ops_src.columns:
-                    pares = _ops_src[[col_fam, col_subfam]].dropna().astype(str).drop_duplicates()
-                    opciones["subfamilias"] = {
-                        f: sorted(s for s in grupo[col_subfam] if s.strip())
-                        for f, grupo in pares.groupby(col_fam)
-                    }
-                _compras_volatilidad_drill(_d_sec("compras_sec_volatilidad"),
-                                           col_prod, col_prov, col_punit, col_fecha,
-                                           col_valor, col_cant, col_um, col_moneda,
-                                           d_full=d_full, col_docu=col_docu,
-                                           col_fam=col_fam, col_subfam=col_subfam,
-                                           familias=opciones)
+        clave = "compras_sec_volatilidad"
+        with st.container(key="compras_vol_drill_wrap"):
+            _compras_volatilidad_drill(
+                _d_sec(clave), col_prod, col_prov, col_punit, col_fecha,
+                col_valor, col_cant, col_um, col_moneda,
+                d_full=_hist_sec(clave), col_docu=col_docu, col_fam=col_fam, col_subfam=col_subfam)
 
     def _dib_semanal():
-            # Drill "Semanal": una barra por período + el detalle del
-            # período en foco. Vive en su propio módulo Y en su propio
-            # `@st.fragment` — ver el docstring de `semanal.py`, que
-            # explica por qué el fragment de `seccion_perezosa` no
-            # alcanzaba desde que la tarjeta tiene selector de fecha.
-            #
-            # `col_fam` y `d_full` son de sus dos filtros propios
-            # (2026-09-08): la tarjeta acota por Familia y por Producto
-            # encima de los chips de la franja. `d_full` es sólo para las
-            # OPCIONES del selector de familia — sacarlas del rango las
-            # hace desaparecer al angostar la fecha, y Streamlit borra la
-            # selección en silencio (el bug medido del bloque de chips, más
-            # arriba). Los datos que se grafican siguen saliendo de `d`.
-            # `col_subfam` (2026-09-19) es del filtro de Subfamilia, que se
-            # sumó junto con el de Proveedor (este usa `col_prov`).
-            #
-            # `d_nc` (regla #628): lo que las notas de crédito restaron, con
-            # los mismos chips y el mismo rango que `d`. La tarjeta lo filtra
-            # con sus propios filtros y dice cuánto se restó en lo que
-            # muestra — la diferencia con el Resumen de Ingresos del Almacén.
-            _nc = data.notas_restadas_compras()
-            if _nc is not None and not _nc.empty:
-                if fam_sel and col_fam and col_fam in _nc.columns:
-                    _nc = _nc[_nc[col_fam].astype(str).isin(fam_sel)]
-                if sub_sel and col_subfam and col_subfam in _nc.columns:
-                    _nc = _nc[_nc[col_subfam].astype(str).isin(sub_sel)]
-                _nc = recortar_por_tarjeta(
-                    _nc, col_fecha, CATEGORIA_SEC["compras_sec_semanal"])
-            _compras_semanal_drill(_d_sec("compras_sec_semanal"),
-                                   col_prod, col_fecha, col_cant,
-                                   col_punit, col_prov, col_docu,
-                                   col_valor, col_fam=col_fam,
-                                   d_full=d_full, col_subfam=col_subfam,
-                                   col_igv=col_igv, col_tipo_doc=col_tipo_doc,
-                                   col_moneda=col_moneda, d_nc=_nc, col_um=col_um,
-                                   familias=_familias_de("compras_sec_semanal"))
+        clave = "compras_sec_semanal"
+        notas = recortar_filtros_vista(data.notas_restadas_compras(), col_fam, col_subfam, _selecciones[clave])
+        if notas is not None and not notas.empty:
+            notas = recortar_por_tarjeta(notas, col_fecha, CATEGORIA_SEC[clave])
+        _compras_semanal_drill(
+            _d_sec(clave), col_prod, col_fecha, col_cant, col_punit, col_prov, col_docu,
+            col_valor, col_fam=col_fam, d_full=_hist_sec(clave), col_subfam=col_subfam,
+            col_igv=col_igv, col_tipo_doc=col_tipo_doc, col_moneda=col_moneda,
+            d_nc=notas, col_um=col_um, familias=_familias_de(clave))
 
     def _dib_tabla():
-            # Cierra la página con el detalle: el mismo AgGrid de la vista
-            # Tabla. `d` ya viene filtrado por los chips Familia/Subfamilia.
-            from tablas import renderizar_aggrid_compras as _render_tabla_compras
-            from estilos import TAM_FUENTE
+        from tablas import renderizar_aggrid_compras as _render_tabla_compras
+        from estilos import TAM_FUENTE
 
-            # ── LA ÚNICA VISTA CUYO COSTO CRECE CON LAS FILAS ────────────
-            # Desde que Compras abre en todo el histórico (2026-09-06, al
-            # sacarle el calendario a la franja) ésta es la sección que hay
-            # que poder acotar, y la única que no tenía con qué. Los
-            # gráficos agregan —un top-10 sobre 43.827 filas dibuja las
-            # mismas 10 barras que sobre 1.083, y el groupby cuesta 15 ms—,
-            # pero la tabla MANDA CADA FILA al navegador. Medido contra el
-            # parquet real, con las cinco familias que vienen marcadas:
-            #
-            #     un mes    1.083 filas  ->   0,94 MB
-            #     12 meses 11.324 filas  ->   9,76 MB
-            #     todo     43.827 filas  ->  37,81 MB   (4,8 s de serializar)
-            #
-            # El default sigue siendo "Todo", que es lo que se pidió: la
-            # tabla de detalle muestra el detalle. Lo que agrega el selector
-            # es la salida — y se paga sólo al llegar acá, porque la pila
-            # es perezosa y esta sección no se construye hasta que uno baja
-            # (`seccion_perezosa`, regla #211). Desde el 2026-09-09 ya no es
-            # la última: debajo va «Documentos por proveedor».
-            with st.container(key="tabla_fila_hdr"):
-                _op_tab = periodo.selector("compras_tabla_periodo",
-                                           default="Todo", widget="lista")
-            _d_tab = periodo.recortar(d, col_fecha, _op_tab)
-            _font_px = TAM_FUENTE.get(st.session_state.get("tabla_tam", "Mediano"), 14)
-            _render_tabla_compras(_d_tab, _font_px)
+        with st.container(key="tabla_fila_hdr"):
+            op_tab = periodo.selector("compras_tabla_periodo", default="Todo", widget="lista")
+        d_tab = periodo.recortar(_d_sec("compras_sec_tabla"), col_fecha, op_tab)
+        font_px = TAM_FUENTE.get(st.session_state.get("tabla_tam", "Mediano"), 14)
+        _render_tabla_compras(d_tab, font_px)
 
     def _dib_documentos():
-            # «Detalle de documentos por proveedor». Era la última fila del
-            # drill de Proveedor hasta el 2026-09-09; hoy cierra la página.
-            #
-            # Recibe el `d` de la categoría `sec_proveedor` —la MISMA que el
-            # ranking del que sale— y no uno propio: ver `CATEGORIA_SEC`.
-            # `_d_sec` memoiza por categoría, así que este recorte ya está
-            # hecho y no se paga dos veces.
-            #
-            # Viaja además el histórico sin el filtro de familias: una factura con
-            # líneas en otras familias tiene que poder decirlo, y el precio
-            # habitual mira 90 días atrás (regla #773).
-            with st.container(key="compras_docs_wrap"):
-                _docs_todas = (_ops_src[_ops_src[col_subfam].isin(sub_sel)]
-                               if sub_sel and col_subfam in _ops_src.columns else _ops_src)
-                _docs_seccion(_d_sec("compras_sec_documentos"),
-                              col_prov, col_prod, col_cant, col_valor,
-                              col_punit, col_um, col_fecha, col_docu,
-                              extra=dict(fam=col_fam, igv=col_igv, tipo=col_tipo_doc,
-                                         proc=_resolver(_ops_src, ["Fecha_proceso_doc", "Fecha proceso doc"]),
-                                         nc=_resolver(_ops_src, ["Valor_nc", "Valor nc"])),
-                              d_historia=_docs_todas,
-                              familias=_familias_de("compras_sec_documentos"))
+        clave = "compras_sec_documentos"
+        # El detalle de un comprobante conserva las líneas de otras familias.
+        todas = recortar_filtros_vista(_ops_src, col_fam, col_subfam, ((), _selecciones[clave][1]))
+        with st.container(key="compras_docs_wrap"):
+            _docs_seccion(
+                _d_sec(clave), col_prov, col_prod, col_cant, col_valor,
+                col_punit, col_um, col_fecha, col_docu,
+                extra=dict(fam=col_fam, igv=col_igv, tipo=col_tipo_doc,
+                           proc=_resolver(_ops_src, ["Fecha_proceso_doc", "Fecha proceso doc"]),
+                           nc=_resolver(_ops_src, ["Valor_nc", "Valor nc"])),
+                d_historia=todas, familias=_familias_de(clave))
 
     _DIBUJANTES = {
         "compras_sec_proveedor":     _dib_proveedor,
@@ -958,6 +689,20 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         "compras_sec_tabla":         _dib_tabla,
         "compras_sec_documentos":    _dib_documentos,
     }
+
+    def _dibujar_vista(clave):
+        if not _op_fam:
+            _DIBUJANTES[clave]()
+            return
+        actual = preparar_filtros_vista(clave, _op_fam, _mapa_sub, _FAMILIAS_DE_ENTRADA)
+        if actual != _selecciones[clave]:
+            # El cambio llega al fragmento de una tarjeta. El rail y su
+            # histórico se vuelven a calcular con esa selección en la app.
+            st.rerun(scope="app")
+        slug = clave.removeprefix("compras_sec_")
+        with st.container(key=f"cp_con_filtro_{slug}", gap=None):
+            panel_filtros_vista(clave, _op_fam, _mapa_sub)
+            _DIBUJANTES[clave]()
 
     # El contenedor con la key va AFUERA del fragment a propósito: es el que
     # observan el scrollspy y la precarga, y tiene que sobrevivir a que el
@@ -1015,5 +760,5 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
     for _i, (_clave, _vista) in enumerate(_secciones):
         with st.container(key=_clave):
-            seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
+            seccion_perezosa(_clave, _vista, lambda clave=_clave: _dibujar_vista(clave),
                              activa_de_entrada=(_i == 0))
