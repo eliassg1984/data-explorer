@@ -5,12 +5,44 @@ import unittest
 from unittest.mock import patch
 
 import pandas as pd
+from streamlit.testing.v1 import AppTest
 
 from graficos import compras
 from graficos.compras import _filtros_vista as filtros
 
 
 class FiltrosVistaCompras(unittest.TestCase):
+    def test_casillas_del_panel_y_cascada_son_independientes(self):
+        app = AppTest.from_string("""
+from graficos.compras._filtros_vista import panel_filtros_vista, preparar_filtros_vista
+
+opciones = ["ALIMENTOS", "BEBIDAS"]
+mapa = {"ALIMENTOS": ["CARNES"], "BEBIDAS": ["AGUAS"]}
+for vista, familia in [("volatilidad", "ALIMENTOS"), ("proveedor", "BEBIDAS")]:
+    seccion = "compras_sec_" + vista
+    preparar_filtros_vista(seccion, opciones, mapa, [familia])
+    panel_filtros_vista(seccion, opciones, mapa)
+""").run()
+        self.assertFalse(app.exception)
+
+        def casilla(clave, rotulo):
+            return next(c for c in app.checkbox if c.key.startswith(f"{clave}__") and c.label == rotulo)
+
+        familias = "cp_familias_volatilidad"
+        subfamilias = "cp_subfamilias_volatilidad"
+        casilla(subfamilias, "Carnes").check().run()
+        self.assertEqual(app.session_state[subfamilias], ["CARNES"])
+        casilla(familias, "Alimentos").uncheck().run()
+        self.assertEqual(app.session_state[subfamilias], [])
+        self.assertFalse(any(c.key.startswith(f"{subfamilias}__") for c in app.checkbox))
+
+        casilla(familias, "Bebidas").check().run()
+        self.assertFalse(casilla(subfamilias, "Aguas").value)
+        app.button(key=f"{familias}_todas").click().run()
+        self.assertFalse(app.exception)
+        self.assertFalse(casilla(familias, "Bebidas").value)
+        self.assertTrue(casilla("cp_familias_proveedor", "Bebidas").value)
+
     def test_migra_el_filtro_previo_y_recorta_solo_la_subfamilia_propia(self):
         estado = {"compras_graf_filtro_fam": ["ALIMENTOS"], "compras_graf_filtro_sub": ["CARNES"]}
         opciones = ["ALIMENTOS", "BEBIDAS"]

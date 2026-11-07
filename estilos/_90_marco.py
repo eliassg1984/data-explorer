@@ -731,10 +731,33 @@ CSS = """
         display: none !important;
     }
     [class*="st-key-cp_panel_filtro_"] {
-        width: min(330px, calc(100vw - 64px)) !important;
-        max-height: min(400px, 65vh);
+        width: min(300px, calc(100vw - 64px)) !important;
+        max-height: min(420px, 65vh);
         overflow-y: auto;
         overscroll-behavior: contain;
+    }
+    [class*="st-key-cp_grupo_filtro_"] {
+        border-top: 1px solid var(--line-soft);
+        padding-top: 6px;
+    }
+    [class*="st-key-cp_grupo_filtro_"] [data-testid="stCheckbox"] {
+        min-height: 34px;
+        display: flex;
+        align-items: center;
+    }
+    [class*="st-key-cp_grupo_filtro_"] [data-testid="stCheckbox"] p {
+        font-size: 13px;
+        text-transform: none !important;
+    }
+    [class*="st-key-cp_grupo_filtro_"] [data-testid="stButton"] button {
+        min-height: 24px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--rail-fondo);
+    }
+    [class*="st-key-cp_grupo_filtro_"] [data-testid="stButton"] button p {
+        font-size: 12px;
     }
     @media (max-width: 900px) {
         [class*="st-key-cp_filtro_vista_"] button[data-testid="stPopoverButton"] {

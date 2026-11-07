@@ -2,7 +2,8 @@
 
 import streamlit as st
 
-from graficos.base import poner_seleccion, recortar_seleccion, seleccion_en_panel
+from graficos.base import poner_seleccion, recortar_seleccion
+from ._etiquetas_proveedor import nombre_propio
 
 
 _GLOBALES_ANTERIORES = ("compras_graf_filtro_fam", "compras_graf_filtro_sub")
@@ -46,14 +47,32 @@ def recortar_filtros_vista(df, col_fam, col_sub, seleccion):
     return df
 
 
-def _grupo_filtro(rotulo, limpiar, clave, opciones):
-    with st.container(horizontal=True, horizontal_alignment="distribute",
-                      vertical_alignment="center", gap="small"):
-        st.markdown(f"**{rotulo}**")
-        if st.session_state.get(clave):
-            st.button(limpiar, key=f"{clave}_todas", on_click=poner_seleccion, args=(clave, []))
-    seleccion_en_panel(st.pills, rotulo, clave, opciones,
-                       selection_mode="multi", label_visibility="collapsed")
+def _marcar_casilla(clave, valor, widget):
+    ss = st.session_state
+    elegidas = set(ss.get(clave) or ())
+    if ss[widget]:
+        elegidas.add(valor)
+    else:
+        elegidas.discard(valor)
+    ss[clave] = sorted(elegidas)
+
+
+def _grupo_filtro(rotulo, clave, opciones):
+    ss = st.session_state
+    elegidas = set(ss.get(clave) or ())
+    # Un recorte o «Todas» sube la versión y vuelve a crear las casillas
+    # con su valor correcto, incluso si el popover estaba cerrado.
+    version = ss.get(f"{clave}__v", 0)
+    with st.container(key=f"cp_grupo_filtro_{clave}", gap=None):
+        with st.container(horizontal=True, horizontal_alignment="distribute",
+                          vertical_alignment="center", gap="small"):
+            st.markdown(f"**{rotulo}**")
+            st.button("Todas", key=f"{clave}_todas", disabled=not elegidas,
+                      on_click=poner_seleccion, args=(clave, []))
+        for valor in opciones:
+            widget = f"{clave}__casilla_{version}_{valor}"
+            st.checkbox(nombre_propio(valor) or "Sin nombre", value=valor in elegidas,
+                        key=widget, on_change=_marcar_casilla, args=(clave, valor, widget))
 
 
 def panel_filtros_vista(seccion, opciones, mapa_sub):
@@ -65,7 +84,7 @@ def panel_filtros_vista(seccion, opciones, mapa_sub):
     def resumen(valores):
         if len(valores) > 3:
             return f"{len(valores)} seleccionadas"
-        return ", ".join(valores) or "todas"
+        return ", ".join(nombre_propio(v) for v in valores) or "todas"
 
     ayuda = "Filtros de esta vista" + "".join(
         f"\n\n{rotulo}: {resumen(valores)}" for rotulo, valores in actual.items()
@@ -77,9 +96,9 @@ def panel_filtros_vista(seccion, opciones, mapa_sub):
         with st.popover(icono, key=f"cp_filtro_btn_{slug}", help=ayuda):
             with st.container(key=f"cp_panel_filtro_{slug}", gap="small"):
                 st.caption("Filtros de esta vista")
-                _grupo_filtro("Familia", "Todas las familias", k_fam, opciones)
+                _grupo_filtro("Familia", k_fam, opciones)
                 if disponibles:
-                    _grupo_filtro("Subfamilia", "Todas las subfamilias", k_sub, disponibles)
+                    _grupo_filtro("Subfamilia", k_sub, disponibles)
                 else:
                     st.markdown("**Subfamilia**")
                     st.caption("Elige una familia para ver sus subfamilias." if not actual["Familia"]
