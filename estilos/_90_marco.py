@@ -940,14 +940,35 @@ CSS = """
 
         /* Ruta integrada en todos los reportes: grupo discreto, vista en tinta
            y lavanda al interactuar. Conserva los destinos nativos. */
-        .franja-ruta[data-franja-compacta] { cursor: default; }
+        /* Los niveles comparten ancho; las flechas ocupan su propio espacio. */
+        .barra-ctx[data-barra-compacta] {
+            --franja-nivel-ancho: 120px;
+            gap: 0;
+        }
+        .barra-ctx[data-barra-compacta] .barra-reporte {
+            display: inline-flex; align-items: center; justify-content: center;
+            gap: 10px; width: var(--franja-nivel-ancho); flex: 0 0 var(--franja-nivel-ancho);
+            box-sizing: border-box; padding: 0 7px;
+        }
+        .barra-ctx[data-barra-compacta] .barra-nom {
+            flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+        }
+        .franja-ruta[data-franja-compacta] { cursor: default; gap: 0; margin-left: 0; }
+        .franja-ruta[data-franja-compacta] .fr-sep {
+            width: 24px; flex: 0 0 24px; text-align: center;
+        }
         .franja-ruta[data-franja-compacta] button {
-            display: inline-flex; align-items: center; gap: 7px;
+            display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+            box-sizing: border-box; width: var(--franja-nivel-ancho); flex: 0 0 var(--franja-nivel-ancho);
             height: 30px; padding: 0 7px; border-radius: 7px;
             border: 0; background: transparent;
             color: var(--text-primary); font: inherit; font-size: 13px;
             font-weight: 500; cursor: pointer;
         }
+        .franja-ruta[data-franja-compacta] :is(.fr-grupo, .fr-txt) {
+            min-width: 0; overflow: hidden; text-overflow: ellipsis;
+        }
+        .franja-ruta[data-franja-compacta] :is(i, .barra-ico) { flex-shrink: 0; }
         .franja-ruta[data-franja-compacta] .fr-grupo-boton { font-weight: 400; }
         .franja-ruta[data-franja-compacta] .fr-grupo { color: var(--text-secondary); }
         .franja-ruta[data-franja-nombre] { margin-left: 0; }

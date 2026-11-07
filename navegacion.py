@@ -393,12 +393,18 @@ def _html_barra_contexto(nombre, icono, ruta=None, *, menu_compacto=False):
     Todo con `html.escape`: el nombre es texto, y este bloque va por
     `unsafe_allow_html`."""
     icono = (icono or "").removeprefix(":material/").removesuffix(":")
-    partes = ['<div class="barra-ctx">']
-    if icono:
-        partes.append(f'<span class="barra-ico" aria-hidden="true">{html.escape(icono)}</span>')
     grupo_en_nombre = bool(menu_compacto and ruta and ruta[0] == nombre)
+    compacta = menu_compacto and ruta is not None
+    icono_html = (f'<span class="barra-ico" aria-hidden="true">{html.escape(icono)}</span>'
+                  if icono else "")
+    partes = ['<div class="barra-ctx"' + (' data-barra-compacta' if compacta else '') + '>']
+    if compacta and not grupo_en_nombre:
+        partes.append('<span class="barra-reporte">')
     if not grupo_en_nombre:
-        partes.append(f'<span class="barra-nom">{html.escape(nombre)}</span>')
+        partes.append(icono_html)
+        partes.append(f'<span class="barra-nom" title="{html.escape(nombre)}">{html.escape(nombre)}</span>')
+    if compacta and not grupo_en_nombre:
+        partes.append('</span>')
     # La ruta (regla #817): «› Ajuste ▾ › Diferencias ▾». El grupo sólo si el área
     # tiene varios reportes; si coincide con su nombre, ese nombre abre el menú.
     # El temporizador de `graficos/base.py::_render_rail` los reescribe al bajar.
@@ -411,7 +417,8 @@ def _html_barra_contexto(nombre, icono, ruta=None, *, menu_compacto=False):
                 partes.append('<span class="fr-sep" aria-hidden="true">›</span>')
             partes.append(
                 '<button type="button" class="fr-grupo-boton" data-franja-abrir="secciones" '
-                'aria-haspopup="true" aria-expanded="false"><span class="fr-grupo">'
+                'aria-haspopup="true" aria-expanded="false">'
+                + (icono_html if grupo_en_nombre else '') + '<span class="fr-grupo">'
                 f'{grupo}</span><i aria-hidden="true">▾</i></button>')
         partes.append(
             '<span class="fr-sep" aria-hidden="true">›</span>'
