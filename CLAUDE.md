@@ -2489,6 +2489,13 @@ devolverlas, `True` y nada más. Regla #507.
 
 ## Auditar el layout antes de proponer píxeles
 
+El modo Diseño (`?debug=1&diseno=1`) incluye deshacer/rehacer, medidas,
+distribución, grupos, estilos compartidos y variantes General/Escritorio/
+Tablet/Móvil. La vista previa por ancho es estática, sin ejecutar otra app.
+«Todos los cambios» entrega CSS, textos, insertados y destinos en Python;
+no escribe en el proyecto ni guarda borradores. Antes de cambiar el editor,
+correr `python test_diseno_visual.py` (Chromium sin red). Regla #828.
+
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del
 editor y usar `herramientas/auditar_layout.js`:

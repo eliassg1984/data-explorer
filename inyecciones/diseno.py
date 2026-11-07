@@ -134,6 +134,16 @@ tamaño fijo por dentro (arquitectura.md #175). `contenidoRedimensionable()`
 tamaño nuevo hacia adentro: `Plotly.relayout()` para gráficos, y forzar
 iframe + `#gridContainer` (mismo origen, se entra sin CORS) para AgGrid,
 que después se reacomoda solo.
+
+La edición ampliada agrega deshacer/rehacer (60 acciones), medidas numéricas,
+filas/columnas/rejillas, alineación de grupos, guías y movimiento con flechas.
+General, Escritorio, Tablet y Móvil son variantes independientes en memoria;
+cada una parte de General la primera vez. La vista previa copia la pantalla
+en un iframe sin scripts, conservando CSS y shadow roots, para revisar sus
+anchos. Los estilos compartidos vinculan elementos y los componentes de
+prueba incluyen botón, tarjeta, indicador y filtro. «Todos los cambios»
+entrega estilos, textos, insertados y destinos en Python; no recupera un
+borrador ni escribe en el proyecto. Regla #828, test_diseno_visual.py.
 """
 
 import json
@@ -181,6 +191,5 @@ _PALETA = [
 
 
 def inject_diseno_visual():
-    """Inyecta el modo de diseno visual. El JS vive en _diseno_js.py
-    (794 lineas); aca solo queda la sustitucion de la paleta."""
+    """Inyecta el editor de _diseno_js.py con la paleta del proyecto."""
     inyectar_html(JS.replace("__PALETA__", json.dumps(_PALETA)), height=0)

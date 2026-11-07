@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-827 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+828 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (274)
+**CSS y estilos** (275)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -341,6 +341,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#822** — Refrescar al pie del rail, con la hora del dato en su nombre al cursor
 - **#825** — Cada hoja termina a 8 px del borde de abajo, como a los costados
 - **#826** — El margen de abajo de cada hoja es de 24 px
+- **#828** — La edición visual conserva originales de los destinos reales y reaplica todas las propuestas
 
 **Layout y alturas** (113)
 
@@ -1177,7 +1178,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 - **#820** — Adentro de una pieza propia, el modo diseño baja al nodo de verdad
 
-**Decisiones de diseño y UX** (275)
+**Decisiones de diseño y UX** (276)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1454,6 +1455,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#823** — La franja de Ajuste no tiene «Filtros»: Evolución y la Tabla dinámica traen el suyo
 - **#824** — La fecha de Diferencias sube a la franja mientras la vista está en pantalla
 - **#827** — «12 cierres» se fue de Diferencias a Evolución: el grano «Cierre» de la Serie
+- **#828** — La edición visual conserva originales de los destinos reales y reaplica todas las propuestas
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59003,6 +59005,22 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    `test_ajuste_evolucion_pieza.py`: cada cierre contra pandas con las mismas filas que
    Diferencias, y la pieza en Chromium (parciales, operación, Tabla, matriz, celular).
 
+828. **La edición visual conserva originales de los destinos reales y reaplica todas las propuestas.**
+   «Ver original» restauraba sólo el wrapper, aunque el color y la tipografía se habían
+   escrito en sus botones y etiquetas. Además, al recrear un elemento ya no seleccionado,
+   sus estilos quedaban sin reaplicar, y el CSS exportado perdía el `!important` del preview.
+   `_diseno_js.py` conserva los originales de cada destino aparte del estado serializable,
+   restaura botones/textos/tamaños y recorre todos los elementos editados por su identidad.
+   La exportación mantiene prioridades y distingue instancias que comparten clase.
+   Deshacer/rehacer usa hasta 60 fotos de datos en memoria: restaura los originales y
+   reaplica la foto sin mover nodos de React. Las variantes General/Escritorio/Tablet/Móvil
+   son independientes, parten de General al abrirlas por primera vez y se exportan con sus
+   condiciones de ancho. La vista previa copia CSS y shadow roots en un iframe sin scripts;
+   sirve para inspección visual, no para probar navegación. La entrega completa identifica
+   estilos globales y de piezas, tablas/tamaños en Python, textos e insertados. A pedido,
+   no hay almacenamiento ni recuperación de borradores. `test_diseno_visual.py` verifica
+   el editor, el inspector real y el reemplazo del iframe de montaje en Chromium sin red.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59015,7 +59033,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#827**; la próxima toma el número siguiente.
+> última regla es la **#828**; la próxima toma el número siguiente.
 
 >
 

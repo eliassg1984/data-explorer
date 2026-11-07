@@ -1,6 +1,6 @@
 """inyecciones._diseno_js - el JS del modo de diseno visual.
 
-Blob de 794 lineas que estaba embebido como un unico inyectar_html
+Script que estaba embebido como un unico inyectar_html
 DENTRO de inject_diseno_visual. Se saco el 2026-08-08, mismo tratamiento
 que _inspector_js.py.
 
@@ -14,6 +14,9 @@ arquitectura.md regla #56.
 Ver el docstring de diseno.py para que hace el modo diseno, como se
 activa (?debug=1&diseno=1) y su acoplamiento de solo-lectura con el pin
 de inspector.py.
+
+La edicion ampliada incluye historial y variantes solo en memoria, medidas,
+distribucion, estilos compartidos y entrega completa. No guarda borradores.
 """
 
 JS = """
@@ -38,7 +41,7 @@ JS = """
         // disena. Contenedores en esta lista quedan exceptuados (son la UI
         // del propio diseno/inspector/barra, no la app).
         function esUIPropiaDeDiseno(nodo) {
-            var ids = ['el-diseno-overlay', 'el-diseno-panel', 'herr-barra',
+            var ids = ['el-diseno-overlay', 'el-diseno-panel', 'el-diseno-entrega', 'el-diseno-preview', 'herr-barra',
                        'herr-panel', 'el-inspector-tip', 'el-inspector-badge'];
             for (var i = 0; i < ids.length; i++) {
                 var c = doc.getElementById(ids[i]);
@@ -75,6 +78,15 @@ JS = """
         if (!win.__disenoState) {
             win.__disenoState = { porKey: {}, panelColapsado: false };
         }
+        // Solo memoria de esta pestana: no se guardan borradores.
+        if (!win.__disenoRuntime) {
+            win.__disenoRuntime = { originales: new Map(), porRegistro: {},
+                graficos: new Map(), filas: new Map(), secciones: {},
+                historial: { atras: [], adelante: [], inicio: null }, restaurando: false };
+        }
+        if (!win.__disenoState.perfiles) win.__disenoState.perfiles = {};
+        if (!win.__disenoState.perfil) win.__disenoState.perfil = 'general';
+        if (!win.__disenoState.estilos) win.__disenoState.estilos = {};
         if (win.__disenoState.panelColapsado === undefined) {
             win.__disenoState.panelColapsado = false;
         }
@@ -292,7 +304,8 @@ JS = """
             // contra un mock con la misma key — asi que este fallback solo
             // se alcanza cuando NINGUN nodo sin data-diseno-mock tiene esa
             // key, o sea nunca para un widget real.
-            return doc.querySelector('.st-key-' + key);
+            var mock = win.__disenoState.mocks.find(function(m) { return m.key === key; });
+            return doc.querySelector('.st-key-' + key) || (mock ? buscarMock(mock) : null);
         }
 
         // Hijos del widget pineado que tienen clase propia pero NO key: los
@@ -434,6 +447,9 @@ JS = """
             // en el momento del evento, nunca confia en una referencia
             // capturada cuando se construyeron los controles.
             var r = elementoPineado();
+            if (r && r.el) registroPara(r.id).destino = {
+                key: r.key, sub: r.sub, subIdx: r.subIdx || 0, subTexto: r.subTexto || null
+            };
             return (r && r.el) ? { el: r.el, key: r.key, sub: r.sub, subIdx: r.subIdx || 0, id: r.id,
                                    subTexto: r.subTexto,
                                    registro: registroPara(r.id) } : null;
@@ -462,7 +478,10 @@ JS = """
             var ids = win.__disenoState.grupo;
             for (var i = 0; i < ids.length; i++) {
                 var el = elPorId(ids[i]);
-                if (el) out.push({ id: ids[i], el: el, registro: registroPara(ids[i]) });
+                var reg = registroPara(ids[i]);
+                var ctx = contextoRegistro(ids[i], reg);
+                if (el && ctx) out.push({ id: ids[i], key: ctx.key, sub: ctx.sub,
+                    subIdx: ctx.subIdx, el: el, registro: reg });
             }
             return out;
         }
@@ -698,7 +717,8 @@ JS = """
         }
 
         var TIPOS_MOCK = [['texto', 'Texto'], ['linea', 'Línea'],
-                          ['barra', 'Barra'], ['espacio', 'Espacio']];
+                          ['barra', 'Barra'], ['espacio', 'Espacio'], ['boton', 'Botón'],
+                          ['tarjeta', 'Tarjeta'], ['indicador', 'Indicador'], ['filtro', 'Filtro']];
 
         // Linea/Barra/Espacio son <div> vacios que dependen de `width:auto`
         // para ocupar la fila — funciona en flujo normal, pero como HIJO de
@@ -759,6 +779,21 @@ JS = """
                 el.style.cssText = ANCHO_MOCK + ENCIMA_MOCK + 'height:1px;margin:8px 0;opacity:.35;background:' + colorPaleta('Gris texto');
             } else if (m.tipo === 'barra') {
                 el.style.cssText = ANCHO_MOCK + ENCIMA_MOCK + 'height:34px;margin:6px 0;border-radius:8px;background:' + colorPaleta('Acento');
+            } else if (['boton', 'tarjeta', 'indicador', 'filtro'].indexOf(m.tipo) >= 0) {
+                el.style.cssText = ENCIMA_MOCK + 'box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid '
+                    + colorPaleta('Gris borde') + ';background:' + colorPaleta('Blanco') + ';color:' + colorPaleta('Texto principal');
+                var rotulo = doc.createElement(m.tipo === 'boton' ? 'button' : 'div');
+                rotulo.className = 'dv-mock-titulo';
+                rotulo.textContent = m.tipo === 'boton' ? 'Acción de ejemplo' : m.tipo === 'filtro' ? 'Seleccionar opción ▾' : 'Título de ejemplo';
+                rotulo.style.cssText = 'font:600 14px/1.5 sans-serif';
+                if (m.tipo === 'boton') { rotulo.type = 'button'; rotulo.style.cssText += ';padding:8px 16px;border:0;border-radius:8px;color:white;background:' + colorPaleta('Acento'); }
+                el.appendChild(rotulo);
+                if (m.tipo === 'tarjeta' || m.tipo === 'indicador') {
+                    var valor = doc.createElement('div'); valor.className = 'dv-mock-valor';
+                    valor.textContent = m.tipo === 'indicador' ? '1,234' : 'Contenido de la tarjeta';
+                    valor.style.cssText = 'margin-top:8px;font:' + (m.tipo === 'indicador' ? '600 28px' : '400 13px') + '/1.4 sans-serif';
+                    el.appendChild(valor);
+                }
             } else {
                 // Aire: no pinta nada, pero hay que PODER verlo y agarrarlo
                 // mientras se disena -> outline, que no ocupa layout (un
@@ -1314,7 +1349,8 @@ JS = """
         }
 
         function panelEspera() {
-            panel.dataset.builtForKey = '';
+            if (panel.dataset.builtForKey === '__espera') return;
+            panel.dataset.builtForKey = '__espera';
             panel.style.cssText = PANEL_CSS_EXPANDIDO;
             panel.style.display = 'block';
             panel.onclick = null;
@@ -1330,7 +1366,8 @@ JS = """
         }
 
         function panelPerdido(key) {
-            panel.dataset.builtForKey = '';
+            if (panel.dataset.builtForKey === '__perdido:' + key) return;
+            panel.dataset.builtForKey = '__perdido:' + key;
             panel.style.cssText = PANEL_CSS_EXPANDIDO;
             panel.style.display = 'block';
             panel.onclick = null;
@@ -1443,6 +1480,7 @@ JS = """
 
         // ---- aplicar/retirar cambios sobre el elemento real ----
         function establecerCambio(elemento, registro, prop, valor) {
+            recordarOriginales(elemento, registro);
             if (valor === null) {
                 delete registro.cambios[prop];
                 elemento.style.removeProperty(prop);
@@ -1656,6 +1694,10 @@ JS = """
         // destinosDeEstilo() redirige el estilo — ocultar una tarjeta con
         // pills adentro escondia las pills y dejaba la tarjeta vacia.
         var PROPS_GEOMETRIA = { width: 1, height: 1, flex: 1, 'max-width': 1, 'max-height': 1, display: 1 };
+        ['flex-direction', 'flex-wrap', 'grid-template-columns', 'gap', 'row-gap', 'column-gap',
+         'align-items', 'justify-content', 'order', 'margin', 'margin-top', 'margin-left', 'transform'].forEach(function(p) {
+            PROPS_GEOMETRIA[p] = 1;
+        });
 
         // Props de TEXTO: ademas de destinosDeEstilo(), tambien van al <p>
         // de adentro si existe (ver extenderATexto). border/padding/
@@ -1745,13 +1787,14 @@ JS = """
         }
 
         function establecerCambioEstilo(elemento, registro, prop, valor) {
+            recordarOriginales(elemento, registro);
             var destinos = destinosDeEstilo(elemento);
             if (PROPS_TEXTO[prop]) destinos = extenderATexto(destinos);
             registro.transicionNeutralizada = true;
             destinos.forEach(neutralizarTransicion);
             if (valor === null) {
                 delete registro.cambios[prop];
-                destinos.forEach(function(d) { d.style.removeProperty(prop); });
+                destinos.forEach(function(d) { restaurarPropiedad(d, prop); });
             } else {
                 registro.cambios[prop] = valor;
                 destinos.forEach(function(d) { d.style.setProperty(prop, valor, 'important'); });
@@ -1759,6 +1802,7 @@ JS = """
         }
 
         function aplicarTransform(elemento, registro) {
+            recordarOriginales(elemento, registro);
             var t = registro.transformState;
             if (t.translateX || t.translateY || t.rotateDeg) {
                 // `transform` no aplica a una caja INLINE (un <span> suelto):
@@ -1774,7 +1818,7 @@ JS = """
                     'translate(' + t.translateX + 'px,' + t.translateY + 'px) rotate(' + t.rotateDeg + 'deg)',
                     'important');
             } else {
-                elemento.style.removeProperty('transform');
+                restaurarPropiedad(elemento, 'transform');
                 if (registro.transformInline) {
                     elemento.style.removeProperty('display');
                     registro.transformInline = false;
@@ -1815,19 +1859,27 @@ JS = """
             if (!res) return;
             if (res.tipo === 'plotly') {
                 if (!win.Plotly) return;   // aun no cargo el bundle de Plotly
+                var originales = win.__disenoRuntime.graficos;
+                if (!originales.has(res.gd)) originales.set(res.gd, {
+                    width: res.gd.layout && res.gd.layout.width,
+                    height: res.gd.layout && res.gd.layout.height
+                });
                 var layout = {};
-                if (anchoPx) layout.width = anchoPx;
-                if (altoPx) layout.height = altoPx;
+                if (anchoPx && (!res.gd.layout || res.gd.layout.width !== anchoPx)) layout.width = anchoPx;
+                if (altoPx && (!res.gd.layout || res.gd.layout.height !== altoPx)) layout.height = altoPx;
+                if (!Object.keys(layout).length) return;
                 try { win.Plotly.relayout(res.gd, layout); } catch (err) {}
                 return;
             }
             // aggrid
+            recordarNodo(res.iframe);
             if (anchoPx) res.iframe.style.setProperty('width', anchoPx + 'px', 'important');
             if (altoPx) res.iframe.style.setProperty('height', altoPx + 'px', 'important');
             try {
                 var doc3 = res.iframe.contentDocument;
                 var gridContainer = doc3 && doc3.getElementById('gridContainer');
                 if (gridContainer) {
+                    recordarNodo(gridContainer);
                     if (anchoPx) gridContainer.style.setProperty('width', anchoPx + 'px', 'important');
                     if (altoPx) gridContainer.style.setProperty('height', altoPx + 'px', 'important');
                 }
@@ -2534,6 +2586,9 @@ JS = """
             var api = apiDeAgGrid(gdoc || docDeAgGridDeKey(key));
             if (!api) return;
             try {
+                if (!win.__disenoRuntime.filas.has(api)) {
+                    win.__disenoRuntime.filas.set(api, api.getGridOption('rowHeight'));
+                }
                 if (api.getGridOption('rowHeight') === t.filaAlto) return;   // idempotente
                 api.setGridOption('rowHeight', t.filaAlto);
                 api.resetRowHeights();
@@ -2572,6 +2627,20 @@ JS = """
         function reaplicarTablas() {
             var ts = win.__disenoState.tablas;
             for (var k in ts) {
+                var original = Object.keys(win.__disenoState.porKey).some(function(id) {
+                    var r = win.__disenoState.porKey[id];
+                    return r.verOriginalActivo && keyDeGrid(r.destino ? r.destino.key : id) === k;
+                });
+                if (original) {
+                    var gd = docDeAgGridDeKey(k), hoja = gd && gd.getElementById(ID_STYLE_TABLA);
+                    if (hoja) hoja.remove();
+                    var api = gd && apiDeAgGrid(gd);
+                    if (api && win.__disenoRuntime.filas.has(api)) {
+                        api.setGridOption('rowHeight', win.__disenoRuntime.filas.get(api));
+                        api.resetRowHeights();
+                    }
+                    continue;
+                }
                 if (hayCambiosDeTabla(ts[k]) || ts[k].filaAlto) aplicarEstiloTabla(k);
             }
         }
@@ -2605,12 +2674,13 @@ JS = """
         }
 
         function aplicarEstado(elemento, registro) {
+            recordarOriginales(elemento, registro);
             // snapshot para "ver original", una sola vez (primer touch de la key)
             if (registro.cssTextOriginal === null) {
                 registro.cssTextOriginal = elemento.style.cssText || '';
             }
             if (registro.verOriginalActivo) {
-                elemento.style.cssText = registro.cssTextOriginal;
+                restaurarRegistro(elemento, registro);
                 restaurarTexto(elemento, registro);
                 return;
             }
@@ -2717,7 +2787,7 @@ JS = """
             doc.body.style.userSelect = 'none';
 
             function onMove(ev) {
-                var dx = ev.clientX - startX, dy = ev.clientY - startY;
+                var dx = ajustarPaso(ev.clientX - startX), dy = ajustarPaso(ev.clientY - startY);
                 var vivos = grupoMiembros();
                 for (var i = 0; i < vivos.length; i++) {
                     for (var j = 0; j < inicio.length; j++) {
@@ -2816,7 +2886,7 @@ JS = """
             function onMove(ev) {
                 var vivo = elementoActivo();
                 if (!vivo) return;
-                var dx = ev.clientX - startX, dy = ev.clientY - startY;
+                var dx = ajustarPaso(ev.clientX - startX), dy = ajustarPaso(ev.clientY - startY);
                 if (modo === 'move') {
                     vivo.registro.transformState.translateX = Math.round(startTX + dx);
                     vivo.registro.transformState.translateY = Math.round(startTY + dy);
@@ -3034,6 +3104,7 @@ JS = """
             var div = doc.createElement('div');
             div.style.cssText = 'font-size:10px;letter-spacing:.04em;color:#6f6f7a;text-transform:uppercase;margin:16px 0 4px;padding-top:10px;border-top:1px solid #2a2a35';
             div.textContent = titulo;
+            div.dataset.disenoSeccion = titulo;
             return div;
         }
 
@@ -3183,7 +3254,10 @@ JS = """
             // `st-key-*` por encima, y estilos/ no entra ahi.
             var dentroPieza = !!sub && enPieza(elemento);
             var ancla = dentroPieza ? '.' + sub
-                : 'div[class*="st-key-' + key + '"]' + (sub ? ' .' + sub : '');
+                : 'div' + selClase('st-key-' + key) + (sub ? ' ' + selClase(sub) : '');
+            if (sub && qsaProfundo(porKeyReal(key) || elemento, selClase(sub)).length > 1) {
+                ancla = selectorDeCapa(elemento);
+            }
             var destinos = destinosDeEstilo(elemento);
             var redirigido = destinos[0] !== elemento;
             // Mismo criterio que destinosDeEstilo: pills de un stButtonGroup
@@ -3209,6 +3283,9 @@ JS = """
                 else if (PROPS_TEXTO[prop]) { estTexto[prop] = registro.cambios[prop]; }
                 else { estBoton[prop] = registro.cambios[prop]; }
             });
+            if (redirigido && (registro.cambios.padding !== undefined || registro.cambios['font-size'] !== undefined)) {
+                estBoton.width = 'auto'; estBoton.height = 'auto';
+            }
             var t = registro.transformState;
             if (t.translateX || t.translateY || t.rotateDeg) {
                 // El mover/rotar siempre va sobre el elemento mismo (igual
@@ -3233,7 +3310,7 @@ JS = """
             var bloques = [];
             Object.keys(grupos).forEach(function(sel) {
                 var props = grupos[sel];
-                var lineas = Object.keys(props).map(function(p) { return '    ' + p + ': ' + props[p] + ';'; });
+                var lineas = Object.keys(props).map(function(p) { return '    ' + p + ': ' + props[p] + ' !important;'; });
                 bloques.push(sel + ' {\\n' + lineas.join('\\n') + '\\n}');
             });
             var bloqueCapas = construirBloqueCapas(elemento, registro, ancla);
@@ -3243,7 +3320,9 @@ JS = """
             // como bloque aparte y se pega en otro archivo. Ver
             // construirBloqueTabla.
             var notaFila = construirBloqueTabla(key);
-            if (!bloques.length) return notaFila || null;
+            var notaTexto = registro.texto && registro.texto.actual !== null
+                ? '/* Texto propuesto en el codigo de ' + key + ': ' + textoSeguroComentario(JSON.stringify(registro.texto.actual)) + ' */' : '';
+            if (!bloques.length) return [notaFila, notaTexto].filter(Boolean).join('\\n') || null;
 
             // Las notas se emiten solo si esa redireccion LE PASO a algo que
             // se esta copiando: `redirigido`/`hayTextoPropio` describen al
@@ -3269,11 +3348,11 @@ JS = """
                 var conLaClase = qsaProfundo(porKeyReal(key) || elemento, selClase(sub)).length;
                 if (conLaClase > 1) {
                     encabezado += '\\n/* La clase .' + sub + ' la llevan ' + conLaClase
-                        + ' elementos: este bloque los toca a TODOS, no solo al que se probo. */';
+                        + ' elementos; se usa la ruta del elemento seleccionado. */';
                 }
             }
             return encabezado + '\\n' + bloques.join('\\n\\n') + pie
-                   + (notaFila ? '\\n\\n' + notaFila : '');
+                   + (notaFila ? '\\n\\n' + notaFila : '') + (notaTexto ? '\\n' + notaTexto : '');
         }
 
         // La union se copia SIEMPRE de a dos bloques: pegar uno solo deja
@@ -3331,12 +3410,9 @@ JS = """
         // `res` es el objeto de elementoPineado() entero (key + sub + el),
         // no la key suelta: el arbol necesita saber si el actual es el
         // contenedor o un hijo suyo, y "Copiar CSS" necesita el sub.
-        // Panel del GRUPO. Deliberadamente corto: mover en conjunto, ver
-        // quien esta adentro y sacar el CSS. Los controles de estilo siguen
-        // siendo de a uno — aplicar "color de fondo" a N elementos que
-        // arrancan de valores distintos no tiene un valor inicial que
-        // mostrar en el control, y un slider que miente es peor que no
-        // estar. Ver regla #259.
+        // Panel del grupo: los valores diferentes no se muestran como si
+        // fueran uno solo. La edicion ampliada ofrece acciones de alineacion
+        // y colores/estilos compartidos que se aplican en una transaccion.
         function construirPanelGrupo(miembros) {
             panel.style.cssText = PANEL_CSS_EXPANDIDO;
             panel.style.display = 'block';
@@ -3363,7 +3439,7 @@ JS = """
 
             var ayuda = doc.createElement('div');
             ayuda.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#e4e4e8;background:#1c1c24;border:1px dashed #6c5ce7;border-radius:4px;padding:6px 7px;margin-bottom:10px';
-            ayuda.textContent = 'Arrastrá la perilla + para moverlos juntos. El contorno es la caja que los envuelve. Para estilos, soltá la selección y editá de a uno.';
+            ayuda.textContent = 'Mueve la selección con + o con las flechas. Puedes alinear, distribuir y aplicar colores o estilos a todo el grupo.';
             panel.appendChild(ayuda);
 
             var lista = doc.createElement('div');
@@ -3419,7 +3495,9 @@ JS = """
                     var capaCSS = construirBloqueCapas(m.el, m.registro, selectorDeCapa(m.el));
                     if (capaCSS) partes.push(capaCSS);
                     if (!props.length) return;
-                    partes.push('.st-key-' + m.id + ' {\\n' + props.join('\\n') + '\\n}');
+                var cssMiembro = construirBloqueCSS(m.key, m.el, m.registro,
+                    m.sub || '', m.registro.destino && m.registro.destino.subTexto);
+                if (cssMiembro) partes.push(cssMiembro);
                 });
                 if (!partes.length) {
                     estadoCSS.textContent = 'nada que copiar';
@@ -3732,6 +3810,7 @@ JS = """
                 filaTxt.style.cssText = 'display:flex;gap:5px;align-items:center';
                 var inpTxt = doc.createElement('input');
                 inpTxt.type = 'text';
+                inpTxt.setAttribute('aria-label', 'Texto de vista previa');
                 inpTxt.value = (registro.texto && registro.texto.actual !== null
                                 && registro.texto.actual !== undefined)
                     ? registro.texto.actual : (elemento.textContent || '');
@@ -4814,6 +4893,11 @@ JS = """
             if (!panel.__tamVal) return;
             var r = elemento.getBoundingClientRect();
             panel.__tamVal.textContent = Math.round(r.width) + ' x ' + Math.round(r.height) + ' px';
+            var medidas = { width: r.width, height: r.height,
+                x: registro.transformState.translateX, y: registro.transformState.translateY };
+            panel.querySelectorAll('[data-medida]').forEach(function(inp) {
+                if (doc.activeElement !== inp) inp.value = Math.round(medidas[inp.dataset.medida]);
+            });
             // El alto PEDIDO y el alto REAL pueden no coincidir, y el
             // culpable no se ve: el padding (y el contenido) son un PISO
             // que ningun `height` mas chico atraviesa. Es la mitad del
@@ -4858,6 +4942,694 @@ JS = """
             }
         }
 
+        // Edicion de sesion. Las fotos del historial son datos, nunca nodos
+        // de React. Los originales se guardan aparte y se vuelven a resolver
+        // por destino si Streamlit recrea una rama.
+        var CAMPOS_VISTA = ['porKey', 'tablas', 'mocks', 'uniones'];
+        var PERFILES = {
+            general: { nombre: 'General', media: '', ancho: 1280 },
+            escritorio: { nombre: 'Escritorio', media: '(min-width: 901px)', ancho: 1280 },
+            tablet: { nombre: 'Tablet', media: '(min-width: 601px) and (max-width: 900px)', ancho: 768 },
+            movil: { nombre: 'Móvil', media: '(max-width: 600px)', ancho: 390 }
+        };
+        var PROPS_COMPARTIDAS = ['color', 'background-color', 'font-family', 'font-size',
+            'font-weight', 'text-align', 'text-decoration', 'letter-spacing', 'border',
+            'border-radius', 'padding', 'box-shadow'];
+
+        function clonarDato(dato) { return JSON.parse(JSON.stringify(dato)); }
+
+        function recordarNodo(nodo) {
+            if (!nodo || !nodo.style) return null;
+            var mapa = win.__disenoRuntime.originales;
+            if (!mapa.has(nodo)) {
+                var cs = nodo.ownerDocument.defaultView.getComputedStyle(nodo), computado = {};
+                for (var i = 0; i < cs.length; i++) computado[cs[i]] = cs.getPropertyValue(cs[i]);
+                mapa.set(nodo, { css: nodo.style.cssText,
+                    texto: nodo.children.length ? null : nodo.textContent, computado: computado });
+            }
+            return mapa.get(nodo);
+        }
+
+        function recordarOriginales(elemento, registro) {
+            var grupos = win.__disenoRuntime.porRegistro;
+            var nodos = grupos[registro.key] || (grupos[registro.key] = new Set());
+            var destinos = [elemento];
+            if (!elemento.ownerSVGElement && elemento.ownerDocument === doc) {
+                destinos = destinos.concat(extenderATexto(destinosDeEstilo(elemento)));
+            }
+            destinos.forEach(function(n) { recordarNodo(n); nodos.add(n); });
+            if (registro.cssTextOriginal === null) registro.cssTextOriginal = recordarNodo(elemento).css;
+        }
+
+        function restaurarNodo(nodo) {
+            var original = win.__disenoRuntime.originales.get(nodo);
+            if (!original) return;
+            nodo.style.cssText = original.css;
+            if (original.texto !== null && !nodo.children.length) nodo.textContent = original.texto;
+        }
+
+        function restaurarPropiedad(nodo, prop) {
+            var original = win.__disenoRuntime.originales.get(nodo);
+            if (!original) return;
+            var caja = doc.createElement('div');
+            caja.style.cssText = original.css;
+            var valor = caja.style.getPropertyValue(prop);
+            if (valor) nodo.style.setProperty(prop, valor, caja.style.getPropertyPriority(prop));
+            else nodo.style.removeProperty(prop);
+        }
+
+        function restaurarRegistro(elemento, registro) {
+            var nodos = win.__disenoRuntime.porRegistro[registro.key];
+            if (nodos) nodos.forEach(restaurarNodo);
+            else restaurarNodo(elemento);
+            var contenido = contenidoRedimensionable(elemento);
+            if (contenido && contenido.tipo === 'plotly' && win.Plotly) {
+                var original = win.__disenoRuntime.graficos.get(contenido.gd);
+                if (original) win.Plotly.relayout(contenido.gd, original);
+            }
+            if (contenido && contenido.tipo === 'aggrid') {
+                restaurarNodo(contenido.iframe);
+                try { restaurarNodo(contenido.iframe.contentDocument.getElementById('gridContainer')); } catch (e) {}
+            }
+        }
+
+        function contextoRegistro(id, registro) {
+            var d = registro.destino;
+            if (!d) {
+                var sep = id.indexOf(' .');
+                d = { key: sep < 0 ? id : id.slice(0, sep), sub: '', subIdx: 0 };
+                if (sep >= 0) {
+                    d.sub = id.slice(sep + 2).split(' [')[0];
+                    var parte = id.indexOf(' [', sep);
+                    if (parte >= 0) d.subIdx = (parseInt(id.slice(parte + 2), 10) || 1) - 1;
+                }
+            }
+            var base = porKeyReal(d.key);
+            var el = d.subTexto ? resolverNodoTexto(d.key, d.subTexto)
+                : d.sub ? resolverSubClase(base, d.sub, d.subIdx) : base;
+            return { id: id, key: d.key, sub: d.sub || '', subIdx: d.subIdx || 0,
+                     subTexto: d.subTexto || null, el: el, registro: registro };
+        }
+
+        function reaplicarEdicion() {
+            var estado = win.__disenoState;
+            Object.keys(estado.porKey).sort(function(a, b) { return a.length - b.length; }).forEach(function(id) {
+                var reg = estado.porKey[id], ctx = contextoRegistro(id, reg);
+                if (!ctx.el) return;
+                var compartido = reg.estiloCompartido && estado.estilos[reg.estiloCompartido];
+                if (compartido && !reg.verOriginalActivo) {
+                    var efectivo = Object.assign({}, reg, { cambios: Object.assign({}, compartido, reg.cambios) });
+                    aplicarEstado(ctx.el, efectivo);
+                } else aplicarEstado(ctx.el, reg);
+            });
+        }
+
+        function vistaActual() {
+            var foto = {};
+            CAMPOS_VISTA.forEach(function(k) { foto[k] = clonarDato(win.__disenoState[k]); });
+            return foto;
+        }
+
+        function fotoEdicion() {
+            var estado = win.__disenoState;
+            return JSON.stringify({ vista: vistaActual(), perfiles: estado.perfiles,
+                perfil: estado.perfil, estilos: estado.estilos, mockN: estado.mockN });
+        }
+
+        function iniciarAccion() {
+            var rt = win.__disenoRuntime;
+            if (!rt.restaurando && rt.historial.inicio === null) rt.historial.inicio = fotoEdicion();
+        }
+
+        function terminarAccion() {
+            var h = win.__disenoRuntime.historial;
+            if (h.inicio === null) return;
+            var antes = h.inicio;
+            h.inicio = null;
+            if (antes !== fotoEdicion()) {
+                h.atras.push(antes);
+                if (h.atras.length > 60) h.atras.shift();
+                h.adelante = [];
+            }
+            actualizarHistorial();
+        }
+
+        function accionEdicion(fn) {
+            iniciarAccion();
+            fn();
+            terminarAccion();
+            panel.dataset.builtForKey = '';
+            sync();
+        }
+
+        function limpiarPreview() {
+            var rt = win.__disenoRuntime;
+            rt.originales.forEach(function(o, nodo) { restaurarNodo(nodo); });
+            rt.graficos.forEach(function(o, nodo) {
+                if (nodo.isConnected && win.Plotly) win.Plotly.relayout(nodo, o);
+            });
+            rt.filas.forEach(function(alto, api) {
+                try { api.setGridOption('rowHeight', alto); api.resetRowHeights(); } catch (e) {}
+            });
+            win.__disenoState.mocks.forEach(function(m) { var n = buscarMock(m); if (n) n.remove(); });
+            Object.keys(win.__disenoState.tablas).forEach(function(k) {
+                var gd = docDeAgGridDeKey(k), st = gd && gd.getElementById(ID_STYLE_TABLA);
+                if (st) st.remove();
+            });
+        }
+
+        function cargarVista(vista) {
+            CAMPOS_VISTA.forEach(function(k) { win.__disenoState[k] = clonarDato(vista[k]); });
+        }
+
+        function cambiarPerfil(nombre) {
+            if (!PERFILES[nombre] || nombre === win.__disenoState.perfil) return;
+            accionEdicion(function() {
+                var estado = win.__disenoState;
+                estado.perfiles[estado.perfil] = vistaActual();
+                var siguiente = estado.perfiles[nombre] || estado.perfiles.general || vistaActual();
+                limpiarPreview();
+                cargarVista(siguiente);
+                estado.perfil = nombre;
+            });
+        }
+
+        function restaurarFoto(foto) {
+            var rt = win.__disenoRuntime, datos = JSON.parse(foto), estado = win.__disenoState;
+            rt.restaurando = true;
+            try {
+                limpiarPreview();
+                cargarVista(datos.vista);
+                estado.perfiles = datos.perfiles;
+                estado.perfil = datos.perfil;
+                estado.estilos = datos.estilos;
+                // Los identificadores no se reutilizan al abrir otra rama del historial.
+                estado.mockN = Math.max(estado.mockN, datos.mockN);
+                panel.dataset.builtForKey = '';
+                sync();
+            } finally { rt.restaurando = false; }
+        }
+
+        function deshacerEdicion(rehacer) {
+            terminarAccion();
+            var h = win.__disenoRuntime.historial;
+            var origen = rehacer ? h.adelante : h.atras;
+            if (!origen.length) return;
+            (rehacer ? h.atras : h.adelante).push(fotoEdicion());
+            restaurarFoto(origen.pop());
+            actualizarHistorial();
+        }
+
+        function actualizarHistorial() {
+            var h = win.__disenoRuntime.historial;
+            [['deshacer', h.atras], ['rehacer', h.adelante]].forEach(function(par) {
+                var b = panel.querySelector('[data-diseno-accion="' + par[0] + '"]');
+                if (b) { b.disabled = !par[1].length; b.style.opacity = b.disabled ? '.4' : '1'; }
+            });
+        }
+
+        function atajoEdicion(e) {
+            if (!disenoActivo() || e.altKey) return false;
+            var nodo = e.composedPath ? e.composedPath()[0] : e.target;
+            if (nodo && (nodo.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(nodo.tagName))) return false;
+            var flechas = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]};
+            if (!e.ctrlKey && !e.metaKey && flechas[e.key] && elementoActivo()) {
+                e.preventDefault(); e.stopPropagation();
+                accionEdicion(function() {
+                    var ms = grupoMiembros(); if (ms.length < 2) ms = [elementoActivo()];
+                    var paso = e.shiftKey ? 10 : win.__disenoState.paso || 1;
+                    ms.forEach(function(m) {
+                        m.registro.transformState.translateX += flechas[e.key][0] * paso;
+                        m.registro.transformState.translateY += flechas[e.key][1] * paso;
+                        aplicarTransform(m.el, m.registro);
+                    });
+                });
+                return true;
+            }
+            if (!(e.ctrlKey || e.metaKey)) return false;
+            var letra = e.key.toLowerCase();
+            if (letra !== 'z' && letra !== 'y') return false;
+            e.preventDefault(); e.stopPropagation();
+            deshacerEdicion(letra === 'y' || e.shiftKey);
+            return true;
+        }
+
+        function instalarHistorial() {
+            if (win.__disenoEventosHistorial) win.__disenoEventosHistorial.forEach(function(x) {
+                doc.removeEventListener(x.tipo, x.fn, true);
+            });
+            var eventos = [];
+            function escuchar(tipo, fn) { doc.addEventListener(tipo, fn, true); eventos.push({tipo: tipo, fn: fn}); }
+            function propia(e) {
+                var nodo = e.composedPath ? e.composedPath()[0] : e.target;
+                return disenoActivo() && (esUIPropiaDeDiseno(nodo)
+                    || (nodo.closest && nodo.closest('[data-diseno-mock]')));
+            }
+            ['mousedown', 'beforeinput', 'keydown'].forEach(function(tipo) {
+                escuchar(tipo, function(e) {
+                    if (!propia(e) || (e.target.closest && e.target.closest('[data-diseno-accion]'))) return;
+                    iniciarAccion();
+                });
+            });
+            ['mouseup', 'click', 'change', 'keyup', 'input'].forEach(function(tipo) {
+                escuchar(tipo, function(e) {
+                    if (tipo === 'input' && propia(e)) iniciarAccion();
+                    if (win.__disenoRuntime.historial.inicio === null) return;
+                    if (tipo === 'input') {
+                        win.clearTimeout(win.__disenoFinEntrada);
+                        win.__disenoFinEntrada = win.setTimeout(terminarAccion, 450);
+                    } else if (tipo !== 'mouseup' || e.button === 0) {
+                        win.setTimeout(terminarAccion, 0);
+                    }
+                });
+            });
+            win.__disenoEventosHistorial = eventos;
+        }
+
+        function botonEdicion(texto, fn) {
+            var b = doc.createElement('button');
+            b.type = 'button'; b.textContent = texto;
+            b.style.cssText = 'background:#242332;color:#eee;border:1px solid #454254;border-radius:5px;padding:6px 7px;font:11px sans-serif;cursor:pointer';
+            b.addEventListener('click', fn);
+            return b;
+        }
+
+        function detalleEdicion(titulo, abierto) {
+            var det = doc.createElement('details'), resumen = doc.createElement('summary');
+            det.style.cssText = 'border-top:1px solid #34313f;margin-top:10px;padding-top:8px';
+            resumen.textContent = titulo;
+            resumen.style.cssText = 'cursor:pointer;font:600 12px sans-serif;color:#ddd;padding:4px 0';
+            var opciones = win.__disenoRuntime.secciones;
+            det.open = opciones[titulo] === undefined ? !!abierto : opciones[titulo];
+            det.addEventListener('toggle', function() { opciones[titulo] = det.open; });
+            det.appendChild(resumen);
+            return det;
+        }
+
+        function selectorEdicion(etiqueta, opciones, valor, fn) {
+            var caja = doc.createElement('label');
+            caja.style.cssText = 'display:block;font:11px sans-serif;color:#bbb;margin:9px 0';
+            caja.appendChild(doc.createTextNode(etiqueta));
+            var sel = doc.createElement('select');
+            sel.setAttribute('aria-label', etiqueta);
+            sel.style.cssText = 'width:100%;margin-top:4px;background:#181820;color:#eee;border:1px solid #454254;border-radius:4px;padding:5px';
+            opciones.forEach(function(par) { var o = doc.createElement('option'); o.value = par[0]; o.textContent = par[1]; sel.appendChild(o); });
+            sel.value = valor;
+            sel.addEventListener('change', function() { accionEdicion(function() { fn(sel.value); }); });
+            caja.appendChild(sel);
+            return caja;
+        }
+
+        function numeroEdicion(etiqueta, valor, fn, minimo) {
+            var caja = doc.createElement('label');
+            caja.style.cssText = 'display:block;font:11px sans-serif;color:#bbb;margin:6px 0';
+            caja.appendChild(doc.createTextNode(etiqueta));
+            var inp = doc.createElement('input');
+            inp.type = 'number'; inp.step = '1'; inp.value = Math.round(valor || 0);
+            if (minimo !== undefined) inp.min = minimo;
+            inp.setAttribute('aria-label', etiqueta);
+            inp.style.cssText = 'display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:5px;background:#181820;color:#eee;border:1px solid #454254;border-radius:4px';
+            inp.addEventListener('change', function() {
+                if (!inp.value.trim()) return;
+                var n = Number(inp.value);
+                if (!Number.isFinite(n) || (minimo !== undefined && n < minimo)) return;
+                accionEdicion(function() { fn(n); });
+            });
+            caja.appendChild(inp);
+            return caja;
+        }
+
+        function aplicarMedida(prop, numero) {
+            var ctx = elementoActivo();
+            if (!ctx) return;
+            if (prop === 'x' || prop === 'y') {
+                ctx.registro.transformState[prop === 'x' ? 'translateX' : 'translateY'] = numero;
+                aplicarTransform(ctx.el, ctx.registro);
+            } else {
+                ['flex', 'max-width', 'max-height'].forEach(function(p) {
+                    establecerCambio(ctx.el, ctx.registro, p, 'none');
+                });
+                establecerCambio(ctx.el, ctx.registro, prop, numero + 'px');
+                sincronizarContenidoRedimensionable(ctx.el, prop === 'width' ? numero : null, prop === 'height' ? numero : null);
+            }
+        }
+
+        function controlesDistribucion(ctx) {
+            var caja = detalleEdicion('Medidas y distribución', true);
+            var r = ctx.el.getBoundingClientRect(), t = ctx.registro.transformState;
+            var medidas = doc.createElement('div');
+            medidas.style.cssText = 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:8px';
+            [['Ancho (px)', r.width, 'width', 1], ['Alto (px)', r.height, 'height', 1],
+             ['Desplazamiento X (px)', t.translateX, 'x'], ['Desplazamiento Y (px)', t.translateY, 'y']].forEach(function(par) {
+                var fila = numeroEdicion(par[0], par[1], function(n) { aplicarMedida(par[2], n); }, par[3]);
+                fila.querySelector('input').dataset.medida = par[2];
+                medidas.appendChild(fila);
+            });
+            caja.appendChild(medidas);
+            if (ctx.el.ownerSVGElement || ctx.el.ownerDocument !== doc) return caja;
+            var cs = win.getComputedStyle(ctx.el);
+            caja.appendChild(numeroEdicion('Orden entre hermanos', parseInt(cs.order, 10), function(n) {
+                var a = elementoActivo(); if (a) establecerCambio(a.el, a.registro, 'order', String(n));
+            }));
+            if (!ctx.el.children.length) return caja;
+            var distribucion = cs.display === 'grid' ? 'grid' : cs.display === 'flex' ? cs.flexDirection : '';
+            caja.appendChild(selectorEdicion('Distribución del contenedor', [['', 'Original'], ['row', 'Fila'], ['column', 'Columna'], ['grid', 'Rejilla']], distribucion, function(v) {
+                var a = elementoActivo(); if (!a) return;
+                ['display', 'flex-direction', 'grid-template-columns', 'flex-wrap'].forEach(function(p) {
+                    establecerCambio(a.el, a.registro, p, null); restaurarPropiedad(a.el, p);
+                });
+                if (v) establecerCambio(a.el, a.registro, 'display', v === 'grid' ? 'grid' : 'flex');
+                if (v === 'row' || v === 'column') establecerCambio(a.el, a.registro, 'flex-direction', v);
+                if (v === 'grid') establecerCambio(a.el, a.registro, 'grid-template-columns', 'repeat(2, minmax(0, 1fr))');
+            }));
+            caja.appendChild(numeroEdicion('Separación (px)', parseFloat(cs.gap), function(n) {
+                var a = elementoActivo(); if (a) establecerCambio(a.el, a.registro, 'gap', n + 'px');
+            }, 0));
+            caja.appendChild(numeroEdicion('Columnas de la rejilla', (cs.gridTemplateColumns.match(/px/g) || []).length || 2, function(n) {
+                var a = elementoActivo(); if (!a) return;
+                establecerCambio(a.el, a.registro, 'display', 'grid');
+                establecerCambio(a.el, a.registro, 'grid-template-columns', 'repeat(' + Math.min(12, Math.round(n)) + ', minmax(0, 1fr))');
+            }, 1));
+            [['Alineación transversal', 'align-items'], ['Reparto del espacio', 'justify-content']].forEach(function(par) {
+                var opciones = [['normal', 'Original'], ['flex-start', 'Inicio'], ['center', 'Centro'], ['flex-end', 'Final'], ['stretch', 'Estirar']];
+                opciones.push(par[1] === 'align-items' ? ['baseline', 'Línea del texto'] : ['space-between', 'Espacio entre elementos']);
+                caja.appendChild(selectorEdicion(par[0], opciones, cs.getPropertyValue(par[1]), function(v) {
+                    var a = elementoActivo(); if (a) establecerCambio(a.el, a.registro, par[1], v);
+                }));
+            });
+            return caja;
+        }
+
+        function ajustarPaso(n) {
+            var paso = win.__disenoState.paso || 1;
+            return Math.round(n / paso) * paso;
+        }
+
+        function pintarGuias(rect) {
+            var guia = doc.getElementById('el-diseno-guias');
+            if (!win.__disenoState.guias || !disenoActivo() || !rect) {
+                if (guia) guia.remove(); return;
+            }
+            if (!guia) { guia = doc.createElement('div'); guia.id = 'el-diseno-guias'; doc.body.appendChild(guia); }
+            guia.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483500;border-top:1px dashed #9385ec;border-left:1px dashed #9385ec;'
+                + 'left:' + rect.left + 'px;top:' + rect.top + 'px;width:100vw;height:100vh';
+        }
+
+        function varianteExportable(vista, general) {
+            var copia = clonarDato(vista);
+            if (!general) return copia;
+            Object.keys(general.porKey).forEach(function(id) {
+                var base = general.porKey[id], reg = copia.porKey[id];
+                if (!reg) {
+                    reg = clonarDato(base); reg.cambios = {}; reg.estiloCompartido = '';
+                    reg.transformState = {translateX:0,translateY:0,rotateDeg:0};
+                    reg.texto.actual = null; delete reg.capa;
+                    copia.porKey[id] = reg;
+                }
+                var ctx = contextoRegistro(id, reg); if (!ctx.el) return;
+                var compartido = base.estiloCompartido && win.__disenoState.estilos[base.estiloCompartido];
+                Object.keys(Object.assign({}, compartido || {}, base.cambios)).forEach(function(p) {
+                    if (reg.cambios[p] !== undefined || (reg.estiloCompartido && win.__disenoState.estilos[reg.estiloCompartido] && win.__disenoState.estilos[reg.estiloCompartido][p] !== undefined)) return;
+                    var destino = PROPS_GEOMETRIA[p] ? ctx.el : PROPS_TEXTO[p]
+                        ? primerTexto(destinosDeEstilo(ctx.el)) : destinosDeEstilo(ctx.el)[0];
+                    var original = recordarNodo(destino);
+                    if (original.computado[p]) reg.cambios[p] = original.computado[p];
+                });
+                if ((base.transformState.translateX || base.transformState.translateY || base.transformState.rotateDeg)
+                        && !reg.transformState.translateX && !reg.transformState.translateY && !reg.transformState.rotateDeg) {
+                    reg.cambios.transform = recordarNodo(ctx.el).computado.transform || 'none';
+                }
+            });
+            return copia;
+        }
+
+        function ajustarGrupo(operacion) {
+            var ms = grupoMiembros();
+            if (ms.length < 2) return;
+            var caja = bboxGrupo(ms);
+            var datos = ms.map(function(m) { return { m: m, r: m.el.getBoundingClientRect() }; });
+            if (operacion === 'horizontal' || operacion === 'vertical') {
+                var horizontal = operacion === 'horizontal', eje = horizontal ? 'left' : 'top';
+                var largo = horizontal ? 'width' : 'height';
+                datos.sort(function(a, b) { return a.r[eje] - b.r[eje]; });
+                var ocupado = datos.reduce(function(s, x) { return s + x.r[largo]; }, 0);
+                var espacio = (caja[largo] - ocupado) / (datos.length - 1), cursor = caja[eje];
+                datos.forEach(function(x) { x.delta = cursor - x.r[eje]; cursor += x.r[largo] + espacio; });
+            }
+            datos.forEach(function(x) {
+                var t = x.m.registro.transformState;
+                if (operacion === 'izquierda') t.translateX += caja.left - x.r.left;
+                if (operacion === 'derecha') t.translateX += caja.right - x.r.right;
+                if (operacion === 'arriba') t.translateY += caja.top - x.r.top;
+                if (operacion === 'abajo') t.translateY += caja.bottom - x.r.bottom;
+                if (operacion === 'centro') t.translateX += caja.left + caja.width / 2 - x.r.left - x.r.width / 2;
+                if (operacion === 'horizontal') t.translateX += x.delta;
+                if (operacion === 'vertical') t.translateY += x.delta;
+                if (operacion === 'ancho' || operacion === 'alto') {
+                    establecerCambio(x.m.el, x.m.registro, 'flex', 'none');
+                    establecerCambio(x.m.el, x.m.registro, 'max-width', 'none');
+                    establecerCambio(x.m.el, x.m.registro, 'max-height', 'none');
+                    establecerCambio(x.m.el, x.m.registro, operacion === 'ancho' ? 'width' : 'height',
+                        datos[0].r[operacion === 'ancho' ? 'width' : 'height'] + 'px');
+                }
+                aplicarEstado(x.m.el, x.m.registro);
+            });
+        }
+
+        function controlesEstilos(ctx, miembros) {
+            var caja = detalleEdicion('Estilos compartidos', false);
+            var estado = win.__disenoState;
+            if (ctx) {
+                var nombre = doc.createElement('input');
+                nombre.placeholder = 'Ej.: Título de tarjeta'; nombre.setAttribute('aria-label', 'Nombre del estilo compartido');
+                nombre.style.cssText = 'box-sizing:border-box;width:100%;background:#181820;color:#eee;border:1px solid #454254;padding:6px;margin:6px 0';
+                caja.appendChild(nombre);
+                caja.appendChild(botonEdicion('Crear o actualizar estilo', function() {
+                    var valor = nombre.value.trim(); if (!valor) { nombre.focus(); return; }
+                    accionEdicion(function() {
+                        var a = elementoActivo(); if (!a) return;
+                        var estilos = {}, fuente = primerTexto(destinosDeEstilo(a.el));
+                        var cs = win.getComputedStyle(fuente), cb = win.getComputedStyle(destinosDeEstilo(a.el)[0]);
+                        PROPS_COMPARTIDAS.forEach(function(p) {
+                            estilos[p] = a.registro.cambios[p] || (PROPS_TEXTO[p] ? cs : cb).getPropertyValue(p);
+                        });
+                        estado.estilos[valor] = estilos;
+                        a.registro.estiloCompartido = valor;
+                        PROPS_COMPARTIDAS.forEach(function(p) { delete a.registro.cambios[p]; });
+                    });
+                }));
+            }
+            var lista = [['', 'Sin estilo compartido']].concat(Object.keys(estado.estilos).map(function(n) { return [n, n]; }));
+            caja.appendChild(selectorEdicion('Aplicar estilo', lista, ctx ? ctx.registro.estiloCompartido || '' : '', function(n) {
+                var destinos = miembros || [elementoActivo()];
+                destinos.forEach(function(a) {
+                    if (!a) return;
+                    restaurarRegistro(a.el, a.registro);
+                    a.registro.estiloCompartido = n;
+                    if (n) PROPS_COMPARTIDAS.forEach(function(p) { delete a.registro.cambios[p]; });
+                });
+            }));
+            return caja;
+        }
+
+        function textoSeguroComentario(texto) { return String(texto).split('*/').join('* /'); }
+
+        function exportarEdicion() {
+            var estado = win.__disenoState, actual = vistaActual(), perfil = estado.perfil;
+            // La entrega no reemplaza los objetos usados por los controles
+            // ya montados (tablas y textos insertados conservan sus eventos).
+            var referencias = {};
+            CAMPOS_VISTA.forEach(function(k) { referencias[k] = estado[k]; });
+            var perfiles = Object.assign({}, estado.perfiles); perfiles[perfil] = actual;
+            var salto = String.fromCharCode(10), cerca = String.fromCharCode(96).repeat(3);
+            var out = ['# Cambios de diseño para implementar', '',
+                'Los cambios de distribución y tamaño deben validarse con los controles de la app.',
+                'Los textos e insertados son propuestas; no modifican datos ni crean acciones.', ''];
+            try {
+                Object.keys(PERFILES).forEach(function(nombre) {
+                    var vista = perfiles[nombre]; if (!vista) return;
+                    if (nombre !== 'general') vista = varianteExportable(vista, perfiles.general);
+                    cargarVista(vista);
+                    out.push('## ' + PERFILES[nombre].nombre, '');
+                    Object.keys(vista.porKey).forEach(function(id) {
+                        var reg = vista.porKey[id], ctx = contextoRegistro(id, reg);
+                        var compartido = reg.estiloCompartido && estado.estilos[reg.estiloCompartido];
+                        var efectivo = Object.assign({}, reg, { cambios: Object.assign({}, compartido || {}, reg.cambios) });
+                        var tieneTexto = reg.texto && reg.texto.actual !== null;
+                        var t = reg.transformState;
+                        if (!Object.keys(efectivo.cambios).length && !t.translateX && !t.translateY && !t.rotateDeg && !tieneTexto && !reg.capa) return;
+                        out.push('### ' + id, '');
+                        if (ctx.el) {
+                            var tablas = estado.tablas; estado.tablas = {};
+                            var css;
+                            try { css = construirBloqueCSS(ctx.key, ctx.el, efectivo, ctx.sub, ctx.subTexto); }
+                            finally { estado.tablas = tablas; }
+                            if (css) {
+                                out.push(ctx.subTexto
+                                    ? 'Destino: configuración de ' + (ctx.subTexto.tipo === 'svgtext' ? 'Plotly' : 'AgGrid') + ' en Python.'
+                                    : enPieza(ctx.el) ? 'Destino: CSS de la pieza ' + ctx.key + '.' : 'Destino: CSS global de la app.');
+                                if (PERFILES[nombre].media) css = '@media ' + PERFILES[nombre].media + ' {' + salto + css + salto + '}';
+                                out.push(cerca + 'css', css, cerca, '');
+                            }
+                            if (contenidoRedimensionable(ctx.el) && (reg.cambios.width || reg.cambios.height)) {
+                                out.push('Destino adicional: tamaño en Python de ' + ctx.key +
+                                    ' — ancho ' + (reg.cambios.width || 'original') + ', alto ' + (reg.cambios.height || 'original') + '.', '');
+                            }
+                        } else out.push('Destino fuera de la pantalla actual. Ajustes: ' + JSON.stringify(efectivo.cambios) +
+                            '; desplazamiento: ' + JSON.stringify(t) + '.', '');
+                        if (tieneTexto) out.push('Texto propuesto (HTML/Python/datos según el elemento): ' + JSON.stringify(reg.texto.actual), '');
+                    });
+                    Object.keys(vista.tablas).forEach(function(k) {
+                        var bloque = construirBloqueTabla(k);
+                        if (bloque) out.push('### Tabla ' + k, 'Destino: configuración AgGrid en Python; variante ' + PERFILES[nombre].nombre + '.', cerca + 'python', bloque, cerca, '');
+                    });
+                    vista.mocks.forEach(function(m) {
+                        var n = nodoMock(m);
+                        n.removeAttribute('contenteditable');
+                        out.push('### Insertar ' + m.tipo, 'Ubicación: ' + m.posicion + ' de ' + m.anclaKey + (m.anclaSub ? ' .' + m.anclaSub : '') + '.',
+                            'Crear el elemento en el código de la vista y conectar sus acciones si corresponde.', cerca + 'html', n.outerHTML, cerca, '');
+                    });
+                    vista.uniones.forEach(function(u) { out.push('Unificar ' + u.a + ' con ' + u.b + ': el código debe usar el contenedor común correspondiente.', ''); });
+                });
+            } finally {
+                CAMPOS_VISTA.forEach(function(k) { estado[k] = referencias[k]; });
+                estado.perfil = perfil;
+            }
+            return out.join(salto);
+        }
+
+        function mostrarEntrega() {
+            var anterior = doc.getElementById('el-diseno-entrega'); if (anterior) anterior.remove();
+            var caja = doc.createElement('div'); caja.id = 'el-diseno-entrega';
+            caja.style.cssText = 'position:fixed;inset:6vh 6vw;z-index:2147483647;background:#14141c;color:#eee;border:1px solid #777;padding:18px;display:flex;flex-direction:column;gap:10px';
+            var texto = exportarEdicion(), ta = doc.createElement('textarea');
+            ta.value = texto; ta.readOnly = true; ta.setAttribute('aria-label', 'Todos los cambios para implementar');
+            ta.style.cssText = 'flex:1;min-height:0;background:#101017;color:#ddd;padding:10px;font:12px monospace';
+            var acciones = doc.createElement('div'); acciones.style.cssText = 'display:flex;gap:8px';
+            acciones.appendChild(botonEdicion('Copiar todos los cambios', function() {
+                copiarTextoDiseno(texto, function(ok) { if (!ok) { ta.focus(); ta.select(); } });
+            }));
+            acciones.appendChild(botonEdicion('Descargar entrega', function() {
+                var url = win.URL.createObjectURL(new win.Blob([texto], {type:'text/markdown;charset=utf-8'}));
+                var a = doc.createElement('a'); a.href = url; a.download = 'cambios-diseno.md'; a.click();
+                win.setTimeout(function() { win.URL.revokeObjectURL(url); }, 1000);
+            }));
+            acciones.appendChild(botonEdicion('Cerrar entrega', function() { caja.remove(); }));
+            caja.appendChild(acciones); caja.appendChild(ta); doc.body.appendChild(caja);
+        }
+
+        // Previsualizacion visual sin ejecutar otra instancia de la app.
+        // Conserva el CSS y los shadow roots; no copia scripts ni eventos.
+        function copiarVisual(nodo, destino) {
+            if (nodo.nodeType === 3) return destino.createTextNode(nodo.textContent);
+            if (nodo.nodeType !== 1 || nodo.tagName === 'SCRIPT'
+                    || (nodo.id && /^(el-diseno-|el-inspector-|herr-)/.test(nodo.id))) return null;
+            if (nodo.tagName === 'IFRAME') {
+                try {
+                    var fd = nodo.contentDocument;
+                    if (!fd || !fd.body || nodo.getBoundingClientRect().height < 2) return null;
+                    var sustituto = destino.createElement('div');
+                    sustituto.style.cssText = 'width:100%;height:' + nodo.getBoundingClientRect().height + 'px;overflow:hidden';
+                    var sombra = sustituto.attachShadow({mode:'open'});
+                    Array.prototype.forEach.call(fd.head.children, function(n) { var c = copiarVisual(n, destino); if (c) sombra.appendChild(c); });
+                    var cuerpo = copiarVisual(fd.body, destino); if (cuerpo) sombra.appendChild(cuerpo);
+                    return sustituto;
+                } catch (e) { return null; }
+            }
+            if (nodo.tagName === 'CANVAS') {
+                try { var img = destino.createElement('img'); img.src = nodo.toDataURL(); img.style.cssText = nodo.style.cssText; return img; } catch (e) {}
+            }
+            var copia = destino.importNode(nodo, false);
+            Array.prototype.slice.call(copia.attributes).forEach(function(a) {
+                if (a.name.slice(0, 2).toLowerCase() === 'on' || a.name === 'contenteditable') copia.removeAttribute(a.name);
+            });
+            if (nodo.tagName === 'INPUT') { copia.value = nodo.value; copia.checked = nodo.checked; }
+            Array.prototype.forEach.call(nodo.childNodes, function(h) { var c = copiarVisual(h, destino); if (c) copia.appendChild(c); });
+            if (nodo.shadowRoot) {
+                var root = copia.attachShadow({mode:'open'});
+                Array.prototype.forEach.call(nodo.shadowRoot.childNodes, function(h) { var c = copiarVisual(h, destino); if (c) root.appendChild(c); });
+                Array.prototype.forEach.call(nodo.shadowRoot.adoptedStyleSheets || [], function(hoja) {
+                    var st = destino.createElement('style');
+                    st.textContent = Array.prototype.map.call(hoja.cssRules, function(r) { return r.cssText; }).join(''); root.appendChild(st);
+                });
+            }
+            return copia;
+        }
+
+        function mostrarPreview() {
+            var previo = doc.getElementById('el-diseno-preview'); if (previo) previo.remove();
+            var caja = doc.createElement('div'); caja.id = 'el-diseno-preview';
+            caja.style.cssText = 'position:fixed;inset:3vh 2vw;z-index:2147483647;background:#20202a;padding:12px;display:flex;flex-direction:column;gap:10px;color:#eee';
+            var fila = doc.createElement('div');
+            fila.textContent = PERFILES[win.__disenoState.perfil].nombre + ' · Vista visual estática. Prueba la navegación en la app. ';
+            fila.appendChild(botonEdicion('Cerrar vista previa', function() { caja.remove(); }));
+            var cont = doc.createElement('div'); cont.style.cssText = 'overflow:auto;flex:1;min-height:0';
+            var frame = doc.createElement('iframe'); frame.title = 'Vista previa del diseño';
+            frame.setAttribute('sandbox', 'allow-same-origin');
+            frame.style.cssText = 'border:0;background:white;height:100%;width:' + PERFILES[win.__disenoState.perfil].ancho + 'px';
+            cont.appendChild(frame); caja.appendChild(fila); caja.appendChild(cont); doc.body.appendChild(caja);
+            var fd = frame.contentDocument;
+            Array.prototype.forEach.call(doc.head.children, function(n) { var c = copiarVisual(n, fd); if (c) fd.head.appendChild(c); });
+            Array.prototype.slice.call(doc.body.childNodes).forEach(function(n) { var c = copiarVisual(n, fd); if (c) fd.body.appendChild(c); });
+            var reserva = fd.getElementById('el-diseno-reserva'); if (reserva) reserva.remove();
+            var st = fd.createElement('style'); st.textContent = 'html,body {min-width:0!important} body {pointer-events:none!important}'; fd.head.appendChild(st);
+        }
+
+        function completarPanel() {
+            if (win.__disenoState.panelColapsado || panel.querySelector('[data-diseno-mejoras]')) return;
+            var barra = doc.createElement('div'); barra.dataset.disenoMejoras = '1';
+            barra.style.cssText = 'position:sticky;top:-12px;background:#101014;padding:8px 0;z-index:2;border-bottom:1px solid #454254';
+            var acciones = doc.createElement('div'); acciones.style.cssText = 'display:flex;gap:5px;flex-wrap:wrap';
+            [['Deshacer', false], ['Rehacer', true]].forEach(function(par) {
+                var b = botonEdicion(par[0], function() { deshacerEdicion(par[1]); });
+                b.dataset.disenoAccion = par[1] ? 'rehacer' : 'deshacer';
+                b.title = par[1] ? 'Ctrl+Shift+Z / Ctrl+Y' : 'Ctrl+Z'; acciones.appendChild(b);
+            });
+            acciones.appendChild(botonEdicion('Todos los cambios', mostrarEntrega));
+            acciones.appendChild(botonEdicion('Vista previa', mostrarPreview));
+            barra.appendChild(acciones);
+            barra.appendChild(selectorEdicion('Diseñar para', Object.keys(PERFILES).map(function(k) { return [k, PERFILES[k].nombre]; }), win.__disenoState.perfil, cambiarPerfil));
+            var ayudas = detalleEdicion('Guías y movimiento', false);
+            ayudas.appendChild(numeroEdicion('Ajuste al mover (px)', win.__disenoState.paso || 1, function(n) { win.__disenoState.paso = n; }, 1));
+            ayudas.appendChild(botonEdicion(win.__disenoState.guias ? 'Ocultar guías' : 'Mostrar guías', function() {
+                win.__disenoState.guias = !win.__disenoState.guias; panel.dataset.builtForKey = ''; sync();
+            }));
+            barra.appendChild(ayudas);
+            var nota = doc.createElement('div');
+            nota.textContent = 'Cambios temporales. Cada tamaño parte de General la primera vez.';
+            nota.style.cssText = 'font:10px/1.4 sans-serif;color:#aaa'; barra.appendChild(nota);
+            panel.insertBefore(barra, panel.firstChild);
+            var ctx = elementoActivo(), miembros = grupoMiembros();
+            if (miembros.length >= 2) {
+                var grupo = detalleEdicion('Alinear y distribuir', true);
+                [['Izquierda', 'izquierda'], ['Centro', 'centro'], ['Derecha', 'derecha'], ['Arriba', 'arriba'], ['Abajo', 'abajo'],
+                 ['Distribuir horizontal', 'horizontal'], ['Distribuir vertical', 'vertical'], ['Igualar ancho', 'ancho'], ['Igualar alto', 'alto']].forEach(function(par) {
+                    grupo.appendChild(botonEdicion(par[0], function() { accionEdicion(function() { ajustarGrupo(par[1]); }); }));
+                });
+                panel.insertBefore(grupo, barra.nextSibling ? barra.nextSibling.nextSibling : null);
+                [['Fondo del grupo', 'background-color'], ['Texto del grupo', 'color']].forEach(function(par) {
+                    grupo.appendChild(selectorEdicion(par[0], [['', 'Elegir color']].concat(PALETA.map(function(c) { return [c.hex, c.nombre]; })), '', function(color) {
+                        if (!color) return;
+                        grupoMiembros().forEach(function(m) { establecerCambioEstilo(m.el, m.registro, par[1], color); });
+                    }));
+                });
+                panel.appendChild(controlesEstilos(null, miembros));
+            } else if (ctx) {
+                panel.insertBefore(controlesDistribucion(ctx), barra.nextSibling ? barra.nextSibling.nextSibling : null);
+                panel.appendChild(controlesEstilos(ctx, null));
+            }
+            // Agrupar las secciones existentes sin cambiar sus controles ni eventos.
+            var seccionActual = null;
+            Array.prototype.slice.call(panel.children).forEach(function(n) {
+                if (n.dataset.disenoSeccion) {
+                    seccionActual = detalleEdicion(n.dataset.disenoSeccion, false);
+                    panel.insertBefore(seccionActual, n); n.remove();
+                } else if (n.tagName === 'DETAILS' || n === barra || (n.tagName === 'BUTTON' && /^Ver (original|con cambios)$/.test(n.textContent))) seccionActual = null;
+                else if (seccionActual) seccionActual.appendChild(n);
+            });
+            actualizarHistorial();
+        }
+
         // sync() es la UNICA fuente de verdad del tracking, y se llama tanto
         // desde el setInterval (cada 150ms, la garantia de fondo) como desde
         // scroll/resize (reaccion instantanea). NO depende de
@@ -4870,6 +5642,7 @@ JS = """
         function sync() {
             reaplicarCapas();
             if (!disenoActivo()) {
+                pintarGuias(null);
                 overlay.style.display = 'none';
                 panel.style.display = 'none';
                 // Salir del modo diseno tiene que devolver la app a su ancho:
@@ -4887,6 +5660,7 @@ JS = """
                 if (win.__inspectorSetResaltadoOculto) win.__inspectorSetResaltadoOculto(false);
                 return;
             }
+            panel.style.display = 'block';
             // Antes de resolver el pin: un mock puede SER el pineado, y
             // Streamlit se lo lleva cuando re-renderiza su rama.
             reponerMocks();
@@ -4899,6 +5673,7 @@ JS = """
             // <style> del estilo de tabla vive en el head del IFRAME del
             // AgGrid, y Streamlit recrea ese iframe entero en cada rerun.
             reaplicarTablas();
+            reaplicarEdicion();
             // Barato por el guard `__disenoEnganchado`, y hay que reintentar
             // en cada tick: Streamlit recrea el iframe de AgGrid en cada
             // rerun y el listener se va con el documento viejo.
@@ -4925,12 +5700,17 @@ JS = """
             // normal sin tocar nada mas.
             var miembrosG = grupoMiembros();
             if (!win.__disenoState.panelColapsado && miembrosG.length >= 2) {
-                construirPanelGrupo(miembrosG);
-                panel.dataset.builtForKey = 'grupo:' + miembrosG.length;
+                var grupoId = 'grupo:' + miembrosG.map(function(m) { return m.id; }).join('|');
+                if (panel.dataset.builtForKey !== grupoId) {
+                    construirPanelGrupo(miembrosG);
+                    panel.dataset.builtForKey = grupoId;
+                }
                 for (var gm = 0; gm < miembrosG.length; gm++) {
                     aplicarEstado(miembrosG[gm].el, miembrosG[gm].registro);
                 }
+                completarPanel();
                 trackearRect(bboxGrupo(miembrosG));
+                pintarGuias(bboxGrupo(miembrosG));
                 return;
             }
             if (win.__disenoState.panelColapsado) {
@@ -4948,6 +5728,8 @@ JS = """
             }
 
             if (!res || !res.el) {
+                pintarGuias(null);
+                completarPanel();
                 overlay.style.display = 'none';
                 // Nada pineado en diseno: el outline de Inspector (si hay
                 // hover suelto) vuelve a verse normal.
@@ -4965,9 +5747,13 @@ JS = """
             // Por `id`, no por key: la tarjeta y cada uno de sus hijos
             // pineables llevan su propio registro de cambios.
             var registro = registroPara(res.id);
+            registro.destino = { key: res.key, sub: res.sub, subIdx: res.subIdx || 0,
+                                 subTexto: res.subTexto || null };
             aplicarEstado(res.el, registro);
             trackear(res.el);
+            pintarGuias(res.el.getBoundingClientRect());
             actualizarReadouts(res.el, registro);
+            completarPanel();
             // 1 de cada 7 ticks (~1 seg): la lista de vecinas se arma con
             // rects y el layout se acomoda despues del pin — ver
             // pintarVecinas(), que corta sola si no cambio nada.
@@ -4992,6 +5778,7 @@ JS = """
         win.__disenoScrollHandler = sync;
         win.__disenoResizeHandler = sync;
         win.__disenoKeydownHandler = function(e) {
+            if (atajoEdicion(e)) return;
             if (e.altKey && (e.key === 'd' || e.key === 'D') && disenoActivo()) {
                 win.__disenoState.panelColapsado = !win.__disenoState.panelColapsado;
                 panel.dataset.builtForKey = '';
@@ -5023,6 +5810,7 @@ JS = """
         win.addEventListener('keydown', win.__disenoKeydownHandler);
         doc.addEventListener('click', win.__disenoClickBlocker, true);
 
+        instalarHistorial();
         win.__disenoPollInterval = win.setInterval(sync, 150);
         sync();
 
