@@ -2,6 +2,7 @@
 
 No cambia datos, firmas públicas ni eventos del reporte. La adaptación de
 controles se monta después del render original y se revierte en escritorio.
+Las pestañas principales comparten también la tipografía de Diferencias.
 """
 
 from pathlib import Path

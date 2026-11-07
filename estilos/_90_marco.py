@@ -921,5 +921,5 @@ CSS = """
     }
 """
 
-# La misma presentación entra en los shadow roots mediante css_movil().
+# La misma presentación y tipografía entran en los shadow roots mediante css_movil().
 CSS += "\n" + (Path(__file__).parent.parent / "graficos" / "pestanas.css").read_text(encoding="utf-8")
