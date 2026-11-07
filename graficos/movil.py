@@ -1,4 +1,4 @@
-"""Presentación móvil compartida de las piezas v2, dentro de su shadow root.
+"""Presentación compartida de las piezas v2, dentro de su shadow root.
 
 No cambia datos, firmas públicas ni eventos del reporte. La adaptación de
 controles se monta después del render original y se revierte en escritorio.
@@ -9,13 +9,14 @@ import re
 
 _DIR = Path(__file__).parent
 _CSS = (_DIR / "movil.css").read_text(encoding="utf-8")
+_PESTANAS = (_DIR / "pestanas.css").read_text(encoding="utf-8")
 _JS = (_DIR / "movil.js").read_text(encoding="utf-8")
 _EXPORT = re.compile(r"export\s+default\s+function\s*\(")
 
 
 def css_movil(css):
-    """Añade sólo reglas bajo el breakpoint móvil a la hoja de cada pieza."""
-    return css + "\n" + _CSS
+    """Compone las pestañas de escritorio y la adaptación móvil de cada pieza."""
+    return css + "\n" + _PESTANAS + "\n" + _CSS
 
 
 def js_movil(js):

@@ -18,6 +18,8 @@ y sólo el celular (`_99_movil`) viene después. Las variables viven en
 `_00_base.py` y el presupuesto de alto en `graficos/alturas.py`.
 """
 
+from pathlib import Path
+
 CSS = """
     @media (min-width: 901px) {
     :root:has(.st-key-compras_tabs_row),
@@ -127,149 +129,8 @@ CSS = """
         font-size: 16px !important;
         font-weight: 700 !important;
     }
-    /* #796: el renglón de «Ver» de Stock es el nivel 2 de Costo de Carta: sin el
-       título (está en la franja), las perspectivas subrayadas y una raya de borde
-       a borde debajo. La pieza pone a la derecha «Detalle» y «Cómo se calcula». */
-    .st-key-persp_stock .persp-tit { display: none; }
-    .st-key-persp_stock.st-key-persp_stock {
-        border-bottom: 1px solid var(--border);
-        margin-left: -18px !important;
-        margin-right: -18px !important;
-        padding: 0 18px;
-    }
-    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] {
-        background: none;
-        padding: 0;
-        gap: 18px !important;
-    }
-    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] button {
-        border-bottom: 2px solid transparent !important;
-        padding: 0 !important;
-        margin-right: 18px !important;
-        height: 32px !important;
-        min-height: 32px !important;
-    }
-    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] button[aria-checked="true"],
-    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {
-        background: transparent !important;
-        box-shadow: none;
-        border-bottom-color: var(--accent) !important;
-    }
-    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] button[aria-checked="true"] p,
-    .st-key-persp_stock.st-key-persp_stock [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {
-        color: var(--text-primary) !important;
-    }
-    /* #799: lo mismo en Evolución (Serie | Tabla dinámica), desde el renglón de «Ver»: #796 — de Costo de Carta: sin el
-       rótulo «Ver», las perspectivas subrayadas y una raya de borde
-       a borde debajo. La pieza pone a la derecha «Detalle» y «Cómo se calcula». */
-    .st-key-persp_tiempo .persp-rot { display: none; }
-    .st-key-aj_tiempo_cabecera {
-        border-bottom: 1px solid var(--border);
-        padding: 6px 18px 0 !important;
-        min-height: 44px;
-    }
-    .st-key-persp_tiempo.st-key-persp_tiempo {
-        padding: 0 !important;
-        margin: 0 !important;
-    }
-    .st-key-ajevo_controles {
-        gap: 12px !important;
-    }
-    .st-key-persp_tiempo.st-key-persp_tiempo [data-testid="stButtonGroup"] {
-        background: none;
-        padding: 0;
-        gap: 18px !important;
-    }
-    .st-key-persp_tiempo.st-key-persp_tiempo [data-testid="stButtonGroup"] button {
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        border-bottom: 2px solid transparent !important;
-        padding: 0 !important;
-        margin-right: 18px !important;
-        height: 38px !important;
-        min-height: 38px !important;
-    }
-    .st-key-persp_tiempo.st-key-persp_tiempo [data-testid="stButtonGroup"] button[aria-checked="true"],
-    .st-key-persp_tiempo.st-key-persp_tiempo [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {
-        background: transparent !important;
-        box-shadow: none;
-        border-bottom-color: var(--accent) !important;
-    }
-    .st-key-persp_tiempo.st-key-persp_tiempo [data-testid="stButtonGroup"] button[aria-checked="true"] p,
-    .st-key-persp_tiempo.st-key-persp_tiempo [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {
-        color: var(--text-primary) !important;
-    }
-    /* #800: lo mismo en Movimientos (Req. y salidas), desde el renglón de «Ver»: #796 — de Costo de Carta: sin el
-       rótulo «Ver», las perspectivas subrayadas y una raya de borde
-       a borde debajo. La pieza pone a la derecha «Detalle» y «Cómo se calcula». */
-    .st-key-persp_mov .persp-rot { display: none; }
-    .st-key-persp_mov.st-key-persp_mov {
-        border-bottom: 1px solid var(--border);
-        margin-left: -18px !important;
-        margin-right: -18px !important;
-        padding: 0 18px;
-    }
-    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] {
-        background: none;
-        padding: 0;
-        gap: 18px !important;
-    }
-    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] button {
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        border-bottom: 2px solid transparent !important;
-        padding: 0 !important;
-        margin-right: 18px !important;
-        height: 32px !important;
-        min-height: 32px !important;
-    }
-    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] button[aria-checked="true"],
-    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {
-        background: transparent !important;
-        box-shadow: none;
-        border-bottom-color: var(--accent) !important;
-    }
-    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] button[aria-checked="true"] p,
-    .st-key-persp_mov.st-key-persp_mov [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {
-        color: var(--text-primary) !important;
-    }
-    /* #800: lo mismo en Movimientos (Sin plato), desde el renglón de «Ver»: #796 — de Costo de Carta: sin el
-       rótulo «Ver», las perspectivas subrayadas y una raya de borde
-       a borde debajo. La pieza pone a la derecha «Detalle» y «Cómo se calcula». */
-    .st-key-persp_sin .persp-rot { display: none; }
-    .st-key-persp_sin.st-key-persp_sin {
-        border-bottom: 1px solid var(--border);
-        margin-left: -18px !important;
-        margin-right: -18px !important;
-        padding: 0 18px;
-    }
-    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] {
-        background: none;
-        padding: 0;
-        gap: 18px !important;
-    }
-    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button {
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        border-bottom: 2px solid transparent !important;
-        padding: 0 !important;
-        margin-right: 18px !important;
-        height: 32px !important;
-        min-height: 32px !important;
-    }
-    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button[aria-checked="true"],
-    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {
-        background: transparent !important;
-        box-shadow: none;
-        border-bottom-color: var(--accent) !important;
-    }
-    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button[aria-checked="true"] p,
-    .st-key-persp_sin.st-key-persp_sin [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {
-        color: var(--text-primary) !important;
-    }
+    /* Las perspectivas de Stock, Evolución y Movimientos comparten
+       graficos/pestanas.css; allí vive también su geometría compacta. */
     /* #805: Por tipo · «De conteo a conteo | Fechas del calendario» cuenta lo mismo
        con otro reloj: un ajuste, en la caja gris (#795), y no dos botones con borde. */
     .st-key-stock_mov_cab_reloj [data-testid="stButtonGroup"] {
@@ -635,6 +496,8 @@ CSS = """
         padding: 0 24px !important;
         border-bottom: 1px solid var(--border);
     }
+    /* El escritorio usa las carpetas compartidas; móvil conserva su fila. */
+    @media (max-width: 900px) {
     .st-key-form_receta_modo [data-testid="stButtonGroup"] {
         justify-content: flex-start !important;
     }
@@ -668,6 +531,8 @@ CSS = """
     }
     .st-key-form_receta_modo [data-testid="stButtonGroup"] button p {
         font-size: 14px !important;
+    }
+
     }
 
     /* Cada fecha de Ajuste conserva su widget y sigue a la vista del rail. */
@@ -1046,3 +911,6 @@ CSS = """
         }
     }
 """
+
+# La misma presentación entra en los shadow roots mediante css_movil().
+CSS += "\n" + (Path(__file__).parent.parent / "graficos" / "pestanas.css").read_text(encoding="utf-8")

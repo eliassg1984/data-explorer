@@ -29,6 +29,11 @@ actualiza este documento en el mismo commit.
 
 ## Vista móvil
 
+Las pestañas principales de escritorio comparten `graficos/pestanas.css`:
+carpetas compactas con acento superior, sin alterar controles secundarios.
+`estilos/_90_marco.py` la incluye para Streamlit y `graficos/movil.py` para
+los componentes con shadow root; la adaptación móvil conserva sus reglas.
+
 Los enlaces entre reportes ofrecen «Volver a…» en una banda fija sobre las
 pestañas, también en móvil. `navegacion_retorno.py` conserva el contexto de
 interfaz y la cadena de saltos; `.js` repone selección, desplegables y scroll

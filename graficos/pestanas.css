@@ -1,0 +1,182 @@
+/* Pestañas principales tipo carpeta. Misma hoja en Streamlit y en los
+   shadow roots de las piezas: 28 px, sin título ni espacio superior.
+   Sólo nivel 2: los filtros y las vistas internas conservan su presentación.
+   Los eventos, las keys y las selecciones siguen siendo los originales. */
+@media (min-width: 901px) {
+  /* Las perspectivas nativas ya reservaban una fila. Se reutiliza su sitio;
+     el margen inferior absorbe el gap de Streamlit hacia la tarjeta. */
+  .st-key-persp_stock.st-key-persp_stock,
+  .st-key-persp_mov.st-key-persp_mov,
+  .st-key-persp_sin.st-key-persp_sin {
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    margin: 0 -18px -16px !important;
+    padding: 0 18px !important;
+    align-items: flex-end !important;
+    background: var(--marco-fondo) !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .st-key-persp_stock .persp-tit,
+  .st-key-persp_mov .persp-rot,
+  .st-key-persp_sin .persp-rot {
+    display: none;
+  }
+  .st-key-persp_stock [data-testid="stElementContainer"] {
+    height: auto;
+  }
+  .st-key-aj_tiempo_cabecera {
+    padding: 0 18px !important;
+    min-height: 30px;
+    align-items: flex-end !important;
+    background: var(--marco-fondo);
+    border-bottom: 1px solid var(--border);
+  }
+  .st-key-persp_tiempo.st-key-persp_tiempo {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .st-key-ajevo_controles { gap: 12px !important; }
+  .st-key-inv_sec_persp_stock.st-key-inv_sec_persp_stock,
+  .st-key-mov_sec_persp_lados.st-key-mov_sec_persp_lados,
+  .st-key-mov_sec_persp_sin.st-key-mov_sec_persp_sin {
+    --persp-alto: 28px;
+  }
+  .st-key-aj_sec_persp_tiempo.st-key-aj_sec_persp_tiempo {
+    --persp-alto: 30px;
+  }
+  .st-key-form_receta_modo {
+    background: var(--marco-fondo);
+  }
+  .st-key-form_receta_modo.st-key-form_receta_modo
+      [data-testid="stButtonGroup"] button p {
+    font-size: 14px !important;
+  }
+  [class*="st-key-pspw_mov_1_"] [data-testid="stButtonGroup"],
+  [class*="st-key-pspw_mov_1_"] [data-testid="stButtonGroup"] > div {
+    gap: 2px !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+  [class*="st-key-pspw_mov_1_"] [data-testid="stButtonGroup"] button {
+    height: 26px !important;
+    min-height: 26px !important;
+    padding: 0 10px !important;
+    border: none !important;
+    border-radius: 6px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  [class*="st-key-pspw_mov_1_"] [data-testid="stButtonGroup"]
+      button:is([aria-checked="true"], [kind="segmented_controlActive"]) {
+    background: var(--accent-tint) !important;
+  }
+
+  /* El primer eje es la sección principal. El segundo eje de Movimientos
+     (Resumen / Análisis por área) queda como control secundario: no se
+     dibujan dos carpetas activas para dos selecciones independientes. */
+  :is([class*="st-key-pspw_"][class*="_0_"],
+      .st-key-form_receta_modo.st-key-form_receta_modo)
+      [data-testid="stButtonGroup"],
+  :is([class*="st-key-pspw_"][class*="_0_"],
+      .st-key-form_receta_modo.st-key-form_receta_modo)
+      [data-testid="stButtonGroup"] > div {
+    display: flex !important;
+    align-items: flex-end !important;
+    justify-content: flex-start !important;
+    gap: 4px !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* Cabeceras de las piezas propias. Tienen controles a la derecha de
+     30–32 px: se conserva ese alto y las carpetas se alinean abajo. */
+  :is(.cc .cc-cab, .rb > .n2, .cr > .n2, .rr > .n2,
+      .sa > .sa-n2, .ajc .ajc-fnav, .dc > .dc-n2) {
+    align-items: flex-end;
+    gap: 12px;
+    min-height: 32px;
+    height: 32px;
+    background: var(--marco-fondo);
+    border-bottom: 1px solid var(--border);
+    box-sizing: border-box;
+  }
+  .ajc .ajc-fnav {
+    height: auto;
+    margin: -8px -18px 0;
+    padding: 0 18px;
+  }
+  :is(.cc-der, .n2-der, .sa-n2-der, .dc-n2-der) {
+    align-self: center;
+  }
+
+  /* El selector se acota a cada botonera dueña, nunca a todos los botones
+     de una tarjeta. La especificidad iguala sus estilos base locales. */
+  :is(.cc .cc-cab > .cc-tabs, .n2 > .tabs2, .sa-n2 > .sa-tabs,
+      .ajc .ajc-fnav > .ajc-tabs, .dc-n2 > .dc-tabs) {
+    display: flex;
+    align-items: flex-end;
+    align-self: flex-end;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    gap: 4px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  :is(.cc .cc-cab > .cc-tabs, .n2 > .tabs2, .sa-n2 > .sa-tabs,
+      .ajc .ajc-fnav > .ajc-tabs, .dc-n2 > .dc-tabs,
+      [class*="st-key-pspw_"][class*="_0_"] [data-testid="stButtonGroup"],
+      .st-key-form_receta_modo.st-key-form_receta_modo [data-testid="stButtonGroup"])
+      button {
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    height: 26px !important;
+    min-height: 26px !important;
+    margin: 0 0 -1px !important;
+    padding: 0 12px !important;
+    border: 1px solid var(--border) !important;
+    border-bottom-color: transparent !important;
+    border-radius: 7px 7px 0 0 !important;
+    background: var(--accent-light) !important;
+    box-shadow: none !important;
+    color: var(--text-secondary) !important;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  :is(.cc .cc-cab > .cc-tabs, .n2 > .tabs2, .sa-n2 > .sa-tabs,
+      .ajc .ajc-fnav > .ajc-tabs, .dc-n2 > .dc-tabs,
+      [class*="st-key-pspw_"][class*="_0_"] [data-testid="stButtonGroup"],
+      .st-key-form_receta_modo.st-key-form_receta_modo [data-testid="stButtonGroup"])
+      button:is(.on, .selected, [aria-selected="true"], [aria-checked="true"],
+                [kind="segmented_controlActive"]) {
+    height: 28px !important;
+    min-height: 28px !important;
+    border-bottom-color: var(--bg-card) !important;
+    background: var(--bg-card) !important;
+    box-shadow: inset 0 2px 0 var(--accent) !important;
+    color: var(--accent-deep) !important;
+    font-weight: 600;
+  }
+  :is(.cc .cc-cab > .cc-tabs, .n2 > .tabs2, .sa-n2 > .sa-tabs,
+      .ajc .ajc-fnav > .ajc-tabs, .dc-n2 > .dc-tabs,
+      [class*="st-key-pspw_"][class*="_0_"] [data-testid="stButtonGroup"],
+      .st-key-form_receta_modo.st-key-form_receta_modo [data-testid="stButtonGroup"])
+      button:hover {
+    color: var(--accent-deep) !important;
+  }
+  :is([class*="st-key-pspw_"][class*="_0_"],
+      .st-key-form_receta_modo.st-key-form_receta_modo)
+      [data-testid="stButtonGroup"] button p {
+    color: inherit !important;
+  }
+}
