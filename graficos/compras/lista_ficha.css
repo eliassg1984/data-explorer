@@ -215,8 +215,8 @@
    nombre ya está en la franja): la fecha, las familias, el buscador, el Excel.
    Sin «Detalle», el renglón de abajo de cada indicador y las columnas de más
    se esconden. ⤢ amplía la lista o la ficha a la hoja debajo del nivel 2. */
-.lf-main { padding-top: 0; }
-.lf-n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; flex: none; margin: 0 -18px;
+.lf-main { padding-top: var(--cp-margen-pestanas, 8px); }
+.lf-n2 { display: flex; align-items: stretch; gap: 20px; min-height: var(--cp-alto-pestanas, 40px); flex: none; margin: 0 -18px 4px;
   padding: 0 18px; border-bottom: 1px solid var(--border); box-sizing: border-box; font-size: 13px; }
 .lf-tabs { display: flex; align-items: stretch; gap: 20px; min-width: 0; }
 .lf-tabs button { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; padding: 0;
@@ -270,7 +270,7 @@
 .lf-pleg-c { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; min-height: 0; flex: 1 1 auto; }
 .lf-pleg-c .lf-lista { flex: 1 1 0; }
 @media (max-width: 900px) {
-  .lf-n2 { margin: 0; padding: 0; height: auto; min-height: 36px; flex-wrap: wrap; row-gap: 0; }
+  .lf-n2 { margin-inline: 0; padding: 0; flex-wrap: wrap; row-gap: 0; }
   .lf-tabs { overflow-x: auto; overscroll-behavior: contain; }
   .lf-tabs button, .lf-link { min-height: 44px; }
   .lf-amp { display: none; }

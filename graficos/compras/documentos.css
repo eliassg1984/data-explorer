@@ -177,9 +177,9 @@
    Tabla dinámica, «Detalle» y «Cómo se calcula». Nivel 3 sin título, con los
    filtros puestos. Los indicadores son CONTADORES que filtran: sin «Detalle»,
    su renglón de abajo se esconde. ⤢ deja la lista o la ficha solas. */
-.dc-main { padding-top: 0; }
+.dc-main { padding-top: var(--cp-margen-pestanas, 8px); }
 .dc-tit { display: none; }
-.dc-n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; flex: none; margin: 0 -18px; padding: 0 18px;
+.dc-n2 { display: flex; align-items: stretch; gap: 20px; min-height: var(--cp-alto-pestanas, 40px); flex: none; margin: 0 -18px 4px; padding: 0 18px;
   border-bottom: 1px solid var(--border); font-size: 13px; }
 .dc-tabs { display: flex; align-items: stretch; gap: 20px; min-width: 0; }
 .dc-tabs button { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; padding: 0; cursor: pointer;
@@ -208,7 +208,7 @@
 .dc-amp:hover { background: var(--marco-control, var(--bg-hover)); color: var(--accent-deep) !important; }
 .dc-amp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 @media (max-width: 900px) {
-  .dc-n2 { margin: 0; padding: 0; height: auto; min-height: 36px; flex-wrap: wrap; }
+  .dc-n2 { margin-inline: 0; padding: 0; flex-wrap: wrap; }
   .dc-tabs { overflow-x: auto; overscroll-behavior: contain; }
   .dc-tabs button, .dc-link { min-height: 44px; }
   .dc-amp { display: none; }

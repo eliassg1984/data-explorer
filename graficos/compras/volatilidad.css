@@ -19,7 +19,7 @@
 .cp-lugar { display: var(--cp-fecha-slot, block); width: var(--cp-fecha, 190px); flex: none; }
 .cp-cab-din { display: inline-flex; flex-wrap: wrap; gap: 6px; max-width: 100%; }
 .cp-cab-din:empty { display: none; }
-.cp-vistas { display: flex; flex: none; gap: 18px; border-bottom: 1px solid var(--border); }
+.cp-vistas { display: flex; flex: none; gap: 18px; min-height: var(--cp-alto-pestanas, 40px); margin-bottom: 4px; border-bottom: 1px solid var(--border); }
 .cp-vistas button { min-height: 36px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-secondary); }
 .cp-vistas button[aria-pressed="true"] { border-bottom-color: var(--accent); color: var(--accent-deep); font-weight: 600; }
 .cp-ms > button { display: flex; align-items: center; gap: 6px; max-width: min(245px, 85vw); }
@@ -189,7 +189,7 @@ td.t polyline { fill: none; stroke: var(--cp-tono); stroke-width: 1.3; }
    Todos», «Detalle» y «Cómo se calcula». Nivel 3, la cabecera sin título. Sin
    «Detalle», el renglón de abajo de los indicadores y las columnas de más se
    esconden. ⤢ deja la lista o la ficha solas debajo del nivel 2. */
-.cvol { padding-top: 0; }
+.cvol { padding-top: var(--cp-margen-pestanas, 8px); }
 .cp-tit { display: none; }
 .cp-n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; flex: none; margin: 0 -18px; padding: 0 18px;
   border-bottom: 1px solid var(--border); font-size: 13px; }

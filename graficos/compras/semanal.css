@@ -309,7 +309,9 @@ button.fi:hover { background: var(--bg-hover); }
    «Detalle», su renglón de abajo es la comparación y se queda. ⤢ deja el gráfico
    (o la tabla) o la lista del costado solos debajo del nivel 2. */
 .titulo { display: none; }
-.n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; flex: none; margin: -12px -18px 0; padding: 0 18px;
+/* La tarjeta nativa de Semanal ya aporta 16 px de relleno superior. */
+.n2 { display: flex; align-items: stretch; gap: 20px; min-height: var(--cp-alto-pestanas, 40px); flex: none;
+  margin: calc(var(--cp-margen-pestanas, 8px) - 16px) -18px 4px; padding: 0 18px;
   border-bottom: 1px solid var(--border); font-size: 13px; }
 .tabs { display: flex; align-items: stretch; gap: 20px; min-width: 0; }
 .tabs button { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; padding: 0; cursor: pointer;
@@ -337,7 +339,7 @@ button.fi:hover { background: var(--bg-hover); }
 .pn-cab { display: flex; align-items: center; gap: 8px; }
 .pn-cab > b { flex: 1; min-width: 0; }
 @media (max-width: 900px) {
-  .n2 { margin: 0; padding: 0; height: auto; min-height: 36px; flex-wrap: wrap; }
+  .n2 { margin: 0 0 4px; padding: 0; flex-wrap: wrap; }
   .tabs { overflow-x: auto; overscroll-behavior: contain; }
   .tabs button, .link { min-height: 44px; }
   .amp-b { display: none; }

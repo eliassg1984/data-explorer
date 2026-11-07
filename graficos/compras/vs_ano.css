@@ -182,8 +182,8 @@ button.vap-cp:hover, .vap-cp.on { background: var(--accent-tint); }
    «Detalle» (las columnas de más de la lista) y «Cómo se calcula». Nivel 3 sin
    título (lo dice «Contra»). Los indicadores son MEDIDAS: su renglón de abajo se
    queda. ⤢ deja el gráfico o la lista, o la ficha, solos debajo del nivel 2. */
-.vap { padding-top: 0; }
-.vap-n2 { display: flex; align-items: stretch; gap: 20px; height: 36px; flex: none; margin: 0 -18px; padding: 0 18px;
+.vap { padding-top: var(--cp-margen-pestanas, 8px); }
+.vap-n2 { display: flex; align-items: stretch; gap: 20px; min-height: var(--cp-alto-pestanas, 40px); flex: none; margin: 0 -18px 4px; padding: 0 18px;
   border-bottom: 1px solid var(--border); font-size: 13px; }
 .vap-tabs { display: flex; align-items: stretch; gap: 20px; min-width: 0; }
 .vap-tabs button { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; padding: 0; cursor: pointer;
@@ -213,7 +213,7 @@ button.vap-cp:hover, .vap-cp.on { background: var(--accent-tint); }
 .vap-amp:hover { background: var(--marco-control, var(--bg-hover)); color: var(--accent-deep) !important; }
 .vap-amp svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 @media (max-width: 900px) {
-  .vap-n2 { margin: 0; padding: 0; height: auto; min-height: 36px; flex-wrap: wrap; }
+  .vap-n2 { margin-inline: 0; padding: 0; flex-wrap: wrap; }
   .vap-tabs { overflow-x: auto; overscroll-behavior: contain; }
   .vap-tabs button, .vap-link { min-height: 44px; }
   .vap-amp { display: none; }

@@ -706,6 +706,11 @@ CSS = """
         }
     }
 
+    /* Cabeceras de Compras con el alto y el margen de Ajuste › Diferencias. */
+    [class*="st-key-cp_con_filtro_"] {
+        --cp-alto-pestanas: 40px;
+        --cp-margen-pestanas: 8px;
+    }
     /* Un popover de familia y subfamilia por tarjeta de Compras. */
     [class*="st-key-cp_filtro_vista_"] {
         padding-inline: 10px;
@@ -772,8 +777,9 @@ CSS = """
         }
         [class*="st-key-cp_filtro_vista_"] {
             position: absolute !important;
-            top: 4px;
-            right: 14px;
+            top: calc(var(--cp-margen-pestanas) + var(--cp-alto-pestanas) / 2);
+            right: 18px;
+            transform: translateY(-50%);
             width: max-content !important;
             padding: 0;
             z-index: 8;
