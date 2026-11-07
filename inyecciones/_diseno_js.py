@@ -721,9 +721,8 @@ JS = """
         // superponen) lo decide el orden del DOM, no la posición visual:
         // sin esto, arrastrar un mock encima de CUALQUIER hermano que
         // venga DESPUES en el código (la tarjeta de mas abajo, por
-        // ejemplo) lo dejaba pintado DEBAJO de esa tarjeta — no hay ningun
-        // "traer al frente/enviar atras" en esta herramienta, es
-        // simplemente que nada lo mantenia arriba. Reportado 2026-08-31:
+        // ejemplo) lo dejaba pintado DEBAJO de esa tarjeta antes de tener
+        // un control de capas. Reportado 2026-08-31:
         // "la barra que cree aparece como detras de algo".
         // `z-index` no hace NADA en un elemento `position:static` (el
         // default) — hace falta `position:relative` (no saca al mock del
@@ -1451,6 +1450,139 @@ JS = """
                 registro.cambios[prop] = valor;
                 elemento.style.setProperty(prop, valor, 'important');
             }
+        }
+
+        // El hijo no puede salir de la capa de su contenedor (#270).
+        // Se ordena tambien su rama, cruzando los shadow roots de las piezas.
+        // Cada rama conserva su caja y su lugar en el DOM de Streamlit.
+        function planDeCapa(elemento, registro) {
+            if (!registro.capa) return [];
+            var plan = [], nodo = elemento;
+            while (nodo && nodo !== doc.body && nodo !== doc.documentElement) {
+                if (nodo !== elemento && nodo.matches('[data-testid="stMainBlockContainer"], .block-container')) break;
+                var posicion = win.getComputedStyle(nodo).position;
+                plan.push({ nodo: nodo, props: {
+                    position: posicion === 'static' ? 'relative' : posicion,
+                    'z-index': String(registro.capa.nivel)
+                } });
+                nodo = padreCompuesto(nodo);
+            }
+            // Contener las capas negativas mantiene el contenido sobre el
+            // fondo del lienzo al enviarlo detras de sus vecinos.
+            if (nodo) plan.push({ nodo: nodo, props: { isolation: 'isolate' } });
+            return plan;
+        }
+
+        function reaplicarCapas() {
+            var estado = win.__disenoState;
+            var anteriores = estado.capasAplicadas || new Map();
+            var deseadas = new Map();
+            var explicitas = new Set(), activos = [];
+            if (disenoActivo()) {
+                Object.keys(estado.porKey).forEach(function(id) {
+                    var reg = estado.porKey[id], capa = reg.capa;
+                    if (!capa || reg.verOriginalActivo) return;
+                    var el = elPorId(id);
+                    if (!el) return;
+                    explicitas.add(el);
+                    activos.push({ el: el, registro: reg });
+                });
+                activos.forEach(function(activo) {
+                    var plan = planDeCapa(activo.el, activo.registro);
+                    for (var i = 0; i < plan.length; i++) {
+                        var paso = plan[i];
+                        // El contenedor con una orden propia lleva su grupo
+                        // completo. El orden del hijo queda dentro de el.
+                        if (paso.nodo !== activo.el && explicitas.has(paso.nodo)) break;
+                        var props = deseadas.get(paso.nodo) || {};
+                        Object.keys(paso.props).forEach(function(prop) {
+                            var valor = paso.props[prop];
+                            // Dos elementos pueden compartir un contenedor.
+                            // Su rama conserva la capa mas alta que necesita.
+                            if (prop === 'z-index' && props[prop] !== undefined) {
+                                valor = String(Math.max(Number(props[prop]), Number(valor)));
+                            }
+                            props[prop] = valor;
+                        });
+                        deseadas.set(paso.nodo, props);
+                    }
+                });
+            }
+            anteriores.forEach(function(props, nodo) {
+                var siguientes = deseadas.get(nodo) || {};
+                Object.keys(props).forEach(function(prop) {
+                    var antes = props[prop];
+                    if (siguientes[prop] !== undefined) return;
+                    if (nodo.style.getPropertyValue(prop) !== antes.aplicado
+                            || nodo.style.getPropertyPriority(prop) !== 'important') return;
+                    if (antes.valor) nodo.style.setProperty(prop, antes.valor, antes.prioridad);
+                    else nodo.style.removeProperty(prop);
+                });
+            });
+            var aplicadas = new Map();
+            deseadas.forEach(function(props, nodo) {
+                var previas = anteriores.get(nodo) || {}, guardadas = {};
+                Object.keys(props).forEach(function(prop) {
+                    var valor = nodo.style.getPropertyValue(prop);
+                    var prioridad = nodo.style.getPropertyPriority(prop);
+                    var antes = previas[prop];
+                    var original = antes && valor === antes.aplicado && prioridad === 'important'
+                        ? antes : { valor: valor, prioridad: prioridad };
+                    guardadas[prop] = { valor: original.valor, prioridad: original.prioridad,
+                                        aplicado: props[prop] };
+                    if (valor !== props[prop] || prioridad !== 'important') {
+                        nodo.style.setProperty(prop, props[prop], 'important');
+                    }
+                });
+                aplicadas.set(nodo, guardadas);
+            });
+            estado.capasAplicadas = aplicadas;
+        }
+
+        function cambiarCapa(ctx, alFrente) {
+            var estado = win.__disenoState;
+            estado.secuenciaCapas = (estado.secuenciaCapas || 0) + 1;
+            ctx.registro.capa = {
+                nivel: alFrente ? 1000000000 + estado.secuenciaCapas : -estado.secuenciaCapas
+            };
+            reaplicarCapas();
+        }
+
+        // Selector del contenedor auxiliar para entregar tambien sus capas
+        // al copiar CSS. Dentro de una pieza termina en su shadow root.
+        function selectorDeCapa(nodo) {
+            var partes = [];
+            while (nodo && nodo.nodeType === 1) {
+                var key = Array.prototype.find.call(nodo.classList, function(c) {
+                    return c.indexOf('st-key-') === 0;
+                });
+                if (key) {
+                    partes.unshift('.' + win.CSS.escape(key));
+                    break;
+                }
+                var padre = nodo.parentNode;
+                var indice = padre && padre.children
+                    ? Array.prototype.indexOf.call(padre.children, nodo) + 1 : 1;
+                partes.unshift(nodo.tagName.toLowerCase() + ':nth-child(' + indice + ')');
+                nodo = nodo.parentElement;
+            }
+            return partes.join(' > ');
+        }
+
+        function construirBloqueCapas(elemento, registro, ancla) {
+            var bloques = [];
+            planDeCapa(elemento, registro).forEach(function(paso) {
+                var selector = paso.nodo === elemento ? ancla : selectorDeCapa(paso.nodo);
+                var props = (win.__disenoState.capasAplicadas || new Map()).get(paso.nodo) || {};
+                var lineas = Object.keys(paso.props).map(function(prop) {
+                    var valor = props[prop] ? props[prop].aplicado : paso.props[prop];
+                    return '    ' + prop + ': ' + valor + ' !important;';
+                });
+                var destino = enPieza(paso.nodo) ? 'CSS de la pieza' : 'CSS global de la app';
+                bloques.push('/* Capa — ' + destino + ' */\\n' + selector
+                    + ' {\\n' + lineas.join('\\n') + '\\n}');
+            });
+            return bloques.join('\\n\\n');
         }
 
         // Widgets tipo boton (st.pills/segmented_control, o un st.button/
@@ -3104,6 +3236,8 @@ JS = """
                 var lineas = Object.keys(props).map(function(p) { return '    ' + p + ': ' + props[p] + ';'; });
                 bloques.push(sel + ' {\\n' + lineas.join('\\n') + '\\n}');
             });
+            var bloqueCapas = construirBloqueCapas(elemento, registro, ancla);
+            if (bloqueCapas) bloques.push(bloqueCapas);
             // Lo de la TABLA (si el elemento tiene una grilla adentro) no
             // es CSS de estilos/ sino el custom_css de Python, asi que sale
             // como bloque aparte y se pega en otro archivo. Ver
@@ -3282,6 +3416,8 @@ JS = """
                         props.push('    /* movido ' + t.translateX + ',' + t.translateY
                                    + 'px — traducilo a margin/gap, no pegues el transform */');
                     }
+                    var capaCSS = construirBloqueCapas(m.el, m.registro, selectorDeCapa(m.el));
+                    if (capaCSS) partes.push(capaCSS);
                     if (!props.length) return;
                     partes.push('.st-key-' + m.id + ' {\\n' + props.join('\\n') + '\\n}');
                 });
@@ -3722,6 +3858,28 @@ JS = """
             }));
             var posVal = spanValor('');
             panel.appendChild(filaSoloLectura('Posición (nudge)', posVal));
+            if (!res.subTexto && !elemento.ownerSVGElement && elemento.ownerDocument === doc) {
+                var botonesCapas = doc.createElement('div');
+                botonesCapas.style.cssText = 'display:flex;gap:5px';
+                [[true, 'Traer al frente'], [false, 'Enviar al fondo']].forEach(function(opcion) {
+                    var b = doc.createElement('button');
+                    b.textContent = opcion[1];
+                    b.style.cssText = 'flex:1;background:#1c1c24;color:#fff;border:1px solid #34343f;border-radius:4px;padding:6px 3px;font:11px sans-serif;cursor:pointer';
+                    b.addEventListener('click', function() {
+                        var ctx = elementoActivo(); if (!ctx) return;
+                        cambiarCapa(ctx, opcion[0]);
+                        rehacerPanel();
+                    });
+                    botonesCapas.appendChild(b);
+                });
+                var capaActual = registro.capa ? (registro.capa.nivel > 0 ? 'Frente' : 'Fondo') : 'Original';
+                panel.appendChild(filaControl('Orden de capas', botonesCapas, spanValor(capaActual), function() {
+                    var ctx = elementoActivo(); if (!ctx) return;
+                    delete ctx.registro.capa;
+                    reaplicarCapas();
+                    rehacerPanel();
+                }));
+            }
             // Se actualiza en cada tick desde actualizarReadouts(); nace
             // oculta y solo aparece cuando hay recorte de verdad.
             var recorteVal = spanValor('');
@@ -4539,6 +4697,7 @@ JS = """
                 ctx.registro.verOriginalActivo = !ctx.registro.verOriginalActivo;
                 btnOriginal.textContent = ctx.registro.verOriginalActivo ? 'Ver con cambios' : 'Ver original';
                 aplicarEstado(ctx.el, ctx.registro);
+                reaplicarCapas();
             });
             panel.appendChild(btnOriginal);
 
@@ -4709,6 +4868,7 @@ JS = """
         // arrastre (resize/mover) tampoco usa rAF: aplica los cambios
         // directo en cada 'mousemove', que ya alcanza para verse fluido.
         function sync() {
+            reaplicarCapas();
             if (!disenoActivo()) {
                 overlay.style.display = 'none';
                 panel.style.display = 'none';

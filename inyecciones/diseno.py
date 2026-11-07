@@ -39,6 +39,11 @@ serializa al script igual que `_mapas_desarrollador()` en inspector.py
 (`json.dumps` + placeholder), para no hardcodear hex sueltos (CLAUDE.md
 "nunca un #hex suelto").
 
+Orden de capas agrega «Traer al frente» y «Enviar al fondo» junto a la
+posición. También ordena los contenedores de la rama, incluidos los de las
+piezas con shadow root. El ↺ restaura las capas, «Ver original» permite
+compararlas y «Copiar CSS» incluye las reglas de los contenedores.
+
 Fase C agrega INSERTAR: elementos de mentira ("mocks") para ver cómo se
 vería algo que todavía no existe — Texto (editable en el lugar), Línea,
 Barra y Espacio, anclados antes/dentro/después del elemento pineado. Nacen
