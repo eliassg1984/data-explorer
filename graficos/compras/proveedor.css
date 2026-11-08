@@ -40,6 +40,34 @@ details.dl[open] summary .ch { transform: rotate(180deg); }
 .lf-fl1 { width: 30px; padding: 0; height: 26px; }
 .fuerte { font-weight: 600; }
 .lf-panel[hidden] { display: none; }
+/* Los controles temporales se ven donde se usa el desglose, no sólo en Curva. */
+.pv-controles { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; padding: 8px; background: var(--rail-fondo); border-radius: 8px; flex: none; }
+.pv-control { display: flex; flex-direction: column; gap: 3px; min-width: 0; max-width: 100%; font-size: 11px; color: var(--text-secondary); }
+.pv-control .lf-men { background: var(--bg-card); max-width: 100%; color: var(--text-primary); }
+.pv-puntos { align-items: end; }
+.pv-contexto { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 3px 12px; font-size: 12px; flex: none; }
+.pv-contexto b { font-weight: 600; }
+.pv-contexto > span { color: var(--text-secondary); }
+.pv-leyenda b { font-weight: 600; }
+.ft.pl.pl-valor .ft-f { grid-template-columns: minmax(130px, 1fr) 118px 42px 84px; }
+.ft.pl.pl-cant .ft-f { grid-template-columns: minmax(130px, 1fr) 118px; }
+.ft.pl.pl-precio .ft-f { grid-template-columns: minmax(130px, 1fr) 118px 84px; }
+.ft.pl.pl-ambos .ft-f { grid-template-columns: minmax(130px, 1fr) 112px 118px; }
+.ft.pl.pl-tres .ft-f { grid-template-columns: minmax(130px, 1fr) 100px 118px 118px; }
+.ft.pl small, .pv-celda small { font-size: 11px; color: var(--text-secondary); }
+.ft.pm.pm-combinado { min-width: calc(156px + (var(--n) + 1) * 100px); }
+.ft.pm.pm-combinado .ft-f { grid-template-columns: minmax(148px, 1fr) repeat(var(--n), minmax(88px, 1fr)) minmax(96px, 1fr); }
+.pm-combinado .pm-f { padding-top: 6px; padding-bottom: 6px; }
+.pm-combinado .ft-h > span:last-child, .pm-combinado .pm-f > span:last-child { background: var(--rail-fondo); }
+.pv-celda { display: flex; flex-direction: column; align-items: end; gap: 2px; padding: 2px 4px; text-align: right; }
+.pv-celda > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pv-cantidad { font-weight: 600; }
+.pv-precio { font-size: 11px; color: var(--accent-deep); }
+.pv-valor { font-size: 11px; color: var(--text-secondary); }
+.pv-celda.z { color: var(--text-secondary); }
+@media (max-width: 900px) {
+  .pv-controles .pv-control { flex: 1 1 140px; }
+}
 @media (max-width: 900px) {
   .ft { min-width: 470px; }
   .p90 { grid-template-columns: minmax(0, 1fr) 120px 66px 50px; }

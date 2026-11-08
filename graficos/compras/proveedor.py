@@ -17,6 +17,12 @@ seis puntos con su tendencia de trece; los documentos con los días desde la
 compra anterior y lo que subió de precio, o agrupados por período. Sólo la
 fecha, el filtro de proveedores y las familias vuelven a Python.
 
+En Productos se eligen valor comprado, cantidad, precio unitario ponderado,
+cantidad y precio juntos, o las tres medidas. El Desglose muestra la cantidad
+arriba y el precio debajo de cada período; Total del rango los pone en columnas.
+Agrupación y período están visibles también en el Desglose y en Documentos por
+período. La curva arranca con el rango del reporte, agrupado por día.
+
 Lo que manda Python, partido en dos montajes para que la fecha no vuelva a
 mandar el historial:
 

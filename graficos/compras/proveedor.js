@@ -24,6 +24,7 @@ const RL = { dia: 0, prod: 1, doc: 2, cant: 3, valor: 4, ref: 5, um: 6, flag: 7 
 const GRANOS = [['Día', 'Día'], ['Semana', 'Semana'], ['Mes', 'Mes'], ['Año', 'Año'], ['Documento', 'Documento']];
 const GRAN_POR = { Día: 'Por día', Semana: 'Por semana', Mes: 'Por mes', Año: 'Por año', Documento: 'Por documento' };
 const MEDIDAS = [['valor', 'Soles'], ['cant', 'Cantidad'], ['precio', 'Precio']];
+const MEDIDAS_PRODUCTOS = [['valor', 'Valor comprado (S/)'], ['cant', 'Cantidad'], ['precio', 'Precio unitario'], ['ambos', 'Cantidad y precio'], ['tres', 'Cantidad, precio y valor']];
 const OPS = [['Rango', 'el rango'], ['3m', '3 meses'], ['12m', '12 meses'], ['24m', '24 meses'], ['Todo', 'todo']];
 const MESES_OP = { '3m': 3, '12m': 12, '24m': 24 };
 const VENTANA_AUTO = 12;   // max(4, min(12, int(1200 / (16 * 2)))) de la vista de antes
@@ -71,6 +72,15 @@ function moda(ls, F) {
   let mejor = null, k = 0;
   n.forEach((c, u) => { if (c > k || (c === k && u < mejor)) { mejor = u; k = c; } });
   return mejor == null ? '' : F.ums[mejor];
+}
+
+// El precio de compra es el ponderado. Un mismo producto con unidades
+// distintas no tiene una cantidad ni un precio unitario que se puedan juntar.
+function medidasDe(ls, F) {
+  const unidades = new Set(ls.map((l) => F.ums[l.um] || ''));
+  const mezcla = unidades.size > 1, valor = suma(ls, (l) => l.valor);
+  const cant = mezcla ? null : suma(ls, (l) => l.cant);
+  return { valor, cant, precio: cant > 0 ? valor / cant : null, um: mezcla ? '' : [...unidades][0] || '', mezcla };
 }
 
 // ── Los períodos (`agregar_periodo`, `inicio_de_periodo`, `tramo_parcial`) ─
@@ -387,10 +397,10 @@ function calcular(F, R, st) {
   return { rk, p, prod, ci, C };
 }
 
-window.__cpProvCalc = { leerFicha, leerRank, ranking, cifras, panorama, curvaDe, desglose, historiaDocs, calcular, clave, parcial };
+window.__cpProvCalc = { leerFicha, leerRank, ranking, cifras, panorama, curvaDe, desglose, historiaDocs, calcular, clave, parcial, medidasDe };
 
 const G = window.__cpProv || (window.__cpProv = {
-  st: { gran: 'Mes', op: '12m', medida: 'valor', tab: 'curva', pmodo: 'tot', dmodo: 'doc', kpi: 'todos', ver: 'todos', q: '', foco: null, per: null, amp: null, menu: null, abiertos: new Set() },
+  st: { gran: 'Día', op: 'Rango', medida: 'valor', tab: 'curva', pmodo: 'per', pmedida: 'ambos', dmodo: 'doc', kpi: 'todos', ver: 'todos', q: '', foco: null, per: null, amp: null, menu: null, abiertos: new Set() },
   R: null, F: null });
 
 if (G.st.det == null) G.st.det = !!lfLeer('cp_prov_det', false);
@@ -428,11 +438,31 @@ function fmtMedida(v, medida, um) {
   return soles(v);
 }
 
+const medidaProductos = () => MEDIDAS_PRODUCTOS.some(([k]) => k === G.st.pmedida) ? G.st.pmedida : 'ambos';
+const tituloMedidaProductos = () => MEDIDAS_PRODUCTOS.find(([k]) => k === medidaProductos())[1];
+const unidadPrecio = (um) => um ? `/${esc(um)}` : '';
+function cantidadProducto(a) {
+  return a.mezcla ? '<span class="igual" title="Compras en distintas unidades">Unidades distintas</span>'
+    : `${finito(a.cant) ? cantTxt(a.cant) : '—'}${a.um ? ` <small>${esc(a.um)}</small>` : ''}`;
+}
+function precioProducto(a) {
+  return a.mezcla ? '<span class="igual" title="Compras en distintas unidades">—</span>' : `${precio(a.precio)}${finito(a.precio) ? `<small>${unidadPrecio(a.um)}</small>` : ''}`;
+}
+function celdaMedidas(a, medida) {
+  if (!a.valor && !a.cant) return '<span class="pv-celda z">—</span>';
+  return `<span class="pv-celda" data-cant="${a.cant ?? ''}" data-precio="${a.precio ?? ''}" data-valor="${a.valor}">`
+    + `<span class="pv-cantidad">${cantidadProducto(a)}</span><span class="pv-precio">${precioProducto(a)}</span>`
+    + (medida === 'tres' ? `<span class="pv-valor">${soles(a.valor)}</span>` : '') + '</span>';
+}
+
 // «Total del rango»: los productos comprados al proveedor en el rango. El
 // producto en foco se despliega con sus proveedores de los últimos 90 días
 // (precio promedio del período) y, abajo, los de todo el histórico.
 function tablaProductos(F, R, X, colores) {
   const { p, ci, prod } = X;
+  const medida = medidaProductos();
+  const columnas = { valor: ['valor', 'pct', 'hab'], cant: ['cant'], precio: ['precio', 'hab'], ambos: ['cant', 'precio'], tres: ['cant', 'precio', 'valor'] }[medida];
+  const titulos = { valor: 'Valor comprado (S/)', pct: '%', cant: 'Cantidad', precio: 'Precio unitario', hab: 'Vs. habitual' };
   const g = new Map();
   ci.ls.forEach((l) => {
     const a = g.get(l.prod) || { prod: l.prod, valor: 0, cant: 0, ls: [] };
@@ -443,22 +473,20 @@ function tablaProductos(F, R, X, colores) {
   if (!rows.length) return { n: 0, html: '<div class="nota-v">Sin productos para este proveedor.</div>' };
   const tot = suma(rows, (a) => a.valor) || 1;
   const filas = rows.map((a) => {
-    const nom = F.prods[a.prod], um = moda(a.ls, F), hab = ci.hab.get(a.prod);
+    const nom = F.prods[a.prod], hab = ci.hab.get(a.prod), m = medidasDe(a.ls, F);
     let vh;
     if (!finito(hab)) vh = '<span class="var">—</span>';
     else if (Math.abs(hab) < 0.5) vh = '<span class="var igual" title="Igual al precio habitual (±0,5 %)">=</span>';
     else vh = `<span class="var ${hab > 0 ? 'sube' : 'baja'}">${fmtVar(hab)}</span>`;
     const foco = a.prod === prod, solo = G.pan && G.pan.pv90.get(a.prod) && G.pan.pv90.get(a.prod).size === 1;
+    const valores = { valor: soles(a.valor), pct: `${Math.round(a.valor / tot * 100)} %`, cant: cantidadProducto(m), precio: precioProducto(m), hab: vh };
     return `<div class="ft-f${foco ? ' foco' : ''}" data-acc="prod" data-v="${a.prod}" title="${esc(nom)}${solo ? ' · en 90 días, sólo a este proveedor' : ''} · clic: sus proveedores y su curva">`
-      + celda(esc(nom), 'nm') + celda(soles(a.valor), 'r') + celda(`${Math.round(a.valor / tot * 100)} %`, 'r igual')
-      + celda(cantTxt(a.cant) + (um ? ` ${esc(um)}` : ''), 'r') + celda(a.cant ? precio(a.valor / a.cant) : '—', 'r')
-      + `<span class="r">${vh}</span></div>`
+      + celda(esc(nom), 'nm') + columnas.map((k) => celda(valores[k], `r pv-${k}`)).join('') + '</div>'
       + (foco ? `<div class="lf-sub pl-provs">${provsDelProducto(F, R, a.prod, colores)}</div>` : '');
   });
-  return { n: rows.length, html: tabla('pl', [celda('Producto'), celda('Valor', 'r'), celda('%', 'r'), celda('Cant.', 'r'), celda('Precio', 'r'),
-      celda('Vs. hab.', 'r', 'Contra la mediana del precio de los 90 días anteriores a cada compra, sin las compras para revisar')],
-    filas, [celda(`Total · ${rows.length} ${rows.length === 1 ? 'producto' : 'productos'}`, 'nm'), celda(soles(suma(rows, (a) => a.valor)), 'r'),
-      celda('100 %', 'r'), celda(''), celda(''), celda('')]) };
+  return { n: rows.length, html: tabla(`pl pl-${medida}`, [celda('Producto'), ...columnas.map((k) => celda(titulos[k], 'r', k === 'precio' ? 'Valor comprado dividido entre cantidad, en la unidad de compra del producto'
+      : k === 'hab' ? 'Contra la mediana del precio de los 90 días anteriores a cada compra, sin las compras para revisar' : ''))], filas,
+    [celda(`${rows.length} ${rows.length === 1 ? 'producto' : 'productos'}`, 'nm'), ...columnas.map((k) => celda(k === 'valor' ? soles(suma(rows, (a) => a.valor)) : k === 'pct' ? '100 %' : '', 'r'))]) };
 }
 function provsDelProducto(F, R, i, colores) {
   const L = delProducto(F, i);
@@ -513,9 +541,15 @@ function tabla(tipo, cab, filas, tot) {
 
 function tablaDesglose(F, X) {
   const { C, prod } = X;
-  const D = desglose(F, C, F.P[X.p], G.st.medida);
+  const medidaTabla = medidaProductos();
+  if (medidaTabla === 'ambos' || medidaTabla === 'tres') return tablaDesgloseCombinado(F, X, medidaTabla);
+  const D = desglose(F, C, F.P[X.p], medidaTabla);
   if (!D.vis.length) return '<div class="nota-v">La curva no tiene períodos que desglosar.</div>';
   if (!D.filas.length) return '<div class="nota-v">Sin compras a este proveedor en los últimos períodos de la curva.</div>';
+  if (medidaTabla !== 'valor') D.filas.forEach((a) => {
+    const unidad = medidasDe(a.ls, F);
+    if (unidad.mezcla) { a.m = a.m.map(() => null); a.um = 'Unidades distintas'; }
+  });
   const nv = D.vis.length, desde = D.tend.length - nv, medida = D.medida;
   const dec = medida === 'precio' ? 2 : medida === 'cant' ? 1 : 0;
   const txt = (v) => (!finito(v) || v === 0 ? '—' : num(v, dec));
@@ -575,7 +609,7 @@ function tablaDesglose(F, X) {
   const head = D.vis.map((k, i) => (parc && i === nv - 1 ? C.parc.rot : etq(k, C.gran, false, F)));
   let titD = 'vs. anterior';
   if (D.modo === 'ref') titD = 'vs. ' + (C.gran === 'Semana' ? C.parc.rotRef.split(' de la ')[0] : C.parc.rotRef);
-  const que = { valor: 'Soles', cant: 'Cantidad', precio: 'Precios' }[medida];
+  const que = { valor: 'Valor comprado (S/)', cant: 'Cantidad', precio: 'Precio unitario promedio' }[medida];
   const gr = { Día: 'día', Semana: 'semana', Mes: 'mes', Año: 'año', Documento: 'documento' }[C.gran];
   let nota = `<b>${que} por ${gr}</b> · los últimos ${nv} puntos de la curva`;
   if (parc) nota += medida === 'precio' ? ` · ${esc(C.parc.rot)} se compara con el período anterior entero` : ` · ${esc(C.parc.rot)} se compara con ${esc(C.parc.rotRef)}`;
@@ -586,6 +620,42 @@ function tablaDesglose(F, X) {
     + '<span class="sp" title="Los últimos puntos de la curva; la franja, las columnas de la tabla">Tendencia</span>'
     + head.map((h) => `<span class="r">${esc(h)}</span>`).join('') + `<span class="r">${esc(titD)}</span></div>`
     + `<div class="ft-l">${filas.join('')}</div>${tot ? `<div class="ft-f ft-t">${tot.join('')}</div>` : ''}</div>`;
+}
+
+function tablaDesgloseCombinado(F, X, medida) {
+  const C = X.C, D = desglose(F, C, F.P[X.p], 'valor');
+  if (!D.vis.length) return '<div class="nota-v">Sin períodos para desglosar.</div>';
+  if (!D.filas.length) return '<div class="nota-v">Sin compras a este proveedor en los períodos visibles.</div>';
+  const vis = new Set(D.vis), filas = D.filas.map((a) => {
+    const nombre = F.prods[a.prod], visibles = a.ls.filter((l) => vis.has(l.k));
+    return `<div class="ft-f pm-f${a.prod === X.prod ? ' foco' : ''}" data-acc="prod-curva" data-v="${a.prod}" title="${esc(nombre)} · clic: su curva">`
+      + celda(esc(nombre), 'nm') + D.vis.map((k) => celdaMedidas(medidasDe(a.ls.filter((l) => l.k === k), F), medida)).join('')
+      + celdaMedidas(medidasDe(visibles, F), medida) + '</div>';
+  });
+  const head = D.vis.map((k, i) => C.parc && i === D.vis.length - 1 ? C.parc.rot : etq(k, C.gran, false, F));
+  const total = medida === 'tres' ? `<div class="ft-f ft-t">${celda('Valor comprado (S/)', 'nm')}${D.total.map((v) => celda(soles(v), 'r')).join('')}${celda(soles(suma(D.total, (v) => v)), 'r')}</div>` : '';
+  return `<div class="nota pv-leyenda"><b>Cantidad</b> arriba · <b>Precio unitario promedio</b> debajo${medida === 'tres' ? ' · valor comprado al final' : ''} · ${D.vis.length} últimos períodos visibles</div>`
+    + `<div class="ft pm pm-combinado" style="--n:${D.vis.length}"><div class="ft-f ft-h">${celda('Producto')}${head.map((h) => celda(esc(h), 'r')).join('')}${celda('Total visible', 'r', 'Cantidad y precio ponderado de los períodos visibles')}</div>`
+    + `<div class="ft-l">${filas.join('')}</div>${total}</div>`;
+}
+
+function controlesTiempo(C, fijo = false) {
+  const st = G.st, option = (k, texto, on) => `<option value="${k}"${on ? ' selected' : ''}>${texto}</option>`;
+  const disabled = fijo ? ' disabled' : '';
+  return `<label class="pv-control"><span>Agrupar por</span><select class="lf-men" data-sel="gran" aria-label="Agrupar"${disabled}>${GRANOS.map(([k, t]) => option(k, t, k === st.gran)).join('')}</select></label>`
+    + `<label class="pv-control"><span>Período</span><select class="lf-men" data-sel="op" aria-label="Período de la vista"${disabled}>${OPS.map(([k, t]) => option(k, k === 'Rango' ? 'Rango del reporte' : k === 'Todo' ? 'Todo el historial' : `Últimos ${t}`, k === (fijo ? 'Rango' : st.op))).join('')}</select></label>`;
+}
+function controlesPuntos(C) {
+  if (!C.win) return '';
+  const w = C.win, fmtW = (o) => o == null ? `Automático (${Math.min(VENTANA_AUTO, w.nPer)})` : o === w.nPer ? `Todos (${w.nPer})` : String(o);
+  return `<div class="lf-ev pv-puntos"><label class="pv-control"><span>Puntos de la curva</span><select class="lf-men" data-sel="win" aria-label="Períodos visibles">${w.ops.map((o) => `<option value="${o ?? ''}"${o === w.tam ? ' selected' : ''}>${fmtW(o)}</option>`).join('')}</select></label>`
+    + `<button class="lf-pil lf-fl1" data-acc="mover" data-v="-1" title="Períodos anteriores"${w.ini <= 0 ? ' disabled' : ''}>‹</button>`
+    + `<button class="lf-pil lf-fl1" data-acc="mover" data-v="1" title="Períodos siguientes"${w.ini >= w.iniMax ? ' disabled' : ''}>›</button></div>`;
+}
+function contextoTiempo(F, R, C, fijo = false) {
+  if (fijo || !C.hist) return `Rango del reporte · ${tramo(R.R0, R.R1)}`;
+  const [ini, fin] = ventana(C.op, F.ULT, F.MIN);
+  return `Histórico · ${fDMA(inicioDe(ini, C.gran))}–${fDMA(fin)}`;
 }
 
 function tablaDocumentos(F, X, per) {
@@ -693,12 +763,18 @@ function fichaHtml() {
   let zona = '';
   if (st.tab === 'curva') zona = zonaCurva(F, C, prod, per);
   else if (st.tab === 'prod') {
-    const sel = `<select class="lf-men" data-sel="pmodo" aria-label="Cómo ver los productos">${[['tot', 'Ver: Total del rango'], ['per', 'Ver: Desglose']].map(([k, t]) => `<option value="${k}"${k === st.pmodo ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
-    zona = `<div class="lf-ev">${sel}<span class="sub">${st.pmodo === 'tot' ? 'Clic: quién más lo vende, y su curva' : ''}</span></div><div class="cuerpo">${st.pmodo === 'per' ? tablaDesglose(F, X) : tablaProductos(F, R, X, colores).html}</div>`;
+    const fijo = st.pmodo === 'tot';
+    const sel = `<label class="pv-control"><span>Ver</span><select class="lf-men" data-sel="pmodo" aria-label="Cómo ver los productos">${[['per', 'Desglose por período'], ['tot', 'Total del rango']].map(([k, t]) => `<option value="${k}"${k === st.pmodo ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
+    const medir = `<label class="pv-control"><span>Mostrar</span><select class="lf-men" data-sel="pmedida" aria-label="Medida de los productos">${MEDIDAS_PRODUCTOS.map(([k, t]) => `<option value="${k}"${k === medidaProductos() ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
+    zona = `<div class="pv-controles">${sel}${controlesTiempo(C, fijo)}${medir}${fijo ? '' : controlesPuntos(C)}</div>`
+      + `<div class="pv-contexto"><b>${esc(tituloMedidaProductos())}</b><span>${esc(contextoTiempo(F, R, C, fijo))}</span></div>`
+      + `<div class="cuerpo">${fijo ? tablaProductos(F, R, X, colores).html : tablaDesglose(F, X)}</div>`;
   } else {
-    const sel = `<select class="lf-men" data-sel="dmodo" aria-label="Cómo ver los documentos">${[['doc', 'Ver: Por documento'], ['per', `Ver: ${GRAN_POR[C.gran === 'Documento' ? 'Mes' : C.gran]}`]].map(([k, t]) => `<option value="${k}"${k === st.dmodo ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
-    const porPer = st.dmodo === 'per' && C.gran !== 'Documento';
-    zona = `<div class="lf-ev">${C.gran === 'Documento' ? '' : sel}<span class="sub">${porPer ? 'Los períodos de la curva' : per ? 'De ese período. Clic: sus líneas' : 'Del rango. Clic: sus líneas'}</span></div><div class="cuerpo">${porPer ? tablaDocsPeriodo(F, X) : tablaDocumentos(F, X, per).html}</div>`;
+    const sel = `<select class="lf-men" data-sel="dmodo" aria-label="Cómo ver los documentos">${[['doc', 'Ver: Por documento'], ['per', 'Ver: Por período']].map(([k, t]) => `<option value="${k}"${k === st.dmodo ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+    const porPer = st.dmodo === 'per';
+    zona = `<div class="lf-ev">${sel}<span class="sub">${porPer ? contextoTiempo(F, R, C) : per ? 'De ese período. Clic: sus líneas' : 'Del rango. Clic: sus líneas'}</span></div>`
+      + (porPer ? `<div class="pv-controles">${controlesTiempo(C)}${controlesPuntos(C)}</div>` : '')
+      + `<div class="cuerpo">${porPer ? tablaDocsPeriodo(F, X) : tablaDocumentos(F, X, per).html}</div>`;
   }
   return `<div class="lf-fcab"><div class="lf-ftit"><span class="lf-miga">Proveedor${desde != null ? ` · desde ${mesAnio(desde)}` : ''}</span><h3 title="${esc(nom)}">${esc(nom)}</h3></div>`
     + `${lfAmp('panel', st.amp === 'panel', 'la ficha')}<button class="lf-quita" data-acc="soltar">Soltar</button></div>`
@@ -709,16 +785,8 @@ function fichaHtml() {
 function zonaCurva(F, C, prod, per) {
   const st = G.st;
   const op = (v, t, on) => `<option value="${v}"${on ? ' selected' : ''}>${t}</option>`;
-  let ctl = '';
-  if (prod != null) ctl += `<select class="lf-men" data-sel="medida" aria-label="Qué medir">${MEDIDAS.map(([k, t]) => op(k, `Medir: ${t}`, k === st.medida)).join('')}</select>`;
-  ctl += `<select class="lf-men" data-sel="gran" aria-label="Agrupar">${GRANOS.map(([k, t]) => op(k, `Por: ${t}`, k === st.gran)).join('')}</select>`;
-  ctl += `<select class="lf-men" data-sel="op" aria-label="Ventana de la curva">${OPS.map(([k, t]) => op(k, `Curva: ${t}`, k === st.op)).join('')}</select>`;
-  if (C.win) {
-    const w = C.win, fmtW = (o) => (o == null ? `Ver: ${VENTANA_AUTO}` : o === w.nPer ? `Ver: todos (${w.nPer})` : `Ver: ${o}`);
-    ctl += `<select class="lf-men" data-sel="win" aria-label="Períodos visibles">${w.ops.map((o) => op(o == null ? '' : o, fmtW(o), o === w.tam)).join('')}</select>`
-      + `<button class="lf-pil lf-fl1" data-acc="mover" data-v="-1" title="Períodos anteriores"${w.ini <= 0 ? ' disabled' : ''}>‹</button>`
-      + `<button class="lf-pil lf-fl1" data-acc="mover" data-v="1" title="Períodos siguientes"${w.ini >= w.iniMax ? ' disabled' : ''}>›</button>`;
-  }
+  let ctl = controlesTiempo(C);
+  if (prod != null) ctl += `<label class="pv-control"><span>Medir</span><select class="lf-men" data-sel="medida" aria-label="Qué medir">${MEDIDAS.map(([k, t]) => op(k, t, k === st.medida)).join('')}</select></label>`;
   let graf;
   if (!C.keys.length) graf = '<div class="lf-sinc">Sin compras de este proveedor en la ventana.</div>';
   else {
@@ -733,7 +801,7 @@ function zonaCurva(F, C, prod, per) {
     else ley.push(`${C.parc.rotRef}: ${fmtMedida(C.ref, C.medida, C.um)} ${fmtVar(varPct(C.ys[n - 1], C.ref))}`);
   }
   if (prod == null) ley.push('Para cantidad y precio, elige un producto en «Productos».');
-  return `<div class="lf-ev">${ctl}</div>${graf}<p class="lf-nota">${esc(ley.join(' · '))}</p>`;
+  return `<div class="pv-controles">${ctl}${controlesPuntos(C)}</div><p class="lf-nota">${esc(contextoTiempo(F, G.R, C))}</p>${graf}<p class="lf-nota">${esc(ley.join(' · '))}</p>`;
 }
 
 // El globo de un período: su cifra, contra qué, y lo que hace el clic.

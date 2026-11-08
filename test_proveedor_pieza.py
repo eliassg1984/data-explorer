@@ -340,6 +340,22 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             for a, b in zip(m, piv.loc[p].tolist()):
                 self.assertAlmostEqual(a, b, places=6)
 
+    def test_precio_ponderado_cero_cantidad_y_unidades_distintas(self):
+        j = self.pg.evaluate("""() => {
+          const m = __cpProvCalc.medidasDe, f = { ums: ['kg', 'UND'] };
+          const ls = [{valor: 100, cant: 10, um: 0}, {valor: 300, cant: 5, um: 0}];
+          return { ponderado: m(ls, f), cero: m([{valor: 10, cant: 0, um: 0}], f),
+            mezcla: m([ls[0], {...ls[1], um: 1}], f) };
+        }""")
+        self.assertAlmostEqual(j["ponderado"]["precio"], 400 / 15)
+        self.assertEqual(j["ponderado"]["cant"], 15)
+        self.assertEqual(j["ponderado"]["um"], "kg")
+        self.assertIsNone(j["cero"]["precio"])
+        self.assertTrue(j["mezcla"]["mezcla"])
+        self.assertIsNone(j["mezcla"]["cant"])
+        self.assertIsNone(j["mezcla"]["precio"])
+        self.assertEqual(j["mezcla"]["valor"], 400)
+
     def test_la_historia_de_los_documentos(self):
         for prov in ("ALFA SAC", "DELTA SAC"):
             with self.subTest(prov=prov):
@@ -456,6 +472,69 @@ class LaPantalla(unittest.TestCase):
         self.assertIn("Zeta", self._texto("tbody tr[data-acc]"))
         self.pg.locator("tbody tr[data-acc]").first.click()
         self.assertIn("No se le compró", self._texto(".lf-frase"))
+
+    def test_productos_agrupa_sin_ir_a_la_curva_y_muestra_ambas_medidas(self):
+        self.pg.locator('tbody tr[data-acc]').first.click()
+        self.pg.locator('.lf-panel .lf-seg button', has_text='Productos').click()
+        self.pg.locator('[data-sel="pmodo"]').select_option('per')
+        self.pg.locator('[data-sel="pmedida"]').select_option('ambos')
+        self.pg.locator('[data-sel="op"]').select_option('Rango')
+        for grano in ('Día', 'Semana', 'Mes', 'Año', 'Documento'):
+            with self.subTest(grano=grano):
+                self.pg.locator('[data-sel="gran"]').select_option(grano)
+                self.assertEqual(self.pg.evaluate('__cpProv.st.gran'), grano)
+                self.assertGreater(self.pg.locator('.pm-combinado .pv-cantidad').count(), 0)
+                self.assertGreater(self.pg.locator('.pm-combinado .pv-precio').count(), 0)
+                self.assertIn('Rango del reporte', self._texto('.pv-contexto'))
+        self.pg.locator('[data-sel="gran"]').select_option('Mes')
+        prod = self.F['prods'].index('Lomo fino')
+        celdas = self.pg.locator(f'.pm-combinado .pm-f[data-v="{prod}"] .pv-celda').evaluate_all(
+            'es=>es.map(e=>({cant:Number(e.dataset.cant), precio:Number(e.dataset.precio), valor:Number(e.dataset.valor)}))')
+        h = self.h[(self.h['prov'] == 'ALFA SAC') & (self.h['prod'] == 'Lomo fino')
+                   & self.h['fecha'].between(*_RANGO)]
+        self.assertAlmostEqual(celdas[-1]['cant'], float(h['cant'].sum()))
+        self.assertAlmostEqual(celdas[-1]['valor'], float(h['valor'].sum()))
+        self.assertAlmostEqual(celdas[-1]['precio'], float(h['valor'].sum() / h['cant'].sum()))
+        self.pg.locator('.lf-panel .lf-seg button', has_text='Documentos').click()
+        self.pg.locator('[data-sel="dmodo"]').select_option('per')
+        self.pg.locator('[data-sel="gran"]').select_option('Documento')
+        self.assertTrue(self.pg.locator('[data-sel="op"]').is_visible())
+        self.pg.locator('[data-sel="gran"]').select_option('Mes')
+        self.assertGreater(self.pg.locator('.ft.dp .ft-l .ft-f').count(), 0)
+
+    def test_medidas_en_total_y_desglose_conservan_su_contexto(self):
+        self.pg.locator('tbody tr[data-acc]').first.click()
+        self.pg.locator('.lf-panel .lf-seg button', has_text='Productos').click()
+        self.pg.locator('[data-sel="pmodo"]').select_option('per')
+        self.pg.locator('[data-sel="op"]').select_option('12m')
+        for medida in ('valor', 'cant', 'precio', 'ambos', 'tres'):
+            with self.subTest(medida=medida):
+                self.pg.locator('[data-sel="pmedida"]').select_option(medida)
+                self.assertGreater(self.pg.locator('.ft.pm .ft-l .ft-f').count(), 0)
+                self.assertEqual(self.pg.evaluate('__cpProv.st.medida'), 'valor')
+                self.pg.locator('[data-sel="pmodo"]').select_option('tot')
+                self.assertTrue(self.pg.locator('[data-sel="gran"]').is_disabled())
+                self.assertTrue(self.pg.locator('[data-sel="op"]').is_disabled())
+                self.assertEqual(self.pg.locator('[data-sel="op"]').input_value(), 'Rango')
+                self.assertIn('Rango del reporte', self._texto('.pv-contexto'))
+                self.assertGreater(self.pg.locator(f'.ft.pl-{medida} .ft-l .ft-f').count(), 0)
+                self.pg.locator('[data-sel="pmodo"]').select_option('per')
+                self.assertEqual(self.pg.locator('[data-sel="op"]').input_value(), '12m')
+        self.pg.locator('.lf-panel .lf-seg button', has_text='Curva').click()
+        self.assertEqual(self.pg.locator('[data-sel="op"]').input_value(), '12m')
+
+    def test_cantidad_precio_en_movil_sin_desbordar_la_pantalla(self):
+        self.pg.set_viewport_size({'width': 390, 'height': 844})
+        try:
+            self.pg.locator('tbody tr[data-acc]').first.click()
+            self.pg.locator('.lf-panel .lf-seg button', has_text='Productos').click()
+            self.pg.locator('[data-sel="pmodo"]').select_option('per')
+            self.pg.locator('[data-sel="pmedida"]').select_option('tres')
+            self.assertLessEqual(self.pg.evaluate('document.documentElement.scrollWidth-innerWidth'), 1)
+            self.assertGreater(self.pg.locator('.pm-combinado .pv-precio').count(), 0)
+            self.assertGreater(self.pg.locator('.pm-combinado .pv-valor').count(), 0)
+        finally:
+            self.pg.set_viewport_size({'width': 1323, 'height': 619})
 
     def test_ampliar_y_buscar_sin_perder_el_cursor(self):
         # #789: «Detalle» suma columnas; ⤢ deja la lista sola y Esc vuelve.
