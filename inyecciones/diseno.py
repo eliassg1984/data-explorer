@@ -154,6 +154,11 @@ avisos de navegación bloqueada sólo escriben `avisoTexto`/`avisoHasta` en
 `window.__herramientasUI`; herramientas.py los presenta en su barra (#830).
 Los insertados se resuelven desde el ancla aunque ésta sea otro insertado
 dentro de una pieza; conservan su selección y edición al redibujar (#832).
+Libre superpone el insertado sin reservar espacio en la app; En flujo ocupa
+espacio en su contenedor. Dentro de un insertado se propone En flujo; sobre
+la app, Libre. La conversión conserva ajustes e historial. Antes/Dentro/
+Después elige el ancla y Traer al frente/Enviar al fondo el orden de capas.
+Sólo se trasladan nodos del prototipo, nunca controles reales. Regla #833.
 """
 
 import json

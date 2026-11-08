@@ -81,6 +81,10 @@ Los selectores del cierre tienen anclas propias para editar el control
 directamente; las pruebas usan también el montaje real de la pieza (#831).
 Los insertados dentro de piezas se seleccionan por su key, incluso cuando
 su ancla es otro insertado; conservan la selección al redibujar (#832).
+La distribución Libre superpone sin empujar la app; En flujo reserva espacio.
+El valor propuesto es Libre sobre la app y En flujo dentro de un insertado.
+Se puede convertir el insertado conservando ajustes e historial; ubicación
+y orden de capas son controles independientes (regla #833).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|

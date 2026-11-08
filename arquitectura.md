@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-832 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+833 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (278)
 
@@ -346,7 +346,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#831** — Un selector interno necesita su propia ancla de Diseño
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 
-**Layout y alturas** (113)
+**Layout y alturas** (114)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -461,6 +461,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#780** — Recetas base en el lenguaje entero de Costo de Carta, y «Ampliar» (⤢) en la lista y la ficha
 - **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
 - **#804** — La portada con el aire de la hoja
+- **#833** — La ubicación, la distribución y el orden de capas de un insertado son decisiones distintas
 
 **Plotly y figuras** (133)
 
@@ -700,7 +701,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 - **#797** — «Qué faltó» con cantidad, unidad y código; y «Explorar», la tabla dinámica de Ajuste
 
-**Streamlit** (175)
+**Streamlit** (176)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -877,6 +878,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#779** — Alza en el lenguaje entero de Costo de Carta: niveles, jerarquía y divulgación progresiva
 - **#781** — Recetas entera en el lenguaje de Costo de Carta, y los códigos a la vista
 - **#785** — Inventario en la franja común (#782) y nada bajo 12 px
+- **#833** — La ubicación, la distribución y el orden de capas de un insertado son decisiones distintas
 
 **Datos, R2 y DuckDB** (133)
 
@@ -59086,6 +59088,33 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    de un hijo del insertado conserva el prefijo de su propia key dentro de la pieza:
    `.dv-mock-titulo` por sí solo también colorearía los títulos de las demás tarjetas.
 
+833. **La ubicación, la distribución y el orden de capas de un insertado son decisiones distintas.**
+   Antes/Dentro/Después elige la relación con el ancla; no significa delante/detrás.
+   Insertar siempre en el flujo agrandaba la cabecera del cierre y empujaba sus tablas.
+   El panel ofrece «Distribución al insertar» y «Distribución del insertado»: Libre
+   superpone sin reservar espacio; En flujo participa del tamaño del contenedor.
+   Sobre controles reales se propone Libre; Dentro de un insertado se propone En flujo
+   para que su contenido haga crecer sólo esa tarjeta. Los modelos anteriores sin
+   `modo` mantienen En flujo. Dentro se deshabilita sobre controles hoja como select/input.
+   `_diseno_js.py` monta las raíces libres en un lienzo neutro de tamaño cero, sin contexto
+   de apilamiento ni captura de eventos; son nodos propios con posición fija que siguen
+   su ancla y se acotan al viewport, apartándose del panel cuando hay sitio. Así no
+   amplían el scroll de la app. Un hijo Libre directo de una tarjeta Libre usa posición
+   absoluta en ella. Al desaparecer el ancla se retira el prototipo hasta que reaparezca.
+   La conversión sólo desmonta/recrea nodos propios, conserva estilos, medidas, movimiento
+   e historial y repone sus descendientes; nunca traslada nodos reales de Streamlit/React.
+   Quitar una tarjeta quita también los insertados anclados a ella, recuperables con
+   Deshacer. Traer al frente/Enviar al fondo conserva la distribución y se detiene en
+   el prototipo padre: ordenar un hijo no sube ni baja la tarjeta completa. Las raíces
+   libres enviadas al fondo siguen sobre la app y detrás de los otros prototipos.
+   El lienzo vive en el contexto principal, para que Traer al frente también permita
+   subir controles reales sobre las tarjetas libres, sin trasladar esos controles.
+   «Todos los cambios» declara el modo y el desplazamiento relativo al ancla; la vista
+   previa estática recalcula la posición para su ancho sin ejecutar scripts. Todo vive
+   en memoria, sin guardar borradores. `test_herramientas_visuales.py` monta la cabecera
+   real del cierre y verifica que Libre no cambia sus medidas ni su scroll, conversión,
+   contenido anidado, capas, historial, exportación, reposición y vista previa móvil.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59098,7 +59127,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#832**; la próxima toma el número siguiente.
+> última regla es la **#833**; la próxima toma el número siguiente.
 
 >
 

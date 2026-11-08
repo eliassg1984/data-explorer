@@ -58,11 +58,12 @@ class HerramientasVisuales(unittest.TestCase):
         self.page.mouse.move(ax + x - barra['x'], ay + y - barra['y'], steps=6)
         self.page.mouse.up()
 
-    def pin(self, key):
-        self.page.evaluate('''k=>{
-            __inspectorPinned=true; __inspectorUltimo={key:k}; __disenoState.sub=null;
+    def pin(self, key, sub=None):
+        self.page.evaluate('''d=>{
+            __inspectorPinned=true; __inspectorUltimo={key:d.key};
+            __disenoState.sub=d.sub?{key:d.key,clase:d.sub}:null;
             editorPrueba.sync();
-        }''', key)
+        }''', {'key': key, 'sub': sub})
 
     def montar_cierre(self):
         from test_cierre_pieza import CSS, JS, datos, inventario
@@ -89,12 +90,221 @@ class HerramientasVisuales(unittest.TestCase):
         self.page.locator('.dv-ancla').click(button='right')
         self.page.wait_for_function("__disenoState.sub?.clase==='dv-ancla'")
 
-    def insertar_tarjeta(self):
-        boton = self.page.get_by_role('button', name='+ Tarjeta', exact=True, include_hidden=True)
+    def insertar_mock(self, tipo='Tarjeta', modo='flujo', posicion=None):
+        boton = self.page.get_by_role('button', name='+ ' + tipo, exact=True, include_hidden=True)
         if not boton.is_visible():
             boton.locator('xpath=ancestor::details[1]/summary').click()
+        if posicion:
+            self.page.get_by_role('button', name=posicion, exact=True).click()
+        if modo:
+            self.page.get_by_label('Distribución al insertar', exact=True).select_option(modo)
         boton.click()
-        return self.page.locator('[data-diseno-mock=tarjeta]').last
+        key = self.page.evaluate('__disenoState.mocks.at(-1).key')
+        return self.page.locator('.st-key-' + key)
+
+    def insertar_tarjeta(self, modo='flujo', posicion=None):
+        return self.insertar_mock('Tarjeta', modo, posicion)
+
+    def seleccionar_insertado(self, nodo):
+        key = nodo.evaluate('e=>e.classList[0].slice(7)')
+        if not self.page.evaluate("k=>__inspectorPinned && __inspectorUltimo.key===k && !__disenoState.sub", key):
+            nodo.click(button='right', position={'x': 30, 'y': 5})
+        self.page.wait_for_function("k=>__inspectorPinned && document.getElementById('el-diseno-panel').dataset.builtForKey===k", arg=key)
+
+    def test_libre_por_defecto_no_empuja_la_cabecera_real_ni_crea_scroll(self):
+        self.montar_cierre()
+        cabecera = self.page.locator('.ajc-fnav')
+        cuerpo = self.page.locator('.ajc-cuerpo')
+        antes = [e.bounding_box() for e in [cabecera, cuerpo]]
+        scroll = self.page.evaluate('[scrollX,scrollY,document.documentElement.scrollWidth,document.documentElement.scrollHeight]')
+        self.pin('piece', 'ajc-fnav')
+        tarjeta = self.insertar_tarjeta(modo=None, posicion='Dentro')
+        self.assertEqual(tarjeta.get_attribute('data-diseno-distribucion'), 'libre')
+        self.assertEqual([e.bounding_box() for e in [cabecera, cuerpo]], antes)
+        self.assertEqual(self.page.evaluate('[scrollX,scrollY,document.documentElement.scrollWidth,document.documentElement.scrollHeight]'), scroll)
+        self.assertEqual(tarjeta.evaluate('e=>getComputedStyle(e).position'), 'fixed')
+        self.assertEqual(tarjeta.evaluate('e=>e.parentElement.id'), 'diseno-insertados-libres')
+        self.seleccionar_insertado(tarjeta)
+        distribucion = self.page.get_by_label('Distribución del insertado', exact=True)
+        self.assertLess(distribucion.bounding_box()['y'], self.page.viewport_size['height'])
+        distribucion.select_option('flujo')
+        self.assertGreater(cabecera.bounding_box()['height'], antes[0]['height'])
+        self.assertGreater(cuerpo.bounding_box()['y'], antes[1]['y'])
+        self.page.get_by_label('Distribución del insertado', exact=True).select_option('libre')
+        self.assertEqual([e.bounding_box() for e in [cabecera, cuerpo]], antes)
+
+    def test_dentro_de_tarjeta_libre_el_contenido_es_en_flujo_y_solo_crece_la_tarjeta(self):
+        self.montar_zona_interna()
+        tarjeta = self.insertar_tarjeta(modo=None)
+        antes_app = self.page.locator('.stApp').bounding_box()
+        alto = tarjeta.bounding_box()['height']
+        self.seleccionar_insertado(tarjeta)
+        texto = self.insertar_mock('Texto', modo=None, posicion='Dentro')
+        self.assertEqual(texto.get_attribute('data-diseno-distribucion'), 'flujo')
+        self.assertEqual(texto.evaluate('e=>e.parentElement.className'), 'st-key-diseno_tarjeta_1')
+        self.assertGreater(tarjeta.bounding_box()['height'], alto)
+        self.assertEqual(self.page.locator('.stApp').bounding_box(), antes_app)
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        self.assertIn('Distribución: Libre', entrega)
+        self.assertIn('Distribución: En flujo', entrega)
+        self.assertIn('Anclaje relativo:', entrega)
+        self.assertNotIn('diseno-insertados-libres', entrega)
+        self.seleccionar_insertado(tarjeta)
+        self.page.get_by_label('Distribución del insertado', exact=True).select_option('flujo')
+        self.assertEqual(texto.evaluate('e=>e.parentElement.className'), 'st-key-diseno_tarjeta_1')
+        self.page.get_by_label('Distribución del insertado', exact=True).select_option('libre')
+        self.assertEqual(self.page.locator('[data-diseno-mock]').count(), 2)
+        self.assertEqual(texto.evaluate('e=>e.parentElement.className'), 'st-key-diseno_tarjeta_1')
+        self.assertEqual(self.page.locator('.stApp').bounding_box(), antes_app)
+
+    def test_libre_dentro_de_tarjeta_sigue_a_su_padre_y_sus_capas_no_mueven_la_tarjeta(self):
+        self.montar_zona_interna()
+        tarjeta = self.insertar_tarjeta(modo=None)
+        self.seleccionar_insertado(tarjeta)
+        texto = self.insertar_mock('Texto', modo='libre', posicion='Dentro')
+        self.assertEqual(texto.evaluate('e=>e.parentElement.className'), 'st-key-diseno_tarjeta_1')
+        self.assertEqual(texto.evaluate('e=>getComputedStyle(e).position'), 'absolute')
+        posicion = texto.bounding_box()
+        capa = tarjeta.evaluate('e=>getComputedStyle(e).zIndex')
+        self.seleccionar_insertado(texto)
+        self.page.get_by_role('button', name='Enviar al fondo', exact=True).click()
+        self.assertEqual(tarjeta.evaluate('e=>getComputedStyle(e).zIndex'), capa)
+        self.seleccionar_insertado(tarjeta)
+        campo = self.page.get_by_label('Desplazamiento X (px)', exact=True)
+        campo.fill('40'); campo.press('Tab')
+        self.assertAlmostEqual(texto.bounding_box()['x'], posicion['x'] + 40, delta=1)
+        self.page.get_by_label('Distribución del insertado', exact=True).select_option('flujo')
+        self.assertEqual(texto.evaluate('e=>getComputedStyle(e).position'), 'fixed')
+        self.page.get_by_label('Distribución del insertado', exact=True).select_option('libre')
+        self.assertEqual(texto.evaluate('e=>e.parentElement.className'), 'st-key-diseno_tarjeta_1')
+        self.assertEqual(texto.evaluate('e=>getComputedStyle(e).position'), 'absolute')
+
+    def test_convertir_distribucion_conserva_ajustes_e_historial(self):
+        self.montar_zona_interna()
+        alto_inicial = self.page.locator('.dv-zona').bounding_box()['height']
+        tarjeta = self.insertar_tarjeta()
+        self.seleccionar_insertado(tarjeta)
+        for etiqueta, valor in [('Ancho (px)', '300'), ('Desplazamiento X (px)', '18')]:
+            campo = self.page.get_by_label(etiqueta, exact=True)
+            campo.fill(valor); campo.press('Tab')
+        fila = self.page.get_by_text('Fondo', exact=True).locator('xpath=../../..')
+        fila.locator('xpath=ancestor::details[1]/summary').click()
+        fila.get_by_title('Acento', exact=True).click()
+        posicion = tarjeta.bounding_box()
+        self.page.get_by_label('Distribución del insertado', exact=True).select_option('libre')
+        self.assertEqual(tarjeta.get_attribute('data-diseno-distribucion'), 'libre')
+        self.assertEqual(tarjeta.bounding_box()['width'], 300)
+        self.assertAlmostEqual(tarjeta.bounding_box()['x'], posicion['x'], delta=1)
+        self.assertEqual(tarjeta.evaluate('e=>getComputedStyle(e).backgroundColor'), 'rgb(108, 92, 231)')
+        self.assertEqual(self.page.locator('.dv-zona').bounding_box()['height'], alto_inicial)
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(tarjeta.get_attribute('data-diseno-distribucion'), 'flujo')
+        self.assertEqual(tarjeta.bounding_box()['width'], 300)
+        self.page.get_by_role('button', name='Rehacer', exact=True).click()
+        self.assertEqual(tarjeta.get_attribute('data-diseno-distribucion'), 'libre')
+        self.assertEqual(tarjeta.bounding_box()['width'], 300)
+        self.page.get_by_role('button', name='Ver original', exact=True).click()
+        self.assertEqual(tarjeta.evaluate('e=>getComputedStyle(e).backgroundColor'), 'rgb(255, 255, 255)')
+        self.page.get_by_role('button', name='Ver con cambios', exact=True).click()
+        self.assertEqual(tarjeta.evaluate('e=>getComputedStyle(e).backgroundColor'), 'rgb(108, 92, 231)')
+
+    def test_libre_sigue_el_ancla_y_se_repone_sin_duplicados(self):
+        self.montar_zona_interna()
+        tarjeta = self.insertar_tarjeta(modo=None)
+        antes = tarjeta.bounding_box()
+        self.page.locator('.st-key-piece').evaluate('e=>e.style.marginTop="25px"')
+        self.page.evaluate('editorPrueba.sync()')
+        self.assertAlmostEqual(tarjeta.bounding_box()['y'], antes['y'] + 25, delta=1)
+        self.page.locator('.dv-ancla').evaluate('e=>e.remove()')
+        self.page.evaluate('editorPrueba.sync()')
+        self.assertEqual(tarjeta.count(), 0)
+        self.page.locator('.dv-zona').evaluate('e=>e.innerHTML=\'<div class="dv-ancla" style="width:220px;height:32px">Ancla nueva</div>\'')
+        self.page.evaluate('editorPrueba.sync()')
+        self.assertEqual(tarjeta.count(), 1)
+        self.assertEqual(self.page.evaluate('__disenoState.mocks.length'), 1)
+
+    def test_capas_de_libres_no_cambian_distribucion_ni_tapan_todos_los_insertados(self):
+        self.montar_zona_interna()
+        primera = self.insertar_tarjeta(modo=None)
+        segunda = self.insertar_tarjeta(modo=None)
+        self.seleccionar_insertado(segunda)
+        for etiqueta in ['Desplazamiento X (px)', 'Desplazamiento Y (px)']:
+            campo = self.page.get_by_label(etiqueta, exact=True)
+            campo.fill('-12'); campo.press('Tab')
+        punto = primera.bounding_box()
+        punto = {'x': punto['x']+40, 'y': punto['y']+35}
+        self.page.get_by_role('button', name='Enviar al fondo', exact=True).click()
+        self.assertEqual(self.page.evaluate("p=>document.elementFromPoint(p.x,p.y).closest('[data-diseno-mock]').className", punto), 'st-key-diseno_tarjeta_1')
+        self.page.get_by_role('button', name='Traer al frente', exact=True).click()
+        self.assertEqual(self.page.evaluate("p=>document.elementFromPoint(p.x,p.y).closest('[data-diseno-mock]').className", punto), 'st-key-diseno_tarjeta_2')
+        self.assertEqual(segunda.get_attribute('data-diseno-distribucion'), 'libre')
+
+    def test_vista_previa_reubica_libres_en_movil_y_no_ejecuta_scripts(self):
+        self.montar_zona_interna()
+        self.insertar_tarjeta(modo=None)
+        self.page.get_by_label('Diseñar para', exact=True).select_option('movil')
+        self.page.get_by_role('button', name='Vista previa', exact=True).click()
+        marco = self.page.get_by_title('Vista previa del diseño').element_handle().content_frame()
+        tarjeta = marco.locator('.st-key-diseno_tarjeta_1')
+        caja = tarjeta.bounding_box()
+        self.assertEqual(marco.locator('script').count(), 0)
+        self.assertEqual(marco.evaluate('innerWidth'), 390)
+        self.assertGreaterEqual(tarjeta.evaluate('e=>e.getBoundingClientRect().left'), 0)
+        self.assertLessEqual(tarjeta.evaluate('e=>e.getBoundingClientRect().right'), 390)
+        self.assertGreater(caja['width'], 0)
+
+    def test_control_real_puede_traerse_al_frente_de_una_tarjeta_libre(self):
+        self.montar_zona_interna()
+        self.page.locator('.dv-zona').evaluate('''e=>{
+            const control=document.createElement('button'); control.className='dv-control';
+            control.style.cssText='display:block;width:220px;height:32px;margin-top:8px';
+            control.textContent='Control real'; e.appendChild(control);
+        }''')
+        tarjeta = self.insertar_tarjeta(modo=None)
+        caja = tarjeta.bounding_box()
+        punto = {'x': caja['x'] + 30, 'y': caja['y'] + 15}
+        self.assertTrue(self.page.evaluate("p=>!!document.elementFromPoint(p.x,p.y).closest('[data-diseno-mock]')", punto))
+        self.pin('piece', 'dv-control')
+        self.page.get_by_role('button', name='Traer al frente', exact=True).click()
+        self.assertTrue(self.page.evaluate("p=>!!document.elementFromPoint(p.x,p.y).closest('.st-key-piece')", punto))
+        self.page.get_by_role('button', name='Enviar al fondo', exact=True).click()
+        self.assertTrue(self.page.evaluate("p=>!!document.elementFromPoint(p.x,p.y).closest('[data-diseno-mock]')", punto))
+        self.assertEqual(tarjeta.get_attribute('data-diseno-distribucion'), 'libre')
+
+    def test_modelos_anteriores_sin_modo_siguen_en_flujo(self):
+        self.montar_zona_interna()
+        self.page.evaluate("()=>{__disenoState.mocks.push({key:'diseno_tarjeta_vieja',tipo:'tarjeta',anclaKey:'piece',anclaSub:'dv-ancla',posicion:'despues',texto:'Vieja'});editorPrueba.sync()}")
+        vieja = self.page.locator('.st-key-diseno_tarjeta_vieja')
+        self.assertEqual(vieja.get_attribute('data-diseno-distribucion'), 'flujo')
+        self.assertTrue(vieja.evaluate('e=>e.getRootNode() instanceof ShadowRoot'))
+
+    def test_quitar_tarjeta_con_contenido_no_deja_insertados_huerfanos_y_se_puede_deshacer(self):
+        self.montar_zona_interna()
+        tarjeta = self.insertar_tarjeta(modo=None)
+        self.seleccionar_insertado(tarjeta)
+        self.insertar_mock('Texto', modo=None, posicion='Dentro')
+        self.seleccionar_insertado(tarjeta)
+        quitar = self.page.get_by_role('button', name='Quitar este', exact=True, include_hidden=True)
+        if not quitar.is_visible():
+            quitar.locator('xpath=ancestor::details[1]/summary').click()
+        quitar.click()
+        self.assertEqual(self.page.locator('[data-diseno-mock]').count(), 0)
+        self.assertEqual(self.page.evaluate('__disenoState.mocks.length'), 0)
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(self.page.locator('[data-diseno-mock]').count(), 2)
+        self.assertEqual(self.page.locator('.st-key-diseno_texto_2').evaluate('e=>e.parentElement.className'), 'st-key-diseno_tarjeta_1')
+
+    def test_dentro_se_deshabilita_en_un_selector_nativo(self):
+        corte = self.montar_cierre()
+        corte.click(button='right')
+        self.page.wait_for_function("__disenoState.sub?.clase==='ajc-selector-corte'")
+        boton = self.page.get_by_role('button', name='+ Tarjeta', exact=True, include_hidden=True)
+        boton.locator('xpath=ancestor::details[1]/summary').click()
+        self.assertTrue(self.page.get_by_role('button', name='Dentro', exact=True).is_disabled())
+        opciones = corte.locator('option').count()
+        tarjeta = self.insertar_tarjeta(modo=None)
+        self.assertEqual(tarjeta.get_attribute('data-diseno-distribucion'), 'libre')
+        self.assertEqual(corte.locator('option').count(), opciones)
 
     def test_tarjeta_insertada_en_pieza_se_selecciona_con_un_clic_derecho_y_se_edita(self):
         self.montar_zona_interna()

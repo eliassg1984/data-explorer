@@ -2502,6 +2502,11 @@ Los selectores internos del cierre tienen anclas propias por acción para
 seleccionarlos y pintar su fondo sin tocar la caja que los envuelve (#831).
 Los insertados en piezas conservan su key y se buscan desde su ancla,
 también si están encadenados a otro insertado dentro del shadow root (#832).
+Al insertar se elige Libre (superpuesto, sin empujar la app) o En flujo
+(ocupa espacio). Dentro de un insertado se propone En flujo; sobre la app,
+Libre. Se puede convertir después conservando ajustes e historial. Antes/
+Dentro/Después es ubicación; frente/fondo es orden de capas. Sólo se
+trasladan nodos del prototipo, nunca controles reales. Regla #833.
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del

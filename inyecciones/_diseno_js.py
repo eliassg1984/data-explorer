@@ -747,6 +747,118 @@ JS = """
         // overlay del propio modo diseño y el pie de "Ultima
         // actualizacion" — asi el mock nunca tapa al PANEL de edicion.
         var ENCIMA_MOCK = 'position:relative;z-index:1000000000;';
+        var ID_LIBRES = 'diseno-insertados-libres';
+
+        function modeloMock(key) {
+            return win.__disenoState.mocks.find(function(m) { return m.key === key; }) || null;
+        }
+        // Los modelos anteriores sin modo conservan su distribucion (#833).
+        function modoMock(m) { return m && m.modo === 'libre' ? 'libre' : 'flujo'; }
+        function admiteDentro(el) {
+            return el && !/^(INPUT|SELECT|TEXTAREA|BUTTON|IMG|IFRAME|SVG|CANVAS|VIDEO|AUDIO|HR|BR|OPTION)$/.test(el.tagName);
+        }
+        function modoAlInsertar(res) {
+            var st = win.__disenoState;
+            if (st.mockPos === 'dentro' && !admiteDentro(res.el)) st.mockPos = 'despues';
+            var contexto = res.id + '|' + st.mockPos;
+            if (st.mockContexto !== contexto) {
+                st.mockContexto = contexto;
+                st.mockModo = st.mockPos === 'dentro' && esMock(res.key) ? 'flujo' : 'libre';
+            }
+            return st.mockModo === 'flujo' ? 'flujo' : 'libre';
+        }
+        function lienzoLibres() {
+            var lienzo = doc.getElementById(ID_LIBRES);
+            var destino = doc.querySelector('[data-testid="stMainBlockContainer"], .block-container') || doc.body;
+            if (!lienzo) {
+                lienzo = doc.createElement('div'); lienzo.id = ID_LIBRES;
+                // No crea un contexto de apilamiento ni una caja que intercepte la app.
+                lienzo.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;';
+            }
+            // Comparte el contexto principal: un control real tambien puede subir
+            // sobre la tarjeta. Solo trasladamos nuestro lienzo, nunca nodos de React.
+            if (lienzo.parentNode !== destino) destino.appendChild(lienzo);
+            return lienzo;
+        }
+        function dentroDelLienzo(el) {
+            while (el && el !== doc.body) {
+                if (el.id === ID_LIBRES) return true;
+                el = padreCompuesto(el);
+            }
+            return false;
+        }
+        function anclaOriginalMock(m, documento) {
+            var base = documento ? documento.querySelector(selClase('st-key-' + m.anclaKey)) : porKeyReal(m.anclaKey);
+            if (!base && documento && documento.body) base = qsaProfundo(documento.body, selClase('st-key-' + m.anclaKey))[0];
+            return base && m.anclaSub ? resolverSubClase(base, m.anclaSub, m.anclaIdx) : base;
+        }
+        function limitesLibres() {
+            var area = { left: 8, right: win.innerWidth - 8, top: 8, bottom: win.innerHeight - 8 };
+            var p = doc.getElementById('el-diseno-panel');
+            if (p && p.style.display !== 'none' && !win.__disenoState.panelColapsado) {
+                var r = p.getBoundingClientRect();
+                if (r.left + r.width / 2 < win.innerWidth / 2) area.left = r.right + 8;
+                else area.right = r.left - 8;
+            }
+            return area;
+        }
+        function ubicarLibre(m, el, documento) {
+            var ancla = anclaOriginalMock(m, documento);
+            if (!ancla || !ancla.isConnected || !ancla.getClientRects().length) { el.remove(); return; }
+            var interno = m.posicion === 'dentro' && !m.anclaSub && esMock(m.anclaKey) && dentroDelLienzo(ancla);
+            if (!documento) {
+                var padre = interno ? ancla : lienzoLibres();
+                if (el.parentNode !== padre) padre.appendChild(el);
+            }
+            var r = ancla.getBoundingClientRect();
+            var vista = documento ? documento.defaultView : win;
+            if (!m.libre) {
+                var cs = vista.getComputedStyle(ancla);
+                var anteriores = win.__disenoState.mocks.filter(function(p) {
+                    return p.key !== m.key && p.anclaKey === m.anclaKey && p.anclaSub === m.anclaSub && (p.anclaIdx || 0) === (m.anclaIdx || 0)
+                        && p.posicion === m.posicion && modoMock(p) === 'libre' && p.libre;
+                }).length;
+                m.libre = {
+                    x: m.posicion === 'dentro' ? parseFloat(cs.paddingLeft || 0) + ancla.clientLeft : anteriores * 12,
+                    y: m.posicion === 'antes' ? -el.offsetHeight - 8 - anteriores * 12
+                        : m.posicion === 'dentro' ? parseFloat(cs.paddingTop || 0) + ancla.clientTop : r.height + 8 + anteriores * 12
+                };
+                if (interno && !m.anchoLibre) {
+                    m.anchoLibre = Math.max(32, Math.min(240, ancla.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0)));
+                    el.style.width = m.anchoLibre + 'px';
+                }
+            }
+            el.style.setProperty('position', interno ? 'absolute' : 'fixed');
+            var x = m.libre.x, y = m.libre.y;
+            if (interno) {
+                x += ancla.scrollLeft - ancla.clientLeft; y += ancla.scrollTop - ancla.clientTop;
+            } else {
+                x += r.left; y += r.top;
+                // El anclaje sigue al control al desplazarse; solo se acota si esta visible.
+                if (r.right > 0 && r.left < vista.innerWidth && r.bottom > 0 && r.top < vista.innerHeight) {
+                    var area = documento ? {left:8,right:vista.innerWidth-8,top:8,bottom:vista.innerHeight-8} : limitesLibres();
+                    if (area.right - area.left < el.offsetWidth) { area.left = 8; area.right = vista.innerWidth - 8; }
+                    x = Math.max(area.left, Math.min(x, area.right - el.offsetWidth));
+                    y = Math.max(area.top, Math.min(y, area.bottom - el.offsetHeight));
+                }
+            }
+            el.style.left = x + 'px'; el.style.top = y + 'px';
+        }
+        function cambiarModoMock(key, modo) {
+            var m = modeloMock(key), el = m && buscarMock(m);
+            if (!m || !el || modoMock(m) === modo) return;
+            var transform = el.style.getPropertyValue('transform'), prioridad = el.style.getPropertyPriority('transform');
+            el.style.setProperty('transform', 'none', 'important');
+            var r = el.getBoundingClientRect(), ancho = el.offsetWidth;
+            if (transform) el.style.setProperty('transform', transform, prioridad); else el.style.removeProperty('transform');
+            el.remove(); m.modo = modo;
+            if (modo === 'libre') {
+                var ancla = anclaOriginalMock(m), a = ancla && ancla.getBoundingClientRect();
+                m.libre = a ? {x:r.left-a.left,y:r.top-a.top} : null;
+                m.anchoLibre = ancho;
+            } else delete m.libre;
+            panel.dataset.builtForKey = ''; sync();
+        }
 
         function nodoMock(m) {
             var el = doc.createElement('div');
@@ -787,6 +899,12 @@ JS = """
                 // border si, y falsearia el alto que se esta probando).
                 el.style.cssText = ANCHO_MOCK + ENCIMA_MOCK + 'height:16px;opacity:.5;outline-offset:-1px;outline:1px dashed ' + colorPaleta('Gris texto');
             }
+            el.dataset.disenoDistribucion = modoMock(m);
+            if (modoMock(m) === 'libre') {
+                el.style.position = 'fixed'; el.style.width = (m.anchoLibre || 240) + 'px';
+                el.style.maxWidth = 'calc(100vw - 24px)'; el.style.margin = '0';
+                el.style.pointerEvents = 'auto'; el.style.boxSizing = 'border-box';
+            }
             return el;
         }
 
@@ -807,6 +925,7 @@ JS = """
             var ms = win.__disenoState.mocks;
             for (var i = 0; i < ms.length && ms[i].key !== m.key; i++) {
                 if (ms[i].anclaKey !== m.anclaKey || ms[i].posicion !== 'despues') continue;
+                if (modoMock(ms[i]) === 'libre') continue;
                 if ((ms[i].anclaSub || '') !== (m.anclaSub || '')) continue;
                 if ((ms[i].anclaIdx || 0) !== (m.anclaIdx || 0)) continue;
                 var prev = buscarMock(ms[i]);
@@ -816,11 +935,13 @@ JS = """
         }
 
         function insertarMock(m) {
-            var ancla = anclaEfectiva(m);
+            var ancla = modoMock(m) === 'libre' ? anclaOriginalMock(m) : anclaEfectiva(m);
             if (!ancla) return false;
+            if (modoMock(m) === 'libre' && !ancla.getClientRects().length) return false;
             var el = nodoMock(m);
             if (!el) return false;
-            if (m.posicion === 'antes') ancla.parentNode.insertBefore(el, ancla);
+            if (modoMock(m) === 'libre') lienzoLibres().appendChild(el);
+            else if (m.posicion === 'antes') ancla.parentNode.insertBefore(el, ancla);
             else if (m.posicion === 'dentro') ancla.appendChild(el);
             else ancla.parentNode.insertBefore(el, ancla.nextSibling);
             // El nodo es NUEVO (llegamos aca porque un rerun se llevo el
@@ -828,11 +949,13 @@ JS = """
             // igual que aplicarEstado hace con los widgets reales.
             var reg = win.__disenoState.porKey[m.key];
             if (reg) {
+                recordarOriginales(el, reg);
                 Object.keys(reg.cambios).forEach(function(prop) {
                     el.style.setProperty(prop, reg.cambios[prop], 'important');
                 });
                 aplicarTransform(el, reg);
             }
+            if (modoMock(m) === 'libre') ubicarLibre(m, el);
             return true;
         }
 
@@ -842,13 +965,16 @@ JS = """
                 // `buscarMock` y no un querySelector del documento: uno
                 // insertado adentro de una pieza propia no se ve desde
                 // afuera, y sin esto se volvia a insertar en cada tick.
-                if (!buscarMock(ms[i])) insertarMock(ms[i]);
+                var el = buscarMock(ms[i]);
+                if (!el) insertarMock(ms[i]);
+                else if (modoMock(ms[i]) === 'libre') ubicarLibre(ms[i], el);
             }
         }
 
         function agregarMock(tipo) {
             var res = elementoPineado();
             if (!res || !res.el) return;   // sin ancla no hay donde insertar
+            var modo = modoAlInsertar(res);
             win.__disenoState.mockN += 1;
             var m = {
                 key: 'diseno_' + tipo + '_' + win.__disenoState.mockN,
@@ -857,6 +983,7 @@ JS = """
                 anclaSub: res.sub,
                 anclaIdx: res.subIdx || 0,
                 posicion: win.__disenoState.mockPos,
+                modo: modo,
                 texto: 'Texto de prueba'
             };
             win.__disenoState.mocks.push(m);
@@ -871,7 +998,10 @@ JS = """
             // del contorno de selección — usarlo se confundiría con ambos).
             var nuevo = buscarMock(m);
             if (nuevo) {
-                nuevo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                var rectNuevo = nuevo.getBoundingClientRect();
+                if (modo === 'flujo' && (rectNuevo.top < 8 || rectNuevo.bottom > win.innerHeight - 8)) {
+                    nuevo.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
                 nuevo.style.setProperty('outline', '3px solid ' + colorPaleta('Advertencia'), 'important');
                 nuevo.style.setProperty('outline-offset', '2px', 'important');
                 setTimeout(function() {
@@ -897,14 +1027,23 @@ JS = """
         }
 
         function quitarMock(key) {
-            var mq = null;
-            win.__disenoState.mocks.forEach(function(m) { if (m.key === key) mq = m; });
-            var n = mq ? buscarMock(mq) : doc.querySelector('.st-key-' + key);
-            if (n && n.parentNode) n.parentNode.removeChild(n);
-            win.__disenoState.mocks = win.__disenoState.mocks.filter(function(m) {
-                return m.key !== key;
+            var st = win.__disenoState, quitar = new Set([key]), cambio = true;
+            while (cambio) {
+                cambio = false;
+                st.mocks.forEach(function(m) {
+                    if (quitar.has(m.anclaKey) && !quitar.has(m.key)) { quitar.add(m.key); cambio = true; }
+                });
+            }
+            st.mocks.slice().reverse().forEach(function(m) {
+                if (!quitar.has(m.key)) return;
+                var n = buscarMock(m); if (n) n.remove();
             });
-            delete win.__disenoState.porKey[key];
+            st.mocks = st.mocks.filter(function(m) { return !quitar.has(m.key); });
+            Object.keys(st.porKey).forEach(function(id) {
+                quitar.forEach(function(k) {
+                    if (id === k || id.indexOf(k + ' .') === 0 || id.indexOf(k + ' «') === 0) delete st.porKey[id];
+                });
+            });
         }
 
         function esMock(key) {
@@ -1491,18 +1630,21 @@ JS = """
         function planDeCapa(elemento, registro) {
             if (!registro.capa) return [];
             var plan = [], nodo = elemento;
+            var nivel = registro.capa.nivel;
+            if (elemento.parentElement && elemento.parentElement.id === ID_LIBRES && nivel < 0) nivel += 1000000000;
             while (nodo && nodo !== doc.body && nodo !== doc.documentElement) {
+                if (nodo !== elemento && (nodo.id === ID_LIBRES || nodo.hasAttribute('data-diseno-mock'))) break;
                 if (nodo !== elemento && nodo.matches('[data-testid="stMainBlockContainer"], .block-container')) break;
                 var posicion = win.getComputedStyle(nodo).position;
                 plan.push({ nodo: nodo, props: {
                     position: posicion === 'static' ? 'relative' : posicion,
-                    'z-index': String(registro.capa.nivel)
+                    'z-index': String(nivel)
                 } });
                 nodo = padreCompuesto(nodo);
             }
             // Contener las capas negativas mantiene el contenido sobre el
             // fondo del lienzo al enviarlo detras de sus vecinos.
-            if (nodo) plan.push({ nodo: nodo, props: { isolation: 'isolate' } });
+            if (nodo && nodo.id !== ID_LIBRES) plan.push({ nodo: nodo, props: { isolation: 'isolate' } });
             return plan;
         }
 
@@ -4831,23 +4973,34 @@ JS = """
             // ---- insertar: elementos de mentira ----
             panel.appendChild(seccion('Insertar'));
 
+            var modoNuevo = modoAlInsertar(res);
+
             var POSICIONES = [['antes', 'Antes'], ['dentro', 'Dentro'], ['despues', 'Después']];
             var posWrap = doc.createElement('div');
             posWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
-            var posBotones = [];
             POSICIONES.forEach(function(par) {
                 var b = doc.createElement('button');
                 b.textContent = par[1];
+                if (par[0] === 'dentro' && !admiteDentro(res.el)) {
+                    b.disabled = true; b.title = 'Selecciona un contenedor para insertar dentro.';
+                }
                 b.style.cssText = 'flex:1;background:' + (par[0] === win.__disenoState.mockPos ? '#3C3489' : '#1c1c24') + ';color:#fff;border:1px solid #34343f;border-radius:4px;padding:5px 2px;font:11px sans-serif;cursor:pointer';
                 b.addEventListener('click', function() {
                     win.__disenoState.mockPos = par[0];
-                    posBotones.forEach(function(x) { x.style.background = '#1c1c24'; });
-                    b.style.background = '#3C3489';
+                    win.__disenoState.mockContexto = ''; rehacerPanel();
                 });
-                posBotones.push(b);
                 posWrap.appendChild(b);
             });
             panel.appendChild(filaControl('Dónde (respecto del contorno)', posWrap, spanValor('')));
+            panel.appendChild(selectorEdicion('Distribución al insertar', [['libre','Libre'],['flujo','En flujo']], modoNuevo, function(modo) {
+                win.__disenoState.mockModo = modo; rehacerPanel();
+            }));
+            var ayudaModo = doc.createElement('div');
+            ayudaModo.style.cssText = 'font:11px/1.4 sans-serif;color:#b9b9c4;margin:6px 0';
+            ayudaModo.textContent = modoNuevo === 'libre'
+                ? 'Libre: se superpone sin desplazar el contenido de la app.'
+                : 'En flujo: ocupa espacio y el contenedor puede crecer.';
+            panel.appendChild(ayudaModo);
 
             var addWrap = doc.createElement('div');
             addWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-top:6px';
@@ -5048,6 +5201,10 @@ JS = """
                     var efectivo = Object.assign({}, reg, { cambios: Object.assign({}, compartido, reg.cambios) });
                     aplicarEstado(ctx.el, efectivo);
                 } else aplicarEstado(ctx.el, reg);
+            });
+            estado.mocks.forEach(function(m) {
+                var el = modoMock(m) === 'libre' && buscarMock(m);
+                if (el) ubicarLibre(m, el);
             });
         }
 
@@ -5281,6 +5438,11 @@ JS = """
 
         function controlesDistribucion(ctx) {
             var caja = detalleEdicion('Medidas y distribución', true);
+            if (esMock(ctx.key)) {
+                caja.appendChild(selectorEdicion('Distribución del insertado', [['libre','Libre'],['flujo','En flujo']], modoMock(modeloMock(ctx.key)), function(modo) {
+                    accionEdicion(function() { cambiarModoMock(ctx.key, modo); });
+                }));
+            }
             var r = ctx.el.getBoundingClientRect(), t = ctx.registro.transformState;
             var medidas = doc.createElement('div');
             medidas.style.cssText = 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:8px';
@@ -5489,7 +5651,17 @@ JS = """
                     vista.mocks.forEach(function(m) {
                         var n = nodoMock(m);
                         n.removeAttribute('contenteditable');
+                        if (modoMock(m) === 'libre') {
+                            var vivo = buscarMock(m), ancla = anclaOriginalMock(m), r = ancla && ancla.getBoundingClientRect();
+                            if (vivo && vivo.dataset.disenoDistribucion === 'libre') {
+                                ['position','left','top'].forEach(function(p) { n.style.setProperty(p, vivo.style.getPropertyValue(p)); });
+                            } else if (r && m.libre) {
+                                n.style.left = (r.left + m.libre.x) + 'px'; n.style.top = (r.top + m.libre.y) + 'px';
+                            }
+                        }
                         out.push('### Insertar ' + m.tipo, 'Ubicación: ' + m.posicion + ' de ' + m.anclaKey + (m.anclaSub ? ' .' + m.anclaSub : '') + '.',
+                            'Distribución: ' + (modoMock(m) === 'libre' ? 'Libre (superpuesto, sin reservar espacio).' : 'En flujo (ocupa espacio en el contenedor).'),
+                            m.libre ? 'Anclaje relativo: ' + m.libre.x + 'px horizontal, ' + m.libre.y + 'px vertical. Conservar este anclaje al implementar.' : '',
                             'Crear el elemento en el código de la vista y conectar sus acciones si corresponde.', cerca + 'html', n.outerHTML, cerca, '');
                     });
                     vista.uniones.forEach(function(u) { out.push('Unificar ' + u.a + ' con ' + u.b + ': el código debe usar el contenedor común correspondiente.', ''); });
@@ -5575,7 +5747,11 @@ JS = """
             Array.prototype.forEach.call(doc.head.children, function(n) { var c = copiarVisual(n, fd); if (c) fd.head.appendChild(c); });
             Array.prototype.slice.call(doc.body.childNodes).forEach(function(n) { var c = copiarVisual(n, fd); if (c) fd.body.appendChild(c); });
             var reserva = fd.getElementById('el-diseno-reserva'); if (reserva) reserva.remove();
-            var st = fd.createElement('style'); st.textContent = 'html,body {min-width:0!important} body {pointer-events:none!important}'; fd.head.appendChild(st);
+            var st = fd.createElement('style'); st.textContent = 'html,body {min-width:0!important} body,body * {pointer-events:none!important}'; fd.head.appendChild(st);
+            win.__disenoState.mocks.forEach(function(m) {
+                var n = modoMock(m) === 'libre' && qsaProfundo(fd.body, selClase('st-key-' + m.key))[0];
+                if (n) ubicarLibre(m, n, fd);
+            });
         }
 
         function completarPanel() {
