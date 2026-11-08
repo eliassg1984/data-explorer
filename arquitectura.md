@@ -58082,6 +58082,10 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      sola vez. La frase lo dice: no todos son una dependencia de verdad.
    - **Producto no duplica a Precios**: Precios responde dónde pago más; Producto, en qué se va y qué
      cambió. Por eso sus indicadores son nuevos, dejados y para revisar, y el precio es una columna.
+   - **La ficha de Producto reúne sus cifras y comentarios en «Resumen»** (2026-11-08).
+     Curva, Proveedores, Compras y Períodos usan su espacio para el análisis. La pestaña elegida
+     se conserva al cambiar de producto y al redibujar la pieza, sin pedir datos a Python.
+     Los cuatro indicadores generales de la vista conservan sus cuentas y sus filtros.
    - **La curva va en HTML y porcentajes** (`lfCurva`), no en SVG medido: sigue a «Ampliar» sin volver a
      calcular. Barras para soles y cantidad; el precio, línea en su propia escala. Todo el ancho de cada
      período responde al cursor y al clic (`.lf-hit`, regla #421).

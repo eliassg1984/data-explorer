@@ -551,13 +551,16 @@ function fichaHtml(V) {
   let Lc = bsel || (cprov != null ? Lp : h.filter((l) => l.d >= R.R0 && l.d <= R.R1));
   if (cprov != null) Lc = Lc.filter((l) => l.prov === cprov);
   const tPv = tablaProveedores(Lp, um), tCp = tablaCompras(Lc, um);
-  const tabs = [['curva', 'Curva'], ['prov', `Proveedores · ${tPv.n}`], ['comp', `Compras · ${tCp.n}`], ['per', `Períodos · ${S ? S.keys.length : 0}`]]
+  const tabs = [['resumen', 'Resumen'], ['curva', 'Curva'], ['prov', `Proveedores · ${tPv.n}`], ['comp', `Compras · ${tCp.n}`], ['per', `Períodos · ${S ? S.keys.length : 0}`]]
     .map(([k, t]) => `<button class="${k === tab ? 'on' : ''}" data-acc="tab" data-v="${k}" aria-pressed="${k === tab}">${esc(t)}</button>`).join('');
   const chips = (tab === 'comp' && per ? `<button class="lf-quita" data-acc="soltar-per">${esc(etq(per, gran, true, F))} ✕</button>` : '')
     + (tab === 'comp' && cprov != null ? `<button class="lf-quita" data-acc="soltar-prov" title="${esc(F.provs[cprov])}">${esc(F.provs[cprov])} ✕</button>` : '');
   const op2 = (v, t, on) => `<option value="${v}"${on ? ' selected' : ''}>${t}</option>`;
   let zona;
-  if (tab === 'curva') {
+  if (tab === 'resumen') {
+    zona = `<section class="cpd-resumen" aria-label="Resumen del producto"><div class="lf-cifras">${cifras}</div>`
+      + `${fr.length ? `<p class="lf-frase">${esc(fr.join(' '))}</p>` : ''}</section>`;
+  } else if (tab === 'curva') {
     let graf;
     if (!S) graf = `<div class="lf-sinc">Sin compras de este producto en «${esc(OPS.find((o) => o[0] === op)[1])}».</div>`;
     else {
@@ -579,7 +582,7 @@ function fichaHtml(V) {
   }
   return `<div class="lf-fcab"><div class="lf-ftit"><span class="lf-miga">${esc(nomS(R, fila.sub))} · ${esc(nomF(R, fila.fam))}${F.cods[fila.i] ? ` · cód. ${esc(F.cods[fila.i])}` : ''}</span><h3 title="${esc(nom)}">${esc(nom)}</h3><span class="lf-miga" title="${esc(subt.join(' · '))}">${esc(subt.join(' · '))}</span></div>`
     + `${lfAmp('panel', st.amp === 'panel', 'la ficha')}<button class="lf-quita" data-acc="soltar">Soltar</button></div>`
-    + `<div class="lf-cifras">${cifras}</div>${fr.length ? `<p class="lf-frase">${esc(fr.join(' '))}</p>` : ''}<div class="lf-fl"><span class="lf-seg" role="group" aria-label="Qué mirar">${tabs}</span>${chips}</div><div class="lf-zona">${zona}</div>`;
+    + `<div class="lf-fl"><span class="lf-seg" role="group" aria-label="Qué mirar">${tabs}</span>${chips}</div><div class="lf-zona">${zona}</div>`;
 }
 
 // El globo de un período: la cifra y sus compras.

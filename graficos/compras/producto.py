@@ -7,7 +7,10 @@ antepuestos, como Proveedor:
     [ Productos · fecha (Python) · familias · buscar · Excel                ]
     [ Productos | Nuevos o vuelven | Se dejaron de comprar | Para revisar   ]
     [ la lista, o por familia ][ en qué se va, o la ficha del elegido:      ]
-    [                         ][ Curva | Proveedores | Compras | Períodos   ]
+    [                         ][ Resumen | Curva | Proveedores | Compras | Períodos ]
+
+La pestaña Resumen reúne las cifras y los comentarios del producto. Las
+demás pestañas dedican su espacio al gráfico o la tabla correspondiente.
 
 Sólo la fecha y las familias vuelven a Python. Las cuentas son las de la regla
 #653, que siguen escritas ACÁ (`_resumen`, `_serie`, `_precios`) y el navegador

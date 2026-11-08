@@ -339,8 +339,17 @@ class LaPantalla(unittest.TestCase):
     def test_la_ficha_y_sus_pestanas(self):
         self.pg.locator("tbody tr[data-acc]", has_text="Lomo").click()
         self.assertEqual(self._texto(".lf-panel h3"), "Lomo")
+        self.assertEqual(self.pg.locator(".lf-cf").count(), 0)
+        self.assertEqual(self.pg.locator(".lf-frase").count(), 0)
+        self.assertGreater(self.pg.locator(".lf-ba").count(), 0)
+        self.pg.locator('.lf-panel [data-acc="tab"][data-v="resumen"]').click()
         self.assertEqual(self.pg.locator(".lf-cf").count(), 4)
         self.assertIn("revisar", self._texto(".lf-frase"))
+        self.assertEqual(self.pg.locator(".lf-ba").count(), 0)
+        self.assertEqual(self.pg.locator('.lf-panel [data-v="resumen"]').get_attribute("aria-pressed"), "true")
+        self.pg.locator('.lf-panel [data-acc="tab"][data-v="curva"]').click()
+        self.assertEqual(self.pg.locator(".lf-cf").count(), 0)
+        self.assertEqual(self.pg.locator(".lf-frase").count(), 0)
         self.assertGreater(self.pg.locator(".lf-ba").count(), 0)
         self.assertGreater(self.pg.locator(".lf-pto.fl").count(), 0)
         hit = self.pg.locator(".lf-hit").last
@@ -358,6 +367,23 @@ class LaPantalla(unittest.TestCase):
         self.pg.locator(".lf-panel .lf-seg button", has_text="Períodos").click()
         self.assertGreater(self.pg.locator(".ft.pe .ft-l .ft-f").count(), 0)
 
+    def test_resumen_conserva_la_pestana_y_el_alto_de_laptop(self):
+        self.pg.locator('tbody tr[data-acc="fila"]').first.click()
+        alto = self.pg.locator(".lf-main").bounding_box()["height"]
+        self.pg.locator('.lf-panel [data-acc="tab"][data-v="resumen"]').click()
+        self.pg.locator('tbody tr[data-acc="fila"]').nth(1).click()
+        self.assertEqual(self.pg.evaluate("__cpProd.st.tab"), "resumen")
+        self.assertEqual(self.pg.locator(".lf-cf").count(), 4)
+        self.pg.evaluate("""(R) => __montar({ data: R,
+          parentElement: document.querySelector('#montar'),
+          setTriggerValue: (...a) => window.__pedidos.push(a) })""", self.Rk)
+        self.assertEqual(self.pg.evaluate("__cpProd.st.tab"), "resumen")
+        self.assertAlmostEqual(self.pg.locator(".lf-main").bounding_box()["height"], alto, delta=1)
+        self.assertEqual(self.pg.locator(".lf-cf").count(), 4)
+        self.assertEqual(self.pg.evaluate("__pedidos"), [])
+        m = self.pg.evaluate("(()=>{const e=document.querySelector('.lf-main');return [e.scrollWidth-e.clientWidth, e.scrollHeight-e.clientHeight]})()")
+        self.assertLessEqual(max(m), 1, m)
+
     def test_los_indicadores_y_lo_dejado_se_abre(self):
         self.pg.locator(".lf-kpi").nth(3).click()
         self.assertIn("Compras para revisar", self._texto(".lf-panel"))
@@ -366,6 +392,7 @@ class LaPantalla(unittest.TestCase):
             self.pg.locator(".lf-kpi").nth(2).click()
             self.assertIn("Lo que se dejó de comprar", self._texto(".lf-panel"))
             self.pg.locator("tbody tr[data-acc]").first.click()
+            self.pg.locator('.lf-panel [data-acc="tab"][data-v="resumen"]').click()
             self.assertIn("No se compró", self._texto(".lf-frase"))
 
     def test_por_familia_abre_y_cierra(self):
@@ -414,6 +441,8 @@ class LaPantalla(unittest.TestCase):
         self.pg.set_viewport_size({"width": 390, "height": 844})
         try:
             self.pg.locator("tbody tr[data-acc]").first.click()
+            self.pg.locator('.lf-panel [data-acc="tab"][data-v="resumen"]').click()
+            self.assertEqual(self.pg.locator(".lf-cf").count(), 4)
             self.assertLessEqual(self.pg.evaluate("document.documentElement.scrollWidth-document.documentElement.clientWidth"), 1)
         finally:
             self.pg.set_viewport_size({"width": 1323, "height": 619})

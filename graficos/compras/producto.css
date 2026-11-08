@@ -12,6 +12,8 @@
 .lf-sub .dl-l.sel { background: var(--accent-tint); font-weight: 600; }
 .lf-sub .dl-l.tot { font-weight: 700; color: var(--accent-deep); border-top: 1px solid var(--border-lavender); }
 .lf-t td.l .w { font-size: 12px; }
+.cpd-resumen { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px; padding: 2px 6px 6px 0; }
+.cpd-resumen .lf-cifras { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); }
 @media (max-width: 900px) {
   .ft { min-width: 520px; }
 }
