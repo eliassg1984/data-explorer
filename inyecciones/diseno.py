@@ -144,6 +144,10 @@ anchos. Los estilos compartidos vinculan elementos y los componentes de
 prueba incluyen botón, tarjeta, indicador y filtro. «Todos los cambios»
 entrega estilos, textos, insertados y destinos en Python; no recupera un
 borrador ni escribe en el proyecto. Regla #828, test_diseno_visual.py.
+El redimensionado manual libera los mínimos/máximos del eje elegido sobre
+el nodo seleccionado. Los controles internos pueden bajar de 40px; el
+original, el historial, el ↺ de tamaño y la exportación conservan sus
+límites CSS, sin modificar el tamaño predeterminado de la app. Regla #829.
 """
 
 import json

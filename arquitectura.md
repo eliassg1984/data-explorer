@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-828 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+829 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (275)
+**CSS y estilos** (276)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -342,6 +342,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#825** — Cada hoja termina a 8 px del borde de abajo, como a los costados
 - **#826** — El margen de abajo de cada hoja es de 24 px
 - **#828** — La edición visual conserva originales de los destinos reales y reaplica todas las propuestas
+- **#829** — Un control interno no tiene el piso de una tarjeta, y height no vence min-height
 
 **Layout y alturas** (113)
 
@@ -59021,6 +59022,20 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    no hay almacenamiento ni recuperación de borradores. `test_diseno_visual.py` verifica
    el editor, el inspector real y el reemplazo del iframe de montaje en Chromium sin red.
 
+829. **Un control interno no tiene el piso de una tarjeta, y height no vence min-height.**
+   El buscador `input.ajc-search` de Diferencias del cierre medía 32px y no podía afinarse:
+   `pisoResize` imponía 40px a todo elemento, y su CSS además conservaba `min-height:32px`.
+   Arrastrar lo agrandaba a 40px; escribir 24 en el alto lo dejaba en 32px. Ahora el piso
+   protector 60×40 queda para contenedores completos; los controles y partes internas
+   pueden bajar a 8px, y líneas/barras/espacios insertados conservan 1px de alto (#342).
+   `prepararRedimensionado` libera sólo el mínimo y máximo del eje elegido sobre el nodo
+   seleccionado. Se comparte entre manijas, medidas numéricas e igualar tamaños en grupo.
+   Los límites son propiedades de geometría: se reaplican al recrear el nodo y se exportan
+   en su CSS. Original, historial y ↺ de tamaño restauran también esos límites. No se
+   cambia el alto predeterminado del buscador ni se toca a sus vecinos. Las pruebas usan
+   el CSS real de `cierre.css` en un shadow root y verifican el gesto 32→24, ancho estable,
+   controles vecinos, original, deshacer/rehacer y reproducción del CSS exportado.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59033,7 +59048,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#828**; la próxima toma el número siguiente.
+> última regla es la **#829**; la próxima toma el número siguiente.
 
 >
 

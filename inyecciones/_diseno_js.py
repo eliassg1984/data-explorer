@@ -1695,7 +1695,8 @@ JS = """
         // pills adentro escondia las pills y dejaba la tarjeta vacia.
         var PROPS_GEOMETRIA = { width: 1, height: 1, flex: 1, 'max-width': 1, 'max-height': 1, display: 1 };
         ['flex-direction', 'flex-wrap', 'grid-template-columns', 'gap', 'row-gap', 'column-gap',
-         'align-items', 'justify-content', 'order', 'margin', 'margin-top', 'margin-left', 'transform'].forEach(function(p) {
+         'align-items', 'justify-content', 'order', 'margin', 'margin-top', 'margin-left', 'transform',
+         'min-width', 'min-height'].forEach(function(p) {
             PROPS_GEOMETRIA[p] = 1;
         });
 
@@ -2831,18 +2832,26 @@ JS = """
             doc.addEventListener('mouseup', onUp);
         }
 
-        // Piso del arrastre. Los 60x40 existen para que una tarjeta real no
-        // se colapse debajo de sus propias manijas y quede inagarrable. Pero
-        // una LINEA insertada nace de 1px y una barra/espacio son justamente
-        // lo que uno quiere afinar: reportado 2026-09-07 —"la hice mas
-        // gruesa y ahora no me permite volverla a hacer delgada"—, el piso
-        // de 40 dejaba la linea convertida en una franja para siempre. Un
-        // mock no tiene contenido que proteger (y se borra con un boton),
-        // asi que su piso es 1px. Ver regla #342.
+        // La proteccion de 60x40 corresponde a un contenedor completo, no
+        // a sus controles internos: un buscador puede medir 32px de origen.
+        // Las piezas y controles pequenos se pueden afinar hasta 8px; las
+        // lineas/barras/espacios insertados conservan su piso de 1px (#342).
         function pisoResize(el) {
             var t = el.getAttribute && el.getAttribute('data-diseno-mock');
             if (t === 'linea' || t === 'barra' || t === 'espacio') return { ancho: 8, alto: 1 };
+            var control = el.matches && el.matches('input, textarea, select, button');
+            var tieneKey = Array.prototype.some.call(el.classList || [], function(c) { return c.indexOf('st-key-') === 0; });
+            if (control || enPieza(el) || !tieneKey) return { ancho: 8, alto: 8 };
             return { ancho: 60, alto: 40 };
+        }
+
+        function prepararRedimensionado(ctx, eje) {
+            establecerCambio(ctx.el, ctx.registro, 'flex', 'none');
+            // height/width no pueden vencer min-height/min-width, ni con
+            // !important. Se libera solo el eje elegido, sobre el nodo
+            // seleccionado; sus originales y el CSS exportado lo incluyen.
+            establecerCambio(ctx.el, ctx.registro, 'min-' + eje, '0px');
+            establecerCambio(ctx.el, ctx.registro, 'max-' + eje, 'none');
         }
 
         function iniciarArrastre(e, modo) {
@@ -2856,6 +2865,7 @@ JS = """
             // "nudge" también se ve trabado sin esto si el elemento anima.
             ctx.registro.transicionNeutralizada = true;
             neutralizarTransicion(ctx.el);
+            var r = ctx.el.getBoundingClientRect();
             if (modo !== 'move') {
                 // Tomar control manual del tamaño (arquitectura.md #47): un
                 // width/height con !important NO alcanza en un item flex —
@@ -2865,11 +2875,15 @@ JS = """
                 // clampea el cruzado. Ninguna de las dos se gana agregando
                 // !important a la MISMA propiedad — hay que neutralizar estas
                 // tres antes de que width/height tengan efecto visual.
-                establecerCambio(ctx.el, ctx.registro, 'flex', 'none');
-                establecerCambio(ctx.el, ctx.registro, 'max-width', 'none');
-                establecerCambio(ctx.el, ctx.registro, 'max-height', 'none');
+                if (modo.indexOf('e') !== -1 || modo.indexOf('w') !== -1) {
+                    prepararRedimensionado(ctx, 'width');
+                    establecerCambio(ctx.el, ctx.registro, 'width', r.width + 'px');
+                }
+                if (modo.indexOf('s') !== -1 || modo.indexOf('n') !== -1) {
+                    prepararRedimensionado(ctx, 'height');
+                    establecerCambio(ctx.el, ctx.registro, 'height', r.height + 'px');
+                }
             }
-            var r = ctx.el.getBoundingClientRect();
             var startX = e.clientX, startY = e.clientY;
             var startW = r.width, startH = r.height;
             var startTX = ctx.registro.transformState.translateX;
@@ -3922,16 +3936,14 @@ JS = """
             }
 
             var tamVal = spanValor('');
-            // Las cinco que escribe iniciarArrastre(): width/height mas las
-            // tres que hay que neutralizar para que tengan efecto en un item
-            // flex (regla #47). Revertir solo width/height dejaria el
-            // elemento con `flex:none` y sin su max-width — o sea "vuelve al
-            // tamaño" a medias.
+            // Revertir tambien los limites liberados por el redimensionado:
+            // borrar solo width/height dejaria sin el minimo original a los
+            // controles y con otra distribucion a los items flex (#47, #829).
             panel.appendChild(filaSoloLectura('Tamaño', tamVal, function() {
                 var ctx = elementoActivo(); if (!ctx) return;
-                ['width', 'height', 'flex', 'max-width', 'max-height'].forEach(function(pr) {
+                ['width', 'height', 'flex', 'max-width', 'max-height', 'min-width', 'min-height'].forEach(function(pr) {
                     establecerCambio(ctx.el, ctx.registro, pr, null);
-                    restaurarPropDeOriginal(ctx.el, ctx.registro, pr);
+                    restaurarPropiedad(ctx.el, pr);
                 });
                 rehacerPanel();
             }));
@@ -5266,9 +5278,7 @@ JS = """
                 ctx.registro.transformState[prop === 'x' ? 'translateX' : 'translateY'] = numero;
                 aplicarTransform(ctx.el, ctx.registro);
             } else {
-                ['flex', 'max-width', 'max-height'].forEach(function(p) {
-                    establecerCambio(ctx.el, ctx.registro, p, 'none');
-                });
+                prepararRedimensionado(ctx, prop);
                 establecerCambio(ctx.el, ctx.registro, prop, numero + 'px');
                 sincronizarContenidoRedimensionable(ctx.el, prop === 'width' ? numero : null, prop === 'height' ? numero : null);
             }
@@ -5386,9 +5396,7 @@ JS = """
                 if (operacion === 'horizontal') t.translateX += x.delta;
                 if (operacion === 'vertical') t.translateY += x.delta;
                 if (operacion === 'ancho' || operacion === 'alto') {
-                    establecerCambio(x.m.el, x.m.registro, 'flex', 'none');
-                    establecerCambio(x.m.el, x.m.registro, 'max-width', 'none');
-                    establecerCambio(x.m.el, x.m.registro, 'max-height', 'none');
+                    prepararRedimensionado(x.m, operacion === 'ancho' ? 'width' : 'height');
                     establecerCambio(x.m.el, x.m.registro, operacion === 'ancho' ? 'width' : 'height',
                         datos[0].r[operacion === 'ancho' ? 'width' : 'height'] + 'px');
                 }

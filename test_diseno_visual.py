@@ -316,6 +316,64 @@ class EditorVisual(unittest.TestCase):
         self.assertEqual(self.color('.st-key-a'), 'rgb(255, 0, 0)')
         self.page.evaluate('clearInterval(window.__disenoPollInterval)')
 
+    def montar_buscador_cierre(self):
+        css = (ROOT / 'graficos/ajuste/cierre.css').read_text(encoding='utf-8')
+        self.page.locator('.st-key-piece').evaluate('''(e,css) => {
+            const r=e.attachShadow({mode:'open'}), style=document.createElement('style');
+            style.textContent=css; r.appendChild(style);
+            const view=document.createElement('div'); view.className='ajc';
+            view.innerHTML='<div class="ajc-fila ajc-barra"><label class="ajc-buscar"><svg class="ico"></svg><input class="ajc-search" type="search" placeholder="Buscar producto o area"></label><button>Otro control</button></div>';
+            r.appendChild(view);
+        }''', css)
+        self.pin('piece', 'ajc-search')
+
+    def test_buscador_real_del_cierre_se_puede_reducir_con_la_manija(self):
+        self.montar_buscador_cierre()
+        buscador = self.page.locator('.ajc-search')
+        original = buscador.bounding_box()
+        self.assertEqual(original['height'], 32)
+        manija = self.page.locator('#el-diseno-rh-s').bounding_box()
+        x, y = manija['x'] + manija['width']/2, manija['y'] + manija['height']/2
+        self.page.mouse.move(x, y)
+        self.page.mouse.down()
+        self.page.mouse.move(x, y-8, steps=4)
+        self.page.mouse.up()
+        self.assertEqual(buscador.bounding_box()['height'], 24)
+        self.assertEqual(buscador.bounding_box()['width'], original['width'])
+        self.assertEqual(self.page.locator('.ajc-barra button').bounding_box()['height'], 30)
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(buscador.bounding_box()['height'], 32)
+        self.page.get_by_role('button', name='Rehacer', exact=True).click()
+        self.assertEqual(buscador.bounding_box()['height'], 24)
+
+    def test_alto_numerico_del_buscador_se_exporta_y_original_restaura_su_minimo(self):
+        self.montar_buscador_cierre()
+        self.page.get_by_label('Alto (px)', exact=True).fill('24')
+        self.page.get_by_label('Alto (px)', exact=True).press('Tab')
+        self.assertEqual(self.page.locator('.ajc-search').bounding_box()['height'], 24)
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        css = '\n'.join(re.findall(r'```css\n(.*?)\n```', entrega, re.S))
+        self.page.locator('.ajc-search').evaluate('e=>e.style.cssText=""')
+        self.page.locator('.st-key-piece').evaluate('''(e,css) => {
+            const st=document.createElement('style'); st.textContent=css; e.shadowRoot.appendChild(st);
+        }''', css)
+        self.assertEqual(self.page.locator('.ajc-search').bounding_box()['height'], 24)
+        self.page.locator('.st-key-piece').evaluate('e=>e.shadowRoot.lastElementChild.remove()')
+        self.page.evaluate('editorPrueba.sync()')
+        self.page.get_by_role('button', name='Ver original', exact=True).click()
+        self.assertEqual(self.page.locator('.ajc-search').bounding_box()['height'], 32)
+        self.page.get_by_role('button', name='Ver con cambios', exact=True).click()
+        self.assertEqual(self.page.locator('.ajc-search').bounding_box()['height'], 24)
+
+    def test_contenedor_completo_conserva_piso_de_arrastre(self):
+        manija = self.page.locator('#el-diseno-rh-s').bounding_box()
+        x, y = manija['x'] + manija['width']/2, manija['y'] + manija['height']/2
+        self.page.mouse.move(x, y)
+        self.page.mouse.down()
+        self.page.mouse.move(x, y-100, steps=4)
+        self.page.mouse.up()
+        self.assertEqual(self.page.locator('.st-key-a').bounding_box()['height'], 40)
+
     def test_remontaje_no_duplica_panel_ni_historial_y_no_hay_borradores(self):
         self.editar('background-color', 'rgb(0,128,0)')
         self.page.evaluate(self.js)

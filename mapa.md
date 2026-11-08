@@ -71,7 +71,9 @@ deshacer/rehacer, medidas, distribución, alineación y estilos compartidos.
 General, Escritorio, Tablet y Móvil son variantes de sesión, con vista
 previa estática por ancho. «Todos los cambios» reúne los destinos en CSS,
 HTML y Python; no guarda ni recupera borradores. Lo verifica
-`test_diseno_visual.py` en Chromium sin red (regla #828).
+`test_diseno_visual.py` en Chromium sin red (regla #828). El tamaño manual
+libera los límites CSS del eje elegido y permite afinar controles internos
+por debajo de 40px, con original/restauración/exportación completos (#829).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|
