@@ -173,7 +173,8 @@ const cseg=(act,ops,sel,label)=>`<span class="ajc-seg" role="group" aria-label="
 // elegido; el cursor o el foco lo despliegan hacia abajo. Las pestañas, no: llevan a otra
 // cosa y van a la vista (#795).
 const ccap=(act,ops,sel,label)=>{const el=ops.find(([v])=>v===sel)||ops[0];return `<span class="ajc-cap" data-cap="${act}" role="group" aria-label="${cesc(label)}"><button type="button" class="ajc-cap-b" aria-haspopup="true" title="${cesc(label)}">${cesc(el[1])}<i aria-hidden="true">▾</i></button><span class="ajc-cap-op">${ops.map(([v,t])=>cbtn(act,v,t,v===sel)).join('')}</span></span>`;};
-const cselect=(act,ops,sel,label)=>`<label>${cesc(label)} <select data-change="${act}" aria-label="${cesc(label)}">${ops.map(([v,t])=>`<option value="${cesc(v)}" ${v===sel?'selected':''}>${cesc(t)}</option>`).join('')}</select></label>`;
+// Ancla propia del control: el sub-pin de Diseño debe llegar al select, no a su caja (#831).
+const cselect=(act,ops,sel,label)=>`<label>${cesc(label)} <select class="ajc-selector-${cesc(act)}" data-change="${act}" aria-label="${cesc(label)}">${ops.map(([v,t])=>`<option value="${cesc(v)}" ${v===sel?'selected':''}>${cesc(t)}</option>`).join('')}</select></label>`;
 const ckpi=(label,value,sub='',tip='',cls='',extra='')=>`<div class="ajc-kpi ${extra}" title="${cesc(tip)}"><span>${cesc(label)}</span><b class="${cls}">${cesc(value)}</b><small>${cesc(sub)}</small></div>`;
 const cclase=v=>v<-.5?'neg':v>.5?'pos':'';
 const ctipo=(B,rep,r)=>{const n=rep.n.get(r.prod)||0;return B.oper.has(r.fam)?'oper':n>=3?'rein':n<=1?'una':'otros';};

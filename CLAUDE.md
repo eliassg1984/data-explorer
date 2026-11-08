@@ -2498,6 +2498,8 @@ correr `python test_diseno_visual.py` (Chromium sin red). Regla #828.
 La barra se arrastra desde ⠿ y se pliega con –; su ayuda integra los atajos
 y los avisos de Diseño. El panel admite izquierda/derecha. Correr también
 `python test_herramientas_visuales.py` al cambiar estas capas (regla #830).
+Los selectores internos del cierre tienen anclas propias por acción para
+seleccionarlos y pintar su fondo sin tocar la caja que los envuelve (#831).
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del

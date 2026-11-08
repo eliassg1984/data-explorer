@@ -77,6 +77,8 @@ por debajo de 40px, con original/restauración/exportación completos (#829).
 La barra de herramientas es movible/plegable e integra ayuda y avisos;
 el panel del editor admite ambos lados. Lo verifica además
 `test_herramientas_visuales.py` (regla #830).
+Los selectores del cierre tienen anclas propias para editar el control
+directamente; las pruebas usan también el montaje real de la pieza (#831).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|

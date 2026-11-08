@@ -64,6 +64,70 @@ class HerramientasVisuales(unittest.TestCase):
             editorPrueba.sync();
         }''', key)
 
+    def montar_cierre(self):
+        from test_cierre_pieza import CSS, JS, datos, inventario
+
+        self.page.add_script_tag(content=(ROOT / 'graficos/_xlsx.js').read_text(encoding='utf-8')
+            + JS.replace('export default function(component)', 'window.montarCierrePrueba=function(component)'))
+        self.page.locator('.st-key-piece').evaluate('''(e, [css, datos]) => {
+            const r=e.attachShadow({mode:'open'}), estilo=document.createElement('style');
+            e.style.setProperty('--accent-tint','rgb(235,230,255)');
+            e.style.setProperty('--bg-card','rgb(255,255,255)');
+            estilo.textContent=css; r.appendChild(estilo);
+            const montaje=document.createElement('div'); r.appendChild(montaje);
+            montarCierrePrueba({data:datos,parentElement:montaje,setTriggerValue:()=>{}});
+        }''', [CSS, datos.armar(inventario())])
+        self.page.get_by_role('button', name='Panel a la izquierda', exact=True).click()
+        return self.page.locator('.st-key-piece select[data-change=corte]')
+
+    def test_corte_real_se_selecciona_y_su_fondo_se_exporta_sin_pintar_la_caja(self):
+        corte = self.montar_cierre()
+        padre = self.page.locator('.ajc-ses')
+        buscador = self.page.locator('.ajc-search')
+        fondo = corte.evaluate('e=>getComputedStyle(e).backgroundColor')
+        vecinos = [e.evaluate('n=>getComputedStyle(n).backgroundColor') for e in [padre, buscador]]
+        corte.click(button='right')
+        self.page.wait_for_function("__disenoState.sub?.clase==='ajc-selector-corte'")
+        caja = corte.bounding_box()
+        contorno = self.page.locator('#el-diseno-overlay').bounding_box()
+        self.assertAlmostEqual(contorno['width'], caja['width'] + 8, delta=1)
+        self.assertAlmostEqual(contorno['height'], caja['height'] + 8, delta=1)
+        fila = self.page.get_by_text('Fondo', exact=True).locator('xpath=../../..')
+        fila.locator('xpath=ancestor::details[1]/summary').click()
+        fila.get_by_title('Acento', exact=True).click()
+        self.assertEqual(corte.evaluate('e=>getComputedStyle(e).backgroundColor'), 'rgb(108, 92, 231)')
+        self.assertEqual([e.evaluate('n=>getComputedStyle(n).backgroundColor') for e in [padre, buscador]], vecinos)
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(corte.evaluate('e=>getComputedStyle(e).backgroundColor'), fondo)
+        self.page.get_by_role('button', name='Rehacer', exact=True).click()
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        self.assertIn('CSS de la pieza', entrega)
+        css = '\n'.join(re.findall(r'```css\n(.*?)\n```', entrega, re.S))
+        self.assertIn('.ajc-selector-corte', css)
+        corte.evaluate('e=>e.style.cssText=""')
+        self.page.locator('.st-key-piece').evaluate('''(e, css)=>{
+            const estilo=document.createElement('style'); estilo.textContent=css;
+            e.shadowRoot.appendChild(estilo);
+        }''', css)
+        self.assertEqual(corte.evaluate('e=>getComputedStyle(e).backgroundColor'), 'rgb(108, 92, 231)')
+        self.assertEqual([e.evaluate('n=>getComputedStyle(n).backgroundColor') for e in [padre, buscador]], vecinos)
+
+    def test_corte_real_conserva_pin_tras_redibujar_y_sigue_filtrando_al_salir_de_diseno(self):
+        corte = self.montar_cierre()
+        corte.click(button='right')
+        self.page.wait_for_function("__disenoState.sub?.clase==='ajc-selector-corte'")
+        fila = self.page.get_by_text('Fondo', exact=True).locator('xpath=../../..')
+        fila.locator('xpath=ancestor::details[1]/summary').click()
+        fila.get_by_title('Acento', exact=True).click()
+        corte.evaluate('e=>{window.corteAnteriorPrueba=e; __ajCierreUI.pintar(__ajCierre)}')
+        self.page.wait_for_function("!corteAnteriorPrueba.isConnected && getComputedStyle(__ajCierre.root.querySelector('select[data-change=corte]')).backgroundColor==='rgb(108, 92, 231)'")
+        self.page.get_by_role('button', name=re.compile('Diseño$')).click()
+        valor = corte.input_value()
+        otro = next(v for v in corte.locator('option').evaluate_all('es=>es.map(e=>e.value)') if v != valor)
+        corte.select_option(otro)
+        self.assertEqual(self.page.evaluate('__ajCierre.st.c'), int(otro))
+        self.assertEqual(corte.input_value(), otro)
+
     def test_barra_arrastrable_y_plegable_conserva_diseno_activo(self):
         antes = self.page.locator('#herr-barra').bounding_box()
         self.mover_barra(300, 200)

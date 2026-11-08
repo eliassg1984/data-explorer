@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-830 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+831 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (276)
+**CSS y estilos** (277)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -343,6 +343,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#826** — El margen de abajo de cada hoja es de 24 px
 - **#828** — La edición visual conserva originales de los destinos reales y reaplica todas las propuestas
 - **#829** — Un control interno no tiene el piso de una tarjeta, y height no vence min-height
+- **#831** — Un selector interno necesita su propia ancla de Diseño
 
 **Layout y alturas** (113)
 
@@ -59054,6 +59055,18 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    cubre arrastre, límites, reinyección, plegado, atajos, avisos, lados y reservas, junto
    con `test_diseno_visual.py` para conservar las propuestas y el historial.
 
+831. **Un selector interno necesita su propia ancla de Diseño.**
+   El fechador de Diferencias del cierre era un `select` sin clase de autor. El inspector
+   detectaba el nodo profundo, pero el sub-pin (#157, #820) subía a `.ajc-ses`: cambiar
+   Fondo pintaba la franja de alrededor y dejaba intacto el selector. `cselect` en
+   `graficos/ajuste/cierre.js` da a cada control una clase estable por acción:
+   `.ajc-selector-corte` y `.ajc-selector-prev`. Así el gesto directo selecciona el control,
+   su CSS exportado apunta al mismo nodo y el cierre anterior conserva su ancla aparte.
+   No se cambian los eventos, opciones ni colores predeterminados. Las pruebas de
+   `test_herramientas_visuales.py` montan el JS y CSS reales dentro de un shadow root y
+   verifican clic derecho, contorno, fondo sin afectar vecinos, historial, reproducción
+   del CSS exportado, redibujado y cambio de cierre al salir de Diseño.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59066,7 +59079,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#830**; la próxima toma el número siguiente.
+> última regla es la **#831**; la próxima toma el número siguiente.
 
 >
 
