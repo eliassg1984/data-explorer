@@ -2500,6 +2500,8 @@ y los avisos de Diseño. El panel admite izquierda/derecha. Correr también
 `python test_herramientas_visuales.py` al cambiar estas capas (regla #830).
 Los selectores internos del cierre tienen anclas propias por acción para
 seleccionarlos y pintar su fondo sin tocar la caja que los envuelve (#831).
+Los insertados en piezas conservan su key y se buscan desde su ancla,
+también si están encadenados a otro insertado dentro del shadow root (#832).
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del

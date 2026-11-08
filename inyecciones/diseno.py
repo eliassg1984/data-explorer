@@ -152,6 +152,8 @@ El panel puede cambiar entre izquierda y derecha y plegarse sin soltar el
 elemento. La reserva de espacio y las manijas respetan ambos lados. Los
 avisos de navegación bloqueada sólo escriben `avisoTexto`/`avisoHasta` en
 `window.__herramientasUI`; herramientas.py los presenta en su barra (#830).
+Los insertados se resuelven desde el ancla aunque ésta sea otro insertado
+dentro de una pieza; conservan su selección y edición al redibujar (#832).
 """
 
 import json

@@ -79,6 +79,8 @@ el panel del editor admite ambos lados. Lo verifica además
 `test_herramientas_visuales.py` (regla #830).
 Los selectores del cierre tienen anclas propias para editar el control
 directamente; las pruebas usan también el montaje real de la pieza (#831).
+Los insertados dentro de piezas se seleccionan por su key, incluso cuando
+su ancla es otro insertado; conservan la selección al redibujar (#832).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|

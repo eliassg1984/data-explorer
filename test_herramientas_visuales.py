@@ -36,8 +36,8 @@ class HerramientasVisuales(unittest.TestCase):
         self.page.route('http://editor.test/**', lambda r: r.fulfill(body=HTML, content_type='text/html'))
         self.page.goto('http://editor.test/?debug=1&diseno=1')
         self.page.evaluate('''() => {
-            document.execCommand=()=>true;
-            Object.defineProperty(navigator,'clipboard',{value:{writeText:()=>Promise.resolve()},configurable:true});
+            document.execCommand=()=>{window.textoCopiadoPrueba=document.activeElement.value||String(getSelection());return true;};
+            Object.defineProperty(navigator,'clipboard',{value:{writeText:texto=>{window.textoCopiadoPrueba=texto;return Promise.resolve();}},configurable:true});
         }''')
         self.page.evaluate(self.inspector)
         self.page.evaluate(self.editor)
@@ -79,6 +79,108 @@ class HerramientasVisuales(unittest.TestCase):
         }''', [CSS, datos.armar(inventario())])
         self.page.get_by_role('button', name='Panel a la izquierda', exact=True).click()
         return self.page.locator('.st-key-piece select[data-change=corte]')
+
+    def montar_zona_interna(self):
+        self.page.locator('.st-key-piece').evaluate('''e=>{
+            e.style.width='620px';
+            e.attachShadow({mode:'open'}).innerHTML='<section class="dv-zona" style="padding:16px"><div class="dv-ancla" style="width:220px;height:32px">Ancla de la pieza</div></section>';
+        }''')
+        self.page.keyboard.press('Alt+t')
+        self.page.locator('.dv-ancla').click(button='right')
+        self.page.wait_for_function("__disenoState.sub?.clase==='dv-ancla'")
+
+    def insertar_tarjeta(self):
+        boton = self.page.get_by_role('button', name='+ Tarjeta', exact=True, include_hidden=True)
+        if not boton.is_visible():
+            boton.locator('xpath=ancestor::details[1]/summary').click()
+        boton.click()
+        return self.page.locator('[data-diseno-mock=tarjeta]').last
+
+    def test_tarjeta_insertada_en_pieza_se_selecciona_con_un_clic_derecho_y_se_edita(self):
+        self.montar_zona_interna()
+        tarjeta = self.insertar_tarjeta()
+        tarjeta.click(button='right', position={'x': 5, 'y': 5})
+        self.page.wait_for_function("__inspectorPinned && __inspectorUltimo.key==='diseno_tarjeta_1' && document.getElementById('el-diseno-panel').dataset.builtForKey==='diseno_tarjeta_1'", timeout=5000)
+        self.assertEqual(self.page.evaluate('__inspectorUltimo.ctx.padre'), 'piece')
+        self.assertEqual(self.page.evaluate('__inspectorUltimo.extras2.keysCad'), ['diseno_tarjeta_1', 'piece'])
+        self.assertIn('Widget key: diseno_tarjeta_1', self.page.evaluate('textoCopiadoPrueba'))
+        ancho_ancla = self.page.locator('.dv-ancla').bounding_box()['width']
+        self.page.get_by_label('Ancho (px)', exact=True).fill('300')
+        self.page.get_by_label('Ancho (px)', exact=True).press('Tab')
+        self.assertEqual(tarjeta.bounding_box()['width'], 300)
+        self.assertEqual(self.page.locator('.dv-ancla').bounding_box()['width'], ancho_ancla)
+        fila = self.page.get_by_text('Fondo', exact=True).locator('xpath=../../..')
+        fila.locator('xpath=ancestor::details[1]/summary').click()
+        fila.get_by_title('Acento', exact=True).click()
+        self.assertEqual(tarjeta.evaluate('e=>getComputedStyle(e).backgroundColor'), 'rgb(108, 92, 231)')
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(tarjeta.evaluate('e=>getComputedStyle(e).backgroundColor'), 'rgb(255, 255, 255)')
+        self.page.get_by_role('button', name='Rehacer', exact=True).click()
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        self.assertIn('Destino: CSS de la pieza', entrega)
+        css = '\n'.join(re.findall(r'```css\n(.*?)\n```', entrega, re.S))
+        tarjeta.evaluate('e=>e.style.removeProperty("background-color")')
+        self.page.locator('.st-key-piece').evaluate('''(e,css)=>{
+            const st=document.createElement('style'); st.textContent=css; e.shadowRoot.appendChild(st);
+        }''', css)
+        self.assertEqual(tarjeta.evaluate('e=>getComputedStyle(e).backgroundColor'), 'rgb(108, 92, 231)')
+
+    def test_cambiar_de_tarjeta_a_su_titulo_y_al_ancla_y_soltar_el_mismo_nodo(self):
+        self.montar_zona_interna()
+        tarjeta = self.insertar_tarjeta()
+        tarjeta.click(button='right', position={'x': 5, 'y': 5})
+        self.page.wait_for_function("__inspectorPinned && __inspectorUltimo.key==='diseno_tarjeta_1'", timeout=5000)
+        tarjeta.locator('.dv-mock-titulo').click(button='right')
+        self.page.wait_for_function("__inspectorPinned && __inspectorUltimo.key==='diseno_tarjeta_1' && __disenoState.sub?.clase==='dv-mock-titulo'", timeout=5000)
+        self.page.locator('.dv-ancla').click(button='right')
+        self.page.wait_for_function("__inspectorPinned && __inspectorUltimo.key==='piece' && __disenoState.sub?.clase==='dv-ancla'", timeout=5000)
+        self.page.locator('.dv-ancla').click(button='right')
+        self.assertFalse(self.page.evaluate('__inspectorPinned'))
+
+    def test_tarjetas_encadenadas_en_shadow_root_no_se_duplican_y_recuperan_seleccion(self):
+        self.montar_zona_interna()
+        primera = self.insertar_tarjeta()
+        primera.click(button='right', position={'x': 5, 'y': 5})
+        self.page.wait_for_function("__inspectorPinned && __inspectorUltimo.key==='diseno_tarjeta_1' && document.getElementById('el-diseno-panel').dataset.builtForKey==='diseno_tarjeta_1'", timeout=5000)
+        segunda = self.insertar_tarjeta()
+        self.page.evaluate('()=>{for(let i=0;i<4;i++)editorPrueba.sync()}')
+        self.assertEqual(self.page.locator('[data-diseno-mock=tarjeta]').count(), 2)
+        segunda.click(button='right', position={'x': 5, 'y': 5})
+        self.page.wait_for_function("__inspectorPinned && __inspectorUltimo.key==='diseno_tarjeta_2' && document.getElementById('el-diseno-panel').dataset.builtForKey==='diseno_tarjeta_2'", timeout=5000)
+        self.page.get_by_label('Ancho (px)', exact=True).fill('280')
+        self.page.get_by_label('Ancho (px)', exact=True).press('Tab')
+        self.assertEqual(segunda.bounding_box()['width'], 280)
+        self.page.locator('.dv-zona').evaluate('e=>e.innerHTML=\'<div class="dv-ancla" style="width:220px;height:32px">Ancla redibujada</div>\'')
+        self.page.wait_for_function("document.querySelector('.st-key-piece').shadowRoot.querySelectorAll('[data-diseno-mock=tarjeta]').length===2 && getComputedStyle(document.querySelector('.st-key-piece').shadowRoot.querySelector('.st-key-diseno_tarjeta_2')).width==='280px'")
+        self.assertEqual(self.page.locator('.st-key-diseno_tarjeta_2').bounding_box()['width'], 280)
+        self.assertEqual(self.page.evaluate('__inspectorUltimo.key'), 'diseno_tarjeta_2')
+        self.assertEqual(self.page.locator('.st-key-diseno_tarjeta_2').evaluate('e=>e.previousElementSibling.className'), 'st-key-diseno_tarjeta_1')
+
+    def test_titulo_de_tarjeta_exporta_css_limitado_a_esa_tarjeta(self):
+        self.montar_zona_interna()
+        primera = self.insertar_tarjeta()
+        primera.click(button='right', position={'x': 5, 'y': 5})
+        self.page.wait_for_function("document.getElementById('el-diseno-panel').dataset.builtForKey==='diseno_tarjeta_1'")
+        segunda = self.insertar_tarjeta()
+        titulo = self.page.locator('.st-key-diseno_tarjeta_1 .dv-mock-titulo')
+        vecino = segunda.locator('.dv-mock-titulo')
+        original_vecino = vecino.evaluate('e=>getComputedStyle(e).color')
+        titulo.click(button='right')
+        self.page.wait_for_function("__inspectorPinned && document.getElementById('el-diseno-panel').dataset.builtForKey==='diseno_tarjeta_1 .dv-mock-titulo'")
+        fila = self.page.get_by_text('Texto', exact=True).locator('xpath=../../..')
+        fila.locator('xpath=ancestor::details[1]/summary').click()
+        fila.get_by_title('Acento', exact=True).click()
+        self.assertEqual(titulo.evaluate('e=>getComputedStyle(e).color'), 'rgb(108, 92, 231)')
+        self.assertEqual(vecino.evaluate('e=>getComputedStyle(e).color'), original_vecino)
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        css = '\n'.join(re.findall(r'```css\n(.*?)\n```', entrega, re.S))
+        self.assertIn('.st-key-diseno_tarjeta_1 .dv-mock-titulo', css)
+        titulo.evaluate('e=>e.style.removeProperty("color")')
+        self.page.locator('.st-key-piece').evaluate('''(e,css)=>{
+            const st=document.createElement('style'); st.textContent=css; e.shadowRoot.appendChild(st);
+        }''', css)
+        self.assertEqual(titulo.evaluate('e=>getComputedStyle(e).color'), 'rgb(108, 92, 231)')
+        self.assertEqual(vecino.evaluate('e=>getComputedStyle(e).color'), original_vecino)
 
     def test_corte_real_se_selecciona_y_su_fondo_se_exporta_sin_pintar_la_caja(self):
         corte = self.montar_cierre()

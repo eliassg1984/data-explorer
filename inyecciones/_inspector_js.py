@@ -139,19 +139,24 @@ JS = """
             var m = /st-key-([A-Za-z0-9_-]+)/.exec(el.className.toString());
             return m ? m[1] : '';
         }
+        // Los insertados de Diseño pueden vivir dentro de una pieza (#832).
+        function padreCompuesto(el) {
+            if (!el) return null;
+            return el.parentElement || (el.parentNode && el.parentNode.host) || null;
+        }
         function contenedorConKey(el) {
             var cur = el;
             while (cur && cur !== doc.body) {
                 var k = keyDeElemento(cur);
                 if (k) return { el: cur, key: k };
-                cur = cur.parentElement;
+                cur = padreCompuesto(cur);
             }
             return null;
         }
         function padreYHermanos(el) {
             var mio = contenedorConKey(el);
             if (!mio) return { padre: '', hermanos: [] };
-            var arriba = contenedorConKey(mio.el.parentElement);
+            var arriba = contenedorConKey(padreCompuesto(mio.el));
             if (!arriba) return { padre: '', hermanos: [] };
             var hermanos = [];
             var candidatos = arriba.el.querySelectorAll('[class*="st-key-"]');
@@ -242,7 +247,7 @@ JS = """
             while (cur && cur !== doc.body && out.length < 12) {
                 var k = keyDeElemento(cur);
                 if (k && out.indexOf(k) === -1) out.push(k);
-                cur = cur.parentElement;
+                cur = padreCompuesto(cur);
             }
             return out;
         }
@@ -289,7 +294,7 @@ JS = """
             while (cur && cur !== doc.body && out.length < 8) {
                 var t = cur.getAttribute && cur.getAttribute('data-testid');
                 if (t) out.push(t);
-                cur = cur.parentElement;
+                cur = padreCompuesto(cur);
             }
             return out;
         }
@@ -315,7 +320,7 @@ JS = """
                     // stVerticalBlock = un st.container, puede traer varios.
                     return { key: k, soloWidget: (td === 'stElementContainer') };
                 }
-                cur = cur.parentElement;
+                cur = padreCompuesto(cur);
             }
             return null;
         }
@@ -333,7 +338,7 @@ JS = """
                     out.push({ key: k, widgets: n, propio: primero });
                     primero = false;
                 }
-                cur = cur.parentElement;
+                cur = padreCompuesto(cur);
             }
             return out;
         }
@@ -659,7 +664,7 @@ JS = """
         function boxPadre(el) {
             var cont = contenedorConKey(el);
             if (!cont) return '';
-            return estilosCajaDe(cont.el.parentElement);
+            return estilosCajaDe(padreCompuesto(cont.el));
         }
         function boxPadreKey(el) {
             // Estilos computados del ANCESTRO KEYED (el que aparece como "Padre:
@@ -668,7 +673,7 @@ JS = """
             // el "por que se pega arriba" queda invisible.
             var mio = contenedorConKey(el);
             if (!mio) return '';
-            var arriba = contenedorConKey(mio.el.parentElement);
+            var arriba = contenedorConKey(padreCompuesto(mio.el));
             if (!arriba) return '';
             return estilosCajaDe(arriba.el);
         }
@@ -1505,7 +1510,7 @@ JS = """
             // regla de estilos/ lo produce.
             try {
                 var _mio = contenedorConKey(elBase);
-                var _up  = _mio ? contenedorConKey(_mio.el.parentElement) : null;
+                var _up  = _mio ? contenedorConKey(padreCompuesto(_mio.el)) : null;
                 if (_up) matcheantesPadreKey = reglasQueMatchean(_up.el);
             } catch(_){}
             var extras2Copia = {};
@@ -1518,7 +1523,7 @@ JS = """
             // que suele traer el margen que uno tiene ganas de tocar.
             try {
                 var _mio2 = contenedorConKey(elBase);
-                var _up2  = _mio2 ? contenedorConKey(_mio2.el.parentElement) : null;
+                var _up2  = _mio2 ? contenedorConKey(padreCompuesto(_mio2.el)) : null;
                 extras2Copia.compartidos = selectoresCompartidos(_up2 ? _up2.el : elBase);
             } catch(_){}
             // Variables CSS: junto el cssText AUTORADO de las reglas que
@@ -1571,11 +1576,16 @@ JS = """
             if (!tipEl) return;
             if (win.__inspectorPinned) {
                 e.preventDefault();
+                var anterior = win.__inspectorUltimo;
+                var nodoAnterior = anterior && (anterior.elementoProfundo || anterior.elementoOriginal || anterior.elemento);
                 win.__inspectorTogglePin(true);
                 // recalcular de inmediato en la posicion actual del cursor,
                 // si no queda invisible hasta el proximo mousemove real
                 if (win.__inspectorMouseMoveHandler) win.__inspectorMouseMoveHandler(e);
-                return;
+                var actual = win.__inspectorUltimo;
+                var nodoActual = actual && (actual.elementoProfundo || actual.elementoOriginal || actual.elemento);
+                // Mismo nodo: soltar. Otro nodo con key: cambiar el pin en este gesto.
+                if (!actual || !actual.key || actual === anterior || nodoActual === nodoAnterior) return;
             }
             if (!win.__inspectorUltimo) return; // no hay nada bajo el cursor para fijar
             e.preventDefault();
@@ -1631,8 +1641,15 @@ JS = """
                         && camino[0].nodeType === 1) profundo = camino[0];
                 } catch (_cp) { profundo = null; }
 
+                // El host identifica la pieza; un insertado de Diseño tiene
+                // su propia key dentro del shadow root y debe conservarla (#832).
+                var mockProfundo = profundo && profundo.closest ? profundo.closest('[data-diseno-mock]') : null;
+                if (mockProfundo) { el = mockProfundo; cursor = mockProfundo; }
+
                 var agInfo = null;
-                try { agInfo = agGridInfo(e.clientX, e.clientY); } catch(err) { agInfo = null; }
+                if (!mockProfundo) {
+                    try { agInfo = agGridInfo(e.clientX, e.clientY); } catch(err) { agInfo = null; }
+                }
                 if (agInfo) {
                     etiqueta = agInfo;
                     var agFrame = doc.querySelector('iframe[src*="st_aggrid"], [data-testid="stAgGrid"] iframe');

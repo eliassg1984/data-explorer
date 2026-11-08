@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-831 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+832 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (277)
+**CSS y estilos** (278)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -344,6 +344,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#828** — La edición visual conserva originales de los destinos reales y reaplica todas las propuestas
 - **#829** — Un control interno no tiene el piso de una tarjeta, y height no vence min-height
 - **#831** — Un selector interno necesita su propia ancla de Diseño
+- **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 
 **Layout y alturas** (113)
 
@@ -1137,7 +1138,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
 - **#643** — El asistente IA suma los requerimientos como la página: sin anulados ni líneas sin producto,…
 
-**Herramientas de desarrollo** (42)
+**Herramientas de desarrollo** (43)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -1181,6 +1182,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 - **#820** — Adentro de una pieza propia, el modo diseño baja al nodo de verdad
 - **#830** — Las herramientas se apartan sin apilar avisos sobre el contenido
+- **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 
 **Decisiones de diseño y UX** (276)
 
@@ -59067,6 +59069,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    verifican clic derecho, contorno, fondo sin afectar vecinos, historial, reproducción
    del CSS exportado, redibujado y cambio de cierre al salir de Diseño.
 
+832. **Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección.**
+   El evento sobre `diseno_tarjeta_1` llegaba retargeteado al host de `aj_cierre_pieza`.
+   El inspector guardaba esa key exterior aunque el nodo profundo ya era el insertado;
+   el editor seguía seleccionando la vista completa. `_inspector_js.py` reconoce la
+   key del `[data-diseno-mock]` profundo y recorre sus padres cruzando el shadow root,
+   de modo que medidas, ancla y «copiar para IA» describen el insertado y su contenedor.
+   Con un pin activo, clic derecho en otro nodo cambia la selección en ese gesto;
+   clic derecho en el mismo nodo conserva el gesto de soltar. El botón de soltar sigue
+   disponible. En `_diseno_js.py`, `buscarMock` consulta la raíz del ancla también si
+   el ancla es otro insertado sin sub-pin: cortar por `!anclaSub` dejaba de encontrarlo
+   y cada sync lo duplicaba. Las anclas se crean sobre elementos anteriores, formando
+   una cadena que se repone en orden. `test_herramientas_visuales.py` cubre inserción
+   desde el panel, selección de tarjeta/título/ancla, copia de su key, tamaño/fondo,
+   historial, CSS exportado y reposición de tarjetas encadenadas sin duplicados. El CSS
+   de un hijo del insertado conserva el prefijo de su propia key dentro de la pieza:
+   `.dv-mock-titulo` por sí solo también colorearía los títulos de las demás tarjetas.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59079,7 +59098,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#831**; la próxima toma el número siguiente.
+> última regla es la **#832**; la próxima toma el número siguiente.
 
 >
 

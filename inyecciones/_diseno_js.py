@@ -885,12 +885,13 @@ JS = """
 
         // Un mock anclado adentro de una pieza propia vive en su shadow
         // root: se lo busca en la raiz de su ancla, no en el documento.
+        // El ancla tambien puede ser otro insertado sin sub-pin (#832).
         function buscarMock(m) {
             var sel = '.st-key-' + m.key;
             var n = doc.querySelector(sel);
-            if (n || !m.anclaSub) return n;
+            if (n) return n;
             var base = porKeyReal(m.anclaKey);
-            var a = base ? resolverSubClase(base, m.anclaSub, m.anclaIdx) : null;
+            var a = base && m.anclaSub ? resolverSubClase(base, m.anclaSub, m.anclaIdx) : base;
             var raiz = (a && a.getRootNode) ? a.getRootNode() : null;
             return (raiz && raiz !== doc && raiz.querySelector) ? raiz.querySelector(sel) : null;
         }
@@ -3261,7 +3262,7 @@ JS = """
             // `.css` de la pieza vive en su shadow root, donde no hay ningun
             // `st-key-*` por encima, y estilos/ no entra ahi.
             var dentroPieza = !!sub && enPieza(elemento);
-            var ancla = dentroPieza ? '.' + sub
+            var ancla = dentroPieza ? (esMock(key) ? selClase('st-key-' + key) + ' ' : '') + selClase(sub)
                 : 'div' + selClase('st-key-' + key) + (sub ? ' ' + selClase(sub) : '');
             if (sub && qsaProfundo(porKeyReal(key) || elemento, selClase(sub)).length > 1) {
                 ancla = selectorDeCapa(elemento);
