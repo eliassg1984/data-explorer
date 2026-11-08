@@ -74,6 +74,9 @@ HTML y Python; no guarda ni recupera borradores. Lo verifica
 `test_diseno_visual.py` en Chromium sin red (regla #828). El tamaño manual
 libera los límites CSS del eje elegido y permite afinar controles internos
 por debajo de 40px, con original/restauración/exportación completos (#829).
+La barra de herramientas es movible/plegable e integra ayuda y avisos;
+el panel del editor admite ambos lados. Lo verifica además
+`test_herramientas_visuales.py` (regla #830).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|

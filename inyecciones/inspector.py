@@ -2,6 +2,8 @@
 
 Permite senalar un elemento en la pagina y ver sus selectores y estilos. Es
 la inyeccion mas grande del paquete y no participa del render normal.
+La leyenda de atajos sólo aparece si no existe `herr-barra`: la barra
+unificada los integra en su ayuda y evita otra capa sobre la app (#830).
 """
 
 import json

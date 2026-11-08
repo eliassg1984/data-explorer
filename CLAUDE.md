@@ -2495,6 +2495,9 @@ Tablet/Móvil. La vista previa por ancho es estática, sin ejecutar otra app.
 «Todos los cambios» entrega CSS, textos, insertados y destinos en Python;
 no escribe en el proyecto ni guarda borradores. Antes de cambiar el editor,
 correr `python test_diseno_visual.py` (Chromium sin red). Regla #828.
+La barra se arrastra desde ⠿ y se pliega con –; su ayuda integra los atajos
+y los avisos de Diseño. El panel admite izquierda/derecha. Correr también
+`python test_herramientas_visuales.py` al cambiar estas capas (regla #830).
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del

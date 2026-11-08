@@ -50,29 +50,15 @@ JS = """
             return false;
         }
 
-        // Cartelito efimero que explica un click comido por el bloqueador.
-        // Vive en el overlay propio (no en el arbol de Streamlit) para que un
-        // rerun no lo borre a mitad de la animacion, y se auto-borra a los
-        // 1.6s. `pointer-events:none` para que no se coma el click siguiente.
-        function avisarBloqueo(x, y) {
+        // Estado efimero para la barra, sin otro cartel sobre el contenido.
+        function avisarBloqueo() {
             var prev = doc.getElementById('el-diseno-aviso-bloqueo');
             if (prev) { prev.remove(); }
-            var av = doc.createElement('div');
-            av.id = 'el-diseno-aviso-bloqueo';
-            av.textContent = '🎨 Modo diseño: navegación bloqueada · apagalo en la barra de abajo';
-            av.style.cssText = [
-                'position:fixed', 'z-index:2147483647', 'pointer-events:none',
-                'left:' + Math.min(x + 14, win.innerWidth - 340) + 'px',
-                'top:' + Math.max(y - 40, 8) + 'px',
-                'max-width:330px', 'padding:7px 11px', 'border-radius:8px',
-                'background:rgba(28,26,48,.94)', 'color:#fff',
-                'font:500 11.5px/1.35 -apple-system,Segoe UI,sans-serif',
-                'box-shadow:0 4px 14px rgba(15,15,30,.28)',
-                'transition:opacity .25s', 'opacity:1',
-            ].join(';');
-            doc.body.appendChild(av);
-            win.setTimeout(function () { av.style.opacity = '0'; }, 1200);
-            win.setTimeout(function () { av.remove(); }, 1600);
+            // Contrato de datos con herramientas: el aviso vive en su barra,
+            // sin otro cartel sobre la pantalla ni mover el foco del usuario.
+            var ui = win.__herramientasUI || (win.__herramientasUI = {});
+            ui.avisoTexto = 'Diseño: navegación bloqueada';
+            ui.avisoHasta = Date.now() + 1800;
         }
 
         if (!win.__disenoState) {
@@ -87,6 +73,7 @@ JS = """
         if (!win.__disenoState.perfiles) win.__disenoState.perfiles = {};
         if (!win.__disenoState.perfil) win.__disenoState.perfil = 'general';
         if (!win.__disenoState.estilos) win.__disenoState.estilos = {};
+        if (!win.__disenoState.ladoPanel) win.__disenoState.ladoPanel = 'derecha';
         if (win.__disenoState.panelColapsado === undefined) {
             win.__disenoState.panelColapsado = false;
         }
@@ -1252,8 +1239,20 @@ JS = """
                 doc.head.appendChild(st);
             }
             st.textContent = activa
-                ? ('.stApp { width: calc(100% - ' + ANCHO_PANEL + 'px) !important; }')
+                ? ('.stApp { width: calc(100% - ' + ANCHO_PANEL + 'px) !important; margin-left: '
+                    + (win.__disenoState.ladoPanel === 'izquierda' ? ANCHO_PANEL : 0) + 'px !important; }')
                 : '';
+        }
+
+        function ubicarPanel() {
+            var izquierda = win.__disenoState.ladoPanel === 'izquierda';
+            var plegado = win.__disenoState.panelColapsado;
+            panel.style.left = izquierda ? (plegado ? '16px' : '0px') : 'auto';
+            panel.style.right = izquierda ? 'auto' : (plegado ? '16px' : '0px');
+            if (!plegado) {
+                panel.style.borderLeft = izquierda ? '0' : '1px solid #6c5ce7';
+                panel.style.borderRight = izquierda ? '1px solid #6c5ce7' : '0';
+            }
         }
 
         // Gemela de aplicarReserva, mismo recurso (un <style> propio en el
@@ -1336,7 +1335,8 @@ JS = """
                 'border-radius:20px','padding:7px 14px',
                 'font:600 12px/1.3 -apple-system,sans-serif',
                 'cursor:pointer','box-shadow:0 2px 8px rgba(0,0,0,.35)',
-                'display:block','white-space:nowrap'
+                'display:block','white-space:nowrap', 'max-width:min(420px, calc(100vw - 32px))',
+                'overflow:hidden', 'text-overflow:ellipsis', 'box-sizing:border-box'
             ].join(';');
             panel.textContent = etiqueta + '  ·  expandir (Alt+D)';
             panel.__tamVal = null;
@@ -1441,7 +1441,7 @@ JS = """
         // overlay ya 4px afuera, un simple "poner 2px" seguia dejandola medio
         // fuera de la pantalla.
         function clampManijas(ox, oy, ow, oh) {
-            var vw = win.innerWidth, vh = win.innerHeight, M = 2;
+            var vw = win.innerWidth, vh = win.innerHeight, izquierda = 0, M = 2;
             // El PANEL lateral tambien tapa: un elemento ancho (nav_rail mide
             // 1264px) llega por debajo suyo y sus manijas derechas quedan
             // dentro del viewport pero incliqueables. Se trata su borde
@@ -1452,30 +1452,24 @@ JS = """
             if (pnl && pnl.style.display !== 'none') {
                 var pr = pnl.getBoundingClientRect();
                 if (pr.width > 0 && pr.bottom > oy && pr.top < oy + oh) {
-                    vw = Math.min(vw, Math.round(pr.left));
+                    if (pr.left + pr.width / 2 < win.innerWidth / 2) izquierda = Math.round(pr.right);
+                    else vw = Math.min(vw, Math.round(pr.left));
                 }
             }
-            function pos(id, prop, deseado, calcularMin) {
+            function pos(id, x, y, ancho, alto) {
                 var h = doc.getElementById(id);
                 if (!h) return;
-                var min = calcularMin();
-                h.style[prop] = (deseado < min ? min : deseado) + 'px';
+                var px = Math.max(izquierda + M, Math.min(ox + x, vw - ancho - M));
+                var py = Math.max(M, Math.min(oy + y, vh - alto - M));
+                h.style.left = (px - ox) + 'px'; h.style.top = (py - oy) + 'px';
+                h.style.right = 'auto'; h.style.bottom = 'auto'; h.style.margin = '0';
             }
-            // mover: top/left negativos -> su borde sup/izq no puede ser < M
-            pos('el-diseno-mover', 'top', -13, function() { return -oy + M; });
-            pos('el-diseno-mover', 'left', -13, function() { return -ox + M; });
-            // resize: right/bottom negativos -> su borde der/inf no puede
-            // pasarse de vw-M / vh-M
-            pos('el-diseno-rh-e', 'right', -5, function() { return ox + ow - vw + M; });
-            pos('el-diseno-rh-s', 'bottom', -5, function() { return oy + oh - vh + M; });
-            pos('el-diseno-rh-se', 'right', -6, function() { return ox + ow - vw + M; });
-            pos('el-diseno-rh-se', 'bottom', -6, function() { return oy + oh - vh + M; });
-            // n/w cuelgan hacia ARRIBA y hacia la IZQUIERDA, o sea el mismo
-            // modo de falla que la perilla de mover (regla #168): con el
-            // elemento pegado al borde de la ventana su posicion negativa
-            // cae fuera del viewport. Mismo clamp que ella.
-            pos('el-diseno-rh-n', 'top', -5, function() { return -oy + M; });
-            pos('el-diseno-rh-w', 'left', -5, function() { return -ox + M; });
+            pos('el-diseno-mover', -13, -13, 24, 24);
+            pos('el-diseno-rh-e', ow - 4, oh / 2 - 17, 9, 34);
+            pos('el-diseno-rh-s', ow / 2 - 17, oh - 4, 34, 9);
+            pos('el-diseno-rh-se', ow - 8, oh - 8, 14, 14);
+            pos('el-diseno-rh-n', ow / 2 - 17, -5, 34, 9);
+            pos('el-diseno-rh-w', -5, oh / 2 - 17, 9, 34);
         }
 
         // ---- aplicar/retirar cambios sobre el elemento real ----
@@ -5595,6 +5589,15 @@ JS = """
             });
             acciones.appendChild(botonEdicion('Todos los cambios', mostrarEntrega));
             acciones.appendChild(botonEdicion('Vista previa', mostrarPreview));
+            acciones.appendChild(botonEdicion(win.__disenoState.ladoPanel === 'izquierda'
+                ? 'Panel a la derecha' : 'Panel a la izquierda', function() {
+                win.__disenoState.ladoPanel = win.__disenoState.ladoPanel === 'izquierda' ? 'derecha' : 'izquierda';
+                panel.dataset.builtForKey = ''; sync();
+            }));
+            acciones.appendChild(botonEdicion('Plegar panel', function(ev) {
+                ev.stopPropagation();
+                win.__disenoState.panelColapsado = true; panel.dataset.builtForKey = ''; sync();
+            }));
             barra.appendChild(acciones);
             barra.appendChild(selectorEdicion('Diseñar para', Object.keys(PERFILES).map(function(k) { return [k, PERFILES[k].nombre]; }), win.__disenoState.perfil, cambiarPerfil));
             var ayudas = detalleEdicion('Guías y movimiento', false);
@@ -5717,6 +5720,7 @@ JS = """
                     aplicarEstado(miembrosG[gm].el, miembrosG[gm].registro);
                 }
                 completarPanel();
+                ubicarPanel();
                 trackearRect(bboxGrupo(miembrosG));
                 pintarGuias(bboxGrupo(miembrosG));
                 return;
@@ -5734,6 +5738,7 @@ JS = """
                 }
                 panel.style.display = 'block';
             }
+            ubicarPanel();
 
             if (!res || !res.el) {
                 pintarGuias(null);
@@ -5811,7 +5816,7 @@ JS = """
             if (esUIPropiaDeDiseno(e.target)) return;
             e.preventDefault();
             e.stopPropagation();
-            avisarBloqueo(e.clientX, e.clientY);
+            avisarBloqueo();
         };
         win.addEventListener('scroll', win.__disenoScrollHandler, true);
         win.addEventListener('resize', win.__disenoResizeHandler);

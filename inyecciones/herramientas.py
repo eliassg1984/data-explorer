@@ -43,10 +43,16 @@ este modulo existe:
    `__inspectorTooltipSilenciado` (lectura) y `__inspectorAlternarSilenciado`
    (invocacion). Si inspector.py renombra esos dos, el boton deja de
    funcionar — avisar en ambos lados.
-2. ESPACIO COMPARTIDO: la barra vive en `bottom:10px; left:72px`, que es
-   donde estaba el badge "Inspector ON" de inspector.py. Ese badge se corrio
-   a `bottom:46px` para apilarse ENCIMA de la barra; el comentario esta
-   tambien en `_inspector_js.py`, junto a su `cssText`.
+2. ESPACIO COMPARTIDO: la barra se mueve con su agarre y se puede plegar.
+   Integra los atajos en «?» y oculta la leyenda independiente del inspector;
+   ese badge queda como fallback si no carga la barra. El inspector consulta
+   la existencia de `herr-barra` para no volver a mostrar otra capa (#830).
+
+El modo Diseño comunica sus avisos mediante `window.__herramientasUI`
+(`avisoTexto`, `avisoHasta`); la barra los muestra dentro de sí, también
+plegada. En ese objeto sólo viven preferencias de la pestaña (posición,
+plegado y ayuda), sin storage. La posición se ajusta al viewport y al panel
+del editor; los resultados de los auditores se abren cerca de la barra.
 
 El Alt+I del inspector reescribe la URL con `replaceState`, que no dispara
 `popstate`: la barra instala su propio listener de Alt+I para no quedarse

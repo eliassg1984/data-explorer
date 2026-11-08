@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-829 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+830 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (276)
 
@@ -460,7 +460,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
 - **#804** — La portada con el aire de la hoja
 
-**Plotly y figuras** (132)
+**Plotly y figuras** (133)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -594,6 +594,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#768** — La comparación con el año pasado: el porqué a la vista, y la carta nueva aparte
 - **#815** — Diferencias en tres niveles: dónde estoy · qué miro · los datos con sus ajustes
 - **#816** — Diferencias: el código a la izquierda, «6 cierres» a pedido y la cuenta de cada área en la…
+- **#830** — Las herramientas se apartan sin apilar avisos sobre el contenido
 
 **AgGrid y tablas** (99)
 
@@ -1135,7 +1136,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
 - **#643** — El asistente IA suma los requerimientos como la página: sin anulados ni líneas sin producto,…
 
-**Herramientas de desarrollo** (41)
+**Herramientas de desarrollo** (42)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -1178,6 +1179,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 - **#820** — Adentro de una pieza propia, el modo diseño baja al nodo de verdad
+- **#830** — Las herramientas se apartan sin apilar avisos sobre el contenido
 
 **Decisiones de diseño y UX** (276)
 
@@ -59036,6 +59038,22 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    el CSS real de `cierre.css` en un shadow root y verifican el gesto 32→24, ancho estable,
    controles vecinos, original, deshacer/rehacer y reproducción del CSS exportado.
 
+830. **Las herramientas se apartan sin apilar avisos sobre el contenido.**
+   La barra fija y la leyenda del inspector tapaban totales, el panel derecho cubría la
+   cabecera y el aviso de navegación bloqueada agregaba otro cartel. `_herramientas_js.py`
+   permite arrastrar desde ⠿ (captura de puntero, también sobre iframes), mover con flechas
+   y plegar la barra. Sus preferencias viven sólo en `window.__herramientasUI`, sobreviven
+   al rerun y se acotan al viewport y al panel visible. La leyenda del inspector queda
+   integrada en «?»; el badge independiente es sólo un fallback cuando no existe la barra.
+   `_diseno_js.py` comunica `avisoTexto`/`avisoHasta` en ese objeto, sin invocar funciones
+   de la barra ni crear toasts flotantes. El aviso no despliega una barra plegada.
+   El panel de Diseño puede ir a izquierda o derecha; la reserva de espacio y las manijas
+   respetan el lado, incluso cuando el seleccionado queda detrás del panel. Plegar el
+   panel detiene la propagación del clic: si no, el onclick de la pastilla recién creada
+   recibía ese mismo evento y lo abría inmediatamente. `test_herramientas_visuales.py`
+   cubre arrastre, límites, reinyección, plegado, atajos, avisos, lados y reservas, junto
+   con `test_diseno_visual.py` para conservar las propuestas y el historial.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59048,7 +59066,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#829**; la próxima toma el número siguiente.
+> última regla es la **#830**; la próxima toma el número siguiente.
 
 >
 

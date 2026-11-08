@@ -118,6 +118,12 @@ JS = """
     // ── Paleta (la del modo diseno, para que se lean como una familia) ────
     var FONDO = '#101014', TEXTO = '#cfcfd6', BORDE = '#2a2a35';
     var ACENTO = '#6c5ce7', AVISO = '#e1a100';
+    // Preferencias de esta pestana; no se escriben en disco ni en storage.
+    var UI = win.__herramientasUI || (win.__herramientasUI = {});
+    if (UI.x === undefined) UI.x = null;
+    if (UI.y === undefined) UI.y = null;
+    if (UI.colapsada === undefined) UI.colapsada = false;
+    var ATAJOS = 'Clic derecho: fijar elemento. C: copiar. Alt+T: tooltip. Alt+D: plegar el editor. Alt+I: salir de herramientas.';
 
     // =====================================================================
     // PANEL DE RESULTADOS (los dos auditores)
@@ -379,7 +385,10 @@ JS = """
 
     function construirBarra() {
         var vieja = doc.getElementById(ID_BARRA);
-        if (vieja) vieja.remove();
+        if (vieja) {
+            if (UI.arrastrando) { doc.body.style.userSelect = UI.seleccionAnterior || ''; UI.arrastrando = false; }
+            vieja.remove();
+        }
         if (!barraVisible()) return;
 
         var barra = doc.createElement('div');
@@ -390,7 +399,28 @@ JS = """
             'background:' + FONDO, 'border:1px solid ' + BORDE,
             'border-radius:18px', 'padding:5px 8px',
             'box-shadow:0 2px 10px rgba(0,0,0,.4)',
+            'box-sizing:border-box', 'width:max-content', 'max-width:calc(100vw - 16px)',
+            'max-height:calc(100vh - 16px)', 'overflow:auto', 'overscroll-behavior:contain',
         ].join(';');
+        barra.setAttribute('role', 'toolbar');
+        barra.setAttribute('aria-label', 'Herramientas de diseño');
+        barra.dataset.plegada = UI.colapsada ? '1' : '0';
+
+        var agarre = doc.createElement('button');
+        agarre.type = 'button'; agarre.textContent = '⠿';
+        agarre.setAttribute('aria-label', 'Mover herramientas');
+        agarre.title = 'Arrastra para mover la barra. También puedes usar las flechas.';
+        agarre.style.cssText = estiloBoton(false) + ';cursor:grab;touch-action:none;flex:none;padding:4px 6px';
+        engancharArrastre(agarre, barra);
+        barra.appendChild(agarre);
+
+        if (UI.colapsada) {
+            var abrir = botonBarra('🛠 Herramientas', 'Abrir herramientas', function () {
+                UI.colapsada = false; construirBarra();
+            });
+            abrir.style.maxWidth = '100%'; abrir.style.minWidth = '0';
+            barra.appendChild(abrir);
+        } else {
 
         MODOS.forEach(function (m) {
             var b = doc.createElement('button');
@@ -421,6 +451,13 @@ JS = """
             barra.appendChild(b);
         });
 
+        barra.appendChild(botonBarra('?', 'Atajos de herramientas', function () {
+            UI.ayuda = !UI.ayuda; construirBarra();
+        }));
+        barra.appendChild(botonBarra('–', 'Plegar herramientas', function () {
+            UI.colapsada = true; UI.ayuda = false; cerrarPanel(); construirBarra();
+        }));
+
         // Aviso de modos que se estorban. No se bloquea la combinacion (el
         // usuario puede querer verla): se avisa, que es lo que faltaba
         // cuando esto costo una sesion entera de diagnostico.
@@ -431,22 +468,126 @@ JS = """
                              + 'max-width:260px';
             barra.appendChild(av);
         }
+        }
+
+        var estado = doc.createElement('span');
+        estado.dataset.herrEstado = '1'; estado.setAttribute('role', 'status');
+        estado.setAttribute('aria-live', 'polite');
+        estado.style.cssText = 'display:none;color:' + AVISO + ';font:11px/1.35 sans-serif;max-width:220px';
+        barra.appendChild(estado);
+        if (UI.ayuda && !UI.colapsada) {
+            var ayuda = doc.createElement('div'); ayuda.textContent = ATAJOS;
+            ayuda.dataset.herrAyuda = '1';
+            ayuda.style.cssText = 'flex:1 0 100%;font:11px/1.45 sans-serif;color:' + TEXTO + ';max-width:420px;padding:4px 2px';
+            barra.appendChild(ayuda);
+        }
 
         doc.body.appendChild(barra);
         apilarBadgeInspector(barra);
+        sincronizarBarra();
     }
 
-    // El badge "Inspector ON" de inspector.py vivia en esta misma esquina.
-    // Se lo sube JUSTO encima de la barra, midiendo: con una constante
-    // coordinada a mano se superponian, porque el alto de la barra no es
-    // fijo (crece cuando aparece el aviso de modos que se estorban, y con
-    // flex-wrap puede pasar a dos filas). Ver el comentario gemelo en
-    // _inspector_js.py, junto al cssText del badge.
+    function botonBarra(texto, nombre, fn) {
+        var b = doc.createElement('button'); b.type = 'button'; b.textContent = texto;
+        b.setAttribute('aria-label', nombre); b.title = nombre;
+        b.style.cssText = estiloBoton(false); b.addEventListener('click', fn);
+        return b;
+    }
+
+    // La leyenda del inspector queda integrada en la ayuda, sin otra capa.
+    // El inspector conserva su badge como fallback si no carga esta barra.
     function apilarBadgeInspector(barra) {
         var badge = doc.getElementById('el-inspector-badge');
-        if (!badge) return;
-        var alto = Math.round(barra.getBoundingClientRect().height);
-        badge.style.bottom = (10 + alto + 8) + 'px';
+        if (badge && barra) badge.style.display = 'none';
+    }
+
+    function espacioDisponible() {
+        var area = { izquierda: 8, derecha: win.innerWidth - 8 };
+        var panel = doc.getElementById('el-diseno-panel');
+        if (panel && panel.style.display !== 'none' && !(win.__disenoState && win.__disenoState.panelColapsado)) {
+            var r = panel.getBoundingClientRect();
+            if (r.height > win.innerHeight / 2 && r.width < win.innerWidth - 40) {
+                if (r.left + r.width / 2 < win.innerWidth / 2) area.izquierda = r.right + 8;
+                else area.derecha = r.left - 8;
+            }
+        }
+        return area;
+    }
+
+    function sincronizarBarra() {
+        var barra = doc.getElementById(ID_BARRA); if (!barra) return;
+        if (!barraVisible()) { barra.style.display = 'none'; return; }
+        barra.style.display = 'flex';
+        var estado = barra.querySelector('[data-herr-estado]'), activo = UI.avisoHasta > Date.now();
+        if (estado) {
+            var texto = activo ? (UI.colapsada ? '🔒' : UI.avisoTexto) : '';
+            if (estado.textContent !== texto) estado.textContent = texto;
+            estado.title = activo ? UI.avisoTexto : '';
+            estado.setAttribute('aria-label', activo ? UI.avisoTexto : '');
+            estado.style.display = activo ? 'inline' : 'none';
+        }
+        var area = espacioDisponible();
+        barra.style.maxWidth = Math.max(48, area.derecha - area.izquierda) + 'px';
+        var r = barra.getBoundingClientRect();
+        var x = UI.x === null ? 72 : UI.x, y = UI.y === null ? win.innerHeight - r.height - 10 : UI.y;
+        x = Math.max(area.izquierda, Math.min(x, area.derecha - r.width));
+        y = Math.max(8, Math.min(y, win.innerHeight - r.height - 8));
+        var panel = doc.getElementById('el-diseno-panel');
+        if (panel && panel.style.display !== 'none' && win.__disenoState && win.__disenoState.panelColapsado) {
+            var p = panel.getBoundingClientRect();
+            if (x < p.right && x + r.width > p.left && y < p.bottom && y + r.height > p.top) {
+                y = Math.max(8, p.top - r.height - 8);
+            }
+        }
+        barra.style.left = x + 'px'; barra.style.top = y + 'px';
+        barra.style.right = 'auto'; barra.style.bottom = 'auto';
+        if (UI.x !== null) { UI.x = x; UI.y = y; }
+        apilarBadgeInspector(barra);
+        var resultados = doc.getElementById(ID_PANEL);
+        if (resultados) {
+            resultados.style.maxWidth = Math.max(48, area.derecha - area.izquierda) + 'px';
+            resultados.style.boxSizing = 'border-box';
+            var rp = resultados.getBoundingClientRect();
+            resultados.style.left = Math.max(area.izquierda, Math.min(x, area.derecha - rp.width)) + 'px';
+            resultados.style.top = Math.max(8, Math.min(y - rp.height - 8 >= 8 ? y - rp.height - 8 : y + r.height + 8,
+                win.innerHeight - rp.height - 8)) + 'px';
+            resultados.style.bottom = 'auto';
+        }
+    }
+
+    function engancharArrastre(agarre, barra) {
+        var inicio = null;
+        function terminar() {
+            if (!inicio) return;
+            inicio = null; UI.arrastrando = false;
+            doc.body.style.userSelect = UI.seleccionAnterior || '';
+            agarre.style.cursor = 'grab';
+        }
+        agarre.addEventListener('pointerdown', function(e) {
+            if (e.button !== 0 || inicio) return;
+            e.preventDefault(); e.stopPropagation();
+            var r = barra.getBoundingClientRect();
+            inicio = { x: e.clientX, y: e.clientY, left: r.left, top: r.top, id: e.pointerId };
+            UI.arrastrando = true; UI.seleccionAnterior = doc.body.style.userSelect;
+            doc.body.style.userSelect = 'none'; agarre.style.cursor = 'grabbing';
+            agarre.setPointerCapture(e.pointerId);
+        });
+        agarre.addEventListener('pointermove', function(e) {
+            if (!inicio || e.pointerId !== inicio.id) return;
+            UI.x = inicio.left + e.clientX - inicio.x; UI.y = inicio.top + e.clientY - inicio.y;
+            sincronizarBarra();
+        });
+        agarre.addEventListener('pointerup', terminar);
+        agarre.addEventListener('pointercancel', terminar);
+        agarre.addEventListener('lostpointercapture', terminar);
+        agarre.addEventListener('keydown', function(e) {
+            var pasos = { ArrowLeft: [-1,0], ArrowRight: [1,0], ArrowUp: [0,-1], ArrowDown: [0,1] };
+            if (!pasos[e.key]) return;
+            e.preventDefault(); e.stopPropagation();
+            var r = barra.getBoundingClientRect(), paso = e.shiftKey ? 30 : 10;
+            UI.x = r.left + pasos[e.key][0] * paso; UI.y = r.top + pasos[e.key][1] * paso;
+            sincronizarBarra();
+        });
     }
 
     // ── arranque ─────────────────────────────────────────────────────────
@@ -497,6 +638,11 @@ JS = """
         }
     };
     doc.addEventListener('keydown', win.__herramientasKeyHandler, true);
+    if (win.__herramientasUIInterval) win.clearInterval(win.__herramientasUIInterval);
+    if (win.__herramientasResizeHandler) win.removeEventListener('resize', win.__herramientasResizeHandler);
+    win.__herramientasResizeHandler = sincronizarBarra;
+    win.addEventListener('resize', win.__herramientasResizeHandler);
+    win.__herramientasUIInterval = win.setInterval(sincronizarBarra, 200);
 })();
 </script>
 """

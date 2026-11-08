@@ -148,6 +148,10 @@ El redimensionado manual libera los mínimos/máximos del eje elegido sobre
 el nodo seleccionado. Los controles internos pueden bajar de 40px; el
 original, el historial, el ↺ de tamaño y la exportación conservan sus
 límites CSS, sin modificar el tamaño predeterminado de la app. Regla #829.
+El panel puede cambiar entre izquierda y derecha y plegarse sin soltar el
+elemento. La reserva de espacio y las manijas respetan ambos lados. Los
+avisos de navegación bloqueada sólo escriben `avisoTexto`/`avisoHasta` en
+`window.__herramientasUI`; herramientas.py los presenta en su barra (#830).
 """
 
 import json

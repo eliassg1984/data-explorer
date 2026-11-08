@@ -1055,14 +1055,9 @@ JS = """
             badge = doc.createElement('div');
             badge.id = 'el-inspector-badge';
             // ESPACIO COMPARTIDO (Regla viva, arquitectura.md #4): el
-            // bottom:10px de esta esquina lo ocupa desde 2026-08-22 la barra
-            // unificada de inyecciones/herramientas.py, que apila este badge
-            // ENCIMA suyo escribiendole `style.bottom` en cada repintado.
-            // El 10px de aca es el valor de arranque (y el que queda si esa
-            // barra no llega a cargar); NO se coordina a mano con ella —
-            // se probo con una constante y se superponian, porque el alto
-            // de la barra cambia cuando muestra un aviso. El comentario
-            // gemelo esta en el docstring de herramientas.py.
+            // La barra unificada integra estos atajos en su ayuda. Este
+            // badge queda como fallback solo si no existe herr-barra; no se
+            // apila otra leyenda encima de la pantalla. Regla #830.
             // Se ve como TEXTO DE AYUDA, no como un control: era una pastilla
             // de acento con un boton adentro, y desde que la barra unificada
             // tiene su propio toggle de Inspector eso eran DOS controles del
@@ -1078,12 +1073,12 @@ JS = """
             // los muestra y los maneja la barra unificada. Esto es lo unico
             // que aportaba y que no vive en ningun otro lado.
             badge.innerHTML = 'C copiar &middot; clic-derecho fija y copia '
-                + '&middot; T oculta tooltip &middot; Alt+I salir';
+                + '&middot; Alt+T oculta tooltip &middot; Alt+I salir';
             doc.body.appendChild(badge);
         }
 
         function actualizarBadge() {
-            badge.style.display = inspectorActivo() ? 'flex' : 'none';
+            badge.style.display = inspectorActivo() && !doc.getElementById('herr-barra') ? 'flex' : 'none';
         }
         actualizarBadge();
 
@@ -1816,8 +1811,7 @@ JS = """
                     // _herramientas_js.py (si ya corrio) no lo pise.
                     if (win.__toolFlagsVivos) win.__toolFlagsVivos.debug = _prenderDebug;
                     win.history.replaceState({}, '', url.toString());
-                    var badge = doc.getElementById('el-inspector-badge');
-                    if (badge) badge.style.display = inspectorActivo() ? 'flex' : 'none';
+                    actualizarBadge();
                     if (!inspectorActivo()) {
                         if (win.__inspectorPinned) win.__inspectorTogglePin(true);
                         var tip = doc.getElementById('el-inspector-tip');
