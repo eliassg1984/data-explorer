@@ -111,6 +111,90 @@ class HerramientasVisuales(unittest.TestCase):
             nodo.click(button='right', position={'x': 30, 'y': 5})
         self.page.wait_for_function("k=>__inspectorPinned && document.getElementById('el-diseno-panel').dataset.builtForKey===k", arg=key)
 
+    def clase_en_punto(self, punto):
+        return self.page.evaluate('''p=>{
+            let el=document.elementFromPoint(p.x,p.y);
+            while(el && el.shadowRoot) {
+                const siguiente=el.shadowRoot.elementFromPoint(p.x,p.y);
+                if(!siguiente || siguiente===el) break;
+                el=siguiente;
+            }
+            return el && el.getAttribute('class');
+        }''', punto)
+
+    def test_tarjeta_libre_se_envia_detras_de_imagenes_formas_y_controles_reales(self):
+        from io import BytesIO
+        from PIL import Image
+
+        self.montar_zona_interna()
+        self.page.locator('main').evaluate("e=>e.style.background='#a0a0a0'")
+        self.page.locator('.dv-zona').evaluate('''e=>{
+            const fila=document.createElement('div');
+            fila.style.cssText='display:flex;gap:8px;margin-top:8px';
+            fila.innerHTML='<button class="dv-control" style="width:50px;height:32px">Real</button>'
+                +'<img class="dv-imagen" width="50" height="32" alt="Imagen de prueba">'
+                +'<div class="dv-forma" style="width:50px;height:32px;background:#d05040"></div>';
+            fila.querySelector('img').src='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="50" height="32"><rect width="50" height="32" fill="#00aa44"/></svg>');
+            e.appendChild(fila);
+        }''')
+        tarjeta = self.insertar_tarjeta(modo=None)
+        self.seleccionar_insertado(tarjeta)
+        caja = tarjeta.bounding_box()
+        puntos = {c: {'x': caja['x'] + x, 'y': caja['y'] + 16}
+            for c, x in [('dv-control', 25), ('dv-imagen', 83), ('dv-forma', 141)]}
+        self.assertTrue(all(self.clase_en_punto(p) == 'dv-mock-titulo' for p in puntos.values()))
+        self.page.get_by_role('button', name='Enviar al fondo', exact=True).click()
+        for clase, punto in puntos.items():
+            self.assertEqual(self.clase_en_punto(punto), clase)
+        self.assertEqual(tarjeta.bounding_box(), caja)
+        # La parte sin vecinos sigue pintada sobre el fondo gris del lienzo.
+        pixel = self.page.screenshot(clip={'x': caja['x'] + 220, 'y': caja['y'] + 24, 'width': 1, 'height': 1})
+        self.assertEqual(Image.open(BytesIO(pixel)).getpixel((0, 0))[:3], (255, 255, 255))
+        css = self.page.evaluate('editorPrueba.exportarEdicion()')
+        self.assertIn('z-index: -', css)
+        self.assertIn('isolation: isolate', css)
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(self.clase_en_punto(puntos['dv-imagen']), 'dv-mock-titulo')
+        self.page.get_by_role('button', name='Rehacer', exact=True).click()
+        self.assertEqual(self.clase_en_punto(puntos['dv-imagen']), 'dv-imagen')
+        self.page.get_by_role('button', name='Ver original', exact=True).click()
+        self.assertEqual(self.clase_en_punto(puntos['dv-imagen']), 'dv-mock-titulo')
+        self.assertEqual(tarjeta.bounding_box(), caja)
+        self.page.get_by_role('button', name='Ver con cambios', exact=True).click()
+        self.assertEqual(self.clase_en_punto(puntos['dv-imagen']), 'dv-imagen')
+        tarjeta.evaluate('e=>e.remove()')
+        self.page.evaluate('editorPrueba.sync()')
+        self.assertEqual(tarjeta.count(), 1)
+        self.assertEqual(self.clase_en_punto(puntos['dv-imagen']), 'dv-imagen')
+        bloque = self.page.evaluate('''()=>editorPrueba.construirBloqueCSS('diseno_tarjeta_1',
+            document.querySelector('.st-key-diseno_tarjeta_1'),editorPrueba.registroPara('diseno_tarjeta_1'),'',null)''')
+        self.assertIn('[data-testid="stMainBlockContainer"]', bloque)
+        self.page.get_by_role('button', name='Ver original', exact=True).click()
+        self.assertEqual(self.clase_en_punto(puntos['dv-imagen']), 'dv-mock-titulo')
+        self.page.add_style_tag(content=bloque)
+        self.assertEqual(self.clase_en_punto(puntos['dv-imagen']), 'dv-imagen')
+        pixel = self.page.screenshot(clip={'x': caja['x'] + 220, 'y': caja['y'] + 24, 'width': 1, 'height': 1})
+        self.assertEqual(Image.open(BytesIO(pixel)).getpixel((0, 0))[:3], (255, 255, 255))
+
+    def test_tarjeta_libre_se_envia_detras_del_fechador_real_sin_mover_la_cabecera(self):
+        corte = self.montar_cierre()
+        self.page.keyboard.press('Alt+t')
+        self.pin('piece', 'ajc-fnav')
+        tarjeta = self.insertar_tarjeta(modo=None, posicion='Dentro')
+        self.seleccionar_insertado(tarjeta)
+        t, r = tarjeta.bounding_box(), corte.bounding_box()
+        for etiqueta, valor in [('Desplazamiento X (px)', r['x'] - t['x']), ('Desplazamiento Y (px)', r['y'] - t['y'])]:
+            campo = self.page.get_by_label(etiqueta, exact=True)
+            campo.fill(str(round(valor))); campo.press('Tab')
+        punto = {'x': r['x'] + 15, 'y': r['y'] + 16}
+        geometria = [self.page.locator(s).bounding_box() for s in ['.ajc-fnav', '.ajc-cuerpo']]
+        self.assertEqual(self.clase_en_punto(punto), 'dv-mock-titulo')
+        self.page.get_by_role('button', name='Enviar al fondo', exact=True).click()
+        self.assertIn('ajc-selector-corte', self.clase_en_punto(punto))
+        self.assertEqual([self.page.locator(s).bounding_box() for s in ['.ajc-fnav', '.ajc-cuerpo']], geometria)
+        self.page.get_by_role('button', name='Traer al frente', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'dv-mock-titulo')
+
     def test_libre_por_defecto_no_empuja_la_cabecera_real_ni_crea_scroll(self):
         self.montar_cierre()
         cabecera = self.page.locator('.ajc-fnav')

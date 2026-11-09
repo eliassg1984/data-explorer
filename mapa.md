@@ -85,6 +85,8 @@ La distribución Libre superpone sin empujar la app; En flujo reserva espacio.
 El valor propuesto es Libre sobre la app y En flujo dentro de un insertado.
 Se puede convertir el insertado conservando ajustes e historial; ubicación
 y orden de capas son controles independientes (regla #833).
+Enviar al fondo incluye imágenes, formas y controles reales; el contexto compartido
+conserva la tarjeta sobre el fondo del lienzo y se restaura con el historial (#834).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|

@@ -940,7 +940,13 @@ JS = """
             if (modoMock(m) === 'libre' && !ancla.getClientRects().length) return false;
             var el = nodoMock(m);
             if (!el) return false;
-            if (modoMock(m) === 'libre') lienzoLibres().appendChild(el);
+            if (modoMock(m) === 'libre') {
+                lienzoLibres().appendChild(el);
+                // Su anclaje pertenece al modelo, tambien al ver Original.
+                // Guardarlo antes de recordar el CSS base evita un salto al
+                // restaurar un nodo recreado por historial o rerun (#834).
+                ubicarLibre(m, el);
+            }
             else if (m.posicion === 'antes') ancla.parentNode.insertBefore(el, ancla);
             else if (m.posicion === 'dentro') ancla.appendChild(el);
             else ancla.parentNode.insertBefore(el, ancla.nextSibling);
@@ -1631,7 +1637,6 @@ JS = """
             if (!registro.capa) return [];
             var plan = [], nodo = elemento;
             var nivel = registro.capa.nivel;
-            if (elemento.parentElement && elemento.parentElement.id === ID_LIBRES && nivel < 0) nivel += 1000000000;
             while (nodo && nodo !== doc.body && nodo !== doc.documentElement) {
                 if (nodo !== elemento && (nodo.id === ID_LIBRES || nodo.hasAttribute('data-diseno-mock'))) break;
                 if (nodo !== elemento && nodo.matches('[data-testid="stMainBlockContainer"], .block-container')) break;
@@ -1644,7 +1649,10 @@ JS = """
             }
             // Contener las capas negativas mantiene el contenido sobre el
             // fondo del lienzo al enviarlo detras de sus vecinos.
-            if (nodo && nodo.id !== ID_LIBRES) plan.push({ nodo: nodo, props: { isolation: 'isolate' } });
+            // El auxiliar de tamaño cero NO es ese contexto: la tarjeta debe
+            // compartirlo con las formas y controles reales de la app (#834).
+            if (nodo && nodo.id === ID_LIBRES) nodo = padreCompuesto(nodo);
+            if (nodo) plan.push({ nodo: nodo, props: { isolation: 'isolate' } });
             return plan;
         }
 
@@ -1726,6 +1734,9 @@ JS = """
         // Selector del contenedor auxiliar para entregar tambien sus capas
         // al copiar CSS. Dentro de una pieza termina en su shadow root.
         function selectorDeCapa(nodo) {
+            if (nodo === doc.body) return 'body';
+            if (nodo.matches('[data-testid="stMainBlockContainer"]')) return '[data-testid="stMainBlockContainer"]';
+            if (nodo.matches('.block-container')) return '.block-container';
             var partes = [];
             while (nodo && nodo.nodeType === 1) {
                 var key = Array.prototype.find.call(nodo.classList, function(c) {
@@ -5828,8 +5839,8 @@ JS = """
         // arrastre (resize/mover) tampoco usa rAF: aplica los cambios
         // directo en cada 'mousemove', que ya alcanza para verse fluido.
         function sync() {
-            reaplicarCapas();
             if (!disenoActivo()) {
+                reaplicarCapas();
                 pintarGuias(null);
                 overlay.style.display = 'none';
                 panel.style.display = 'none';
@@ -5852,6 +5863,9 @@ JS = """
             // Antes de resolver el pin: un mock puede SER el pineado, y
             // Streamlit se lo lleva cuando re-renderiza su rama.
             reponerMocks();
+            // El historial y los reruns pueden haber recreado el insertado:
+            // su capa se aplica al nodo nuevo en este mismo tick (#834).
+            reaplicarCapas();
             // Despues de reponerMocks (que puede insertar nodos y correr
             // los rects) y antes de resolver el pin: las dos mitades de una
             // union se reaplican aunque ninguna este pineada — el

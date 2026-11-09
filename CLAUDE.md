@@ -2507,6 +2507,8 @@ Al insertar se elige Libre (superpuesto, sin empujar la app) o En flujo
 Libre. Se puede convertir después conservando ajustes e historial. Antes/
 Dentro/Después es ubicación; frente/fondo es orden de capas. Sólo se
 trasladan nodos del prototipo, nunca controles reales. Regla #833.
+Enviar al fondo también coloca los insertados detrás del contenido real; conserva
+un contexto compartido para que sigan sobre el fondo del lienzo (regla #834).
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del

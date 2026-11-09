@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-833 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+834 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (278)
+**CSS y estilos** (279)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -345,6 +345,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#829** — Un control interno no tiene el piso de una tarjeta, y height no vence min-height
 - **#831** — Un selector interno necesita su propia ancla de Diseño
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
+- **#834** — Enviar al fondo incluye el contenido real, no sólo los otros insertados
 
 **Layout y alturas** (114)
 
@@ -59109,8 +59110,8 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    e historial y repone sus descendientes; nunca traslada nodos reales de Streamlit/React.
    Quitar una tarjeta quita también los insertados anclados a ella, recuperables con
    Deshacer. Traer al frente/Enviar al fondo conserva la distribución y se detiene en
-   el prototipo padre: ordenar un hijo no sube ni baja la tarjeta completa. Las raíces
-   libres enviadas al fondo siguen sobre la app y detrás de los otros prototipos.
+   el prototipo padre: ordenar un hijo no sube ni baja la tarjeta completa. El orden de
+   las raíces libres frente al contenido real se corrigió en la regla #834.
    El lienzo vive en el contexto principal, para que Traer al frente también permita
    subir controles reales sobre las tarjetas libres, sin trasladar esos controles.
    «Todos los cambios» declara el modo y el desplazamiento relativo al ancla; la vista
@@ -59118,6 +59119,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    en memoria, sin guardar borradores. `test_herramientas_visuales.py` monta la cabecera
    real del cierre y verifica que Libre no cambia sus medidas ni su scroll, conversión,
    contenido anidado, capas, historial, exportación, reposición y vista previa móvil.
+
+834. **Enviar al fondo incluye el contenido real, no sólo los otros insertados.**
+   Las tarjetas Libres traducían una capa negativa a `1000000000 + nivel`: el panel
+   decía Fondo, pero la tarjeta continuaba encima de imágenes, formas y controles
+   normales de la app. `planDeCapa` conserva ahora el nivel negativo y aísla el contexto
+   principal compartido, nunca el auxiliar de tamaño cero que contiene los insertados.
+   Así los vecinos reales pueden pintarse encima y la parte libre de la tarjeta sigue
+   sobre el fondo del lienzo, sin cambiar su posición ni reservar espacio. Los hijos
+   siguen ordenándose dentro de su prototipo padre. El aislamiento es una propuesta
+   reversible: se restaura con Original, historial y al salir de Diseño. El CSS
+   entregado incluye la capa y el contexto con el selector estable del contenedor
+   principal. `test_herramientas_visuales.py` comprueba la superposición con imagen,
+   forma y botón reales en un shadow root, el píxel visible fuera de ellos, original,
+   historial, reproducción del CSS y el fechador de la pieza de cierre sin mover su
+   cabecera ni su cuerpo. Las capas se reaplican después de reponer los insertados,
+   y el anclaje se coloca antes de guardar su CSS original: rehacer o recrear un nodo
+   conserva el orden de capas en ese mismo tick y Original no lo desplaza.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -59131,7 +59149,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#833**; la próxima toma el número siguiente.
+> última regla es la **#834**; la próxima toma el número siguiente.
 
 >
 
