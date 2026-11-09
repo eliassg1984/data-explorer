@@ -97,6 +97,8 @@ Un control de pieza sin clase propia se selecciona por sus atributos (`data-*`,
 Mover una sección que encaja en la pila no desplaza la página: Diseño compensa su
 punto de encaje con `scroll-margin-top` y lo incluye en el CSS copiado (#838).
 El piso al arrastrar un contenedor con key es 32×16 px, el de sus manijas (#839).
+Una caja con controles fijos adentro (la fecha de la franja) se mueve con
+`position: relative` y no con `transform`, que los encerraría en ella (#840).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|

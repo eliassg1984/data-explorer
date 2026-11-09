@@ -2522,6 +2522,9 @@ la página la seguía: el editor lo compensa con `scroll-margin-top`, que tambi�
 el CSS copiado (#838).
 Al arrastrar, un contenedor con key baja hasta 32×16 px (antes 60×40, que no dejaba
 afinar la franja de 44 px); controles internos, 8 px; líneas insertadas, 1 px (#839).
+Mover una caja que tiene adentro un control fijo (la fecha de Compras, que se ve en la
+franja) usa `position: relative` + `left/top`, no `transform`: el transform la metía en
+la tarjeta y su `overflow: clip` la cortaba, y «Traer al frente» no la sacaba (#840).
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del

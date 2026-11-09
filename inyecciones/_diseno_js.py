@@ -2429,9 +2429,73 @@ JS = """
             }
         }
 
+        // Un `transform` en un contenedor ATRAPA a sus hijos `position:
+        // fixed` (regla #156): pasan a ubicarse contra la caja del
+        // contenedor y a recortarse con su `overflow`. Mover «Compras por
+        // periodo» se llevaba la fecha de la franja adentro de la tarjeta, y
+        // al subirla de nuevo la cortaba el `overflow: clip` de la seccion:
+        // ni «Traer al frente» la sacaba, porque no era una capa sino un
+        // recorte (#840). `position: relative` con `left/top` corre la caja
+        // igual y no atrapa a nadie. Solo para trasladar una caja del flujo
+        // (static o relative): rotar sigue necesitando `transform`, y en una
+        // caja absoluta o fija `left/top` ya son su lugar.
+        function hayFijosAdentro(el) {
+            var rt = win.__disenoRuntime;
+            if (!rt.fijosAdentro) rt.fijosAdentro = new WeakMap();
+            // El reaplicado corre cada 150 ms: se recorre a lo sumo una vez
+            // por segundo (medido: 2-6 ms una seccion de Compras).
+            var ahora = Date.now(), previo = rt.fijosAdentro.get(el);
+            if (previo && ahora - previo.t < 1000) return previo.hay;
+            var pila = Array.prototype.slice.call(el.children || []), hay = false;
+            if (el.shadowRoot) Array.prototype.push.apply(pila, el.shadowRoot.children);
+            while (pila.length) {
+                var n = pila.pop(), vista = n.ownerDocument && n.ownerDocument.defaultView;
+                if (vista && vista.getComputedStyle(n).position === 'fixed') { hay = true; break; }
+                if (n.shadowRoot) Array.prototype.push.apply(pila, n.shadowRoot.children);
+                Array.prototype.push.apply(pila, n.children || []);
+            }
+            rt.fijosAdentro.set(el, { t: ahora, hay: hay });
+            return hay;
+        }
+        // Sale del registro y del estilo ORIGINAL (no del DOM ya movido),
+        // para que la vista previa y el CSS copiado digan lo mismo.
+        function desplazamientoRelativo(elemento, registro) {
+            var t = registro.transformState;
+            if (!t || t.rotateDeg || (!t.translateX && !t.translateY)) return null;
+            var original = recordarNodo(elemento);
+            var pos = original && original.computado.position;
+            if (pos !== 'static' && pos !== 'relative') return null;
+            if (!hayFijosAdentro(elemento)) return null;
+            var izq = pos === 'relative' ? (parseFloat(original.computado.left) || 0) : 0;
+            var arr = pos === 'relative' ? (parseFloat(original.computado.top) || 0) : 0;
+            return { position: 'relative',
+                     left: Math.round((izq + t.translateX) * 100) / 100 + 'px',
+                     top: Math.round((arr + t.translateY) * 100) / 100 + 'px' };
+        }
+        var PROPS_DESPLAZAMIENTO = ['position', 'left', 'top'];
+
         function aplicarTransform(elemento, registro) {
             recordarOriginales(elemento, registro);
             var t = registro.transformState;
+            var relativo = desplazamientoRelativo(elemento, registro);
+            if (relativo) {
+                if (elemento.style.getPropertyValue('transform').indexOf('translate(') === 0) {
+                    restaurarPropiedad(elemento, 'transform');
+                }
+                PROPS_DESPLAZAMIENTO.forEach(function(prop) {
+                    if (elemento.style.getPropertyValue(prop) !== relativo[prop]
+                            || elemento.style.getPropertyPriority(prop) !== 'important') {
+                        elemento.style.setProperty(prop, relativo[prop], 'important');
+                    }
+                });
+                registro.desplazamientoRelativo = true;
+                compensarEncaje(elemento, registro);
+                return;
+            }
+            if (registro.desplazamientoRelativo) {
+                PROPS_DESPLAZAMIENTO.forEach(function(prop) { restaurarPropiedad(elemento, prop); });
+                registro.desplazamientoRelativo = false;
+            }
             if (t.translateX || t.translateY || t.rotateDeg) {
                 // `transform` no aplica a una caja INLINE (un <span> suelto):
                 // el estilo queda puesto y no se mueve nada. Adentro de las
@@ -3939,7 +4003,12 @@ JS = """
                 estBoton.width = 'auto'; estBoton.height = 'auto';
             }
             var t = registro.transformState;
-            if (t.translateX || t.translateY || t.rotateDeg) {
+            var relativo = desplazamientoRelativo(elemento, registro);
+            if (relativo) {
+                // Igual que aplicarTransform: con controles fijos adentro,
+                // un transform pegado en la app los encerraria (#840).
+                PROPS_DESPLAZAMIENTO.forEach(function(prop) { geo[prop] = relativo[prop]; });
+            } else if (t.translateX || t.translateY || t.rotateDeg) {
                 // El mover/rotar siempre va sobre el elemento mismo (igual
                 // que aplicarTransform), nunca redirigido.
                 geo.transform = 'translate(' + t.translateX + 'px,' + t.translateY + 'px) rotate(' + t.rotateDeg + 'deg)';
@@ -3996,6 +4065,11 @@ JS = """
             if (encajeCSS) {
                 pie += '\\n/* scroll-margin-top compensa el encaje de la pila: sin él la página'
                     + ' sigue a la tarjeta y no se ve movida (regla #838). */';
+            }
+            if (relativo) {
+                pie += '\\n/* Se mueve con position: relative y no con transform: un transform'
+                    + ' encerraría en la tarjeta los controles fijos de adentro, como la fecha'
+                    + ' de la franja (regla #840). */';
             }
 
             var encabezado = '/* copiado del modo diseño — ' + key + (sub ? ' ' + textoSub(sub) : '') + ' */';

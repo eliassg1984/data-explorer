@@ -1043,6 +1043,48 @@ class HerramientasVisuales(unittest.TestCase):
         self.page.wait_for_timeout(250)
         self.assertEqual(self.medir_pila()['scroll'], antes['scroll'] + 80)
 
+    def test_mover_una_tarjeta_no_encierra_su_control_fijo(self):
+        # Regla #840: la fecha de Compras vive adentro de su sección pero se
+        # ve fija en la franja. Un transform en la sección la atrapaba: bajaba
+        # con la tarjeta y, al subirla, la cortaba el `overflow: clip`.
+        self.montar_pila_que_encaja()
+        self.page.evaluate('''()=>{const b=document.querySelector('.st-key-pila_sec_b');
+            b.style.overflow='clip';
+            const f=document.createElement('div'); f.className='st-key-pila_fecha'; f.textContent='Últimos 30 días';
+            f.style.cssText='position:fixed;top:10px;left:700px;width:160px;height:24px;z-index:30;background:rgb(255,255,255)';
+            b.appendChild(f);}''')
+        medir_fecha = '''()=>{const f=document.querySelector('.st-key-pila_fecha'),r=f.getBoundingClientRect();
+            const hit=document.elementsFromPoint(r.left+r.width/2,r.top+r.height/2).find(n=>!n.closest('[id^="el-"]'));
+            return {top:Math.round(r.top), left:Math.round(r.left), visible:hit===f};}'''
+        antes, fecha = self.medir_pila(), self.page.evaluate(medir_fecha)
+        self.assertTrue(fecha['visible'])
+        self.pin('pila_sec_b')
+        self.arrastrar('#el-diseno-mover', 80)
+        movida = self.medir_pila()
+        self.assertAlmostEqual(movida['b'], antes['b'] + 80, delta=1)
+        self.assertEqual(movida['scroll'], antes['scroll'])
+        self.assertEqual(self.page.evaluate(medir_fecha), fecha)
+        estilo = self.page.evaluate('''()=>{const c=getComputedStyle(document.querySelector('.st-key-pila_sec_b'));
+            return [c.transform, c.position, c.top];}''')
+        self.assertEqual(estilo, ['none', 'relative', '80px'])
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        css = '\n'.join(re.findall(r'```css\n(.*?)\n```', entrega, re.S))
+        self.assertIn('position: relative', css)
+        self.assertIn('top: 80px', css)
+        self.assertNotIn('translate(', css)
+        self.assertIn('scroll-margin-top: 80px', css)
+        self.assertIn('#840', css)
+        # Pegado en la app, la fecha sigue en su lugar y la tarjeta, abajo.
+        self.page.get_by_role('button', name=re.compile('Diseño$')).click()
+        self.page.evaluate('''css=>{const b=document.querySelector('.st-key-pila_sec_b');
+            ['position','left','top','scroll-margin-top'].forEach(p=>b.style.removeProperty(p));
+            const e=document.createElement('style'); e.textContent=css; document.head.appendChild(e);}''', css)
+        self.page.wait_for_timeout(250)
+        pegado = self.medir_pila()
+        self.assertAlmostEqual(pegado['b'], antes['b'] + 80, delta=1)
+        self.assertEqual(pegado['scroll'], antes['scroll'])
+        self.assertEqual(self.page.evaluate(medir_fecha), fecha)
+
     def test_borde_de_arriba_de_una_seccion_que_encaja_no_sube_la_siguiente(self):
         self.montar_pila_que_encaja()
         antes = self.medir_pila()

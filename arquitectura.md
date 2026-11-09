@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-839 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+840 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (284)
+**CSS y estilos** (285)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -351,6 +351,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#837** — Un control de pieza sin clase propia se ancla por sus atributos, no por su estado
 - **#838** — Mover una sección de la pila corre su encaje: se compensa con scroll-margin-top
 - **#839** — El piso de un contenedor es el de sus manijas, no el de una tarjeta
+- **#840** — Mover una caja con controles fijos adentro no puede usar transform
 
 **Layout y alturas** (115)
 
@@ -59251,6 +59252,27 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    `!important` hasta 24 px: CSS copiado, Deshacer y el CSS pegado. Las dos fallan con el
    piso anterior.
 
+840. **Mover una caja con controles fijos adentro no puede usar `transform`.**
+   Reportado con captura en Compras › Período: al subir la fecha a la franja con Diseño,
+   se ocultaba, y «Traer al frente» no la sacaba. La fecha (`cp_sem_escala`) vive adentro
+   de su sección y se ve en la franja con `position: fixed` (`estilos/_90_marco.py`).
+   Antes se había movido la sección, y Diseño mueve con `transform`: un `transform` en un
+   ancestro lo vuelve el contenedor de sus hijos fijos (#156). La fecha bajó a la caja de
+   la tarjeta (de `top` 15 a 83) y, al subirla, la recortaba el `overflow: clip` de la
+   sección (#764). Medido en la app local: copiado de la captura, `top` 48 y la mitad de
+   arriba cortada. «Traer al frente» no podía arreglarlo, porque no era una capa sino un
+   recorte. En `_diseno_js.py`, `desplazamientoRelativo` decide: si la caja es `static` o
+   `relative`, no se rota y tiene un descendiente `position: fixed` (`hayFijosAdentro`,
+   que cruza los shadow roots y recorre a lo sumo una vez por segundo: 2-6 ms una sección
+   de Compras), se mueve con `position: relative` + `left`/`top`, que corre la caja igual
+   y no atrapa a nadie. Si no, sigue con `transform`, como siempre. `aplicarTransform` y
+   el CSS copiado deciden con la misma función; el CSS lleva un comentario que lo explica.
+   El encaje de la pila (#838) se compensa igual. Rotar una caja con controles fijos
+   adentro sigue atrapándolos. `test_herramientas_visuales.py` mueve una sección que
+   encaja, con `overflow: clip` y un hijo fijo: la página no se mueve, el hijo se queda
+   y se puede tocar, y el CSS copiado y pegado da lo mismo. Falla con el editor anterior
+   (el hijo bajaba de 10 a 150 y quedaba tapado).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59263,7 +59285,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#839**; la próxima toma el número siguiente.
+> última regla es la **#840**; la próxima toma el número siguiente.
 
 >
 
