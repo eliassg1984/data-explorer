@@ -163,6 +163,8 @@ Sólo se trasladan nodos del prototipo, nunca controles reales. Regla #833.
 Los objetos del lienzo no dependen de otro widget y se seleccionan con la API
 pública del inspector. Subir/Bajar una capa cambia una posición entre vecinos
 del contenedor; conserva historial, anidado y exportación por variante (#835).
+Para intercalarse con los controles de una pieza aislada, sólo el insertado usa
+un auxiliar local fuera de flujo; conserva su anclaje al lienzo (#836).
 """
 
 import json

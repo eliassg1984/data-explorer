@@ -371,6 +371,139 @@ class HerramientasVisuales(unittest.TestCase):
         self.page.get_by_role('button', name='Enviar al fondo', exact=True).click()
         self.assertEqual(self.clase_en_punto(punto), 'dv-mock-titulo')
 
+    def test_un_paso_de_tarjeta_sobre_cierre_descubre_un_control_sin_saltar_el_reporte(self):
+        self.montar_cierre()
+        self.page.locator('.st-key-piece').evaluate("e=>e.style.isolation='isolate'")
+        self.page.get_by_role('button', name='+ Insertar', exact=True).click()
+        self.page.get_by_label('Destino al insertar', exact=True).select_option('lienzo')
+        tarjeta = self.insertar_tarjeta(modo=None)
+        self.page.locator('.ajc-acciones').evaluate('''e=>{
+            const a=e.getBoundingClientRect(), base=document.querySelector('main').getBoundingClientRect();
+            const m=__disenoState.mocks[0]; m.libre={x:a.left-base.left,y:a.top-base.top};
+            const r=__disenoState.porKey[m.key]; r.cambios.width=a.width+'px'; r.cambios.height=a.height+'px';
+            r.cambios.padding='0'; r.cambios.overflow='hidden'; editorPrueba.sync();
+        }''')
+        caja = tarjeta.bounding_box()
+        originales = self.page.locator('.ajc-acciones > *').evaluate_all('es=>es.map(e=>e.getBoundingClientRect().toJSON())')
+
+        def cubiertos():
+            return self.page.locator('.ajc-acciones').evaluate('''e=>Array.from(e.children)
+                .filter(n=>!n.hasAttribute('data-diseno-capas')).map(n=>{
+                    const r=n.getBoundingClientRect(), raiz=n.getRootNode();
+                    const encima=raiz.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+                    return !!encima?.closest('[data-diseno-mock]');
+                })''')
+
+        self.assertEqual(cubiertos(), [True]*4)
+        for paso in range(1, 5):
+            self.page.get_by_role('button', name='Bajar una capa', exact=True).click()
+            self.assertEqual(cubiertos().count(False), paso)
+            self.assertEqual(tarjeta.bounding_box(), caja)
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(cubiertos().count(False), 3)
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(cubiertos().count(False), 4)
+        self.page.get_by_role('button', name='Rehacer', exact=True).click()
+        self.assertEqual(cubiertos().count(False), 3)
+        self.assertEqual(self.page.locator('.ajc-acciones > :not([data-diseno-capas])').evaluate_all(
+            'es=>es.map(e=>e.getBoundingClientRect().toJSON())'), originales)
+
+    def montar_controles_superpuestos_por_tarjeta(self, contenido=False):
+        self.page.locator('.st-key-piece').evaluate('''(e, contenido)=>{
+            e.style.cssText='width:620px;height:150px;position:relative;isolation:isolate;'
+                +(contenido?'contain:paint;transform:translate(20px,10px);':'');
+            e.attachShadow({mode:'open'}).innerHTML='<section class="dv-fila" style="display:flex;gap:8px;padding:16px;background:#eee">'
+                +['Uno','Dos','Tres'].map((s,i)=>'<button class="dv-b'+i+'" style="width:70px;height:32px">'+s+'</button>').join('')+'</section>';
+        }''', contenido)
+        tarjeta = self.insertar_tarjeta(modo=None)
+        self.page.locator('.dv-b0').evaluate('''e=>{
+            const a=e.getBoundingClientRect(), base=document.querySelector('main').getBoundingClientRect();
+            const m=__disenoState.mocks[0]; m.libre={x:a.left-base.left,y:a.top-base.top};
+            const r=__disenoState.porKey[m.key]; r.cambios.width='226px'; r.cambios.height='32px';
+            r.cambios.padding='0'; r.cambios.overflow='hidden'; r.cambios['margin-left']='-15px';
+            r.transformState.translateX=15; editorPrueba.sync();
+        }''')
+        return tarjeta
+
+    def controles_descubiertos(self):
+        return self.page.locator('.dv-fila').evaluate('''e=>Array.from(e.querySelectorAll('button')).filter(n=>{
+            const r=n.getBoundingClientRect(), raiz=n.getRootNode();
+            return !raiz.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.closest('[data-diseno-mock]');
+        }).length''')
+
+    def test_capas_locales_conservan_coordenadas_en_host_con_contain_y_transform(self):
+        tarjeta = self.montar_controles_superpuestos_por_tarjeta(contenido=True)
+        caja = tarjeta.bounding_box()
+        originales = self.page.locator('.dv-fila button').evaluate_all('es=>es.map(e=>e.getBoundingClientRect().toJSON())')
+        self.page.get_by_role('button', name='Bajar una capa', exact=True).click()
+        self.assertEqual(self.controles_descubiertos(), 1)
+        self.assertEqual(tarjeta.bounding_box(), caja)
+        self.page.get_by_role('button', name='Vista previa', exact=True).click()
+        marco = self.page.get_by_title('Vista previa del diseño').element_handle().content_frame()
+        self.assertEqual(marco.locator('.st-key-diseno_tarjeta_1').evaluate('e=>e.getBoundingClientRect().toJSON()'),
+            tarjeta.evaluate('e=>e.getBoundingClientRect().toJSON()'))
+        self.page.get_by_role('button', name='Cerrar vista previa', exact=True).click()
+        self.assertEqual(self.page.locator('.dv-fila button').evaluate_all('es=>es.map(e=>e.getBoundingClientRect().toJSON())'), originales)
+
+    def test_capas_locales_se_reponen_con_la_pieza_y_conservan_original_y_entrega(self):
+        tarjeta = self.montar_controles_superpuestos_por_tarjeta()
+        html = self.page.locator('.st-key-piece').evaluate('e=>e.shadowRoot.innerHTML')
+        caja = tarjeta.bounding_box()
+        self.page.get_by_role('button', name='Bajar una capa', exact=True).click()
+        self.page.evaluate('__inspectorTogglePin(true)')
+        tarjeta.click(button='right', position={'x':30,'y':25})
+        self.page.wait_for_function("__inspectorPinned && __inspectorUltimo.key==='diseno_tarjeta_1' && !__disenoState.sub")
+        self.page.evaluate("__inspectorTipVisible(document.getElementById('el-inspector-tip'),false)")
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        self.assertIn('Ámbito visual de capas:', entrega)
+        self.assertIn('dv-fila', entrega)
+        self.assertIn('Va en el .css de la PIEZA', entrega)
+        self.page.locator('.st-key-piece').evaluate('(e,s)=>e.shadowRoot.innerHTML=s', html)
+        self.page.evaluate('editorPrueba.sync()')
+        self.assertEqual(self.controles_descubiertos(), 1)
+        self.assertEqual(tarjeta.count(), 1)
+        self.assertEqual(tarjeta.bounding_box(), caja)
+        self.page.get_by_role('button', name='Ver original', exact=True).click()
+        self.assertEqual(self.controles_descubiertos(), 0)
+        original = tarjeta.bounding_box()
+        self.assertEqual((original['x'], original['y']), (caja['x'], caja['y']))
+        self.page.get_by_role('button', name='Ver con cambios', exact=True).click()
+        self.assertEqual(self.controles_descubiertos(), 1)
+        self.page.get_by_label('Diseñar para', exact=True).select_option('movil')
+        self.assertEqual(self.controles_descubiertos(), 1)
+        self.page.get_by_role('button', name='Traer al frente', exact=True).click()
+        self.assertEqual(self.controles_descubiertos(), 0)
+        self.assertEqual(tarjeta.evaluate('e=>e.parentElement.id'), 'diseno-insertados-libres')
+        self.page.get_by_role('button', name='Enviar al fondo', exact=True).click()
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(self.controles_descubiertos(), 2)
+
+    def test_al_mover_tarjeta_a_otros_controles_el_paso_usa_el_nuevo_grupo(self):
+        tarjeta = self.montar_controles_superpuestos_por_tarjeta()
+        self.page.get_by_role('button', name='Bajar una capa', exact=True).click()
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertTrue(self.page.get_by_role('button', name='Subir una capa', exact=True).is_disabled())
+        self.page.locator('.dv-fila').evaluate('''e=>{
+            const otra=e.cloneNode(true); otra.className='dv-otra-fila';
+            otra.querySelectorAll('[data-diseno-capas]').forEach(n=>n.remove()); e.after(otra);
+        }''')
+        origen = tarjeta.bounding_box()
+        destino = self.page.locator('.dv-otra-fila button').first.bounding_box()
+        agarre = self.page.locator('#el-diseno-mover').bounding_box()
+        x, y = agarre['x']+12, agarre['y']+12
+        self.page.mouse.move(x,y)
+        self.page.mouse.down()
+        self.page.mouse.move(x,y+destino['y']-origen['y'],steps=5)
+        self.page.mouse.up()
+        caja = tarjeta.bounding_box()
+        self.assertTrue(self.page.get_by_role('button', name='Subir una capa', exact=True).is_enabled())
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertTrue(tarjeta.evaluate("e=>e.parentElement.parentElement.classList.contains('dv-otra-fila')"))
+        self.assertEqual(tarjeta.bounding_box(), caja)
+        self.assertEqual(self.page.locator('.dv-otra-fila').evaluate('''e=>Array.from(e.querySelectorAll('button')).filter(n=>{
+            const r=n.getBoundingClientRect();return !n.getRootNode().elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.closest('[data-diseno-mock]');
+        }).length'''), 2)
+
     def test_exportar_capas_conserva_posicion_de_lienzo_libre_y_flujo_por_variante(self):
         self.insertar_tarjeta(modo=None)
         self.page.get_by_role('button', name='Bajar una capa', exact=True).click()

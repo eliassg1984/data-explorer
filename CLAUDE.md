@@ -2512,6 +2512,8 @@ un contexto compartido para que sigan sobre el fondo del lienzo (regla #834).
 «+ Insertar» permite crear en el Lienzo sin seleccionar un widget; Seleccionado conserva
 la inserción relativa. Subir/Bajar una capa intercambia una posición dentro del mismo
 contenedor, con historial y exportación por variante, sin mover nodos reales (#835).
+Sobre los controles de una pieza, los pasos intercalan sólo el insertado en su grupo;
+conservan el anclaje al lienzo y no saltan delante/detrás del reporte entero (#836).
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del

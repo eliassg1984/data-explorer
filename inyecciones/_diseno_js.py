@@ -800,7 +800,7 @@ JS = """
         }
         function dentroDelLienzo(el) {
             while (el && el !== doc.body) {
-                if (el.id === ID_LIBRES) return true;
+                if (el.id === ID_LIBRES || el.hasAttribute('data-diseno-capas')) return true;
                 el = padreCompuesto(el);
             }
             return false;
@@ -821,12 +821,44 @@ JS = """
             }
             return area;
         }
+        function auxiliarDeCapas(padre) {
+            var auxiliar = Array.prototype.find.call(padre.children, function(n) { return n.hasAttribute('data-diseno-capas'); });
+            if (!auxiliar) {
+                auxiliar = padre.ownerDocument.createElement('div');
+                auxiliar.setAttribute('data-diseno-capas','');
+                auxiliar.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;';
+                padre.appendChild(auxiliar);
+            }
+            return auxiliar;
+        }
+        function coordenadasFijas(padre, x, y) {
+            // Un host con transform/contain cambia el origen de position:fixed.
+            // La sonda propia mide ese origen sin cambiar ninguna caja nativa.
+            var vista = padre.ownerDocument.defaultView, n = padre, contenido = false;
+            while (n && n !== padre.ownerDocument.body) {
+                var cs = vista.getComputedStyle(n);
+                if (cs.transform !== 'none' || cs.perspective !== 'none' || cs.filter !== 'none'
+                        || /layout|paint|strict|content/.test(cs.contain) || /transform|perspective|filter/.test(cs.willChange)) {
+                    contenido = true; break;
+                }
+                n = padreCompuesto(n);
+            }
+            if (!contenido) return {x:x,y:y};
+            var sonda = padre.ownerDocument.createElement('div');
+            sonda.style.cssText = 'position:fixed!important;left:0!important;top:0!important;width:100px!important;height:100px!important;margin:0!important;padding:0!important;border:0!important;transform:none!important;visibility:hidden!important;pointer-events:none!important;';
+            padre.appendChild(sonda);
+            var r = sonda.getBoundingClientRect(); sonda.remove();
+            return {x:(x-r.left)/(r.width/100 || 1),y:(y-r.top)/(r.height/100 || 1)};
+        }
         function ubicarLibre(m, el, documento) {
             var ancla = anclaOriginalMock(m, documento);
             if (!ancla || !ancla.isConnected || !ancla.getClientRects().length) { el.remove(); return; }
             var interno = m.posicion === 'dentro' && !m.anclaSub && esMock(m.anclaKey) && dentroDelLienzo(ancla);
+            var registro = win.__disenoState.porKey[m.key];
+            var local = registro && registro.capa && registro.capa.local && !registro.verOriginalActivo
+                && resolverDestinoDOM(registro.capa.limite, documento);
             if (!documento) {
-                var padre = interno ? ancla : lienzoLibres();
+                var padre = interno ? ancla : local ? auxiliarDeCapas(local) : lienzoLibres();
                 if (el.parentNode !== padre) padre.appendChild(el);
             }
             var r = ancla.getBoundingClientRect();
@@ -865,6 +897,10 @@ JS = """
                     x = Math.max(area.left, Math.min(x, area.right - el.offsetWidth));
                     y = Math.max(area.top, Math.min(y, area.bottom - el.offsetHeight));
                 }
+            }
+            if (local && !interno) {
+                var puntoLocal = coordenadasFijas(el.parentElement,x,y);
+                x = puntoLocal.x; y = puntoLocal.y;
             }
             el.style.left = x + 'px'; el.style.top = y + 'px';
         }
@@ -1064,10 +1100,14 @@ JS = """
             var sel = '.st-key-' + m.key;
             var n = doc.querySelector(sel);
             if (n) return n;
+            var reg = win.__disenoState.porKey[m.key];
+            var local = reg && reg.capa && reg.capa.local && resolverDestinoDOM(reg.capa.limite);
+            if (local && local.querySelector(sel)) return local.querySelector(sel);
             var base = porKeyReal(m.anclaKey);
             var a = base && m.anclaSub ? resolverSubClase(base, m.anclaSub, m.anclaIdx) : base;
             var raiz = (a && a.getRootNode) ? a.getRootNode() : null;
-            return (raiz && raiz !== doc && raiz.querySelector) ? raiz.querySelector(sel) : null;
+            return ((raiz && raiz !== doc && raiz.querySelector) ? raiz.querySelector(sel) : null)
+                || qsaProfundo(doc.body,sel)[0] || null;
         }
 
         function quitarMock(key) {
@@ -1722,7 +1762,7 @@ JS = """
                     if (!capa || (reg.verOriginalActivo && !incluirOriginal)) return;
                     var el = elPorId(id);
                     if (!el) return;
-                    if (capa.paso && !incluirOriginal) {
+                    if (capa.paso && !capa.local && !incluirOriginal) {
                         var padre = padreDeCapas(el);
                         if (padre && resolverDestinoDOM(capa.limite) !== padre) {
                             var destino = identidadCapa(padre);
@@ -1793,6 +1833,21 @@ JS = """
 
         function cambiarCapa(ctx, alFrente) {
             var estado = win.__disenoState;
+            // Los extremos del insertado libre vuelven al lienzo completo.
+            // Un control de un grupo local conserva el ambito de ese grupo.
+            var modelo = modeloMock(ctx.key), ambito = null;
+            if (modelo && ctx.registro.capa && ctx.registro.capa.local) {
+                delete ctx.registro.capa;
+                ubicarLibre(modelo,ctx.el);
+            } else if (!modelo) {
+                var p = padreCompuesto(ctx.el);
+                while (p && p !== doc.body) {
+                    if (Array.prototype.some.call(p.children, function(n) { return n.hasAttribute('data-diseno-capas') && n.children.length; })) {
+                        var destinoLocal = identidadCapa(p); ambito = destinoLocal && destinoLocal.destino; break;
+                    }
+                    p = padreCompuesto(p);
+                }
+            }
             // Un vecino normalizado automaticamente no fija para siempre
             // la rama de un control real. Una orden extrema posterior puede
             // volver a adelantarla o atrasarla, como antes de ordenar por pasos.
@@ -1809,11 +1864,15 @@ JS = """
             ctx.registro.capa = {
                 nivel: alFrente ? 1000000000 + estado.secuenciaCapas : -estado.secuenciaCapas
             };
+            if (ambito) ctx.registro.capa.limite = ambito;
             reaplicarCapas();
         }
 
-        function resolverDestinoDOM(d) {
-            var el = porKeyReal(d.key);
+        function resolverDestinoDOM(d, documento) {
+            if (!d) return null;
+            var el = documento ? (d.key === CLAVE_LIENZO ? superficieLienzo(documento)
+                : d.key === '__diseno_documento' ? documento.body
+                : qsaProfundo(documento.body,selClase('st-key-'+d.key))[0]) : porKeyReal(d.key);
             if (d.subTexto) el = resolverNodoTexto(d.key, d.subTexto);
             else if (d.sub) el = resolverSubClase(el, d.sub, d.subIdx);
             if (d.ascender) for (var i = 0; el && i < d.ascender; i++) el = padreCompuesto(el);
@@ -1871,16 +1930,60 @@ JS = """
         }
         function padreDeCapas(el) {
             var padre = el.parentElement || (el.getRootNode && el.getRootNode().host);
-            if (padre && padre.id === ID_LIBRES) padre = padre.parentElement;
+            if (padre && (padre.id === ID_LIBRES || padre.hasAttribute('data-diseno-capas'))) padre = padre.parentElement;
             return padre;
         }
+        function grupoBajoInsertado(ctx) {
+            var modelo = modeloMock(ctx.key || ctx.id);
+            if (!modelo || modoMock(modelo) !== 'libre' || !ctx.el.parentElement
+                    || (ctx.el.parentElement.id !== ID_LIBRES && !ctx.el.parentElement.hasAttribute('data-diseno-capas'))) return null;
+            var r = ctx.el.getBoundingClientRect(), grupos = new Map();
+            qsaProfundo(superficieLienzo(), 'button,summary,select,input,textarea,img,svg,[role="button"]').forEach(function(n) {
+                if (esUIPropiaDeDiseno(n) || n.closest('[data-diseno-mock]')) return;
+                n = n.closest('button,summary,select,input,textarea,[role="button"]') || n;
+                if (n.tagName === 'SUMMARY') n = n.parentElement;
+                var padre = n.parentElement;
+                if (!padre || padre === superficieLienzo() || padre === doc.body || padre.closest('[data-diseno-mock]')) return;
+                var a = n.getBoundingClientRect();
+                var ancho = Math.min(r.right,a.right)-Math.max(r.left,a.left), alto = Math.min(r.bottom,a.bottom)-Math.max(r.top,a.top);
+                if (ancho <= 0 || alto <= 0 || !n.getClientRects().length) return;
+                var g = grupos.get(padre);
+                if (!g) { g={padre:padre,nodos:new Set(),area:0}; grupos.set(padre,g); }
+                if (!g.nodos.has(n)) { g.nodos.add(n); g.area += ancho*alto; }
+            });
+            var candidatos = Array.from(grupos.values()).filter(function(g) {
+                return Array.prototype.filter.call(g.padre.children,function(n) {
+                    return !/^(STYLE|SCRIPT|LINK)$/.test(n.tagName) && !n.hasAttribute('data-diseno-capas') && n.getBoundingClientRect().width;
+                }).length >= 2;
+            });
+            candidatos.sort(function(a,b) { return b.nodos.size-a.nodos.size || b.area-a.area; });
+            return candidatos[0] || null;
+        }
+        function insertadoSobreGrupo(el, grupo) {
+            var n = Array.from(grupo.nodos)[0], r=el.getBoundingClientRect(), a=n.getBoundingClientRect();
+            var x=(Math.max(r.left,a.left)+Math.min(r.right,a.right))/2;
+            var y=(Math.max(r.top,a.top)+Math.min(r.bottom,a.bottom))/2;
+            function enRaiz(nodo, raiz) {
+                while (nodo && nodo.getRootNode() !== raiz) nodo = nodo.getRootNode().host;
+                return nodo;
+            }
+            var raiz=el.getRootNode(), ajenoEnRaiz=enRaiz(n,raiz);
+            while (!ajenoEnRaiz && raiz.host) { raiz=raiz.host.getRootNode(); ajenoEnRaiz=enRaiz(n,raiz); }
+            var propioEnRaiz=enRaiz(el,raiz); n=ajenoEnRaiz || n;
+            var pila = raiz.elementsFromPoint(x,y);
+            var propio=pila.findIndex(function(p) { return p===propioEnRaiz || propioEnRaiz.contains(p); });
+            var ajeno=pila.findIndex(function(p) { return p===n || n.contains(p); });
+            return propio >= 0 && (ajeno < 0 || propio < ajeno);
+        }
         function capasVecinas(ctx) {
-            var padre = padreDeCapas(ctx.el);
+            var padreActual=padreDeCapas(ctx.el), grupo=grupoBajoInsertado(ctx);
+            if (grupo && grupo.padre === padreActual) grupo=null;
+            var padre = grupo ? grupo.padre : padreActual;
             if (!padre) return {elementos:[],indice:-1};
             var limite = identidadCapa(padre), elementos = [];
             var raiz = ctx.el.parentNode === padre.shadowRoot ? padre.shadowRoot : padre;
             function agregar(n) {
-                if (n.id === ID_LIBRES) { Array.prototype.forEach.call(n.children, agregar); return; }
+                if (n.id === ID_LIBRES || n.hasAttribute('data-diseno-capas')) { Array.prototype.forEach.call(n.children, agregar); return; }
                 if (/^(STYLE|SCRIPT|LINK|META)$/.test(n.tagName) || esUIPropiaDeDiseno(n) || !n.getClientRects().length) return;
                 var r = n.getBoundingClientRect();
                 if (!r.width || !r.height) return;
@@ -1894,8 +1997,13 @@ JS = """
                 c.orden = elementos.length; elementos.push(c);
             }
             Array.prototype.forEach.call(raiz.children, agregar);
+            if (grupo) {
+                agregar(ctx.el);
+                var propio = elementos.find(function(c) { return c.el === ctx.el; });
+                if (propio) propio.nivel = insertadoSobreGrupo(ctx.el,grupo) ? Infinity : -Infinity;
+            }
             elementos.sort(function(a,b) { return a.nivel-b.nivel || a.ordenVisual-b.ordenVisual || a.orden-b.orden; });
-            return {elementos:elementos,indice:elementos.findIndex(function(c) { return c.el === ctx.el; }),limite:limite};
+            return {elementos:elementos,indice:elementos.findIndex(function(c) { return c.el === ctx.el; }),limite:limite,local:!!grupo};
         }
         function moverUnaCapa(ctx, subir) {
             // Intercambiar vecinos y normalizar empates: sumar 1 al z-index
@@ -1909,6 +2017,7 @@ JS = """
                 var reg = registroPara(c.id); reg.destino = c.destino;
                 if (!existia) reg.soloCapa = true;
                 var automatica = c.el !== ctx.el && (!reg.capa || !!reg.capa.automatica);
+                var local = !!(reg.capa && reg.capa.local) || (c.el === ctx.el && capas.local);
                 // Los estilos de una capa aplicada a la rama no son el CSS
                 // original del vecino que vamos a registrar por primera vez.
                 var aplicadas = (st.capasAplicadas || new Map()).get(c.el) || {}, restaurar = {};
@@ -1924,7 +2033,10 @@ JS = """
                     if (id !== c.id && st.porKey[id].capa && elPorId(id) === c.el) delete st.porKey[id].capa;
                 });
                 reg.capa = {nivel:indice+1,paso:true,limite:capas.limite.destino,automatica:automatica};
+                if (local) reg.capa.local = true;
             });
+            var modelo = modeloMock(ctx.key || ctx.id);
+            if (modelo) ubicarLibre(modelo,ctx.el);
             reaplicarCapas();
         }
 
@@ -3336,6 +3448,9 @@ JS = """
                     ganchosIframe[gi].fdoc.removeEventListener('mousemove', ganchosIframe[gi].move);
                     ganchosIframe[gi].fdoc.removeEventListener('mouseup', ganchosIframe[gi].up);
                 }
+                // Al soltar sobre otros controles, recalcular tambien los
+                // extremos habilitados de Subir/Bajar, no solo el contorno.
+                if (modeloMock(ctx.key)) rehacerPanel();
             }
             doc.addEventListener('mousemove', onMove);
             doc.addEventListener('mouseup', onUp);
@@ -3619,8 +3734,8 @@ JS = """
             // Adentro de una pieza propia el ancla es la clase sola: el
             // `.css` de la pieza vive en su shadow root, donde no hay ningun
             // `st-key-*` por encima, y estilos/ no entra ahi.
-            var dentroPieza = !!sub && enPieza(elemento);
-            var ancla = dentroPieza ? (esMock(key) ? selClase('st-key-' + key) + ' ' : '') + selClase(sub)
+            var dentroPieza = (!!sub || esMock(key)) && enPieza(elemento);
+            var ancla = dentroPieza ? (esMock(key) ? selClase('st-key-' + key) + (sub ? ' ' : '') : '') + (sub ? selClase(sub) : '')
                 : 'div' + selClase('st-key-' + key) + (sub ? ' ' + selClase(sub) : '');
             if (key === CLAVE_LIENZO || key === '__diseno_documento' || (registro.destino && (registro.destino.ruta || registro.destino.ascender))) {
                 ancla = selectorDeCapa(elemento); dentroPieza = enPieza(elemento);
@@ -4316,7 +4431,9 @@ JS = """
                     b.style.cssText = 'flex:1;background:#1c1c24;color:#fff;border:1px solid #34343f;border-radius:4px;padding:6px 3px;font:11px sans-serif;cursor:pointer';
                     if (opcion[0] === 'subir' || opcion[0] === 'bajar') {
                         b.disabled = comparando || capas.indice < 0 || !capas.limite || (opcion[0] === 'subir' ? capas.indice >= capas.elementos.length-1 : capas.indice === 0);
-                        b.title = comparando ? 'Vuelve a Ver con cambios para ordenar las capas de este contenedor.' : 'Mueve una posición entre los elementos del mismo contenedor.';
+                        b.title = comparando ? 'Vuelve a Ver con cambios para ordenar las capas de este contenedor.'
+                            : capas.local || (registro.capa && registro.capa.local) ? 'Mueve un objeto entre los controles que se superponen con el insertado.'
+                            : 'Mueve una posición entre los elementos del mismo contenedor.';
                         if (b.disabled) b.style.opacity = '.4';
                     }
                     b.addEventListener('click', function() {
@@ -5892,6 +6009,8 @@ JS = """
                                 '; desplazamiento: ' + JSON.stringify(t) + '.', '');
                             if (reg.capa) out.push('Orden de capas propuesto: ' + JSON.stringify(reg.capa), '');
                         }
+                        if (reg.capa && reg.capa.local) out.push('Ámbito visual de capas: ' + JSON.stringify(reg.capa.limite)
+                            + '. Colocar sólo este insertado en un auxiliar fuera de flujo dentro de ese contenedor, conservando su anclaje al lienzo. No mover los controles originales.', '');
                         if (tieneTexto) out.push('Texto propuesto (HTML/Python/datos según el elemento): ' + JSON.stringify(reg.texto.actual), '');
                     });
                     Object.keys(vista.tablas).forEach(function(k) {

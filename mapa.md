@@ -90,6 +90,8 @@ conserva la tarjeta sobre el fondo del lienzo y se restaura con el historial (#8
 «+ Insertar» ofrece Lienzo sin selección previa y Seleccionado para insertar respecto
 de un elemento. Subir/Bajar una capa avanza una posición entre vecinos del contenedor;
 conserva anidado, historial, variantes y entrega sin mover nodos reales (regla #835).
+Sobre controles agrupados en una pieza, los pasos usan un ámbito local para descubrir
+un control por pulsación; el anclaje al lienzo y las cajas nativas se conservan (#836).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|

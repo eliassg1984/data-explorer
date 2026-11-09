@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-835 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+836 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (280)
+**CSS y estilos** (281)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -347,8 +347,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#834** — Enviar al fondo incluye el contenido real, no sólo los otros insertados
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
+- **#836** — Una pieza completa no equivale a una capa entre sus controles
 
-**Layout y alturas** (114)
+**Layout y alturas** (115)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -464,6 +465,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#782** — Una franja de indicadores para toda la app, con dos formas según qué miden
 - **#804** — La portada con el aire de la hoja
 - **#833** — La ubicación, la distribución y el orden de capas de un insertado son decisiones distintas
+- **#836** — Una pieza completa no equivale a una capa entre sus controles
 
 **Plotly y figuras** (133)
 
@@ -59166,6 +59168,24 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    selección automática, independencia, anidado, geometría, pasos entre tres capas,
    controles reales, reposición, original, historial, variantes y exportación.
 
+836. **Una pieza completa no equivale a una capa entre sus controles.**
+   Una tarjeta libre en el lienzo no puede intercalarse con botones de un shadow root
+   aislado cambiando sólo su z-index: el navegador apila la pieza entera. Subir/Bajar
+   detecta el grupo de controles que se superpone con la tarjeta y coloca únicamente
+   el insertado en un auxiliar de tamaño cero dentro de ese grupo. `capa.local` y su
+   destino conservan ese ámbito en el historial; ningún control real cambia de padre.
+   El anclaje al lienzo sigue siendo independiente. Una sonda propia mide el origen
+   de coordenadas fijas cuando el host tiene transform o contain, sin afectar su caja.
+   Los auxiliares son transparentes para contar capas y los insertados se resuelven
+   también en su destino local, incluidos los redibujos y la vista previa. Una nueva
+   orden de pasos sobre otro grupo usa los controles de la nueva posición. Los extremos
+   del insertado vuelven al lienzo completo; los de un control local respetan su grupo.
+   Original y la entrega conservan la distinción: el CSS del shadow root se identifica
+   como tal y la entrega declara dónde colocar el insertado sin mover los originales.
+   `test_herramientas_visuales.py` reproduce el salto de cuatro controles en el cierre
+   real y verifica un control por paso, coordenadas, historial, reposición, comparación,
+   variantes, vista previa, exportación y traslado entre grupos.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59178,7 +59198,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#835**; la próxima toma el número siguiente.
+> última regla es la **#836**; la próxima toma el número siguiente.
 
 >
 
