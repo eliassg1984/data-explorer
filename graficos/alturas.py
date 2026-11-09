@@ -79,7 +79,8 @@ VIEWPORT_OBJETIVO = 657
 # tira de 12px (`--franja-rep-reserva`), así que arriba quedan 12 + 8 de aire
 # en vez de 52. Las tarjetas suben esos 32px y el presupuesto los gana.
 # Regla #472.
-_CAB_OFFSET = 44    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
+_CAB_OFFSET = 60    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
+                    # 2026-11-09: 44 -> 60, 12 px entre la ruta y la hoja (#842)
                     # 2026-10-30: 20 -> 44, la franja siempre a la vista (#764)
                     # 2026-08-31: 80 -> 118, los 38px de la franja de reportes
                     # 2026-09-01: 118 -> 128, la franja paso de 38 a 48

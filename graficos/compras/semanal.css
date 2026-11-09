@@ -345,3 +345,42 @@ button.fi:hover { background: var(--bg-hover); }
   .amp-b { display: none; }
 }
 
+
+/* #842: los indicadores plegados en el renglón de las pestañas (boceto
+   https://claude.ai/artifact/7v7WufpmWibLs4s6TDQx54). La cápsula vive en el hueco
+   entre las pestañas y la derecha; abierta, la tira ocupa ESE hueco, encima del
+   renglón y sin cambiarle el alto: no corre el gráfico ni tapa las pestañas. */
+@media (min-width: 901px) {
+  .kz { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: flex-end; }
+  .kcap { display: flex; align-items: center; gap: 10px; max-width: 100%; height: 32px; padding: 0 6px 0 12px; overflow: hidden;
+    border: 0; border-radius: 16px; background: var(--rail-fondo); color: var(--text-primary); font: inherit; font-size: 13px;
+    white-space: nowrap; cursor: pointer; }
+  .kcap:hover { background: var(--accent-tint); }
+  .kcap .r { color: var(--text-secondary); }
+  .kcap .v { font-size: 15px; font-weight: 600; }
+  .kcap .v.sube { color: var(--danger-text, var(--danger)); }
+  .kcap .v.baja { color: var(--success-text, var(--success)); }
+  .kcap .v.aviso { color: var(--warning-text); }
+  .kcap .c { font-size: 12px; color: var(--text-secondary); }
+  .kcap .mas { display: flex; align-items: center; gap: 6px; height: 20px; padding: 0 6px 0 10px; border-left: 1px solid var(--border);
+    font-size: 12px; color: var(--text-secondary); }
+  .kcap .pto { display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px;
+    background: var(--warning); color: var(--bg-card); font-size: 11px; font-style: normal; font-weight: 600; }
+  .kz.abierta { align-self: stretch; }
+  .ktira { position: absolute; top: 50%; right: 0; left: 0; z-index: 4; transform: translateY(-50%);
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 28px; gap: 2px; height: 44px; padding: 2px; box-sizing: border-box;
+    border-radius: 10px; background: var(--rail-fondo); animation: cp-kabre .2s ease-out; }
+  @keyframes cp-kabre { from { clip-path: inset(0 0 0 70% round 10px); opacity: .4; } to { clip-path: inset(0 0 0 0 round 10px); opacity: 1; } }
+  /* La curva va en el renglon del rotulo: en el de la cifra se montaba sobre la comparacion. */
+  .ktira .kpi { padding: 3px 10px; border-radius: 8px; white-space: nowrap; }
+  .ktira .kpi .r { line-height: 16px; margin-right: 50px; }
+  .ktira .kpi > span.v, .ktira .kpi > span.d { display: inline; }
+  .ktira .kpi .v { font-size: 15px; font-weight: 600; line-height: 20px; }
+  .ktira .kpi .d { margin-left: 6px; }
+  .ktira .kpi svg { top: 5px; right: 8px; width: 42px; height: 14px; }
+  .kcerrar { border: 0; border-radius: 6px; background: none; color: var(--text-secondary); font: inherit; font-size: 14px; cursor: pointer; }
+  .kcerrar:hover { background: rgba(255, 255, 255, .55); color: var(--text-primary); }
+  .cab .como { margin-right: 4px; }
+  .cab .pop-como { top: 34px; }
+}
+@media (min-width: 901px) and (prefers-reduced-motion: reduce) { .ktira { animation: none; } }

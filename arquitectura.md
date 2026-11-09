@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-841 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+842 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (286)
+**CSS y estilos** (287)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -353,6 +353,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#839** — El piso de un contenedor es el de sus manijas, no el de una tarjeta
 - **#840** — Mover una caja con controles fijos adentro no puede usar transform
 - **#841** — La ruta va en una píldora con los bordes de la hoja: la píldora es el ::before de la franja
+- **#842** — Los indicadores de Compras › Período van plegados en el renglón de las pestañas; la franja…
 
 **Layout y alturas** (115)
 
@@ -59297,6 +59298,37 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    menú de vistas (#817) abre igual debajo de su botón.
 
 
+842. **Los indicadores de Compras › Período van plegados en el renglón de las pestañas; la franja mide 60.**
+   A pedido, comparando una captura de la app con el boceto
+   https://claude.ai/artifact/7v7WufpmWibLs4s6TDQx54: la letra de la ruta, el aire entre la
+   píldora (#841) y la hoja, y los indicadores. Tres cambios:
+   - **La ruta en 13 px**, el área en 600 y la vista en 500 (`estilos/_90_marco.py`). El
+     área iba en 17 y la vista en 13: dos tamaños en una misma ruta. La letra sigue siendo
+     DM Sans, la de la app; el boceto usaba Inter.
+   - **La franja pasa de 44 a 60 px** (`--franja-rep-alto`, `--franja-rep-reserva` y
+     `--cab-offset-contenido` en `estilos/_00_base.py`, y `_CAB_OFFSET` en
+     `graficos/alturas.py`, que `test_graficos` coteja). La píldora mide 36 y queda
+     centrada: 12 px arriba y 12 hasta la hoja, como el boceto. Con 44 quedaban 4. Centrada
+     y no pegada arriba, porque los controles de la franja (la fecha, Filtros) se ubican
+     con `(--franja-rep-alto - 30px) / 2` en una decena de reglas y siguen cayendo en su
+     centro sin tocarlas. Medido en la app local a 1323×619: píldora de 20 a 56, hoja
+     desde 68. Cada vista pierde esos 16 px de alto.
+   - **Los indicadores, plegados en el hueco del renglón de las pestañas**
+     (`graficos/compras/semanal.js`, `capsula`, y su bloque al final de `semanal.css`).
+     Plegados, una cápsula dice el que mide el gráfico, su comparación y, con un punto
+     ámbar, cuántos productos hay para revisar. Un clic abre la tira con los cuatro;
+     elegir uno la deja abierta; ✕ o Esc la pliegan (`st.kAb`, que en el Esc va después
+     de los menús y de «Cómo se calcula»). La tira es `position: absolute` dentro de ese
+     hueco, centrada sobre el renglón, así que no cambia su alto ni tapa las pestañas
+     (#465): medido, empieza 20 px a la derecha de «Documentos · 241» y el gráfico no se
+     mueve. El gráfico gana el renglón que ocupaba la fila de indicadores. La curva de
+     cada indicador va en el renglón del rótulo: en el de la cifra se montaba sobre la
+     comparación. «Cómo se calcula» baja a la fila de los controles, antes de Excel. En el
+     celular sigue la fila de siempre (`indicadores`): ahí no hay renglón libre. Los dos
+     salen de `datosKpi`, así que las cifras son las mismas. `test_compras_periodo.py` abre
+     la cápsula, comprueba que la tira no pisa las pestañas ni corre el gráfico, y que al
+     plegar dice el indicador elegido.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59309,7 +59341,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#841**; la próxima toma el número siguiente.
+> última regla es la **#842**; la próxima toma el número siguiente.
 
 >
 

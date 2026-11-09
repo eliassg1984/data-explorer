@@ -154,7 +154,9 @@ CSS = """    <style>
            El tramo de 769 a 900px se queda en 52: ahí arriba sigue habiendo
            una banda que pinta (`_40_ajuste_franja.py::before`) y el contenido
            tiene que arrancar debajo de ella. */
-        --cab-offset-contenido: 44px;
+        /* 2026-11-09: 44 -> 60, regla #842: la franja deja 12 px entre la
+           píldora de la ruta y la hoja, como el boceto. */
+        --cab-offset-contenido: 60px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -513,10 +515,12 @@ CSS = """    <style>
     }
     @media (min-width: 901px) {
         :root {
-            --franja-rep-alto: 44px;
+            /* 44 -> 60 (regla #842): la píldora de 36 queda con 12 de aire
+               arriba y abajo; los controles siguen centrados en ella. */
+            --franja-rep-alto: 60px;
             /* Reserva lo que mide: desde la regla #764 está siempre a la
                vista. Hasta ese día reservaba 12 y aparecía con el cursor. */
-            --franja-rep-reserva: 44px;
+            --franja-rep-reserva: 60px;
             --rail-der-w: 248px;
             /* 68 -> 80 el 2026-09-29 (regla #568): íconos de 24px con su
                nombre DEBAJO, en botones de 72x56 — las medidas del riel de

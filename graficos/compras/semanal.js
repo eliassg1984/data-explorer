@@ -560,7 +560,7 @@ const G = window.__cpPer || (window.__cpPer = { st: null, F: null, raiz: null })
 G.tandas = G.tandas || {};
 const estadoInicial = () => ({ gran: 'Semana', fam: [], sub: [], prov: [], prod: [], docu: 'Todos', montos: 'Sin IGV',
   partir: FAM, res: { [FAM]: null, [SUB]: null, [PROV]: null, [PRECIO]: null }, modo: 'Resumen Total', foco: null, doc: null, provDet: null, menu: null, q: {}, orden: {}, ctx: '',
-  filtrosAbiertos: false, lectura: null, zona: 'graf', med: 'valor', contra: 'ano', item: null });
+  filtrosAbiertos: false, lectura: null, zona: 'graf', med: 'valor', contra: 'ano', item: null, kAb: false });
 // Los tonos de «Partir por», del acento al gris, en el orden de la lista.
 const TONOS = ['var(--cp-t0)', 'var(--cp-t1)', 'var(--cp-t2)', 'var(--cp-t3)', 'var(--cp-t4)', 'var(--cp-t5)'];
 const colorParte = (V, k) => (/^(Otras|Otros) \(/.test(V.partes[k][0]) ? 'var(--cp-otro)' : G.st.partir === PRECIO ? V.partes[k][1] : TONOS[k % TONOS.length]);
@@ -970,8 +970,11 @@ function nivel2(F, V, st) {
     + '<dt>Efecto del precio</dt><dd>Lo pagado menos lo que hubiera costado al precio habitual (la mediana de los 90 días anteriores), producto por producto, sin las compras para revisar.</dd>'
     + '<dt>Para revisar</dt><dd>Una compra de S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o con decimales en una unidad entera.</dd>'
     + '<dt>Documento</dt><dd>«Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito. Sólo esta tarjeta.</dd></dl><p>Es un cálculo propio, no un estándar.</p></div>' : '';
+  G.comoHtml = `<span class="como"><button class="link" data-acc="como" aria-expanded="${!!st.como}">Cómo se calcula</button>${como}</span>`;
+  const movil = esMovil();
   return `<div class="n2"><div class="tabs" role="tablist">${zonas.map(([k, t]) => `<button role="tab" class="${k === st.zona ? 'on' : ''}" data-acc="zona" data-v="${k}" aria-selected="${k === st.zona}">${t}</button>`).join('')}</div>`
-    + `<div class="n2-der"><span class="como"><button class="link" data-acc="como" aria-expanded="${!!st.como}">Cómo se calcula</button>${como}</span></div></div>`;
+    + (movil || !V || V.vacio ? '' : capsula(F, V, st))
+    + `<div class="n2-der">${movil ? G.comoHtml : ''}</div></div>`;
 }
 function cabecera(F, V, st) {
   const activos = FILTROS.filter(([k]) => st[k].length).length + (st.docu !== 'Todos' ? 1 : 0) + (st.montos !== 'Sin IGV' ? 1 : 0);
@@ -987,7 +990,7 @@ function cabecera(F, V, st) {
     + `<div class="ms"><button class="ms-b${nMas ? ' on' : ''}" data-acc="menu" data-v="fil" aria-expanded="${st.menu === 'fil'}" title="${local ? '' : 'Subfamilia, '}Proveedor, producto, documento y montos">Más filtros${nMas ? ` · ${nMas}` : ''} <i>▾</i></button>${st.menu === 'fil' ? `<div class="ms-l ancho">${dentro.map(seccion).join('')}<h4>Documento</h4><div class="seg chico">${DOCUS.map((k) => `<button class="${k === st.docu ? 'on' : ''}" data-acc="docu" data-v="${k}">${k}</button>`).join('')}</div><h4>Montos</h4><div class="seg chico">${MONTOS.map((k) => `<button class="${k === st.montos ? 'on' : ''}" data-acc="montos" data-v="${k}">${k}</button>`).join('')}</div><p class="mas">«Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito. Sólo esta tarjeta.</p></div>` : ''}</div>`;
   return `<div class="cab"><span class="lugar-fecha" aria-hidden="true"></span>`
     + `<button class="filtros-toggle" data-acc="panel-filtros" aria-expanded="${!!st.filtrosAbiertos}">Filtros${activos ? ` · ${activos} activo${activos === 1 ? '' : 's'}` : ''} <span aria-hidden="true">${st.filtrosAbiertos ? '▴' : '▾'}</span></button>`
-    + `<div class="fils">${fil}</div>${menusVista(F, V, st)}<span class="esp"></span><button class="excel" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div>`
+    + `<div class="fils">${fil}</div>${menusVista(F, V, st)}<span class="esp"></span>${esMovil() ? '' : G.comoHtml || ''}<button class="excel" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div>`
     + `<div class="filtro-estado"><span>${esc(st.docu)} · ${esc(st.montos)}</span>`
     + FILTROS.filter(([k]) => st[k].length).map(([k, rot]) => `<button data-acc="limpiar" data-v="${k}" aria-label="Quitar filtro de ${rot}">${rot}: ${esc(st[k].length === 1 ? st[k][0] : st[k].length)} ×</button>`).join('')
     + (activos ? '<button data-acc="restablecer">Limpiar filtros</button>' : '') + '</div>';
@@ -1000,7 +1003,7 @@ function curvaKpi(xs) {
   const a = Math.min(...xs), b = Math.max(...xs), r = b - a || 1;
   return `<svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><polyline points="${xs.map((x, i) => `${(i * 100 / (xs.length - 1)).toFixed(1)},${(31 - (x - a) / r * 28).toFixed(1)}`).join(' ')}"/></svg>`;
 }
-function indicadores(F, V, st) {
+function datosKpi(F, V, st) {
   const tot = suma(V.tot, (x) => x), docs = new Set(V.dd.map((l) => l.compra)).size, provs = new Set(V.dd.map((l) => l.prov)).size;
   // La curva de doce meses mide los filtros de la página: con otro filtro no.
   const propios = FILTROS.some(([k]) => st[k].length) || st.docu !== 'Todos' || st.montos !== 'Sin IGV';
@@ -1009,11 +1012,33 @@ function indicadores(F, V, st) {
   const vs = V.contraTot == null ? (st.contra === 'no' ? 'sin comparar' : 'sin datos para comparar')
     : V.contraTot > 0 ? (() => { const [t, cl] = fmtVariacion((tot - V.contraTot) / V.contraTot * 100); return `${esc(flecha(t))} contra ${esc(V.contraNom)}`; })() : `sin compras en ${esc(V.contraNom)}`;
   const E = V.efecto, neto = E.up + E.dn;
-  const kp = (m, rot, val, sub, curva, tip, cls = '') => `<button class="kpi${st.med === m ? ' on' : ''}" data-acc="medida" data-v="${m}" aria-pressed="${st.med === m}" title="${esc(tip)}">${curvaKpi(curva)}<span class="r">${esc(rot)}</span><span class="v ${cls}">${esc(val)}</span><span class="d">${sub}</span></button>`;
-  return `<div class="kpis">${kp('valor', `Compra · ${nFam}`, fS0(tot), vs, c(1), 'Valor comprado en el rango, con las notas de crédito ya restadas.')}`
-    + kp('docs', 'Documentos', num(docs, 0), `${esc(fS0(docs ? tot / docs : 0))} por documento · ${num(provs, 0)} proveedores`, c(2), 'Comprobantes distintos en el rango.')
-    + kp('precio', 'Efecto del precio', fD0(neto), `${num(E.nUp, 0)} subieron ${esc(fD0(E.up))} · ${num(E.nDn, 0)} bajaron ${esc(fD0(E.dn))}`, c(3), 'Lo pagado menos lo que hubiera costado al precio habitual (la mediana de los 90 días anteriores), producto por producto, sin las compras para revisar.', neto > 0.5 ? 'sube' : neto < -0.5 ? 'baja' : '')
-    + kp('revisar', 'Para revisar', `${num(V.revProd, 0)} producto${V.revProd === 1 ? '' : 's'}`, `${num(V.revLin, 0)} compra${V.revLin === 1 ? '' : 's'} por ${esc(fS0(V.revVal))} · no entran en el precio`, c(4), 'Una compra de S/ 50 o más a 2,5 veces su precio habitual o a menos de 0,4, o con decimales en una unidad que se cuenta entera.', V.revProd ? 'aviso' : '') + '</div>';
+  // `corto`: lo que dice la cápsula plegada y la tira abierta (#842); `sub`, la fila del celular.
+  const vsCorto = V.contraTot > 0 ? esc(flecha(fmtVariacion((tot - V.contraTot) / V.contraTot * 100)[0])) : '';
+  return [
+    { m: 'valor', rot: `Compra · ${nFam}`, nom: 'Compra', val: fS0(tot), sub: vs, corto: vsCorto, curva: c(1), tip: `Valor comprado en el rango, con las notas de crédito ya restadas.${V.contraTot > 0 ? ` Contra ${V.contraNom}.` : ''}` },
+    { m: 'docs', rot: 'Documentos', nom: 'Documentos', val: num(docs, 0), sub: `${esc(fS0(docs ? tot / docs : 0))} por documento · ${num(provs, 0)} proveedores`, corto: `${esc(fS0(docs ? tot / docs : 0))} c/u`, curva: c(2), tip: `Comprobantes distintos en el rango, de ${num(provs, 0)} proveedores.` },
+    { m: 'precio', rot: 'Efecto del precio', nom: 'Efecto del precio', val: fD0(neto), sub: `${num(E.nUp, 0)} subieron ${esc(fD0(E.up))} · ${num(E.nDn, 0)} bajaron ${esc(fD0(E.dn))}`, corto: `${num(E.nUp, 0)} subieron`, curva: c(3), tip: `Lo pagado menos lo que hubiera costado al precio habitual (la mediana de los 90 días anteriores), producto por producto, sin las compras para revisar. ${num(E.nUp, 0)} subieron ${fD0(E.up)} y ${num(E.nDn, 0)} bajaron ${fD0(E.dn)}.`, cls: neto > 0.5 ? 'sube' : neto < -0.5 ? 'baja' : '' },
+    { m: 'revisar', rot: 'Para revisar', nom: 'Para revisar', val: `${num(V.revProd, 0)} producto${V.revProd === 1 ? '' : 's'}`, sub: `${num(V.revLin, 0)} compra${V.revLin === 1 ? '' : 's'} por ${esc(fS0(V.revVal))} · no entran en el precio`, corto: `${num(V.revLin, 0)} compra${V.revLin === 1 ? '' : 's'}`, curva: c(4), tip: `Una compra de S/ 50 o más a 2,5 veces su precio habitual o a menos de 0,4, o con decimales en una unidad que se cuenta entera. ${num(V.revLin, 0)} compras por ${fS0(V.revVal)}: no entran en el precio.`, cls: V.revProd ? 'aviso' : '', n: V.revProd },
+  ];
+}
+const botonKpi = (st, k, sub) => `<button class="kpi${st.med === k.m ? ' on' : ''}" data-acc="medida" data-v="${k.m}" aria-pressed="${st.med === k.m}" title="${esc(k.tip)}">${curvaKpi(k.curva)}<span class="r">${esc(k.rot)}</span><span class="v ${k.cls || ''}">${esc(k.val)}</span><span class="d">${sub}</span></button>`;
+// La fila de siempre: en el celular, donde no hay renglón libre para la cápsula.
+function indicadores(F, V, st) {
+  return `<div class="kpis">${datosKpi(F, V, st).map((k) => botonKpi(st, k, k.sub)).join('')}</div>`;
+}
+// #842: en escritorio los indicadores van plegados en el renglón de las pestañas,
+// que estaba casi vacío. Plegada, la cápsula dice qué mide el gráfico y con qué
+// se compara, y avisa lo que hay para revisar. Abierta, la tira ocupa ese mismo
+// hueco hacia la izquierda: no tapa las pestañas ni corre nada (#465).
+function capsula(F, V, st) {
+  const ks = datosKpi(F, V, st), k = ks.find((x) => x.m === st.med) || ks[0], rev = ks[3].n;
+  if (!st.kAb) {
+    return `<div class="kz"><button class="kcap" data-acc="kpis" aria-expanded="false" title="Ver los cuatro indicadores">`
+      + `<span class="r">${esc(k.nom)}</span><span class="v ${k.cls || ''}">${esc(k.val)}</span>${k.corto ? `<span class="c">${k.corto}</span>` : ''}`
+      + `<span class="mas">${rev && k.m !== 'revisar' ? `<i class="pto" title="${num(rev, 0)} para revisar">${num(rev, 0)}</i>` : ''}3 más ‹</span></button></div>`;
+  }
+  return `<div class="kz abierta"><div class="ktira" role="group" aria-label="Indicadores">${ks.map((x) => botonKpi(st, x, x.corto)).join('')}`
+    + '<button class="kcerrar" data-acc="kpis" aria-expanded="true" title="Plegar (Esc)" aria-label="Plegar los indicadores">✕</button></div></div>';
 }
 // ── La lista del costado ─────────────────────────────────────────────────
 const campoParte = (st) => ({ [FAM]: 'fam', [SUB]: 'sub', [PROV]: 'prov' }[st.partir] || null);
@@ -1078,7 +1103,7 @@ function pintar() {
     raiz.innerHTML = html + `<div class="vacio grande"><b>${esc(V.titulo)}</b> — sin compras que mostrar. Ampliá el rango de fechas o soltá algún filtro de la tarjeta.</div>`;
     return;
   }
-  html += indicadores(F, V, st);
+  if (esMovil()) html += indicadores(F, V, st);
   const nomFoco = st.foco != null && V.ix.has(st.foco) ? (V.gran === 'Día' ? V.hov[V.ix.get(st.foco)] : (V.rotDe.get(st.foco) || [st.foco, st.foco])[1]).replace(/<[^>]+>/g, '') : null;
   const quitar = nomFoco ? `<button class="quita" data-acc="quita-foco">Ver todo el rango ✕</button>` : '';
   let izq, panel = panelLista(F, V, st);
@@ -1181,6 +1206,7 @@ function accion(acc, val, el) {
     st[k] = el.checked ? [...xs, val] : xs.filter((x) => x !== val);
   } else if (acc === 'limpiar') { st[val] = []; }
   else if (acc === 'medida') { st.med = val; st.item = null; }
+  else if (acc === 'kpis') st.kAb = !st.kAb;
   else if (acc === 'zona') { st.zona = val; if (val === 'tabla' && st.modo === 'Detalle') st.modo = 'Resumen Total'; }
   else if (acc === 'quita-foco') { st.foco = null; st.doc = null; }
   else if (acc === 'item') { const k = Number(val), igual = st.item === k; st.item = igual ? null : k; const nom = igual ? null : nombreParte(G.F, st, k); st.res[st.partir] = nom != null && V.opsRes.includes(nom) ? nom : null; }
@@ -1247,7 +1273,7 @@ function enlazar(raiz) {
     const avisar = () => { if (G.pagina) { const v = G.pagina; G.pagina = null; G.enviar?.('familias', v); } };
     document.addEventListener('keydown', (ev) => {
       if (ev.key !== 'Escape' || !G.st || !G.raiz || !G.raiz.isConnected) return;
-      if (G.st.menu) { G.st.menu = null; pintar(); avisar(); } else if (G.st.como) { G.st.como = false; pintar(); } else if (G.st.amp) { G.st.amp = null; pintar(); }
+      if (G.st.menu) { G.st.menu = null; pintar(); avisar(); } else if (G.st.como) { G.st.como = false; pintar(); } else if (G.st.kAb) { G.st.kAb = false; pintar(); } else if (G.st.amp) { G.st.amp = null; pintar(); }
     });
     document.addEventListener('pointerdown', (ev) => {
       if (!G.st || !G.st.menu) return;

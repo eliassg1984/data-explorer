@@ -965,6 +965,18 @@ CSS = """
         .franja-ruta[data-franja-nombre] .fr-grupo-boton {
             margin-left: -8px;
         }
+        /* #842: la letra del boceto. El área iba en 17 px y la vista en 13:
+           ahora los dos niveles en 13, el área en negrita (600) y la vista
+           en 500, como cualquier ruta. */
+        .st-key-nav_franja_rep .barra-nom,
+        .franja-ruta[data-franja-nombre] .fr-grupo {
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .franja-ruta[data-franja-compacta] .fr-vista {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
     }
     @media (max-width: 900px) {
         html body .st-key-aj_tiempo_cabecera {

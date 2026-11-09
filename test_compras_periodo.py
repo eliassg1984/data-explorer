@@ -345,13 +345,33 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             pg.add_style_tag(content=(Path(sm.__file__).parent / "semanal.css").read_text(encoding="utf-8"))
             pg.add_script_tag(content=_JS.replace("export default function (component)", "window.__montar = function (component)"))
             pg.evaluate("""P => { window.__avisos = []; window.__montar({data: P, parentElement: document.querySelector('#pieza'), setTriggerValue: (k, v) => window.__avisos.push([k, v])}); }""", P)
-            pg.wait_for_selector(".kpi")
+            # #842: los indicadores abren plegados en el renglón de las pestañas.
+            pg.wait_for_selector(".kcap")
+            self.assertEqual(pg.locator(".kpi").count(), 0)
+            self.assertIn("Compra", pg.locator(".kcap").inner_text())
+            alto_n2 = pg.evaluate("document.querySelector('.n2').getBoundingClientRect().height")
+            y_graf = pg.evaluate("document.querySelector('.graf').getBoundingClientRect().top")
+            pg.locator(".kcap").click()
             self.assertEqual(pg.locator(".kpi").count(), 4)
+            # Abierta no tapa las pestañas ni corre nada.
+            self.assertGreaterEqual(pg.evaluate("document.querySelector('.ktira').getBoundingClientRect().left"),
+                                    pg.evaluate("document.querySelector('.tabs').getBoundingClientRect().right"))
+            self.assertEqual(pg.evaluate("document.querySelector('.n2').getBoundingClientRect().height"), alto_n2)
+            self.assertEqual(pg.evaluate("document.querySelector('.graf').getBoundingClientRect().top"), y_graf)
             self.assertIn("Fuera de esta cuenta", pg.locator(".fuera").inner_text())
             for m in ("docs", "precio", "revisar", "valor"):
                 pg.locator(f'.kpi[data-v="{m}"]').click()
                 self.assertEqual(pg.locator(f'.kpi[data-v="{m}"].on').count(), 1)
                 self.assertGreater(pg.locator(".graf svg").count(), 0)
+            # Plegada con Esc, dice el elegido; con otro, el suyo.
+            pg.locator('.kpi[data-v="docs"]').click()
+            pg.keyboard.press("Escape")
+            self.assertEqual(pg.locator(".kpi").count(), 0)
+            self.assertIn("Documentos", pg.locator(".kcap").inner_text())
+            pg.locator(".kcap").click()
+            pg.locator('.kpi[data-v="valor"]').click()
+            pg.locator(".kcerrar").click()
+            self.assertIn("Compra", pg.locator(".kcap").inner_text())
             # Una pantalla: la pieza no pide scroll.
             self.assertLessEqual(pg.evaluate("document.querySelector('.cpp').getBoundingClientRect().bottom"), 680)
             # Con una tabla ancha: se desliza en su zona y no se mete en el panel.
