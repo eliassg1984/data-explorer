@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-837 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+838 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (282)
+**CSS y estilos** (283)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -349,6 +349,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 - **#836** — Una pieza completa no equivale a una capa entre sus controles
 - **#837** — Un control de pieza sin clase propia se ancla por sus atributos, no por su estado
+- **#838** — Mover una sección de la pila corre su encaje: se compensa con scroll-margin-top
 
 **Layout y alturas** (115)
 
@@ -59208,6 +59209,30 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    y al cambiar de pestaña, el id sin destino guardado, el CSS reproducido y la pestaña
    que sigue cambiando de vista fuera de Diseño.
 
+838. **Mover una sección de la pila corre su encaje: se compensa con `scroll-margin-top`.**
+   Reportado con captura en Compras › Período: al bajar la tarjeta con Diseño no bajaba,
+   y la de abajo subía. `.stMain` encaja (`scroll-snap-type: y mandatory`, #533) y cada
+   sección `_sec_` es un punto de encaje; Chrome lo mide con la caja TRANSFORMADA y con su
+   margen. Medido en la app local: arrastrar 120 px dejó `translateY(120px)` y llevó
+   `scrollTop` de 2 a 122. El navegador volvía a encajar la sección y la página la
+   seguía: la tarjeta quedaba quieta y «Ranking de proveedores» subía 120 px. La manija
+   de arriba, que corre el borde con `margin-top` (#429), hacía lo mismo: de ahí el
+   `margin-top: 45px` de la captura. En `_diseno_js.py`, `compensarEncaje` pone en el
+   elemento `scroll-margin-top` = el original + `translateY` + lo que cambió `margin-top`
+   (los originales salen de `recordarNodo`, antes del primer cambio). Así el punto de
+   encaje no se mueve: la página se queda y la tarjeta se ve donde se la soltó, hacia
+   abajo o hacia arriba (un `scroll-margin` negativo vale), también la primera sección,
+   que no puede encajar por encima de `scrollTop` 0. Corre en `aplicarTransform` (arrastre,
+   flechas, campos, alinear, el reaplicado de cada tick) y en `establecerCambio` de
+   `margin-top`/`margin`. Escribe sólo si cambió y se restaura al volver a cero, con
+   Original y al salir. Sólo actúa si el elemento mismo es un punto de encaje en Y
+   (`encajaEnY`): mover un contenedor que envuelve varias secciones no se compensa. El CSS
+   copiado lleva el mismo `scroll-margin-top`, con un comentario: sin él, pegado en la app,
+   la página seguiría a la tarjeta. `test_herramientas_visuales.py` monta una pila que
+   encaja y comprueba bajar, subir, deshacer, la manija de arriba, que lo que no encaja
+   no lleva `scroll-margin`, y que el CSS copiado hace lo mismo pegado y no sin esa línea.
+   Las dos pruebas fallan con el editor anterior.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59220,7 +59245,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#837**; la próxima toma el número siguiente.
+> última regla es la **#838**; la próxima toma el número siguiente.
 
 >
 

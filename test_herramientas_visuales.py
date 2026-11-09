@@ -971,6 +971,93 @@ class HerramientasVisuales(unittest.TestCase):
         tab('comparar').press('Enter')
         self.assertEqual(self.page.evaluate('__ajCierre.st.tab'), 'comparar')
 
+    def montar_pila_que_encaja(self):
+        # La pila de la app (regla #533): un contenedor con scroll-snap y
+        # secciones `_sec_` que encajan al tope, con scroll-padding.
+        self.page.evaluate('''()=>{
+            const pila=document.createElement('div'); pila.className='pila-prueba';
+            pila.style.cssText='position:fixed;top:40px;left:260px;width:760px;height:520px;overflow-y:auto;'
+                +'scroll-snap-type:y mandatory;scroll-padding-top:20px;background:rgb(235,235,245)';
+            ['a','b','c'].forEach(k=>{
+                const s=document.createElement('div'); s.className='st-key-pila_sec_'+k; s.textContent='Sección '+k;
+                s.style.cssText='scroll-snap-align:start;height:480px;margin:16px 24px;background:rgb(255,255,255)';
+                pila.appendChild(s);
+            });
+            document.body.appendChild(pila);
+            pila.scrollTop=document.querySelector('.st-key-pila_sec_b').offsetTop-20;
+        }''')
+        self.page.wait_for_timeout(200)
+
+    def medir_pila(self):
+        return self.page.evaluate('''()=>{const p=document.querySelector('.pila-prueba'),
+            r=k=>Math.round(document.querySelector('.st-key-pila_sec_'+k).getBoundingClientRect().top);
+            return {scroll:Math.round(p.scrollTop), b:r('b'), c:r('c'),
+                smt:getComputedStyle(document.querySelector('.st-key-pila_sec_b')).scrollMarginTop};}''')
+
+    def arrastrar(self, selector, dy):
+        caja = self.page.locator(selector).bounding_box()
+        x, y = caja['x'] + caja['width'] / 2, caja['y'] + caja['height'] / 2
+        self.page.mouse.move(x, y)
+        self.page.mouse.down()
+        self.page.mouse.move(x, y + dy, steps=8)
+        self.page.mouse.up()
+        self.page.wait_for_timeout(250)
+
+    def test_mover_una_seccion_que_encaja_no_arrastra_la_pagina(self):
+        # Regla #838: Chrome mide el encaje con la caja transformada; sin
+        # compensar, bajar la tarjeta desplazaba la página lo mismo y la
+        # tarjeta de abajo subía.
+        self.montar_pila_que_encaja()
+        antes = self.medir_pila()
+        self.pin('pila_sec_b')
+        self.arrastrar('#el-diseno-mover', 80)
+        bajada = self.medir_pila()
+        self.assertEqual(bajada['scroll'], antes['scroll'])
+        self.assertAlmostEqual(bajada['b'], antes['b'] + 80, delta=1)
+        self.assertEqual(bajada['c'], antes['c'])
+        self.assertEqual(bajada['smt'], '80px')
+        self.arrastrar('#el-diseno-mover', -120)
+        subida = self.medir_pila()
+        self.assertEqual(subida['scroll'], antes['scroll'])
+        self.assertAlmostEqual(subida['b'], antes['b'] - 40, delta=1)
+        self.assertEqual(subida['smt'], '-40px')
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.page.wait_for_timeout(250)
+        self.assertEqual(self.medir_pila(), bajada)
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        css = '\n'.join(re.findall(r'```css\n(.*?)\n```', entrega, re.S))
+        self.assertIn('scroll-margin-top: 80px', css)
+        self.assertIn('translate(0px,80px)', css)
+        # Pegado en la app, el CSS hace lo que se vio; sin el
+        # scroll-margin-top, la página sigue a la tarjeta.
+        self.page.get_by_role('button', name=re.compile('Diseño$')).click()
+        self.page.evaluate('''css=>{const b=document.querySelector('.st-key-pila_sec_b');
+            b.style.removeProperty('transform'); b.style.removeProperty('scroll-margin-top');
+            const e=document.createElement('style'); e.id='css-copiado'; e.textContent=css; document.head.appendChild(e);}''', css)
+        self.page.wait_for_timeout(250)
+        pegado = self.medir_pila()
+        self.assertEqual(pegado['scroll'], antes['scroll'])
+        self.assertAlmostEqual(pegado['b'], antes['b'] + 80, delta=1)
+        self.page.evaluate('''()=>{const e=document.getElementById('css-copiado');
+            e.textContent=e.textContent.replace(/scroll-margin-top:[^;]*;/,'');}''')
+        self.page.wait_for_timeout(250)
+        self.assertEqual(self.medir_pila()['scroll'], antes['scroll'] + 80)
+
+    def test_borde_de_arriba_de_una_seccion_que_encaja_no_sube_la_siguiente(self):
+        self.montar_pila_que_encaja()
+        antes = self.medir_pila()
+        self.pin('pila_sec_b')
+        self.arrastrar('#el-diseno-rh-n', 45)
+        despues = self.medir_pila()
+        self.assertEqual(despues['scroll'], antes['scroll'])
+        self.assertAlmostEqual(despues['b'], antes['b'] + 45, delta=1)
+        self.assertEqual(despues['c'], antes['c'])
+        self.assertEqual(despues['smt'], '45px')
+        # Lo que no encaja no lleva scroll-margin.
+        self.pin('a')
+        self.arrastrar('#el-diseno-mover', 30)
+        self.assertEqual(self.page.evaluate("document.querySelector('.st-key-a').style.getPropertyValue('scroll-margin-top')"), '')
+
     def test_barra_arrastrable_y_plegable_conserva_diseno_activo(self):
         antes = self.page.locator('#herr-barra').bounding_box()
         self.mover_barra(300, 200)

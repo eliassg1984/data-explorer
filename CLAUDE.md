@@ -2517,6 +2517,9 @@ conservan el anclaje al lienzo y no saltan delante/detrás del reporte entero (#
 Un control de pieza sin clase propia (las pestañas del cierre) se fija por sus
 `data-*`, no por `.selected` ni por su contenedor: el sub-pin es entonces un
 selector `[data-act="tab"][data-v="familias"]`, también en el CSS copiado (#837).
+Mover una sección de la pila (o correr su borde de arriba) corre su punto de encaje y
+la página la seguía: el editor lo compensa con `scroll-margin-top`, que también va en
+el CSS copiado (#838).
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del

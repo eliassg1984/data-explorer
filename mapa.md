@@ -94,6 +94,8 @@ Sobre controles agrupados en una pieza, los pasos usan un ámbito local para des
 un control por pulsación; el anclaje al lienzo y las cajas nativas se conservan (#836).
 Un control de pieza sin clase propia se selecciona por sus atributos (`data-*`,
 `name`, `aria-label`), nunca por una clase de estado como `selected` (#837).
+Mover una sección que encaja en la pila no desplaza la página: Diseño compensa su
+punto de encaje con `scroll-margin-top` y lo incluye en el CSS copiado (#838).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|

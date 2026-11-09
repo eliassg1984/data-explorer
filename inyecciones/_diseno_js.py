@@ -1794,6 +1794,9 @@ JS = """
                 registro.cambios[prop] = valor;
                 elemento.style.setProperty(prop, valor, 'important');
             }
+            // La manija de arriba corre el borde con `margin-top` (#429): en
+            // una seccion de la pila eso tambien corre su encaje (#838).
+            if (prop === 'margin-top' || prop === 'margin') compensarEncaje(elemento, registro);
         }
 
         // El hijo no puede salir de la capa de su contenedor (#270).
@@ -2361,6 +2364,71 @@ JS = """
             }
         }
 
+        // ── Encaje de la pila (regla #838) ───────────────────────────────
+        // Desde la regla #533 `.stMain` encaja (`scroll-snap-type: y
+        // mandatory`) y cada seccion `_sec_` es un punto de encaje. Chrome
+        // mide ese punto con la caja TRANSFORMADA y con su margen: bajar
+        // «Compras por periodo» 120 px corria su punto de encaje y el
+        // navegador volvia a encajarla desplazando la pagina 120 px
+        // (medido: scrollTop 2 -> 122). La tarjeta quedaba quieta y la de
+        // abajo subia. La manija de arriba hacia lo mismo con su
+        // `margin-top`. Se compensa con `scroll-margin-top`: el punto de
+        // encaje vuelve a su lugar, la tarjeta se ve donde se la solto y
+        // el CSS copiado lo reproduce en la app.
+        function contenedorDeEncajeY(el) {
+            for (var cur = padreCompuesto(el); cur; cur = padreCompuesto(cur)) {
+                var tipo = (win.getComputedStyle(cur).scrollSnapType || 'none').split(' ');
+                if (tipo.indexOf('y') !== -1 || tipo.indexOf('block') !== -1 || tipo.indexOf('both') !== -1) return cur;
+            }
+            return null;
+        }
+        function encajaEnY(el) {
+            if (!el || !el.ownerDocument || el.ownerDocument !== doc) return false;
+            var alin = (win.getComputedStyle(el).scrollSnapAlign || 'none').split(' ')[0];
+            return alin !== 'none' && !!contenedorDeEncajeY(el);
+        }
+        // Cuanto se corrio el borde de arriba: el desplazamiento y lo que
+        // cambio `margin-top` contra el original (`recordarNodo` lo guarda
+        // antes del primer cambio). Sale del registro y no del DOM, para que
+        // la entrega de otra variante use sus propios numeros.
+        function desplazamientoDeEncaje(elemento, registro) {
+            var dy = (registro.transformState && registro.transformState.translateY) || 0;
+            var cambios = registro.cambios || {};
+            var mt = cambios['margin-top'];
+            if (mt === undefined && cambios.margin !== undefined) mt = String(cambios.margin).trim().split(' ')[0];
+            var original = recordarNodo(elemento), dm = 0;
+            if (mt !== undefined && /px$/.test(String(mt)) && original) {
+                dm = parseFloat(mt) - (parseFloat(original.computado['margin-top']) || 0);
+            }
+            return Math.round((dy + dm) * 100) / 100;
+        }
+        // Primero la cuenta del registro (gratis) y despues el estilo: corre
+        // en el reaplicado de cada tick para todo lo editado.
+        function scrollMarginDeEncaje(elemento, registro) {
+            var mover = desplazamientoDeEncaje(elemento, registro);
+            if (!mover || !encajaEnY(elemento)) return null;
+            var original = recordarNodo(elemento);
+            var base = original ? (parseFloat(original.computado['scroll-margin-top']) || 0) : 0;
+            return (base + mover) + 'px';
+        }
+        // Escribe solo si el valor cambio (un tick que reescribe lo mismo no
+        // es gratis, CLAUDE.md «Adentro de un :has()»).
+        function compensarEncaje(elemento, registro) {
+            if (!elemento || !elemento.style) return;
+            var rt = win.__disenoRuntime;
+            if (!rt.encajados) rt.encajados = new WeakSet();
+            var valor = scrollMarginDeEncaje(elemento, registro);
+            if (valor) {
+                if (elemento.style.getPropertyValue('scroll-margin-top') !== valor) {
+                    elemento.style.setProperty('scroll-margin-top', valor, 'important');
+                }
+                rt.encajados.add(elemento);
+            } else if (rt.encajados.has(elemento)) {
+                restaurarPropiedad(elemento, 'scroll-margin-top');
+                rt.encajados.delete(elemento);
+            }
+        }
+
         function aplicarTransform(elemento, registro) {
             recordarOriginales(elemento, registro);
             var t = registro.transformState;
@@ -2384,6 +2452,7 @@ JS = """
                     registro.transformInline = false;
                 }
             }
+            compensarEncaje(elemento, registro);
         }
 
         // ── Gráficos y tablas: redimensionar el contenedor NO ALCANZA ──────
@@ -3874,6 +3943,10 @@ JS = """
                 geo.transform = 'translate(' + t.translateX + 'px,' + t.translateY + 'px) rotate(' + t.rotateDeg + 'deg)';
                 if (registro.transformInline && !geo.display) geo.display = 'inline-block';
             }
+            // Sin esto, pegado en la app el encaje de la pila se lleva el
+            // desplazamiento: la pagina sigue a la tarjeta (#838).
+            var encajeCSS = scrollMarginDeEncaje(elemento, registro);
+            if (encajeCSS) geo['scroll-margin-top'] = encajeCSS;
 
             // Agrupar por selector (no por grupo geo/boton/texto): cuando
             // dos grupos terminan en el MISMO selector (el caso comun, sin
@@ -3918,6 +3991,10 @@ JS = """
             var pie = notas.length
                 ? '\\n/* ' + notas.join(' — ') + ' — ver destinosDeEstilo()/extenderATexto() en _diseno_js.py */'
                 : '';
+            if (encajeCSS) {
+                pie += '\\n/* scroll-margin-top compensa el encaje de la pila: sin él la página'
+                    + ' sigue a la tarjeta y no se ve movida (regla #838). */';
+            }
 
             var encabezado = '/* copiado del modo diseño — ' + key + (sub ? ' ' + textoSub(sub) : '') + ' */';
             if (dentroPieza) {
