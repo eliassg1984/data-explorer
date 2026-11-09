@@ -3462,17 +3462,19 @@ JS = """
             doc.addEventListener('mouseup', onUp);
         }
 
-        // La proteccion de 60x40 corresponde a un contenedor completo, no
-        // a sus controles internos: un buscador puede medir 32px de origen.
-        // Las piezas y controles pequenos se pueden afinar hasta 8px; las
-        // lineas/barras/espacios insertados conservan su piso de 1px (#342).
+        // El piso de un contenedor completo existe para que no quede debajo
+        // de sus propias manijas (#342): las de arriba y abajo miden 9px y
+        // dejan de pisarse desde 10px. Era 60x40, medido sobre tarjetas, y
+        // dejaba a la franja de 44px bajar sólo 4 (#839): 32x16. Las piezas
+        // y controles pequenos se pueden afinar hasta 8px (#829); las
+        // lineas/barras/espacios insertados conservan su piso de 1px.
         function pisoResize(el) {
             var t = el.getAttribute && el.getAttribute('data-diseno-mock');
             if (t === 'linea' || t === 'barra' || t === 'espacio') return { ancho: 8, alto: 1 };
             var control = el.matches && el.matches('input, textarea, select, button');
             var tieneKey = Array.prototype.some.call(el.classList || [], function(c) { return c.indexOf('st-key-') === 0; });
             if (control || enPieza(el) || !tieneKey) return { ancho: 8, alto: 8 };
-            return { ancho: 60, alto: 40 };
+            return { ancho: 32, alto: 16 };
         }
 
         function prepararRedimensionado(ctx, eje) {

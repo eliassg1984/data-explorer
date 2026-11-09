@@ -2520,6 +2520,8 @@ selector `[data-act="tab"][data-v="familias"]`, también en el CSS copiado (#837
 Mover una sección de la pila (o correr su borde de arriba) corre su punto de encaje y
 la página la seguía: el editor lo compensa con `scroll-margin-top`, que también va en
 el CSS copiado (#838).
+Al arrastrar, un contenedor con key baja hasta 32×16 px (antes 60×40, que no dejaba
+afinar la franja de 44 px); controles internos, 8 px; líneas insertadas, 1 px (#839).
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del

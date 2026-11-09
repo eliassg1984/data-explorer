@@ -96,6 +96,7 @@ Un control de pieza sin clase propia se selecciona por sus atributos (`data-*`,
 `name`, `aria-label`), nunca por una clase de estado como `selected` (#837).
 Mover una sección que encaja en la pila no desplaza la página: Diseño compensa su
 punto de encaje con `scroll-margin-top` y lo incluye en el CSS copiado (#838).
+El piso al arrastrar un contenedor con key es 32×16 px, el de sus manijas (#839).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|

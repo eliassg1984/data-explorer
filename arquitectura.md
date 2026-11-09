@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-838 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+839 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (283)
+**CSS y estilos** (284)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -350,6 +350,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#836** — Una pieza completa no equivale a una capa entre sus controles
 - **#837** — Un control de pieza sin clase propia se ancla por sus atributos, no por su estado
 - **#838** — Mover una sección de la pila corre su encaje: se compensa con scroll-margin-top
+- **#839** — El piso de un contenedor es el de sus manijas, no el de una tarjeta
 
 **Layout y alturas** (115)
 
@@ -59233,6 +59234,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    no lleva `scroll-margin`, y que el CSS copiado hace lo mismo pegado y no sin esa línea.
    Las dos pruebas fallan con el editor anterior.
 
+839. **El piso de un contenedor es el de sus manijas, no el de una tarjeta.**
+   Reportado con captura: la franja de arriba (`nav_franja_rep`, 44 px) no se podía achicar
+   por debajo de 40 px con Diseño. `pisoResize` le imponía a todo contenedor con key el
+   piso de 60×40 de la #342, medido sobre tarjetas: a la franja la dejaba bajar sólo 4 px.
+   Ese piso existe para que un contenedor no quede debajo de sus propias manijas; las de
+   arriba y abajo miden 9 px y dejan de pisarse desde 10 px. Ahora es 32×16 para los
+   contenedores con key; los controles y partes de una pieza siguen en 8 px (#829) y las
+   líneas, barras y espacios insertados en 1 px de alto. El alto numérico del panel nunca
+   tuvo piso. Medido en la app local: la franja baja a 28 px, con su texto a la vista y
+   sin barra de scroll (`overflow-y: hidden`). Achicar la franja no sube la hoja de abajo:
+   la hoja se ubica con `--franja-rep-alto` (`estilos/_00_base.py`), así que el CSS copiado
+   cambia sólo la franja; para que el contenido suba hay que cambiar esa variable.
+   `test_diseno_visual.py` arrastra una tarjeta hasta 16 px de alto y 32 de ancho con las
+   manijas a la vista, y una franja de 44 px con `height` y `min-height` fijados con
+   `!important` hasta 24 px: CSS copiado, Deshacer y el CSS pegado. Las dos fallan con el
+   piso anterior.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59245,7 +59263,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#838**; la próxima toma el número siguiente.
+> última regla es la **#839**; la próxima toma el número siguiente.
 
 >
 

@@ -365,14 +365,49 @@ class EditorVisual(unittest.TestCase):
         self.page.get_by_role('button', name='Ver con cambios', exact=True).click()
         self.assertEqual(self.page.locator('.ajc-search').bounding_box()['height'], 24)
 
-    def test_contenedor_completo_conserva_piso_de_arrastre(self):
-        manija = self.page.locator('#el-diseno-rh-s').bounding_box()
-        x, y = manija['x'] + manija['width']/2, manija['y'] + manija['height']/2
+    def arrastrar_manija(self, manija, dx=0, dy=0):
+        caja = self.page.locator(manija).bounding_box()
+        x, y = caja['x'] + caja['width']/2, caja['y'] + caja['height']/2
         self.page.mouse.move(x, y)
         self.page.mouse.down()
-        self.page.mouse.move(x, y-100, steps=4)
+        self.page.mouse.move(x + dx, y + dy, steps=4)
         self.page.mouse.up()
-        self.assertEqual(self.page.locator('.st-key-a').bounding_box()['height'], 40)
+
+    def test_contenedor_completo_conserva_piso_de_arrastre(self):
+        # Regla #839: el piso de un contenedor es el menor tamaño en que sus
+        # manijas no se pisan (32x16), no el de una tarjeta (60x40).
+        self.arrastrar_manija('#el-diseno-rh-s', dy=-200)
+        self.assertEqual(self.page.locator('.st-key-a').bounding_box()['height'], 16)
+        self.arrastrar_manija('#el-diseno-rh-e', dx=-300)
+        self.assertEqual(self.page.locator('.st-key-a').bounding_box()['width'], 32)
+        for manija in ['#el-diseno-rh-s', '#el-diseno-rh-n']:
+            self.assertTrue(self.page.locator(manija).is_visible())
+
+    def test_franja_de_44px_se_puede_afinar_por_debajo_de_40(self):
+        # La franja de la app (nav_franja_rep) mide 44px con height y
+        # min-height fijados con !important: el piso de 40 la dejaba bajar 4.
+        self.page.evaluate('''()=>{
+            const f=document.createElement('div'); f.className='st-key-franja_prueba';
+            f.innerHTML='<p style="margin:0;font-size:14px">Compras › Período</p>';
+            const e=document.createElement('style');
+            e.textContent='.st-key-franja_prueba{position:fixed!important;top:8px;left:80px;right:300px;'
+                +'height:44px!important;min-height:44px!important;display:flex!important;align-items:center;'
+                +'overflow:hidden;background:rgb(238,236,247)}';
+            document.head.appendChild(e); document.body.appendChild(f);
+        }''')
+        self.pin('franja_prueba')
+        self.arrastrar_manija('#el-diseno-rh-s', dy=-20)
+        franja = self.page.locator('.st-key-franja_prueba')
+        self.assertEqual(franja.bounding_box()['height'], 24)
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        css = '\n'.join(re.findall(r'```css\n(.*?)\n```', entrega, re.S))
+        self.assertIn('height: 24px', css)
+        self.assertIn('min-height: 0px', css)
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(franja.bounding_box()['height'], 44)
+        franja.evaluate('e=>e.style.cssText=""')
+        self.page.evaluate('css=>{const e=document.createElement("style");e.textContent=css;document.head.appendChild(e);}', css)
+        self.assertEqual(franja.bounding_box()['height'], 24)
 
     def test_remontaje_no_duplica_panel_ni_historial_y_no_hay_borradores(self):
         self.editar('background-color', 'rgb(0,128,0)')
