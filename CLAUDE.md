@@ -2514,6 +2514,9 @@ la inserción relativa. Subir/Bajar una capa intercambia una posición dentro de
 contenedor, con historial y exportación por variante, sin mover nodos reales (#835).
 Sobre los controles de una pieza, los pasos intercalan sólo el insertado en su grupo;
 conservan el anclaje al lienzo y no saltan delante/detrás del reporte entero (#836).
+Un control de pieza sin clase propia (las pestañas del cierre) se fija por sus
+`data-*`, no por `.selected` ni por su contenedor: el sub-pin es entonces un
+selector `[data-act="tab"][data-v="familias"]`, también en el CSS copiado (#837).
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del

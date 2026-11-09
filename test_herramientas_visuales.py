@@ -917,6 +917,60 @@ class HerramientasVisuales(unittest.TestCase):
         self.assertEqual(self.page.evaluate('__ajCierre.st.c'), int(otro))
         self.assertEqual(corte.input_value(), otro)
 
+    def test_pestana_sin_clase_se_selecciona_sola_y_no_sigue_a_la_elegida(self):
+        # Regla #837: las pestañas del cierre son botones sin clase propia
+        # (sólo `selected` en la elegida). El clic derecho subía a `.ajc-tabs`
+        # o fijaba `.selected`, que se muda al cambiar de pestaña.
+        self.montar_cierre()
+        self.page.get_by_role('button', name='Panel a la derecha', exact=True).click()
+        tab = lambda v: self.page.locator(f'.st-key-piece button[data-act=tab][data-v={v}]')
+        fondo = lambda e: e.evaluate('n=>getComputedStyle(n).backgroundColor')
+        barra = self.page.locator('.st-key-piece .ajc-tabs')
+        self.assertEqual(self.page.evaluate('__ajCierre.st.tab'), 'listas')
+        tab('listas').click(button='right')
+        self.page.wait_for_function('''__disenoState.sub?.clase==='[data-act="tab"][data-v="listas"]' ''')
+        tab('listas').click(button='right')
+        self.page.wait_for_function('!__inspectorPinned')
+        antes = {v: fondo(tab(v)) for v in ['listas', 'comparar', 'lineas']}
+        fondo_barra = fondo(barra)
+        familias = tab('familias')
+        familias.click(button='right')
+        self.page.wait_for_function('''__disenoState.sub?.clase==='[data-act="tab"][data-v="familias"]' ''')
+        caja = familias.bounding_box()
+        contorno = self.page.locator('#el-diseno-overlay').bounding_box()
+        self.assertAlmostEqual(contorno['width'], caja['width'] + 8, delta=1)
+        self.assertAlmostEqual(contorno['height'], caja['height'] + 8, delta=1)
+        fila = self.page.get_by_text('Fondo', exact=True).locator('xpath=../../..')
+        fila.locator('xpath=ancestor::details[1]/summary').click()
+        fila.get_by_title('Acento', exact=True).click()
+        acento = 'rgb(108, 92, 231)'
+        self.assertEqual(fondo(familias), acento)
+        self.assertEqual({v: fondo(tab(v)) for v in antes}, antes)
+        self.assertEqual(fondo(barra), fondo_barra)
+        # Elegir la pestaña redibuja la pieza: la edición sigue a «Familias y
+        # áreas», no a la que lleve `selected`.
+        self.page.evaluate("()=>{__ajCierre.st.tab='familias'; __ajCierreUI.pintar(__ajCierre)}")
+        self.page.wait_for_function('''getComputedStyle(__ajCierre.root.querySelector('[data-act="tab"][data-v="familias"]')).backgroundColor==='rgb(108, 92, 231)' ''')
+        self.assertEqual(fondo(tab('listas')), antes['comparar'])
+        # Un modelo sin destino guardado se resuelve desde su id.
+        self.page.evaluate('Object.values(__disenoState.porKey).forEach(r=>delete r.destino)')
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        css = '\n'.join(re.findall(r'```css\n(.*?)\n```', entrega, re.S))
+        self.assertIn('[data-act="tab"][data-v="familias"]', css)
+        self.assertNotIn('.selected', re.sub(r'/\*.*?\*/', '', css, flags=re.S))
+        self.page.get_by_role('button', name=re.compile('Diseño$')).click()
+        familias.evaluate('e=>e.style.cssText=""')
+        self.page.locator('.st-key-piece').evaluate('''(e, css)=>{
+            const estilo=document.createElement('style'); estilo.textContent=css;
+            e.shadowRoot.appendChild(estilo);
+        }''', css)
+        self.assertEqual(fondo(familias), acento)
+        self.assertEqual(fondo(barra), fondo_barra)
+        # Fuera de Diseño la pestaña sigue cambiando de vista (con el teclado:
+        # el tooltip fijado del inspector queda encima).
+        tab('comparar').press('Enter')
+        self.assertEqual(self.page.evaluate('__ajCierre.st.tab'), 'comparar')
+
     def test_barra_arrastrable_y_plegable_conserva_diseno_activo(self):
         antes = self.page.locator('#herr-barra').bounding_box()
         self.mover_barra(300, 200)

@@ -196,8 +196,74 @@ JS = """
             var p = n.parentNode;
             return (p && p.host) ? p.host : null;
         }
+        // Un sub-pin es una CLASE (`cp-rank-tit`) o, para un control de una
+        // pieza sin clase propia, un SELECTOR DE ATRIBUTOS que empieza con
+        // `[` (regla #837): `[data-act="tab"][data-v="familias"]`. Las
+        // pestanas de Diferencias son `<button data-act="tab" data-v=...>`
+        // sin clase, salvo `selected` en la elegida: el clic derecho subia a
+        // `.ajc-tabs` (la barra entera) o fijaba `.selected`, que se muda a
+        // la otra pestana en cuanto se cambia de pestana.
+        function esSubSelector(c) {
+            return !!c && c.charAt(0) === '[';
+        }
         function selClase(c) {
+            if (esSubSelector(c)) return c;
             return '.' + ((win.CSS && win.CSS.escape) ? win.CSS.escape(c) : c);
+        }
+        // Como se nombra un sub ante el usuario y en los ids.
+        function textoSub(c) {
+            return esSubSelector(c) ? c : '.' + c;
+        }
+        // Una clase que dice el ESTADO de un nodo no lo identifica: la
+        // lleva otro en cuanto el estado cambia. No ancla un sub-pin.
+        var CLASES_DE_ESTADO = { selected: 1, active: 1, activo: 1, activa: 1,
+            on: 1, open: 1, abierto: 1, abierta: 1, sel: 1, actual: 1,
+            current: 1, checked: 1, elegido: 1, elegida: 1, 'is-active': 1,
+            'is-selected': 1, cargando: 1 };
+        function esClaseDeAnclaje(c) {
+            return esClaseDeAutor(c) && !CLASES_DE_ESTADO[c];
+        }
+        // Los atributos que NOMBRAN a un control sin clase propia: los
+        // `data-*` de la pieza (accion y valor), `name` y `aria-label`.
+        // Los que cambian con el estado no anclan: `aria-selected`,
+        // `aria-pressed`, un «true»/«false». Un valor con comillas o barra
+        // invertida tampoco: el selector exportado se pega tal cual.
+        var ATRIBUTOS_DE_ESTADO = { 'data-state': 1, 'data-estado': 1,
+            'data-open': 1, 'data-on': 1, 'data-sel': 1, 'data-selected': 1,
+            'data-active': 1, 'data-activo': 1, 'data-stale': 1 };
+        function selectorDeAtributos(el) {
+            if (!el || !el.attributes) return '';
+            var partes = [];
+            for (var i = 0; i < el.attributes.length; i++) {
+                var a = el.attributes[i], n = a.name, v = a.value;
+                var util = (n.indexOf('data-') === 0 && n.indexOf('data-diseno') !== 0
+                            && n !== 'data-testid' && !ATRIBUTOS_DE_ESTADO[n])
+                    || n === 'name' || n === 'aria-label';
+                if (!util || v === '' || v === 'true' || v === 'false' || v.length > 60) continue;
+                if (v.indexOf('"') !== -1 || v.indexOf(String.fromCharCode(92)) !== -1) continue;
+                partes.push('[' + n + '="' + v + '"]');
+            }
+            return partes.join('');
+        }
+        // `key .clase [n]` o `key [attr="v"] [n]` -> {key, sub, subIdx}.
+        // null si el id es de otro tipo (texto «», rama ↑n): esos llevan
+        // su destino guardado en el registro.
+        function parsearIdSub(id) {
+            var idx = 0, cuerpo = id;
+            var corchete = id.lastIndexOf(' [');
+            if (corchete !== -1) {
+                var cola = id.slice(corchete + 2);
+                if (cola.charAt(cola.length - 1) === ']' && /^[0-9]+$/.test(cola.slice(0, -1))) {
+                    idx = (parseInt(cola, 10) || 1) - 1;
+                    cuerpo = id.slice(0, corchete);
+                }
+            }
+            var sep = cuerpo.indexOf(' ');
+            if (sep === -1) return { key: cuerpo, sub: '', subIdx: 0 };
+            var resto = cuerpo.slice(sep + 1);
+            if (resto.charAt(0) === '.') return { key: cuerpo.slice(0, sep), sub: resto.slice(1), subIdx: idx };
+            if (esSubSelector(resto)) return { key: cuerpo.slice(0, sep), sub: resto, subIdx: idx };
+            return null;
         }
         // `base` y los shadow roots que cuelgan de el (una pieza adentro de
         // otra tambien). Corre en cada tick con un sub-pin puesto: barrer
@@ -232,7 +298,7 @@ JS = """
         // los indicadores y los renglones de la ficha comparten clase: sin
         // el indice, todo pin bajaba al PRIMERO y no al que se senalo.
         function idSubClase(key, clase, idx) {
-            return key + ' .' + clase + (idx ? ' [' + (idx + 1) + ']' : '');
+            return key + ' ' + textoSub(clase) + (idx ? ' [' + (idx + 1) + ']' : '');
         }
         function resolverSubClase(base, clase, idx) {
             if (!base || !clase) return null;
@@ -249,6 +315,21 @@ JS = """
                 hojas = Array.prototype.slice.call(raiz.styleSheets || [])
                     .concat(Array.prototype.slice.call(raiz.adoptedStyleSheets || []));
             } catch (e) { hojas = []; }
+            // Un sub por atributos no tiene clase que buscar: se nombra la
+            // ultima regla con clase que hoy le aplica (`.ajc-tabs button`).
+            if (esSubSelector(clase)) {
+                var ultima = '';
+                for (var h = 0; h < hojas.length; h++) {
+                    var rs = null;
+                    try { rs = hojas[h].cssRules; } catch (e) { continue; }
+                    for (var k = 0; rs && k < rs.length; k++) {
+                        var sel = rs[k].selectorText || '';
+                        if (sel.indexOf('.') === -1) continue;
+                        try { if (elemento.matches(sel)) ultima = sel; } catch (e) {}
+                    }
+                }
+                return ultima;
+            }
             var buscado = '.' + clase;
             for (var i = 0; i < hojas.length; i++) {
                 var reglas = null;
@@ -329,7 +410,7 @@ JS = """
                 if (!propio || cur !== base) continue;
                 var cls = n.classList || [];
                 for (var j = 0; j < cls.length; j++) {
-                    if (!esClaseDeAutor(cls[j]) || vistas[cls[j]]) continue;
+                    if (!esClaseDeAnclaje(cls[j]) || vistas[cls[j]]) continue;
                     vistas[cls[j]] = 1;
                     out.push(cls[j]);
                 }
@@ -454,16 +535,9 @@ JS = """
         function elPorId(id) {
             var reg = win.__disenoState.porKey[id];
             if (reg && reg.destino) return resolverDestinoDOM(reg.destino);
-            var sep = id.indexOf(' .');
-            if (sep === -1) return porKeyReal(id);
-            var base = porKeyReal(id.slice(0, sep));
-            var clase = id.slice(sep + 2), idx = 0;
-            var corchete = clase.indexOf(' [');
-            if (corchete !== -1) {
-                idx = (parseInt(clase.slice(corchete + 2), 10) || 1) - 1;
-                clase = clase.slice(0, corchete);
-            }
-            return resolverSubClase(base, clase, idx);
+            var p = parsearIdSub(id);
+            if (!p || !p.sub) return porKeyReal(id);
+            return resolverSubClase(porKeyReal(p.key), p.sub, p.subIdx);
         }
 
         function grupoMiembros() {
@@ -527,18 +601,32 @@ JS = """
             // clase de autor (el camino viejo, el de `.cp-rank-tit`).
             // Cruza el borde del shadow root de una pieza (padreCompuesto) y
             // guarda CUAL de los que llevan esa clase se senalo (`idx`).
+            // Una clase de estado (`selected`) no ancla; un control de pieza
+            // sin clase propia se ancla por sus atributos antes de subir a
+            // su contenedor (regla #837).
             var cur = nodo;
             while (cur && cur !== base) {
                 var cls = cur.classList || [];
                 for (i = 0; i < cls.length; i++) {
-                    if (esClaseDeAutor(cls[i])) {
+                    if (esClaseDeAnclaje(cls[i])) {
                         var pos = qsaProfundo(base, selClase(cls[i])).indexOf(cur);
                         return { key: key, clase: cls[i], idx: pos > 0 ? pos : 0 };
                     }
                 }
+                var porAtr = anclaPorAtributos(base, cur);
+                if (porAtr) return { key: key, clase: porAtr.sel, idx: porAtr.idx };
                 cur = padreCompuesto(cur);
             }
             return null;
+        }
+        // Sólo adentro de una pieza: afuera, los `data-*` son de Streamlit
+        // (`data-baseweb`, `data-stale`) y el ancla de siempre es la clase.
+        function anclaPorAtributos(base, el) {
+            if (!base || !el || !enPieza(el)) return null;
+            var sel = selectorDeAtributos(el);
+            if (!sel) return null;
+            var pos = qsaProfundo(base, sel).indexOf(el);
+            return pos === -1 ? null : { sel: sel, idx: pos };
         }
 
         // El sub-pin se RECALCULA cada vez que el inspector fija un nodo
@@ -1903,10 +1991,18 @@ JS = """
             }
             if (!base) return null;
             if (base === el) return {id:key,destino:{key:key},el:el};
-            var clase = Array.prototype.find.call(el.classList, esClaseDeAutor);
+            // El mismo ancla que el clic derecho (subDesdeNodo): si no, un
+            // control ordenado como vecino y despues seleccionado tendria
+            // dos registros con CSS propio cada uno.
+            var clase = Array.prototype.find.call(el.classList, esClaseDeAnclaje);
             if (clase) {
                 var idx = qsaProfundo(base, selClase(clase)).indexOf(el);
                 return {id:idSubClase(key,clase,idx),destino:{key:key,sub:clase,subIdx:idx},el:el};
+            }
+            var porAtr = anclaPorAtributos(base, el);
+            if (porAtr) {
+                return {id:idSubClase(key,porAtr.sel,porAtr.idx),
+                        destino:{key:key,sub:porAtr.sel,subIdx:porAtr.idx},el:el};
             }
             // Un wrapper sin clase de autor se identifica desde la key de
             // su contenido, para conservar la rama cuando Streamlit la recrea.
@@ -3823,7 +3919,7 @@ JS = """
                 ? '\\n/* ' + notas.join(' — ') + ' — ver destinosDeEstilo()/extenderATexto() en _diseno_js.py */'
                 : '';
 
-            var encabezado = '/* copiado del modo diseño — ' + key + (sub ? ' .' + sub : '') + ' */';
+            var encabezado = '/* copiado del modo diseño — ' + key + (sub ? ' ' + textoSub(sub) : '') + ' */';
             if (dentroPieza) {
                 var hoy = reglaEnPieza(elemento, sub);
                 encabezado += '\\n/* Va en el .css de la PIEZA (shadow root), no en estilos/'
@@ -3832,7 +3928,8 @@ JS = """
             if (sub) {
                 var conLaClase = qsaProfundo(porKeyReal(key) || elemento, selClase(sub)).length;
                 if (conLaClase > 1) {
-                    encabezado += '\\n/* La clase .' + sub + ' la llevan ' + conLaClase
+                    encabezado += '\\n/* ' + (esSubSelector(sub) ? 'El selector ' : 'La clase ')
+                        + textoSub(sub) + ' la llevan ' + conLaClase
                         + ' elementos; se usa la ruta del elemento seleccionado. */';
                 }
             }
@@ -4172,7 +4269,7 @@ JS = """
                     rama.style.cssText = 'color:#3f3f4c;flex-shrink:0;font-size:11px';
                     fila.appendChild(rama);
                     var nodo = doc.createElement(esActualSub ? 'span' : 'button');
-                    nodo.textContent = '.' + c;
+                    nodo.textContent = textoSub(c);
                     nodo.title = 'Bajar el pin a este hijo (no tiene key propia)';
                     nodo.style.cssText = 'font:11px "Courier New",monospace;background:transparent;border:0;padding:1px 3px;border-radius:3px;'
                         + 'color:' + (esActualSub ? '#e4e4e8' : '#7fb2e5') + ';'
@@ -5539,15 +5636,7 @@ JS = """
 
         function contextoRegistro(id, registro) {
             var d = registro.destino;
-            if (!d) {
-                var sep = id.indexOf(' .');
-                d = { key: sep < 0 ? id : id.slice(0, sep), sub: '', subIdx: 0 };
-                if (sep >= 0) {
-                    d.sub = id.slice(sep + 2).split(' [')[0];
-                    var parte = id.indexOf(' [', sep);
-                    if (parte >= 0) d.subIdx = (parseInt(id.slice(parte + 2), 10) || 1) - 1;
-                }
-            }
+            if (!d) d = parsearIdSub(id) || { key: id, sub: '', subIdx: 0 };
             var el = resolverDestinoDOM(d);
             return { id: id, key: d.key, sub: d.sub || '', subIdx: d.subIdx || 0,
                      subTexto: d.subTexto || null, el: el, registro: registro };

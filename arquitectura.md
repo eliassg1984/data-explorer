@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-836 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+837 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (281)
+**CSS y estilos** (282)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -348,6 +348,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#834** — Enviar al fondo incluye el contenido real, no sólo los otros insertados
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 - **#836** — Una pieza completa no equivale a una capa entre sus controles
+- **#837** — Un control de pieza sin clase propia se ancla por sus atributos, no por su estado
 
 **Layout y alturas** (115)
 
@@ -59186,6 +59187,27 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    real y verifica un control por paso, coordenadas, historial, reposición, comparación,
    variantes, vista previa, exportación y traslado entre grupos.
 
+837. **Un control de pieza sin clase propia se ancla por sus atributos, no por su estado.**
+   Reportado con captura: en Diferencias del cierre no se podía editar una pestaña. Son
+   `<button data-act="tab" data-v="…">` sin clase, salvo `selected` en la elegida. El
+   inspector ya detectaba el nodo profundo (#820), pero el sub-pin subía a `.ajc-tabs`
+   —contorno y Fondo sobre la barra entera, 396 px— o, en la elegida, fijaba `.selected`,
+   que se muda a otra pestaña al cambiar de vista. La #831 lo resolvió para un control
+   poniéndole una clase en `cierre.js`; esto lo resuelve en el editor, para toda pieza.
+   En `_diseno_js.py` un sub-pin puede ser una clase o un selector que empieza con `[`
+   (`esSubSelector`): `subDesdeNodo` e `identidadCapa` saltan las clases de estado
+   (`CLASES_DE_ESTADO`) y, dentro de una pieza, anclan el nodo por sus `data-*`, `name` y
+   `aria-label` (`selectorDeAtributos`) antes de subir a su contenedor. No anclan los
+   atributos de estado (`aria-selected`, `data-on`, valores `true`/`false`) ni los de
+   Streamlit fuera de una pieza. El id es `key [data-act="tab"][data-v="familias"]`, con
+   ` [n]` al final si hay varios; `parsearIdSub` lo lee desde el final, porque el selector
+   también lleva corchetes. El CSS exportado usa ese selector tal cual, para el `.css` de
+   la pieza, y nombra la regla que hoy la estiliza. `test_herramientas_visuales.py` monta
+   el cierre real: clic derecho en la elegida y en otra, contorno de la pestaña sola,
+   Fondo sin tocar a las vecinas ni a la barra, la edición sigue a su pestaña al redibujar
+   y al cambiar de pestaña, el id sin destino guardado, el CSS reproducido y la pestaña
+   que sigue cambiando de vista fuera de Diseño.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59198,7 +59220,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#836**; la próxima toma el número siguiente.
+> última regla es la **#837**; la próxima toma el número siguiente.
 
 >
 

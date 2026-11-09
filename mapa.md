@@ -92,6 +92,8 @@ de un elemento. Subir/Bajar una capa avanza una posición entre vecinos del cont
 conserva anidado, historial, variantes y entrega sin mover nodos reales (regla #835).
 Sobre controles agrupados en una pieza, los pasos usan un ámbito local para descubrir
 un control por pulsación; el anclaje al lienzo y las cajas nativas se conservan (#836).
+Un control de pieza sin clase propia se selecciona por sus atributos (`data-*`,
+`name`, `aria-label`), nunca por una clase de estado como `selected` (#837).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|
