@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-840 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+841 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (285)
+**CSS y estilos** (286)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -352,6 +352,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#838** — Mover una sección de la pila corre su encaje: se compensa con scroll-margin-top
 - **#839** — El piso de un contenedor es el de sus manijas, no el de una tarjeta
 - **#840** — Mover una caja con controles fijos adentro no puede usar transform
+- **#841** — La ruta va en una píldora con los bordes de la hoja: la píldora es el ::before de la franja
 
 **Layout y alturas** (115)
 
@@ -1195,7 +1196,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
-**Decisiones de diseño y UX** (276)
+**Decisiones de diseño y UX** (277)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1473,6 +1474,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#824** — La fecha de Diferencias sube a la franja mientras la vista está en pantalla
 - **#827** — «12 cierres» se fue de Diferencias a Evolución: el grano «Cierre» de la Serie
 - **#828** — La edición visual conserva originales de los destinos reales y reaplica todas las propuestas
+- **#841** — La ruta va en una píldora con los bordes de la hoja: la píldora es el ::before de la franja
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59273,6 +59275,28 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    y se puede tocar, y el CSS copiado y pegado da lo mismo. Falla con el editor anterior
    (el hijo bajaba de 10 a 150 y quedaba tapado).
 
+841. **La ruta va en una píldora con los bordes de la hoja: la píldora es el `::before` de la franja.**
+   A pedido, sobre una captura editada con Diseño en Compras › Período (la ruta en una
+   cápsula blanca que terminaba a media franja, con la fecha suelta sobre el lavanda) y el
+   boceto https://claude.ai/artifact/7v7WufpmWibLs4s6TDQx54. La franja (`nav_franja_rep`)
+   ya mide lo mismo que la hoja: medido en la app local a 1323×619, las dos van de 80 a
+   1315 px. Por eso la píldora es su `::before` (`estilos/_90_marco.py`, desde 901 px):
+   `left: 0; right: 0`, 36 px de alto centrada en los 44 de la franja y `z-index: -1`,
+   que pinta sobre el fondo de la franja y debajo de la ruta porque la franja, fija y con
+   z-index, ya es un contexto de apilamiento. Lo de la derecha —la fecha y Filtros— son
+   controles fijos que dibuja cada reporte con su key (`franja_f_escala`,
+   `chipwrap_filtros_*`, `cp_*_escala`, las fechas de Ajuste): no se movió ninguno, la
+   píldora los rodea (de 15 a 45 px dentro de 12 a 48). Sus botones pasan a radio 15:
+   con 8, la esquina chocaba con la curva de la píldora a 8 px del borde. El de Filtros
+   necesita la clase tres veces, como la regla que lo pinta.
+   La ruta mide lo que su texto. Desde la 6c136f58 cada nivel reservaba 120 px con el
+   texto centrado (`--franja-nivel-ancho`), para que la ruta no cambiara de largo entre
+   reportes; adentro de la píldora quedaban ~100 px entre «Ventas» y «Venta» y no se leía
+   como una ruta. Ahora cada nivel es `max-content`, el «›» mide 20 px y el primer nivel
+   sigue arrancando en el mismo x. Medido: la ruta de Ventas pasó de 264 a 136 px, y el
+   menú de vistas (#817) abre igual debajo de su botón.
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59285,7 +59309,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#840**; la próxima toma el número siguiente.
+> última regla es la **#841**; la próxima toma el número siguiente.
 
 >
 

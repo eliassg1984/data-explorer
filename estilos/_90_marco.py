@@ -905,6 +905,66 @@ CSS = """
         .st-key-nav_franja_idx .franja-seccion[aria-current="true"] {
             color: var(--accent-deep); background: var(--accent-tint);
         }
+
+        /* ── LA RUTA EN UNA PÍLDORA DE BORDE A BORDE (regla #841) ──────────
+           A pedido, sobre el boceto https://claude.ai/artifact/7v7WufpmWibLs4s6TDQx54.
+           Una píldora blanca con los MISMOS bordes que la hoja de abajo: la
+           franja ya mide eso (de `--rail-reserva` a `--marco-hoja`), así que
+           la píldora es su `::before` y no hay que medir nada. Lo de la
+           derecha —la fecha, Filtros— son controles fijos que dibuja cada
+           reporte con su key; quedan ADENTRO porque la píldora los rodea, sin
+           moverlos. `z-index: -1` dentro de la franja, que ya es un contexto
+           de apilamiento (fija con z-index): pinta sobre su fondo y debajo de
+           la ruta. 36 px centrada en la franja: los controles de 30 quedan con
+           3 px arriba y abajo, y la hoja empieza 4 px más abajo. */
+        .st-key-nav_franja_rep::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: calc((var(--franja-rep-alto) - 36px) / 2);
+            height: 36px;
+            border-radius: 18px;
+            background: var(--bg-card);
+            box-shadow: var(--marco-sombra);
+            z-index: -1;
+            pointer-events: none;
+        }
+        /* Los controles de adentro también en cápsula: con 8 px de radio, su
+           esquina chocaba con la curva de la píldora a 8 px del borde. */
+        .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill [data-testid="stPopover"] button,
+        .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla [data-testid="stPopover"] button,
+        [data-compras-vista] :is(
+            .st-key-cp_sem_escala, .st-key-cp_rank_escala, .st-key-cp_prod_escala,
+            .st-key-cp_vol_escala, .st-key-cp_vap_f_escala, .st-key-cp_docs_escala
+        ) button[data-testid="stPopoverButton"] {
+            border-radius: 15px !important;
+        }
+        /* La ruta mide lo que su texto: «Compras › Período ▾». Desde la
+           6c136f58 cada nivel reservaba 120 px con el texto centrado, para que
+           la ruta no cambiara de largo entre reportes; dentro de la píldora
+           eso dejaba ~100 px entre «Ventas» y «Venta» y no se leía como una
+           ruta. El primer nivel arranca siempre en el mismo x. */
+        .barra-ctx[data-barra-compacta] .barra-reporte {
+            min-width: 0;
+            justify-content: flex-start;
+            padding: 0 6px 0 0;
+        }
+        .franja-ruta[data-franja-compacta] .fr-sep {
+            width: 20px;
+            flex: 0 0 20px;
+        }
+        .franja-ruta[data-franja-compacta] button,
+        .franja-ruta[data-franja-nombre] .fr-grupo-boton {
+            width: max-content;
+            min-width: 0;
+            flex: 0 0 auto;
+            padding: 0 8px;
+            border-radius: 15px;
+        }
+        .franja-ruta[data-franja-nombre] .fr-grupo-boton {
+            margin-left: -8px;
+        }
     }
     @media (max-width: 900px) {
         html body .st-key-aj_tiempo_cabecera {
