@@ -278,6 +278,8 @@ JS = """
         // algún día se agrega un tipo de mock que sí la comparta.
         var SIN_COPIAS = ':not([data-diseno-mock])';
         function porKeyReal(key) {
+            if (key === CLAVE_LIENZO) return superficieLienzo();
+            if (key === '__diseno_documento') return doc.body;
             var real = doc.querySelector('.st-key-' + key + SIN_COPIAS);
             if (real) return real;
             // Sin real: puede ser la key de un mock pineado SOBRE SI MISMO
@@ -434,9 +436,11 @@ JS = """
             // en el momento del evento, nunca confia en una referencia
             // capturada cuando se construyeron los controles.
             var r = elementoPineado();
-            if (r && r.el) registroPara(r.id).destino = {
-                key: r.key, sub: r.sub, subIdx: r.subIdx || 0, subTexto: r.subTexto || null
-            };
+            if (r && r.el) {
+                var reg = registroPara(r.id);
+                delete reg.soloCapa;
+                reg.destino = { key: r.key, sub: r.sub, subIdx: r.subIdx || 0, subTexto: r.subTexto || null };
+            }
             return (r && r.el) ? { el: r.el, key: r.key, sub: r.sub, subIdx: r.subIdx || 0, id: r.id,
                                    subTexto: r.subTexto,
                                    registro: registroPara(r.id) } : null;
@@ -448,6 +452,8 @@ JS = """
         // resuelve se ignora en silencio en vez de vaciar la seleccion —
         // volver de otro reporte no tiene por que perderla.
         function elPorId(id) {
+            var reg = win.__disenoState.porKey[id];
+            if (reg && reg.destino) return resolverDestinoDOM(reg.destino);
             var sep = id.indexOf(' .');
             if (sep === -1) return porKeyReal(id);
             var base = porKeyReal(id.slice(0, sep));
@@ -748,6 +754,18 @@ JS = """
         // actualizacion" — asi el mock nunca tapa al PANEL de edicion.
         var ENCIMA_MOCK = 'position:relative;z-index:1000000000;';
         var ID_LIBRES = 'diseno-insertados-libres';
+        var CLAVE_LIENZO = '__diseno_lienzo';
+
+        function superficieLienzo(documento) {
+            var d = documento || doc;
+            return d.querySelector('[data-testid="stMainBlockContainer"], .block-container') || d.body;
+        }
+        function destinoInsercion() {
+            // Un destino propio del editor, sin fijar un widget ficticio (#835).
+            var res = elementoPineado();
+            if (res && res.el && win.__disenoState.destinoInsertar !== 'lienzo' && grupoMiembros().length < 2) return res;
+            return { key: CLAVE_LIENZO, sub: '', id: CLAVE_LIENZO, el: superficieLienzo(), lienzo: true };
+        }
 
         function modeloMock(key) {
             return win.__disenoState.mocks.find(function(m) { return m.key === key; }) || null;
@@ -759,17 +777,17 @@ JS = """
         }
         function modoAlInsertar(res) {
             var st = win.__disenoState;
-            if (st.mockPos === 'dentro' && !admiteDentro(res.el)) st.mockPos = 'despues';
-            var contexto = res.id + '|' + st.mockPos;
+            if (!res.lienzo && st.mockPos === 'dentro' && !admiteDentro(res.el)) st.mockPos = 'despues';
+            var contexto = res.id + '|' + (res.lienzo ? 'dentro' : st.mockPos);
             if (st.mockContexto !== contexto) {
                 st.mockContexto = contexto;
-                st.mockModo = st.mockPos === 'dentro' && esMock(res.key) ? 'flujo' : 'libre';
+                st.mockModo = !res.lienzo && st.mockPos === 'dentro' && esMock(res.key) ? 'flujo' : 'libre';
             }
             return st.mockModo === 'flujo' ? 'flujo' : 'libre';
         }
         function lienzoLibres() {
             var lienzo = doc.getElementById(ID_LIBRES);
-            var destino = doc.querySelector('[data-testid="stMainBlockContainer"], .block-container') || doc.body;
+            var destino = superficieLienzo();
             if (!lienzo) {
                 lienzo = doc.createElement('div'); lienzo.id = ID_LIBRES;
                 // No crea un contexto de apilamiento ni una caja que intercepte la app.
@@ -788,6 +806,7 @@ JS = """
             return false;
         }
         function anclaOriginalMock(m, documento) {
+            if (m.enLienzo) return superficieLienzo(documento);
             var base = documento ? documento.querySelector(selClase('st-key-' + m.anclaKey)) : porKeyReal(m.anclaKey);
             if (!base && documento && documento.body) base = qsaProfundo(documento.body, selClase('st-key-' + m.anclaKey))[0];
             return base && m.anclaSub ? resolverSubClase(base, m.anclaSub, m.anclaIdx) : base;
@@ -823,6 +842,11 @@ JS = """
                     y: m.posicion === 'antes' ? -el.offsetHeight - 8 - anteriores * 12
                         : m.posicion === 'dentro' ? parseFloat(cs.paddingTop || 0) + ancla.clientTop : r.height + 8 + anteriores * 12
                 };
+                if (m.enLienzo) {
+                    var areaInicial = documento ? {left:8,right:vista.innerWidth-8,top:8,bottom:vista.innerHeight-8} : limitesLibres();
+                    m.libre = { x: (areaInicial.left + areaInicial.right - el.offsetWidth) / 2 - r.left + anteriores * 12,
+                        y: (areaInicial.top + areaInicial.bottom - el.offsetHeight) / 2 - r.top + anteriores * 12 };
+                }
                 if (interno && !m.anchoLibre) {
                     m.anchoLibre = Math.max(32, Math.min(240, ancla.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0)));
                     el.style.width = m.anchoLibre + 'px';
@@ -909,6 +933,7 @@ JS = """
         }
 
         function anclaEfectiva(m) {
+            if (m.enLienzo) return anclaOriginalMock(m);
             var ancla = porKeyReal(m.anclaKey);
             // Con sub-pin el ancla es el HIJO, no la tarjeta: insertar "antes"
             // de un titulo y "antes" de la tarjeta que lo contiene son dos
@@ -978,8 +1003,8 @@ JS = """
         }
 
         function agregarMock(tipo) {
-            var res = elementoPineado();
-            if (!res || !res.el) return;   // sin ancla no hay donde insertar
+            var res = destinoInsercion();
+            if (!res.el) return;
             var modo = modoAlInsertar(res);
             win.__disenoState.mockN += 1;
             var m = {
@@ -988,7 +1013,8 @@ JS = """
                 anclaKey: res.key,
                 anclaSub: res.sub,
                 anclaIdx: res.subIdx || 0,
-                posicion: win.__disenoState.mockPos,
+                posicion: res.lienzo ? 'dentro' : win.__disenoState.mockPos,
+                enLienzo: !!res.lienzo,
                 modo: modo,
                 texto: 'Texto de prueba'
             };
@@ -1014,6 +1040,18 @@ JS = """
                     nuevo.style.setProperty('transition', 'outline-color .6s', 'important');
                     nuevo.style.setProperty('outline-color', 'transparent', 'important');
                 }, 1400);
+                if (res.lienzo) {
+                    win.__disenoState.destinoInsertar = 'lienzo';
+                    win.__disenoState.sub = null; win.__disenoState.grupo = [];
+                    win.__disenoRuntime.secciones.Insertar = true;
+                    if (win.__inspectorTogglePin && win.__inspectorMouseMoveHandler) {
+                        win.__inspectorTogglePin(true);
+                        win.__inspectorMouseMoveHandler({target:nuevo,clientX:rectNuevo.left+12,clientY:rectNuevo.top+12});
+                        win.__inspectorTogglePin();
+                        var tipNuevo = doc.getElementById('el-inspector-tip');
+                        if (tipNuevo && win.__inspectorTipVisible) win.__inspectorTipVisible(tipNuevo,false);
+                    }
+                }
             }
             panel.dataset.builtForKey = '';   // cambio el contador de la lista
             sync();
@@ -1507,7 +1545,7 @@ JS = """
             panel.appendChild(header);
             var texto = doc.createElement('div');
             texto.style.cssText = 'font:12px/1.6 "Courier New",monospace;white-space:pre-wrap';
-            texto.textContent = 'Modo diseno activo\\n\\nClic derecho en un elemento para empezar (mismo Fijar del inspector). Insertar texto/linea/barra sale del mismo lugar: el elemento fijado es el ancla.';
+            texto.textContent = 'Crea elementos directamente en el lienzo con Insertar. Para editar uno existente o insertar dentro de una tarjeta, selecciónalo con clic derecho.';
             panel.appendChild(texto);
         }
 
@@ -1633,16 +1671,34 @@ JS = """
         // El hijo no puede salir de la capa de su contenedor (#270).
         // Se ordena tambien su rama, cruzando los shadow roots de las piezas.
         // Cada rama conserva su caja y su lugar en el DOM de Streamlit.
+        function posicionDeCapa(nodo) {
+            var key = Array.prototype.find.call(nodo.classList, function(c) { return c.indexOf('st-key-') === 0; });
+            var m = nodo.hasAttribute('data-diseno-mock') && key && modeloMock(key.slice(7));
+            if (m) {
+                if (modoMock(m) !== 'libre') return 'relative';
+                var padreMock = modeloMock(m.anclaKey);
+                return m.posicion === 'dentro' && !m.anclaSub && padreMock && modoMock(padreMock) === 'libre' ? 'absolute' : 'fixed';
+            }
+            var posicion = win.getComputedStyle(nodo).position, padre = padreCompuesto(nodo);
+            var flexItem = padre && /^(inline-)?(flex|grid)$/.test(win.getComputedStyle(padre).display);
+            return posicion === 'static' && !flexItem ? 'relative' : posicion;
+        }
         function planDeCapa(elemento, registro) {
             if (!registro.capa) return [];
             var plan = [], nodo = elemento;
             var nivel = registro.capa.nivel;
+            var limite = registro.capa.limite && resolverDestinoDOM(registro.capa.limite);
+            if (registro.capa.limite && !limite) return [];
+            if (registro.capa.paso && limite) return [
+                {nodo:elemento,props:{position:posicionDeCapa(elemento),'z-index':String(nivel)}},
+                {nodo:limite,props:{isolation:'isolate'}}
+            ];
             while (nodo && nodo !== doc.body && nodo !== doc.documentElement) {
+                if (nodo !== elemento && nodo === limite) break;
                 if (nodo !== elemento && (nodo.id === ID_LIBRES || nodo.hasAttribute('data-diseno-mock'))) break;
                 if (nodo !== elemento && nodo.matches('[data-testid="stMainBlockContainer"], .block-container')) break;
-                var posicion = win.getComputedStyle(nodo).position;
                 plan.push({ nodo: nodo, props: {
-                    position: posicion === 'static' ? 'relative' : posicion,
+                    position: posicionDeCapa(nodo),
                     'z-index': String(nivel)
                 } });
                 nodo = padreCompuesto(nodo);
@@ -1656,17 +1712,23 @@ JS = """
             return plan;
         }
 
-        function reaplicarCapas() {
+        function calcularCapas(incluirOriginal) {
             var estado = win.__disenoState;
-            var anteriores = estado.capasAplicadas || new Map();
             var deseadas = new Map();
             var explicitas = new Set(), activos = [];
-            if (disenoActivo()) {
+            if (incluirOriginal || disenoActivo()) {
                 Object.keys(estado.porKey).forEach(function(id) {
                     var reg = estado.porKey[id], capa = reg.capa;
-                    if (!capa || reg.verOriginalActivo) return;
+                    if (!capa || (reg.verOriginalActivo && !incluirOriginal)) return;
                     var el = elPorId(id);
                     if (!el) return;
+                    if (capa.paso && !incluirOriginal) {
+                        var padre = padreDeCapas(el);
+                        if (padre && resolverDestinoDOM(capa.limite) !== padre) {
+                            var destino = identidadCapa(padre);
+                            if (destino) capa.limite = destino.destino;
+                        }
+                    }
                     explicitas.add(el);
                     activos.push({ el: el, registro: reg });
                 });
@@ -1691,6 +1753,12 @@ JS = """
                     }
                 });
             }
+            return deseadas;
+        }
+        function reaplicarCapas() {
+            var estado = win.__disenoState;
+            var anteriores = estado.capasAplicadas || new Map();
+            var deseadas = calcularCapas(false);
             anteriores.forEach(function(props, nodo) {
                 var siguientes = deseadas.get(nodo) || {};
                 Object.keys(props).forEach(function(prop) {
@@ -1704,6 +1772,7 @@ JS = """
             });
             var aplicadas = new Map();
             deseadas.forEach(function(props, nodo) {
+                recordarNodo(nodo);
                 var previas = anteriores.get(nodo) || {}, guardadas = {};
                 Object.keys(props).forEach(function(prop) {
                     var valor = nodo.style.getPropertyValue(prop);
@@ -1724,10 +1793,138 @@ JS = """
 
         function cambiarCapa(ctx, alFrente) {
             var estado = win.__disenoState;
+            // Un vecino normalizado automaticamente no fija para siempre
+            // la rama de un control real. Una orden extrema posterior puede
+            // volver a adelantarla o atrasarla, como antes de ordenar por pasos.
+            var padre = padreCompuesto(ctx.el);
+            while (padre && padre !== doc.body && !padre.hasAttribute('data-diseno-mock')) {
+                var ids = Object.keys(estado.porKey).filter(function(id) {
+                    return estado.porKey[id].capa && elPorId(id) === padre;
+                });
+                if (ids.some(function(id) { return !estado.porKey[id].capa.automatica; })) break;
+                ids.forEach(function(id) { delete estado.porKey[id].capa; });
+                padre = padreCompuesto(padre);
+            }
             estado.secuenciaCapas = (estado.secuenciaCapas || 0) + 1;
             ctx.registro.capa = {
                 nivel: alFrente ? 1000000000 + estado.secuenciaCapas : -estado.secuenciaCapas
             };
+            reaplicarCapas();
+        }
+
+        function resolverDestinoDOM(d) {
+            var el = porKeyReal(d.key);
+            if (d.subTexto) el = resolverNodoTexto(d.key, d.subTexto);
+            else if (d.sub) el = resolverSubClase(el, d.sub, d.subIdx);
+            if (d.ascender) for (var i = 0; el && i < d.ascender; i++) el = padreCompuesto(el);
+            (d.ruta || []).forEach(function(paso) {
+                el = el && (paso === 'sombra' ? el.shadowRoot : el.children[paso]);
+            });
+            if (el && d.firma && (el.tagName !== d.firma.tag
+                || (el.getAttribute('data-testid') || '') !== d.firma.testid)) return null;
+            return el || null;
+        }
+        function identidadCapa(el) {
+            var st = win.__disenoState;
+            var existente = Object.keys(st.porKey).find(function(id) {
+                return st.porKey[id].destino && resolverDestinoDOM(st.porKey[id].destino) === el;
+            });
+            if (existente) return {id:existente,destino:st.porKey[existente].destino,el:el};
+            function keyDe(n) {
+                var c = Array.prototype.find.call(n.classList || [], function(x) { return x.indexOf('st-key-') === 0; });
+                return c ? c.slice(7) : '';
+            }
+            var base = el, key = '';
+            while (base) {
+                key = keyDe(base);
+                if (key) break;
+                if (base === superficieLienzo()) { key = CLAVE_LIENZO; break; }
+                if (base === doc.body) { key = '__diseno_documento'; break; }
+                base = padreCompuesto(base);
+            }
+            if (!base) return null;
+            if (base === el) return {id:key,destino:{key:key},el:el};
+            var clase = Array.prototype.find.call(el.classList, esClaseDeAutor);
+            if (clase) {
+                var idx = qsaProfundo(base, selClase(clase)).indexOf(el);
+                return {id:idSubClase(key,clase,idx),destino:{key:key,sub:clase,subIdx:idx},el:el};
+            }
+            // Un wrapper sin clase de autor se identifica desde la key de
+            // su contenido, para conservar la rama cuando Streamlit la recrea.
+            var hijos = qsaProfundo(el, '[class*="st-key-"]');
+            var hijo = hijos.find(function(n) { return !esMock(keyDe(n)); });
+            var firma = {tag:el.tagName,testid:el.getAttribute('data-testid') || ''};
+            if (hijo) {
+                var pasos = 0, n = hijo;
+                while (n && n !== el) { n = padreCompuesto(n); pasos++; }
+                if (n) return {id:keyDe(hijo)+' ↑'+pasos,destino:{key:keyDe(hijo),ascender:pasos,firma:firma},el:el};
+            }
+            var ruta = [], actual = el;
+            while (actual && actual !== base) {
+                var p = actual.parentNode;
+                if (!p || !p.children) return null;
+                ruta.unshift(Array.prototype.indexOf.call(p.children, actual));
+                if (p.host) { ruta.unshift('sombra'); actual = p.host; }
+                else actual = p;
+            }
+            return actual ? {id:key+' ::capa '+ruta.join('.'),destino:{key:key,ruta:ruta,firma:firma},el:el} : null;
+        }
+        function padreDeCapas(el) {
+            var padre = el.parentElement || (el.getRootNode && el.getRootNode().host);
+            if (padre && padre.id === ID_LIBRES) padre = padre.parentElement;
+            return padre;
+        }
+        function capasVecinas(ctx) {
+            var padre = padreDeCapas(ctx.el);
+            if (!padre) return {elementos:[],indice:-1};
+            var limite = identidadCapa(padre), elementos = [];
+            var raiz = ctx.el.parentNode === padre.shadowRoot ? padre.shadowRoot : padre;
+            function agregar(n) {
+                if (n.id === ID_LIBRES) { Array.prototype.forEach.call(n.children, agregar); return; }
+                if (/^(STYLE|SCRIPT|LINK|META)$/.test(n.tagName) || esUIPropiaDeDiseno(n) || !n.getClientRects().length) return;
+                var r = n.getBoundingClientRect();
+                if (!r.width || !r.height) return;
+                var c = n === ctx.el ? {id:ctx.id,destino:ctx.registro.destino,el:n} : identidadCapa(n);
+                if (!c) return;
+                var cs = win.getComputedStyle(n), contenedor = padreCompuesto(n);
+                var esItem = contenedor && /^(inline-)?(flex|grid)$/.test(win.getComputedStyle(contenedor).display)
+                    && cs.position !== 'absolute' && cs.position !== 'fixed';
+                c.nivel = parseInt(cs.zIndex,10) || 0;
+                c.ordenVisual = esItem ? parseInt(cs.order,10) || 0 : 0;
+                c.orden = elementos.length; elementos.push(c);
+            }
+            Array.prototype.forEach.call(raiz.children, agregar);
+            elementos.sort(function(a,b) { return a.nivel-b.nivel || a.ordenVisual-b.ordenVisual || a.orden-b.orden; });
+            return {elementos:elementos,indice:elementos.findIndex(function(c) { return c.el === ctx.el; }),limite:limite};
+        }
+        function moverUnaCapa(ctx, subir) {
+            // Intercambiar vecinos y normalizar empates: sumar 1 al z-index
+            // puede saltar muchas capas, o no producir ningun cambio (#835).
+            var capas = capasVecinas(ctx), i = capas.indice, j = i + (subir ? 1 : -1), st = win.__disenoState;
+            if (!capas.limite || i < 0 || j < 0 || j >= capas.elementos.length) return;
+            if (capas.elementos.some(function(c) { var r=st.porKey[c.id]; return r && r.verOriginalActivo; })) return;
+            var temporal = capas.elementos[i]; capas.elementos[i] = capas.elementos[j]; capas.elementos[j] = temporal;
+            capas.elementos.forEach(function(c, indice) {
+                var existia = !!st.porKey[c.id];
+                var reg = registroPara(c.id); reg.destino = c.destino;
+                if (!existia) reg.soloCapa = true;
+                var automatica = c.el !== ctx.el && (!reg.capa || !!reg.capa.automatica);
+                // Los estilos de una capa aplicada a la rama no son el CSS
+                // original del vecino que vamos a registrar por primera vez.
+                var aplicadas = (st.capasAplicadas || new Map()).get(c.el) || {}, restaurar = {};
+                Object.keys(aplicadas).forEach(function(p) {
+                    var a = aplicadas[p];
+                    if (c.el.style.getPropertyValue(p) !== a.aplicado || c.el.style.getPropertyPriority(p) !== 'important') return;
+                    restaurar[p] = a.aplicado;
+                    if (a.valor) c.el.style.setProperty(p,a.valor,a.prioridad); else c.el.style.removeProperty(p);
+                });
+                recordarOriginales(c.el,reg);
+                Object.keys(restaurar).forEach(function(p) { c.el.style.setProperty(p,restaurar[p],'important'); });
+                Object.keys(st.porKey).forEach(function(id) {
+                    if (id !== c.id && st.porKey[id].capa && elPorId(id) === c.el) delete st.porKey[id].capa;
+                });
+                reg.capa = {nivel:indice+1,paso:true,limite:capas.limite.destino,automatica:automatica};
+            });
             reaplicarCapas();
         }
 
@@ -1739,6 +1936,8 @@ JS = """
             if (nodo.matches('.block-container')) return '.block-container';
             var partes = [];
             while (nodo && nodo.nodeType === 1) {
+                if (nodo.matches('[data-testid="stMainBlockContainer"]')) { partes.unshift('[data-testid="stMainBlockContainer"]'); break; }
+                if (nodo.matches('.block-container')) { partes.unshift('.block-container'); break; }
                 var key = Array.prototype.find.call(nodo.classList, function(c) {
                     return c.indexOf('st-key-') === 0;
                 });
@@ -1755,13 +1954,17 @@ JS = """
             return partes.join(' > ');
         }
 
-        function construirBloqueCapas(elemento, registro, ancla) {
+        function construirBloqueCapas(elemento, registro, ancla, calculadas) {
+            if (!registro.capa) return '';
+            var capas = calculadas || calcularCapas(true);
             var bloques = [];
             planDeCapa(elemento, registro).forEach(function(paso) {
                 var selector = paso.nodo === elemento ? ancla : selectorDeCapa(paso.nodo);
-                var props = (win.__disenoState.capasAplicadas || new Map()).get(paso.nodo) || {};
+                // Calcular la variante completa conserva tambien las ramas
+                // compartidas entre pasos y ordenes extremas (#835).
+                var props = capas.get(paso.nodo) || {};
                 var lineas = Object.keys(paso.props).map(function(prop) {
-                    var valor = props[prop] ? props[prop].aplicado : paso.props[prop];
+                    var valor = props[prop] !== undefined ? props[prop] : paso.props[prop];
                     return '    ' + prop + ': ' + valor + ' !important;';
                 });
                 var destino = enPieza(paso.nodo) ? 'CSS de la pieza' : 'CSS global de la app';
@@ -2831,6 +3034,8 @@ JS = """
             if (registro.verOriginalActivo) {
                 restaurarRegistro(elemento, registro);
                 restaurarTexto(elemento, registro);
+                var modeloOriginal = modeloMock(registro.key);
+                if (modeloOriginal && modoMock(modeloOriginal) === 'libre') ubicarLibre(modeloOriginal,elemento);
                 return;
             }
             // ── Hoja de texto: SVG de Plotly, o nodo dentro del iframe de
@@ -3344,7 +3549,7 @@ JS = """
             return out;
         }
 
-        function construirBloqueCSS(key, elemento, registro, sub, subTexto) {
+        function construirBloqueCSS(key, elemento, registro, sub, subTexto, capasCalculadas) {
             // ── Hoja de texto: el export NO es CSS de estilos/ ───────────
             // Devolver el bloque de siempre seria mentir dos veces: en
             // Plotly el SVG se dibuja en el servidor y esas propiedades
@@ -3417,6 +3622,9 @@ JS = """
             var dentroPieza = !!sub && enPieza(elemento);
             var ancla = dentroPieza ? (esMock(key) ? selClase('st-key-' + key) + ' ' : '') + selClase(sub)
                 : 'div' + selClase('st-key-' + key) + (sub ? ' ' + selClase(sub) : '');
+            if (key === CLAVE_LIENZO || key === '__diseno_documento' || (registro.destino && (registro.destino.ruta || registro.destino.ascender))) {
+                ancla = selectorDeCapa(elemento); dentroPieza = enPieza(elemento);
+            }
             if (sub && qsaProfundo(porKeyReal(key) || elemento, selClase(sub)).length > 1) {
                 ancla = selectorDeCapa(elemento);
             }
@@ -3475,7 +3683,7 @@ JS = """
                 var lineas = Object.keys(props).map(function(p) { return '    ' + p + ': ' + props[p] + ' !important;'; });
                 bloques.push(sel + ' {\\n' + lineas.join('\\n') + '\\n}');
             });
-            var bloqueCapas = construirBloqueCapas(elemento, registro, ancla);
+            var bloqueCapas = construirBloqueCapas(elemento, registro, ancla, capasCalculadas);
             if (bloqueCapas) bloques.push(bloqueCapas);
             // Lo de la TABLA (si el elemento tiene una grilla adentro) no
             // es CSS de estilos/ sino el custom_css de Python, asi que sale
@@ -4099,19 +4307,28 @@ JS = """
             panel.appendChild(filaSoloLectura('Posición (nudge)', posVal));
             if (!res.subTexto && !elemento.ownerSVGElement && elemento.ownerDocument === doc) {
                 var botonesCapas = doc.createElement('div');
-                botonesCapas.style.cssText = 'display:flex;gap:5px';
-                [[true, 'Traer al frente'], [false, 'Enviar al fondo']].forEach(function(opcion) {
+                botonesCapas.style.cssText = 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px';
+                var capas = capasVecinas({el:elemento,id:res.id,registro:registro});
+                var comparando = capas.elementos.some(function(c) { var r=win.__disenoState.porKey[c.id]; return r && r.verOriginalActivo; });
+                [['subir','Subir una capa'],['bajar','Bajar una capa'],['frente','Traer al frente'],['fondo','Enviar al fondo']].forEach(function(opcion) {
                     var b = doc.createElement('button');
                     b.textContent = opcion[1];
                     b.style.cssText = 'flex:1;background:#1c1c24;color:#fff;border:1px solid #34343f;border-radius:4px;padding:6px 3px;font:11px sans-serif;cursor:pointer';
+                    if (opcion[0] === 'subir' || opcion[0] === 'bajar') {
+                        b.disabled = comparando || capas.indice < 0 || !capas.limite || (opcion[0] === 'subir' ? capas.indice >= capas.elementos.length-1 : capas.indice === 0);
+                        b.title = comparando ? 'Vuelve a Ver con cambios para ordenar las capas de este contenedor.' : 'Mueve una posición entre los elementos del mismo contenedor.';
+                        if (b.disabled) b.style.opacity = '.4';
+                    }
                     b.addEventListener('click', function() {
                         var ctx = elementoActivo(); if (!ctx) return;
-                        cambiarCapa(ctx, opcion[0]);
-                        rehacerPanel();
+                        accionEdicion(function() {
+                            if (opcion[0] === 'subir' || opcion[0] === 'bajar') moverUnaCapa(ctx,opcion[0] === 'subir');
+                            else cambiarCapa(ctx,opcion[0] === 'frente');
+                        });
                     });
                     botonesCapas.appendChild(b);
                 });
-                var capaActual = registro.capa ? (registro.capa.nivel > 0 ? 'Frente' : 'Fondo') : 'Original';
+                var capaActual = registro.capa ? (registro.capa.paso ? 'Capa '+(capas.indice+1)+' de '+capas.elementos.length : registro.capa.nivel > 0 ? 'Frente' : 'Fondo') : 'Original';
                 panel.appendChild(filaControl('Orden de capas', botonesCapas, spanValor(capaActual), function() {
                     var ctx = elementoActivo(); if (!ctx) return;
                     delete ctx.registro.capa;
@@ -4937,6 +5154,7 @@ JS = """
                 btnOriginal.textContent = ctx.registro.verOriginalActivo ? 'Ver con cambios' : 'Ver original';
                 aplicarEstado(ctx.el, ctx.registro);
                 reaplicarCapas();
+                rehacerPanel();
             });
             panel.appendChild(btnOriginal);
 
@@ -4981,11 +5199,28 @@ JS = """
             panel.__vecinasFirma = '';
             pintarVecinas();
 
+            controlesInsercion(res);
+        }
+
+        function rehacerPanel() {
+            panel.dataset.builtForKey = '';
+            sync();
+        }
+
+        function controlesInsercion(res) {
+            var key = res ? res.key : '';
             // ---- insertar: elementos de mentira ----
             panel.appendChild(seccion('Insertar'));
 
-            var modoNuevo = modoAlInsertar(res);
+            var destino = destinoInsercion();
+            panel.appendChild(selectorEdicion('Destino al insertar', [['lienzo','Lienzo']].concat(res && res.el ? [['seleccion','Seleccionado']] : []),
+                destino.lienzo ? 'lienzo' : 'seleccion', function(valor) {
+                    win.__disenoState.destinoInsertar = valor;
+                    win.__disenoState.mockContexto = ''; rehacerPanel();
+                }));
+            var modoNuevo = modoAlInsertar(destino);
 
+            if (!destino.lienzo) {
             var POSICIONES = [['antes', 'Antes'], ['dentro', 'Dentro'], ['despues', 'Después']];
             var posWrap = doc.createElement('div');
             posWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
@@ -5003,6 +5238,7 @@ JS = """
                 posWrap.appendChild(b);
             });
             panel.appendChild(filaControl('Dónde (respecto del contorno)', posWrap, spanValor('')));
+            }
             panel.appendChild(selectorEdicion('Distribución al insertar', [['libre','Libre'],['flujo','En flujo']], modoNuevo, function(modo) {
                 win.__disenoState.mockModo = modo; rehacerPanel();
             }));
@@ -5027,10 +5263,6 @@ JS = """
             // Quitar: el que esta fijado (si es un mock) y el resto. Ambos
             // fuerzan la reconstruccion del panel porque cambia el conteo,
             // y la key fijada no cambia -> sync() sola no lo redibujaria.
-            function rehacerPanel() {
-                panel.dataset.builtForKey = '';
-                sync();
-            }
 
             if (esMock(key)) {
                 var btnQuitarEste = doc.createElement('button');
@@ -5145,10 +5377,14 @@ JS = """
             var grupos = win.__disenoRuntime.porRegistro;
             var nodos = grupos[registro.key] || (grupos[registro.key] = new Set());
             var destinos = [elemento];
-            if (!elemento.ownerSVGElement && elemento.ownerDocument === doc) {
+            if (!registro.soloCapa && !elemento.ownerSVGElement && elemento.ownerDocument === doc) {
                 destinos = destinos.concat(extenderATexto(destinosDeEstilo(elemento)));
             }
-            destinos.forEach(function(n) { recordarNodo(n); nodos.add(n); });
+            destinos.forEach(function(n) {
+                var original = recordarNodo(n);
+                if (registro.soloCapa) original.texto = null;
+                nodos.add(n);
+            });
             if (registro.cssTextOriginal === null) registro.cssTextOriginal = recordarNodo(elemento).css;
         }
 
@@ -5195,9 +5431,7 @@ JS = """
                     if (parte >= 0) d.subIdx = (parseInt(id.slice(parte + 2), 10) || 1) - 1;
                 }
             }
-            var base = porKeyReal(d.key);
-            var el = d.subTexto ? resolverNodoTexto(d.key, d.subTexto)
-                : d.sub ? resolverSubClase(base, d.sub, d.subIdx) : base;
+            var el = resolverDestinoDOM(d);
             return { id: id, key: d.key, sub: d.sub || '', subIdx: d.subIdx || 0,
                      subTexto: d.subTexto || null, el: el, registro: registro };
         }
@@ -5389,14 +5623,15 @@ JS = """
             return b;
         }
 
-        function detalleEdicion(titulo, abierto) {
+        function detalleEdicion(titulo, abierto, clave) {
             var det = doc.createElement('details'), resumen = doc.createElement('summary');
             det.style.cssText = 'border-top:1px solid #34313f;margin-top:10px;padding-top:8px';
             resumen.textContent = titulo;
             resumen.style.cssText = 'cursor:pointer;font:600 12px sans-serif;color:#ddd;padding:4px 0';
             var opciones = win.__disenoRuntime.secciones;
-            det.open = opciones[titulo] === undefined ? !!abierto : opciones[titulo];
-            det.addEventListener('toggle', function() { opciones[titulo] = det.open; });
+            var id = clave || titulo;
+            det.open = opciones[id] === undefined ? !!abierto : opciones[id];
+            det.addEventListener('toggle', function() { opciones[id] = det.open; });
             det.appendChild(resumen);
             return det;
         }
@@ -5626,6 +5861,7 @@ JS = """
                     var vista = perfiles[nombre]; if (!vista) return;
                     if (nombre !== 'general') vista = varianteExportable(vista, perfiles.general);
                     cargarVista(vista);
+                    var capasVariante = calcularCapas(true);
                     out.push('## ' + PERFILES[nombre].nombre, '');
                     Object.keys(vista.porKey).forEach(function(id) {
                         var reg = vista.porKey[id], ctx = contextoRegistro(id, reg);
@@ -5638,7 +5874,7 @@ JS = """
                         if (ctx.el) {
                             var tablas = estado.tablas; estado.tablas = {};
                             var css;
-                            try { css = construirBloqueCSS(ctx.key, ctx.el, efectivo, ctx.sub, ctx.subTexto); }
+                            try { css = construirBloqueCSS(ctx.key, ctx.el, efectivo, ctx.sub, ctx.subTexto, capasVariante); }
                             finally { estado.tablas = tablas; }
                             if (css) {
                                 out.push(ctx.subTexto
@@ -5651,8 +5887,11 @@ JS = """
                                 out.push('Destino adicional: tamaño en Python de ' + ctx.key +
                                     ' — ancho ' + (reg.cambios.width || 'original') + ', alto ' + (reg.cambios.height || 'original') + '.', '');
                             }
-                        } else out.push('Destino fuera de la pantalla actual. Ajustes: ' + JSON.stringify(efectivo.cambios) +
-                            '; desplazamiento: ' + JSON.stringify(t) + '.', '');
+                        } else {
+                            out.push('Destino fuera de la pantalla actual. Ajustes: ' + JSON.stringify(efectivo.cambios) +
+                                '; desplazamiento: ' + JSON.stringify(t) + '.', '');
+                            if (reg.capa) out.push('Orden de capas propuesto: ' + JSON.stringify(reg.capa), '');
+                        }
                         if (tieneTexto) out.push('Texto propuesto (HTML/Python/datos según el elemento): ' + JSON.stringify(reg.texto.actual), '');
                     });
                     Object.keys(vista.tablas).forEach(function(k) {
@@ -5670,9 +5909,10 @@ JS = """
                                 n.style.left = (r.left + m.libre.x) + 'px'; n.style.top = (r.top + m.libre.y) + 'px';
                             }
                         }
-                        out.push('### Insertar ' + m.tipo, 'Ubicación: ' + m.posicion + ' de ' + m.anclaKey + (m.anclaSub ? ' .' + m.anclaSub : '') + '.',
+                        out.push('### Insertar ' + m.tipo, m.enLienzo ? 'Ubicación: directamente en el lienzo, sin depender de otro widget.'
+                                : 'Ubicación: ' + m.posicion + ' de ' + m.anclaKey + (m.anclaSub ? ' .' + m.anclaSub : '') + '.',
                             'Distribución: ' + (modoMock(m) === 'libre' ? 'Libre (superpuesto, sin reservar espacio).' : 'En flujo (ocupa espacio en el contenedor).'),
-                            m.libre ? 'Anclaje relativo: ' + m.libre.x + 'px horizontal, ' + m.libre.y + 'px vertical. Conservar este anclaje al implementar.' : '',
+                            m.libre ? (m.enLienzo ? 'Posición relativa al lienzo: ' : 'Anclaje relativo: ') + m.libre.x + 'px horizontal, ' + m.libre.y + 'px vertical. Conservar este anclaje al implementar.' : '',
                             'Crear el elemento en el código de la vista y conectar sus acciones si corresponde.', cerca + 'html', n.outerHTML, cerca, '');
                     });
                     vista.uniones.forEach(function(u) { out.push('Unificar ' + u.a + ' con ' + u.b + ': el código debe usar el contenedor común correspondiente.', ''); });
@@ -5777,6 +6017,12 @@ JS = """
             });
             acciones.appendChild(botonEdicion('Todos los cambios', mostrarEntrega));
             acciones.appendChild(botonEdicion('Vista previa', mostrarPreview));
+            acciones.appendChild(botonEdicion('+ Insertar', function() {
+                var seccionInsertar = panel.querySelector('[data-diseno-insercion]');
+                if (!seccionInsertar) return;
+                seccionInsertar.open = true;
+                panel.scrollTop += seccionInsertar.getBoundingClientRect().top - panel.getBoundingClientRect().top - barra.offsetHeight - 12;
+            }));
             acciones.appendChild(botonEdicion(win.__disenoState.ladoPanel === 'izquierda'
                 ? 'Panel a la derecha' : 'Panel a la izquierda', function() {
                 win.__disenoState.ladoPanel = win.__disenoState.ladoPanel === 'izquierda' ? 'derecha' : 'izquierda';
@@ -5817,11 +6063,14 @@ JS = """
                 panel.insertBefore(controlesDistribucion(ctx), barra.nextSibling ? barra.nextSibling.nextSibling : null);
                 panel.appendChild(controlesEstilos(ctx, null));
             }
+            if (!ctx || miembros.length >= 2) controlesInsercion(null);
             // Agrupar las secciones existentes sin cambiar sus controles ni eventos.
             var seccionActual = null;
             Array.prototype.slice.call(panel.children).forEach(function(n) {
                 if (n.dataset.disenoSeccion) {
-                    seccionActual = detalleEdicion(n.dataset.disenoSeccion, false);
+                    var sinSeleccion = n.dataset.disenoSeccion === 'Insertar' && !ctx;
+                    seccionActual = detalleEdicion(n.dataset.disenoSeccion, sinSeleccion, sinSeleccion ? 'Insertar sin selección' : undefined);
+                    if (n.dataset.disenoSeccion === 'Insertar') seccionActual.dataset.disenoInsercion = '1';
                     panel.insertBefore(seccionActual, n); n.remove();
                 } else if (n.tagName === 'DETAILS' || n === barra || (n.tagName === 'BUTTON' && /^Ver (original|con cambios)$/.test(n.textContent))) seccionActual = null;
                 else if (seccionActual) seccionActual.appendChild(n);

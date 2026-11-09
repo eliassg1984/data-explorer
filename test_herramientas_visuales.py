@@ -1,5 +1,6 @@
 """Barra y editor: apartar herramientas sin alterar la app ni perder el diseño."""
 import ast
+import json
 import re
 import unittest
 
@@ -121,6 +122,265 @@ class HerramientasVisuales(unittest.TestCase):
             }
             return el && el.getAttribute('class');
         }''', punto)
+
+    def orden_insertados(self, punto):
+        return self.page.evaluate('''p=>Array.from(new Set(document.elementsFromPoint(p.x,p.y)
+            .map(e=>e.closest('[data-diseno-mock]')).filter(Boolean).map(e=>e.classList[0].slice(7))))''', punto)
+
+    def test_crear_sin_seleccion_es_independiente_y_no_mueve_la_app(self):
+        antes = self.page.locator('.stApp').bounding_box()
+        scroll = self.page.evaluate('[scrollX,scrollY,document.documentElement.scrollWidth,document.documentElement.scrollHeight]')
+        tarjeta = self.insertar_tarjeta(modo=None)
+        self.assertTrue(self.page.evaluate('__disenoState.mocks[0].enLienzo'))
+        self.assertEqual(self.page.get_by_label('Destino al insertar', exact=True).input_value(), 'lienzo')
+        self.assertEqual(self.page.evaluate('__inspectorUltimo.key'), 'diseno_tarjeta_1')
+        self.assertTrue(self.page.evaluate('__inspectorPinned'))
+        self.assertEqual(self.page.evaluate('typeof textoCopiadoPrueba'), 'undefined')
+        self.assertFalse(self.page.locator('#el-inspector-tip').is_visible())
+        caja = tarjeta.bounding_box()
+        self.assertGreaterEqual(caja['x'], 0)
+        self.assertLessEqual(caja['x'] + caja['width'], 1136)
+        self.assertGreaterEqual(caja['y'], 0)
+        self.assertLessEqual(caja['y'] + caja['height'], 900)
+        self.assertEqual(self.page.locator('.stApp').bounding_box(), antes)
+        self.assertEqual(self.page.evaluate('[scrollX,scrollY,document.documentElement.scrollWidth,document.documentElement.scrollHeight]'), scroll)
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(tarjeta.count(), 0)
+        self.page.get_by_role('button', name='Rehacer', exact=True).click()
+        self.assertEqual(tarjeta.count(), 1)
+        self.assertEqual(tarjeta.bounding_box(), caja)
+        self.page.locator('.st-key-a').evaluate('e=>e.remove()')
+        self.page.evaluate('editorPrueba.sync()')
+        self.assertEqual(tarjeta.count(), 1)
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        self.assertIn('directamente en el lienzo', entrega)
+        self.assertNotIn('de __diseno_lienzo', entrega)
+
+    def test_elegir_lienzo_con_algo_seleccionado_y_volver_a_insertar_dentro(self):
+        self.montar_zona_interna()
+        self.page.get_by_role('button', name='+ Insertar', exact=True).click()
+        self.page.get_by_label('Destino al insertar', exact=True).select_option('lienzo')
+        tarjeta = self.insertar_tarjeta(modo=None)
+        otra = self.insertar_tarjeta(modo=None)
+        self.assertTrue(self.page.evaluate('__disenoState.mocks.every(m=>m.enLienzo)'))
+        self.assertEqual(otra.evaluate('e=>e.parentElement.id'), 'diseno-insertados-libres')
+        self.pin('diseno_tarjeta_1')
+        self.page.get_by_label('Destino al insertar', exact=True).select_option('seleccion')
+        texto = self.insertar_mock('Texto', modo=None, posicion='Dentro')
+        self.assertEqual(texto.evaluate('e=>e.parentElement.className'), tarjeta.get_attribute('class'))
+        self.assertEqual(texto.get_attribute('data-diseno-distribucion'), 'flujo')
+        self.assertFalse(self.page.evaluate('__disenoState.mocks.at(-1).enLienzo'))
+
+    def test_tarjeta_independiente_se_conserva_en_perfiles_y_preview_movil(self):
+        self.insertar_tarjeta(modo=None)
+        self.page.get_by_label('Diseñar para', exact=True).select_option('movil')
+        self.assertTrue(self.page.evaluate('__disenoState.mocks[0].enLienzo'))
+        self.page.get_by_role('button', name='Vista previa', exact=True).click()
+        marco = self.page.get_by_title('Vista previa del diseño').element_handle().content_frame()
+        caja = marco.locator('.st-key-diseno_tarjeta_1').evaluate('e=>({left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right})')
+        self.assertGreaterEqual(caja['left'], 0)
+        self.assertLessEqual(caja['right'], 390)
+        self.assertEqual(marco.locator('script').count(), 0)
+
+    def test_subir_y_bajar_una_capa_no_salta_las_otras_tarjetas(self):
+        for _ in range(3):
+            self.insertar_tarjeta(modo=None)
+        self.page.evaluate('''()=>{
+            const origen={...__disenoState.mocks[0].libre};
+            __disenoState.mocks.forEach(m=>m.libre={...origen}); editorPrueba.sync();
+        }''')
+        caja = self.page.locator('.st-key-diseno_tarjeta_1').bounding_box()
+        punto = {'x': caja['x'] + 40, 'y': caja['y'] + 35}
+        self.assertEqual(self.orden_insertados(punto), ['diseno_tarjeta_3', 'diseno_tarjeta_2', 'diseno_tarjeta_1'])
+        self.pin('diseno_tarjeta_1')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(self.orden_insertados(punto), ['diseno_tarjeta_3', 'diseno_tarjeta_1', 'diseno_tarjeta_2'])
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(self.orden_insertados(punto), ['diseno_tarjeta_1', 'diseno_tarjeta_3', 'diseno_tarjeta_2'])
+        self.assertTrue(self.page.get_by_role('button', name='Subir una capa', exact=True).is_disabled())
+        self.page.get_by_role('button', name='Bajar una capa', exact=True).click()
+        self.assertEqual(self.orden_insertados(punto), ['diseno_tarjeta_3', 'diseno_tarjeta_1', 'diseno_tarjeta_2'])
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(self.orden_insertados(punto), ['diseno_tarjeta_1', 'diseno_tarjeta_3', 'diseno_tarjeta_2'])
+        self.page.get_by_role('button', name='Rehacer', exact=True).click()
+        self.assertEqual(self.orden_insertados(punto), ['diseno_tarjeta_3', 'diseno_tarjeta_1', 'diseno_tarjeta_2'])
+        self.assertEqual(self.page.locator('.st-key-diseno_tarjeta_1').bounding_box(), caja)
+        self.page.get_by_role('button', name='Traer al frente', exact=True).click()
+        self.assertEqual(self.orden_insertados(punto)[0], 'diseno_tarjeta_1')
+        self.page.get_by_role('button', name='Enviar al fondo', exact=True).click()
+        self.assertEqual(self.orden_insertados(punto)[-1], 'diseno_tarjeta_1')
+
+    def test_pasos_de_capa_en_controles_reales_respetan_su_contenedor(self):
+        self.montar_zona_interna()
+        self.page.locator('.dv-zona').evaluate('''e=>{
+            e.style.position='relative';
+            for(const letra of ['a','b','c']) {
+                const n=document.createElement('div'); n.className='dv-capa-'+letra;
+                n.style.cssText='position:absolute;left:16px;top:16px;width:180px;height:40px;background:white';
+                n.textContent=letra; e.appendChild(n);
+            }
+        }''')
+        caja = self.page.locator('.dv-capa-a').bounding_box()
+        punto = {'x': caja['x'] + 25, 'y': caja['y'] + 20}
+        self.pin('piece', 'dv-capa-a')
+        self.assertEqual(self.clase_en_punto(punto), 'dv-capa-c')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'dv-capa-c')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'dv-capa-a')
+        self.page.get_by_role('button', name='Bajar una capa', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'dv-capa-c')
+        self.assertEqual(self.page.locator('.dv-capa-a').bounding_box(), caja)
+        self.assertEqual(self.page.locator('.st-key-piece').evaluate('e=>e.style.zIndex'), '')
+
+    def test_ordenar_tarjetas_no_restaura_etiquetas_de_vecinos_no_seleccionados(self):
+        self.page.locator('.st-key-boton p').evaluate('''e=>{
+            const texto=document.createElement('div'); texto.dataset.testid='stMarkdownContainer';
+            e.before(texto); texto.appendChild(e);
+        }''')
+        self.insertar_tarjeta(modo=None)
+        self.insertar_tarjeta(modo=None)
+        self.pin('diseno_tarjeta_1')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.page.locator('.st-key-boton p').evaluate('e=>e.textContent="Etiqueta actualizada por la app"')
+        self.page.get_by_role('button', name='Deshacer', exact=True).click()
+        self.assertEqual(self.page.locator('.st-key-boton p').inner_text(), 'Etiqueta actualizada por la app')
+
+    def test_pasos_de_capa_dentro_de_tarjeta_no_cambian_su_capa_global(self):
+        tarjeta = self.insertar_tarjeta(modo=None)
+        self.page.get_by_label('Destino al insertar', exact=True).select_option('seleccion')
+        for _ in range(3):
+            self.insertar_mock('Texto', modo='libre', posicion='Dentro')
+        self.page.evaluate('''()=>{
+            const hijos=__disenoState.mocks.slice(1), origen={...hijos[0].libre};
+            hijos.forEach(m=>m.libre={...origen}); editorPrueba.sync();
+        }''')
+        capa = tarjeta.evaluate('e=>getComputedStyle(e).zIndex')
+        app = self.page.locator('.stApp').bounding_box()
+        r = self.page.locator('.st-key-diseno_texto_2').bounding_box()
+        punto = {'x':r['x']+30,'y':r['y']+8}
+        self.pin('diseno_texto_2')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(self.orden_insertados(punto)[:3], ['diseno_texto_4','diseno_texto_2','diseno_texto_3'])
+        self.assertEqual(tarjeta.evaluate('e=>getComputedStyle(e).zIndex'), capa)
+        self.assertEqual(self.page.locator('.stApp').bounding_box(), app)
+
+    def test_exportar_pasos_de_capa_respeta_general_y_movil(self):
+        for _ in range(3):
+            self.insertar_tarjeta(modo=None)
+        self.pin('diseno_tarjeta_1')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        general = self.page.evaluate('__disenoState.porKey.diseno_tarjeta_1.capa.nivel')
+        self.page.get_by_label('Diseñar para', exact=True).select_option('movil')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        movil = self.page.evaluate('__disenoState.porKey.diseno_tarjeta_1.capa.nivel')
+        self.assertNotEqual(general, movil)
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        for nombre, nivel in [('General', general), ('Móvil', movil)]:
+            seccion = entrega.split('\n## ' + nombre + '\n', 1)[1].split('\n## ', 1)[0]
+            bloque = re.search(r'\n### diseno_tarjeta_1\n(.*?)(?=\n### |\Z)', seccion, re.S).group(1)
+            self.assertEqual([int(v) for v in re.findall(r'z-index:\s*(-?\d+)', bloque)], [nivel])
+
+    def test_exportar_conserva_capas_de_insertados_de_otra_variante_no_visible(self):
+        self.page.get_by_label('Diseñar para', exact=True).select_option('movil')
+        self.insertar_tarjeta(modo=None)
+        self.insertar_tarjeta(modo=None)
+        self.pin('diseno_tarjeta_1')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        nivel = self.page.evaluate('__disenoState.porKey.diseno_tarjeta_1.capa.nivel')
+        self.page.get_by_label('Diseñar para', exact=True).select_option('general')
+        self.assertEqual(self.page.locator('[data-diseno-mock]').count(), 0)
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        seccion = entrega.split('\n## Móvil\n', 1)[1]
+        bloque = re.search(r'\n### diseno_tarjeta_1\n(.*?)(?=\n### |\Z)', seccion, re.S).group(1)
+        capa = json.loads(re.search(r'Orden de capas propuesto: (.+)', bloque).group(1))
+        self.assertEqual(capa['nivel'], nivel)
+        self.assertIn('directamente en el lienzo', seccion)
+
+    def test_capa_de_rama_sin_clase_de_autor_se_repone_y_conserva_original(self):
+        self.page.locator('.fila').evaluate('''e=>{
+            const padre=document.createElement('div'); padre.dataset.testid='stLayoutWrapper';
+            e.before(padre); padre.appendChild(e);
+        }''')
+        html = self.page.locator('[data-testid=stLayoutWrapper]').evaluate('e=>e.outerHTML')
+        tarjeta = self.insertar_tarjeta(modo=None)
+        self.page.evaluate('''()=>{
+            const r=document.querySelector('.st-key-a').getBoundingClientRect();
+            const base=document.querySelector('main').getBoundingClientRect();
+            __disenoState.mocks[0].libre={x:r.left-base.left,y:r.top-base.top}; editorPrueba.sync();
+        }''')
+        r = self.page.locator('.st-key-a').bounding_box()
+        punto = {'x':r['x']+30,'y':r['y']+30}
+        for _ in range(3):
+            self.page.get_by_role('button', name='Bajar una capa', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'st-key-a')
+        self.page.locator('[data-testid=stLayoutWrapper]').evaluate('(e,s)=>e.outerHTML=s', html)
+        self.page.evaluate('editorPrueba.sync()')
+        self.assertEqual(self.clase_en_punto(punto), 'st-key-a')
+        self.assertEqual(tarjeta.count(), 1)
+        self.page.get_by_role('button', name='Ver original', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'dv-mock-titulo')
+        self.assertTrue(self.page.get_by_role('button', name='Bajar una capa', exact=True).is_disabled())
+        self.page.get_by_role('button', name='Ver con cambios', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'st-key-a')
+        self.assertTrue(self.page.get_by_role('button', name='Subir una capa', exact=True).is_enabled())
+
+    def test_pasos_de_capa_respetan_el_orden_visual_de_un_flex(self):
+        self.page.locator('.fila').evaluate('''e=>{
+            e.style.gap='0'; e.style.paddingLeft='180px';
+            for(const [key, orden] of [['a',2],['b',0],['c',1]]) {
+                const n=e.querySelector('.st-key-'+key);
+                n.style.margin='0 0 0 -180px'; n.style.order=String(orden);
+            }
+        }''')
+        cajas = [self.page.locator('.st-key-' + k).bounding_box() for k in ['a','b','c']]
+        punto = {'x':cajas[0]['x']+40,'y':cajas[0]['y']+40}
+        self.pin('b')
+        self.assertEqual(self.clase_en_punto(punto), 'st-key-a')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'st-key-a')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'st-key-b')
+        self.assertEqual([self.page.locator('.st-key-' + k).bounding_box() for k in ['a','b','c']], cajas)
+
+    def test_pasos_y_extremos_siguen_funcionando_entre_tarjeta_y_control_real(self):
+        self.montar_zona_interna()
+        self.page.locator('.dv-zona').evaluate('''e=>{
+            const n=document.createElement('button'); n.className='dv-control'; n.textContent='Control real';
+            n.style.cssText='display:block;width:220px;height:32px;margin-top:8px'; e.appendChild(n);
+        }''')
+        self.page.get_by_role('button', name='+ Insertar', exact=True).click()
+        self.page.get_by_label('Destino al insertar', exact=True).select_option('lienzo')
+        self.insertar_tarjeta(modo=None)
+        r = self.page.locator('.dv-control').bounding_box()
+        self.page.evaluate('''r=>{
+            const b=document.querySelector('main').getBoundingClientRect();
+            __disenoState.mocks[0].libre={x:r.x-b.left,y:r.y-b.top}; editorPrueba.sync();
+        }''', r)
+        punto = {'x':r['x']+20,'y':r['y']+16}
+        self.page.get_by_role('button', name='Bajar una capa', exact=True).click()
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'dv-mock-titulo')
+        self.pin('piece', 'dv-control')
+        self.page.get_by_role('button', name='Traer al frente', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'dv-control')
+        self.pin('diseno_tarjeta_1')
+        self.page.get_by_role('button', name='Subir una capa', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'dv-mock-titulo')
+        self.pin('piece', 'dv-control')
+        self.page.get_by_role('button', name='Enviar al fondo', exact=True).click()
+        self.assertEqual(self.clase_en_punto(punto), 'dv-mock-titulo')
+
+    def test_exportar_capas_conserva_posicion_de_lienzo_libre_y_flujo_por_variante(self):
+        self.insertar_tarjeta(modo=None)
+        self.page.get_by_role('button', name='Bajar una capa', exact=True).click()
+        self.page.get_by_label('Diseñar para', exact=True).select_option('movil')
+        self.page.get_by_label('Distribución del insertado', exact=True).select_option('flujo')
+        entrega = self.page.evaluate('editorPrueba.exportarEdicion()')
+        for nombre, posicion in [('General','fixed'),('Móvil','relative')]:
+            seccion = entrega.split('\n## ' + nombre + '\n', 1)[1].split('\n## ', 1)[0]
+            bloque = re.search(r'\n### diseno_tarjeta_1\n(.*?)(?=\n### |\Z)', seccion, re.S).group(1)
+            self.assertIn('position: ' + posicion, bloque)
 
     def test_tarjeta_libre_se_envia_detras_de_imagenes_formas_y_controles_reales(self):
         from io import BytesIO

@@ -159,6 +159,10 @@ espacio en su contenedor. Dentro de un insertado se propone En flujo; sobre
 la app, Libre. La conversión conserva ajustes e historial. Antes/Dentro/
 Después elige el ancla y Traer al frente/Enviar al fondo el orden de capas.
 Sólo se trasladan nodos del prototipo, nunca controles reales. Regla #833.
+«+ Insertar» abre la creación en Lienzo sin selección, o respecto de Seleccionado.
+Los objetos del lienzo no dependen de otro widget y se seleccionan con la API
+pública del inspector. Subir/Bajar una capa cambia una posición entre vecinos
+del contenedor; conserva historial, anidado y exportación por variante (#835).
 """
 
 import json

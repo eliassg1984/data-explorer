@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-834 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+835 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (279)
+**CSS y estilos** (280)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -346,6 +346,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#831** — Un selector interno necesita su propia ancla de Diseño
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#834** — Enviar al fondo incluye el contenido real, no sólo los otros insertados
+- **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
 **Layout y alturas** (114)
 
@@ -1141,7 +1142,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
 - **#643** — El asistente IA suma los requerimientos como la página: sin anulados ni líneas sin producto,…
 
-**Herramientas de desarrollo** (43)
+**Herramientas de desarrollo** (44)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -1186,6 +1187,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#820** — Adentro de una pieza propia, el modo diseño baja al nodo de verdad
 - **#830** — Las herramientas se apartan sin apilar avisos sobre el contenido
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
+- **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
 **Decisiones de diseño y UX** (276)
 
@@ -59137,6 +59139,33 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    y el anclaje se coloca antes de guardar su CSS original: rehacer o recrear un nodo
    conserva el orden de capas en ese mismo tick y Original no lo desplaza.
 
+835. **Crear en el lienzo no exige selección, y una capa es una posición entre vecinos.**
+   «+ Insertar» abre la sección de creación desde la barra del panel. «Destino al
+   insertar» ofrece Lienzo y, si hay un elemento, Seleccionado. Sin selección se abre
+   la creación en el lienzo; no se fija un widget ficticio para habilitarla. Los modelos
+   con `enLienzo` se resuelven contra el contenedor principal, se crean Libres por
+   defecto en el área visible y no dependen de que sobreviva otro widget. El inspector
+   los selecciona con sus funciones públicas, sin escribir sus variables de pin ni
+   abrir un tooltip encima. Seleccionado conserva Antes/Dentro/Después y Libre/En flujo.
+   La entrega declara el destino real y la posición relativa al lienzo.
+   «Subir una capa» y «Bajar una capa» intercambian una posición entre elementos del
+   mismo contenedor. No suman/restan uno al z-index: hay empates y saltos de mil millones.
+   Se ordenan los vecinos por capa, orden visual de flex/grid y DOM; se intercambian los dos y se
+   normalizan sus niveles enteros en una sola acción de historial. El auxiliar de Libres
+   es transparente para contar los vecinos del lienzo; los hijos de una tarjeta mantienen
+   su ámbito dentro de ella. No se mueve ningún nodo real de React. Las ramas sin clase
+   de autor se resuelven desde keys descendientes o rutas validadas, sin guardar nodos.
+   Los vecinos registrados sólo para ordenar capas conservan su CSS, sin restaurar sus
+   etiquetas o datos al deshacer. Al seleccionarlos pasan a la edición normal. Una
+   normalización automática no bloquea una orden posterior de traer al frente o enviar
+   al fondo sobre un control real. Al cambiar Libre/En flujo se resuelve de nuevo el
+   ámbito. El CSS exportado usa los niveles y la posición del modelo de cada variante,
+   aunque otra esté visible, y la entrega
+   conserva el orden propuesto de objetos ausentes de la pantalla actual. Todo sigue
+   en memoria, sin borradores. `test_herramientas_visuales.py` comprueba creación sin pin,
+   selección automática, independencia, anidado, geometría, pasos entre tres capas,
+   controles reales, reposición, original, historial, variantes y exportación.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59149,7 +59178,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#834**; la próxima toma el número siguiente.
+> última regla es la **#835**; la próxima toma el número siguiente.
 
 >
 

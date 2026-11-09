@@ -87,6 +87,9 @@ Se puede convertir el insertado conservando ajustes e historial; ubicación
 y orden de capas son controles independientes (regla #833).
 Enviar al fondo incluye imágenes, formas y controles reales; el contexto compartido
 conserva la tarjeta sobre el fondo del lienzo y se restaura con el historial (#834).
+«+ Insertar» ofrece Lienzo sin selección previa y Seleccionado para insertar respecto
+de un elemento. Subir/Bajar una capa avanza una posición entre vecinos del contenedor;
+conserva anidado, historial, variantes y entrega sin mover nodos reales (regla #835).
 
 | Fichero | Trabajo (uno solo) |
 |---|---|

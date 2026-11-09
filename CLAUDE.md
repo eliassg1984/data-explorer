@@ -2509,6 +2509,9 @@ Dentro/Después es ubicación; frente/fondo es orden de capas. Sólo se
 trasladan nodos del prototipo, nunca controles reales. Regla #833.
 Enviar al fondo también coloca los insertados detrás del contenido real; conserva
 un contexto compartido para que sigan sobre el fondo del lienzo (regla #834).
+«+ Insertar» permite crear en el Lienzo sin seleccionar un widget; Seleccionado conserva
+la inserción relativa. Subir/Bajar una capa intercambia una posición dentro del mismo
+contenedor, con historial y exportación por variante, sin mover nodos reales (#835).
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
 hay secrets R2). Levantarla con `streamlit run app.py` o el preview del
