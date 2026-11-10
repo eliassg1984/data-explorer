@@ -166,9 +166,14 @@ from graficos.base import (
     eleccion_compartida, filtro_pills,
     _render_rail, _resolver, pila_sin_tablas, publicar_contexto_ia,
     rail_sin_tablas, rango_tarjeta, renderizar_graficos_genericos,
-    seccion_perezosa, selector_fecha_tarjeta,
+    seccion_perezosa, selector_fecha_tarjeta, k_rango_tarjeta,
 )
+from graficos.panel_fecha import etiqueta_disparador
 from graficos.movimientos_comun import K_RECARGA, recargar_si_cambio
+# «Contar por» y la pestaña «Cadena por área» de Req. y salidas (regla #845).
+from graficos.movimientos_periodo_pieza import (
+    CONTAR, K_CONTAR, K_CORTE_PERSP, ROT_CONTAR, contar_por, ir_a_zona,
+)
 # `_ANULADO`, `SALIDAS` y `REQUERIMIENTOS` son de las tarjetas «por
 # período»: el «Detalle de salidas» y la cadena de requerimientos suman lo
 # mismo que ellas (reglas #511 y #641), y dos copias de «qué es un documento
@@ -284,10 +289,19 @@ PERSPECTIVAS = (
     ("Salidas", "Análisis por área", "mov_sec_detalle_sal",
      "Detalle de salidas", "Salidas por Área"),
 )
+PESTANAS_PIEZA = (
+    ("Gráfico", "Gráfico", "grafico"), ("Calendario", "Calendario", "calendario"),
+    ("Resumen", "Tabla", "tabla"), ("Por área", "Por área", "porarea"),
+    ("Productos", "Productos", "productos"), ("Detalle", "Detalle", "detalle"),
+)
+"""Las pestañas de la pieza de Req. y salidas (`movimientos_periodo.js`,
+`tabs`), en su orden: `(modo de la pieza, rótulo, sufijo de la key)`. Las
+repite la fila de «Cadena por área» (#845). Comparación no va: sólo aparece
+con un año para comparar, y lo sabe la pieza."""
 SEC_LADOS = "mov_sec_persp_lados"
 """La sección de la pila que dibuja la perspectiva elegida. El `_sec_persp_`
 es la marca con que su tarjeta cede el alto de la franja (#712)."""
-K_LADO, K_CORTE = "_mov_persp_lado", "_mov_persp_corte"
+K_LADO, K_CORTE = "_mov_persp_lado", K_CORTE_PERSP
 """Dónde viven el lado y el corte elegidos: claves propias y no las de sus
 widgets, para que sobrevivan a que la sección no se dibuje (otro reporte,
 el esqueleto) — `base.eleccion_compartida`."""
@@ -403,8 +417,15 @@ def fecha_de_vista(categoria, ctx_v):
 
     def dibujar(titulo_html=None):
         if ctx_v:
+            # #845: en Req. y salidas la fecha dice además cómo se cuenta
+            # («· al cierre»): «Contar por» se elige en su panel.
+            label = None
+            if "contar" in AJUSTES_PIE.get(categoria, ()):
+                rango_tarjeta(categoria, ctx_v)
+                ctx_l = {**ctx_v, "k_rango": k_rango_tarjeta(categoria, ctx_v)}
+                label = f"{etiqueta_disparador(ctx_l)} · {ROT_CONTAR[contar_por()]}"
             selector_fecha_tarjeta(f"mov_f_{categoria}", None,
-                                   titulo_html=titulo_html,
+                                   titulo_html=titulo_html, label=label,
                                    categoria=categoria, ctx=ctx_v, pie=pie,
                                    pie_al_costado=True)
         elif titulo_html:
@@ -630,15 +651,25 @@ _AJUSTES = {
     "comparar": (
         K_COMP_SAL, "Comparar con", COMPARAR_SAL, COMPARAR_SAL[1],
         "El mismo rango de fechas, uno o dos años atrás."),
+    # #845: hasta ese día, un control de la pieza. Decide en qué mes cae cada
+    # documento, así que es parte de la fecha: va al costado de su panel.
+    "contar": (
+        K_CONTAR, "Contar por", tuple(CONTAR), "Cierre",
+        "**Cierre**: el mes del conteo: lo digitado hasta la apertura del "
+        "inventario va al mes que cerró; es lo que suma Sin plato. Sólo mes a "
+        "mes: por día o por semana cuenta por registro. **Registro**: el día "
+        "en que se digitó. **Proceso**: el día en que movió el stock, como el "
+        "kardex."),
 }
 AJUSTES_PIE = {
     # categoría de la vista (`CATEGORIA_VISTA`): los ajustes de su pie.
     # Las dos de cierre a cierre (regla #645) no tienen panel de fecha: eligen
     # un cierre y comparan contra los seis anteriores.
-    # «Por período» elige su fecha en la pieza, con «Contar por» (regla #772).
+    # «Por período» elige su fecha con «Contar por» al costado (#772, #845).
+    "req_periodo": ("contar",),
     "req_area":    ("req_fecha",),
     "req_tabla":   ("req_fecha",),
-    "sal_periodo": ("comparar",),
+    "sal_periodo": ("contar", "comparar"),
     "sal_area":    ("sal_fecha", "comparar"),
     "sal_tabla":   ("sal_fecha",),
 }
@@ -1684,7 +1715,28 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
         # cuadro, de un tercio del ancho. La franja la dibuja
         # `base.dibujar_perspectiva` desde la regla #712, que la llevó a
         # Stock, Ajuste y Producción.
-        dibujar_perspectiva("mov", EJES_LADOS, PERSPECTIVAS, _DIBUJANTES)
+        #
+        # Desde la regla #845 el segundo eje (Resumen | Análisis por área) no se
+        # ve: «Análisis por área» es la última pestaña de la pieza, «Cadena por
+        # área». Esa vista es otra pieza, así que arriba de su tarjeta va la
+        # misma fila de pestañas, dibujada acá, que vuelve a la pieza.
+        dib = dict(_DIBUJANTES)
+        for _s in ("mov_sec_cadena", "mov_sec_detalle_sal"):
+            dib[_s] = lambda o=_DIBUJANTES[_s]: (_pestanas_cadena(), o())
+        dibujar_perspectiva("mov", EJES_LADOS, PERSPECTIVAS, dib)
+
+    def _pestanas_cadena():
+        lado = st.session_state.get(K_LADO, LADOS[0])
+        detalle = "Notas" if lado == "Salidas" else "Requerimientos"
+        with st.container(key="mov_cadena_tabs", horizontal=True, gap=None,
+                          vertical_alignment="bottom"):
+            for zona, rot, k in PESTANAS_PIEZA:
+                st.button(detalle if zona == "Detalle" else rot,
+                          key=f"mov_cadena_tab_{k}", type="tertiary",
+                          on_click=ir_a_zona, args=(zona,))
+            # La elegida: no hace nada (deshabilitada, sin corrida).
+            st.button("Cadena por área", key="mov_cadena_tab_cadena",
+                      type="tertiary", disabled=True)
 
     _DIBUJANTES = {
         SEC_LADOS:             _dib_lados,

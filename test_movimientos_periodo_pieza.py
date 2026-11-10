@@ -16,8 +16,11 @@ from graficos import movimientos_periodo as mp
 from graficos import movimientos_periodo_datos as datos
 
 ROOT = Path(__file__).parent
-JS = (ROOT/'graficos/movimientos_periodo.js').read_text(encoding='utf-8')
-CSS = (ROOT/'graficos/movimientos_periodo.css').read_text(encoding='utf-8')
+# Como la monta `movimientos_periodo_pieza.py`: los íconos de la app van antepuestos (#845).
+JS = ((ROOT/'graficos/iconos.js').read_text(encoding='utf-8')
+      + (ROOT/'graficos/movimientos_periodo.js').read_text(encoding='utf-8'))
+CSS = ((ROOT/'graficos/iconos.css').read_text(encoding='utf-8')
+       + (ROOT/'graficos/movimientos_periodo.css').read_text(encoding='utf-8'))
 COLS = dict(fecha='F',doc='D',area='A',estado='E',fam='FM',prod='P',cant='Q',val='V',tipo='T',unid='U',causa='C')
 RANGO = (pd.Timestamp('2025-01-02'),pd.Timestamp('2025-04-16'))
 
@@ -60,6 +63,33 @@ class Contrato(unittest.TestCase):
         d.loc[d.index[0],'V']+=.000000001
         self.assertNotEqual(p['sello'],datos.armar(d,mp.REQUERIMIENTOS,COLS,hist=h,anios=2,rango=RANGO,marcas=m)['sello'])
         self.assertNotRegex(JS+CSS,r'#[0-9a-fA-F]{6}\b')
+
+    def test_contar_por_y_cadena_desde_python(self):
+        """#845: «Contar por» vive al costado del panel de la fecha y la pestaña
+        «Cadena por área» escribe la perspectiva; la fila de la cadena repite las
+        pestañas de la pieza en su orden."""
+        from graficos import movimientos as mv
+        from graficos import movimientos_periodo_pieza as pz
+        self.assertEqual(mv.K_CORTE,pz.K_CORTE_PERSP);self.assertIn("Análisis por área",mv.CORTES)
+        self.assertEqual(mv.AJUSTES_PIE["req_periodo"],("contar",))
+        self.assertEqual(mv.AJUSTES_PIE["sal_periodo"][0],"contar")
+        clave,rot,ops,defecto,_=mv._AJUSTES["contar"]
+        self.assertEqual((clave,rot,ops,defecto),(pz.K_CONTAR,"Contar por",("Cierre","Registro","Proceso"),"Cierre"))
+        self.assertEqual(set(pz.CONTAR.values()),{"cie","reg","pro"})
+        estado={}
+        with patch.object(pz.st,"session_state",estado):
+            self.assertEqual(pz.contar_por(),"Cierre")
+            estado[pz.K_CONTAR]="Proceso";self.assertEqual(pz.contar_por(),"Proceso")
+            estado[pz.K_CONTAR]="otra";self.assertEqual(pz.contar_por(),"Cierre")
+            pz.ir_a_cadena();self.assertEqual(estado[pz.K_CORTE_PERSP],"Análisis por área")
+            pz.ir_a_zona("Productos");pz.ir_a_zona("Detalle")
+            self.assertEqual(estado[pz.K_CORTE_PERSP],"Resumen");self.assertEqual(estado[pz.K_ZONA],{"v":"Detalle","n":2})
+        # Las pestañas de la fila de la cadena son las de la pieza, en su orden.
+        modos=[z for z,_r,_k in mv.PESTANAS_PIEZA]
+        self.assertEqual(modos,["Gráfico","Calendario","Resumen","Por área","Productos","Detalle"])
+        i=JS.index("const tabs = [['Gráfico','Gráfico']")
+        self.assertLess(JS.index("['Calendario','Calendario']",i),JS.index("['Resumen','Tabla']",i))
+        self.assertLess(JS.index("['Productos','Productos']",i),JS.index("['Detalle',nombreDetalle(P)]",i))
 
     def test_fecha_feriados_semana_iso_y_parciales(self):
         p,_,_,_=payload()
@@ -116,9 +146,19 @@ class Navegador(unittest.TestCase):
     def calc(self,p,s):
         return self.pg.evaluate('([p,s])=>__movPeriodoDatos.calcular(p,s)',[p,s])
 
+    # La cabecera de #845: el grano es un select, los indicadores van plegados y
+    # los filtros, dentro de «Más filtros».
+    def gran(self,root,v):root.locator('select[data-select=gran]').select_option(v)
+    def kpis(self,root):
+        if not root.locator('.mv-ktira').count():root.locator('.mv-kcap').click()
+        return root.locator('.mv-ktira')
+    def filtro(self,root,k):
+        if not root.locator('.mv-panel').count():root.locator('[data-a=menu][data-v=mas]').click()
+        root.locator(f'.mv-panel [data-a=menu][data-v={k}]').click()
+
     def mount(self,p=None):
         p=payload()[0] if p is None else p
-        self.pg.evaluate('p=>{window.__movPeriodoEstados={};window.__requests=[];__montarMov({data:p,parentElement:document.querySelector("#montar"),setTriggerValue:(...args)=>__requests.push(args)})}',p)
+        self.pg.evaluate('p=>{Object.values(window.__movPeriodoEstados||{}).forEach(g=>g.abort?.abort());window.__movPeriodoEstados={};window.__requests=[];__montarMov({data:p,parentElement:document.querySelector("#montar"),setTriggerValue:(...args)=>__requests.push(args)})}',p)
         return self.pg.locator('.mv')
 
     def relojes(self,lado=mp.SALIDAS):
@@ -152,15 +192,19 @@ class Navegador(unittest.TestCase):
 
     def test_pantalla_contar_por_calendario_panel_y_ampliar(self):
         p,d,_=self.relojes();root=self.mount(p);pg=self.pg
-        self.assertEqual(root.locator('.mv-kpi').count(),4)
+        self.assertEqual(self.kpis(root).locator('.mv-kpi').count(),4)
+        root.locator('.mv-kcerrar').click();self.assertEqual(root.locator('.mv-kpi').count(),0)
         self.assertEqual(pg.evaluate('document.querySelector(".mv-main").scrollHeight-document.querySelector(".mv-main").clientHeight'),0)
-        root.locator('[data-a=gran][data-v=Mes]').click()
-        self.assertEqual(root.locator('[data-a=reloj][data-v=cie]').get_attribute('aria-pressed'),'true')
+        self.gran(root,'Mes')
+        # #845: «Contar por» llega de Python (`P.reloj`), del panel de la fecha.
+        self.assertEqual(pg.evaluate('__movPeriodo.s.reloj'),'cie');self.assertEqual(root.locator('[data-a=reloj]').count(),0)
         self.assertIn('Al cierre',root.locator('.mv-pn').inner_text())
         barras='__movPeriodo.D.series.map(r=>r.valor)';tot=pg.evaluate(barras)
-        root.locator('[data-a=reloj][data-v=reg]').click();self.assertNotEqual(pg.evaluate(barras),tot)
-        root.locator('[data-a=gran][data-v=Semana]').click();self.assertTrue(root.locator('[data-a=reloj][data-v=cie]').is_disabled())
-        root.locator('[data-a=gran][data-v=Mes]').click();root.locator('[data-a=reloj][data-v=cie]').click()
+        remontar='r=>__montarMov({data:{...__movPeriodo.P,reloj:r},parentElement:document.querySelector("#montar")})'
+        pg.evaluate(remontar,'reg');self.assertEqual(pg.evaluate('__movPeriodo.s.reloj'),'reg');self.assertNotEqual(pg.evaluate(barras),tot)
+        pg.evaluate(remontar,'cie');self.gran(root,'Semana')
+        self.assertIn('el cierre es mes a mes',root.locator('.mv-n3').inner_text())
+        self.gran(root,'Mes');self.assertEqual(root.locator('.mv-aviso-reloj').count(),0)
         # La tabla trae los tres relojes.
         root.locator('[data-a=modo][data-v=Resumen]').click()
         for t in ['Al cierre','Registro','Proceso','Cierre − registro']:self.assertIn(t,root.locator('[data-tabla=resumen] thead').inner_text())
@@ -192,13 +236,13 @@ class Navegador(unittest.TestCase):
                 filas.append(dict(F=m+pd.Timedelta(days=i%27,hours=9),FP=m+pd.Timedelta(days=i%27,hours=10),D=f'{m:%y%m}-{i}',A='Cocina',E='PROCESADO',FM='Comida',P='Arroz',Q=1.,V=10.,T='Bajas',U='KILOS',C='',S=''))
         d=pd.DataFrame(filas);rng=(pd.Timestamp('2024-01-01'),pd.Timestamp('2025-01-01'))
         p=datos.armar(d,mp.SALIDAS,COLS,rango=rng,relojes=dict(reg='F',pro='FP',sub='S',aperturas=[]),hoy=dt.date(2025,2,1))
-        root=self.mount(p);self.pg.locator('[data-a=gran][data-v=Mes]').first.click()
-        self.assertIn('mucho menos',root.locator('.mv-pn').inner_text());self.assertIn('Notas',root.locator('.mv-kpis').inner_text())
+        root=self.mount(p);self.gran(root,'Mes')
+        self.assertIn('mucho menos',root.locator('.mv-pn').inner_text());self.assertIn('Notas',self.kpis(root).inner_text())
         # Requerimientos: la pieza pide lo vendido una vez y lo recibe en un montaje chico.
         q=datos.armar(d,mp.REQUERIMIENTOS,COLS,rango=rng,relojes=dict(reg='F',pro='FP',sub='S',aperturas=[],pedir_refs=True,ap={'2024-03':50.}),hoy=dt.date(2025,2,1))
         root=self.mount(q);pg=self.pg
         self.assertEqual(pg.evaluate('__requests'),[['refs',1]])
-        self.assertIn('…',root.locator('.mv-kpis').inner_text())
+        self.assertIn('…',self.kpis(root).inner_text())
         pg.evaluate('k=>__montarMov({data:{parte:"refs",k,refs:{"2024-03":{plato:100,compras:40}}},parentElement:document.querySelector("#montar")})',q['k'])
         self.assertIn('S/ 40',root.locator('.mv-kpis').inner_text().replace(',',''))
         self.assertEqual(pg.evaluate('__requests.length'),1)
@@ -269,10 +313,12 @@ class Navegador(unittest.TestCase):
 
     def test_interaccion_busqueda_top_detalle_y_persistencia(self):
         root=self.mount();pg=self.pg
-        root.locator('[data-a=menu][data-v=prod]').click();root.locator('[data-input=mq]').fill('Top 5')
+        self.filtro(root,'prod');root.locator('[data-input=mq]').fill('Top 5')
         root.locator('[data-filtro=prod]').check();root.locator('[data-a=cerrar]').click()
         self.assertEqual(len(pg.evaluate('__movPeriodo.D.productos.map(r=>r.prod).filter((v,i,a)=>a.indexOf(v)===i)')),5)
-        root.locator('[data-a=todos]').click();root.locator('[data-a=modo][data-v=Detalle]').click()
+        # El filtro puesto es una ficha lavanda junto a «Más filtros».
+        self.assertIn('Producto: Top 5 por valor',root.locator('.mv-ficha').inner_text())
+        root.locator('[data-a=menu][data-v=mas]').click();root.locator('[data-a=todos]').click();root.locator('[data-a=modo][data-v=Detalle]').click()
         root.locator('[data-input=q]').fill('VACIO');self.assertEqual(pg.evaluate('__movPeriodo.D.docs.length'),1)
         self.assertIn('Sin ítems',root.inner_text())
         root.locator('[data-input=q]').fill('Producto 05');self.assertTrue(pg.evaluate('__movPeriodo.D.docs.length>0'))
@@ -284,7 +330,7 @@ class Navegador(unittest.TestCase):
 
     def test_click_y_arrastre_del_tramo(self):
         root=self.mount();pg=self.pg
-        root.locator('[data-a=gran][data-v=Mes]').click();root.locator('[data-bar="1"]').click()
+        self.gran(root,'Mes');root.locator('[data-bar="1"]').click()
         # Elegir no salta de pestaña: lo cuenta el panel (regla #772).
         self.assertEqual(pg.evaluate('__movPeriodo.s.modo'),'Gráfico');self.assertEqual(len(pg.evaluate('__movPeriodo.D.seleccion')),1)
         root.locator('.mv-ver').click();self.assertEqual(pg.evaluate('__movPeriodo.s.modo'),'Detalle')
@@ -337,6 +383,55 @@ class Navegador(unittest.TestCase):
         pg.evaluate('()=>{const G=__movPeriodo;G.s.foco=G.D.claves[0];__movPeriodoDatos.dibujar(G)}')
         a=pg.evaluate('()=>{const G=__movPeriodo,F=__movPeriodoDatos;const fresh=F.calcular(G.P,G.s);return [G.D.total,fresh.total,G.D.docs.map(r=>r.doc),fresh.docs.map(r=>r.doc)]}')
         self.assertEqual(a[0],a[1]);self.assertEqual(a[2],a[3])
+
+    def test_cabecera_de_la_opcion_d(self):
+        """#845: pestañas con «Cadena por área», la cápsula en la banda, «Más
+        filtros» con su ficha, «Agrupar: Mes ▾», las acciones y «Cómo se calcula»."""
+        p,_d,_=self.relojes(mp.REQUERIMIENTOS);pg=self.pg
+        # En la app, arriba de la pieza va la banda de las carpetas: acá, un hueco.
+        pg.evaluate('document.querySelector("#montar").style.paddingTop="48px"')
+        self.addCleanup(pg.evaluate,'document.querySelector("#montar").style.paddingTop=""')
+        root=self.mount({**p,'banda':True,'cadena':True,'reloj':'cie'})
+        # La cápsula va fuera de `.mv-main` (que recorta) y arriba de la pieza.
+        self.assertEqual(root.locator('.mv-main .mv-kz').count(),0)
+        kz=root.locator('.mv-kz.banda').bounding_box();main=root.locator('.mv-main').bounding_box()
+        self.assertLess(kz['y'],main['y'])
+        self.assertIn('Pedido',root.locator('.mv-kcap').inner_text());self.assertIn('3 más',root.locator('.mv-kcap').inner_text())
+        # Una fila de pestañas; la última pide la cadena a Python y no cambia la pieza.
+        tabs=root.locator('.mv-tabs button').all_inner_texts()
+        self.assertEqual(tabs[-1],'Cadena por área');self.assertEqual(tabs[:3],['Gráfico','Calendario','Tabla'])
+        root.locator('.mv-tabs [data-a=cadena]').click()
+        self.assertEqual([r[0] for r in pg.evaluate('__requests')],['cadena'])
+        self.assertEqual(pg.evaluate('__movPeriodo.s.modo'),'Gráfico')
+        # Volver desde la cadena a una pestaña: una vez por pedido.
+        pg.evaluate('()=>__montarMov({data:{...__movPeriodo.P,zona:{v:"Productos",n:1}},parentElement:document.querySelector("#montar")})')
+        self.assertEqual(pg.evaluate('__movPeriodo.s.modo'),'Productos')
+        root.locator('[data-a=modo][data-v=Gráfico]').click()
+        pg.evaluate('()=>__montarMov({data:{...__movPeriodo.P,zona:{v:"Productos",n:1}},parentElement:document.querySelector("#montar")})')
+        self.assertEqual(pg.evaluate('__movPeriodo.s.modo'),'Gráfico')
+        # Nivel 3: «Más filtros» en gris, sin ficha; con un filtro, lavanda y su ficha con ✕.
+        self.assertEqual(root.locator('.mv-ficha').count(),0)
+        n3=root.locator('.mv-n3');self.assertEqual(n3.locator('.mv-mas').bounding_box()['height'],32)
+        self.filtro(root,'area');root.locator('.mv-panel [data-filtro=area]').first.check()
+        self.assertIn('Más filtros · 1',root.locator('.mv-mas').inner_text())
+        pg.keyboard.press('Escape');self.assertEqual(root.locator('.mv-panel').count(),0)
+        x=root.locator('.mv-ficha-x');self.assertEqual((x.bounding_box()['width'],x.bounding_box()['height']),(24,24))
+        x.click();self.assertEqual(pg.evaluate('__movPeriodo.s.area'),[])
+        # Agrupar es un select con su rótulo; no hay botones de grano ni de reloj.
+        self.assertEqual(root.locator('[data-a=gran]').count()+root.locator('[data-a=reloj]').count(),0)
+        self.gran(root,'Año');self.assertEqual(root.locator('.mv-men span').inner_text(),'Año');self.gran(root,'Mes')
+        # Las acciones: un enlace y dos íconos con su nombre, detrás de una raya.
+        acc=root.locator('.mv-acc')
+        self.assertEqual(acc.evaluate("e=>getComputedStyle(e).borderLeftWidth"),'1px')
+        self.assertEqual(acc.locator('.ib').evaluate_all('xs=>xs.map(e=>e.getAttribute("aria-label"))'),['Descargar Excel','Ampliar: esconder el panel'])
+        acc.locator('[data-a=como]').click()
+        texto=root.locator('.mv-como-pop').inner_text()
+        for t in ('Pedido','Cocina, por S/ 100 servidos','Contar por'):self.assertIn(t,texto)
+        pg.keyboard.press('Escape');self.assertEqual(root.locator('.mv-como-pop').count(),0)
+        # Una capa a la vez: abrir los indicadores cierra «Más filtros».
+        root.locator('[data-a=menu][data-v=mas]').click();root.locator('.mv-kcap').click()
+        self.assertEqual(root.locator('.mv-panel').count(),0);self.assertEqual(root.locator('.mv-ktira .mv-kpi').count(),4)
+        pg.keyboard.press('Escape');self.assertEqual(root.locator('.mv-ktira').count(),0)
 
     def test_tablas_largas_scroll_responsive_y_alturas(self):
         p,_,_,_=payload();n=len(p['filas']);original=p['filas'][0]

@@ -113,7 +113,7 @@ class Navegador(unittest.TestCase):
         self.assertIsNone(rs['Sin cantidad']['medio']);self.assertEqual(rs['Ajuste']['cant'],-1.123456789)
 
     def test_kpi_abre_pendientes_y_filtros_no_cambian_total(self):
-        root=self.mount();total=self.pg.evaluate('__movPeriodo.D.total')
+        root=self.mount();root.locator('.mv-kcap').click();total=self.pg.evaluate('__movPeriodo.D.total')
         root.locator('[data-a=estadoDoc][data-v="Sin procesar"]').click()
         self.assertEqual(self.pg.evaluate('__movPeriodo.D.docs.map(r=>r.doc)'),['OP-02','OP-05'])
         self.assertEqual(root.locator('[data-select=estadoDoc]').input_value(),'Sin procesar')
@@ -130,7 +130,9 @@ class Navegador(unittest.TestCase):
         self.assertEqual(len(a['lineas']),2)
 
     def test_excel_preciso_y_contexto_de_pendientes(self):
-        root=self.mount();root.locator('[data-a=estadoDoc][data-v="Sin procesar"]').click()
+        root=self.mount();root.locator('.mv-kcap').click();root.locator('[data-a=estadoDoc][data-v="Sin procesar"]').click()
+        # La tira abierta tapa las acciones: se pliega antes (#845).
+        root.locator('.mv-kcerrar').click()
         with self.pg.expect_download() as d:root.locator('[data-a=excel]').click()
         with tempfile.TemporaryDirectory() as td:
             path=Path(td)/'prod.xlsx';d.value.save_as(path)
@@ -140,7 +142,7 @@ class Navegador(unittest.TestCase):
                 self.assertNotIn('<f>',text)
 
     def test_remontaje_y_movil(self):
-        root=self.mount();root.locator('[data-a=estadoDoc][data-v=Anuladas]').click()
+        root=self.mount();root.locator('.mv-kcap').click();root.locator('[data-a=estadoDoc][data-v=Anuladas]').click()
         self.pg.evaluate('()=>__montarMov({data:__movPeriodo.P,parentElement:document.querySelector("#montar")})')
         self.assertEqual(self.pg.evaluate('__movPeriodo.s.estadoDoc'),'Anuladas')
         self.pg.set_viewport_size({'width':390,'height':844});self.assertLessEqual(self.pg.evaluate('document.documentElement.scrollWidth'),390)

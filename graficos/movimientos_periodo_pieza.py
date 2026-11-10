@@ -12,9 +12,46 @@ from . import movimientos_periodo_datos as datos
 _DIR = Path(__file__).parent
 _PIEZA = st.components.v2.component(
     "movimientos_periodo",
-    css=css_movil((_DIR / "movimientos_periodo.css").read_text(encoding="utf-8")),
+    # Los íconos de la app (descargar, ampliar; regla #821), desde la #845.
+    css=css_movil((_DIR / "iconos.css").read_text(encoding="utf-8")
+                  + (_DIR / "movimientos_periodo.css").read_text(encoding="utf-8")),
     js=js_movil((_DIR / "_xlsx.js").read_text(encoding="utf-8")
+       + (_DIR / "iconos.js").read_text(encoding="utf-8")
        + (_DIR / "movimientos_periodo.js").read_text(encoding="utf-8")))
+
+# ── Lo que Req. y salidas lee de Python (regla #845) ──────────────────────
+K_CONTAR = "mov_contar"
+"""«Contar por»: en qué mes cae cada documento. Se elige al costado del panel
+de la fecha (`movimientos.AJUSTES_PIE`), como las fechas de las salidas
+(#644); hasta la #845 era un control de la pieza."""
+CONTAR = {"Cierre": "cie", "Registro": "reg", "Proceso": "pro"}
+ROT_CONTAR = {"Cierre": "al cierre", "Registro": "por registro", "Proceso": "por proceso"}
+K_CORTE_PERSP = "_mov_persp_corte"
+"""La clave del segundo eje de la perspectiva (`movimientos.K_CORTE`): la
+pestaña «Cadena por área» la escribe."""
+K_ZONA = "_mov_zona_pedida"
+"""`{"v": pestaña, "n": contador}`: la pestaña de la pieza que se pidió desde
+«Cadena por área». La pieza la toma una vez por `n`."""
+
+
+def contar_por():
+    """El «Contar por» elegido (`"Cierre"` por defecto)."""
+    v = st.session_state.get(K_CONTAR)
+    return v if v in CONTAR else "Cierre"
+
+
+def ir_a_cadena():
+    """La pestaña «Cadena por área»: deja elegida la perspectiva «Análisis
+    por área» del mismo lado. La corrida del fragment la dibuja."""
+    st.session_state[K_CORTE_PERSP] = "Análisis por área"
+
+
+def ir_a_zona(zona):
+    """Una pestaña de la pieza, desde «Cadena por área»: vuelve a «Resumen»
+    y le pide a la pieza que abra en `zona`."""
+    ss = st.session_state
+    ss[K_CORTE_PERSP] = "Resumen"
+    ss[K_ZONA] = {"v": zona, "n": int((ss.get(K_ZONA) or {}).get("n", 0)) + 1}
 
 
 def _huella(d):
@@ -65,6 +102,12 @@ def renderizar(d, lado, cols, *, hist=None, anios=0, rot_fecha="",
     # generada no puede heredar la regla de Requerimientos (#575/#727).
     p.update(suma_sin_procesar=lado.suma_sin_procesar,
              produccion=not lado.suma_sin_procesar,rotulo_tipo=lado.rotulo_tipo)
+    # #845: Req. y salidas va bajo las carpetas de su perspectiva: la cápsula sube
+    # a la banda, la última pestaña lleva a la cadena por área y «Contar por»
+    # viene del panel de la fecha. Producción usa la misma pieza sin carpetas.
+    if relojes:
+        p.update(banda=True, cadena=True, reloj=CONTAR[contar_por()],
+                 zona=ss.get(K_ZONA))
     p["inicial"] = {"gran": ss.get(f"{lado.k}_gran", "Mes" if relojes else "Semana"),
                     "area": ss.get(f"{lado.k}_areas") or [],
                     "tipo": ss.get(f"{lado.k}_tipos") or [],
@@ -83,7 +126,8 @@ def renderizar(d, lado, cols, *, hist=None, anios=0, rot_fecha="",
                 fecha()
         k_refs = f"_{lado.k}_refs"
         _PIEZA(key=f"{lado.k}_pieza", data=p,
-               on_refs_change=lambda: ss.__setitem__(k_refs, True))
+               on_refs_change=lambda: ss.__setitem__(k_refs, True),
+               on_cadena_change=ir_a_cadena)
         # Lo vendido y lo comprado de cada mes salen de la cuenta de Sin plato,
         # que en frío tarda: la pieza dibuja primero y los pide (regla #772).
         if ss.get(k_refs) and relojes and relojes.get("pedir_refs"):

@@ -5241,8 +5241,10 @@ def _pruebas_perspectivas_movimientos():
           mov.vistas_con_ajuste("req_fecha"),
           ["Requerimientos por Área"])
     fuente = inspect.getsource(mov.renderizar)
+    # Desde la #845 las vistas por área llevan arriba la fila de pestañas: `dib`
+    # son los mismos dibujantes, con esas dos envueltas.
     check("el dibujante elige con los dos ejes y dibuja la vista de siempre",
-          ('dibujar_perspectiva("mov", EJES_LADOS, PERSPECTIVAS, _DIBUJANTES)'
+          ('dibujar_perspectiva("mov", EJES_LADOS, PERSPECTIVAS, dib)'
            in fuente, [e[0] for e in mov.EJES_LADOS]),
           (True, [mov.K_LADO, mov.K_CORTE]))
     css = (pathlib.Path(__file__).parent / "estilos" / "_80_cards.py").read_text(

@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-844 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+845 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (289)
+**CSS y estilos** (290)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -356,6 +356,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#842** — Los indicadores de Compras › Período van plegados en el renglón de las pestañas; la franja…
 - **#843** — En Compras › Período el filtro de familias es una ficha al lado de «Más filtros»; el ⚙ se va…
 - **#844** — Un boceto aprobado es el contrato entero: Período se rehízo con sus medidas, y la foto se…
+- **#845** — Movimientos › Req. y salidas con la opción D: carpetas, indicadores en la banda y «Contar…
 
 **Layout y alturas** (115)
 
@@ -1200,7 +1201,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
-**Decisiones de diseño y UX** (278)
+**Decisiones de diseño y UX** (279)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1480,6 +1481,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#828** — La edición visual conserva originales de los destinos reales y reaplica todas las propuestas
 - **#841** — La ruta va en una píldora con los bordes de la hoja: la píldora es el ::before de la franja
 - **#843** — En Compras › Período el filtro de familias es una ficha al lado de «Más filtros»; el ⚙ se va…
+- **#845** — Movimientos › Req. y salidas con la opción D: carpetas, indicadores en la banda y «Contar…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59476,6 +59478,69 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    menús, las acciones, «Ampliar» y los campos de «Más filtros»; la de la ficha, el campo
    de Subfamilia y que nada viaje hasta cerrar.
 
+845. **Movimientos › Req. y salidas con la opción D: carpetas, indicadores en la banda y «Contar por» en la fecha.**
+   A pedido, sobre el boceto https://claude.ai/artifact/KVHUtD7BtKmfcs8qn9oUYt: «vamos con
+   la opción D, con el KPI en banda, contar en la fecha». Antes de tocar código se dijo el
+   alcance (regla #844): entra Req. y salidas entero; cambia también el nivel 3 de Órdenes
+   de producción y Porcionamientos, que usan la misma pieza; queda fuera el estilo nuevo de
+   carpetas en Stock, Ajuste, Producción y las demás.
+   - **Carpetas de 40 px sobre una banda** (`graficos/pestanas.css`, sólo `persp_mov` y
+     `persp_sin`): la banda va de borde a borde de la hoja en un tono entre el blanco y el
+     lavanda; la carpeta elegida es blanca y se funde con la hoja; la otra queda en reposo,
+     en gris oscuro, sin relleno ni borde. Con el margen de −18 px que traía la franja, la
+     banda quedaba corrida 18 px a la izquierda y dejaba un hueco blanco a la derecha.
+   - **El segundo eje (Resumen | Análisis por área) no se ve**: «Análisis por área» es la
+     última pestaña de la pieza, «Cadena por área». Esa vista es otra pieza, así que la
+     pestaña la pide a Python (trigger `cadena` → `movimientos_periodo_pieza.ir_a_cadena`,
+     que escribe `K_CORTE`). Arriba de su tarjeta va la misma fila de pestañas, en botones
+     de Python (`movimientos._pestanas_cadena`, `mov_cadena_tab_*`), que vuelven a la pieza
+     en la pestaña elegida (`ir_a_zona` → `P.zona = {v, n}`, que la pieza toma una vez por
+     `n`). Comparación no está en esa fila: sólo aparece con un año para comparar, y eso lo
+     sabe la pieza. Las pestañas son `movimientos.PESTANAS_PIEZA`, en el orden de `tabs`.
+   - **Los indicadores, plegados en la banda** (`P.banda`): la cápsula dice el principal y
+     cuántos más hay; un clic abre la tira, que cae sobre la hoja. Va FUERA de `.mv-main`,
+     que recorta (`overflow: hidden`), y el CSS la sube (`.mv-kz.banda`, `--mv-banda`).
+     Órdenes de producción y Porcionamientos no tienen carpetas encima: su cápsula queda en
+     el renglón de las pestañas, como en Compras › Período. «Cómo se calcula» lista cada
+     indicador con la explicación de su `title` (`G.kpiInfo`): no se escribió texto nuevo.
+     Una capa a la vez: abrir los indicadores, «Más filtros» o «Cómo se calcula» cierra las
+     otras; Esc y el clic afuera las cierran aunque el foco no esté en la pieza (redibujar
+     se lo lleva), con un oyente en el `document`.
+   - **«Contar por» se elige al costado del panel de la fecha** (`movimientos.AJUSTES_PIE`,
+     ajuste `contar`, clave `K_CONTAR`), como las fechas de las salidas (#644), y la fecha lo
+     dice: «1 dic 2025 – 8 nov 2026 · al cierre» (`label` de `selector_fecha_tarjeta`).
+     Hasta ese día era un control de la pieza. Un valor para Salidas y Requerimientos. La
+     pieza lo recibe en `P.reloj` y sigue contando en el navegador; si no se puede (el
+     cierre existe mes a mes y se eligió Semana), lo dice en el nivel 3.
+   - **La fecha de Req. y salidas sube a la ruta**, a la izquierda de Filtros, como en
+     Compras: `_render_rail` marca `<main data-mov-vista>` con la sección en pantalla
+     (`mov_graf_tipo` en `FECHA_VISTA`) y `estilos/_90_marco.py` la fija. Estaba en la
+     banda, justo donde ahora van los indicadores.
+   - **El nivel 3 es el de Compras › Período (#844)**: «Más filtros» (gris; lavanda con un
+     filtro puesto) con un campo por filtro que abre su lista ahí mismo, y una ficha lavanda
+     con ✕ de 24 px por filtro puesto; a 24 px, «Agrupar: Mes ▾» (un `<select>`
+     transparente sobre el rótulo) y lo de cada pestaña («Partir por» en gris, con el
+     elegido en blanco con contorno índigo: no recorta); al final, detrás de una raya,
+     «Cómo se calcula» y los íconos de la app (`iconos.js`, antepuesto) para descargar y
+     ampliar. «Mes» y «Cierre» ya no llevan el lavanda de los filtros.
+   - **La pieza usaba una letra genérica**: `.mv` decía `font: 13px var(--font, sans-serif)`
+     y `--font` no existe (medido: Arial). Ahora dice DM Sans, la de la app.
+   - **El montaje de prueba soltaba el estado sin soltar los oyentes** de la pieza anterior:
+     la de una prueba seguía escuchando los clics de la siguiente, y la descarga del Excel
+     salía con los datos de otra. `mount` ahora aborta las anteriores.
+   Lo que sigue distinto del boceto, a propósito: la fecha dice sólo las fechas cuando el
+   rango no es un atajo (Req. y salidas abre en meses enteros, #772); la ruta conserva
+   «Filtros» (Sub Almacén y Familia, de todo el reporte); la pestaña de documentos se llama
+   «Requerimientos» o «Notas», como siempre; la leyenda del gráfico va en el nivel 3; y la
+   elección de «Contar por» en el panel de la fecha usa el control de los demás ajustes de
+   ese panel. Medido en la app local a 1323×619 contra el boceto: banda de 40 px de borde a
+   borde, carpeta elegida 136×40 (136×40), «Más filtros» 97×32 (97×32), «Agrupar» 116×32
+   (116×32), acciones 199×24 (199×24), el nivel 3 a 88 px del tope de la hoja (88).
+   `test_movimientos_periodo_pieza.py` cubre la cabecera (cápsula fuera de `.mv-main`, la
+   cadena ida y vuelta, «Más filtros» y su ficha, Agrupar, acciones, «Cómo se calcula», una
+   capa a la vez) y, en Python, «Contar por» en el panel, `ir_a_cadena`/`ir_a_zona` y que
+   las pestañas de la cadena sean las de la pieza.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59488,7 +59553,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#844**; la próxima toma el número siguiente.
+> última regla es la **#845**; la próxima toma el número siguiente.
 
 >
 

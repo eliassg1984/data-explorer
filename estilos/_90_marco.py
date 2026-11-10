@@ -659,6 +659,39 @@ CSS = """
         }
     }
 
+    /* Movimientos › Req. y salidas (#845, opción D): la fecha de Salidas y de
+       Requerimientos sube a la ruta, como en Compras, a la izquierda de
+       Filtros; dice además cómo se cuenta («· al cierre»). En la banda de las
+       carpetas, donde estaba, ahora van los indicadores. Las vistas por área
+       conservan su fecha en el título de su cuadro. */
+    @media (min-width: 901px) {
+        [data-mov-vista="mov_sec_persp_lados"] :is(.st-key-mov_f_req_periodo_escala, .st-key-mov_f_sal_periodo_escala) {
+            display: flex !important;
+            position: fixed !important;
+            inset: calc(var(--marco-hoja, 8px) + (var(--franja-rep-alto, 44px) - 30px) / 2)
+                calc(var(--marco-der, 16px) + var(--barra-f, 120px) + var(--barra-act, 0px)) auto auto !important;
+            width: max-content !important;
+            z-index: 1000012 !important;
+        }
+        [data-mov-vista="mov_sec_persp_lados"] :is(.st-key-mov_per_nativa_fecha, .st-key-mov_psal_nativa_fecha) {
+            z-index: auto !important;
+        }
+        [data-mov-vista="mov_sec_persp_lados"] :is(.st-key-mov_f_req_periodo_escala, .st-key-mov_f_sal_periodo_escala)
+            button[data-testid="stPopoverButton"] {
+            height: 30px !important;
+            min-height: 30px !important;
+            border-radius: 15px !important;
+            background: var(--marco-control) !important;
+            box-shadow: none !important;
+            color: var(--text-primary) !important;
+        }
+        [data-mov-vista="mov_sec_persp_lados"] :is(.st-key-mov_f_req_periodo_escala, .st-key-mov_f_sal_periodo_escala)
+            button[data-testid="stPopoverButton"] p {
+            font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 13px !important;
+        }
+    }
+
     /* Compras conserva los popovers y rangos de cada vista. Sólo el de la
        sección en pantalla sube a la franja, a la izquierda de Filtros. */
     @media (min-width: 901px) {

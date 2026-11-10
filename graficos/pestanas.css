@@ -202,3 +202,111 @@
     color: inherit !important;
   }
 }
+
+/* #845: Movimientos con la opción D del boceto
+   https://claude.ai/artifact/KVHUtD7BtKmfcs8qn9oUYt. Las carpetas miden 40 px
+   sobre una banda entre el lavanda y el blanco (la cabecera de la hoja); la
+   elegida es blanca y se funde con la hoja, las otras quedan en reposo: gris
+   oscuro, sin relleno ni borde (no apagadas). A la derecha de la banda, los
+   indicadores de la pieza (`.mv-kz.banda`, movimientos_periodo.css). El segundo
+   eje (Resumen | Análisis por área) no se ve: es la última pestaña de la pieza,
+   «Cadena por área». Sólo Movimientos: las demás carpetas siguen como arriba. */
+@media (min-width: 901px) {
+  .st-key-persp_mov.st-key-persp_mov,
+  .st-key-persp_sin.st-key-persp_sin {
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    padding-left: 6px !important;
+    /* De borde a borde de la hoja: con el margen de -18 px de arriba, la banda
+       quedaba corrida 18 px a la izquierda y dejaba un hueco blanco a la derecha. */
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+    background: color-mix(in srgb, var(--bg-card) 55%, var(--marco-fondo)) !important;
+    border-bottom: 0;
+  }
+  .st-key-mov_sec_persp_lados.st-key-mov_sec_persp_lados,
+  .st-key-mov_sec_persp_sin.st-key-mov_sec_persp_sin {
+    --persp-alto: 40px;
+  }
+  .st-key-persp_mov [class*="st-key-pspw_mov_1_"] {
+    display: none !important;
+  }
+  :is(.st-key-persp_mov, .st-key-persp_sin) [class*="st-key-pspw_"][class*="_0_"] [data-testid="stButtonGroup"] button {
+    height: 38px !important;
+    min-height: 38px !important;
+    margin: 0 !important;
+    padding: 0 18px !important;
+    border: 0 !important;
+    border-radius: 10px 10px 0 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--ctl-texto-2, var(--text-secondary)) !important;
+    font-weight: 500 !important;
+  }
+  :is(.st-key-persp_mov, .st-key-persp_sin) [class*="st-key-pspw_"][class*="_0_"] [data-testid="stButtonGroup"] button:hover {
+    background: color-mix(in srgb, var(--bg-card) 45%, transparent) !important;
+    color: var(--text-primary) !important;
+  }
+  :is(.st-key-persp_mov, .st-key-persp_sin) [class*="st-key-pspw_"][class*="_0_"] [data-testid="stButtonGroup"]
+      button:is([aria-checked="true"], [kind="segmented_controlActive"]) {
+    height: 40px !important;
+    min-height: 40px !important;
+    background: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+  }
+  /* La fila de pestañas arriba de la cadena por área: la misma de la pieza, con
+     «Cadena por área» elegida. Las otras vuelven a la pieza en esa pestaña. */
+  .st-key-mov_cadena_tabs.st-key-mov_cadena_tabs {
+    height: 40px;
+    min-height: 40px;
+    gap: 4px !important;
+    margin: 0 !important;
+    padding: 0 18px !important;
+    border-bottom: 1px solid var(--ctl-linea, var(--border));
+    align-items: flex-end !important;
+  }
+  .st-key-mov_cadena_tabs [data-testid="stElementContainer"] {
+    width: auto !important;
+    flex: 0 0 auto !important;
+  }
+  .st-key-mov_cadena_tabs button {
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 10px !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    color: var(--ctl-texto-2, var(--text-secondary)) !important;
+  }
+  .st-key-mov_cadena_tabs button p {
+    font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: inherit !important;
+  }
+  .st-key-mov_cadena_tabs button:hover {
+    color: var(--text-primary) !important;
+  }
+  .st-key-mov_cadena_tab_cadena button {
+    border-bottom-color: var(--accent) !important;
+    color: var(--text-primary) !important;
+    opacity: 1 !important;
+    cursor: default !important;
+  }
+  .st-key-mov_cadena_tab_cadena button p {
+    font-weight: 600 !important;
+  }
+}
+@media (max-width: 900px) {
+  .st-key-mov_cadena_tabs.st-key-mov_cadena_tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+  }
+  .st-key-mov_cadena_tabs button { min-height: 44px !important; }
+  .st-key-mov_cadena_tab_cadena button { border-bottom: 2px solid var(--accent) !important; opacity: 1 !important; }
+}

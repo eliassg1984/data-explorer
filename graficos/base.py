@@ -1642,8 +1642,9 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                   var FECHA_VISTA = {json.dumps({
                       "ajuste_graf_tipo": "data-ajuste-vista",
                       "compras_graf_tipo": "data-compras-vista",
+                      "mov_graf_tipo": "data-mov-vista",
                   }.get(state_key))};
-                  ['data-ajuste-vista', 'data-compras-vista'].forEach(function (atributo) {{
+                  ['data-ajuste-vista', 'data-compras-vista', 'data-mov-vista'].forEach(function (atributo) {{
                     if (atributo !== FECHA_VISTA) raiz.removeAttribute(atributo);
                   }});
 

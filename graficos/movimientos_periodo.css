@@ -56,3 +56,105 @@
 .mv .mv-tabs button { background: none !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important; box-shadow: none !important; padding: 4px 0 !important; color: var(--text-secondary) !important; }
 .mv .mv-tabs button:hover { color: var(--accent-deep) !important; }
 .mv .mv-tabs button.on, .mv .mv-tabs button[aria-selected="true"] { color: var(--text-primary) !important; font-weight: 600; border-bottom-color: var(--accent) !important; }
+
+/* #845: la cabecera de Compras › Período (#844), con la escala de controles
+   (`--ctl-*`, estilos/_00_base.py): gris cambia la forma de ver, lavanda
+   recorta, contorno es un campo, sin caja una acción. Nivel 2: las pestañas
+   y la cápsula de los indicadores. Nivel 3: «Más filtros» y una ficha por
+   filtro puesto; a 24 px, «Agrupar: Mes ▾» y lo de cada pestaña; al final,
+   detrás de una raya, las acciones. Va al final: pisa lo de arriba. */
+.mv{position:relative;--mv-sec:var(--ctl-texto-2,var(--text-secondary));
+  /* La letra de la app: `var(--font)` no existe y caía en la genérica (medido: Arial). */
+  font-family:'DM Sans','Inter',-apple-system,BlinkMacSystemFont,sans-serif}
+.mv-n2{min-height:40px;height:40px;align-items:stretch;gap:16px;margin:-8px -18px 0;padding:0 18px;border-bottom:1px solid var(--ctl-linea,var(--border))}
+.mv .mv-n2 .mv-tabs{align-self:stretch;gap:4px!important}
+.mv .mv-n2 .mv-tabs button{height:40px;padding:0 10px!important;font-weight:500;color:var(--mv-sec)!important}
+.mv .mv-n2 .mv-tabs button.on,.mv .mv-n2 .mv-tabs button[aria-selected="true"]{font-weight:600;color:var(--text-primary)!important}
+.mv .mv-n2 .mv-tabs button.esperando{opacity:.55;cursor:progress}
+.mv-n3{min-height:32px;gap:0}
+.mv-g{display:flex;align-items:center;gap:4px;min-width:0;position:relative}
+.mv-g2{margin-left:24px}
+/* La cápsula: el indicador principal y cuántos más hay. */
+.mv-kz{position:relative;margin-left:auto;align-self:center;display:flex;justify-content:flex-end;min-width:0}
+.mv .mv-kcap{display:flex;align-items:center;gap:10px;max-width:100%;height:32px;padding:0 6px 0 12px;border:0;border-radius:6px;background:var(--ctl-gris,var(--rail-fondo));white-space:nowrap;overflow:hidden}
+.mv .mv-kcap:hover{background:var(--ctl-gris-hover,var(--accent-tint))}
+.mv-kcap .r{color:var(--mv-sec)}.mv-kcap .v{font-size:15px;font-weight:600}.mv-kcap .c{font-size:12px;color:var(--mv-sec)}
+.mv-kcap .mas{display:flex;align-items:center;gap:4px;height:20px;padding:0 2px 0 8px;border-left:1px solid var(--ctl-linea,var(--border));font-size:12px;color:var(--mv-sec)}
+.mv-kcap .pto{width:8px;height:8px;border-radius:4px;background:var(--warning-text)}
+.mv-ktira{position:absolute;right:0;top:38px;z-index:25;display:flex;align-items:stretch;gap:4px;padding:4px;border-radius:10px;background:var(--bg-card);
+  box-shadow:0 8px 24px color-mix(in srgb,var(--text-primary) 16%,transparent),0 0 0 1px var(--ctl-linea,var(--border))}
+.mv-ktira .mv-kpis{display:flex!important;gap:4px!important;margin:0!important;padding:0!important;background:none!important;border:0!important}
+.mv-ktira .mv-kpi{width:180px;flex:none}
+/* El elegido, como en el boceto: gris con la raya índigo abajo (no una ficha blanca). */
+.mv .mv-ktira .mv-kpi.on{background:var(--ctl-gris,var(--rail-fondo));box-shadow:inset 0 -2px 0 var(--accent)}
+.mv .mv-kcerrar{width:28px;border:0;border-radius:6px;padding:0;text-align:center;color:var(--mv-sec)}
+/* Banda (#845): la cápsula sube al renglón de las carpetas, a la derecha. La
+   distancia es la de ese renglón hasta la pieza (`--mv-banda`). */
+.mv-kz.banda{position:absolute;right:18px;top:calc(-1 * var(--mv-banda,44px));z-index:24;margin:0}
+.mv .mv-kz.banda .mv-kcap{background:none;max-width:none;padding-right:10px;overflow:visible}
+.mv .mv-kz.banda .mv-kcap:hover,.mv .mv-kz.banda .mv-kcap[aria-expanded="true"]{background:color-mix(in srgb,var(--bg-card) 55%,transparent)}
+.mv-kz.banda .mv-ktira{top:40px}
+/* Nivel 3 */
+.mv .mv-mas{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:0;border-radius:6px;background:var(--ctl-gris,var(--rail-fondo));white-space:nowrap}
+.mv .mv-mas:hover{background:var(--ctl-gris-hover,var(--bg-hover))}
+.mv .mv-mas.on{background:var(--ctl-filtro,var(--accent-tint));color:var(--accent-deep)}
+.mv-mas i,.mv-campo i,.mv-men i{font-style:normal;font-size:10px;color:var(--mv-sec)}
+.mv-masw{position:relative}
+.mv-panel{position:absolute;left:0;top:36px;z-index:22;width:300px;max-height:min(470px,calc(var(--alto-util,600px) - 110px));overflow:auto;overscroll-behavior:contain;
+  display:flex;flex-direction:column;gap:12px;padding:12px;border-radius:12px;background:var(--bg-card);
+  box-shadow:0 8px 24px color-mix(in srgb,var(--text-primary) 16%,transparent),0 0 0 1px var(--ctl-linea,var(--border))}
+.mv-c{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mv-c h4{margin:0;font-size:12px;font-weight:500;color:var(--mv-sec)}
+.mv .mv-campo{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:32px;padding:0 10px;border:0;border-radius:6px;background:var(--bg-card);
+  box-shadow:inset 0 0 0 1px var(--ctl-contorno,var(--text-muted));color:var(--mv-sec)}
+.mv .mv-campo span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mv .mv-campo:hover{background:var(--ctl-gris,var(--rail-fondo))}
+.mv .mv-campo[aria-expanded="true"]{box-shadow:inset 0 0 0 2px var(--accent)}
+.mv-panel .mv-menu{position:static;width:auto;padding:4px 0 0;border:0;box-shadow:none;gap:6px}
+.mv-panel .mv-opciones{max-height:160px}
+.mv-panel-pie{display:flex;justify-content:flex-end}
+.mv-ficha{display:inline-flex;align-items:center;height:28px;padding-right:2px;border-radius:14px;background:var(--ctl-filtro,var(--accent-tint));min-width:0}
+.mv .mv-ficha-b,.mv .mv-ficha-x{border:0;background:none;color:var(--accent-deep);font-weight:500;white-space:nowrap}
+.mv .mv-ficha-b{max-width:220px;height:28px;padding:0 4px 0 10px;border-radius:14px 0 0 14px;overflow:hidden;text-overflow:ellipsis}
+.mv .mv-ficha-x{width:24px;height:24px;padding:0;border-radius:12px;font-size:12px;text-align:center}
+.mv .mv-ficha-x:hover{background:var(--bg-card)}
+.mv .mv-n3 .mv-chip{height:28px;border-radius:14px;background:var(--ctl-filtro,var(--accent-tint));padding:0 10px}
+/* «Agrupar: Mes ▾» sin caja; el select transparente encima recibe el clic y el teclado. */
+.mv-men{position:relative;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:6px;white-space:nowrap;cursor:pointer}
+.mv-men:hover{background:var(--ctl-gris,var(--bg-hover))}
+.mv-men small{font-size:13px;color:var(--mv-sec)}
+.mv .mv-men select{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;cursor:pointer}
+.mv-men:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+/* «Partir por»: gris, el elegido en blanco con el contorno índigo (no lavanda: no recorta). */
+.mv-n3 .mv-seg{gap:2px;padding:2px;border-radius:6px;background:var(--ctl-gris,var(--rail-fondo));flex-wrap:nowrap}
+.mv .mv-n3 .mv-seg button{height:28px;padding:0 10px;border:0;border-radius:4px;background:none;color:var(--mv-sec)}
+.mv .mv-n3 .mv-seg button.on{background:var(--bg-card);color:var(--text-primary);box-shadow:inset 0 0 0 2px var(--accent);font-weight:600}
+.mv-n3 .mv-leyenda{margin-left:8px}
+.mv-aviso-reloj{margin-left:8px;color:var(--warning-text)}
+/* Las acciones, al final y detrás de una raya. */
+.mv-acc{display:flex;align-items:center;gap:4px;height:24px;padding-left:12px;margin-left:8px;border-left:1px solid var(--ctl-linea,var(--border));flex:none}
+.mv .mv-acc .ib{width:32px;min-width:32px;height:32px;padding:0;border:0;border-radius:6px;background:none;color:var(--mv-sec)}
+.mv .mv-acc .ib:hover{background:var(--ctl-gris,var(--bg-hover));color:var(--text-primary)}
+.mv .mv-acc .ib .ico{width:16px;height:16px;stroke-width:1.6}
+.mv .mv-link{height:32px;padding:0 8px;border:0;border-radius:6px;background:none;color:var(--accent-deep);white-space:nowrap}
+.mv .mv-link:hover{background:var(--ctl-gris,var(--bg-hover))}
+.mv-como{position:relative}
+.mv-como-pop{position:absolute;right:0;top:36px;z-index:22;width:420px;max-width:calc(100vw - 32px);max-height:min(420px,calc(var(--alto-util,600px) - 110px));overflow:auto;overscroll-behavior:contain;
+  display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:10px;background:var(--bg-card);font-size:13px;line-height:1.4;
+  box-shadow:0 8px 24px color-mix(in srgb,var(--text-primary) 16%,transparent),0 0 0 1px var(--ctl-linea,var(--border))}
+.mv-como-pop dl{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px}
+.mv-como-pop dt{font-weight:600}.mv-como-pop dd{margin:0;color:var(--mv-sec)}.mv-como-pop p{color:var(--mv-sec)}
+@media(max-width:900px){
+  .mv-n2{height:auto;margin:0;padding:0;flex-wrap:wrap}
+  .mv-kz,.mv-kz.banda{position:static;margin:0;width:100%;justify-content:flex-start}
+  .mv-ktira{position:static;flex-wrap:wrap;box-shadow:none}
+  .mv-ktira .mv-kpi{width:calc(50% - 4px)}
+  .mv-n3{flex-wrap:wrap;gap:8px}.mv-g2{margin-left:0}
+  .mv-panel{position:static;width:100%;max-height:none;box-shadow:none;border:1px solid var(--border)}
+  .mv .mv-mas,.mv .mv-campo,.mv-men,.mv .mv-acc .ib,.mv .mv-link{min-height:44px}
+  .mv .mv-ficha-x{width:44px;height:44px}.mv-ficha{height:auto}
+  .mv-n3 .mv-rot{white-space:normal}.mv-acc{margin-left:0;padding-left:0;border-left:0}
+  .mv-g{flex-wrap:wrap;max-width:100%}.mv-n3 .mv-seg{flex-wrap:wrap}.mv-n3 .mv-leyenda{white-space:normal;flex-wrap:wrap}
+  .mv .mv-kcap{height:auto;min-height:44px;flex-wrap:wrap;white-space:normal;row-gap:2px}
+  .mv-kz{flex-wrap:wrap}.mv-ktira{width:100%;min-width:0}.mv-ktira .mv-kpis{flex-wrap:wrap;width:100%;min-width:0}
+}

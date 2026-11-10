@@ -1535,9 +1535,13 @@ Desde el 2026-10-31 (regla #772). Inventario › Movimientos son dos pestañas: 
 salidas abre en Salidas, por mes y al cierre; Sin plato trae «Cierres | Productos».
 Boceto: https://claude.ai/artifact/JKeLmmTjg1yU1g9HYFyqeF. Lo que muerde:
 
-- **«Contar por» cambia en el navegador**: cada línea viaja con registro, proceso y
-  cierre, por `cols["relojes"]`, que `movimientos_periodo_pieza` saca antes de armar:
-  las firmas de las tarjetas no cambian. Sin eso `lineas_documentos` revienta.
+- **«Contar por» se elige en el panel de la fecha desde la #845** (al costado,
+  `movimientos.AJUSTES_PIE`, clave `movimientos_periodo_pieza.K_CONTAR`) y la fecha lo
+  dice: «dic 2025 – nov 2026 · al cierre». La pieza lo recibe en `P.reloj` y sigue
+  contando en el navegador: cada línea viaja con registro, proceso y cierre, por
+  `cols["relojes"]`, que `movimientos_periodo_pieza` saca antes de armar: las firmas de
+  las tarjetas no cambian. Sin eso `lineas_documentos` revienta. Cambiarlo pide una
+  corrida completa, como las otras fechas del panel.
 - **«Cierre» sólo mueve los bordes y sólo mes a mes** (`fecha_al_cierre`), con la
   apertura de la mayoría; Sin plato corta por área, así que algún mes difiere en
   decenas de soles. El calendario va SIEMPRE por registro.
@@ -1545,6 +1549,18 @@ Boceto: https://claude.ai/artifact/JKeLmmTjg1yU1g9HYFyqeF. Lo que muerde:
   se toque en `movimientos_periodo.js` se ve en las cuatro, y `P.relojes` separa.
 - **«Por área» (pestaña) y «Análisis por área» (perspectiva) son dos cosas**: la
   segunda conserva su fecha, que abre en el mes en curso, y su Registro | Proceso.
+  Desde la #845 la segunda es la última pestaña, «Cadena por área»: otra pieza, así
+  que la pestaña la pide a Python (trigger `cadena`) y arriba de su tarjeta va la misma
+  fila de pestañas, en botones de Python (`mov_cadena_tab_*`), que vuelven a la pieza
+  en la pestaña elegida (`P.zona`, una vez por `n`). Si se agrega una pestaña a la
+  pieza, se agrega en `movimientos.PESTANAS_PIEZA`.
+- **La opción D (#845)**: Salidas | Requerimientos son carpetas de 40 px sobre una banda
+  (`graficos/pestanas.css`, sólo `persp_mov` y `persp_sin`); los indicadores de la
+  pieza, plegados, a la derecha de esa banda (`P.banda`: la cápsula va FUERA de
+  `.mv-main`, que recorta, y el CSS la sube); la fecha de la vista sube a la ruta
+  (`<main data-mov-vista>`, como Compras). Nivel 3 con la forma de Compras › Período:
+  «Más filtros» con campos y una ficha lavanda por filtro, «Agrupar: Mes ▾», acciones
+  con íconos. Boceto: https://claude.ai/artifact/KVHUtD7BtKmfcs8qn9oUYt.
 - **`window.__sinClave` lleva quién lo escribió** (`de`): sin eso, una pieza que se
   vuelve a montar se pisa con su propio cierre.
 - **No decir que lo no registrado es el faltante**: la caída de notas desde julio es

@@ -39,7 +39,7 @@ const MOV = (() => {
   function estado(inicial = {}) {
     return {gran:'Semana', area:[], tipo:[], fam:[], prod:[], partir:null, resaltados:{}, reloj:'cie', dia:null, ampl:false,
       modo:'Gráfico', q:'', marca:'Todas', foco:null, tramo:null, doc:null, completo:false,
-      orden:null, menu:null, mq:'', estadoDoc:'Todas', porcFlag:'Todas', mermaFicha:false, ...inicial};
+      orden:null, menu:null, mq:'', estadoDoc:'Todas', porcFlag:'Todas', mermaFicha:false, kAb:false, como:false, zonaN:null, ...inicial};
   }
   function filtros(rs, s, productos) {
     return rs.filter(r => ['area', 'tipo', 'fam'].every(k => !s[k]?.length || s[k].includes(r[k]))
@@ -355,8 +355,9 @@ const MOV = (() => {
   const variacionTxt = (a,b) => b>0?`${a>=b?'+':'−'}${Math.abs(Math.round((a/b-1)*100))} %`:'—';
   function nombreDetalle(P){return P.merma?'Porcionamientos':P.produccion?'Órdenes':P.tipo?'Notas':'Requerimientos';}
   function htmlKpis(G) {
-    const {P,D,s}=G;
-    const kpi = (titulo, valor, nota, accion='', v='', title='', clase='') => `<${accion ? 'button' : 'div'} class="mv-kpi ${clase} ${accion && ((accion==='resaltar'&&D.resaltado === v)||(accion==='sinresaltar'&&!D.resaltado)||(accion==='modo'&&s.modo===v)) ? 'on' : ''}" ${accion ? `data-a="${accion}" data-v="${esc(v)}"` : ''} title="${esc(title || nota)}"><span>${esc(titulo)}</span><b>${esc(valor)}</b><small>${esc(nota)}</small></${accion ? 'button' : 'div'}>`;
+    const {P,D,s}=G;G.kpiInfo=[];
+    // #845: cada indicador queda anotado para la cápsula y para «Cómo se calcula».
+    const kpi = (titulo, valor, nota, accion='', v='', title='', clase='') => (G.kpiInfo.push({titulo,valor,nota,tip:title||nota,clase}),'') + `<${accion ? 'button' : 'div'} class="mv-kpi ${clase} ${accion && ((accion==='resaltar'&&D.resaltado === v)||(accion==='sinresaltar'&&!D.resaltado)||(accion==='modo'&&s.modo===v)) ? 'on' : ''}" ${accion ? `data-a="${accion}" data-v="${esc(v)}"` : ''} title="${esc(title || nota)}"><span>${esc(titulo)}</span><b>${esc(valor)}</b><small>${esc(nota)}</small></${accion ? 'button' : 'div'}>`;
     const highlights = D.resaltables.filter(x => x !== REP && x !== FUERA);
     const parte = nombre => { const t=D.trazas.find(t => t.nombre === nombre);return t.valores.reduce((a,v,i) => a+(D.seleccion.includes(D.claves[i]) ? v : 0),0); };
     const ap=G.ap, apSel=ap?D.claves.reduce((a,k,i)=>a+(D.seleccion.includes(k)?ap[i]:0),0):null, vsAp=apSel?`${variacionTxt(D.total,apSel)} contra un año antes`:'';
@@ -452,6 +453,48 @@ const MOV = (() => {
     const lista=P.tipo?[[P.rotulo_tipo||'Tipo','tipo'],['Área','area'],...(P.familia===false?[['Producto','prod']]:[['Familia','fam']])]:P.relojes?[['Área','area'],['Familia','fam'],['Subfamilia','sub']]:[['Área','area'],...(P.familia===false?[]:[['Familia','fam']]),['Producto','prod']];
     return `<div class="mv-cuadros">${lista.map(([t,k])=>cuadro(t,k)).join('')}</div>${P.relojes?'<p class="mv-pie">La cadena completa, con productos y qué se pidió contra qué salió, está en «Análisis por área», arriba.</p>':''}`;
   }
+  // ── La cabecera (#845): la forma de Compras › Período (#844) ─────────────
+  const ICO_VOLVER = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/></svg>';
+  const TODOS = {area:'Todas las áreas',tipo:'Todos los tipos',fam:'Todas las familias',prod:'Todos los productos'};
+  function claves(P) {
+    return [['area','Área'],...(P.tipo ? [['tipo',P.rotulo_tipo||'Tipo']] : []),...(P.familia===false?[]:[['fam','Familia']]),['prod','Producto']];
+  }
+  const corto = t => { const x=String(t||'').split(' · ')[0];return x.length>30?`${x.slice(0,29)}…`:x; };
+  // Los indicadores plegados: dicen el principal y cuántos más hay; abiertos, la tira con todos.
+  // Con `P.banda` la cápsula sube a la banda de las carpetas, a la derecha (el CSS la ubica).
+  function capsula(G) {
+    const {s,P}=G, html=htmlKpis(G), ks=G.kpiInfo;if(!ks.length)return '';
+    const k=ks[0], alerta=ks.some(x=>/alerta/.test(x.clase||''));
+    const cap=`<button class="mv-kcap" data-a="kpis" aria-expanded="${!!s.kAb}" title="${esc(s.kAb?'Plegar los indicadores (Esc)':'Ver los indicadores')}"><span class="r">${esc(k.titulo)}</span><span class="v">${esc(k.valor)}</span>${k.nota?`<span class="c">${esc(corto(k.nota))}</span>`:''}${ks.length>1?`<span class="mas">${alerta?'<i class="pto" aria-label="Hay algo para revisar"></i>':''}${ks.length-1} más ‹</span>`:''}</button>`;
+    const tira=s.kAb?`<div class="mv-ktira" role="group" aria-label="Indicadores"><div class="mv-kpis">${html}</div><button class="mv-kcerrar" data-a="kpis" aria-label="Plegar los indicadores" title="Plegar (Esc)">✕</button></div>`:'';
+    return `<div class="mv-kz${P.banda?' banda':''}">${cap}${tira}</div>`;
+  }
+  // «Más filtros»: un campo por filtro, que dice lo elegido y abre su lista ahí mismo.
+  function masFiltros(G,quitar) {
+    const {s,P}=G, ks=claves(P), activos=ks.filter(([k])=>s[k].length).length;
+    const abierto=s.menu==='mas'||ks.some(([k])=>k===s.menu);
+    const btn=`<button class="mv-mas${activos?' on':''}" data-a="menu" data-v="mas" aria-haspopup="dialog" aria-expanded="${abierto}">Más filtros${activos?` · ${activos}`:''} <i aria-hidden="true">▾</i></button>`;
+    if(!abierto)return `<div class="mv-masw">${btn}</div>`;
+    const valor=k=>s[k].length?(s[k].length===1?s[k][0]:`${s[k].length} elegidos`):TODOS[k];
+    const campos=ks.map(([k,n])=>`<div class="mv-c"><h4>${esc(n)}</h4><button class="mv-campo" data-a="menu" data-v="${k}" aria-expanded="${s.menu===k}" title="${esc(s[k].join(', ')||TODOS[k])}"><span>${esc(valor(k))}</span><i aria-hidden="true">▾</i></button>${s.menu===k?menu(G):''}</div>`).join('');
+    return `<div class="mv-masw">${btn}<div class="mv-panel" role="dialog" aria-label="Más filtros">${campos}${quitar?`<div class="mv-panel-pie">${quitar}</div>`:''}</div></div>`;
+  }
+  // Un filtro puesto es una ficha lavanda con su ✕ (recorta el total).
+  function fichas(G) {
+    const {s,P}=G;
+    return claves(P).filter(([k])=>s[k].length).map(([k,n])=>`<span class="mv-ficha"><button class="mv-ficha-b" data-a="menu" data-v="${k}" title="${esc(s[k].join(', '))}">${esc(n)}: ${esc(s[k].length===1?s[k][0]:String(s[k].length))}</button><button class="mv-ficha-x" data-a="limpiar" data-v="${k}" aria-label="Quitar el filtro de ${esc(n.toLowerCase())}">✕</button></span>`).join('');
+  }
+  // «Agrupar: Mes ▾»: se ve el rótulo; el select, transparente y encima, abre la lista.
+  function agrupar(G) {
+    const g=G.s.gran;
+    return `<label class="mv-men"><small>Agrupar:</small><span>${esc(g)}</span><i aria-hidden="true">▾</i><select data-select="gran" aria-label="Agrupar">${GRANOS.map(x=>`<option${x===g?' selected':''}>${x}</option>`).join('')}</select></label>`;
+  }
+  // Lo que dicen los indicadores, con sus explicaciones: las mismas de su `title`.
+  function comoSeCalcula(G) {
+    const ks=G.kpiInfo||[];if(!ks.length)return '';
+    const pop=G.s.como?`<div class="mv-como-pop" role="dialog" aria-label="Cómo se calcula"><dl>${ks.map(k=>`<dt>${esc(k.titulo)}</dt><dd>${esc(k.tip)}</dd>`).join('')}</dl>${G.P.relojes?'<p>«Contar por», en el panel de la fecha, decide en qué mes cae cada documento.</p>':''}</div>`:'';
+    return `<span class="mv-como"><button class="mv-link" data-a="como" aria-expanded="${!!G.s.como}">Cómo se calcula</button>${pop}</span>`;
+  }
   function dibujar(G) {
     const {s,P,raiz} = G;
     G.D = calcular(P,s,G.base,G.hist,G.cache);const D=G.D;
@@ -470,9 +513,13 @@ const MOV = (() => {
     const fechaRango = `${P.rango[0].slice(0,10)} al ${new Date(new Date(P.rango[1].replace(' ','T')).getTime()-DIA).toISOString().slice(0,10)}`;
     const quitar = ['area','tipo','fam','prod'].some(k => s[k].length) ? '<button data-a="todos" class="mv-quitar">Quitar filtros</button>' : '';
     const efectivo = relojDe(P,s);
-    const reloj = P.relojes ? `<span class="mv-rot" title="Cómo se reparten los documentos entre los meses">Contar por</span><div class="mv-seg" role="group" aria-label="Contar por">${P.relojes.disponibles.map(c => { const apagado=c==='cie'&&!['Mes','Año'].includes(s.gran);return `<button data-a="reloj" data-v="${c}" aria-pressed="${c===efectivo}" class="${c===efectivo?'on':''}" ${apagado?'disabled':''} title="${esc(apagado?'El cierre sólo existe mes a mes':({cie:'Cada mes de apertura a apertura de conteo: es lo que suma Sin plato.',reg:'Cuándo se digitó.',pro:'Cuándo movió el stock.'})[c])}">${CLOCKS[c]}</button>`; }).join('')}</div>` : '';
+    // #845: «Contar por» se elige en el panel de la fecha (Python manda `P.reloj`). Acá sólo se avisa
+    // cuando no se puede cumplir: el cierre existe mes a mes.
+    const reloj = P.relojes&&efectivo!==s.reloj ? `<span class="mv-rot mv-aviso-reloj" title="El cierre sólo existe mes a mes">Cuenta ${esc(ROT_RELOJ[efectivo])}: el cierre es mes a mes</span>` : '';
     const tabs = [['Gráfico','Gráfico'],...(P.relojes?[['Calendario','Calendario']]:[]),['Resumen','Tabla'],['Por área','Por área'],['Productos','Productos'],['Detalle',nombreDetalle(P)],...(D.comps.length ? [['Comparación','Comparación']] : [])];
-    const tabsHTML = `<div class="mv-tabs" role="tablist">${tabs.map(([v,t]) => `<button role="tab" data-a="modo" data-v="${esc(v)}" aria-selected="${s.modo===v}" class="${s.modo===v?'on':''}">${esc(t)}</button>`).join('')}</div>`;
+    // #845: «Análisis por área» es la última pestaña, «Cadena por área»: otra pieza, así que la pide a Python.
+    const cadena = P.cadena ? `<button role="tab" data-a="cadena" aria-selected="false">Cadena por área</button>` : '';
+    const tabsHTML = `<div class="mv-tabs" role="tablist">${tabs.map(([v,t]) => `<button role="tab" data-a="modo" data-v="${esc(v)}" aria-selected="${s.modo===v}" class="${s.modo===v?'on':''}">${esc(t)}</button>`).join('')}${cadena}</div>`;
     const comparaTxt = D.compSel.map(c => `<span title="${esc(c.docs)} documentos en el rango comparable completo">${esc(c.rot)}: ${dinero(c.valor)} · ${pct(c.valor > 0 ? (D.total-c.valor)/c.valor*100 : null)}</span>`).join('');
     let medio = '', zona = '', pie = '';
     if (s.modo === 'Gráfico') {
@@ -491,10 +538,17 @@ const MOV = (() => {
     if(P.merma)pie+=' Cada cabecera se cuenta una vez. La valorización es compartida con Rendimiento y Para revisar. Las familias de la página no recortan esta fuente.';
     if(P.produccion)pie+=' Lo generado, anulado o sin producto no entra en el valorizado producido. Las líneas describen la orden registrada; los pendientes no han producido todavía.';
     const foq = D.acotado ? `<button class="mv-chip" data-a="rango" title="Volver a todo el rango">${esc(ambito(G))} ✕</button>` : '';
-    const ampliar = `<button class="mv-amp" data-a="ampl" aria-pressed="${!!s.ampl}" title="${s.ampl?'Volver a poner el panel al costado':'Esconder el panel y usar todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${s.ampl?'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6':'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg>${s.ampl?'Con panel':'Ampliar'}</button>`;
-    const html = `<section class="mv-main"><div class="mv-fila mv-uno">${segmento(GRANOS,s.gran,'gran')}${reloj}<div class="mv-filtros">${filtrosHTML}${quitar}</div>${menu(G)}<span class="mv-esp"></span><span class="mv-rot mv-rango" title="${esc(P.rot_fecha||'')}">${P.relojes?'':esc(fechaRango)}${P.merma?' · '+(P.valoracion==='hoy'?'Precio de hoy':'Costo del día')+(P.valoracion_solicitada==='hoy'&&P.valoracion!=='hoy'?' (precio actual no disponible)':''):''}</span><button class="mv-excel" data-a="excel" title="Descargar los datos y el contexto de esta vista">Excel</button></div>`
-      + `<div class="mv-kpis">${htmlKpis(G)}</div>`
-      + `<div class="mv-fila mv-dos">${tabsHTML}${medio}<span class="mv-esp"></span>${foq}${ampliar}</div>`
+    const ampliar = `<button class="mv-amp ib" data-a="ampl" aria-pressed="${!!s.ampl}" aria-label="${s.ampl?'Volver a poner el panel al costado':'Ampliar: esconder el panel'}" data-tip="${s.ampl?'Volver (Esc)':'Ampliar'}" data-tip-der>${s.ampl?ICO_VOLVER:icono('ampliar')}</button>`;
+    // #845: la cabecera de Período (#844). Nivel 2: las pestañas y, a la derecha, la cápsula de los
+    // indicadores (con `P.banda`, sube a la banda de las carpetas, encima de la pieza). Nivel 3: los
+    // filtros («Más filtros» y una ficha por filtro puesto), a 24 px la forma de ver y, al final, las acciones.
+    // Con banda, la cápsula va FUERA de `.mv-main` (que recorta): la ubica el CSS, encima de la pieza.
+    const kz = capsula(G);
+    const html = (P.banda ? kz : '') + `<section class="mv-main"><div class="mv-fila mv-n2">${tabsHTML}${P.banda ? '' : kz}</div>`
+      + `<div class="mv-fila mv-n3 mv-uno"><div class="mv-g">${masFiltros(G,quitar)}${fichas(G)}${foq}</div>`
+      + `<div class="mv-g mv-g2">${agrupar(G)}${medio}${reloj}</div><span class="mv-esp"></span>`
+      + `<span class="mv-rot mv-rango" title="${esc(P.rot_fecha||'')}">${P.relojes?'':esc(fechaRango)}${P.merma?' · '+(P.valoracion==='hoy'?'Precio de hoy':'Costo del día')+(P.valoracion_solicitada==='hoy'&&P.valoracion!=='hoy'?' (precio actual no disponible)':''):''}</span>`
+      + `<div class="mv-acc">${comoSeCalcula(G)}<button class="ib" data-a="excel" aria-label="Descargar Excel" data-tip="Descargar Excel" data-tip-der>${icono('bajar')}</button>${ampliar}</div></div>`
       + `<div class="mv-cuerpo"><div class="mv-zona">${zona}${pie?`<div class="mv-notas">${pie.startsWith('<')?pie:`<span>${esc(pie)}</span>`}</div>`:''}</div>${s.ampl?'':`<aside class="mv-pn" aria-label="Lectura">${htmlPanel(G)}</aside>`}</div></section>`;
     raiz.innerHTML=html;
     const fb=document.querySelector(`.st-key-${P.k}_nativa_fecha`);
@@ -591,7 +645,11 @@ const MOV = (() => {
       else if(a==='estadoDoc'){s.estadoDoc=v;s.modo='Detalle';s.doc=null;}
       else if(a==='porcFlag'){s.porcFlag=v;s.modo='Detalle';s.doc=null;}
       else if(a==='partir')s.partir=v;
-      else if(a==='menu'){s.menu=s.menu===v?null:v;s.mq='';}
+      else if(a==='menu'){const abierto=!!s.menu&&(s.menu==='mas'||claves(G.P).some(([k])=>k===s.menu));s.menu=v==='mas'?(abierto?null:'mas'):(s.menu===v?'mas':v);s.mq='';s.kAb=false;s.como=false;}
+      // Una capa a la vez: abrir una cierra las otras.
+      else if(a==='kpis'){s.kAb=!s.kAb;s.menu=null;s.como=false;}
+      else if(a==='como'){s.como=!s.como;s.menu=null;s.kAb=false;}
+      else if(a==='cadena'){G.enviar?.('cadena',Date.now());b.classList.add('esperando');b.setAttribute('aria-busy','true');return;}
       else if(a==='cerrar')s.menu=null;
       else if(a==='limpiar')s[v]=[];
       else if(a==='todos'){['area','tipo','fam','prod'].forEach(k=>s[k]=[]);s.menu=null;}
@@ -608,6 +666,7 @@ const MOV = (() => {
     on('change',e=>{
       const k=e.target.dataset.filtro;
       if(k){s[k]=e.target.checked?[...s[k],e.target.value]:s[k].filter(v=>v!==e.target.value);s.foco=null;s.tramo=null;}
+      else if(e.target.dataset.select==='gran'){s.gran=e.target.value;s.foco=null;s.tramo=null;s.doc=null;s.dia=null;}
       else if(e.target.dataset.select==='resaltar')s.resaltados[s.partir]=e.target.value||null;
       else if(e.target.dataset.select==='marca')s.marca=e.target.value;
       else if(e.target.dataset.select==='estadoDoc')s.estadoDoc=e.target.value;
@@ -618,7 +677,7 @@ const MOV = (() => {
     });
     raiz.addEventListener('toggle',e=>{if(e.target.matches('.mv-ficha-porc')&&e.target.isConnected)s.mermaFicha=e.target.open;},{signal,capture:true});
     on('keydown',e=>{
-      if(e.key==='Escape'){s.menu=null;tip(G,null);dibujar(G);}
+      if(e.key==='Escape'){if(s.menu)s.menu=null;else if(s.como)s.como=false;else if(s.kAb)s.kAb=false;else if(s.ampl)s.ampl=false;tip(G,null);dibujar(G);}
       const b=e.target.closest('[data-bar]');
       if(b&&(e.key==='Enter'||e.key===' ')){e.preventDefault();elegirBarra(G,Number(b.dataset.bar));}
       const fila=e.target.closest('tr[data-a]');if(fila&&(e.key==='Enter'||e.key===' ')){e.preventDefault();fila.click();}
@@ -647,7 +706,12 @@ const MOV = (() => {
     },{signal});
     document.addEventListener('pointercancel',()=>{G.drag=null;},{signal});
     document.addEventListener('click',e=>{
-      if(s.menu&&!e.composedPath().includes(raiz)){s.menu=null;dibujar(G);}
+      if((s.menu||s.como||s.kAb)&&!e.composedPath().includes(raiz)){s.menu=null;s.como=false;s.kAb=false;dibujar(G);}
+    },{signal});
+    // Esc cierra la capa abierta aunque el foco no esté en la pieza: redibujar se lleva el foco.
+    document.addEventListener('keydown',e=>{
+      if(e.key!=='Escape'||e.composedPath().includes(raiz)||!(s.menu||s.como||s.kAb))return;
+      if(s.menu)s.menu=null;else if(s.como)s.como=false;else s.kAb=false;dibujar(G);
     },{signal});
     // scroll no burbujea: una escucha en captura sirve para todas las tablas.
     raiz.addEventListener('scroll',e=>{
@@ -668,6 +732,10 @@ const MOV = (() => {
     const prev=window.__movPeriodoEstados[P.k];
     prev?.abort.abort();prev?.ro?.disconnect();
     const s=prev?.s||estado(P.inicial);
+    // #845: «Contar por» lo elige el panel de la fecha, en Python; y la pestaña, si se llegó
+    // desde «Cadena por área» (una vez por pedido: `n`).
+    if(P.reloj&&['cie','reg','pro'].includes(P.reloj))s.reloj=P.reloj;
+    if(P.zona&&P.zona.n!==s.zonaN){s.zonaN=P.zona.n;s.modo=P.zona.v;s.orden=null;}
     if(prev&&prev.P.sello!==P.sello&&!(P.merma&&prev.P.sello_origen===P.sello_origen)){s.foco=null;s.tramo=null;s.doc=null;s.menu=null;}
     if(!GRANOS.includes(s.gran))s.gran='Semana';if(P.familia===false)s.fam=[];
     let raiz=parentElement.querySelector('.mv');if(!raiz){raiz=document.createElement('div');raiz.className='mv';parentElement.appendChild(raiz);}
