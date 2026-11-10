@@ -1899,10 +1899,14 @@ _PIEZA = st.components.v2.component(
     "compras_periodo",
     # `ficha_familias` (.css y .js) es la ficha del filtro de familias de la
     # vista (regla #843): un módulo aparte, para las demás vistas de Compras.
-    css=css_movil((Path(__file__).parent / "ficha_familias.css").read_text(encoding="utf-8")
+    # `iconos` (.css y .js) son los íconos de la app con su nombre al cursor
+    # (regla #821): descargar y ampliar, desde la #844.
+    css=css_movil((Path(__file__).parent.parent / "iconos.css").read_text(encoding="utf-8")
+                  + (Path(__file__).parent / "ficha_familias.css").read_text(encoding="utf-8")
                   + (Path(__file__).parent / "semanal.css").read_text(encoding="utf-8")),
     # El Excel (`libro`, `bajar`, `archivo`) vive en `_xlsx.js`: se antepone.
     js=js_movil((Path(__file__).parent.parent / "_xlsx.js").read_text(encoding="utf-8")
+    + (Path(__file__).parent.parent / "iconos.js").read_text(encoding="utf-8")
     + (Path(__file__).parent / "ficha_familias.js").read_text(encoding="utf-8")
     + (Path(__file__).parent / "semanal.js").read_text(encoding="utf-8")),
 )

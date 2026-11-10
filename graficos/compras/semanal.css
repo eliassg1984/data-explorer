@@ -205,8 +205,6 @@
 .ms-o label.con-s small { color: var(--text-secondary); font-size: 12px; }
 .ms-x { display: inline; }
 .ms-l .mas { margin: 4px; color: var(--text-secondary); font-size: 12px; line-height: 1.35; }
-/* #843: sin ficha, el panel de familias abre debajo de «Más filtros», donde iba el suyo. */
-.ms > .ff-l { top: 34px; }
 .excel { height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--rail-fondo); font-size: 12.5px; cursor: pointer; white-space: nowrap; flex: none; }
 .excel:hover { background: var(--bg-hover); }
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); flex: none; }
@@ -388,3 +386,82 @@ button.fi:hover { background: var(--bg-hover); }
   .cab .pop-como { top: 34px; }
 }
 @media (min-width: 901px) and (prefers-reduced-motion: reduce) { .ktira { animation: none; } }
+
+/* #844: el nivel 3 y sus paneles, con las medidas del boceto
+   https://claude.ai/artifact/2EZyYV79UzT13MBJ1Kxnca y la escala de controles
+   (`--ctl-*`, estilos/_00_base.py). Un relleno por lo que el control HACE: gris,
+   cambia la forma de ver; lavanda, recorta (la ficha, y «Más filtros» cuando
+   tiene algo puesto); contorno, un campo donde se elige; sin caja, una acción o
+   un «Nombre: valor». Va al final: pisa lo de arriba. */
+/* «Agrupar: Semana ▾»: se ve el rótulo; el `<select>`, transparente y encima,
+   abre la lista y recibe el teclado. */
+.men { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; white-space: nowrap; }
+.men small { font-size: inherit; color: var(--text-secondary); }
+.men i { font-style: normal; font-size: 10px; color: var(--text-secondary); }
+.men select { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; border: 0; opacity: 0; cursor: pointer; font: inherit; }
+.men:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mens { display: flex; align-items: center; gap: 4px; min-width: 0; }
+/* Documento y Montos: el elegido, con el contorno índigo de 2 px. */
+.ops { display: flex; flex-wrap: wrap; gap: 4px; }
+.ops button { height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--ctl-gris, var(--rail-fondo)); font-size: 13px;
+  white-space: nowrap; cursor: pointer; }
+.ops button:hover { background: var(--ctl-gris-hover, var(--bg-hover)); }
+.ops button.on { background: var(--bg-card); box-shadow: inset 0 0 0 2px var(--accent); font-weight: 600; }
+/* Los íconos de la app en esta pieza: 32 px, gris, y gris de fondo al pasar. */
+.cpp .ib { border-radius: 6px; color: var(--text-secondary) !important; cursor: pointer; }
+.cpp .ib:hover { background: var(--ctl-gris, var(--bg-hover)); color: var(--text-primary) !important; }
+.cpp .amp-b { width: 32px; height: 32px; }
+/* El dibujo, de 16 px y trazo fino dentro de sus 32 de toque: como los del boceto. */
+.cpp .ib .ico, .cpp .amp-b svg { width: 16px; height: 16px; stroke-width: 1.6; }
+@media (min-width: 901px) {
+  /* El gris secundario de la escala: más oscuro que el de la app (5,4 o más
+     sobre cualquier relleno). Sólo dentro de esta pieza. */
+  .cpp { --text-secondary: var(--ctl-texto-2); }
+  .n2 { gap: 16px; border-bottom-color: var(--ctl-linea, var(--border)); }
+  .tabs { gap: 4px; }
+  .tabs button { padding: 0 10px; font-weight: 500; }
+  .tabs button.on { font-weight: 600; }
+  .kcap { border-radius: 6px; background: var(--ctl-gris, var(--rail-fondo)); }
+  .kcap:hover { background: var(--ctl-gris-hover, var(--accent-tint)); }
+  .kcap .mas { gap: 4px; padding: 0 2px 0 8px; border-left-color: var(--ctl-linea, var(--border)); }
+  .kcap .pto { min-width: 16px; height: 16px; border-radius: 8px; }
+  .ktira { gap: 4px; border-radius: 6px; background: var(--ctl-gris, var(--rail-fondo)); }
+  .ktira .kpi { border-radius: 4px; }
+  .ktira .kpi.on { box-shadow: 0 0 0 1px var(--ctl-linea, var(--border)); }
+  /* Tres grupos: 4 px adentro de cada uno, 24 px entre filtros y menús, y las
+     acciones al final, detrás de una raya. */
+  .cab { gap: 0; min-height: 32px; }
+  /* El hueco de la fecha ya no ocupa: la fecha vive en la franja (#841). Sigue
+     en el DOM, con 1 px, porque `ponerFecha` lo usa para saber si mostrarla. */
+  .cpp .lugar-fecha { width: 1px; margin-right: -1px; }
+  .fils { gap: 4px; }
+  .mens { margin-left: 24px; }
+  .ms-b { height: 32px; gap: 6px; padding: 0 10px; border-radius: 6px; background: var(--ctl-gris, var(--rail-fondo)); font-size: 13px; }
+  .ms-b:hover { background: var(--ctl-gris-hover, var(--bg-hover)); }
+  .ms-b.on { background: var(--ctl-filtro, var(--accent-tint)); font-weight: 500; }
+  .ms-b i { font-size: 10px; color: var(--text-secondary); }
+  .men, .cab .men { height: 32px; border-radius: 6px; background: none; font-size: 13px; }
+  .men:hover { background: var(--ctl-gris, var(--bg-hover)); }
+  .acc { display: flex; align-items: center; gap: 4px; height: 24px; padding-left: 12px; border-left: 1px solid var(--ctl-linea, var(--border)); flex: none; }
+  .acc .link { height: 32px; padding: 0 8px; border-radius: 6px; }
+  .acc .link:hover { background: var(--ctl-gris, var(--bg-hover)); }
+  .cab .como { margin-right: 0; }
+  .cab .pop-como { top: 36px; }
+  /* «Más filtros»: cuatro campos plegados, Documento y Montos. */
+  .ms-l.ancho { top: 36px; width: 300px; padding: 12px; gap: 12px; border-radius: 12px;
+    max-height: min(470px, calc(var(--alto-util, 600px) - 110px));
+    scroll-padding-bottom: 48px;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--text-primary) 16%, transparent), 0 0 0 1px var(--ctl-linea, var(--border)); font-size: 13px; }
+  .ms-l.ancho .ms-o { max-height: 132px; }
+  .ms-l.ancho .ms-o label { min-height: 26px; padding: 0 4px; font-size: 13px; }
+  .ms-l.ancho .ms-o label:hover { background: var(--ctl-gris, var(--bg-hover)); }
+  .ms-l.ancho .ms-q { border-radius: 6px; background: var(--ctl-gris, var(--rail-fondo)); font-size: 13px; }
+  .ms-l.ancho .ff-pie { margin-bottom: -12px; padding-bottom: 12px; }
+  .pn-cab { min-height: 32px; }
+}
+@media (max-width: 900px) {
+  .mens { flex-wrap: wrap; gap: 8px; flex: 1 1 100%; }
+  .men { flex: 1 1 40%; justify-content: flex-start; border-radius: 8px; background: var(--rail-fondo); }
+  .men i { margin-left: auto; }
+  .ops button { min-height: 44px; }
+}

@@ -1,15 +1,19 @@
-// La ficha del filtro de familias de una vista de Compras (regla #843).
+// La ficha del filtro de familias de una vista de Compras (reglas #843 y #844).
 //
 // El filtro de Familia y Subfamilia es de la VISTA y lo aplica Python
 // (`graficos/compras/_filtros_vista.py`): recorta el rango, el histórico, las
 // notas de crédito, el punto del rail y lo que ve el asistente. Este módulo
-// sólo lo MUESTRA y lo EDITA dentro de la pieza: una ficha lavanda con su ✕ al
-// lado de «Más filtros» cuando hay filtro, y el panel de casillas.
+// sólo lo MUESTRA y lo EDITA dentro de la pieza, como el boceto
+// https://claude.ai/artifact/2EZyYV79UzT13MBJ1Kxnca: una ficha lavanda con su
+// ✕ al lado de «Más filtros» cuando hay filtro; su panel, con las familias y
+// lo que suma cada una y el campo de Subfamilia; y los dos campos, Familia y
+// Subfamilia, que la pieza pone dentro de «Más filtros».
 //
 // Se antepone a la pieza, como `_xlsx.js`, y deja un solo nombre: `FichaFam`.
 // No toca el DOM ni manda nada: arma HTML y hace cuentas; los clics los pone la
 // pieza. Las acciones que dibuja (`data-acc`): ffam-menu, ffam-fam, ffam-sub,
-// ffam-sublimpiar, ffam-aplicar, ffam-quitar, ffam-entrada y ffam-todas.
+// ffam-sublimpiar, ffam-aplicar, ffam-quitar, ffam-entrada, ffam-todas y
+// `campo` con `data-v="ffsub"` (abrir o plegar el campo de Subfamilia).
 //
 // `P` es `familias` del mensaje de Python (`_filtros_vista.datos_ficha`):
 //   todas     [[familia, lo que suma en el rango], …]: todas las de la página
@@ -50,7 +54,16 @@ const FichaFam = (() => {
   // Lo que cambia si se aplica `pend`; null si queda igual.
   function cambio(P, pend) { const v = valor(P, pend); return igual(v, vigente(P)) ? null : v; }
   const distinto = (P, v) => !igual(valor(P, { fam: v.fam.length ? v.fam : todas(P), sub: v.sub }), vigente(P));
-  // «5 de 8 familias», «Familia: Alimentos», «… · 2 subfamilias».
+  // Lo que dice cada campo: «5 de 8 familias», «Todas las subfamilias»…
+  function rotuloFam(P, s) {
+    const n = valor(P, s || aplicado(P)).fam.length;
+    return !n || n === P.todas.length ? 'Todas las familias' : n === 1 ? nom(valor(P, s || aplicado(P)).fam[0]) : `${n} de ${P.todas.length} familias`;
+  }
+  function rotuloSub(P, s) {
+    const x = valor(P, s || aplicado(P)).sub;
+    return !x.length ? 'Todas las subfamilias' : x.length === 1 ? nom(x[0]) : `${x.length} subfamilias`;
+  }
+  // Lo que dice la ficha: «5 de 8 familias», «Familia: Alimentos», «… · 2 subfamilias».
   function rotulo(P, v) {
     const x = v || vigente(P), n = x.fam.length, p = [];
     if (n > 0 && n < P.todas.length) p.push(n === 1 ? `Familia: ${nom(x.fam[0])}` : `${n} de ${P.todas.length} familias`);
@@ -73,32 +86,55 @@ const FichaFam = (() => {
     return { fam: pend.fam, sub: [...s].sort() };
   }
 
+  // ── Lo que se dibuja. `o`: pend (lo que se está marcando), q (lo buscado en
+  // Subfamilia), fmt (cómo escribir un monto), campo (el campo abierto),
+  // abierto (el panel de la ficha) y envio (lo pedido a Python que no volvió).
+  function listaFam(P, pend, fmt) {
+    const sel = new Set(pend.fam), f = fmt || String;
+    return P.todas.map(([k, x]) => `<label><input type="checkbox" data-acc="ffam-fam" data-v="${esc(k)}"${sel.has(k) ? ' checked' : ''}><span>${esc(nom(k))}</span><small>${esc(f(x))}</small></label>`).join('');
+  }
   function listaSub(P, pend, q) {
     const sel = new Set(pend.sub), k = plano(q || '');
     const ops = subsDe(P, pend.fam).filter((x) => !k || plano(nom(x)).includes(k));
     return ops.map((x) => `<label><input type="checkbox" data-acc="ffam-sub" data-v="${esc(x)}"${sel.has(x) ? ' checked' : ''}><span>${esc(nom(x))}</span></label>`).join('')
       || '<p class="ff-nada">Sin coincidencias.</p>';
   }
-  // El panel: Familia con lo que suma cada una, Subfamilia y el pie. `o`:
-  // pend (lo que se está marcando), q (lo buscado), fmt (cómo escribir un
-  // monto) y volver (el panel abrió desde «Más filtros»).
-  function panel(P, o) {
-    const pend = o.pend || aplicado(P), sel = new Set(pend.fam), v = valor(P, pend), fmt = o.fmt || String;
-    const subs = subsDe(P, pend.fam), nSub = pend.sub.length, pendiente = !igual(v, vigente(P)), ent = deEntrada(P);
-    const atajos = (activo(P, ent) && !igual(v, ent) ? `<button class="ff-at" data-acc="ffam-entrada" title="${esc(P.entrada.map(nom).join(', '))}">Las de siempre</button>` : '')
-      + (activo(P, v) ? '<button class="ff-at" data-acc="ffam-todas">Todas</button>' : '');
-    return '<div class="ff-l" role="dialog" aria-label="Familia y subfamilia de esta vista">'
-      + (o.volver ? '<button class="ff-at ff-volver" data-acc="menu" data-v="fil">‹ Más filtros</button>' : '')
-      + `<h4><span>Familia</span><span class="ff-ats">${atajos}</span></h4>`
-      + `<div class="ff-o ff-fams">${P.todas.map(([f, x]) => `<label><input type="checkbox" data-acc="ffam-fam" data-v="${esc(f)}"${sel.has(f) ? ' checked' : ''}><span>${esc(nom(f))}</span><small>${esc(fmt(x))}</small></label>`).join('')}</div>`
-      + (subs.length ? `<h4><span>Subfamilia<small> · ${nSub || 'todas'}</small></span><span class="ff-ats">${nSub ? '<button class="ff-at" data-acc="ffam-sublimpiar">Quitar</button>' : ''}</span></h4>`
-        + (subs.length > 8 ? `<input class="ff-q" data-k="ffsub" placeholder="Buscar subfamilia…" aria-label="Buscar subfamilia" value="${esc(o.q || '')}" autocomplete="off">` : '')
-        + `<div class="ff-o ff-subs" data-k="ffsub">${listaSub(P, pend, o.q)}</div>` : '')
-      + `<div class="ff-pie"><span>${pendiente ? 'Se aplica al cerrar' : 'Sólo esta vista'}</span>${pendiente ? '<button class="ff-ap" data-acc="ffam-aplicar">Aplicar</button>' : ''}</div></div>`;
+  // «Las de siempre» y «Todas las familias»: sólo las que cambian algo.
+  function atajos(P, pend) {
+    const v = valor(P, pend), ent = deEntrada(P);
+    return (activo(P, ent) && !igual(v, ent) ? `<button class="ff-at" data-acc="ffam-entrada" title="${esc(P.entrada.map(nom).join(', '))}">Las de siempre</button>` : '')
+      + (activo(P, v) ? '<button class="ff-at" data-acc="ffam-todas">Todas las familias</button>' : '');
   }
-  // La ficha, y debajo su panel. Sin filtro no dibuja nada: ahí el panel abre
-  // desde «Más filtros» (`entrada`). `o.envio` es lo pedido a Python que
-  // todavía no volvió: la ficha lo dice apagada, sin botones.
+  // Lo que abre el campo Familia de «Más filtros»: la lista y sus atajos.
+  function cuerpoFam(P, o) {
+    const pend = o.pend || aplicado(P), at = atajos(P, pend);
+    return `<div class="ff-o ff-fams">${listaFam(P, pend, o.fmt)}</div>${at ? `<div class="ff-ats">${at}</div>` : ''}`;
+  }
+  // Lo que abre el campo Subfamilia, en «Más filtros» o en el panel de la ficha.
+  function cuerpoSub(P, o) {
+    const pend = o.pend || aplicado(P), subs = subsDe(P, pend.fam);
+    if (!subs.length) return '<p class="ff-nada">Estas familias no tienen subfamilias.</p>';
+    return (subs.length > 8 ? `<input class="ff-q" data-k="ffsub" placeholder="Buscar subfamilia…" aria-label="Buscar subfamilia" value="${esc(o.q || '')}" autocomplete="off">` : '')
+      + `<div class="ff-o ff-subs" data-k="ffsub">${listaSub(P, pend, o.q)}</div>`
+      + (pend.sub.length ? '<div class="ff-ats"><button class="ff-at" data-acc="ffam-sublimpiar">Todas las subfamilias</button></div>' : '');
+  }
+  // Un campo: plegado dice lo elegido; un clic lo abre ahí mismo. Lo usa la
+  // pieza para los suyos (Proveedor, Producto), para que todos sean iguales.
+  function campo(k, rot, txt, abierto, cuerpo) {
+    return `<div class="ff-c"><h4>${esc(rot)}</h4><button class="ff-campo" data-acc="campo" data-v="${esc(k)}" aria-expanded="${!!abierto}"><span>${esc(txt)}</span><i aria-hidden="true">▾</i></button>`
+      + (abierto ? `<div class="ff-cl">${cuerpo()}</div>` : '') + '</div>';
+  }
+  // El panel de la ficha: las familias con lo que suma cada una, el campo de
+  // Subfamilia y el pie.
+  function panel(P, o) {
+    const pend = o.pend || aplicado(P), pendiente = !!cambio(P, pend), at = atajos(P, pend);
+    return '<div class="ff-l" role="dialog" aria-label="Familia y subfamilia de esta vista">'
+      + `<div class="ff-c"><h4>Familia</h4><div class="ff-o ff-fams">${listaFam(P, pend, o.fmt)}</div></div>`
+      + campo('ffsub', 'Subfamilia', rotuloSub(P, pend), o.campo === 'ffsub', () => cuerpoSub(P, o))
+      + `<div class="ff-pie"><span>${pendiente ? 'Se aplica al cerrar' : 'Sólo esta vista'}</span>${pendiente ? '<button class="ff-ap" data-acc="ffam-aplicar">Aplicar</button>' : `<span class="ff-ats">${at}</span>`}</div></div>`;
+  }
+  // La ficha, y debajo su panel. Sin filtro no dibuja nada. Mientras Python
+  // contesta dice lo pedido, apagada y sin botones.
   function ficha(P, o) {
     const hay = activo(P), v = o.envio || vigente(P);
     let chip = '';
@@ -109,10 +145,8 @@ const FichaFam = (() => {
     }
     return `<div class="ff">${chip}${o.abierto && hay && !o.envio ? panel(P, o) : ''}</div>`;
   }
-  // El renglón de «Más filtros» que abre el panel cuando no hay ficha.
-  const entrada = () => '<div class="ff-en"><button class="ff-ir" data-acc="ffam-menu" aria-haspopup="dialog"><span>Familia y subfamilia</span><small>Todas ›</small></button></div>';
 
-  return { nom, subsDe, aplicado, valor, vigente, sinFiltro, deEntrada, activo, cambio, distinto, rotulo,
-    iniciar, alternarFam, alternarSub, listaSub, panel, ficha, entrada };
+  return { nom, subsDe, aplicado, valor, vigente, sinFiltro, deEntrada, activo, cambio, distinto, rotulo, rotuloFam, rotuloSub,
+    iniciar, alternarFam, alternarSub, listaFam, listaSub, cuerpoFam, cuerpoSub, campo, panel, ficha };
 })();
 window.__cpFichaFam = FichaFam;

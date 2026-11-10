@@ -28,6 +28,20 @@ CSS = """    <style>
         --marco-activo: 0 1px 3px rgba(73, 56, 184, .2);
         --marco-radio: 14px;
         --rail-fondo: #f7f6fb;      /* == tema.LAVANDA_FILA: la columna del rail en árbol (regla #472) */
+        /* LA ESCALA DE LOS CONTROLES (regla #844). Un relleno por lo que el
+           control HACE, no por dónde está: gris, cambia la forma de ver;
+           lavanda, recorta el total (un filtro puesto); blanco con contorno,
+           un campo donde se elige. Hoy la usa Compras › Período; cruzan el
+           shadow root de las piezas. Contrastes medidos con la fórmula de
+           WCAG: el texto secundario da 6,4 sobre blanco, 5,7 sobre el gris y
+           5,4 sobre el lavanda (`--text-secondary` da 4,8 / 4,3 / 4,1); el
+           contorno, 3,5 sobre blanco (hace falta 3). */
+        --ctl-gris: #f1f0f6;
+        --ctl-gris-hover: #e6e4ef;
+        --ctl-filtro: #ece9fb;
+        --ctl-contorno: #8b87a3;
+        --ctl-texto-2: #5e5e68;
+        --ctl-linea: #e3e0ee;
         /* Sombra de lo que se despliega ENCIMA del contenido (el árbol
            asomado, regla #472): hacia la derecha, porque es de ese lado
            donde tapa. */

@@ -736,6 +736,11 @@ CSS = """
         .franja-ruta {
             display: inline-flex; align-items: center; gap: 8px;
             margin-left: 10px; cursor: pointer; white-space: nowrap;
+            /* La letra de la app, dicha acá (#844): la ruta se dibuja con un
+               `st.markdown`, y su contenedor trae «Source Sans», la de
+               Streamlit. Medido: el área salía en Source Sans 600, más fina y
+               más chica que el resto de la página, que va en DM Sans. */
+            font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
         .franja-ruta .fr-sep { color: var(--text-muted); }
         .franja-ruta .fr-grupo { font-size: 13px; color: var(--text-secondary); }
@@ -944,6 +949,16 @@ CSS = """
             .st-key-cp_vol_escala, .st-key-cp_vap_f_escala, .st-key-cp_docs_escala
         ) button[data-testid="stPopoverButton"] {
             border-radius: 15px !important;
+        }
+        /* …y con la letra de la ruta, que va en la misma píldora (#844): el
+           botón de Streamlit trae «Source Sans», y la fecha salía en otra
+           letra que «Compras › Período». */
+        .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill [data-testid="stPopover"] button p,
+        [data-compras-vista] :is(
+            .st-key-cp_sem_escala, .st-key-cp_rank_escala, .st-key-cp_prod_escala,
+            .st-key-cp_vol_escala, .st-key-cp_vap_f_escala, .st-key-cp_docs_escala
+        ) button[data-testid="stPopoverButton"] p {
+            font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
         /* La ruta mide lo que su texto: «Compras › Período ▾». Desde la
            6c136f58 cada nivel reservaba 120 px con el texto centrado, para que

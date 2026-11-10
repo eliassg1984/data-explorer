@@ -52,6 +52,15 @@ a escritorio y cabeceras nativas sin solapes). El detalle vive en
   pushear un cambio así, **avisarlo**. Ver `arquitectura.md` regla #357.
 - Cada cambio se pushea y se confirma explícitamente. Si algo NO se pusheó,
   decirlo — si no, se diagnostican "conflictos" que no existen.
+- **Un boceto aprobado es el contrato, entero.** Si se va a implementar sólo
+  una parte, decirlo ANTES de empezar, con la lista de lo que queda fuera;
+  y nada de mover cosas de lugar respecto del boceto sin avisar. La vista no
+  está hecha hasta comparar una foto de la app con una del boceto, al mismo
+  tamaño (1323×619) y en los mismos estados, zona por zona: el boceto se
+  baja con `Artifact read` (`path: index.html`) y se fotografía con
+  Playwright, igual que la app. Lo que no coincide se corrige o se dice, con
+  su motivo. Pasó con la #843: se subió la ficha de familias sola y la
+  pantalla no se parecía al boceto. Regla #844.
 - **Los tests en verde NO prueban que ande en Cloud: esta máquina corre
   pandas 3 y `requirements.txt` pide `pandas>=2.2,<2.3`.** Dos mayores de
   distancia, y el hueco no se ve como un error de import sino como la FORMA
@@ -1069,8 +1078,15 @@ vistas); las otras cinco siguen con el ícono ⚙. Lo que muerde:
   vive en la pieza: por eso el aviso de «sin compras» trae el botón «Quitar el filtro
   de familias» (`quitar_filtros_vista`). Una vista nueva con ficha lo necesita.
 - **Compras abre con 5 de 8 familias**: la ficha está desde el primer segundo, la ✕
-  lleva a las ocho y «Las de siempre» vuelve a las cinco. Sin filtro no hay ficha y
-  el panel abre desde «Más filtros».
+  lleva a las ocho y «Las de siempre» vuelve a las cinco. Sin filtro no hay ficha.
+  Familia y Subfamilia están SIEMPRE en «Más filtros», como campos (#844).
+- **El nivel 3 de Período tiene las medidas del boceto** (#844): «Más filtros» y la
+  ficha, a 24 px los menús «Agrupar: Semana ▾» sin caja (un `<select>` transparente
+  encima del rótulo) y, detrás de una raya, las acciones: «Cómo se calcula» y los
+  íconos de la app (`graficos/iconos.js`) para descargar y ampliar. «Más filtros» son
+  cuatro campos plegados, Documento y Montos. Los colores son la escala de controles,
+  `--ctl-*` en `estilos/_00_base.py`: gris cambia la forma de ver, lavanda recorta,
+  contorno es un campo. Hoy la usa sólo esta vista.
 - **El relleno lavanda solo no distingue un filtro de un control gris** (1,07 de
   contraste entre los dos): la señal es el texto índigo, la píldora y la ✕, que es
   un botón aparte de 24 × 24.

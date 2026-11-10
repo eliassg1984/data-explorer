@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-843 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+844 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (288)
+**CSS y estilos** (289)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -355,6 +355,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#841** — La ruta va en una píldora con los bordes de la hoja: la píldora es el ::before de la franja
 - **#842** — Los indicadores de Compras › Período van plegados en el renglón de las pestañas; la franja…
 - **#843** — En Compras › Período el filtro de familias es una ficha al lado de «Más filtros»; el ⚙ se va…
+- **#844** — Un boceto aprobado es el contrato entero: Período se rehízo con sus medidas, y la foto se…
 
 **Layout y alturas** (115)
 
@@ -712,7 +713,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 - **#797** — «Qué faltó» con cantidad, unidad y código; y «Explorar», la tabla dinámica de Ajuste
 
-**Streamlit** (176)
+**Streamlit** (177)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -890,6 +891,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#781** — Recetas entera en el lenguaje de Costo de Carta, y los códigos a la vista
 - **#785** — Inventario en la franja común (#782) y nada bajo 12 px
 - **#833** — La ubicación, la distribución y el orden de capas de un insertado son decisiones distintas
+- **#844** — Un boceto aprobado es el contrato entero: Período se rehízo con sus medidas, y la foto se…
 
 **Datos, R2 y DuckDB** (133)
 
@@ -59355,7 +59357,8 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      la página con lo que suman en el rango —también la que no compró, con S/ 0, para que
      se pueda desmarcar y «de 8» cuente siempre sobre las mismas—, las subfamilias de las
      marcadas con su buscador, «Las de siempre» y «Todas». **Sin filtro no hay ficha**: el
-     mismo panel abre desde un renglón de «Más filtros», en su mismo lugar.
+     mismo panel abría desde un renglón de «Más filtros» (desde la #844, Familia y
+     Subfamilia son campos de «Más filtros», siempre).
    - **La ficha no manda: pide.** Las casillas marcan `G.ffPend` en el navegador y viajan
      UNA vez, al cerrarse el panel por el camino que sea (`soltarFf`: Esc, clic afuera,
      «Aplicar» u otro control); la ✕, «Las de siempre», «Todas» y «Sumarlas» se piden en el
@@ -59402,6 +59405,77 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    hasta cerrar, la espera, el teclado, «Las de siempre», el panel desde «Más filtros»,
    el alto contra la hoja y el celular. Pendiente: las otras cinco vistas de Compras.
 
+844. **Un boceto aprobado es el contrato entero: Período se rehízo con sus medidas, y la foto se compara antes de subir.**
+   La #843 subió la ficha de familias y nada más. El usuario puso la app al lado del
+   boceto https://claude.ai/artifact/2EZyYV79UzT13MBJ1Kxnca y no se parecían: «Más
+   filtros» seguía con sus listas abiertas, los menús eran cajas grises con un `select`
+   nativo, descargar decía «Excel ↓», y Familia había salido de «Más filtros» por una
+   decisión que no estaba en el boceto ni se avisó. La nota de traspaso decía «paso 1: la
+   ficha» y «la escala, sin aplicar», pero el boceto dibujaba la pantalla entera con la
+   escala puesta, y eso es lo que se aprobó. Tampoco se comparó la foto con el boceto
+   antes de pushear, que lo habría mostrado en un minuto. De ahí la regla de trabajo, que
+   va también en `CLAUDE.md`:
+   - **Si se va a implementar sólo una parte de un boceto, se dice ANTES**, con la lista
+     de lo que queda fuera; y no se mueve nada de lugar respecto del boceto sin avisar.
+   - **La vista no está hecha hasta comparar la foto de la app con la del boceto**, al
+     mismo tamaño (1323×619) y en los mismos estados, zona por zona. El boceto se baja
+     con `Artifact read` (`path: index.html`) y se fotografía con Playwright, como la
+     app; se miden las mismas cajas en los dos (alto, relleno, radio, letra) y se arma un
+     par boceto/app por zona. Lo que no coincide se corrige o se dice, con su motivo.
+   Lo que cambió en Compras › Período (`semanal.js`, el bloque «#844» al final de
+   `semanal.css`, `ficha_familias.js` y `.css`):
+   - **El nivel 3 son tres grupos**, 4 px adentro de cada uno: «Más filtros» y la ficha;
+     a 24 px, los menús de la vista; y al final, detrás de una raya, las acciones.
+     «Más filtros» arranca donde las pestañas: el hueco que la cabecera le dejaba a la
+     fecha (`.lugar-fecha`, 24 + 8 px) ya no ocupa, porque la fecha vive en la franja
+     (#841). Sigue en el DOM con 1 px: `ponerFecha` mira su ancho para decidir si muestra
+     el contenedor de la fecha, y con `display: none` la escondía.
+   - **Los menús son «Agrupar: Semana ▾» sin caja** (`menu`): el rótulo en gris, el valor
+     y la flecha. Encima va un `<select>` transparente, que es el que abre la lista y
+     recibe el teclado; sus opciones dicen sólo el valor. Ojo al leerlo en una prueba:
+     `innerText` del rótulo trae las opciones del `select`.
+   - **Las acciones**: «Cómo se calcula» y dos íconos de la app (`graficos/iconos.js` y
+     `.css`, antepuestos; regla #821), descargar y ampliar, de 32 px con el dibujo de 16 y
+     su nombre al cursor (`data-tip`) y para lectores (`aria-label`). «Ampliar» de la zona
+     izquierda subió ahí desde el renglón del gráfico; ampliada, el nivel 3 se esconde y
+     «Volver» queda en ese renglón. En el celular sigue «Excel ↓» con su nombre.
+   - **«Más filtros» son cuatro campos plegados** —Familia, Subfamilia, Proveedor y
+     Producto: 32 px, contorno de 1 px, lo elegido escrito— más Documento y Montos, con
+     el elegido en contorno índigo de 2 px. Un clic en un campo lo abre ahí mismo, de a
+     uno (`st.campo`), y lo trae a la vista (`scrollIntoView` con `scroll-padding-bottom`,
+     por el pie fijo). Familia y Subfamilia están SIEMPRE ahí; con filtro, además, la
+     ficha. La nota de «Todos» se fue: ya está en «Cómo se calcula». El campo lo dibuja
+     `FichaFam.campo`, para que los de la pieza y los del módulo sean el mismo.
+   - **El panel de la ficha**: las familias con lo que suman (en miles, como el boceto),
+     el campo de Subfamilia y el pie, con «Las de siempre» y «Todas las familias».
+   - **Marcar familias en «Más filtros» tampoco manda hasta cerrar**: `soltarFf` espera
+     mientras el menú sea el de la ficha O «Más filtros». Con sólo el primero, cada
+     casilla pedía una corrida completa; lo agarró la prueba.
+   - **La ficha mide 28 px** (la ✕, 24 × 24), la cápsula de los indicadores y su tira
+     tienen esquinas de 6, las pestañas van en 500 con 10 px de relleno.
+   - **La escala de controles entra como variables**, `--ctl-*` en `estilos/_00_base.py`
+     (gris, gris al pasar, lavanda de filtro, contorno, texto secundario, línea): cruzan
+     el shadow root. Período redefine `--text-secondary` con `--ctl-texto-2` adentro de la
+     pieza (5,4 o más de contraste sobre cualquier relleno; el de la app da 4,1 sobre el
+     lavanda). El resto de la app no cambió.
+   - **La ruta salía en «Source Sans»**, la letra de Streamlit, y no en DM Sans: se dibuja
+     con un `st.markdown` y hereda la de su contenedor. Medido: «Compras» en Source Sans
+     600, más fina y chica que el resto. `.franja-ruta` dice ahora su letra
+     (`_90_marco.py`), y la fecha de Compras y de Ajuste, que va en la misma píldora,
+     también. La causa de fondo queda: la regla base es `html, body, [class*="css"]` y
+     Streamlit ya no nombra así sus clases, así que los botones nativos (el rail, las
+     fechas de las demás áreas) siguen en Source Sans. Arreglarlo es de toda la app y
+     cambia anchos: decisión pendiente.
+   Lo que sigue distinto del boceto, a propósito: la letra (DM Sans, la de la app; el
+   boceto usó Inter), los miles con coma, el orden de las familias (por lo que suman), la
+   leyenda («año pasado» sigue arriba del gráfico) y la fecha de la franja, que no tiene
+   la flecha ni el atajo en gris (su rótulo es de todas las tarjetas). Medido en la app
+   local a 1323×619 contra el boceto: «Más filtros» 97×32 (99×32), ficha 128×28 (128×28),
+   menú 139×32 (143×32), paneles de 300 px que terminan a 12 px de la hoja.
+   `test_compras_periodo.py::test_cabecera_como_el_boceto` mide los tres grupos, los
+   menús, las acciones, «Ampliar» y los campos de «Más filtros»; la de la ficha, el campo
+   de Subfamilia y que nada viaje hasta cerrar.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59414,7 +59488,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#843**; la próxima toma el número siguiente.
+> última regla es la **#844**; la próxima toma el número siguiente.
 
 >
 
