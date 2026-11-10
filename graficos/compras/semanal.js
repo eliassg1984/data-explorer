@@ -3,7 +3,8 @@
 //
 // La monta graficos/compras/semanal.py con st.components.v2 (sin iframe,
 // estilos en un shadow root). `_xlsx.js` va antepuesto (libro, bajar,
-// archivo). Python manda las líneas del rango (de TODOS los documentos, con
+// archivo), y `ficha_familias.js` (`FichaFam`, la ficha del filtro de
+// familias de la vista, regla #843). Python manda las líneas del rango (de TODOS los documentos, con
 // su precio habitual), lo que restaron las notas de crédito y las listas
 // del histórico; todo lo demás lo resuelve el navegador: el grano, los
 // cuatro filtros, Documento y Montos, «Partir por» y lo resaltado, las
@@ -979,6 +980,10 @@ function nivel2(F, V, st) {
 function cabecera(F, V, st) {
   const activos = FILTROS.filter(([k]) => st[k].length).length + (st.docu !== 'Todos' ? 1 : 0) + (st.montos !== 'Sin IGV' ? 1 : 0);
   const local = !!F.familias?.en_panel;
+  // #843: el filtro de familias de la vista es una ficha al lado de «Más filtros»
+  // (`ficha_familias.js`). Sin filtro no hay ficha y su panel abre desde «Más filtros».
+  const P = F.familias, conFicha = local && !!P.ficha, ffHay = conFicha && FichaFam.activo(P), ffEnMas = conFicha && !ffHay && !G.ffEnvio;
+  const ffO = conFicha ? { abierto: st.menu === 'ffam', pend: G.ffPend, envio: G.ffEnvio, q: st.q.ffsub, fmt: fS0 } : null;
   const disp = { fam: F.hayFam && V.famOps.length && !F.familias, sub: !local && F.haySub && V.subOps.length, prov: F.hayProv, prod: true };
   const dentro = FILTROS.filter(([k]) => disp[k] && k !== 'fam');
   const nFil = dentro.filter(([k]) => st[k].length).length;
@@ -987,11 +992,14 @@ function cabecera(F, V, st) {
     return `<div class="ms"><button class="ms-b${s.length ? ' on' : ''}" data-acc="menu" data-v="fam" aria-expanded="${st.menu === 'fam'}">${esc(txt)} <i>▾</i></button>${st.menu === 'fam' ? `<div class="ms-l"><input class="ms-q" data-k="fam" placeholder="Buscar…" value="${esc(st.q.fam || '')}" autocomplete="off"><div class="ms-o" data-k="fam">${listaMenu(F, V, st, 'fam')}</div></div>` : ''}</div>`; })() : '';
   const nMas = nFil + (st.docu !== 'Todos' ? 1 : 0) + (st.montos !== 'Sin IGV' ? 1 : 0);
   const fil = (local ? '' : F.familias ? menuFamilias(F, st) : famInt)
-    + `<div class="ms"><button class="ms-b${nMas ? ' on' : ''}" data-acc="menu" data-v="fil" aria-expanded="${st.menu === 'fil'}" title="${local ? '' : 'Subfamilia, '}Proveedor, producto, documento y montos">Más filtros${nMas ? ` · ${nMas}` : ''} <i>▾</i></button>${st.menu === 'fil' ? `<div class="ms-l ancho">${dentro.map(seccion).join('')}<h4>Documento</h4><div class="seg chico">${DOCUS.map((k) => `<button class="${k === st.docu ? 'on' : ''}" data-acc="docu" data-v="${k}">${k}</button>`).join('')}</div><h4>Montos</h4><div class="seg chico">${MONTOS.map((k) => `<button class="${k === st.montos ? 'on' : ''}" data-acc="montos" data-v="${k}">${k}</button>`).join('')}</div><p class="mas">«Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito. Sólo esta tarjeta.</p></div>` : ''}</div>`;
+    + `<div class="ms"><button class="ms-b${nMas ? ' on' : ''}" data-acc="menu" data-v="fil" aria-expanded="${st.menu === 'fil' || (ffEnMas && st.menu === 'ffam')}" title="${ffEnMas ? 'Familia, subfamilia, proveedor' : local ? 'Proveedor' : 'Subfamilia, proveedor'}, producto, documento y montos">Más filtros${nMas ? ` · ${nMas}` : ''} <i>▾</i></button>${ffEnMas && st.menu === 'ffam' ? FichaFam.panel(P, { ...ffO, volver: true }) : ''}${st.menu === 'fil' ? `<div class="ms-l ancho">${ffEnMas ? FichaFam.entrada() : ''}${dentro.map(seccion).join('')}<h4>Documento</h4><div class="seg chico">${DOCUS.map((k) => `<button class="${k === st.docu ? 'on' : ''}" data-acc="docu" data-v="${k}">${k}</button>`).join('')}</div><h4>Montos</h4><div class="seg chico">${MONTOS.map((k) => `<button class="${k === st.montos ? 'on' : ''}" data-acc="montos" data-v="${k}">${k}</button>`).join('')}</div><p class="mas">«Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito. Sólo esta tarjeta.</p></div>` : ''}</div>`
+    + (conFicha ? FichaFam.ficha(P, ffO) : '');
+  const todos = activos + (ffHay ? 1 : 0);
   return `<div class="cab"><span class="lugar-fecha" aria-hidden="true"></span>`
-    + `<button class="filtros-toggle" data-acc="panel-filtros" aria-expanded="${!!st.filtrosAbiertos}">Filtros${activos ? ` · ${activos} activo${activos === 1 ? '' : 's'}` : ''} <span aria-hidden="true">${st.filtrosAbiertos ? '▴' : '▾'}</span></button>`
+    + `<button class="filtros-toggle" data-acc="panel-filtros" aria-expanded="${!!st.filtrosAbiertos}">Filtros${todos ? ` · ${todos} activo${todos === 1 ? '' : 's'}` : ''} <span aria-hidden="true">${st.filtrosAbiertos ? '▴' : '▾'}</span></button>`
     + `<div class="fils">${fil}</div>${menusVista(F, V, st)}<span class="esp"></span>${esMovil() ? '' : G.comoHtml || ''}<button class="excel" data-acc="excel" title="Baja lo que se ve">Excel ↓</button></div>`
     + `<div class="filtro-estado"><span>${esc(st.docu)} · ${esc(st.montos)}</span>`
+    + (ffHay && !G.ffEnvio ? `<button data-acc="ffam-quitar" aria-label="Quitar el filtro de familias">${esc(FichaFam.rotulo(P))} ×</button>` : '')
     + FILTROS.filter(([k]) => st[k].length).map(([k, rot]) => `<button data-acc="limpiar" data-v="${k}" aria-label="Quitar filtro de ${rot}">${rot}: ${esc(st[k].length === 1 ? st[k][0] : st[k].length)} ×</button>`).join('')
     + (activos ? '<button data-acc="restablecer">Limpiar filtros</button>' : '') + '</div>';
 }
@@ -1008,7 +1016,8 @@ function datosKpi(F, V, st) {
   // La curva de doce meses mide los filtros de la página: con otro filtro no.
   const propios = FILTROS.some(([k]) => st[k].length) || st.docu !== 'Todos' || st.montos !== 'Sin IGV';
   const c = (i) => (propios ? null : F.meses.map((m) => m[i]));
-  const nFam = F.familias ? `${F.familias.elegidas.length || F.familias.todas.length} de ${F.familias.todas.length} familias` : 'lo filtrado';
+  const nFam = !F.familias ? 'lo filtrado' : F.familias.ficha ? (FichaFam.rotulo(F.familias) || 'todas las familias')
+    : `${F.familias.elegidas.length || F.familias.todas.length} de ${F.familias.todas.length} familias`;
   const vs = V.contraTot == null ? (st.contra === 'no' ? 'sin comparar' : 'sin datos para comparar')
     : V.contraTot > 0 ? (() => { const [t, cl] = fmtVariacion((tot - V.contraTot) / V.contraTot * 100); return `${esc(flecha(t))} contra ${esc(V.contraNom)}`; })() : `sin compras en ${esc(V.contraNom)}`;
   const E = V.efecto, neto = E.up + E.dn;
@@ -1082,7 +1091,7 @@ function panelLista(F, V, st) {
   let fuera = '';
   if (F.familias && st.item == null) {
     const P = F.familias, el = new Set(P.elegidas), fx = P.todas.filter(([f]) => el.size && !el.has(f)), v = suma(fx, (x) => x[1]);
-    const sumar = P.en_panel ? '' : '<button class="quita" data-acc="pagina-todas">Sumarlas</button>';
+    const sumar = P.ficha ? '<button class="quita" data-acc="ffam-todas">Sumarlas</button>' : P.en_panel ? '' : '<button class="quita" data-acc="pagina-todas">Sumarlas</button>';
     if (fx.length && Math.abs(v) >= 0.5) fuera = `<div class="fuera"><span>Fuera de esta cuenta: ${esc(fS0(v))} de ${esc(fx.slice(0, 2).map(([f]) => nomFam(f)).join(', '))}${fx.length > 2 ? '…' : ''}.</span>${sumar}</div>`;
   }
   return `<div class="pn-cab"><b>${tit}</b>${ampliar(st, 'panel', 'la lista')}</div><div class="lista">${filas || '<p class="mas">Nada que mostrar.</p>'}</div>${ficha}${fuera}`;
@@ -1132,10 +1141,17 @@ function pintar() {
   }
   html += `<div class="cuerpo" data-amp="${st.amp || ''}"><div class="izq">${izq}</div><aside class="panel" aria-label="Lo que hay adentro">${panel}</aside></div>`;
   const listas = [...raiz.querySelectorAll('.tl')].map((e) => e.scrollTop);
-  const q = raiz.querySelector('.ms-q:focus');
+  // Marcar una casilla redibuja la pieza: el menú abierto conserva por dónde
+  // iba su lista y la casilla que tenía el foco (el teclado sigue ahí).
+  const MENUS = '.ms-l, .ms-o, .ff-l, .ff-o', menus = [...raiz.querySelectorAll(MENUS)].map((e) => e.scrollTop);
+  const q = raiz.querySelector('.ms-q:focus, .ff-q:focus'), cas = raiz.querySelector('input[type="checkbox"]:focus');
+  const casilla = cas ? [cas.dataset.acc, cas.dataset.k || '', cas.dataset.v] : null;
   raiz.innerHTML = html;
   [...raiz.querySelectorAll('.tl')].forEach((e, i) => { if (listas[i]) e.scrollTop = listas[i]; });
-  if (q) { const n = raiz.querySelector(`.ms-q[data-k="${q.dataset.k}"]`); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }
+  const menus2 = [...raiz.querySelectorAll(MENUS)];
+  if (menus2.length === menus.length) menus2.forEach((e, i) => { if (menus[i]) e.scrollTop = menus[i]; });
+  if (q) { const n = raiz.querySelector(`.ms-q[data-k="${q.dataset.k}"], .ff-q[data-k="${q.dataset.k}"]`); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }
+  else if (casilla) { const n = [...raiz.querySelectorAll(`input[type="checkbox"][data-acc="${casilla[0]}"]`)].find((e) => (e.dataset.k || '') === casilla[1] && e.dataset.v === casilla[2]); if (n) n.focus(); }
   // La fecha es un botón de Python en la misma página: la cabecera le deja su ancho.
   ponerFecha(raiz);
   const cg = raiz.querySelector('[data-graf]');
@@ -1187,12 +1203,32 @@ function ponerFecha(raiz) {
   if (fb.style.left !== x) fb.style.left = x;
   if (fb.style.top !== y) fb.style.top = y;
 }
+// #843: lo que la ficha de familias le pide a Python. Mientras no vuelve, la
+// ficha dice lo pedido, apagada; si Python no lo aplica, a los 20 s se suelta.
+function enviarFf(v) {
+  const P = G.F && G.F.familias;
+  if (!P || !P.ficha || !FichaFam.distinto(P, v)) { pintar(); return; }
+  G.ffEnvio = v;
+  clearTimeout(G.ffReloj);
+  G.ffReloj = setTimeout(() => { G.ffEnvio = null; pintar(); }, 20000);
+  G.enviar?.('familias', v);
+  pintar();
+}
+// Al cerrarse el panel, por el camino que sea, lo marcado se aplica UNA vez.
+function soltarFf() {
+  const P = G.F && G.F.familias;
+  if (!G.ffPend || !G.st || G.st.menu === 'ffam') return;
+  const v = P && P.ficha ? FichaFam.cambio(P, G.ffPend) : null;
+  G.ffPend = null;
+  if (v) enviarFf(v);
+}
 function accion(acc, val, el) {
   const st = G.st, V = G.V;
   if (acc === 'barra' && esMovil()) { st.lectura = +val; pintar(); return; }
   const verDocumentos = acc === 'ver-barra';
   if (verDocumentos) { acc = 'barra'; st.lectura = null; }
-  if (acc !== 'menu' && acc !== 'filtro' && acc !== 'docu' && acc !== 'montos' && acc !== 'limpiar') st.menu = null;
+  const P = G.F.familias;
+  if (!['menu', 'filtro', 'docu', 'montos', 'limpiar', 'ffam-menu', 'ffam-fam', 'ffam-sub', 'ffam-sublimpiar'].includes(acc)) st.menu = null;
   if (acc !== 'como') st.como = false;
   if (acc === 'como') st.como = !st.como;
   else if (acc === 'amp') st.amp = st.amp === val ? null : val;
@@ -1212,6 +1248,15 @@ function accion(acc, val, el) {
   else if (acc === 'item') { const k = Number(val), igual = st.item === k; st.item = igual ? null : k; const nom = igual ? null : nombreParte(G.F, st, k); st.res[st.partir] = nom != null && V.opsRes.includes(nom) ? nom : null; }
   else if (acc === 'pagina') { const P = G.F.familias, el = P.elegidas.length ? P.elegidas : P.todas.map((x) => x[0]); P.elegidas = el.includes(val) ? el.filter((x) => x !== val) : [...el, val]; G.pagina = P.elegidas.slice(); st.menu = 'pag'; }
   else if (acc === 'pagina-todas') { G.pagina = G.F.familias.todas.map((x) => x[0]); G.enviar?.('familias', G.pagina); return; }
+  // #843: la ficha de familias. Las casillas marcan `G.ffPend` y se aplican al
+  // cerrar el panel (`soltarFf`); la ✕ y los atajos se piden en el acto.
+  else if (acc === 'ffam-menu') { st.menu = st.menu === 'ffam' ? null : 'ffam'; if (st.menu && !G.ffPend) G.ffPend = FichaFam.iniciar(P); }
+  else if (acc === 'ffam-fam') G.ffPend = FichaFam.alternarFam(P, G.ffPend || FichaFam.iniciar(P), val);
+  else if (acc === 'ffam-sub') G.ffPend = FichaFam.alternarSub(P, G.ffPend || FichaFam.iniciar(P), val);
+  else if (acc === 'ffam-sublimpiar') G.ffPend = { fam: (G.ffPend || FichaFam.iniciar(P)).fam, sub: [] };
+  else if (acc === 'ffam-aplicar') { /* El panel ya se cerró: lo marcado lo manda `soltarFf`. */ }
+  else if (acc === 'ffam-quitar' || acc === 'ffam-todas') { G.ffPend = null; enviarFf(FichaFam.sinFiltro()); return; }
+  else if (acc === 'ffam-entrada') { G.ffPend = null; enviarFf(FichaFam.deEntrada(P)); return; }
   else if (acc === 'docu') st.docu = val;
   else if (acc === 'montos') st.montos = val;
   else if (acc === 'modo') st.modo = val;
@@ -1242,13 +1287,16 @@ function enlazar(raiz) {
     if (!b || !raiz.contains(b) || b.disabled) return;
     if ((b.dataset.acc === 'filtro' || b.dataset.acc === 'pagina') && b.tagName !== 'INPUT') return;
     accion(b.dataset.acc, b.dataset.v, b);
+    soltarFf();
   });
   raiz.addEventListener('input', (ev) => {
-    const q = ev.target.closest('.ms-q');
+    const q = ev.target.closest('.ms-q, .ff-q');
     if (!q) return;
-    G.st.q[q.dataset.k] = q.value;
-    const o = raiz.querySelector(`.ms-o[data-k="${q.dataset.k}"]`);
-    if (o) o.innerHTML = listaMenu(G.F, G.V, G.st, q.dataset.k);
+    const k = q.dataset.k;
+    G.st.q[k] = q.value;
+    const o = raiz.querySelector(`.ms-o[data-k="${k}"], .ff-o[data-k="${k}"]`);
+    if (!o) return;
+    o.innerHTML = k === 'ffsub' ? FichaFam.listaSub(G.F.familias, G.ffPend || FichaFam.iniciar(G.F.familias), q.value) : listaMenu(G.F, G.V, G.st, k);
   });
   raiz.addEventListener('change', (ev) => {
     const k = ev.target.dataset && ev.target.dataset.sel;
@@ -1256,6 +1304,7 @@ function enlazar(raiz) {
     G.st[k] = ev.target.value; G.st.menu = null;
     if (k === 'partir') { G.st.item = null; G.st.res[G.st.partir] = null; }
     pintar();
+    soltarFf();
   });
   raiz.addEventListener('mouseover', (ev) => {
     const b = ev.target.closest('[data-acc="barra"]');
@@ -1273,16 +1322,17 @@ function enlazar(raiz) {
     const avisar = () => { if (G.pagina) { const v = G.pagina; G.pagina = null; G.enviar?.('familias', v); } };
     document.addEventListener('keydown', (ev) => {
       if (ev.key !== 'Escape' || !G.st || !G.raiz || !G.raiz.isConnected) return;
-      if (G.st.menu) { G.st.menu = null; pintar(); avisar(); } else if (G.st.como) { G.st.como = false; pintar(); } else if (G.st.kAb) { G.st.kAb = false; pintar(); } else if (G.st.amp) { G.st.amp = null; pintar(); }
+      if (G.st.menu) { G.st.menu = null; pintar(); avisar(); soltarFf(); } else if (G.st.como) { G.st.como = false; pintar(); } else if (G.st.kAb) { G.st.kAb = false; pintar(); } else if (G.st.amp) { G.st.amp = null; pintar(); }
     });
     document.addEventListener('pointerdown', (ev) => {
       if (!G.st || !G.st.menu) return;
       // Un control de la pieza lo cierra en su propio clic (redibujar acá
       // borraría el botón antes de que el clic llegue).
-      if (ev.composedPath().some((n) => n.classList && (n.classList.contains('ms') || (n.dataset && n.dataset.acc)))) return;
+      if (ev.composedPath().some((n) => n.classList && (n.classList.contains('ms') || n.classList.contains('ff') || (n.dataset && n.dataset.acc)))) return;
       G.st.menu = null;
       pintar();
       avisar();
+      soltarFf();
     }, true);
   }
   // La tanda siguiente de una tabla larga, al acercarse al final.
@@ -1319,5 +1369,8 @@ export default function (component) {
   // La misma vista de la corrida anterior: redibujar no cambia nada.
   if (!nueva && G.F && G.F.sello === data.sello) return;
   G.F = leer(data);
+  // #843: llegó lo que la ficha de familias le pidió a Python; deja de esperar.
+  G.ffEnvio = null; G.ffPend = null; clearTimeout(G.ffReloj);
+  if (G.st.menu === 'ffam') G.st.menu = null;
   pintar();
 }

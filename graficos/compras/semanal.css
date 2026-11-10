@@ -194,7 +194,9 @@
 .ms-b:hover { background: var(--bg-hover); }
 .ms-b.on { border: 0; }
 .ms-l { border: 0; box-shadow: 0 6px 24px color-mix(in srgb, var(--text-primary) 18%, transparent); padding: 10px; z-index: 8; }
-.ms-l.ancho { width: 330px; max-height: 470px; overflow: auto; overscroll-behavior: contain; }
+/* El alto sale de la pantalla de la vista: con 470 fijos, a 619 px de alto la
+   hoja le recortaba los últimos 37 px y la nota del pie no se podía leer (#843). */
+.ms-l.ancho { width: 330px; max-height: min(470px, calc(var(--alto-util, 600px) - 108px)); overflow: auto; overscroll-behavior: contain; }
 .ms-l.ancho .ms-o { max-height: 118px; }
 .ms-l h4 { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .ms-q { border: 0; background: var(--rail-fondo); }
@@ -203,6 +205,8 @@
 .ms-o label.con-s small { color: var(--text-secondary); font-size: 12px; }
 .ms-x { display: inline; }
 .ms-l .mas { margin: 4px; color: var(--text-secondary); font-size: 12px; line-height: 1.35; }
+/* #843: sin ficha, el panel de familias abre debajo de «Más filtros», donde iba el suyo. */
+.ms > .ff-l { top: 34px; }
 .excel { height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--rail-fondo); font-size: 12.5px; cursor: pointer; white-space: nowrap; flex: none; }
 .excel:hover { background: var(--bg-hover); }
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); flex: none; }

@@ -629,7 +629,17 @@ def familias_de_tarjeta(base, col_fam, col_valor, elegidas):
 def cambiar_familias(k_pieza, k_pendiente, familias):
     """El menú de familias de una pieza escribe el filtro de la página, que es de
     Python y manda sobre las demás vistas: pide una corrida completa con la misma
-    escalada de la fecha. Sólo lo que Python ofreció (regla #770)."""
+    escalada de la fecha. Sólo lo que Python ofreció (regla #770).
+
+    Desde que cada vista tiene SU filtro (`_filtros_vista.py`), `en_panel`
+    dice que el menú de la pieza no manda. Con `ficha` (regla #843) la pieza
+    vuelve a pedir, pero la selección de su vista: `aplicar_ficha` la valida y
+    la escribe, y la corrida completa se pide sólo si cambió."""
+    if (familias or {}).get("ficha"):
+        from graficos.compras._filtros_vista import aplicar_ficha
+        if aplicar_ficha(familias, (st.session_state.get(k_pieza) or {}).get("familias")):
+            st.session_state[k_pendiente] = True
+        return
     if (familias or {}).get("en_panel"):
         return
     v = (st.session_state.get(k_pieza) or {}).get("familias")

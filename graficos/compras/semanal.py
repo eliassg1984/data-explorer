@@ -124,6 +124,9 @@ from graficos.compras._comun import (
 # que esta vista compara (`dd["compra"]`) sigue llevando el nombre crudo.
 # Ver `_etiquetas_proveedor.nombre_propio` y `arquitectura.md` #379.
 from graficos.compras._etiquetas_proveedor import nombre_propio
+# El filtro de familias de la vista lo dibuja la pieza (regla #843): si deja a
+# la vista sin compras, la pieza no se monta y hace falta otro camino de vuelta.
+from graficos.compras._filtros_vista import quitar_filtros_vista
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
 # Las formas jurídicas sin punto («SAC», «EIRL»): `_rotulo_proveedor` las saca
 # del final del nombre en la leyenda de «Partir por» (regla #620).
@@ -1894,9 +1897,13 @@ def sello_pieza(b, nc, hist_ops):
 
 _PIEZA = st.components.v2.component(
     "compras_periodo",
-    css=css_movil((Path(__file__).parent / "semanal.css").read_text(encoding="utf-8")),
+    # `ficha_familias` (.css y .js) es la ficha del filtro de familias de la
+    # vista (regla #843): un módulo aparte, para las demás vistas de Compras.
+    css=css_movil((Path(__file__).parent / "ficha_familias.css").read_text(encoding="utf-8")
+                  + (Path(__file__).parent / "semanal.css").read_text(encoding="utf-8")),
     # El Excel (`libro`, `bajar`, `archivo`) vive en `_xlsx.js`: se antepone.
     js=js_movil((Path(__file__).parent.parent / "_xlsx.js").read_text(encoding="utf-8")
+    + (Path(__file__).parent / "ficha_familias.js").read_text(encoding="utf-8")
     + (Path(__file__).parent / "semanal.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA = "cp_sem_pieza"
@@ -1950,6 +1957,17 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         else:
             b = lineas_pieza(d, cols, col_um)
             if b.empty:
+                _ff = familias if (familias or {}).get("ficha") else None
+                if _ff and (_ff["elegidas"] or _ff["subs"]["elegidas"]):
+                    # La ficha del filtro vive en la pieza, que acá no se
+                    # dibuja: sin este botón no habría cómo soltarlo (#843).
+                    st.info("Sin compras en el rango con las familias elegidas. "
+                            "Ampliá el rango desde la fecha de la tarjeta o "
+                            "quitá el filtro.")
+                    st.button("Quitar el filtro de familias", key="cp_sem_sin_filtro",
+                              on_click=quitar_filtros_vista,
+                              args=("compras_sec_semanal", "_cp_sem_atajo_pendiente"))
+                    return
                 st.info("Sin compras en el rango seleccionado. Ampliá el rango "
                         "desde la fecha de la tarjeta.")
                 return

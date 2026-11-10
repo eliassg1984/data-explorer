@@ -14,19 +14,26 @@ requirements-dev.txt) esa parte se salta.
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 
 import definicion_compra
+from graficos.compras import _filtros_vista as fv
 from graficos.compras import semanal as sm
 from graficos.compras.producto import marcar_revisar
 from graficos.compras._comun import (CON_IGV, DOC_FACTURAS, DOC_TODOS,
                                      _periodo_serie, documento_legible,
                                      filtrar_documento)
 
-_JS = (Path(sm.__file__).parent / "semanal.js").read_text(encoding="utf-8")
-_COLS = ("PROD", "FECHA", "CANT", "PUNIT", "PROV", "DOC", "VALOR", "FAM", "SUB",
+_AQUI = Path(sm.__file__).parent
+# Como la monta `semanal.py`: la ficha de familias (regla #843) va antepuesta.
+_JS = ((_AQUI / "ficha_familias.js").read_text(encoding="utf-8")
+       + (_AQUI / "semanal.js").read_text(encoding="utf-8"))
+_CSS = ((_AQUI / "ficha_familias.css").read_text(encoding="utf-8")
+        + (_AQUI / "semanal.css").read_text(encoding="utf-8"))
+_COLS =("PROD", "FECHA", "CANT", "PUNIT", "PROV", "DOC", "VALOR", "FAM", "SUB",
          "IGV", "TIPO", "MONEDA")
 _RANGO = (pd.Timestamp("2026-08-20"), pd.Timestamp("2026-10-22"))
 
@@ -102,6 +109,18 @@ def _armar_una_pantalla(familias=None):
     flags = {k: True for k in ("hay_fam", "hay_sub", "hay_prov", "hay_cant", "hay_doc", "hay_tipo", "hay_igv")}
     return hist, sm.armar_pieza(b, hist, nc, _RANGO, flags, "sello", contra=sm.lineas_contra(hist, _RANGO),
                                 meses=sm.resumen_meses(hist, _RANGO[1]), familias=familias)
+
+
+def _ficha(familias=(), subfamilias=()):
+    """Lo que `_familias_de` le manda a la pieza cuando ella dibuja el filtro
+    (regla #843): cuatro familias de la página —una sin compras en el rango—,
+    sus subfamilias y las dos con que abre la vista."""
+    P = fv.datos_ficha(
+        "compras_sec_semanal", ["ALIMENTOS", "GASTOS", "LIMPIEZA", "VINOS"],
+        {"ALIMENTOS": ("CARNES", "VERDURAS"), "VINOS": ("TINTOS",)},
+        [["ALIMENTOS", 100.0], ["VINOS", 50.0], ["GASTOS", 9.0]],
+        (familias, subfamilias), ("ALIMENTOS", "VINOS", "YA NO EXISTE"))
+    return {**P, "en_panel": True}
 
 
 def _dd_ref(d, d_full, gran, docu, con_igv, fam=(), prov=()):
@@ -342,7 +361,7 @@ class LasCuentasEnElNavegador(unittest.TestCase):
         pg = self.b.new_page(viewport={"width": 1323, "height": 680})
         try:
             pg.set_content('<style>:root{--alto-util:612px}body{margin:0 16px}</style><div id="pieza"></div>')
-            pg.add_style_tag(content=(Path(sm.__file__).parent / "semanal.css").read_text(encoding="utf-8"))
+            pg.add_style_tag(content=_CSS)
             pg.add_script_tag(content=_JS.replace("export default function (component)", "window.__montar = function (component)"))
             pg.evaluate("""P => { window.__avisos = []; window.__montar({data: P, parentElement: document.querySelector('#pieza'), setTriggerValue: (k, v) => window.__avisos.push([k, v])}); }""", P)
             # #842: los indicadores abren plegados en el renglón de las pestañas.
@@ -389,12 +408,171 @@ class LasCuentasEnElNavegador(unittest.TestCase):
         finally:
             pg.close()
 
+    def _montar(self, pg, P, sello=None):
+        """Monta la pieza (o le manda datos nuevos, como una corrida de Python)."""
+        if not pg.locator("#pieza").count():
+            pg.set_content('<style>:root{--alto-util:612px}body{margin:0 16px}</style><div id="pieza"></div>')
+            pg.add_style_tag(content=_CSS)
+            pg.add_script_tag(content=_JS.replace("export default function (component)", "window.__montar = function (component)"))
+            pg.evaluate("window.__avisos = []")
+        pg.evaluate("""P => window.__montar({data: P, parentElement: document.querySelector('#pieza'),
+                         setTriggerValue: (k, v) => window.__avisos.push([k, v])})""", {**P, "sello": sello or P["sello"]})
+        pg.wait_for_selector(".cab")
+        # El `ResizeObserver` de la pieza redibuja a los 120 ms de montarla: medir
+        # antes es medir un nodo que está por irse.
+        pg.wait_for_timeout(250)
+
+    def test_ficha_de_familias(self):
+        """#843: el filtro de familias de la vista es una ficha al lado de «Más
+        filtros»; se edita en su panel, se aplica al cerrarlo y la ✕ lo quita."""
+        ultimo = "window.__avisos[window.__avisos.length - 1]"
+        _h, P = _armar_una_pantalla(_ficha(("ALIMENTOS", "VINOS")))
+        pg = self.b.new_page(viewport={"width": 1323, "height": 680})
+        try:
+            self._montar(pg, P)
+            # Ni el menú de la página ni el de la pieza: la ficha, pegada a «Más filtros».
+            self.assertEqual(pg.locator('[data-acc="menu"][data-v="pag"], [data-acc="menu"][data-v="fam"]').count(), 0)
+            self.assertEqual(pg.locator(".ff-b").inner_text(), "2 de 4 familias")
+            mas, fb, fx = (pg.locator(s).bounding_box() for s in (".ms-b", ".ff-b", ".ff-x"))
+            self.assertGreaterEqual(fb["x"], mas["x"] + mas["width"])
+            self.assertLess(fb["x"] - (mas["x"] + mas["width"]), 16)
+            self.assertAlmostEqual(fb["y"] + fb["height"] / 2, mas["y"] + mas["height"] / 2, delta=1.5)
+            # La ✕ es un botón aparte, hermano del que abre el panel, de 24 × 24.
+            self.assertEqual(pg.locator(".ff-x").evaluate("e => e.tagName + ' en ' + e.parentElement.tagName"), "BUTTON en SPAN")
+            self.assertGreaterEqual(fx["width"], 24)
+            self.assertGreaterEqual(fx["height"], 24)
+            # El indicador dice sobre qué familias mide.
+            pg.locator(".kcap").click()
+            self.assertEqual(pg.locator(".kpi .r").first.inner_text(), "Compra · 2 de 4 familias")
+            pg.locator(".kcerrar").click()
+            # El panel: todas las familias de la página con lo que suman, también la que no compró.
+            pg.locator(".ff-b").click()
+            self.assertEqual(pg.locator(".ff-fams label").all_inner_texts(),
+                             ["Alimentos\nS/ 100", "Vinos\nS/ 50", "Gastos\nS/ 9", "Limpieza\nS/ 0"])
+            self.assertEqual(pg.locator(".ff-fams input:checked").count(), 2)
+            self.assertIn("Sólo esta vista", pg.locator(".ff-pie").inner_text())
+            self.assertEqual(pg.locator('[data-acc="ffam-entrada"]').count(), 0)  # ya son las de siempre
+            panel = pg.locator(".ff-l").bounding_box()
+            self.assertLessEqual(panel["y"] + panel["height"], 680)
+            # A 619 px de alto la hoja recorta 16 px debajo de la pieza: ni este panel
+            # ni el de «Más filtros» pasan de ahí, y el pie queda a la vista.
+            pg.evaluate("document.documentElement.style.setProperty('--alto-util', '527px')")
+            fondo = pg.evaluate("document.querySelector('.cpp').getBoundingClientRect().bottom") + 16
+            pie = pg.locator(".ff-pie").bounding_box()
+            self.assertLessEqual(pie["y"] + pie["height"], fondo)
+            pg.locator(".ms-b").click()
+            mas_l = pg.locator(".ms-l").bounding_box()
+            self.assertLessEqual(mas_l["y"] + mas_l["height"], fondo)
+            pg.evaluate("document.documentElement.style.setProperty('--alto-util', '612px')")
+            pg.locator(".ff-b").click()
+            # Marcar no manda nada: se aplica al cerrar.
+            pg.locator('.ff-fams input[data-v="VINOS"]').click()
+            self.assertEqual(pg.locator(".ff-pie .ff-ap").count(), 1)
+            self.assertIn("Se aplica al cerrar", pg.locator(".ff-pie").inner_text())
+            self.assertEqual(pg.evaluate("window.__avisos"), [])
+            # La última familia no se desmarca.
+            pg.locator('.ff-fams input[data-v="ALIMENTOS"]').click()
+            self.assertTrue(pg.locator('.ff-fams input[data-v="ALIMENTOS"]').is_checked())
+            # Las subfamilias son las de las familias marcadas, y el teclado no pierde su casilla.
+            self.assertEqual(pg.locator(".ff-subs label").all_inner_texts(), ["Carnes", "Verduras"])
+            pg.locator('.ff-subs input[data-v="CARNES"]').focus()
+            pg.keyboard.press("Space")
+            self.assertTrue(pg.locator('.ff-subs input[data-v="CARNES"]').is_checked())
+            self.assertEqual(pg.evaluate("document.activeElement.dataset.v"), "CARNES")
+            pg.keyboard.press("Escape")
+            pedido = {"fam": ["ALIMENTOS"], "sub": ["CARNES"]}
+            self.assertEqual(pg.evaluate("window.__avisos"), [["familias", pedido]])
+            # Mientras Python no contesta, la ficha dice lo pedido, apagada y sin botones.
+            self.assertEqual(pg.locator(".ff-chip.espera").count(), 1)
+            self.assertIn("Familia: Alimentos · Subfamilia: Carnes", pg.locator(".ff-chip").inner_text())
+            self.assertEqual(pg.locator(".ff button").count(), 0)
+            # Python lo acepta tal cual llega, y lo escribe en las claves de la vista.
+            estado = {}
+            with patch.object(fv.st, "session_state", estado):
+                self.assertTrue(fv.aplicar_ficha(P["familias"], pedido))
+                self.assertFalse(fv.aplicar_ficha(P["familias"], pedido))
+            self.assertEqual((estado["cp_familias_semanal"], estado["cp_subfamilias_semanal"]), (["ALIMENTOS"], ["CARNES"]))
+            # Llega la corrida con lo pedido: la ficha deja de esperar.
+            _h, P2 = _armar_una_pantalla(_ficha(("ALIMENTOS",), ("CARNES",)))
+            self._montar(pg, P2, "s2")
+            self.assertEqual(pg.locator(".ff-chip.espera").count(), 0)
+            self.assertEqual(pg.locator(".ff-b").inner_text(), "Familia: Alimentos · Subfamilia: Carnes")
+            # «Aplicar» cierra y manda; lo que no cambia, no viaja.
+            pg.locator(".ff-b").click()
+            pg.locator('[data-acc="ffam-sublimpiar"]').click()
+            pg.locator(".ff-pie .ff-ap").click()
+            self.assertEqual(pg.evaluate(ultimo), ["familias", {"fam": ["ALIMENTOS"], "sub": []}])
+            self._montar(pg, _armar_una_pantalla(_ficha(("ALIMENTOS",)))[1], "s3")
+            pg.locator(".ff-b").click()
+            pg.locator(".tabs [data-v='tabla']").click()
+            self.assertEqual(pg.locator(".ff-l").count(), 0)
+            self.assertEqual(pg.evaluate("window.__avisos.length"), 2)
+            # «Las de siempre» y «Sumarlas» se piden en el acto; la ✕ también, con el teclado.
+            pg.locator(".tabs [data-v='graf']").click()
+            pg.locator(".ff-b").click()
+            pg.locator('[data-acc="ffam-entrada"]').click()
+            self.assertEqual(pg.evaluate(ultimo), ["familias", {"fam": ["ALIMENTOS", "VINOS"], "sub": []}])
+            self._montar(pg, P, "s4")
+            self.assertIn("Fuera de esta cuenta: S/ 9 de Gastos", pg.locator(".fuera").inner_text())
+            pg.locator('.fuera [data-acc="ffam-todas"]').click()
+            self.assertEqual(pg.evaluate(ultimo), ["familias", {"fam": [], "sub": []}])
+            self._montar(pg, P, "s5")
+            pg.locator(".ff-x").focus()
+            pg.keyboard.press("Enter")
+            self.assertEqual(pg.evaluate("window.__avisos.length"), 5)
+            self.assertEqual(pg.evaluate(ultimo), ["familias", {"fam": [], "sub": []}])
+            self.assertIn("Quitando el filtro", pg.locator(".ff-chip").inner_text())
+            # Sin filtro no hay ficha: Familia y Subfamilia se abren desde «Más filtros».
+            self._montar(pg, _armar_una_pantalla(_ficha())[1], "s6")
+            self.assertEqual(pg.locator(".ff-chip").count(), 0)
+            self.assertEqual(pg.locator(".fuera").count(), 0)
+            pg.locator(".ms-b").click()
+            pg.locator(".ff-ir").click()
+            self.assertEqual(pg.locator(".ms-l").count(), 0)
+            self.assertAlmostEqual(pg.locator(".ff-l").bounding_box()["x"], mas["x"], delta=1)
+            self.assertEqual(pg.locator(".ff-fams input:checked").count(), 4)
+            self.assertEqual(pg.locator('[data-acc="ffam-todas"]').count(), 0)
+            # Con todas las familias, una subfamilia viaja con las cuatro escritas.
+            pg.locator('.ff-subs input[data-v="TINTOS"]').click()
+            pg.locator(".ff-volver").click()
+            self.assertEqual(pg.locator(".ms-l").count(), 1)
+            self.assertEqual(pg.evaluate(ultimo), ["familias", {"fam": ["ALIMENTOS", "VINOS", "GASTOS", "LIMPIEZA"], "sub": ["TINTOS"]}])
+            with patch.object(fv.st, "session_state", estado):
+                self.assertTrue(fv.aplicar_ficha(P["familias"], pg.evaluate(ultimo)[1]))
+            self.assertEqual(estado["cp_subfamilias_semanal"], ["TINTOS"])
+        finally:
+            pg.close()
+
+    def test_ficha_de_familias_en_el_celular(self):
+        """#843: en el celular la ficha va con las demás fichas, y todo mide 44 px."""
+        _h, P = _armar_una_pantalla(_ficha(("ALIMENTOS", "VINOS")))
+        pg = self.b.new_page(viewport={"width": 390, "height": 844}, has_touch=True)
+        try:
+            self._montar(pg, P)
+            self.assertIn("1 activo", pg.locator(".filtros-toggle").inner_text())
+            self.assertEqual(pg.locator('.filtro-estado [data-acc="ffam-quitar"]').inner_text(), "2 de 4 familias ×")
+            self.assertFalse(pg.locator(".ff-chip").is_visible())
+            pg.locator('[data-acc="panel-filtros"]').click()
+            for s in (".ff-b", ".ff-x"):
+                self.assertGreaterEqual(pg.locator(s).bounding_box()["height"], 44)
+            self.assertGreaterEqual(pg.locator(".ff-x").bounding_box()["width"], 44)
+            pg.locator(".ff-b").click()
+            self.assertEqual(pg.locator(".ff-l").evaluate("e => getComputedStyle(e).position"), "static")
+            self.assertGreaterEqual(pg.locator(".ff-fams label").first.bounding_box()["height"], 44)
+            self.assertLessEqual(pg.locator(".cpp").evaluate("e => e.scrollWidth - e.clientWidth"), 1)
+            # Cerrar los filtros aplica lo marcado.
+            pg.locator('.ff-fams input[data-v="GASTOS"]').click()
+            pg.locator('[data-acc="panel-filtros"]').click()
+            self.assertEqual(pg.evaluate("window.__avisos"), [["familias", {"fam": ["ALIMENTOS", "VINOS", "GASTOS"], "sub": []}]])
+        finally:
+            pg.close()
+
     def test_movil_filtros_y_documentos_al_tocar(self):
         """El panel conserva la selección y el toque permite llegar al detalle."""
         pg = self.b.new_page(viewport={"width": 390, "height": 844}, has_touch=True)
         try:
             pg.set_content('<style>body {margin:12px}</style><div id="pieza"></div>')
-            pg.add_style_tag(content=(Path(sm.__file__).parent / "semanal.css").read_text(encoding="utf-8"))
+            pg.add_style_tag(content=_CSS)
             pg.add_script_tag(content=_JS.replace("export default function (component)", "window.__montar = function (component)"))
             pg.evaluate("P => window.__montar({data:P,parentElement:document.querySelector('#pieza')})", self.P)
             pg.locator('.cpp').wait_for()

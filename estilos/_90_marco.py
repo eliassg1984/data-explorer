@@ -640,6 +640,11 @@ CSS = """
             --cp-reserva-filtro: 56px;
             position: relative;
         }
+        /* Período dibuja su filtro adentro, como ficha al lado de «Más
+           filtros» (#843): no tiene ⚙ y no le reserva el hueco. */
+        .st-key-cp_con_filtro_semanal {
+            --cp-reserva-filtro: 0px;
+        }
         [class*="st-key-cp_filtro_vista_"] {
             position: absolute !important;
             top: calc(var(--cp-margen-pestanas) + var(--cp-alto-pestanas) / 2);

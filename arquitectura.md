@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-842 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+843 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (287)
+**CSS y estilos** (288)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -354,6 +354,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#840** — Mover una caja con controles fijos adentro no puede usar transform
 - **#841** — La ruta va en una píldora con los bordes de la hoja: la píldora es el ::before de la franja
 - **#842** — Los indicadores de Compras › Período van plegados en el renglón de las pestañas; la franja…
+- **#843** — En Compras › Período el filtro de familias es una ficha al lado de «Más filtros»; el ⚙ se va…
 
 **Layout y alturas** (115)
 
@@ -1197,7 +1198,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
-**Decisiones de diseño y UX** (277)
+**Decisiones de diseño y UX** (278)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1476,6 +1477,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#827** — «12 cierres» se fue de Diferencias a Evolución: el grano «Cierre» de la Serie
 - **#828** — La edición visual conserva originales de los destinos reales y reaplica todas las propuestas
 - **#841** — La ruta va en una píldora con los bordes de la hoja: la píldora es el ::before de la franja
+- **#843** — En Compras › Período el filtro de familias es una ficha al lado de «Más filtros»; el ⚙ se va…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59329,6 +59331,77 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      la cápsula, comprueba que la tira no pisa las pestañas ni corre el gráfico, y que al
      plegar dice el indicador elegido.
 
+843. **En Compras › Período el filtro de familias es una ficha al lado de «Más filtros»; el ⚙ se va de esa vista.**
+   A pedido, sobre el boceto https://claude.ai/artifact/2EZyYV79UzT13MBJ1Kxnca. Desde el
+   2026-11-06 (commits d21c8d06 y b8166786, sin regla hasta hoy) Familia y Subfamilia son
+   de cada VISTA de Compras: `graficos/compras/_filtros_vista.py` guarda una selección por
+   tarjeta (`cp_familias_<vista>`, `cp_subfamilias_<vista>`), el dispatcher recorta con ella
+   el rango, el histórico y las notas de crédito de esa vista, y de ahí salen también su
+   punto del rail y lo que ve el asistente. Se elegía en un popover de Streamlit con un
+   ícono ⚙ encima del renglón de las pestañas (`cp_filtro_vista_*`). El ícono tenía tres
+   problemas: forma de acción y no de filtro, «⚙ 1» en vez de qué recorta, y vivir lejos de
+   los demás filtros. (El boceto decía además que le quitaba ancho a la cápsula de los
+   indicadores: leído en el CSS y medido a 1323×619, la cápsula plegada no se cortaba; los
+   56 px sólo le quitaban 14 a cada indicador con la tira abierta.)
+   - **La ficha la dibuja la pieza, con un módulo aparte**: `ficha_familias.js` (un solo
+     nombre, `FichaFam`) y `ficha_familias.css`, antepuestos a `semanal.js` y `.css` como
+     `_xlsx.js`. No toca el DOM ni manda nada: arma el HTML y hace las cuentas; los clics
+     los pone la pieza (`ffam-*` en `accion`). Es un piloto: las otras cinco vistas siguen
+     con el ⚙ y se suman agregándose a `_filtros_vista.VISTAS_CON_FICHA`, anteponiendo el
+     módulo y poniendo sus clics. Sus selectores de botones llevan DOS clases, porque cada
+     pieza trae un `.raiz button { font: inherit; color: inherit }` que le gana a una sola.
+   - **Con filtro**: una píldora de 24 px, texto índigo, «5 de 8 familias» (o «Familia:
+     Alimentos», «… · 2 subfamilias») y su ✕. Un clic abre el panel: todas las familias de
+     la página con lo que suman en el rango —también la que no compró, con S/ 0, para que
+     se pueda desmarcar y «de 8» cuente siempre sobre las mismas—, las subfamilias de las
+     marcadas con su buscador, «Las de siempre» y «Todas». **Sin filtro no hay ficha**: el
+     mismo panel abre desde un renglón de «Más filtros», en su mismo lugar.
+   - **La ficha no manda: pide.** Las casillas marcan `G.ffPend` en el navegador y viajan
+     UNA vez, al cerrarse el panel por el camino que sea (`soltarFf`: Esc, clic afuera,
+     «Aplicar» u otro control); la ✕, «Las de siempre», «Todas» y «Sumarlas» se piden en el
+     acto. Va por el trigger `familias` de siempre, con `{fam, sub}`;
+     `_comun.cambiar_familias` lo pasa a `_filtros_vista.aplicar_ficha`, que valida contra
+     lo que Python ofreció (la sección sale del mensaje de Python, no del navegador),
+     escribe las claves de la vista y devuelve si cambió: sólo entonces se pide la corrida
+     completa, con la escalada de la fecha (`_cp_sem_atajo_pendiente`). Tiene que ser esa:
+     la pieza vive en el fragment de `_compras_semanal_drill`, adentro del de la sección,
+     y un trigger suyo corre sólo el de adentro; la comparación de `_dibujar_vista`, que es
+     la que escala los clics del popover, no se entera.
+   - **Mientras Python contesta la ficha dice lo pedido, apagada y sin botones**
+     (`G.ffEnvio`). Medido en la laptop: 13 s de corrida completa. Sin eso, un clic en la
+     ✕ no mostraba nada durante ese tiempo. Si Python no lo aplica, a los 20 s se suelta.
+   - **«Todas» y sin subfamilias viaja como lista vacía**: sin filtro no hay ficha. Con
+     una subfamilia y todas las familias, las familias viajan escritas una por una, porque
+     `preparar_filtros_vista` suelta las subfamilias cuando no hay familia elegida.
+   - **La última familia no se desmarca**, y las subfamilias de una familia que sale, salen
+     con ella.
+   - **Un filtro que deja la vista sin compras deja la pieza sin dibujar**, y con ella la
+     ficha: antes el ⚙ quedaba afuera. El aviso de «sin compras» trae el botón «Quitar el
+     filtro de familias» (`quitar_filtros_vista`). Probado en la app eligiendo una
+     subfamilia que no compró en el rango.
+   - **La ✕ es un botón aparte**, hermano del que abre el panel, de 24 × 24 (el mínimo de
+     WCAG 2.2, criterio 2.5.8): en el boceto era un `<span>` adentro del botón, que el
+     teclado no alcanza. Marcar una casilla redibuja la pieza: `pintar` devuelve el foco a
+     la casilla y conserva por dónde iba la lista (también en «Más filtros»).
+   - **El relleno lavanda solo no distingue un filtro de un control gris**: entre
+     el gris de «Más filtros» (`--rail-fondo`) y el lavanda de la ficha (`--accent-tint`) hay
+     1,07 de contraste (cálculo propio con la fórmula de WCAG). La señal la llevan el texto
+     índigo (7,2 sobre ese lavanda), la píldora y la ✕.
+   - **El alto de los paneles sale de `--alto-util`**: con un máximo fijo, a 619 px de alto
+     la hoja (`overflow: clip`) recortaba el pie. Le pasaba ya a «Más filtros» (470 px:
+     los últimos 37 no se veían y la nota del pie no se podía leer); se corrigió igual.
+   - `--cp-reserva-filtro` vale 0 en `.st-key-cp_con_filtro_semanal` (`_90_marco.py`).
+     «Sumarlas», en «Fuera de esta cuenta», vuelve a estar: pide todas las familias.
+   - En el celular la ficha va con las demás fichas de filtros (`.filtro-estado`), cuenta
+     en «Filtros · 1 activo» y su panel va en el flujo, todo de 44 px.
+   Medido en la app local a 1323×619 con Playwright: ningún ⚙ en Período, la ficha a 8 px
+   de «Más filtros», S/ 126.465 con las cinco de siempre, S/ 120.755 al sacar Bebidas con
+   alcohol, S/ 145.390 sin filtro. `test_compras_filtros_vista.py` (que no estaba en la
+   batería: se sumó) vigila lo que recibe la ficha y que Python sólo escriba lo ofrecido;
+   `test_compras_periodo.py`, la ficha en Chromium: dónde va, el panel, que nada viaje
+   hasta cerrar, la espera, el teclado, «Las de siempre», el panel desde «Más filtros»,
+   el alto contra la hoja y el celular. Pendiente: las otras cinco vistas de Compras.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59341,7 +59414,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#842**; la próxima toma el número siguiente.
+> última regla es la **#843**; la próxima toma el número siguiente.
 
 >
 

@@ -65,7 +65,7 @@ a escritorio y cabeceras nativas sin solapes). El detalle vive en
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py && python test_ajuste_historico_pieza.py && python test_sunat_documentos_pieza.py && python test_sunat_vistas_pieza.py && python test_sunat_control.py && python test_ficha_plato.py && python test_ventas_alcance.py && python test_ventas_mix_pieza.py && python test_ajuste_evolucion_pieza.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py && python test_resumen_ejecutivo.py && python test_costos_calidad.py && python test_consistencia_maestro.py && python test_costo_carta.py && python test_nuevo_costeo.py && python test_analisis_platos.py && python test_historial_recetas.py && python test_pendientes.py && python test_producto_pieza.py && python test_ventas_periodo.py && python test_proveedor_pieza.py && python test_compras_periodo.py && python test_ventas_comparativo.py && python test_volatilidad_pieza.py && python test_meseros_pieza.py && python test_cierre_pieza.py && python test_stock_producto_pieza.py && python test_movimientos_periodo_pieza.py && python test_control_pieza.py && python test_stock_areas_pieza.py && python test_compras_ano_pieza.py && python test_compras_documentos_pieza.py && python test_produccion_periodo_pieza.py && python test_porcionamientos_pieza.py && python test_merma_proveedores_pieza.py && python test_merma_rendimiento_pieza.py && python test_merma_revision_pieza.py && python test_consumo_pieza.py && python test_requerimientos_area_pieza.py && python test_salidas_area_pieza.py && python test_sin_plato_cierre_pieza.py && python test_destino_producto_pieza.py && python test_stock_movimientos_pieza.py && python test_ajuste_diferencias_pieza.py && python test_ajuste_pivote_pieza.py && python test_ajuste_historico_pieza.py && python test_sunat_documentos_pieza.py && python test_sunat_vistas_pieza.py && python test_sunat_control.py && python test_ficha_plato.py && python test_ventas_alcance.py && python test_ventas_mix_pieza.py && python test_ajuste_evolucion_pieza.py && python test_compras_filtros_vista.py
 python test_navegacion_retorno.py && python test_movil.py
 ```
 
@@ -1051,8 +1051,33 @@ sigue en `vs_ano_pasado.py` como referencia de las cuentas.
 Desde la regla #770 las dos son una pantalla: cuatro indicadores, una zona y lista o
 ficha al costado. «Volatilidad» se llama Precios (mismo id). El efecto del precio es
 el de Producto, sin las compras para revisar (`semanal.con_marca`,
-`volatilidad_datos.precios`). El menú de familias de la tarjeta escribe el filtro de la
-página (`_comun.cambiar_familias`) y pide una corrida completa.
+`volatilidad_datos.precios`).
+
+**Familia y Subfamilia son de cada VISTA** (`graficos/compras/_filtros_vista.py`,
+claves `cp_familias_<vista>`): las aplica Python a su rango, su histórico, sus notas
+de crédito, su punto del rail y lo que ve el asistente. Hasta el 2026-11-06 el menú
+de familias de la tarjeta escribía un filtro de la página (#770). En Período, desde
+la regla #843, el filtro lo dibuja la PIEZA: una ficha lavanda «5 de 8 familias ✕» al
+lado de «Más filtros» (`ficha_familias.js` + `.css`, antepuestos, para las demás
+vistas); las otras cinco siguen con el ícono ⚙. Lo que muerde:
+
+- **La ficha no manda: pide.** Las casillas se marcan en el navegador y viajan UNA
+  vez, al cerrarse el panel (trigger `familias`); `_filtros_vista.aplicar_ficha`
+  valida contra lo que Python ofreció y `cambiar_familias` pide la corrida completa
+  sólo si cambió. Mientras llega (13 s en la laptop), la ficha dice lo pedido, apagada.
+- **Un filtro que deja la vista sin compras deja a la pieza sin dibujar**, y la ficha
+  vive en la pieza: por eso el aviso de «sin compras» trae el botón «Quitar el filtro
+  de familias» (`quitar_filtros_vista`). Una vista nueva con ficha lo necesita.
+- **Compras abre con 5 de 8 familias**: la ficha está desde el primer segundo, la ✕
+  lleva a las ocho y «Las de siempre» vuelve a las cinco. Sin filtro no hay ficha y
+  el panel abre desde «Más filtros».
+- **El relleno lavanda solo no distingue un filtro de un control gris** (1,07 de
+  contraste entre los dos): la señal es el texto índigo, la píldora y la ✕, que es
+  un botón aparte de 24 × 24.
+
+`test_compras_filtros_vista.py` (`python -m unittest test_compras_filtros_vista`)
+vigila el recorte por vista, lo que recibe la ficha y que Python sólo escriba lo que
+ofreció; `test_compras_periodo.py`, la ficha en Chromium.
 
 ## En Compras, cada tarjeta tiene SU rango de fecha
 

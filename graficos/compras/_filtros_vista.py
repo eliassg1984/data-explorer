@@ -8,6 +8,12 @@ from ._etiquetas_proveedor import nombre_propio
 
 _GLOBALES_ANTERIORES = ("compras_graf_filtro_fam", "compras_graf_filtro_sub")
 
+VISTAS_CON_FICHA = frozenset({"compras_sec_semanal"})
+"""Las vistas cuya PIEZA dibuja el filtro: una ficha lavanda con ✕ al lado de
+«Más filtros» (`ficha_familias.js`, regla #843). En ellas no va el popover ⚙
+de `panel_filtros_vista`. La selección sigue en las mismas claves y la sigue
+aplicando Python; la pieza sólo la muestra y la pide (`aplicar_ficha`)."""
+
 
 def _claves(seccion):
     slug = seccion.removeprefix("compras_sec_")
@@ -45,6 +51,67 @@ def recortar_filtros_vista(df, col_fam, col_sub, seleccion):
         if valores and col and col in df.columns:
             df = df[df[col].astype(str).isin(valores)]
     return df
+
+
+def datos_ficha(seccion, opciones, mapa_sub, sumas, seleccion, iniciales):
+    """Lo que la pieza necesita para dibujar la ficha (`P` en `ficha_familias.js`).
+
+    `todas` lleva TODAS las familias de la página con lo que suman en el rango
+    de la tarjeta (`sumas`, de `familias_de_tarjeta`) y 0 si no se compró: una
+    familia elegida que no compró en el rango tiene que poder desmarcarse, y
+    «5 de 8» cuenta sobre las mismas ocho con cualquier fecha. `entrada` son
+    las familias con que abre la vista, para «Las de siempre». Pura."""
+    valor = {str(f).strip(): float(v) for f, v in (sumas or [])}
+    todas = sorted(([f, valor.get(str(f).strip(), 0.0)] for f in opciones),
+                   key=lambda x: -x[1])
+    familias, subfamilias = seleccion
+    return {
+        "ficha": True, "seccion": seccion, "todas": todas,
+        "elegidas": [f for f in familias if f in opciones],
+        "subs": {"mapa": {f: list(mapa_sub.get(f, ())) for f in opciones},
+                 "elegidas": list(subfamilias)},
+        "entrada": [f for f in iniciales if f in opciones],
+    }
+
+
+def aplicar_ficha(ficha, valor):
+    """La ficha de una pieza escribe la selección de SU vista. Sólo lo que
+    Python ofreció: `valor` viene del navegador y `ficha` es lo que se le mandó
+    (la sección sale de ahí, no del navegador). Devuelve si cambió algo, para
+    que quien llama pida la corrida completa sólo entonces."""
+    if not isinstance(valor, dict):
+        return False
+    fam, sub = valor.get("fam"), valor.get("sub")
+    if not isinstance(fam, list) or not isinstance(sub, list):
+        return False
+    opciones = [f for f, _ in (ficha.get("todas") or [])]
+    if not all(isinstance(x, str) and x in opciones for x in fam):
+        return False
+    mapa = (ficha.get("subs") or {}).get("mapa") or {}
+    disponibles = subfamilias_disponibles(mapa, fam)
+    if not all(isinstance(x, str) and x in disponibles for x in sub):
+        return False
+    fam, sub = sorted(set(fam)), sorted(set(sub))
+    # Todas marcadas y sin subfamilias es «sin filtro»: no hay ficha.
+    if len(fam) == len(opciones) and not sub:
+        fam = []
+    ss = st.session_state
+    k_fam, k_sub = _claves(ficha["seccion"])
+    if (fam, sub) == (sorted(ss.get(k_fam) or ()), sorted(ss.get(k_sub) or ())):
+        return False
+    poner_seleccion(k_fam, fam)
+    poner_seleccion(k_sub, sub)
+    return True
+
+
+def quitar_filtros_vista(seccion, k_pendiente=None):
+    """Suelta Familia y Subfamilia de una vista. Es el botón que queda cuando
+    el filtro deja a la vista sin compras y la pieza, con su ficha, no se
+    dibuja. `k_pendiente`: la escalada de la tarjeta a una corrida completa."""
+    for clave in _claves(seccion):
+        poner_seleccion(clave, [])
+    if k_pendiente:
+        st.session_state[k_pendiente] = True
 
 
 def _marcar_casilla(clave, valor, widget):

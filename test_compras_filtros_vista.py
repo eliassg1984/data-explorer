@@ -94,8 +94,10 @@ for vista, familia in [("volatilidad", "ALIMENTOS"), ("proveedor", "BEBIDAS")]:
 
             compras.renderizar_graficos_compras(d, "Compras", df_full=d)
 
-        self.assertEqual(panel.call_count, len(expectativas))
-        for funcion, (_, _, _, producto) in expectativas.items():
+        # El popover ⚙ va en todas menos en las que dibujan su ficha (regla #843).
+        self.assertEqual(panel.call_count, len(expectativas) - len(filtros.VISTAS_CON_FICHA))
+        self.assertNotIn("compras_sec_semanal", [c.args[0] for c in panel.call_args_list])
+        for funcion, (slug, familia, subfamilia, producto) in expectativas.items():
             with self.subTest(funcion=funcion):
                 args, kwargs = dibujos[funcion].call_args
                 self.assertEqual(args[0]["Producto"].tolist(), [producto])
@@ -103,11 +105,94 @@ for vista, familia in [("volatilidad", "ALIMENTOS"), ("proveedor", "BEBIDAS")]:
                     self.assertEqual(kwargs["d_full"]["Producto"].tolist(), [producto])
                 if kwargs.get("familias"):
                     self.assertTrue(kwargs["familias"]["en_panel"])
+                    con_ficha = f"compras_sec_{slug}" in filtros.VISTAS_CON_FICHA
+                    self.assertEqual(bool(kwargs["familias"].get("ficha")), con_ficha)
+        ficha = dibujos["_compras_semanal_drill"].call_args.kwargs["familias"]
+        self.assertEqual(ficha["seccion"], "compras_sec_semanal")
+        self.assertEqual([f for f, _ in ficha["todas"]], ["ALIMENTOS", "BEBIDAS"])
+        self.assertEqual((ficha["elegidas"], ficha["subs"]["elegidas"]), (["ALIMENTOS"], ["VERDURAS"]))
+        self.assertEqual(ficha["subs"]["mapa"], {"ALIMENTOS": ["CARNES", "VERDURAS"], "BEBIDAS": ["AGUAS"]})
         notas = dibujos["_compras_semanal_drill"].call_args.kwargs["d_nc"]
         self.assertEqual(notas["Producto"].tolist(), ["Cebolla"])
         # Comparten calendario. Los filtros y los recortes son independientes.
         self.assertEqual(compras.CATEGORIA_SEC["compras_sec_documentos"],
                          compras.CATEGORIA_SEC["compras_sec_proveedor"])
+
+
+class FichaDeFamilias(unittest.TestCase):
+    """Regla #843: la pieza dibuja el filtro y Python lo valida y lo escribe."""
+
+    OPCIONES = ["ALIMENTOS", "BEBIDAS", "LIMPIEZA", "VINOS"]
+    MAPA = {"ALIMENTOS": ("CARNES", "VERDURAS"), "BEBIDAS": ("AGUAS",), "VINOS": ("TINTOS",)}
+
+    def _ficha(self, seleccion=((), ())):
+        return filtros.datos_ficha("compras_sec_semanal", self.OPCIONES, self.MAPA,
+                                   [["VINOS", 50.0], ["ALIMENTOS ", 100.0]], seleccion,
+                                   ("ALIMENTOS", "VINOS", "YA NO EXISTE"))
+
+    def test_lo_que_recibe_la_pieza(self):
+        ficha = self._ficha((("VINOS", "ALIMENTOS"), ("TINTOS",)))
+        # Todas las de la página, por lo que suman; la que no compró, con cero.
+        self.assertEqual(ficha["todas"], [["ALIMENTOS", 100.0], ["VINOS", 50.0], ["BEBIDAS", 0.0], ["LIMPIEZA", 0.0]])
+        self.assertEqual(ficha["elegidas"], ["VINOS", "ALIMENTOS"])
+        self.assertEqual(ficha["subs"]["elegidas"], ["TINTOS"])
+        self.assertEqual(ficha["subs"]["mapa"]["LIMPIEZA"], [])
+        self.assertEqual(ficha["entrada"], ["ALIMENTOS", "VINOS"])
+        self.assertTrue(ficha["ficha"])
+
+    def test_solo_escribe_lo_que_python_ofrecio(self):
+        ficha, estado = self._ficha(), {}
+        with patch.object(filtros.st, "session_state", estado):
+            for malo in (None, ["ALIMENTOS"], {"fam": "ALIMENTOS", "sub": []}, {"fam": ["ALIMENTOS"]},
+                         {"fam": ["OTRA"], "sub": []}, {"fam": [["ALIMENTOS"]], "sub": []},
+                         {"fam": ["ALIMENTOS"], "sub": ["TINTOS"]}, {"fam": [], "sub": ["CARNES"]},
+                         {"fam": ["ALIMENTOS"], "sub": [{"x": 1}]}):
+                with self.subTest(malo=malo):
+                    self.assertFalse(filtros.aplicar_ficha(ficha, malo))
+            self.assertEqual(estado, {})
+
+            self.assertTrue(filtros.aplicar_ficha(ficha, {"fam": ["VINOS", "ALIMENTOS", "VINOS"], "sub": ["TINTOS"]}))
+            self.assertEqual((estado["cp_familias_semanal"], estado["cp_subfamilias_semanal"]),
+                             (["ALIMENTOS", "VINOS"], ["TINTOS"]))
+            version = estado["cp_familias_semanal__v"]
+            # Lo mismo otra vez no cambia nada: no hay por qué pedir una corrida.
+            self.assertFalse(filtros.aplicar_ficha(ficha, {"fam": ["ALIMENTOS", "VINOS"], "sub": ["TINTOS"]}))
+            self.assertEqual(estado["cp_familias_semanal__v"], version)
+            # Todas y sin subfamilias es «sin filtro»; todas con una subfamilia, no.
+            self.assertTrue(filtros.aplicar_ficha(ficha, {"fam": list(self.OPCIONES), "sub": []}))
+            self.assertEqual((estado["cp_familias_semanal"], estado["cp_subfamilias_semanal"]), ([], []))
+            self.assertTrue(filtros.aplicar_ficha(ficha, {"fam": list(self.OPCIONES), "sub": ["AGUAS"]}))
+            self.assertEqual(estado["cp_familias_semanal"], self.OPCIONES)
+            # Lo que escribe sobrevive a la preparación de la corrida siguiente.
+            self.assertEqual(filtros.preparar_filtros_vista("compras_sec_semanal", self.OPCIONES, self.MAPA, ()),
+                             (tuple(self.OPCIONES), ("AGUAS",)))
+
+    def test_la_pieza_pide_la_corrida_solo_si_cambio(self):
+        from graficos.compras import _comun
+        ficha = {**self._ficha((("ALIMENTOS",), ())), "en_panel": True}
+        estado = {"cp_familias_semanal": ["ALIMENTOS"], "cp_subfamilias_semanal": [],
+                  "pieza": {"familias": {"fam": ["ALIMENTOS"], "sub": []}}}
+        with patch.object(filtros.st, "session_state", estado), patch.object(_comun.st, "session_state", estado):
+            _comun.cambiar_familias("pieza", "pendiente", ficha)
+            self.assertNotIn("pendiente", estado)
+            estado["pieza"] = {"familias": {"fam": [], "sub": []}}
+            _comun.cambiar_familias("pieza", "pendiente", ficha)
+            self.assertTrue(estado["pendiente"])
+            self.assertEqual(estado["cp_familias_semanal"], [])
+            # El filtro de la PÁGINA no se toca: es de las vistas sin ficha.
+            self.assertNotIn("compras_graf_filtro_fam", estado)
+            # Sin ficha, `en_panel` sigue sin mandar.
+            estado.pop("pendiente")
+            estado["pieza"] = {"familias": ["ALIMENTOS"]}
+            _comun.cambiar_familias("pieza", "pendiente", {"todas": [["ALIMENTOS", 1.0]], "elegidas": [], "en_panel": True})
+            self.assertNotIn("pendiente", estado)
+
+    def test_quitar_el_filtro_cuando_la_pieza_no_se_dibuja(self):
+        estado = {"cp_familias_semanal": ["LIMPIEZA"], "cp_subfamilias_semanal": ["X"]}
+        with patch.object(filtros.st, "session_state", estado):
+            filtros.quitar_filtros_vista("compras_sec_semanal", "pendiente")
+        self.assertEqual((estado["cp_familias_semanal"], estado["cp_subfamilias_semanal"]), ([], []))
+        self.assertTrue(estado["pendiente"])
 
 
 if __name__ == "__main__":

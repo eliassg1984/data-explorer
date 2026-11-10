@@ -41,6 +41,7 @@ from graficos.base import (
     renderizar_graficos_genericos,
 )
 from graficos.compras._filtros_vista import (
+    VISTAS_CON_FICHA, datos_ficha,
     filtros_vista, panel_filtros_vista, preparar_filtros_vista, recortar_filtros_vista,
 )
 from graficos.compras._comun import (  # noqa: F401  (re-export)
@@ -609,6 +610,10 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         opciones = familias_de_tarjeta(base, col_fam, col_valor, familias)
         if opciones is not None:
             opciones["en_panel"] = True
+            if clave in VISTAS_CON_FICHA:
+                # La pieza dibuja el filtro: la ficha al lado de «Más filtros» (#843).
+                opciones.update(datos_ficha(clave, _op_fam, _mapa_sub, opciones["todas"],
+                                            _selecciones[clave], _FAMILIAS_DE_ENTRADA))
         return opciones
 
     def _dib_proveedor():
@@ -701,7 +706,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             st.rerun(scope="app")
         slug = clave.removeprefix("compras_sec_")
         with st.container(key=f"cp_con_filtro_{slug}", gap=None):
-            panel_filtros_vista(clave, _op_fam, _mapa_sub)
+            if clave not in VISTAS_CON_FICHA:
+                panel_filtros_vista(clave, _op_fam, _mapa_sub)
             _DIBUJANTES[clave]()
 
     # El contenedor con la key va AFUERA del fragment a propósito: es el que
