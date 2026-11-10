@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-846 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+847 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (290)
+**CSS y estilos** (291)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -357,6 +357,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#843** — En Compras › Período el filtro de familias es una ficha al lado de «Más filtros»; el ⚙ se va…
 - **#844** — Un boceto aprobado es el contrato entero: Período se rehízo con sus medidas, y la foto se…
 - **#845** — Movimientos › Req. y salidas con la opción D: carpetas, indicadores en la banda y «Contar…
+- **#847** — Gráficos chicos compartidos, traducidos de Tremor: graficos/mini.js + .css
 
 **Layout y alturas** (115)
 
@@ -476,7 +477,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#833** — La ubicación, la distribución y el orden de capas de un insertado son decisiones distintas
 - **#836** — Una pieza completa no equivale a una capa entre sus controles
 
-**Plotly y figuras** (133)
+**Plotly y figuras** (134)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -611,6 +612,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#815** — Diferencias en tres niveles: dónde estoy · qué miro · los datos con sus ajustes
 - **#816** — Diferencias: el código a la izquierda, «6 cierres» a pedido y la cuenta de cada área en la…
 - **#830** — Las herramientas se apartan sin apilar avisos sobre el contenido
+- **#847** — Gráficos chicos compartidos, traducidos de Tremor: graficos/mini.js + .css
 
 **AgGrid y tablas** (99)
 
@@ -59578,6 +59580,32 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      Lo que se compara de cada pieza es también su lugar RELATIVO: el centro contra el de
      su renglón y la distancia a los bordes de la hoja, no su caja suelta.
 
+847. **Gráficos chicos compartidos, traducidos de Tremor: `graficos/mini.js` + `.css`.**
+   A pedido: «arma y copia lo que vale la pena traducir» de https://www.tremor.so/. Sus
+   componentes son Apache 2.0, así que se pueden copiar con el aviso; pero son React,
+   Tailwind, Radix y Recharts, y las piezas son JS plano sin compilar. Se rehízo la FORMA,
+   no se pegó código, con la paleta (`--accent-*`, `--danger-*`, `--success-*`) y la
+   escala 12/17. El aviso de la licencia va en la cabecera del `.js`.
+   - **Cinco funciones que devuelven HTML**, como `icono()`: `miniBarras` (BarList: la
+     barra detrás del rótulo, para un ranking sin gráfico), `miniRastro` (Tracker: un
+     cuadrito por cierre o por mes con su texto al cursor), `miniTramos` (CategoryBar: el
+     % de costo contra el 30 %, con marcador y meta), `miniChispa` (SparkChart: curva o
+     barras sin ejes; un `null` corta la curva) y `miniDelta` (BadgeDelta: «▲ 6 %»).
+   - **El color sólo si significa algo**: `miniDelta` es gris si no se le dice
+     `sentido` ('sube-malo' para precio y costo, 'sube-bueno' para venta), y `miniBarras`
+     es lavanda salvo `tono: 'neg' | 'pos'`. Comprar menos no es bueno ni malo (#771).
+   - **Nada mide el DOM**: anchos en porcentajes y la chispa en un `viewBox` estirado
+     con `vector-effect: non-scaling-stroke`, como `lfCurva` (#774): «Ampliar» y el
+     celular no piden redibujar.
+   - **Se antepone como `iconos.js`**: `mini.js` después de `iconos.js`, `mini.css`
+     después de `iconos.css` (el nombre al cursor, `data-tip`, es de ahí). Los clics se
+     escuchan por delegación sobre `data-id`.
+   - **Todavía no lo usa ninguna vista.** Ponerlo en una pide su boceto (#844); la
+     galería con ejemplos sale de `python test_mini.py --foto galeria.png`.
+   - No se tradujo: la paleta y la letra de Tremor (la app tiene las suyas), los
+     bloques «Premium» (la página no dice su licencia) ni el selector de fechas
+     (`panel_fecha` ya hace más). `test_mini.py` vigila las cinco en Chromium.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59590,7 +59618,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#846**; la próxima toma el número siguiente.
+> última regla es la **#847**; la próxima toma el número siguiente.
 
 >
 

@@ -1,0 +1,61 @@
+/* Gráficos chicos de las piezas propias (regla #847): `mini.js`. Van antepuestos a
+   la hoja de cada pieza, después de `iconos.css` (el nombre al cursor es suyo).
+   Colores sólo por variable; letra de 12 px como mínimo y cifras de 13 (#777). */
+
+/* ── BarList: la barra va DETRÁS del texto, en lavanda tenue; rótulo a la
+   izquierda, cifra a la derecha en tabulares. Una fila mide 32 px. */
+.mbl{min-width:0;font-size:13px;color:var(--text-primary)}
+.mbl-cab{display:flex;justify-content:space-between;gap:12px;padding:0 8px 6px;font-size:12px;font-weight:600;color:var(--text-secondary)}
+.mbl-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.mbl-f{position:relative;display:flex;align-items:center;gap:12px;height:32px;padding:0 8px;border-radius:6px;min-width:0}
+.mbl-b{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--accent-light);pointer-events:none}
+.mbl-b.neg{background:var(--danger-bg)}
+.mbl-b.pos{background:var(--success-bg)}
+.mbl-r{position:relative;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mbl-sub{margin-left:6px;font-size:12px;color:var(--text-secondary)}
+.mbl-v{position:relative;flex:none;font-variant-numeric:tabular-nums;font-weight:500}
+.mbl.clic .mbl-f{cursor:pointer}
+.mbl.clic .mbl-f:hover{background:var(--bg-hover)}
+.mbl-f.on{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.mbl-f.on .mbl-r{color:var(--accent-deep);font-weight:600}
+
+/* ── Tracker: cuadritos de 8 px de ancho mínimo que se reparten el renglón. */
+.mrs{min-width:0}
+.mrs-f{display:flex;gap:3px;height:28px}
+.mrs-c{flex:1 1 0;min-width:4px;border-radius:3px;background:var(--border)}
+.mrs-c.ok{background:var(--success)}
+.mrs-c.ojo{background:var(--warning)}
+.mrs-c.mal{background:var(--danger)}
+.mrs-c[data-id]{cursor:pointer}
+.mrs-c:hover{opacity:.75}
+.mrs-pie{display:flex;justify-content:space-between;margin-top:4px;font-size:12px;color:var(--text-secondary)}
+
+/* ── CategoryBar: tramos de 8 px de alto con 2 px entre ellos; el marcador es una
+   raya oscura que sobresale, la meta una raya punteada. */
+.mtr{min-width:0;padding-top:4px}
+.mtr-b{position:relative;display:flex;gap:2px;height:8px}
+.mtr-t{height:100%;border-radius:4px;background:var(--border)}
+.mtr-t.ok{background:var(--success)}
+.mtr-t.ojo{background:var(--warning)}
+.mtr-t.mal{background:var(--danger)}
+.mtr-t.neu{background:var(--accent-light)}
+.mtr-m{position:absolute;top:-5px;width:3px;height:18px;margin-left:-1.5px;border-radius:2px;background:var(--text-primary);box-shadow:0 0 0 2px var(--bg-card)}
+.mtr-meta{position:absolute;top:-3px;width:0;height:14px;border-left:1.5px dashed var(--text-secondary)}
+.mtr-e{position:relative;height:16px;margin-top:4px;font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.mtr-e span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.mtr-e span:first-child{transform:none}
+.mtr-e span:last-child{transform:translateX(-100%)}
+
+/* ── SparkChart: 80 × 24 por defecto; la pieza lo cambia con width/height. */
+.msp{position:relative;display:inline-block;width:80px;height:24px;vertical-align:middle}
+.msp svg{display:block;width:100%;height:100%;overflow:visible}
+.msp-l{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.msp-a{fill:var(--accent-light);opacity:.7;stroke:none}
+.msp-b{fill:var(--accent-tint)}
+.msp-b.u{fill:var(--accent)}
+.msp-u{position:absolute;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg-card)}
+
+/* ── BadgeDelta: cápsula de 20 px; gris si nadie dijo qué es bueno. */
+.mdl{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;background:var(--bg-secondary);color:var(--text-secondary)}
+.mdl.mal{background:var(--danger-bg);color:var(--danger-text)}
+.mdl.bien{background:var(--success-bg);color:var(--success-text)}
