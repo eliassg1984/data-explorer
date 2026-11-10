@@ -60,7 +60,10 @@ a escritorio y cabeceras nativas sin solapes). El detalle vive en
   baja con `Artifact read` (`path: index.html`) y se fotografía con
   Playwright, igual que la app. Lo que no coincide se corrige o se dice, con
   su motivo. Pasó con la #843: se subió la ficha de familias sola y la
-  pantalla no se parecía al boceto. Regla #844.
+  pantalla no se parecía al boceto. Regla #844. **Y se compara el estilo,
+  no sólo las cajas**: de cada pieza, `getComputedStyle` (familia, tamaño,
+  peso, color) y su texto, en los dos lados. En la #845 las cajas daban
+  igual y la cápsula salía con otro peso, otro color y otra frase (#846).
 - **Los tests en verde NO prueban que ande en Cloud: esta máquina corre
   pandas 3 y `requirements.txt` pide `pandas>=2.2,<2.3`.** Dos mayores de
   distancia, y el hueco no se ve como un error de import sino como la FORMA
@@ -1832,7 +1835,8 @@ las dos vistas de requerimientos. Los topes del botón de fecha de
 Consumo salen de ese parquet y siguen por registro, elija lo que elija.
 
 **«Filtros» tiene sólo lo que vale para TODO el reporte** (2026-10-11,
-regla #644): en Movimientos, Sub Almacén y Familia. Las dos fechas y
+regla #644): en Producción, Sub Almacén y Familia; Movimientos ya no lo
+dibuja (#846), cada vista filtra lo suyo. Las dos fechas y
 «Comparar con» van en una columna AL COSTADO del panel de fecha de cada
 vista que gobiernan (`graficos/movimientos.py::AJUSTES_PIE`; debajo quedaban tras
 un scroll a 619px de alto), y «Valorizar la merma» dentro de sus tres

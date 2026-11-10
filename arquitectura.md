@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-845 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+846 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (290)
 
@@ -1146,13 +1146,14 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#783** — La franja de Ventas abre el mismo panel de fecha que las tarjetas
 - **#827** — «12 cierres» se fue de Diferencias a Evolución: el grano «Cierre» de la Serie
 
-**Asistente IA** (5)
+**Asistente IA** (6)
 
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 - **#613** — El cierre de fin de mes se registra en el mes SIGUIENTE: Ajuste lo cuenta en su MES OPERATIVO
 - **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
 - **#643** — El asistente IA suma los requerimientos como la página: sin anulados ni líneas sin producto,…
+- **#846** — Movimientos sin «Filtros» en la ruta, y la cápsula con la letra del boceto: se compara…
 
 **Herramientas de desarrollo** (44)
 
@@ -1201,7 +1202,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
-**Decisiones de diseño y UX** (279)
+**Decisiones de diseño y UX** (280)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1482,6 +1483,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#841** — La ruta va en una píldora con los bordes de la hoja: la píldora es el ::before de la franja
 - **#843** — En Compras › Período el filtro de familias es una ficha al lado de «Más filtros»; el ⚙ se va…
 - **#845** — Movimientos › Req. y salidas con la opción D: carpetas, indicadores en la banda y «Contar…
+- **#846** — Movimientos sin «Filtros» en la ruta, y la cápsula con la letra del boceto: se compara…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59541,6 +59543,33 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    capa a la vez) y, en Python, «Contar por» en el panel, `ir_a_cadena`/`ir_a_zona` y que
    las pestañas de la cadena sean las de la pieza.
 
+846. **Movimientos sin «Filtros» en la ruta, y la cápsula con la letra del boceto: se compara también el estilo, no sólo las cajas.**
+   A pedido, con una captura: «este filtro ya no debería estar, cada tarjeta lleva el
+   propio» y «las letras de los KPI no se parecen a las del boceto, ¿falta alguna regla?».
+   - **Faltaba, sí.** La comparación de la #845 midió CAJAS (ancho, alto, posición, y el
+     tamaño de letra) y dio igual; no midió el peso, el color ni el TEXTO. La cápsula salía
+     con el mismo tamaño y otra cara: peso 400 contra 500, la cifra en negro contra gris, y
+     «−0 % contra un año antes» donde el boceto dice «▲ 6 %». Desde ahora la comparación
+     contra un boceto lee, de cada pieza, `getComputedStyle` (familia, tamaño, peso, color)
+     y su `textContent`, en los dos lados, además de la caja. Va en CLAUDE.md, junto a la
+     #844.
+   - **La cápsula, como el boceto**: peso 500, todo en el gris secundario (la cifra en 600,
+     del mismo gris) y la comparación corta, «▲ 6 %», «▼ 12 %» o «= 0 %»
+     (`movimientos_periodo.js::breve`, sólo cuando la nota empieza con un ±n %). La frase
+     entera queda en el `title` de la cápsula y en la tira abierta. Siguen distintos, a
+     propósito: el separador de miles (la app escribe «175,114» en todas sus cifras) y el
+     punto ámbar de alerta, que el boceto no tenía.
+   - **«Filtros» (Sub Almacén y Familia) deja la ruta de Movimientos** (`renderizar(...,
+     filtros_pagina=False)`): Req. y salidas trae Área y Familia en «Más filtros», la cadena
+     por área y Sin plato filtran en su pieza, y el de arriba recortaba dos veces lo mismo.
+     Se pierde una cosa y se dice: los totales de Sin plato por cierre ya no se pueden
+     recortar a unas familias (su lista sí se busca por familia). Producción, que dibuja con
+     el mismo `renderizar`, lo CONSERVA por ahora: Consumo y Órdenes todavía lo leen. Las
+     claves `mov_graf_filtro_*` son de las dos páginas: en Movimientos se ignoran, no se
+     borran, y lo que la pieza le cuenta al asistente sale de `_mov_filtros_pagina`, que
+     escribe `renderizar` con lo que de verdad aplicó (antes leía las claves y le habría
+     dicho al asistente un filtro puesto en Producción).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59553,7 +59582,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#845**; la próxima toma el número siguiente.
+> última regla es la **#846**; la próxima toma el número siguiente.
 
 >
 

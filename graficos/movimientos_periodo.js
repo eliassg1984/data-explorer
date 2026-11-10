@@ -460,12 +460,14 @@ const MOV = (() => {
     return [['area','Área'],...(P.tipo ? [['tipo',P.rotulo_tipo||'Tipo']] : []),...(P.familia===false?[]:[['fam','Familia']]),['prod','Producto']];
   }
   const corto = t => { const x=String(t||'').split(' · ')[0];return x.length>30?`${x.slice(0,29)}…`:x; };
+  // #846: en la cápsula, la comparación va como en el boceto: «▲ 6 %», no «+6 % contra un año antes» (la frase, en el `title`).
+  const breve = t => { const x=corto(t), m=/^([+−-])(\d+) %/.exec(x);if(!m)return x;return +m[2]?`${m[1]==='+'?'▲':'▼'} ${m[2]} %`:'= 0 %'; };
   // Los indicadores plegados: dicen el principal y cuántos más hay; abiertos, la tira con todos.
   // Con `P.banda` la cápsula sube a la banda de las carpetas, a la derecha (el CSS la ubica).
   function capsula(G) {
     const {s,P}=G, html=htmlKpis(G), ks=G.kpiInfo;if(!ks.length)return '';
     const k=ks[0], alerta=ks.some(x=>/alerta/.test(x.clase||''));
-    const cap=`<button class="mv-kcap" data-a="kpis" aria-expanded="${!!s.kAb}" title="${esc(s.kAb?'Plegar los indicadores (Esc)':'Ver los indicadores')}"><span class="r">${esc(k.titulo)}</span><span class="v">${esc(k.valor)}</span>${k.nota?`<span class="c">${esc(corto(k.nota))}</span>`:''}${ks.length>1?`<span class="mas">${alerta?'<i class="pto" aria-label="Hay algo para revisar"></i>':''}${ks.length-1} más ‹</span>`:''}</button>`;
+    const cap=`<button class="mv-kcap" data-a="kpis" aria-expanded="${!!s.kAb}" title="${esc((k.nota?`${k.titulo}: ${k.nota}. `:'')+(s.kAb?'Plegar los indicadores (Esc)':'Ver los indicadores'))}"><span class="r">${esc(k.titulo)}</span><span class="v">${esc(k.valor)}</span>${k.nota?`<span class="c">${esc(breve(k.nota))}</span>`:''}${ks.length>1?`<span class="mas">${alerta?'<i class="pto" aria-label="Hay algo para revisar"></i>':''}${ks.length-1} más ‹</span>`:''}</button>`;
     const tira=s.kAb?`<div class="mv-ktira" role="group" aria-label="Indicadores"><div class="mv-kpis">${html}</div><button class="mv-kcerrar" data-a="kpis" aria-label="Plegar los indicadores" title="Plegar (Esc)">✕</button></div>`:'';
     return `<div class="mv-kz${P.banda?' banda':''}">${cap}${tira}</div>`;
   }

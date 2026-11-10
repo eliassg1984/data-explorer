@@ -85,8 +85,9 @@ def renderizar(d, lado, cols, *, hist=None, anios=0, rot_fecha="",
     # Las tres fechas viajan en `cols`: la firma de las tarjetas no cambia (#772).
     cols = dict(cols)
     relojes = cols.pop("relojes", None)
-    contexto = {"Áreas de la página": ss.get("mov_graf_filtro_sub") or [],
-                "Familias de la página": ss.get("mov_graf_filtro_fam") or []}
+    # Lo que recortó la página (en Movimientos, nada desde la #846).
+    _sub, _fam = ss.get("_mov_filtros_pagina") or ([], [])
+    contexto = {"Áreas de la página": list(_sub), "Familias de la página": list(_fam)}
     firma = (727, _huella(d), tuple(d.columns), tuple(cols.items()), _huella(hist),
              _huella(marcas), anios, str(rango), rot_fecha, str(faltante),
              str(contexto), str(dt.date.today()))

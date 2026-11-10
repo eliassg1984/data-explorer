@@ -1099,12 +1099,15 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     def dibujar_rail():
         _render_rail(_RAIL_CATEGORIAS, "mov_graf_tipo",
                      btn_prefix="mov_rail_btn_", secciones=_PILA)
+    # Sin «Filtros» en la ruta (#846): cada vista de Movimientos filtra lo suyo
+    # («Más filtros» de Req. y salidas, la cadena por área, el buscador de Sin plato).
     renderizar(df_f, nombre_reporte, df_full, tabla_cb,
-               pila=_PILA, dibujar_rail=dibujar_rail)
+               pila=_PILA, dibujar_rail=dibujar_rail, filtros_pagina=False)
 
 
 def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
-               dibujar_rail, con_salidas=True, perspectivas=None):
+               dibujar_rail, con_salidas=True, perspectivas=None,
+               filtros_pagina=True):
     """El cuerpo de Movimientos y de Producción (regla #709): los chips,
     los parquets, el rail que dibuja `dibujar_rail` y las secciones de
     `pila`. Los dibujantes de las catorce secciones se arman igual para los
@@ -1161,12 +1164,19 @@ def renderizar(df_f, nombre_reporte, df_full, tabla_cb, *, pila,
     # panel de fecha de sus vistas, y la valorización de la merma en sus
     # tarjetas: acá arriba no decían a qué vistas cambiaban, y con ellos
     # encima los dos chips quedaban debajo del borde del panel.
-    with compartimento_filtros(contar_filtros("mov_graf_filtro_sub",
-                                              "mov_graf_filtro_fam")):
-        _, sub_sel = filtro_pills(df_req, col_sub,
-                                  "mov_graf_filtro_sub", "Sub Almacén")
-        _, fam_sel = filtro_pills(df_req, col_fam,
-                                  "mov_graf_filtro_fam", "Familia")
+    #
+    # Movimientos ya no los dibuja (`filtros_pagina=False`, regla #846): sus
+    # vistas traen el suyo y el de arriba recortaba dos veces lo mismo. Las
+    # claves son también de Producción: acá se ignoran, no se borran.
+    sub_sel, fam_sel = [], []
+    if filtros_pagina:
+        with compartimento_filtros(contar_filtros("mov_graf_filtro_sub",
+                                                  "mov_graf_filtro_fam")):
+            _, sub_sel = filtro_pills(df_req, col_sub,
+                                      "mov_graf_filtro_sub", "Sub Almacén")
+            _, fam_sel = filtro_pills(df_req, col_fam,
+                                      "mov_graf_filtro_fam", "Familia")
+    st.session_state["_mov_filtros_pagina"] = (list(sub_sel), list(fam_sel))
 
     d = df_req
     if sub_sel and col_sub:

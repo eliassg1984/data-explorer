@@ -78,7 +78,7 @@
 .mv-kz{position:relative;margin-left:auto;align-self:center;display:flex;justify-content:flex-end;min-width:0}
 .mv .mv-kcap{display:flex;align-items:center;gap:10px;max-width:100%;height:32px;padding:0 6px 0 12px;border:0;border-radius:6px;background:var(--ctl-gris,var(--rail-fondo));white-space:nowrap;overflow:hidden}
 .mv .mv-kcap:hover{background:var(--ctl-gris-hover,var(--accent-tint))}
-.mv-kcap .r{color:var(--mv-sec)}.mv-kcap .v{font-size:15px;font-weight:600}.mv-kcap .c{font-size:12px;color:var(--mv-sec)}
+.mv .mv-kcap{font-weight:500;color:var(--mv-sec)}.mv-kcap .r{color:var(--mv-sec)}.mv-kcap .v{font-size:15px;font-weight:600;color:inherit;font-variant-numeric:tabular-nums}.mv-kcap .c{font-size:12px;color:var(--mv-sec)}
 .mv-kcap .mas{display:flex;align-items:center;gap:4px;height:20px;padding:0 2px 0 8px;border-left:1px solid var(--ctl-linea,var(--border));font-size:12px;color:var(--mv-sec)}
 .mv-kcap .pto{width:8px;height:8px;border-radius:4px;background:var(--warning-text)}
 .mv-ktira{position:absolute;right:0;top:38px;z-index:25;display:flex;align-items:stretch;gap:4px;padding:4px;border-radius:10px;background:var(--bg-card);
