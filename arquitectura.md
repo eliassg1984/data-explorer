@@ -59569,6 +59569,14 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      borran, y lo que la pieza le cuenta al asistente sale de `_mov_filtros_pagina`, que
      escribe `renderizar` con lo que de verdad aplicó (antes leía las claves y le habría
      dicho al asistente un filtro puesto en Producción).
+   - **Y la cápsula estaba 8 px arriba del centro de la banda** (anexo, con otra captura:
+     «no está alineado como en el boceto»). La #845 midió su tamaño y no DÓNDE caía dentro
+     de lo que la contiene: la subía 44 px (el renglón tenía 44 antes de las carpetas) y la
+     banda mide 40. Ahora se centra (`top: calc(var(--mv-banda, 40px) / -2 - 16px)`) y
+     «3 más ‹» termina a 24 px del borde de la hoja, como en el boceto y a plomo con el
+     ícono de ampliar. Medido: centro de la cápsula y de la banda en y = 88 (antes 80).
+     Lo que se compara de cada pieza es también su lugar RELATIVO: el centro contra el de
+     su renglón y la distancia a los bordes de la hoja, no su caja suelta.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

@@ -90,10 +90,12 @@
 .mv .mv-kcerrar{width:28px;border:0;border-radius:6px;padding:0;text-align:center;color:var(--mv-sec)}
 /* Banda (#845): la cápsula sube al renglón de las carpetas, a la derecha. La
    distancia es la de ese renglón hasta la pieza (`--mv-banda`). */
-.mv-kz.banda{position:absolute;right:18px;top:calc(-1 * var(--mv-banda,44px));z-index:24;margin:0}
+/* #846: centrada en la banda (40 px desde su tope hasta la pieza; la cápsula mide 32) y
+   con «3 más ‹» a 24 px del borde de la hoja, como el boceto. Antes, 8 px más arriba. */
+.mv-kz.banda{position:absolute;right:14px;top:calc(var(--mv-banda,40px) / -2 - 16px);z-index:24;margin:0}
 .mv .mv-kz.banda .mv-kcap{background:none;max-width:none;padding-right:10px;overflow:visible}
 .mv .mv-kz.banda .mv-kcap:hover,.mv .mv-kz.banda .mv-kcap[aria-expanded="true"]{background:color-mix(in srgb,var(--bg-card) 55%,transparent)}
-.mv-kz.banda .mv-ktira{top:40px}
+.mv-kz.banda .mv-ktira{top:32px}
 /* Nivel 3 */
 .mv .mv-mas{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:0;border-radius:6px;background:var(--ctl-gris,var(--rail-fondo));white-space:nowrap}
 .mv .mv-mas:hover{background:var(--ctl-gris-hover,var(--bg-hover))}

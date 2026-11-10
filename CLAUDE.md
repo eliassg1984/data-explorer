@@ -62,8 +62,10 @@ a escritorio y cabeceras nativas sin solapes). El detalle vive en
   su motivo. Pasó con la #843: se subió la ficha de familias sola y la
   pantalla no se parecía al boceto. Regla #844. **Y se compara el estilo,
   no sólo las cajas**: de cada pieza, `getComputedStyle` (familia, tamaño,
-  peso, color) y su texto, en los dos lados. En la #845 las cajas daban
-  igual y la cápsula salía con otro peso, otro color y otra frase (#846).
+  peso, color) y su texto, en los dos lados, **y su lugar relativo**: el
+  centro contra el de su renglón y la distancia a los bordes de la hoja. En
+  la #845 las cajas daban igual y la cápsula salía con otro peso, otro color,
+  otra frase y 8 px arriba del centro de la banda (#846).
 - **Los tests en verde NO prueban que ande en Cloud: esta máquina corre
   pandas 3 y `requirements.txt` pide `pandas>=2.2,<2.3`.** Dos mayores de
   distancia, y el hueco no se ve como un error de import sino como la FORMA
