@@ -960,11 +960,29 @@ function menu(k, rot, aria, ops, val) {
   return `<label class="men"><small>${rot}:</small><span>${esc(txt)}</span><i aria-hidden="true">▾</i>`
     + `<select data-sel="${k}" aria-label="${aria}">${ops.map(([v, t]) => `<option value="${esc(v)}"${v === val ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
 }
+// Desde la #848 (opción C del boceto), en escritorio cada uno vive donde se ve
+// lo que cambia: Agrupar en el título del gráfico («Compra por semana ▾»),
+// Partir por en el encabezado del panel («Por familia ▾») y Contra en la
+// leyenda («contra año pasado ▾»). La palabra ES el control: índigo, subrayado
+// punteado y el mismo `<select>` transparente encima. En el nivel 3 quedan sólo
+// los que no tienen dónde verse: en Tabla y Documentos, Agrupar y Contra; en
+// Documentos, también Partir por (su panel es otro). En el celular, todos ahí.
+const OPS_CONTRA = [['ano', 'año pasado'], ['ant', 'período anterior'], ['no', 'sin comparar']];
+const OPS_GRAN_PAL = GRANOS.map(([v]) => [v, AGRUPADO[v]]);
+const PARTIR_PAL = { [FAM]: 'familia', [SUB]: 'subfamilia', [PROV]: 'proveedor', [PRECIO]: 'precio habitual' };
+const enSitio = () => !esMovil();
+function palabra(k, aria, ops, val) {
+  const txt = (ops.find(([v]) => v === val) || ops[0] || ['', ''])[1];
+  return `<label class="pal" title="${aria}"><span>${esc(txt)}</span><i aria-hidden="true">▾</i>`
+    + `<select data-sel="${k}" aria-label="${aria}">${ops.map(([v, t]) => `<option value="${esc(v)}"${v === val ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
+}
+const partirEnPanel = (V, st) => enSitio() && st.zona !== 'docs' && V.partidaGran && (V.opsPartir || []).length;
 function menusVista(F, V, st) {
   if (!V || V.vacio) return '';
-  return menu('gran', 'Agrupar', 'Agrupar', GRANOS, st.gran)
-    + (V.partidaGran ? menu('partir', 'Partir por', 'Partir por', (V.opsPartir || []).map((k) => [k, k]), st.partir) : '')
-    + (F.C.length ? menu('contra', 'Contra', 'Contra qué comparar', [['ano', 'año pasado'], ['ant', 'período anterior'], ['no', 'sin comparar']], st.contra) : '');
+  const graf = enSitio() && st.zona === 'graf';
+  return (graf ? '' : menu('gran', 'Agrupar', 'Agrupar', GRANOS, st.gran))
+    + (V.partidaGran && !partirEnPanel(V, st) ? menu('partir', 'Partir por', 'Partir por', (V.opsPartir || []).map((k) => [k, k]), st.partir) : '')
+    + (F.C.length && !graf ? menu('contra', 'Contra', 'Contra qué comparar', OPS_CONTRA, st.contra) : '');
 }
 // Nivel 2: qué se mira, y a la derecha «Cómo se calcula» (#792). Los íconos son
 // los de la app (`iconos.js`, antepuesto; regla #821), con su nombre al cursor.
@@ -1127,7 +1145,9 @@ function panelLista(F, V, st) {
     const sumar = P.ficha ? '<button class="quita" data-acc="ffam-todas">Sumarlas</button>' : P.en_panel ? '' : '<button class="quita" data-acc="pagina-todas">Sumarlas</button>';
     if (fx.length && Math.abs(v) >= 0.5) fuera = `<div class="fuera"><span>Fuera de esta cuenta: ${esc(fS0(v))} de ${esc(fx.slice(0, 2).map(([f]) => nomFam(f)).join(', '))}${fx.length > 2 ? '…' : ''}.</span>${sumar}</div>`;
   }
-  return `<div class="pn-cab"><b>${tit}</b>${ampliar(st, 'panel', 'la lista')}</div><div class="lista">${filas || '<p class="mas">Nada que mostrar.</p>'}</div>${ficha}${fuera}`;
+  const titC = partirEnPanel(V, st)
+    ? `${foco ? `${tit} · por` : 'Por'} ${palabra('partir', 'Partir por', V.opsPartir.map((k) => [k, PARTIR_PAL[k] || k]), st.partir)}` : tit;
+  return `<div class="pn-cab"><b>${titC}</b>${ampliar(st, 'panel', 'la lista')}</div><div class="lista">${filas || '<p class="mas">Nada que mostrar.</p>'}</div>${ficha}${fuera}`;
 }
 // ── Dibujar ──────────────────────────────────────────────────────────────
 function pintar() {
@@ -1156,7 +1176,12 @@ function pintar() {
     const NOM = { valor: 'Compra', docs: 'Documentos', precio: 'Efecto del precio', revisar: 'Compras para revisar' };
     const SUBT = { valor: V.sufijo.replace(/^ · /, ''), docs: 'comprobantes distintos', precio: 'lo que subió arriba, lo que bajó abajo', revisar: 'valor de las líneas marcadas' };
     const hayPar = V.claves.some((k) => { const [a, b] = cobertura(k, V.gran, V.rango); return V.gran !== 'Por documento' && V.gran !== 'Día' && a < b; });
-    izq = `<div class="tit"><span class="t">${NOM[st.med]} ${esc(AGRUPADO[V.gran] === 'documento' ? 'por documento' : `por ${AGRUPADO[V.gran]}`)}<small> · ${esc(SUBT[st.med])}${hayPar ? ' · * período incompleto' : ''}</small></span>${quitar}<span class="esp"></span>${V.ghost.some((x) => x != null) && st.med === 'valor' ? `<span class="ley"><i></i>${st.contra === 'ano' ? 'año pasado' : 'período anterior'}</span>` : ''}${st.amp === 'izq' ? ampliar(st, 'izq', 'el gráfico') : ''}</div>`
+    const sitio = enSitio(), fantasma = V.ghost.some((x) => x != null) && st.med === 'valor';
+    const grano = sitio ? `por ${palabra('gran', 'Agrupar', OPS_GRAN_PAL, st.gran)}` : esc(`por ${AGRUPADO[V.gran]}`);
+    const ley = sitio && F.C.length
+      ? `<span class="ley">${fantasma && st.contra !== 'no' ? '<i></i>' : ''}${st.contra === 'no' ? '' : 'contra '}${palabra('contra', 'Contra qué comparar', OPS_CONTRA, st.contra)}</span>`
+      : fantasma ? `<span class="ley"><i></i>${st.contra === 'ano' ? 'año pasado' : 'período anterior'}</span>` : '';
+    izq = `<div class="tit"><span class="t">${NOM[st.med]} ${grano}<small> · ${esc(SUBT[st.med])}${hayPar ? ' · * período incompleto' : ''}</small></span>${quitar}<span class="esp"></span>${ley}${st.amp === 'izq' ? ampliar(st, 'izq', 'el gráfico') : ''}</div>`
       + `<div class="graf" data-graf="1"><div class="tip" hidden></div></div>`;
     if (esMovil()) {
       izq += st.lectura != null && st.lectura < V.n ? `<div class="lectura" role="region" aria-label="Detalle del período"><button class="lectura-cerrar" data-acc="cerrar-lectura" aria-label="Cerrar detalle">×</button><div>${tip(F, V, st, st.lectura)}</div><button class="ver-documentos" data-acc="ver-barra" data-v="${st.lectura}">Ver documentos de este período</button></div>` : '<p class="ayuda-tocar">Toca una barra para ver su desglose.</p>';

@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-847 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+848 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (291)
+**CSS y estilos** (292)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -358,6 +358,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#844** — Un boceto aprobado es el contrato entero: Período se rehízo con sus medidas, y la foto se…
 - **#845** — Movimientos › Req. y salidas con la opción D: carpetas, indicadores en la banda y «Contar…
 - **#847** — Gráficos chicos compartidos, traducidos de Tremor: graficos/mini.js + .css
+- **#848** — Período: Agrupar, Partir por y Contra viven donde se ve lo que cambian (opción C)
 
 **Layout y alturas** (115)
 
@@ -477,7 +478,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#833** — La ubicación, la distribución y el orden de capas de un insertado son decisiones distintas
 - **#836** — Una pieza completa no equivale a una capa entre sus controles
 
-**Plotly y figuras** (134)
+**Plotly y figuras** (135)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -613,6 +614,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#816** — Diferencias: el código a la izquierda, «6 cierres» a pedido y la cuenta de cada área en la…
 - **#830** — Las herramientas se apartan sin apilar avisos sobre el contenido
 - **#847** — Gráficos chicos compartidos, traducidos de Tremor: graficos/mini.js + .css
+- **#848** — Período: Agrupar, Partir por y Contra viven donde se ve lo que cambian (opción C)
 
 **AgGrid y tablas** (99)
 
@@ -59606,6 +59608,28 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      bloques «Premium» (la página no dice su licencia) ni el selector de fechas
      (`panel_fecha` ya hace más). `test_mini.py` vigila las cinco en Chromium.
 
+848. **Período: Agrupar, Partir por y Contra viven donde se ve lo que cambian (opción C).**
+   Hasta acá eran tres menús «Nombre: valor ▾» en el nivel 3 (#844), y cada valor ya
+   estaba escrito en otro lado: «Compra por **semana**» en el título, «Por **familia**»
+   en el panel y «año pasado» en la leyenda. Seis textos del mismo peso compitiendo con
+   los filtros, y cada dato leído dos veces. Boceto:
+   https://claude.ai/artifact/1RDntK7r9PzwAhyKh9zSLV (Hoy, A, B y C; se eligió C).
+   - **La palabra ES el control** (`semanal.js::palabra`, clase `.pal`): el mismo
+     `<select data-sel>` transparente de `.men`, encima de la palabra. Índigo
+     (`--accent-deep`), subrayado punteado pegado al texto y ▾; lavanda al cursor. El
+     tamaño y el peso son los del texto donde va: negrita en el título, 12 px en la
+     leyenda. Sin rótulos: la frase los dice. El relleno es de los filtros, no de esto.
+   - **Contra sigue a la vista aunque no compare**: con «sin comparar» la leyenda no
+     tiene muestra pero dice «sin comparar ▾», o no habría por dónde volver.
+   - **Sólo en el Gráfico y en escritorio** (`enSitio`). En Tabla y Documentos no hay
+     título que lo diga: Agrupar y Contra vuelven al nivel 3; Partir por, también en
+     Documentos, cuyo panel es otro. En el celular, los tres siguen en el panel de
+     filtros, con su alto de 44 px.
+   - Con una barra elegida, el panel dice «<período> · por familia ▾». Con «Ampliar»
+     el nivel 3 se esconde y los controles siguen en el título.
+   - `test_compras_periodo.py::test_cabecera_como_el_boceto` vigila las tres palabras,
+     su estilo, que cambien lo suyo y la vuelta al nivel 3 en Tabla.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59618,7 +59642,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#847**; la próxima toma el número siguiente.
+> última regla es la **#848**; la próxima toma el número siguiente.
 
 >
 

@@ -414,7 +414,7 @@ class LasCuentasEnElNavegador(unittest.TestCase):
     def _montar(self, pg, P, sello=None):
         """Monta la pieza (o le manda datos nuevos, como una corrida de Python)."""
         if not pg.locator("#pieza").count():
-            pg.set_content('<style>:root{--alto-util:612px;--border:silver;--bg-card:white;--accent:slateblue}body{margin:0 16px}</style><div id="pieza"></div>')
+            pg.set_content('<style>:root{--alto-util:612px;--border:silver;--bg-card:white;--accent:slateblue;--accent-deep:#4938b8}body{margin:0 16px}</style><div id="pieza"></div>')
             pg.add_style_tag(content=_CSS)
             pg.add_script_tag(content=_JS.replace("export default function (component)", "window.__montar = function (component)"))
             pg.evaluate("window.__avisos = []")
@@ -567,22 +567,48 @@ class LasCuentasEnElNavegador(unittest.TestCase):
         try:
             self._montar(pg, P)
             # «Más filtros» arranca donde las pestañas, y los grupos se separan por cercanía.
-            tabs, mas, chip, men = caja(".tabs"), caja(".ms-b"), caja(".ff-chip"), caja(".men")
+            tabs, mas, chip = caja(".tabs"), caja(".ms-b"), caja(".ff-chip")
             self.assertAlmostEqual(mas["x"], tabs["x"], delta=1)
-            self.assertEqual((mas["height"], chip["height"], men["height"]), (32, 28, 32))
+            self.assertEqual((mas["height"], chip["height"]), (32, 28))
             self.assertAlmostEqual(chip["x"] - (mas["x"] + mas["width"]), 4, delta=1)
-            self.assertAlmostEqual(men["x"] - (chip["x"] + chip["width"]), 24, delta=1)
-            # Los menús de la vista: rótulo gris, valor y ▾, sin relleno; el select va encima.
-            menus = "xs => xs.map((e) => [...e.children].filter((c) => c.tagName !== 'SELECT').map((c) => c.textContent).join(' '))"
-            self.assertEqual(pg.locator(".men").evaluate_all(menus),
-                             ["Agrupar: Semana ▾", "Partir por: Familia ▾", "Contra: año pasado ▾"])
-            self.assertEqual(pg.locator(".men").first.evaluate("e => getComputedStyle(e).backgroundColor"), "rgba(0, 0, 0, 0)")
-            self.assertEqual(pg.locator(".men select").first.evaluate("e => getComputedStyle(e).opacity"), "0")
-            pg.locator('select[data-sel="gran"]').select_option("Mes")
-            pg.locator('select[data-sel="contra"]').select_option("no")
-            self.assertEqual(pg.locator(".men").evaluate_all(menus)[::2],
-                             ["Agrupar: Mes ▾", "Contra: sin comparar ▾"])
+            # #848, opción C: en el gráfico el nivel 3 no tiene menús; cada uno es la
+            # palabra que ya decía su valor, donde se ve lo que cambia.
+            self.assertEqual(pg.locator(".cab .men").count(), 0)
+            texto = "e => [...e.children].filter((c) => c.tagName !== 'SELECT').map((c) => c.textContent).join(' ')"
+            visto = lambda s: pg.locator(s).first.evaluate(r"e => { const c = e.cloneNode(true); c.querySelectorAll('select').forEach((x) => x.remove()); return c.textContent.replace(/\s+/g, ' ').replace(/\s*▾/g, ' ▾').trim(); }")  # noqa: E731
+            pal = lambda s: pg.locator(f"{s} .pal").evaluate(texto)  # noqa: E731
+            self.assertEqual((pal(".tit .t"), pal(".pn-cab"), pal(".tit .ley")), ("semana ▾", "familia ▾", "año pasado ▾"))
+            self.assertTrue(visto(".tit .t").startswith("Compra por semana ▾ · "))
+            self.assertEqual(visto(".pn-cab b"), "Por familia ▾")
+            self.assertEqual(visto(".tit .ley"), "contra año pasado ▾")
+            for s in (".tit .t .pal", ".pn-cab .pal", ".tit .ley .pal"):
+                e = pg.locator(s)
+                self.assertGreaterEqual(e.bounding_box()["height"], 24, s)
+                self.assertEqual(e.locator("> span").evaluate("e => getComputedStyle(e).textDecorationStyle"), "dashed", s)
+                self.assertEqual(e.evaluate("e => getComputedStyle(e).color"), "rgb(73, 56, 184)", s)
+                self.assertEqual(e.locator("select").evaluate("e => getComputedStyle(e).opacity"), "0", s)
+            # Mismo tamaño y peso que el texto donde va.
+            self.assertEqual(pg.locator(".tit .t .pal").evaluate("e => getComputedStyle(e).fontWeight"),
+                             pg.locator(".tit .t").evaluate("e => getComputedStyle(e).fontWeight"))
+            self.assertEqual(pg.locator(".tit .ley .pal").evaluate("e => getComputedStyle(e).fontSize"), "12px")
+            pg.locator('.tit select[data-sel="gran"]').select_option("Mes")
+            self.assertTrue(visto(".tit .t").startswith("Compra por mes ▾"))
+            pg.locator('.pn-cab select[data-sel="partir"]').select_option("Proveedor")
+            self.assertEqual(pal(".pn-cab"), "proveedor ▾")
+            pg.locator('.pn-cab select[data-sel="partir"]').select_option("Familia")
+            pg.locator('.tit select[data-sel="contra"]').select_option("no")
+            # Sin comparar, la leyenda no tiene muestra pero sigue siendo el camino de vuelta.
+            self.assertEqual(pal(".tit .ley"), "sin comparar ▾")
+            self.assertEqual(pg.locator(".tit .ley > i").count(), 0)
             self.assertEqual(pg.evaluate("[window.__cpPer.st.gran, window.__cpPer.st.contra]"), ["Mes", "no"])
+            pg.locator('.tit select[data-sel="contra"]').select_option("ano")
+            # En Tabla no hay título que lo diga: Agrupar y Contra vuelven al nivel 3.
+            pg.locator('[data-acc="zona"][data-v="tabla"]').first.click()
+            menus = "xs => xs.map((e) => [...e.children].filter((c) => c.tagName !== 'SELECT').map((c) => c.textContent).join(' '))"
+            self.assertEqual(pg.locator(".cab .men").evaluate_all(menus), ["Agrupar: Mes ▾", "Contra: año pasado ▾"])
+            self.assertEqual(pg.locator(".cab .men").first.evaluate("e => getComputedStyle(e).backgroundColor"), "rgba(0, 0, 0, 0)")
+            self.assertAlmostEqual(caja(".cab .men")["x"] - (caja(".ff-chip")["x"] + caja(".ff-chip")["width"]), 24, delta=1)
+            pg.locator('[data-acc="zona"][data-v="graf"]').first.click()
             # Las acciones, al final y detrás de una raya: un enlace y dos íconos con nombre.
             acc = pg.locator(".acc")
             self.assertEqual(acc.evaluate("e => getComputedStyle(e).borderLeftWidth"), "1px")

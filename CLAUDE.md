@@ -1091,8 +1091,11 @@ vistas); las otras cinco siguen con el ícono ⚙. Lo que muerde:
   lleva a las ocho y «Las de siempre» vuelve a las cinco. Sin filtro no hay ficha.
   Familia y Subfamilia están SIEMPRE en «Más filtros», como campos (#844).
 - **El nivel 3 de Período tiene las medidas del boceto** (#844): «Más filtros» y la
-  ficha, a 24 px los menús «Agrupar: Semana ▾» sin caja (un `<select>` transparente
-  encima del rótulo) y, detrás de una raya, las acciones: «Cómo se calcula» y los
+  ficha y, detrás de una raya, las acciones. **Desde la #848 Agrupar, Partir por y
+  Contra no están ahí en el Gráfico**: la palabra que decía su valor es el control
+  —«Compra por semana ▾», «Por familia ▾», «contra año pasado ▾»—, índigo con subrayado
+  punteado y un `<select>` transparente encima (`semanal.js::palabra`). En Tabla,
+  Documentos y el celular vuelven al nivel 3 como «Agrupar: Semana ▾». Las acciones: «Cómo se calcula» y los
   íconos de la app (`graficos/iconos.js`) para descargar y ampliar. «Más filtros» son
   cuatro campos plegados, Documento y Montos. Los colores son la escala de controles,
   `--ctl-*` en `estilos/_00_base.py`: gris cambia la forma de ver, lavanda recorta,
