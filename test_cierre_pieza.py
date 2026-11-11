@@ -22,8 +22,8 @@ from graficos.ajuste._productos import filas_productos
 
 ROOT = Path(__file__).parent
 # Como la compone `_cierre.py`: el vocabulario de íconos (#821) antes que la pieza.
-JS = (ROOT / "graficos/iconos.js").read_text(encoding="utf-8") + (ROOT / "graficos/ajuste/cierre.js").read_text(encoding="utf-8")
-CSS = (ROOT / "graficos/iconos.css").read_text(encoding="utf-8") + (ROOT / "graficos/ajuste/cierre.css").read_text(encoding="utf-8")
+JS = (ROOT / "graficos/iconos.js").read_text(encoding="utf-8") + (ROOT / "graficos/mini.js").read_text(encoding="utf-8") + (ROOT / "graficos/ajuste/cierre.js").read_text(encoding="utf-8")
+CSS = (ROOT / "graficos/iconos.css").read_text(encoding="utf-8") + (ROOT / "graficos/mini.css").read_text(encoding="utf-8") + (ROOT / "graficos/ajuste/cierre.css").read_text(encoding="utf-8")
 
 
 def inventario():
@@ -419,13 +419,45 @@ class Navegador(unittest.TestCase):
         root.locator('.ajc-vista summary').click();root.locator('[data-act="lado"][data-v="ambos"]').click()
         self.assertEqual(root.locator('.ajc-cajon .ajc-frase').count(),1)
         self.assertEqual(root.locator('.ajc-pn').count(),0)
-        # «6 cierres» y «Faltó» sólo con su interruptor (#816).
-        self.assertEqual(root.locator('.ajc-lists .ajc-6').count(),0)
-        root.locator('.ajc-vista summary').click();root.locator('[data-act="det6"]').click()
-        self.assertGreater(root.locator('.ajc-lists .ajc-6').count(),0)
-        self.assertGreater(root.locator('.ajc-lists .ajc-rep').count(),0)
-        root.locator('.ajc-vista summary').click();root.locator('[data-act="det6"]').click()
+        # #849: «Barras» y «6 cierres» se prenden desde el panel de los números, apagados
+        # de entrada; «Vista» ya no los trae. Los 6 cierres van en cuadritos entre el
+        # nombre y la cantidad, y la barra mide el ajuste contra el mayor de las dos listas.
+        self.assertEqual(root.locator('.ajc-lists .ajc-6, .ajc-lists .ajc-bar, .ajc-lists .ajc-rep').count(),0)
+        self.assertEqual(root.locator('.ajc-vista [data-act="det6"]').count(),0)
+        root.locator('.ajc-neto').click();caj=root.locator('.ajc-cajon')
+        self.assertEqual(caj.locator('.ajc-enl button[aria-pressed="false"]').count(),2)
+        caj.locator('[data-act="det6"]').click()
+        fila=root.locator('.ajc-col.neg [data-act="prod"]').first
+        self.assertEqual(fila.locator('.ajc-6 .mrs-c').count(),pg.evaluate('__ajCierre.lista.rep.de'))
         self.assertEqual(root.locator('.ajc-lists .ajc-rep').count(),0)
+        x6=fila.locator('.ajc-6').bounding_box()['x']
+        self.assertLess(fila.locator('.ajc-pnom').bounding_box()['x'],x6)
+        self.assertLess(x6,fila.locator('.ajc-pq').bounding_box()['x'])
+        caj.locator('[data-act="barras"]').click()
+        self.assertEqual(caj.locator('.ajc-enl button[aria-pressed="true"]').count(),2)
+        f=pg.evaluate('''(()=>{const X=__ajCierre.lista,r=X.f[0];return [Math.abs(r.val)/X.maxv,
+            Math.max(...X.f.map(r=>Math.abs(r.val)),...X.s.map(r=>Math.abs(r.val)))===X.maxv];})()''')
+        self.assertTrue(f[1])
+        bar=root.locator('.ajc-col.neg .ajc-bar').first
+        self.assertAlmostEqual(float(bar.evaluate('e=>getComputedStyle(e).getPropertyValue("--f")')),f[0],places=3)
+        self.assertGreater(root.locator('.ajc-col.pos .ajc-bar.pos').count(),0)
+        caj.locator('[data-act="barras"]').click();caj.locator('[data-act="det6"]').click()
+        self.assertEqual(root.locator('.ajc-lists .ajc-6, .ajc-lists .ajc-bar').count(),0)
+        # El panel: exactitud del conteo (líneas dentro de ±S/ 5) con su marcador, y los
+        # últimos cierres en cuadritos con la misma regla (40 / 60 %).
+        mc=pg.evaluate('__ajCierre.D.mc')
+        self.assertIn(f"{int(100*mc['tol']/mc['lineas']+0.5)} %",caj.locator('.ajc-exa .ajc-xt b').inner_text())
+        doce=pg.evaluate('''(()=>{const G=__ajCierre,P=G.B.P;return P.sesiones.map((s,i)=>i).filter(i=>P.sesiones[i].tipo==='cierre').slice(-12);})()''')
+        if len(doce)>1:
+            self.assertEqual(caj.locator('.ajc-doce .mrs-c').count(),len(doce))
+            self.assertEqual(caj.locator('.ajc-kd[data-k="falto"] .msp').count(),1)
+            c0=pg.evaluate('__ajCierre.st.c')
+            caj.locator(f'.ajc-doce .mrs-c[data-id="{doce[0]}"]').click()
+            self.assertEqual(pg.evaluate('__ajCierre.st.c'),doce[0])
+            root.locator(f'.ajc-doce .mrs-c[data-id="{c0}"]').click()
+            self.assertEqual(pg.evaluate('__ajCierre.st.c'),c0)
+            self.assertEqual(root.locator('.ajc-doce .mrs-c[aria-current]').get_attribute('data-id'),str(c0))
+        root.locator('.ajc-cajon [data-act="numcerrar"]').click()
         antes=root.locator('.ajc-zona').bounding_box()['width']
         root.locator('.ajc-col.neg [data-act="prod"]').first.click()
         self.assertEqual(root.locator('.ajc-ven .ajc-fn').count(),1)

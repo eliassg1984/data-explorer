@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-848 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+849 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (292)
 
@@ -478,7 +478,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#833** — La ubicación, la distribución y el orden de capas de un insertado son decisiones distintas
 - **#836** — Una pieza completa no equivale a una capa entre sus controles
 
-**Plotly y figuras** (135)
+**Plotly y figuras** (136)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -615,6 +615,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#830** — Las herramientas se apartan sin apilar avisos sobre el contenido
 - **#847** — Gráficos chicos compartidos, traducidos de Tremor: graficos/mini.js + .css
 - **#848** — Período: Agrupar, Partir por y Contra viven donde se ve lo que cambian (opción C)
+- **#849** — Diferencias del cierre: el panel de los números con los gráficos chicos, y Barras y 6 cierres…
 
 **AgGrid y tablas** (99)
 
@@ -1206,7 +1207,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
-**Decisiones de diseño y UX** (280)
+**Decisiones de diseño y UX** (281)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1488,6 +1489,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#843** — En Compras › Período el filtro de familias es una ficha al lado de «Más filtros»; el ⚙ se va…
 - **#845** — Movimientos › Req. y salidas con la opción D: carpetas, indicadores en la banda y «Contar…
 - **#846** — Movimientos sin «Filtros» en la ruta, y la cápsula con la letra del boceto: se compara…
+- **#849** — Diferencias del cierre: el panel de los números con los gráficos chicos, y Barras y 6 cierres…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59602,7 +59604,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - **Se antepone como `iconos.js`**: `mini.js` después de `iconos.js`, `mini.css`
      después de `iconos.css` (el nombre al cursor, `data-tip`, es de ahí). Los clics se
      escuchan por delegación sobre `data-id`.
-   - **Todavía no lo usa ninguna vista.** Ponerlo en una pide su boceto (#844); la
+   - **Desde la #849 lo usa Diferencias del cierre**; otra vista pide su boceto (#844). La
      galería con ejemplos sale de `python test_mini.py --foto galeria.png`.
    - No se tradujo: la paleta y la letra de Tremor (la app tiene las suyas), los
      bloques «Premium» (la página no dice su licencia) ni el selector de fechas
@@ -59630,6 +59632,37 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - `test_compras_periodo.py::test_cabecera_como_el_boceto` vigila las tres palabras,
      su estilo, que cambien lo suyo y la vuelta al nivel 3 en Tabla.
 
+849. **Diferencias del cierre: el panel de los números con los gráficos chicos, y Barras y 6 cierres desde ahí.**
+   Primera vista que usa `graficos/mini.js` (#847), con el boceto aprobado
+   https://claude.ai/artifact/XUrazwCxhZgu8D5N8i2i6E: a pedido, «lo de las barras y lo de
+   los 6 cierres, con algún clic minimalista dentro del panel de números».
+   - **El panel suma cuatro cosas**: la curva de los últimos 12 cierres en Faltó y Sobró,
+     con la cápsula contra el corte de comparación (`st.prev`; en Faltó, verde si faltó
+     menos, porque es pérdida; en Sobró, gris); «Líneas dentro de ±S/ 5» con sus tramos
+     (lo que hasta acá decía sólo el ⓘ de Neto), y los 12 cierres en cuadritos con la
+     misma regla. Los umbrales los eligió el usuario: rojo bajo 40 %, naranja hasta 60 %,
+     verde desde ahí (`cierre.js::CEXA`).
+   - **Las cuentas son las de «Faltó», «Sobró» y «Neto» del panel** (`cdoce`): los filtros
+     de la vista, SIN el foco y SIN la operación, igual que `mc` y que Evolución con el
+     grano «Cierre» (#827). La serie sigue viviendo en Evolución; acá va como forma, sin
+     ejes. Todos los cierres ya viajan en la pieza: no se pide nada a Python.
+   - **La tira de cuadritos muestra los 12 cierres más nuevos**, con el elegido marcado
+     (`aria-current`), y un clic lleva a ese cierre. Si terminara en el elegido, desde un
+     cierre viejo no habría cómo volver al último (lo encontró la prueba). Las curvas sí
+     terminan en el elegido.
+   - **«En las listas: Barras · 6 cierres»**, dos interruptores de texto bajo el título del
+     panel, apagados de entrada y recordados en `localStorage` (`aj_dif_barras`,
+     `aj_dif_6`). Barras pinta el ajuste detrás de cada fila contra el mayor de las DOS
+     listas (`X.maxv`), en rojo y verde tenues como sus totales. 6 cierres va en cuadritos
+     ENTRE el nombre y la cantidad, como el boceto, y reemplaza a las barritas, a la
+     columna «Faltó n de 6» y al ítem de «Vista» (#816): la cuenta queda en el `title`.
+   - Medido contra el boceto a 1323 × 619 (letra, peso, color, texto, centro de cada pieza):
+     los interruptores nacían en 30 px por la regla general `.ajc button{min-height:30px}` y
+     quedaban 8 px arriba; ahora 24 px y al centro del boceto. Distinto a propósito: el
+     panel conserva su ancho de 300 px (el boceto lo dibujó en 326) y la columna Cantidad
+     sus 116 px, así los cuadritos caen 30 px más a la izquierda; el pie de los 12 cierres
+     dice «nov 2025 … oct 2026» y no «nov 25 … oct».
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59642,7 +59675,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#848**; la próxima toma el número siguiente.
+> última regla es la **#849**; la próxima toma el número siguiente.
 
 >
 

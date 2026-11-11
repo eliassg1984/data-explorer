@@ -156,6 +156,24 @@ function cserie(G){const {st,B}=G,P=B.P,clave=JSON.stringify(['serie',st.c,st.fa
   const out={cierres:idx.map(fila),tabla:P.sesiones.map((s,i)=>i).filter(i=>i>=desde&&i<=st.c).reverse().map(fila)};
   B.cache.set(clave,out);return out;
 }
+// #849: los últimos 12 cierres hasta el elegido, con los filtros de la vista y SIN el
+// foco ni la operación, como «Faltó», «Sobró» y «Neto» del panel (`mc`); y esas mismas
+// cifras del corte de comparación (`st.prev`). Las curvas, la cápsula y el rastro.
+function cdoce(G){const {st,B}=G,P=B.P,clave=JSON.stringify(['doce',st.c,st.prev,st.fams,st.areas]);
+  if(B.cache.has(clave))return B.cache.get(clave);
+  const m=i=>cmetricas(cfiltrar(B.cortes[i]||[],st).filter(r=>!B.oper.has(r.fam)),P.hay);
+  const todos=P.sesiones.map((s,i)=>i).filter(i=>P.sesiones[i].tipo==='cierre'),idx=todos.filter(i=>i<=st.c).slice(-12);
+  // La tira de cuadritos muestra los 12 más nuevos (para poder volver a ellos) o, si el
+  // elegido es más viejo, los 12 que terminan en él; las curvas terminan en el elegido.
+  const ven=todos.length-idx.length<12&&idx.length&&todos.indexOf(idx[idx.length-1])>=todos.length-12?todos.slice(-12):idx;
+  const fila=i=>({i,s:P.sesiones[i],c:m(i)});
+  const out={cierres:idx.map(fila),ventana:ven.map(fila),prev:st.prev>=0?{s:P.sesiones[st.prev],c:m(st.prev)}:null};
+  B.cache.set(clave,out);return out;
+}
+const CEXA=[40,60];
+const cexa=c=>c.lineas?100*c.tol/c.lineas:null;
+const cexaEst=v=>v==null?'nada':v<CEXA[0]?'mal':v<CEXA[1]?'ojo':'ok';
+const cmes=s=>String(s?.corto??'').replace(/^cierre\s+/i,'');
 // Cuántos de los últimos 6 cierres faltó cada producto (por nombre) y su neto en cada uno.
 function crepite(G){const {st,B}=G,P=B.P,clave=JSON.stringify(['repite',st.c,st.fams,st.areas,st.fam,st.area]);
   if(B.cache.has(clave))return B.cache.get(clave);
@@ -252,11 +270,17 @@ function cneto(G,D){const {mc}=D,st=G.st,abierto=!!st.numOpen;
 function cnumeros(G,D,nota){const {mc,mo}=D,st=G.st,X=G.lista,cl=X.cls,t=X.tfTodo,rep=X.rep.de,e=cespejos(D.scope);
   const pc=v=>t?`${Math.round(100*v/t)} %`:'—',ab=new Set(st.numAb||[]),ses=G.B.P.sesiones[st.c];
   const det=(k,cls,cab,cuerpo)=>`<details class="${cls}" data-k="${k}"${ab.has(k)?' open':''}><summary>${cab}</summary>${cuerpo}</details>`;
-  const kd=(k,r,v,c,x,ex='')=>det(k,`ajc-kd${k==='neto'?' sel':''}${ex}`,`<span class="ajc-kr">${cesc(r)}</span><b class="${c}">${csol(v)}</b>${icono('info','chico')}`,`<p>${cesc(x)}</p>`);
+  const kd=(k,r,v,c,x,ex='',kx='')=>det(k,`ajc-kd${k==='neto'?' sel':''}${ex}`,`<span class="ajc-kr">${cesc(r)}</span><b class="${c}">${csol(v)}</b>${icono('info','chico')}${kx}`,`<p>${cesc(x)}</p>`);
+  // #849: la curva de los últimos 12 cierres y la cápsula contra el corte de comparación.
+  const Z=cdoce(G),pv=Z.prev,ult=Z.cierres.length>1;
+  const curva=(k,tip)=>ult?miniChispa(Z.cierres.map(r=>Math.abs(r.c[k])),{ultimo:true,tip}):'';
+  const kx=(k,sentido)=>{const ch=curva(k,`${k==='falto'?'Faltó':'Sobró'} en los últimos ${Z.cierres.length} cierres`),
+      dl=pv?miniDelta(Math.abs(mc[k]),Math.abs(pv.c[k]),{sentido,tip:`Contra ${pv.s.corto}: ${csol(pv.c[k])}`}):'';
+    return ch||dl?`<span class="ajc-kx">${ch}${dl}</span>`:'';};
   // «Operación» nombraba dos números distintos: el neto por línea (el de acá) y lo que
   // faltó por producto (el de «Por qué faltó»). Cada uno con su nombre (#821).
-  const nums=kd('falto','Faltó',mc.falto,'neg',D.hayOper?'Alimentos y bebidas, sin los insumos de operación: la suma de las líneas que faltaron.':'La suma de las líneas que faltaron.')
-    +kd('sobro','Sobró',mc.sobro,'pos','Suele ser stock que estaba en negativo en el sistema, no mercadería que apareció.')
+  const nums=kd('falto','Faltó',mc.falto,'neg',D.hayOper?'Alimentos y bebidas, sin los insumos de operación: la suma de las líneas que faltaron.':'La suma de las líneas que faltaron.','',kx('falto','sube-malo'))
+    +kd('sobro','Sobró',mc.sobro,'pos','Suele ser stock que estaba en negativo en el sistema, no mercadería que apareció.','',kx('sobro'))
     +kd('neto','Neto',mc.saldo,cclase(mc.saldo),`Faltó más sobró. Sin compensar (todo en positivo) son ${csol(mc.total)}, y el ${cpct(mc.tol,mc.lineas)} de las líneas quedó dentro de ±S/ 5.`)
     +(D.hayOper?kd('oper','Operación, neto',mo.saldo,'op','Leña, carbón, aceite, limpieza: ninguna receta los descarga, así que su consumo aparece recién al contar. Va aparte.',' ajc-aparte')
       :kd('total','Sin compensar',mc.total,'','Faltó y sobró sumados en positivo: cuánto se movió, sin que lo que sobró tape lo que faltó.'));
@@ -266,11 +290,21 @@ function cnumeros(G,D,nota){const {mc,mo}=D,st=G.st,X=G.lista,cl=X.cls,t=X.tfTod
     +(hay&&cl.oper.n?tipo('t-oper','Faltó en operación',csol(cl.oper.v),`Por producto.${Math.abs(opSob)>.5?` Con lo que sobró en operación (${csol(opSob)}) da el neto de operación de arriba.`:''}`):'')
     +(hay?tipo('t-una','Sólo este cierre',pc(cl.una.v),`${cnn(cl.una.n,'producto')} (${csol(cl.una.v)}) que no faltaron en ninguno de los otros ${Math.max(0,rep-1)} cierres: por ahí conviene empezar.`):'')
     +(e.n?tipo('t-esp','Falta acá y sobra allá',cn(e.n),`Productos que faltan en un área y sobran en otra: ${csol(e.falto)} contra ${csol(e.sobro)}.`):'');
+  // La exactitud del conteo (lo que antes sólo decía el ⓘ de Neto) y los 12 cierres con
+  // la misma regla: rojo bajo 40 %, naranja hasta 60 %, verde desde ahí (#849, a pedido).
+  const ex=cexa(mc),exa=ex==null?'':`<div class="ajc-exa"><div class="ajc-xt"><span>Líneas dentro de ±S/ 5</span><b>${cn(ex)} %</b></div>`
+    +miniTramos([{hasta:CEXA[0],estado:'mal'},{hasta:CEXA[1],estado:'ojo'},{hasta:100,estado:'ok'}],{valor:ex,tipValor:`${cn(mc.tol)} de ${cn(mc.lineas)} líneas con stock`})+'</div>';
+  const doce=Z.ventana.length>1?`<div class="ajc-doce"><div class="ajc-xt"><span>Últimos ${Z.ventana.length} cierres</span><span>exactitud</span></div>`
+    +miniRastro(Z.ventana.map(r=>{const v=cexa(r.c);return {id:r.i,rotulo:cmes(r.s),estado:cexaEst(v),tip:`${r.s.corto}: ${v==null?'sin líneas con stock':`${cn(v)} %`} · neto ${csol(r.c.saldo)}`};}),{pie:true})
+      .replace(`data-id="${st.c}"`,`data-id="${st.c}" aria-current="true"`)+'</div>':'';
+  // Barras y 6 cierres: lo que se suma a las listas, desde acá (#849). Apagados de entrada.
+  const tg=(act,on,ic,t,tip)=>`<button type="button" data-act="${act}" aria-pressed="${on}" data-tip="${cesc(tip)}"><i class="${ic}" aria-hidden="true"></i>${t}</button>`;
+  const enl=`<div class="ajc-enl" role="group" aria-label="Mostrar en las listas"><span>En las listas</span>${tg('barras',!!st.barras,'ajc-ib1','Barras','El ajuste de cada fila, en barra')}${tg('det6',!!st.det6,'ajc-ib2',`${rep} cierres`,`Faltó o sobró en los últimos ${rep} cierres`)}</div>`;
   const fijo=!!st.numFijo;
   const cab=`<div class="ajc-cajon-cab"><b>Números del cierre<small>${cesc(ses?`${ses.corto} · ${ses.etiqueta_anio}`:'')}</small></b>`
     +`<button type="button" class="ib${fijo?' on':''}" data-act="numfijo" aria-pressed="${fijo}" aria-label="Dejar fijo el panel" data-tip="${fijo?'Soltar: vuelve a ir encima de las listas':'Dejarlo fijo: las listas se corren'}" data-tip-der>${icono('fijar')}</button>`
     +`<button type="button" class="ib" data-act="numcerrar" aria-label="Cerrar los números" data-tip="Cerrar" data-tip-der>${icono('cerrar')}</button></div>`;
-  return `<aside class="ajc-cajon${st.numOpen?'':' cerrado'}" id="ajc-cajon" aria-label="Números del cierre">${cab}${nums}`
+  return `<aside class="ajc-cajon${st.numOpen?'':' cerrado'}" id="ajc-cajon" aria-label="Números del cierre">${cab}${st.lado==='tabla'?'':enl}${nums}${exa}${doce}`
     +det('lec','ajc-bl2',`${chev}Lectura del cierre`,`<p class="ajc-frase">${cfrase(G,D)}</p><small class="ajc-kcap-n">${cesc(nota)}</small>`)
     +(tipos?det('por','ajc-bl2',`${chev}Por qué faltó`,tipos):'')+'</aside>';
 }
@@ -281,9 +315,9 @@ function cvista(G,D){const {st}=D,X=G.lista,tabla=st.lado==='tabla';
   const op=(act,v,t,sel,ico)=>`<button type="button" class="ajc-op" role="menuitemradio" aria-checked="${sel}" data-act="${act}" data-v="${cesc(v)}">${ico?icono(ico):`<i>${sel?'✓':''}</i>`}${cesc(t)}</button>`;
   const lados=Object.entries(CLADO).map(([v,[t,ic]])=>op('lado',v,v==='f'?`${t} · ${csol(X.tf)}`:v==='s'?`${t} · ${csol(X.ts)}`:t,st.lado===v,ic)).join('');
   const resto=tabla?`<small class="ajc-cap-t">Agrupar</small>${CAGR.map(([v,t])=>op('cagr',v,t,(st.cagr||'')===v)).join('')}`
-    :`<small class="ajc-cap-t">Orden</small>${op('orden','monto','Por monto',st.orden!=='pareto')}${op('orden','pareto','Pareto',st.orden==='pareto')}<hr><button type="button" class="ajc-op" role="menuitemcheckbox" aria-checked="${!!st.det6}" data-act="det6"><span class="ajc-casilla"></span>Mostrar los últimos ${X.rep.de} cierres</button>`;
+    :`<small class="ajc-cap-t">Orden</small>${op('orden','monto','Por monto',st.orden!=='pareto')}${op('orden','pareto','Pareto',st.orden==='pareto')}`;
   const tip=`Vista: ${CLADO[st.lado][0].toLowerCase()}`+(tabla?(st.cagr?` · ${(CAGR.find(([v])=>v===st.cagr)||['',''])[1].toLowerCase()}`:'')
-    :`${st.orden==='pareto'?' · Pareto':''}${st.det6?` · con ${X.rep.de} cierres`:''}`);
+    :`${st.orden==='pareto'?' · Pareto':''}`);
   return `<details class="ajc-menu ajc-vista"><summary class="ib" aria-label="Vista de la lista" data-tip="${cesc(tip)}" data-tip-der>${icono(CLADO[st.lado][1])}${icono('caret','chico')}</summary><div class="ajc-options" role="menu"><small class="ajc-cap-t">Qué lista</small>${lados}${resto}</div></details>`;
 }
 function cexcel(){
@@ -322,8 +356,12 @@ function cbarritas(h){const mx=Math.max(1,...h.map(v=>Math.abs(v||0)));
   return h.map(v=>{const a=Math.max(v==null?0:1.5,Math.abs(v||0)/mx*10);return `<span class="ajc-b"><i class="${v==null?'':v<-1?'neg':v>1?'pos':'cero'}" style="top:${(v||0)<0?11:11-a}px;height:${a}px"></i></span>`;}).join('');}
 function cfilaprod(G,X,r,l,una){const {st}=G,det=!!st.det6,key=`${l}|${r.prod}`,n=X.rep.n.get(r.prod)||0,pp=X.par&&X.par[l].get(r.prod);
   const qty=r.dif==null?'varias unidades':`${ccant(r.dif)} ${r.um}`,qtyC=r.dif==null?qty:`${ccant(r.dif)} ${cum(r.um)}`;
+  // #849: los 6 cierres en cuadritos (rojo faltó, naranja sobró), entre el nombre y la
+  // cantidad; y la barra del ajuste detrás de la fila, contra el mayor de las dos listas.
+  const seis=det&&!X.par?`<span class="ajc-6">${miniRastro((X.rep.h.get(r.prod)||[]).map((v,j)=>({rotulo:X.rep.nombres[j],estado:v==null?'nada':v<-CTOL?'mal':v>CTOL?'ojo':'nada',tip:`${X.rep.nombres[j]}: ${v==null?'sin registro':csol(v)}`})))}</span>`:'';
+  const bar=st.barras&&X.maxv?`<span class="ajc-bar ${l==='f'?'neg':'pos'}" style="--f:${Math.min(1,Math.abs(r.val)/X.maxv).toFixed(4)}" aria-hidden="true"></span>`:'';
   const medio=X.par?`<span class="ajc-acum" title="El % de este producto sobre el neto de su lado, y el acumulado">${pp?`${cp(pp.pct)} · acum. ${cp(pp.acum)}`:'—'}</span>`:`<span class="ajc-6" title="Los últimos ${X.rep.de} cierres">${cbarritas(X.rep.h.get(r.prod)||[])}</span>`;
-  return `<button type="button" class="ajc-p${st.sel===key?' on':''}" data-act="prod" data-v="${cesc(key)}" aria-pressed="${st.sel===key}" title="${cesc(`${r.cod?r.cod+' · ':''}${r.prod} · ${cnom(r.area)} · ${qty}`)}"><span class="ajc-pc">${r.cod?ccod(r.cod):'—'}</span><span class="ajc-pnom">${cesc(r.prod)}</span>${una?`<span class="ajc-pa">${cesc(cnom(r.area))}</span>`:''}<span class="ajc-pq">${cesc(qtyC)}</span><b>${csol(r.val)}</b>${det||X.par?medio:''}${det?`<span class="ajc-rep${l==='f'&&n>=3?' fuerte':''}">${l==='f'?`${n} de ${X.rep.de}`:''}</span>`:''}</button>`;
+  return `<button type="button" class="ajc-p${st.sel===key?' on':''}" data-act="prod" data-v="${cesc(key)}" aria-pressed="${st.sel===key}" title="${cesc(`${r.cod?r.cod+' · ':''}${r.prod} · ${cnom(r.area)} · ${qty}${n?` · faltó en ${n} de ${X.rep.de} cierres`:''}`)}">${bar}<span class="ajc-pc">${r.cod?ccod(r.cod):'—'}</span><span class="ajc-pnom">${cesc(r.prod)}</span>${una?`<span class="ajc-pa">${cesc(cnom(r.area))}</span>`:''}${seis}<span class="ajc-pq">${cesc(qtyC)}</span><b>${csol(r.val)}</b>${X.par?medio:''}</button>`;
 }
 // «Consolidado» (#808, a pedido): todas las líneas del cierre, producto por área, con
 // sus cantidades y valores, como la tabla de «Detalle docs.» de Compras. Agrupa por
@@ -373,12 +411,14 @@ function clistashtml(G,D){const {st}=D,X=G.lista,{B}=G;
   // #818, con la forma de la tabla de Compras › Período: UN renglón de encabezado (el lado,
   // con su punto de color, en lugar de «Producto»), los montos en tinta normal —el lado ya
   // lo dicen el punto y el «−»— y el total al pie, que es lo único con color.
-  const extra=(l,cab)=>`${st.det6||X.par?`<span class="${X.par?'ajc-acum':'ajc-6'}">${cab?(X.par?'Pareto':`${X.rep.de} cierres`):''}</span>`:''}${st.det6?`<span class="ajc-rep">${cab&&l==='f'?'Faltó':''}</span>`:''}`;
-  const cab=(una,l)=>`<div class="ajc-p cab"><span class="ajc-pc">Código</span><span class="ajc-pnom"><i class="ajc-dot ${l==='f'?'neg':'pos'}"></i>${l==='f'?'Faltantes':'Sobrantes'}</span>${una?'<span class="ajc-pa">Área</span>':''}<span class="ajc-pq">Cantidad</span><b>Ajuste</b>${extra(l,true)}</div>`;
+  const seis=st.det6&&!X.par,extra=(l,cab)=>X.par?`<span class="ajc-acum">${cab?'Pareto':''}</span>`:'';
+  const s6=cab=>seis?`<span class="ajc-6">${cab?`${X.rep.de} cierres`:''}</span>`:'';
+  X.maxv=Math.max(0,...X.f.map(r=>Math.abs(r.val)),...X.s.map(r=>Math.abs(r.val)));
+  const cab=(una,l)=>`<div class="ajc-p cab"><span class="ajc-pc">Código</span><span class="ajc-pnom"><i class="ajc-dot ${l==='f'?'neg':'pos'}"></i>${l==='f'?'Faltantes':'Sobrantes'}</span>${una?'<span class="ajc-pa">Área</span>':''}${s6(true)}<span class="ajc-pq">Cantidad</span><b>Ajuste</b>${extra(l,true)}</div>`;
   const filas=(ps,l,una)=>ps.slice(0,st.limite).map(r=>cfilaprod(G,X,r,l,una)).join('')||'<p class="ajc-pie">Ninguno con estos filtros.</p>';
   // La suma sale de TODAS las filas de la lista, no de las dibujadas (#769), y sigue al
   // buscador y al contador elegido.
-  const pie=(una,l,ps)=>`<div class="ajc-p ajc-ptot"><span class="ajc-ptl">Total · ${cnn(ps.length,'producto')}</span>${una?'<span class="ajc-pa"></span>':''}<span class="ajc-pq"></span><b class="${l==='f'?'neg':'pos'}">${csol(csum(ps,'val'))}</b>${extra(l,false)}</div>`;
+  const pie=(una,l,ps)=>`<div class="ajc-p ajc-ptot"><span class="ajc-ptl">Total · ${cnn(ps.length,'producto')}</span>${una?'<span class="ajc-pa"></span>':''}${s6(false)}<span class="ajc-pq"></span><b class="${l==='f'?'neg':'pos'}">${csol(csum(ps,'val'))}</b>${extra(l,false)}</div>`;
   const col=(l,ps,una,cls)=>`<section class="ajc-col${cls?` ${cls}`:''}"><div class="ajc-scroll">${cab(una,l)}${filas(ps,l,una)}</div><div class="ajc-espacio-total" aria-hidden="true"></div>${pie(una,l,ps)}</section>`;
   const cuerpo=st.lado==='ambos'?col('f',X.f,false,'neg')+col('s',X.s,false,'pos')
     :col(st.lado,st.lado==='s'?X.s:X.f,true,'');
@@ -387,7 +427,7 @@ function clistashtml(G,D){const {st}=D,X=G.lista,{B}=G;
   const a=n80(X.f),b=n80(X.s),comp=cmetricas(D.scope,B.P.hay).falto-X.tfTodo;
   const dF=`Faltantes: ${a.n} de ${a.de} explican el 80 %`,dS=`sobrantes: ${b.n} de ${b.de}`,dC=Math.abs(comp)>.5?` · ${csol(Math.abs(comp))} del faltante se compensó con sobrantes de otra área`:'';
   G.sub=st.lado==='s'?`Sobrantes: ${b.n} de ${b.de} explican el 80 %`:st.lado==='f'?`${dF}${dC}`:`${dF} · ${dS}${dC}`;
-  return `<div class="ajc-zl">${cbarra(G,D)}<div class="ajc-lists ${st.lado==='ambos'?'dos':'una'}${X.par?' pareto':''}${st.det6?'':' sin6'}">${cuerpo}</div></div>`;
+  return `<div class="ajc-zl">${cbarra(G,D)}<div class="ajc-lists ${st.lado==='ambos'?'dos':'una'}${X.par?' pareto':''}${seis?'':' sin6'}${st.barras?' barras':''}">${cuerpo}</div></div>`;
 }
 // ── La ficha del producto, en una ventana (#814) ─────────────────────────
 const CVAC=new Set('con sin para del los las und unid unidad unidades kg kgs kilo kilos grs gramos ml lts litro litros por caja cajas bolsa paquete pqt botella bot frasco sac eirl produccion calientes frios pasteleria parrilla parrillas cocina arroces bar limpio limpia'.split(' '));
@@ -521,6 +561,8 @@ function ccambiarcorte(G,i){const {st}=G,P=G.B.P;if(!(i>=0&&i<P.sesiones.length)
 const cplegar=root=>root.querySelectorAll('details[open]').forEach(d=>{if(!d.closest('.ajc-cajon'))d.open=false;});
 function cenlazar(G){const root=G.root;
   root.addEventListener('click',ev=>{const b=ev.target.closest('[data-act]');
+    // #849: un cuadrito de los 12 cierres del panel lleva a ese cierre.
+    const rc=ev.target.closest('.ajc-doce .mrs-c[data-id]');if(rc){ccambiarcorte(G,+rc.dataset.id);cpintar(G);return;}
     if(!ev.target.closest('details'))cplegar(root);
     if(!b||!root.contains(b))return;const {act,v}=b.dataset,st=G.st;
     if(act==='vf'){st.vf=v;st.limite=150;if(v!=='cruce')st.medida='val';}
@@ -542,6 +584,7 @@ function cenlazar(G){const root=G.root;
     else if(act==='numeros')st.numOpen=!st.numOpen;
     else if(act==='numcerrar')st.numOpen=false;
     else if(act==='numfijo'){st.numFijo=!st.numFijo;try{localStorage.setItem('aj_dif_fijo',st.numFijo?'1':'0');}catch(e){/* sólo esta vez */}}
+    else if(act==='barras'){st.barras=!st.barras;try{localStorage.setItem('aj_dif_barras',st.barras?'1':'0');}catch(e){/* sólo esta vez */}}
     else if(act==='det6'){st.det6=!st.det6;try{localStorage.setItem('aj_dif_6',st.det6?'1':'0');}catch(e){/* sólo esta vez */}}
     else if(act==='quitar'){st.q='';st.limite=150;}
     else if(act==='quitarq'){st.q='';st.limite=150;}
@@ -575,6 +618,7 @@ export default function(component){const {data:P,parentElement,setTriggerValue}=
   const mismo=old?.B.P.sello===P.sello,st=mismo&&old.st&&'lado' in old.st?old.st:cinicial(P);
   if(!ctabs.some(([t])=>t===st.tab))st.tab='listas';
   if(st.det6===undefined){try{st.det6=localStorage.getItem('aj_dif_6')==='1';}catch(e){st.det6=false;}}
+  if(st.barras===undefined){try{st.barras=localStorage.getItem('aj_dif_barras')==='1';}catch(e){st.barras=false;}}
   if(old&&old.semilla!==P.perspectiva){st.vf=P.perspectiva==='Familia × Área'?'cruce':'lista';if(st.vf==='cruce')st.tab='familias';}
   let root=parentElement.querySelector('.ajc');if(root)root.remove();root=document.createElement('div');root.className='ajc';root.innerHTML='<section class="ajc-main"></section>';parentElement.appendChild(root);
   const B=mismo?old.B:cleer(P);B.oper=new Set(P.operacion||[]);

@@ -86,7 +86,7 @@ python test_navegacion_retorno.py && python test_movil.py
 `test_mini.py` vigila los gráficos chicos compartidos (`graficos/mini.js` y
 `.css`, traducidos de Tremor, Apache 2.0): barras de ranking, rastro de
 cierres, tramos con meta, chispas y la cápsula de variación, en Chromium.
-Gris salvo que se diga qué es bueno. Ninguna vista los usa aún. Regla #847.
+Gris salvo que se diga qué es bueno. Los usa Diferencias del cierre (#849). Regla #847.
 
 `test_navegacion_retorno.py` cubre la vuelta contextual entre reportes y
 pestañas: filtros, fechas, cadena y ubicación dentro de tablas. Regla #742.
@@ -1541,6 +1541,12 @@ del producto, y lo demás en pestañas. Lo que muerde:
   por período, los parciales a pedido y la operación aparte, como acá). Así el neto de un
   cierre es el mismo en las dos vistas; si se toca la operación en una, se toca en la
   otra. La Tabla dinámica sigue con «Corte» (`GRANOS`).
+- **El panel de los números lleva los gráficos chicos** (#849, `graficos/mini.js`): curvas
+  de 12 cierres y cápsula en Faltó y Sobró, «Líneas dentro de ±S/ 5» con tramos 40 / 60 %
+  y los 12 cierres en cuadritos (un clic va al cierre). Con la cuenta de `mc` y de
+  Evolución: sin foco y sin operación (`cdoce`). Y «En las listas: Barras · 6 cierres»
+  prende en las listas la barra del ajuste y los 6 cierres en cuadritos; apagados de
+  entrada, ya no están en «Vista».
 
 ## Movimientos: «Contar por», calendario y Sin plato con Destino adentro
 
