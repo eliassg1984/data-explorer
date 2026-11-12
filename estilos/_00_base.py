@@ -42,6 +42,10 @@ CSS = """    <style>
         --ctl-contorno: #8b87a3;
         --ctl-texto-2: #5e5e68;
         --ctl-linea: #e3e0ee;
+        /* Borde de un control que cambia la forma de ver (Agrupar, Contra, Partir
+           por): un tono más suave que el contorno, que queda para lo que filtra.
+           1,5 sobre blanco (regla #856). */
+        --ctl-borde-suave: #d4d0e2;
         /* Sombra de lo que se despliega ENCIMA del contenido (el árbol
            asomado, regla #472): hacia la derecha, porque es de ese lado
            donde tapa. */

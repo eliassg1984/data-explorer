@@ -183,6 +183,9 @@ function delAl(dias) {
   if (ya === yb) return `Del ${da} ${MES[ma - 1]} al ${db} ${MES[mb - 1]} ${yb}`;
   return `Del ${da} ${MES[ma - 1]} ${ya} al ${db} ${MES[mb - 1]} ${yb}`;
 }
+// El título de una zona, corto (#856): «13 oct – 11 nov 2026». Lo que explica cómo
+// leerla va al cursor (`tip`), no al renglón.
+const corto = (t) => t.replace(/\bDel (\d+ \S+) al (\d+ \S+ \d{4})\b/, '$1 – $2').replace(/\bDel (\d+ \S+ \d{4}) al (\d+ \S+ \d{4})\b/, '$1 – $2').replace(/^El (\d+ \S+ \d{4})/, '$1');
 
 // ── Los datos ────────────────────────────────────────────────────────────
 function leer(data) {
@@ -840,7 +843,7 @@ function resumenTotal(F, V, st) {
   const total = { periodo: `Total · ${num(n, 0)} ${UNIDAD[gran][n === 1 ? 0 : 1]}`, valor: `S/ ${num(totVista, 2)}`, parte: '100%',
     docs: num(suma(V.ndocs, (x) => x), 0), lineas: num(suma(V.nlin, (x) => x), 0), ...totFam };
   if (conNc) total.nc = `−S/ ${num(V.ncTot, 2)}`;
-  return { html: tabla('per', cols, filas, total, st, { cls: 'per' }), pie: `<b>${delAl(V.dd.map((l) => l.d))}</b> · agrupado por ${AGRUPADO[gran]} — una fila por barra, en el orden del eje; un clic en una fila abre sus documentos.`,
+  return { html: tabla('per', cols, filas, total, st, { cls: 'per' }), pie: `<b>${corto(delAl(V.dd.map((l) => l.d)))}</b> · por ${AGRUPADO[gran]}`, tip: 'Una fila por barra, en el orden del eje. Un clic en una fila abre sus documentos.',
     cols, filas };
 }
 
@@ -861,7 +864,7 @@ function resumenProveedores(F, V, st) {
   const total = { prov: `Total · ${num(rows.length, 0)} ${rows.length === 1 ? 'proveedor' : 'proveedores'}`, valor: `S/ ${num(suma(rows, (a) => a.valor), 2)}`,
     parte: '100%', docs: num(suma(rows, (a) => a.docs.size), 0), items: num(new Set(V.dd.map((l) => l.prod)).size, 0) };
   return { html: tabla('provs', cols, filas, total, st, { orden: { col: 'valor', dir: -1 }, cls: 'provs' }),
-    pie: `<b>${delAl(V.dd.map((l) => l.d))}</b> · una fila por proveedor — un clic en uno abre sus documentos en Detalle.`, cols, filas };
+    pie: `<b>${corto(delAl(V.dd.map((l) => l.d)))}</b> · por proveedor`, tip: 'Una fila por proveedor. Un clic en uno abre sus documentos.', cols, filas };
 }
 
 // `igv_de_linea`: «18 %», «exonerado», «guía» u otra tasa.
@@ -931,7 +934,7 @@ function detalle(F, V, st) {
   const totL = { prod: `Total · ${lin.length} línea${lin.length === 1 ? '' : 's'}`, valor: `S/ ${num(suma(lin, (l) => l.neto), 2)}` };
   return { html: `<div class="det">${tabla('docs', colsD, filasD, totD, st, { cls: 'docs' })}</div>`,
   panel: dSel ? `<div class="pn-cab"><b title="${esc(F.provN[dSel.prov] || '')}">${esc(F.provN[dSel.prov] || F.provs[dSel.prov])}</b><button class="quita" data-acc="doc" data-v="">‹ Volver</button></div><p class="pn-sub">${esc(marca(dSel) + (dSel.doc || 'sin número'))} · ${dmy(dSel.fecha)} · ${esc(s2(dSel.neto))}</p><div class="pn-tabla">${tabla('lin', colsL, filasL, totL, st, { orden: { col: 'valor', dir: -1 }, cls: 'lin' })}</div>` : '',
-  pie: `<b>${esc(nombre.replace(/<[^>]+>/g, ''))}</b> · ${num(docs.length, 0)} documentos · un clic en uno abre sus líneas al costado.`, colsD, filasD, colsL, filasL };
+  pie: `<b>${esc(corto(nombre.replace(/<[^>]+>/g, '')))}</b> · ${num(docs.length, 0)} documentos`, tip: 'Un clic en un documento abre sus líneas al costado.', colsD, filasD, colsL, filasL };
 }
 
 // ── Los filtros de la cabecera: menús, sin ocupar filas ─────────────────
@@ -1181,11 +1184,11 @@ function pintar() {
   } else if (st.zona === 'tabla') {
     const z = st.modo === 'Resumen del Período' ? resumenProveedores(F, V, st) : resumenTotal(F, V, st);
     G.zona = z;
-    izq = `<div class="tit"><div class="seg chico">${[['Resumen Total', 'Por período'], ['Resumen del Período', 'Por proveedor']].map(([k, t]) => `<button class="${k === st.modo ? 'on' : ''}" data-acc="modo" data-v="${k}">${t}</button>`).join('')}</div><span class="cap">${z.pie}</span>${ampliar(st, 'izq', 'la tabla')}</div><div class="zona">${z.html}</div>`;
+    izq = `<div class="tit"><div class="seg chico">${[['Resumen Total', 'Por período'], ['Resumen del Período', 'Por proveedor']].map(([k, t]) => `<button class="${k === st.modo ? 'on' : ''}" data-acc="modo" data-v="${k}">${t}</button>`).join('')}</div><span class="cap" title="${esc(z.tip || '')}">${z.pie}</span><span class="esp"></span>${ampliar(st, 'izq', 'la tabla')}</div><div class="zona">${z.html}</div>`;
   } else {
     const z = detalle(F, V, st);
     G.zona = z;
-    izq = `<div class="tit"><span class="cap">${z.pie}</span>${quitar}${st.docProd != null ? `<button class="quita" data-acc="quita-prod" title="Volver a todos los documentos">${esc(F.prods[st.docProd])} ✕</button>` : ''}<span class="esp"></span>${ampliar(st, 'izq', 'los documentos')}</div><div class="zona">${z.html}</div>`;
+    izq = `<div class="tit"><span class="cap" title="${esc(z.tip || '')}">${z.pie}</span>${quitar}${st.docProd != null ? `<button class="quita" data-acc="quita-prod" title="Volver a todos los documentos">${esc(F.prods[st.docProd])} ✕</button>` : ''}<span class="esp"></span>${ampliar(st, 'izq', 'los documentos')}</div><div class="zona">${z.html}</div>`;
     if (z.panel) panel = z.panel;
   }
   html += `<div class="cuerpo" data-amp="${st.amp || ''}"><div class="izq">${izq}</div><aside class="panel" aria-label="Lo que hay adentro">${panel}</aside></div>`;

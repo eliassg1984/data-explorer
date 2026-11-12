@@ -630,13 +630,28 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             self.assertEqual(pg.locator(".panel > .pn-cab .amp-b").get_attribute("aria-label"), "Ampliar la lista")
             self.assertAlmostEqual(caja(".tit .amp-b")["y"], caja(".panel > .pn-cab .amp-b")["y"], delta=1)
             self.assertAlmostEqual(caja(".tit .amp-b")["x"] + 32, caja(".tit")["x"] + caja(".tit")["width"], delta=1)
+            # #856 (forma B): la separación es una raya de 4 px, de borde a borde, y el
+            # divisor entre el gráfico y el panel es igual de grueso y del mismo color.
             linea = pg.locator(".cab").evaluate("e => { const a = getComputedStyle(e, '::after'); return [a.height, a.backgroundColor, a.content]; }")
-            self.assertEqual(linea[0], "1px")
+            self.assertEqual(linea[0], "4px")
             self.assertNotEqual(linea[2], "none")
+            divisor = pg.locator(".panel").evaluate("e => { const a = getComputedStyle(e, '::before'); return [a.width, a.backgroundColor]; }")
+            self.assertEqual(divisor, ["4px", linea[1]])
             self.assertGreater(caja(".tit")["y"], caja(".cab")["y"] + caja(".cab")["height"])
+            # Los selectores cambian la forma de ver: borde suave; «Más filtros» el fuerte.
+            # (el arnés no trae la escala de controles de `_00_base.py`: se la pone acá)
+            pg.evaluate("document.documentElement.style.cssText += ';--ctl-contorno:#8b87a3;--ctl-borde-suave:#d4d0e2'")
+            bordes = [pg.locator(s).first.evaluate("e => getComputedStyle(e).borderTopColor") for s in (".men .caja", ".ms-b")]
+            self.assertNotEqual(bordes[0], bordes[1])
             for t in ("graf", "tabla", "docs"):
                 pg.locator(f'[data-acc="zona"][data-v="{t}"]').first.click()
                 self.assertEqual(pg.locator(".tit .amp-b").count(), 1, t)
+                # La ⤢ al borde de su zona, también con el título corto.
+                self.assertAlmostEqual(caja(".tit .amp-b")["x"] + 32, caja(".tit")["x"] + caja(".tit")["width"], delta=1)
+                if t != "graf":
+                    cap = pg.locator(".tit .cap").first
+                    self.assertNotIn("un clic", cap.inner_text())
+                    self.assertIn("clic", cap.get_attribute("title"))
             pg.locator('[data-acc="zona"][data-v="graf"]').first.click()
             # «Cómo se calcula» abre su explicación desde el ícono.
             pg.locator('.acc [data-acc="como"]').click()

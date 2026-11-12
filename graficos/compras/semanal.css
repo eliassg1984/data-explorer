@@ -540,3 +540,23 @@ button.fi:hover { background: var(--bg-hover); }
   .pr.prod:hover b::after { content: ' →'; color: var(--accent-deep); }
   .pr.prod:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 }
+
+/* #856 (boceto https://claude.ai/artifact/9EGR91Txe7MfNDErzZ4tzn, forma B, y
+   https://claude.ai/artifact/3sxoWYtyec1WdSunwkLJxM, «borde suave»):
+   - Una raya de 4 px del lavanda del fondo separa la configuración (pestañas y
+     controles) del contenido, de borde a borde de la hoja; el divisor entre el
+     gráfico y el panel es igual de grueso. Quedan dos hojas, cada una con su
+     título arriba. La línea fina sigue entre pestañas y controles: mismo grupo.
+   - Agrupar, Contra y Partir por con un borde suave: cambian la forma de ver, no
+     filtran. «Más filtros» y la ficha conservan lo suyo. */
+@media (min-width: 901px) {
+  .cab::after { left: -18px; right: -18px; bottom: -8px; height: 4px; background: var(--marco-fondo, var(--rail-fondo)); }
+  .panel { position: relative; border-left-color: transparent; }
+  .panel::before { content: ''; position: absolute; left: -3px; top: 0; bottom: calc(-1 * var(--cp-pie-hoja, 16px)); width: 4px;
+    background: var(--marco-fondo, var(--rail-fondo)); pointer-events: none; }
+  .cuerpo[data-amp="panel"] .panel::before { display: none; }
+  .men .caja { border-color: var(--ctl-borde-suave, var(--border)); }
+  .men .caja i { color: var(--ctl-contorno, var(--text-secondary)); }
+  /* La ⤢ a 8 px de lo que tenga al lado (la leyenda), como en el boceto. */
+  .tit .amp-b { margin-left: 0; }
+}

@@ -1113,7 +1113,11 @@ vistas); las otras cinco siguen con el ícono ⚙. Lo que muerde:
   app (`graficos/iconos.js`): ⓘ «Cómo se calcula» y descargar. **Desde la #854** cada ⤢ va
   al final del título de su zona, una línea separa los controles del contenido, todo lo que
   tiene caja mide 32 px con 13 px, y la ficha de lo elegido abre sus documentos con un ícono
-  junto a «Soltar» —y cada producto, los suyos (`st.docProd`)—. «Más filtros» son
+  junto a «Soltar» —y cada producto, los suyos (`st.docProd`)—. **Desde la #856** la
+  separación entre configuración y contenido es una raya de 4 px del lavanda del fondo, y
+  el divisor gráfico | panel es igual (fino dentro de un grupo, grueso entre grupos); los
+  tres selectores llevan `--ctl-borde-suave`, y los títulos de zona son cortos, con la
+  explicación al cursor. «Más filtros» son
   cuatro campos plegados, Documento y Montos. Los colores son la escala de controles,
   `--ctl-*` en `estilos/_00_base.py`: gris cambia la forma de ver, lavanda recorta,
   contorno es un campo. Hoy la usa sólo esta vista.

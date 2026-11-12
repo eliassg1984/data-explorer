@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-855 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+856 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (295)
+**CSS y estilos** (296)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -362,6 +362,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#850** — Los costados de la hoja: 8 px más a la izquierda y 16 a la derecha, en toda la app
 - **#851** — La franja es la barra de la app, con las vistas a la vista; Período, con sus controles juntos
 - **#854** — Período ordenado: 20 px bajo la barra, una ⤢ por zona, la línea bajo los controles, cajas…
+- **#856** — Período: una raya gruesa entre la configuración y el contenido, el divisor igual, selectores…
 
 **Layout y alturas** (115)
 
@@ -59868,6 +59869,34 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      elegidos en cero, los pedidos de una celda contra pandas, el pedido entero, su Excel, Esc y
      el pie. Las cinco medidas no entraban a 390 px: en el celular la botonera se parte.
 
+856. **Período: una raya gruesa entre la configuración y el contenido, el divisor igual, selectores con borde suave y títulos cortos.**
+   A pedido, sobre una captura de Tabla con los indicadores abiertos («no se ve cargado? no
+   debería tener más separación?») y dos dibujos del usuario: primero una banda, después
+   «líneas más gruesas». Bocetos: https://claude.ai/artifact/9EGR91Txe7MfNDErzZ4tzn (forma B)
+   y https://claude.ai/artifact/3sxoWYtyec1WdSunwkLJxM («32 px, selectores con borde suave»).
+   - **La línea de la #854 no se veía**: `--ctl-linea` da 1,3:1 sobre blanco. Ahora es una
+     **raya de 4 px del lavanda del fondo** (`--marco-fondo`), de borde a borde de la hoja,
+     entre los controles y el contenido: el lavanda grueso se lee como el espacio entre
+     hojas, el mismo idioma que separa la hoja de la barra.
+   - **Una raya, no dos.** El usuario dibujó dos, encerrando el renglón de los títulos; la
+     de abajo separaba «Compra por semana» y «Por familia» de lo que titulan. Y **el divisor
+     entre el gráfico y el panel es igual** (`.panel::before`, hasta el pie de la hoja): dos
+     hojas, cada una con su título arriba. La línea fina bajo las pestañas queda: pestañas y
+     controles son el mismo grupo. Fino dentro de un grupo, grueso entre grupos.
+   - **Agrupar, Contra y Partir por con borde suave** (`--ctl-borde-suave`, 1,5:1, nuevo en
+     `_00_base.py`): cambian la forma de ver, no filtran; «Más filtros» conserva el
+     contorno. Se descartaron bajar todo a 28 px (sería una tercera altura fuera de la escala
+     24/32) y sin borde hasta el cursor (no se adivina que son controles).
+   - **Los títulos de Tabla y Documentos son cortos** (`semanal.js::corto`): «13 oct – 11 nov
+     2026 · por semana». Lo que explica cómo leerlos («un clic en una fila abre sus
+     documentos») va al cursor (`tip`). Con el título corto apareció un error de la #854: la
+     ⤢ de Tabla quedaba pegada al texto; va al borde (`.esp`).
+   - **Comparada con el boceto, píxel por píxel**: Gráfico, idéntico; Tabla, igual salvo el
+     borde suave de los selectores, que el boceto de la forma B no tenía.
+   - `test_compras_periodo.py` cubre la raya y el divisor de 4 px y el mismo color, el borde
+     suave distinto del de «Más filtros», la ⤢ al borde en las tres zonas y el título sin
+     «un clic» con la explicación en su `title`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59880,7 +59909,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#855**; la próxima toma el número siguiente.
+> última regla es la **#856**; la próxima toma el número siguiente.
 
 >
 
