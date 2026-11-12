@@ -111,4 +111,10 @@
 .msp .ms-vt-scroll tfoot{position:sticky;bottom:0;z-index:3;}
 .msp .ms-vt-scroll tfoot td{font-weight:650;background:var(--accent-tint);border-top:1px solid var(--border-lavender);border-bottom:0;}
 .msp .ms-vt-scroll tbody tr:hover td{background:var(--accent-tint);}
+/* #853: casilla para elegir filas, Grupo y Subgrupo como columnas de texto. */
+.msp .ms-vt-nom{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.msp .ms-vt-nom input{margin:0;flex:none;accent-color:var(--accent);cursor:pointer;}
+.msp .ms-vt-scroll th.ms-vt-txt,.msp .ms-vt-scroll td.ms-vt-txt{text-align:left;min-width:110px;max-width:170px;white-space:normal;color:var(--text-secondary);font-size:12px;}
+.msp .ms-vt-scroll tr.ms-vt-sel td.ms-sticky{box-shadow:inset 3px 0 var(--accent);}
+.msp .ms-vt-eleg{display:inline-flex;align-items:center;gap:4px;}
 @media(max-width:900px){.msp .ms-vt{height:auto;}.msp .ms-vt .ms-toolbar input[type=search]{width:100%;}.msp .ms-vt-scroll th.ms-sticky,.msp .ms-vt-scroll td.ms-sticky{min-width:130px;max-width:160px;}}

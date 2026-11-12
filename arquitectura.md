@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-852 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+853 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (294)
 
@@ -1210,7 +1210,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
-**Decisiones de diseño y UX** (283)
+**Decisiones de diseño y UX** (284)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1495,6 +1495,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#849** — Diferencias del cierre: el panel de los números con los gráficos chicos, y Barras y 6 cierres…
 - **#851** — La franja es la barra de la app, con las vistas a la vista; Período, con sus controles juntos
 - **#852** — Ventas › Meseros: «Venta por mesero», lo vendido por grupo, subgrupo o plato × mesero, con su…
+- **#853** — Venta por mesero: Grupo y Subgrupo como columnas, «Precio unitario» y filas elegidas a mano
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59772,6 +59773,23 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      levantado después de los cambios. Ante «no aparece lo que acabo de escribir», mirar quién
      escucha el puerto (`Get-NetTCPConnection -LocalPort 8503`) antes de sospechar del código.
 
+853. **Venta por mesero: Grupo y Subgrupo como columnas, «Precio unitario» y filas elegidas a mano.**
+   A pedido, sobre la tarjeta de la #852: ver el grupo y el subgrupo, el precio unitario de cada
+   plato y «elegir sólo ciertos productos, digamos 10».
+   - **Grupo y Subgrupo son columnas** (con Plato, las dos; con Subgrupo, Grupo), que ordenan
+     como el nombre. Se fue el renglón chico «Alimentos › Fondos» debajo del plato. Junto al
+     filtro de grupo, uno de **subgrupo** cuyas opciones siguen al grupo (cambiar el grupo lo
+     vuelve a «Todos»).
+   - **«Precio unitario» es una medida más**: venta ÷ unidades de cada celda, lo cobrado en
+     promedio con descuentos (no el precio de carta). Sin unidades, «·». El pie dice «Promedio»:
+     es la venta ÷ las unidades de lo visible, no una suma.
+   - **Elegir filas**: una casilla por fila (y la de la cabecera marca todo lo visible), sin
+     tope. «Solo elegidas (n)» deja sólo esas y borra la búsqueda, así se arma la lista buscando
+     de a uno; «✕» las suelta. Se guardan por NOMBRE y por corte (`st.vsel[dim]`), así
+     sobreviven a otra fecha. El total, el Excel y su «Contexto» siguen a lo visible.
+   - `test_meseros_pieza.py` compara el precio unitario con pandas y recorre en Chromium el
+     subgrupo, las columnas, elegir buscando, «Solo elegidas», su total, su Excel y el remontaje.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59784,7 +59802,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#852**; la próxima toma el número siguiente.
+> última regla es la **#853**; la próxima toma el número siguiente.
 
 >
 

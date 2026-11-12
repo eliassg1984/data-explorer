@@ -290,6 +290,55 @@ class Navegador(unittest.TestCase):
         cena=vm.del_turno(self.items,'Cena')['venta'].sum()
         self.assertAlmostEqual(num(),cena,delta=.51)
 
+    def test_venta_por_mesero_precio_subgrupo_y_elegidas(self):
+        # #853: precio unitario contra pandas, filtro de subgrupo, columnas de
+        # grupo y subgrupo, y «Solo elegidas» con su total y su Excel.
+        it=self.items
+        ref=it.groupby(['prod','mesero'],as_index=False).agg(u=('cant','sum'),v=('venta','sum'))
+        out=self.pg.evaluate("""([P])=>{const B=__mesCalc.leer(P),st={...__mesUI.inicial(),vdim:'Plato'},C=__mesCalc.cruce(B,st);
+          return C.filas.flatMap(f=>[...f.cel].map(([ms,x])=>({fila:f.label,ms:P.meseros[ms],pu:__mesCalc.valor('Precio unitario',x)})))}""",[self.P])
+        idx={(a,b):(u,v) for a,b,u,v in ref[['prod','mesero','u','v']].itertuples(index=False,name=None)}
+        for o in out:
+            u,v=idx[(o['fila'],o['ms'])]
+            if u>0:self.assertAlmostEqual(o['pu'],v/u,places=6)
+            else:self.assertIsNone(o['pu'])
+        self.mount();pg=self.pg;card=pg.locator('.ms-vt')
+        card.locator('[data-acc="vdim"][data-v="Plato"]').click()
+        cab=[t.strip(' ▲▼') for t in card.locator('thead th').all_inner_texts()]
+        self.assertEqual(cab[:3],['Plato','Grupo','Subgrupo'])
+        # Subgrupo: las opciones siguen al grupo, y filtra.
+        s=self.P['subs'].index('Aguas')
+        card.locator('[data-acc="vsub"]').select_option(str(s))
+        esperados=sorted(it.loc[it['sub']=='Aguas','prod'].unique())
+        self.assertEqual(sorted(pg.evaluate('__vtMes.C.filas.map(f=>f.label)')),esperados)
+        card.locator('[data-acc="vsub"]').select_option('-1')
+        # Elegir dos platos desde la búsqueda y ver sólo esos.
+        elegidos=['Agua','Plato']
+        for n in elegidos:
+            card.locator('[data-acc="vbuscar"]').fill(n.lower())
+            card.locator(f'[data-acc="vsel"][data-v="{n}"]').check()
+        card.locator('[data-acc="vsolo"]').click()
+        self.assertEqual(pg.evaluate('__vtMes.st.vq'),'')
+        self.assertEqual(sorted(card.locator('tbody b').all_inner_texts()),elegidos)
+        total=it.loc[it['prod'].isin(elegidos),'venta'].sum()
+        self.assertAlmostEqual(float(card.locator('tfoot td').last.inner_text().replace(',','')),total,delta=.51)
+        card.locator('[data-acc="vmed"][data-v="Precio unitario"]').click()
+        u=it.loc[it['prod'].isin(elegidos),'cant'].sum()
+        self.assertAlmostEqual(float(card.locator('tfoot td').last.inner_text().replace(',','')),total/u,delta=.006)
+        with pg.expect_download() as dl:card.locator('[data-acc="excelventa"]').click()
+        with tempfile.TemporaryDirectory() as temp:
+            p=Path(temp)/'venta.xlsx';dl.value.save_as(str(p))
+            with zipfile.ZipFile(p) as z:
+                ns={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                det=ET.fromstring(z.read('xl/worksheets/sheet2.xml'))
+                ventas=[float(c.find('s:v',ns).text) for c in det.iter('{%s}c'%ns['s']) if c.attrib['r'].startswith('F') and c.find('s:v',ns) is not None]
+                self.assertAlmostEqual(sum(ventas),total,places=1)
+        # Las elegidas son por nombre: sobreviven a otra fecha (remontaje).
+        pg.evaluate('P=>__montarMes({data:{...P,sello:"otro"},parentElement:document.querySelector("#montar")})',self.P)
+        self.assertEqual(sorted(card.locator('tbody b').all_inner_texts()),elegidos)
+        card.locator('[data-acc="vlimpiar"]').click()
+        self.assertEqual(card.locator('tbody tr').count(),it['prod'].nunique())
+
     def test_excel_de_ajuste_deja_sin_base_el_porcentaje(self):
         self.mount();pg=self.pg;root=pg.locator('.msp')
         root.locator('tr[data-acc="mesero"]').filter(has_text='Ana').click()
