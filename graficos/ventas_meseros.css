@@ -162,4 +162,14 @@
 .msp .ms-ped-cols tr.on td{color:var(--accent);font-weight:650;}
 .msp .ms-tandas{list-style:none;margin:0;padding:0;font-size:12px;display:flex;flex-direction:column;gap:4px;}
 .msp .ms-tandas b{display:inline-block;min-width:44px;}
+/* #858: el nombre del mesero abre sus pedidos; la flecha de al lado ordena. «Platos». */
+.msp .ms-vt-cab{display:inline-flex;align-items:center;gap:2px;justify-content:center;}
+.msp .ms-vt-scroll th .ms-vt-abre{border:0;background:transparent;padding:2px 4px;border-radius:4px;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;}
+.msp .ms-vt-scroll th .ms-vt-abre:hover,.msp .ms-vt-scroll th .ms-vt-abre.on{background:var(--bg-card);text-decoration:underline;}
+.msp .ms-vt-scroll th .ms-vt-flecha{border:0;background:transparent;padding:2px 3px;min-width:0;color:var(--text-secondary);font-size:11px;cursor:pointer;}
+.msp .ms-vt-scroll th .ms-vt-flecha.on{color:var(--accent);}
+.msp .ms-vt-det .ms-toolbar input[type=search]{margin-left:auto;min-width:220px;}
+.msp .ms-vt-platos tbody tr{cursor:pointer;}
+.msp .ms-vt-platos tbody tr.par td{background:var(--accent-tint);}
+.msp .ms-vt-platos tbody tr:hover td{outline:1px solid var(--border-lavender);outline-offset:-1px;}
 @media(max-width:900px){.msp .ms-vt{height:auto;}.msp .ms-vt .ms-seg{flex-wrap:wrap;flex-shrink:1;}.msp .ms-vt .ms-seg button{border-right:1px solid var(--border);border-radius:6px;margin:0 2px 2px 0;}.msp .ms-vt-det,.msp .ms-vt-det.ancho{position:fixed;inset:auto 0 0 0;top:15vh;width:auto;border-radius:12px 12px 0 0;}.msp .ms-ped-cajas,.msp .ms-ped-cols{grid-template-columns:1fr;}.msp .ms-tl{flex-wrap:wrap;}.msp .ms-tl li{flex:1 0 33%;}.msp .ms-vt .ms-toolbar input[type=search]{width:100%;}.msp .ms-vt-scroll th.ms-sticky,.msp .ms-vt-scroll td.ms-sticky{min-width:130px;max-width:160px;}}

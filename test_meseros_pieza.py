@@ -510,6 +510,50 @@ class Navegador(unittest.TestCase):
         det.locator('tbody tr[data-acc="vdetped"]').first.click()
         self.assertIn('Empresa SAC',det.locator('.ms-ped').inner_text())
 
+    def test_mesero_hacia_abajo_y_platos(self):
+        # #858: el nombre del mesero abre todos sus pedidos (la flecha ordena) y «Platos»
+        # trae una fila por plato vendido, con su hora, y su hoja en el Excel.
+        self.mount();pg=self.pg;card=pg.locator('.ms-vt');it=self.items
+        ana=self.P['meseros'].index('Ana')
+        card.locator(f'.ms-vt-abre[data-v="{ana}~t"]').click()
+        suyo=it[it['mesero']=='Ana']
+        self.assertEqual(pg.evaluate('__vtMes.D.lista.length'),suyo['ped'].nunique())
+        self.assertAlmostEqual(pg.evaluate('__vtMes.D.v'),suyo['venta'].sum(),places=4)
+        self.assertIsNone(pg.evaluate('__vtMes.st.vorden==="%d"?1:null'%ana))  # abrir no ordena
+        det=card.locator('.ms-vt-det')
+        det.locator('[data-acc="vdetvista"][data-v="Platos"]').click()
+        filas=det.locator('table.ms-vt-platos tbody tr')
+        self.assertEqual(filas.count(),len(suyo))
+        L=pg.evaluate('__vtMes.L.map(x=>({plato:__vtMes.B.P.prods[x.r.prod],v:x.r.venta,hora:x.hora,ped:x.p.ped}))')
+        self.assertAlmostEqual(sum(x['v'] for x in L),suyo['venta'].sum(),places=4)
+        # Todas con hora (el paloteo de mentira marca los dos platos 115 min antes del cobro).
+        self.assertTrue(all(x['hora'] is not None for x in L))
+        # Las líneas de un pedido van juntas.
+        vistos=[];[vistos.append(x['ped']) for x in L if not vistos or vistos[-1]!=x['ped']]
+        self.assertEqual(len(vistos),len(set(vistos)))
+        # Buscar escribiendo, sin perder el foco.
+        det.locator('[data-acc="vdetq"]').press_sequentially('agu')
+        self.assertEqual(pg.evaluate('document.activeElement.dataset?.acc||document.activeElement.shadowRoot?.activeElement?.dataset.acc'),'vdetq')
+        self.assertEqual(det.locator('table.ms-vt-platos tbody tr').count(),int((suyo['prod']=='Agua').sum()))
+        with pg.expect_download() as dl:det.locator('[data-acc="excelped"]').click()
+        with tempfile.TemporaryDirectory() as temp:
+            p=Path(temp)/'platos.xlsx';dl.value.save_as(str(p))
+            with zipfile.ZipFile(p) as z:
+                wb=z.read('xl/workbook.xml').decode();self.assertIn('Platos',wb)
+                ns={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                hojas=[n for n in z.namelist() if n.startswith('xl/worksheets/sheet')]
+                hoja=ET.fromstring(z.read(sorted(hojas,key=lambda n:int(n[19:-4]))[4]))
+                self.assertEqual(len(hoja.findall('.//s:row',ns))-1,int((suyo['prod']=='Agua').sum()))
+        # Una fila lleva a la ficha de su pedido, en la Tabla.
+        det.locator('table.ms-vt-platos tbody tr').first.click()
+        self.assertEqual(pg.evaluate('__vtMes.st.vdetVista'),'Tabla')
+        self.assertEqual(det.locator('.ms-ped').count(),1)
+        # La flecha sigue ordenando la columna.
+        pg.keyboard.press('Escape')
+        card.locator(f'.ms-vt-flecha[data-v="{ana}"]').click()
+        self.assertEqual(pg.evaluate('__vtMes.st.vorden'),str(ana))
+        self.assertEqual(card.locator('.ms-vt-det').count(),0)
+
     def test_excel_de_ajuste_deja_sin_base_el_porcentaje(self):
         self.mount();pg=self.pg;root=pg.locator('.msp')
         root.locator('tr[data-acc="mesero"]').filter(has_text='Ana').click()

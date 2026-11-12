@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-857 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+858 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (296)
 
@@ -1216,7 +1216,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
-**Decisiones de diseño y UX** (285)
+**Decisiones de diseño y UX** (286)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1503,6 +1503,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#852** — Ventas › Meseros: «Venta por mesero», lo vendido por grupo, subgrupo o plato × mesero, con su…
 - **#853** — Venta por mesero: Grupo y Subgrupo como columnas, «Precio unitario» y filas elegidas a mano
 - **#855** — Venta por mesero como la planilla de la semana: Und | S/, secciones, platos sin venta y los…
+- **#858** — Del mesero hacia abajo: su nombre abre sus pedidos, y «Platos» los trae línea por línea
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59935,6 +59936,28 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      cuatro, el cliente), sin los dos parquets, y en Chromium la Tabla, su orden, la ficha, el
      cliente de una empresa sin nombre y su Excel.
 
+858. **Del mesero hacia abajo: su nombre abre sus pedidos, y «Platos» los trae línea por línea.**
+   A pedido: «la vista de tabla es desde el enfoque del plato del mesero; si deseo verlo desde un
+   enfoque de mesero hacia abajo, cómo sería».
+   - **El nombre de un mesero en la cabecera abre TODOS sus pedidos** (y «Total», todos), con
+     los filtros de la tarjeta: es la celda `id~t` de la #855, que antes sólo se alcanzaba por
+     el total de abajo. Ordenar pasa a la flecha ▲▼/↕ de al lado (`.ms-vt-flecha`, la misma
+     acción `vorden`). El título del panel dice «Pedidos de …» y, si hay un filtro de grupo,
+     subgrupo, búsqueda o elegidas, «con los filtros de la tabla».
+   - **El panel tiene una tercera forma, «Platos»** (`mdetallePlatos`, `mlineasPlatos`): una
+     fila por línea vendida de la celda —mesero → pedido → plato— con fecha, la hora en que se
+     marcó, mesa, comprobante, plato, grupo, unidades, S/, precio, cliente y pago. De entrada
+     por fecha, con las líneas de un pedido juntas y rayadas de a pedido; se ordena, se busca
+     (plato, mesa, cliente, comprobante) y dibuja de a 300 («Ver 300 más»); el Excel suma la hoja
+     «Platos» con todas. Un clic en una fila abre la ficha de su pedido en la Tabla.
+   - **La hora de cada línea sale del paloteo por nombre** (`mhorasLineas`): el mismo plato dos
+     veces toma sus horas en orden, y un plato con opciones («… (CON Papas)») cae en su nombre
+     base. Lo que el paloteo no trae (aguas, extras sin receta) queda en «—»: noviembre de 2026,
+     704 de 764 líneas de un mesero con hora.
+   - `test_meseros_pieza.py`: el nombre abre los pedidos de ese mesero (cuántos y cuánto, contra
+     pandas) sin ordenar, «Platos» trae sus líneas con hora y juntas por pedido, la búsqueda sin
+     perder el foco, la hoja del Excel, la fila que lleva a la ficha y la flecha que ordena.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59947,7 +59970,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#857**; la próxima toma el número siguiente.
+> última regla es la **#858**; la próxima toma el número siguiente.
 
 >
 

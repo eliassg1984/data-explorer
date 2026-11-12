@@ -140,7 +140,7 @@ function mhistoria(B,st){
 }
 window.__mesCalc={cliente:fi=>mcliente(fi),pedidosDe:(B,st,C,vis)=>mpedidos(B,st,C,vis),leer:mleer,resumen:mresumen,pozo:mpozo,planilla:mplanilla,distribucion:mdistribucion,vendido:mvendido,cruce:mcruce,valor:mvalor,visibles:mvisibles,equipo:mequipo,scope:mscope,historia:mhistoria};
 
-function minicial(){return {turno:'Todo el día',modo:'Por mesero',ms:null,q:'',vdim:'Grupo',vmed:'Unidades y venta',vgrupo:-1,vsub:-1,vsel:{},vsolo:false,vsin:false,vsec:true,vdet:null,vdetPed:null,vdetVista:'Lista',vdetOrden:'f',vdetDir:-1,vq:'',vorden:'t',vdir:-1,orden:'propina',dir:-1,mas:false,tab:'Propinas',filtro:'Todos',celda:null,weekday:null,pedido:null,limite:150,mapa:'Por mesa',ayuda:false};}
+function minicial(){return {turno:'Todo el día',modo:'Por mesero',ms:null,q:'',vdim:'Grupo',vmed:'Unidades y venta',vgrupo:-1,vsub:-1,vsel:{},vsolo:false,vsin:false,vsec:true,vdet:null,vdetPed:null,vdetVista:'Lista',vdetOrden:'f',vdetDir:-1,vdetOrdenL:'f',vdetDirL:-1,vdetq:'',vdetLim:300,vq:'',vorden:'t',vdir:-1,orden:'propina',dir:-1,mas:false,tab:'Propinas',filtro:'Todos',celda:null,weekday:null,pedido:null,limite:150,mapa:'Por mesa',ayuda:false};}
 const mboton=(a,v,t,on=false,tip='')=>`<button type="button" data-acc="${a}" data-v="${mesc(v)}" class="${on?'on':''}" aria-pressed="${on}" title="${mesc(tip)}">${mesc(t)}</button>`;
 // ⤢ amplía la lista o la ficha a todo el ancho; ↙ o Esc vuelven (#788, como Recetas).
 const mamp=(st,cual)=>{const on=st.amp===cual;return `<button type="button" class="ms-amp" data-acc="amp" data-v="${cual}" aria-pressed="${on}" title="${on?'Volver a las dos columnas (Esc)':'Ampliar '+(cual==='lista'?'la lista':'la ficha')+' a todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${on?'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6':'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg></button>`;};
@@ -153,7 +153,7 @@ function mpintar(G){
   if(st.ms==null||st.ms!==-1&&!T.R.some(r=>r.id===st.ms))st.ms=T.rank[0]?.id??-1;
   G.S=mscope(B,T,st);G.plan=mplanilla(T.z,st.modo);
   const oldScroll=root.querySelector('.ms-pay-scroll'),left=oldScroll?.scrollLeft||0,vOld=root.querySelector('.ms-vt-scroll'),vPos=[vOld?.scrollLeft||0,vOld?.scrollTop||0];
-  const focus=root.getRootNode().activeElement,search=focus?.matches?.('[data-acc="buscar"],[data-acc="vbuscar"]')?focus.dataset.acc:null,cursor=search?focus.selectionStart:0;
+  const focus=root.getRootNode().activeElement,search=focus?.matches?.('[data-acc="buscar"],[data-acc="vbuscar"],[data-acc="vdetq"]')?focus.dataset.acc:null,cursor=search?focus.selectionStart:0;
   const t=T.t,t0=T.t0,pct=mdiv(t.propina,t.venta),vp=B.P.hay_anterior?mvar(t.propina,t0.propina):null;
   const corte=B.P.corte_ms!=null&&B.P.corte_ms<20*3600e3?` · último día hasta ${String(Math.floor(B.P.corte_ms/3600e3)).padStart(2,'0')}:${String(Math.floor(B.P.corte_ms/60000)%60).padStart(2,'0')}`:'';
   const sin=T.R.find(r=>r.id===B.P.sin_mesero);
@@ -259,8 +259,8 @@ function mpedidos(B,st,C,vis){
     if(!C.pasa(r)||!keys.has(C.clave(r))||(ms!=='t'&&r.ms!==+ms))continue;
     if(!m.has(r.ped)){const p=B.porPed.get(r.ped),fi=mfichaDe(B,r.ped);
       m.set(r.ped,{ped:r.ped,f:r.f,ms:r.ms,hora:p?.hora??null,doc:p?B.P.docs[p.doc]:'',pax:p?.personas??null,total:p?.venta??null,fi,
-        dur:mmin(fi?.apertura,fi?.comprobante),propina:p?.propina??null,u:0,v:0,lineas:0});}
-    const a=m.get(r.ped);a.u+=r.cant;a.v+=r.venta;a.lineas++;
+        dur:mmin(fi?.apertura,fi?.comprobante),propina:p?.propina??null,u:0,v:0,lineas:0,items:[]});}
+    const a=m.get(r.ped);a.u+=r.cant;a.v+=r.venta;a.lineas++;a.items.push(r);
   }
   const lista=[...m.values()];
   // Orden de la tabla (#856): por la columna elegida; de entrada, el más nuevo arriba.
@@ -268,7 +268,8 @@ function mpedidos(B,st,C,vis){
   const num={f:p=>p.fi?.apertura??((p.f-mdia(B.P.base))*1440+(p.hora??0)/60000),ap:p=>p.fi?.apertura,pri:p=>p.fi?.primer,ult:p=>p.fi?.ultimo,pre:p=>p.fi?.precuenta,comp:p=>p.fi?.comprobante,
     dur:p=>p.dur,pax:p=>p.fi?.adultos??p.pax,u:p=>p.u,v:p=>p.v,total:p=>p.total,prop:p=>p.propina}[o]||(p=>p.f);
   lista.sort((a,b)=>txt?txt(a).localeCompare(txt(b),'es',{numeric:true})*d||b.f-a.f:((num(a)??-Infinity)-(num(b)??-Infinity))*d||b.ped-a.ped);
-  const nombre=fila==='t'?'Todo lo visible':fila.startsWith('s:')?fila.slice(2).split('|').reverse().join(' · '):(vis.find(f=>f.k===fila.slice(2))?.label??C.filas.find(f=>f.k===fila.slice(2))?.label??'');
+  const filtrado=vis.length<C.filas.length||(st.vgrupo??-1)>=0||(st.vsub??-1)>=0;
+  const nombre=fila==='t'?(ms==='t'?'Todos los pedidos':`Pedidos de ${B.P.meseros[+ms]}`)+(filtrado?' · con los filtros de la tabla':''):fila.startsWith('s:')?fila.slice(2).split('|').reverse().join(' · '):(vis.find(f=>f.k===fila.slice(2))?.label??C.filas.find(f=>f.k===fila.slice(2))?.label??'');
   return {ms,fila,nombre,mesero:ms==='t'?'Todos los meseros':B.P.meseros[+ms],lista,u:msum(lista,'u'),v:msum(lista,'v')};
 }
 const mhora=ms=>ms==null?'—':`${String(Math.floor(ms/3600e3)).padStart(2,'0')}:${String(Math.floor(ms/60000)%60).padStart(2,'0')}`;
@@ -295,10 +296,60 @@ function mfichaPedido(G,p,keys,conMs){
   return `<div class="ms-ped">${linea}<div class="ms-ped-cajas">${mesa}<div>${docs}</div><div>${pagos}</div></div>
     <div class="ms-ped-cols"><section><h4>Lo cobrado</h4>${cobrado}</section><section><h4>Cómo se fue pidiendo</h4>${pedido}</section></div></div>`;
 }
+// La hora en que se marcó cada línea (#858): del paloteo del pedido, por nombre; el
+// mismo plato dos veces toma las horas en orden, y un combo con opciones («Lomo
+// (CON Papas)») cae en su nombre base. Sin coincidencia, null.
+function mhorasLineas(B,p){
+  const pool=new Map();for(const [n,m] of p.fi?.platos||[]){const k=mnorm(n);if(!pool.has(k))pool.set(k,[]);pool.get(k).push(m);}
+  const tomar=n=>{const k=mnorm(n);let xs=pool.get(k);
+    if(!xs)for(const [kk,v] of pool)if(kk.startsWith(k+'(')||kk.startsWith(k+' (')){xs=v;break;}
+    return xs&&xs.length?(xs.length>1?xs.shift():xs[0]):null;};
+  return new Map(p.items.map(r=>[r,tomar(B.P.prods[r.prod])]));
+}
+// «Platos» (#858): una fila por línea vendida de la celda —mesero → pedido → plato—,
+// con la hora en que se marcó, el cliente y el pago del pedido.
+function mlineasPlatos(B,st,D){
+  const out=[];
+  for(const p of D.lista){const hs=mhorasLineas(B,p);
+    for(const r of p.items)out.push({p,r,hora:hs.get(r),plato:B.P.prods[r.prod],grupo:mgnom(B,r.grupo),sub:msnom(B,r.sub),
+      cli:mcliente(p.fi),pago:mpago(p.fi),mesa:p.fi?.mesa||'',doc:p.doc||B.P.pedidos[p.ped],ms:B.P.meseros[r.ms]});}
+  const q=mnorm(st.vdetq);
+  const vs=q?out.filter(x=>[x.plato,x.mesa,x.cli,x.doc,x.ms,x.grupo,x.sub].some(t=>mnorm(t).includes(q))):out;
+  const o=st.vdetOrdenL||'f',d=st.vdetDirL??-1;
+  const txt={plato:'plato',mesa:'mesa',doc:'doc',ms:'ms',cli:'cli',pago:'pago',grupo:'grupo'}[o];
+  const num={f:x=>x.p.fi?.apertura??((x.p.f-mdia(B.P.base))*1440+(x.p.hora??0)/60000),u:x=>x.r.cant,v:x=>x.r.venta,pu:x=>x.r.cant?x.r.venta/x.r.cant:null}[o]||(x=>x.p.f);
+  // De entrada, por fecha: las líneas de un pedido quedan juntas, en el orden en que se marcaron.
+  vs.sort((a,b)=>(txt?a[txt].localeCompare(b[txt],'es',{numeric:true})*d:((num(a)??-Infinity)-(num(b)??-Infinity))*d)
+    ||(a.p.ped-b.p.ped)||((a.hora??0)-(b.hora??0)));
+  return vs;
+}
+function mdetallePlatos(G,und,conMs){
+  const {B,st,D}=G,L=mlineasPlatos(B,st,D);G.L=L;
+  const lim=st.vdetLim||300,fl=k=>(st.vdetOrdenL||'f')===k?(st.vdetDirL===1?' ▲':' ▼'):'';
+  const th=(k,t,n)=>`<th class="${n?'ms-num':''}">${mboton('vdetordenl',k,t+fl(k),(st.vdetOrdenL||'f')===k,'Ordenar')}</th>`;
+  const cols=[['f','Fecha'],['hora','Hora',0,1],['mesa','Mesa'],['doc','Comprobante'],...(conMs?[['ms','Mesero']]:[]),['plato','Plato'],['grupo','Grupo'],
+    ['u','Und',1],['v','S/',1],['pu','P. unit.',1],['cli','Cliente'],['pago','Pago']];
+  let ant=null,par=false;
+  const filas=L.slice(0,lim).map(x=>{if(x.p.ped!==ant){par=!par;ant=x.p.ped;}
+    return `<tr class="${par?'par':''}" data-acc="vdetirped" data-v="${x.p.ped}" tabindex="0" title="Ver la ficha del pedido">${cols.map(([k,,n])=>{const v=
+      k==='f'?mdm(x.p.f):k==='hora'?mreloj(B,x.hora,x.p.f):k==='u'?und(x.r.cant):k==='v'?mnum(x.r.venta,2):k==='pu'?(x.r.cant?mnum(x.r.venta/x.r.cant,2):'—')
+      :mesc(k==='grupo'?`${x.grupo} › ${x.sub}`:x[k]||'—');
+      return `<td class="${n?'ms-num':''}">${v}</td>`;}).join('')}</tr>`;}).join('');
+  const u=L.reduce((s,x)=>s+x.r.cant,0),v=L.reduce((s,x)=>s+x.r.venta,0),peds=new Set(L.map(x=>x.p.ped)).size;
+  return `<aside class="ms-vt-det ancho" role="dialog" aria-label="Platos de la celda"><div class="ms-head"><h3>${mesc(D.nombre)}</h3>${msegmento('vdetvista',['Lista','Tabla','Platos'],'Platos')}${mboton('excelped','','Excel')}${mboton('vdetcerrar','','✕',false,'Cerrar (Esc)')}</div>
+    <div class="ms-caption">${mesc(D.mesero)} · ${mesc(st.turno)} · ${B.P.rango.map(s=>mfecha(mdia(s))).join('–')}</div>
+    <div class="ms-toolbar"><span class="ms-vt-det-sum"><b>${L.length}</b> líneas · <b>${und(u)}</b> und · <b>S/ ${mnum(v,2)}</b> · ${peds} pedido${peds===1?'':'s'}</span>
+      <input type="search" data-acc="vdetq" aria-label="Buscar en los platos" placeholder="Buscar plato, mesa, cliente…" value="${mesc(st.vdetq||'')}"></div>
+    ${L.length?`<div class="ms-scroll ms-vt-det-scroll"><table class="ms-vt-platos"><thead><tr>${cols.map(([k,t,n,sin])=>sin?`<th>${t}</th>`:th(k,t,n)).join('')}</tr></thead><tbody>${filas}</tbody></table>
+      ${L.length>lim?`<div class="ms-caption">${mboton('vdetmas','',`Ver ${Math.min(300,L.length-lim)} más`)} · se muestran ${lim} de ${L.length}; el Excel trae todas.</div>`:''}</div>
+    <div class="ms-caption">Una fila por plato vendido de esta celda, juntas las de un mismo pedido. «Hora» es cuando el mesero lo marcó. Un clic en una fila abre la ficha del pedido.</div>`
+    :`<p class="ms-empty">${st.vdetq?'Nada coincide con la búsqueda.':'Sin platos: esta celda no tuvo venta con estos filtros.'}</p>`}</aside>`;
+}
 function mdetalle(G){
   const {B,st}=G,D=G.D;if(!D)return '';
   const und=v=>mnum(v,Math.abs(v-Math.round(v))<1e-6?0:2);
   const conMs=D.ms==='t',keys=mfilasDe(D.fila,G.Cvis||[]),tabla=st.vdetVista==='Tabla';
+  if(st.vdetVista==='Platos')return mdetallePlatos(G,und,conMs);
   const fl=k=>(st.vdetOrden||'f')===k?(st.vdetDir===1?' ▲':' ▼'):'';
   const th=(k,t,cls='')=>`<th class="${cls}">${mboton('vdetorden',k,t+fl(k),(st.vdetOrden||'f')===k,'Ordenar')}</th>`;
   const cols=tabla?[['f','Fecha'],['mesa','Mesa'],...(conMs?[['ms','Mesero']]:[]),['pax','Adultos','n'],['ap','Apertura'],['pri','1er plato'],['ult','Último plato'],['pre','Precuenta'],['comp','Comprobante'],['dur','Duración','n'],['doc','N° comprobante'],['cli','Cliente'],['pago','Pago'],['prop','Propina','n'],['u','Und','n'],['v','S/','n'],['total','Total pedido','n']]
@@ -311,7 +362,7 @@ function mdetalle(G){
     case 'prop':return p.propina?mnum(p.propina,2):'·';case 'u':return und(p.u);case 'v':return mnum(p.v,2);case 'total':return p.total!=null?mnum(p.total,2):'—';case 'pu':return p.u>0?mnum(p.v/p.u,2):'—';}};
   const filas=D.lista.map(p=>{const abierto=st.vdetPed===p.ped;
     return `<tr data-acc="vdetped" data-v="${p.ped}" tabindex="0" class="${abierto?'on':''}" title="Ver la ficha del pedido">${cols.map(([k,,n])=>`<td class="${n?'ms-num':''}">${celda(k,p)}</td>`).join('')}</tr>${abierto?`<tr class="ms-vt-det-lin"><td colspan="${cols.length}">${mfichaPedido(G,p,keys,conMs)}</td></tr>`:''}`;}).join('');
-  return `<aside class="ms-vt-det${tabla||D.lista.some(p=>p.ped===st.vdetPed)?' ancho':''}" role="dialog" aria-label="Pedidos de la celda"><div class="ms-head"><h3>${mesc(D.nombre)}</h3>${msegmento('vdetvista',['Lista','Tabla'],tabla?'Tabla':'Lista')}${mboton('excelped','','Excel')}${mboton('vdetcerrar','','✕',false,'Cerrar (Esc)')}</div>
+  return `<aside class="ms-vt-det${tabla||D.lista.some(p=>p.ped===st.vdetPed)?' ancho':''}" role="dialog" aria-label="Pedidos de la celda"><div class="ms-head"><h3>${mesc(D.nombre)}</h3>${msegmento('vdetvista',['Lista','Tabla','Platos'],tabla?'Tabla':'Lista')}${mboton('excelped','','Excel')}${mboton('vdetcerrar','','✕',false,'Cerrar (Esc)')}</div>
     <div class="ms-caption">${mesc(D.mesero)} · ${mesc(st.turno)} · ${B.P.rango.map(s=>mfecha(mdia(s))).join('–')}</div>
     <div class="ms-vt-det-sum"><b>${und(D.u)}</b> und · <b>S/ ${mnum(D.v,2)}</b> · ${D.lista.length} pedido${D.lista.length===1?'':'s'}${D.u>0?` · S/ ${mnum(D.v/D.u,2)} c/u`:''}</div>
     ${D.lista.length?`<div class="ms-scroll ms-vt-det-scroll"><table><thead><tr>${cols.map(([k,t,n])=>k==='pu'?`<th class="ms-num">${t}</th>`:th(k,t,n?'ms-num':'')).join('')}</tr></thead><tbody>${filas}</tbody></table></div>
@@ -337,10 +388,14 @@ function mventa(G){
   const flecha=k=>String(st.vorden)===String(k)?(st.vdir===1?' ▲':' ▼'):'';
   const rs=both?' rowspan="2"':'',cs=both?' colspan="2"':'';
   const th=(k,t,tip,cls='',span='')=>`<th class="${cls}"${span}>${mboton('vorden',k,t+flecha(k),String(st.vorden)===String(k),tip)}</th>`;
+  // #858: el nombre de un mesero (o «Total») abre TODOS sus pedidos con los filtros de la
+  // tarjeta; ordenar pasa a la flecha de al lado.
+  const thMs=(k,t,cls,span)=>{const on=String(st.vorden)===String(k),ms=k==='t'?'t':k;
+    return `<th class="${cls}"${span}><span class="ms-vt-cab"><button type="button" class="ms-vt-abre${st.vdet===`${ms}~t`?' on':''}" data-acc="vcel" data-v="${ms}~t" title="${k==='t'?'Ver todos los pedidos':`Ver los pedidos de ${mesc(t)}`}">${mesc(t)}</button><button type="button" class="ms-vt-flecha${on?' on':''}" data-acc="vorden" data-v="${k}" aria-pressed="${on}" title="Ordenar por ${k==='t'?'el total':mesc(t)}">${on?(st.vdir===1?'▲':'▼'):'↕'}</button></span></th>`;};
   const grupos=[...new Set(B.items.map(r=>r.grupo))].sort((a,b)=>mgnom(B,a).localeCompare(mgnom(B,b),'es'));
   const g=st.vgrupo??-1,subs=[...new Set(B.items.filter(r=>g<0||r.grupo===g).map(r=>r.sub))].sort((a,b)=>msnom(B,a).localeCompare(msnom(B,b),'es'));
   const marca=`<input type="checkbox" data-acc="vselvis" aria-label="Elegir todo lo visible" title="Elegir todo lo visible"${todasVis?' checked':''}>`;
-  const head=`<tr><th class="ms-sticky"${rs}><span class="ms-vt-nom">${marca}${mboton('vorden','nombre',dim+flecha('nombre'),st.vorden==='nombre','Ordenar por nombre')}</span></th>${extra.map(([k,t])=>th(k,t,`Ordenar por ${t.toLowerCase()}`,'ms-vt-txt',rs)).join('')}${cols.map(id=>th(id,B.P.meseros[id],`Ordenar por ${B.P.meseros[id]}${both?' (venta)':''}`,`ms-vt-ms${colOn(id)}`,cs)).join('')}${th('t','Total','Ordenar por el total','ms-vt-tot ms-vt-ms',cs)}</tr>`
+  const head=`<tr><th class="ms-sticky"${rs}><span class="ms-vt-nom">${marca}${mboton('vorden','nombre',dim+flecha('nombre'),st.vorden==='nombre','Ordenar por nombre')}</span></th>${extra.map(([k,t])=>th(k,t,`Ordenar por ${t.toLowerCase()}`,'ms-vt-txt',rs)).join('')}${cols.map(id=>thMs(id,B.P.meseros[id],`ms-vt-ms${colOn(id)}`,cs)).join('')}${thMs('t','Total','ms-vt-tot ms-vt-ms',cs)}</tr>`
     +(both?`<tr class="ms-vt-sub">${cols.map(id=>`<th class="ms-vt-u${colOn(id)}">Und</th><th class="${colOn(id).trim()}">S/</th>`).join('')}<th class="ms-vt-u ms-vt-tot">Und</th><th class="ms-vt-tot">S/</th></tr>`:'');
   const fila=f=>`<tr class="${sel.has(f.nom)?'ms-vt-sel':''}${f.u||f.cel.size?'':' ms-vt-cero'}"><td class="ms-sticky"><label class="ms-vt-nom"><input type="checkbox" data-acc="vsel" data-v="${mesc(f.nom)}" aria-label="Elegir ${mesc(f.label)}"${sel.has(f.nom)?' checked':''}><b>${mesc(f.label)}</b></label></td>${extra.map(([,,c])=>`<td class="ms-vt-txt">${mesc(f[c])}</td>`).join('')}${cols.map(id=>celdas(f.cel.get(id),C.col.get(id),id,'k:'+f.k,colOn(id),`${B.P.meseros[id]} · ${f.label}`)).join('')}${celdas(f,C.tot,'t','k:'+f.k,' ms-vt-tot',`Todos · ${f.label}`)}</tr>`;
   // Secciones por subgrupo, como una planilla: la banda lleva el subtotal.
@@ -396,6 +451,9 @@ function mexcelPedidos(G){
     {nombre:'Lo cobrado',cabeza:['Fecha','Comprobante','Mesa','Mesero','Plato','Grupo','Subgrupo','Unidades','Venta'],filas:lineas},
     {nombre:'Cómo se pidió',cabeza:['Fecha','Comprobante','Mesa','Hora','Plato','Cantidad'],filas:marcado},
     {nombre:'Pagos',cabeza:['Fecha','Comprobante','Forma','Tarjeta u otro','Monto','Propina','Cajero','Hora'],filas:pagos},
+    // #858: lo de «Platos», todas las líneas de la celda (con la búsqueda del panel), no sólo las dibujadas.
+    {nombre:'Platos',cabeza:['Fecha','Hora','Mesa','Comprobante','Mesero','Plato','Grupo','Subgrupo','Unidades','Venta','Precio unitario','Cliente','Pago'],
+      filas:mlineasPlatos(B,st,D).map(x=>[mfecha(x.p.f),t(x.hora,x.p),x.mesa||null,x.doc,x.ms,x.plato,x.grupo,x.sub,x.r.cant,x.r.venta,x.r.cant?x.r.venta/x.r.cant:null,x.cli,x.pago])},
     {nombre:'Contexto',cabeza:['Dato','Valor'],filas:[['Celda',D.nombre],['Mesero',D.mesero],['Turno',st.turno],['Desde',B.P.rango[0]],['Hasta',B.P.rango[1]],['Unidades',D.u],['Venta',D.v],['Tiempos','Hora de Lima; mesa y tiempos de pedidos.parquet, la hora de cada plato del paloteo']]}]));
 }
 function msvg(G){
@@ -441,10 +499,14 @@ function menlazar(G){
     else if(acc==='vdim'){st.vdim=v;st.vq='';st.vdet=null;st.vdetPed=null;}
     else if(acc==='vmed')st.vmed=v;
     else if(acc==='vorden'){st.vdir=st.vorden===v?-st.vdir:(['nombre','grupo','subg'].includes(v)?1:-1);st.vorden=v;}
-    else if(acc==='vcel'){st.vdet=st.vdet===v?null:v;st.vdetPed=null;}
+    else if(acc==='vcel'){st.vdet=st.vdet===v?null:v;st.vdetPed=null;st.vdetq='';st.vdetLim=300;}
     else if(acc==='vdetcerrar'){st.vdet=null;st.vdetPed=null;}
     else if(acc==='vdetped')st.vdetPed=st.vdetPed===+v?null:+v;
-    else if(acc==='vdetvista')st.vdetVista=v;
+    else if(acc==='vdetvista'){st.vdetVista=v;st.vdetLim=300;}
+    else if(acc==='vdetordenl'){st.vdetDirL=(st.vdetOrdenL||'f')===v?-(st.vdetDirL??-1):(['plato','mesa','doc','ms','cli','pago','grupo'].includes(v)?1:-1);st.vdetOrdenL=v;}
+    else if(acc==='vdetmas')st.vdetLim=(st.vdetLim||300)+300;
+    // Desde «Platos», una fila lleva a la ficha de su pedido, en la Tabla.
+    else if(acc==='vdetirped'){st.vdetVista='Tabla';st.vdetPed=+v;}
     else if(acc==='vdetorden'){st.vdetDir=(st.vdetOrden||'f')===v?-(st.vdetDir??-1):(['mesa','ms','cli','pago','doc'].includes(v)?1:-1);st.vdetOrden=v;}
     else if(acc==='excelped'){mexcelPedidos(G);return;}
     else if(acc==='vsec')st.vsec=!msecciones(st);
@@ -457,7 +519,7 @@ function menlazar(G){
   });
   // Esc en el document: el redibujo se lleva el botón que tenía el foco.
   document.addEventListener('keydown',ev=>{if(ev.key!=='Escape'||!root.isConnected)return;if(st.vdet){st.vdet=null;st.vdetPed=null;mpintar(G);}else if(st.amp){st.amp=null;mpintar(G);}});
-  root.addEventListener('input',ev=>{const a=ev.target.dataset.acc;if(a==='buscar'){st.q=ev.target.value;mpintar(G);}else if(a==='vbuscar'){st.vq=ev.target.value;mpintar(G);}});
+  root.addEventListener('input',ev=>{const a=ev.target.dataset.acc;if(a==='buscar'){st.q=ev.target.value;mpintar(G);}else if(a==='vbuscar'){st.vq=ev.target.value;mpintar(G);}else if(a==='vdetq'){st.vdetq=ev.target.value;st.vdetLim=300;mpintar(G);}});
   root.addEventListener('change',ev=>{const a=ev.target.dataset.acc;if(a==='filtro'){st.filtro=ev.target.value;st.pedido=null;st.limite=150;mpintar(G);}else if(a==='vgrupo'){st.vgrupo=+ev.target.value;st.vsub=-1;mpintar(G);}else if(a==='vsub'){st.vsub=+ev.target.value;mpintar(G);}
     // Elegir filas: por nombre y por corte (Grupo, Subgrupo o Plato), sin tope.
     else if(a==='vsel'||a==='vselvis'){const s=melegidas(st),noms=a==='vsel'?[ev.target.dataset.v]:(G.Cvis||[]).map(f=>f.nom);
