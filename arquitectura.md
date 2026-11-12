@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-849 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+850 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (292)
+**CSS y estilos** (293)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -359,6 +359,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#845** — Movimientos › Req. y salidas con la opción D: carpetas, indicadores en la banda y «Contar…
 - **#847** — Gráficos chicos compartidos, traducidos de Tremor: graficos/mini.js + .css
 - **#848** — Período: Agrupar, Partir por y Contra viven donde se ve lo que cambian (opción C)
+- **#850** — Los costados de la hoja: 8 px más a la izquierda y 16 a la derecha, en toda la app
 
 **Layout y alturas** (115)
 
@@ -59663,6 +59664,32 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      sus 116 px, así los cuadritos caen 30 px más a la izquierda; el pie de los 12 cierres
      dice «nov 2025 … oct 2026» y no «nov 25 … oct».
 
+850. **Los costados de la hoja: 8 px más a la izquierda y 16 a la derecha, en toda la app.**
+   A pedido, con una captura de Compras › Período: «los bordes laterales de las tarjetas
+   están muy al borde». Boceto sobre fotos de la app:
+   https://claude.ai/artifact/GJg6RzAE6guZHhVrxddnji.
+   - **No era el ancho, era que el aire no era parejo**: la hoja arrancaba pegada a la
+     columna de íconos (12 px del rótulo más ancho, «Producción»), terminaba a 8 px de
+     la ventana, y arriba había 12 y abajo 24. Ahora quedan 20 a la izquierda —la
+     columna no tiene caja, así que el aire se ve desde el texto— y 16 a la derecha.
+     La hoja pasa de 1235 a 1219 px a 1323 de ventana (−1,3 %).
+   - **Dos variables propias, aparte de `--marco-hoja`** (`estilos/_90_marco.py`):
+     `--marco-izq` (8 px más allá de `--rail-reserva`) y `--marco-lado` (16 px). Subir
+     `--marco-hoja` habría movido también la hoja arriba y abajo, y la fecha y los
+     filtros de la ruta, que la suman a su `top`. La ruta (`nav_franja_rep` y su
+     píldora, #841) usa los mismos dos bordes, y `--marco-der` —donde se ubican la
+     fecha y los filtros fijos— sale ahora de `--marco-lado`.
+   - **El botón del asistente vive debajo de la ruta**, a 15 px fijos de la ventana
+     (`_85_asistente.py`): con la ruta 8 px más corta asomaba 1 px y su sombra. Desde
+     901 px va a `--marco-lado` + 7.
+   - Medido en nueve vistas (Período, Diferencias, Venta por Periodo, Costos, Inicio,
+     Movimientos, Documentos SUNAT, Stock, Recetas): hoja y ruta de 88 a 1307 en todas,
+     ningún elemento de la hoja más allá de su borde derecho, y la fecha y los filtros
+     adentro de la píldora. Abajo de 901 px no cambia nada.
+   - **La ruta sigue en minúsculas**, a pedido después de ver tres formas en el boceto:
+     en mayúsculas se lee más lento, ocupa ~20 % más («Diferencias» 71 → 86 px) y
+     tira el ojo hacia la navegación en vez de los números.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59675,7 +59702,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#849**; la próxima toma el número siguiente.
+> última regla es la **#850**; la próxima toma el número siguiente.
 
 >
 

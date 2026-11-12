@@ -637,7 +637,10 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   franja deja de recortar (`overflow`) mientras está abierto.
 
 **Y cada vista es una hoja blanca** (reglas #764, #776, #825 y #826, `estilos/_90_marco.py`),
-que termina a 24 px del borde de abajo, con sus cuatro esquinas a la vista:
+que termina a 24 px del borde de abajo, con sus cuatro esquinas a la vista. **Los costados
+tienen variables propias desde la #850**: `--marco-izq` (8 px después de la columna) y
+`--marco-lado` (16 px hasta la ventana), que usan también la ruta y `--marco-der`; no se
+tocan con `--marco-hoja`, que mueve arriba y abajo. La organización:
 la franja va sobre el lavanda, con la vista activa en pastilla índigo, y cada
 sección de la pila —su key lleva `_sec_`— es su propia hoja, que recorta con
 `overflow: clip`; Costos y Documentos SUNAT, sin pila, nombran su contenedor.

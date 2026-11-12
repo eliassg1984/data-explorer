@@ -28,7 +28,15 @@ CSS = """
         background: var(--marco-fondo) !important;
     }
     :root {
-        --marco-der: calc(var(--marco-hoja) + 8px);
+        /* #850: el aire de los COSTADOS de la hoja, aparte del de arriba y abajo
+           (`--marco-hoja`). Hasta ese día la hoja arrancaba pegada a la columna
+           (12 px del rótulo más ancho, «Producción») y terminaba a 8 px de la
+           ventana; con 8 más a la izquierda y 16 a la derecha quedan 20 y 16,
+           que se ven parejos porque la columna no tiene caja. La ruta usa los
+           mismos dos bordes. Boceto: https://claude.ai/artifact/GJg6RzAE6guZHhVrxddnji */
+        --marco-izq: 8px;
+        --marco-lado: 16px;
+        --marco-der: calc(var(--marco-lado) + 8px);
         /* En la hoja la tarjeta no lleva margen: esos 16px son de contenido. */
         --margen-tarjeta: 0px;
         /* #826: cada hoja termina a 24 px del borde de abajo —estos 16 más
@@ -64,8 +72,8 @@ CSS = """
         width: auto !important;
         min-width: 0 !important;
         height: calc(100dvh - var(--marco-hoja) * 2) !important;
-        margin: var(--marco-hoja) var(--marco-hoja) var(--marco-hoja)
-                var(--rail-reserva) !important;
+        margin: var(--marco-hoja) var(--marco-lado) var(--marco-hoja)
+                calc(var(--rail-reserva) + var(--marco-izq)) !important;
         background: var(--bg-card) !important;
         border-radius: var(--marco-radio) !important;
         box-shadow: var(--marco-sombra) !important;
@@ -227,8 +235,14 @@ CSS = """
     /* ── LA FRANJA: EL BORDE DE ARRIBA DE LA HOJA ──────────────────────── */
     .st-key-nav_franja_rep {
         top: var(--marco-hoja) !important;
-        right: var(--marco-hoja) !important;
+        left: calc(var(--rail-reserva) + var(--marco-izq)) !important;
+        right: var(--marco-lado) !important;
         border-radius: var(--marco-radio) var(--marco-radio) 0 0 !important;
+    }
+    /* El botón del asistente vive debajo de la franja, a 15 px de la ventana: los
+       7 px que la hoja le dejaba adentro. Con el costado de la #850 asomaba 1 px. */
+    .st-key-ai_float_wrap {
+        right: calc(var(--marco-lado) + 7px) !important;
     }
     .st-key-nav_franja_idx [data-testid="stButton"] button.vista-en-pantalla {
         background: var(--marco-control) !important;
@@ -952,7 +966,7 @@ CSS = """
         /* ── LA RUTA EN UNA PÍLDORA DE BORDE A BORDE (regla #841) ──────────
            A pedido, sobre el boceto https://claude.ai/artifact/7v7WufpmWibLs4s6TDQx54.
            Una píldora blanca con los MISMOS bordes que la hoja de abajo: la
-           franja ya mide eso (de `--rail-reserva` a `--marco-hoja`), así que
+           franja ya mide eso (de `--rail-reserva` + `--marco-izq` a `--marco-lado`, #850), así que
            la píldora es su `::before` y no hay que medir nada. Lo de la
            derecha —la fecha, Filtros— son controles fijos que dibuja cada
            reporte con su key; quedan ADENTRO porque la píldora los rodea, sin
