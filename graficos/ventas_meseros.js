@@ -138,9 +138,9 @@ function mhistoria(B,st){
     if(!m.has(mes))m.set(mes,{mes,propina:0,venta:0,equipo:0});const a=m.get(mes);a.equipo+=p;a.venta+=v;if(st.ms===-1||ms===st.ms)a.propina+=p;}
   return [...m.values()].sort((a,b)=>a.mes.localeCompare(b.mes));
 }
-window.__mesCalc={pedidosDe:(B,st,C,vis)=>mpedidos(B,st,C,vis),leer:mleer,resumen:mresumen,pozo:mpozo,planilla:mplanilla,distribucion:mdistribucion,vendido:mvendido,cruce:mcruce,valor:mvalor,visibles:mvisibles,equipo:mequipo,scope:mscope,historia:mhistoria};
+window.__mesCalc={cliente:fi=>mcliente(fi),pedidosDe:(B,st,C,vis)=>mpedidos(B,st,C,vis),leer:mleer,resumen:mresumen,pozo:mpozo,planilla:mplanilla,distribucion:mdistribucion,vendido:mvendido,cruce:mcruce,valor:mvalor,visibles:mvisibles,equipo:mequipo,scope:mscope,historia:mhistoria};
 
-function minicial(){return {turno:'Todo el día',modo:'Por mesero',ms:null,q:'',vdim:'Grupo',vmed:'Unidades y venta',vgrupo:-1,vsub:-1,vsel:{},vsolo:false,vsin:false,vsec:true,vdet:null,vdetPed:null,vq:'',vorden:'t',vdir:-1,orden:'propina',dir:-1,mas:false,tab:'Propinas',filtro:'Todos',celda:null,weekday:null,pedido:null,limite:150,mapa:'Por mesa',ayuda:false};}
+function minicial(){return {turno:'Todo el día',modo:'Por mesero',ms:null,q:'',vdim:'Grupo',vmed:'Unidades y venta',vgrupo:-1,vsub:-1,vsel:{},vsolo:false,vsin:false,vsec:true,vdet:null,vdetPed:null,vdetVista:'Lista',vdetOrden:'f',vdetDir:-1,vq:'',vorden:'t',vdir:-1,orden:'propina',dir:-1,mas:false,tab:'Propinas',filtro:'Todos',celda:null,weekday:null,pedido:null,limite:150,mapa:'Por mesa',ayuda:false};}
 const mboton=(a,v,t,on=false,tip='')=>`<button type="button" data-acc="${a}" data-v="${mesc(v)}" class="${on?'on':''}" aria-pressed="${on}" title="${mesc(tip)}">${mesc(t)}</button>`;
 // ⤢ amplía la lista o la ficha a todo el ancho; ↙ o Esc vuelven (#788, como Recetas).
 const mamp=(st,cual)=>{const on=st.amp===cual;return `<button type="button" class="ms-amp" data-acc="amp" data-v="${cual}" aria-pressed="${on}" title="${on?'Volver a las dos columnas (Esc)':'Ampliar '+(cual==='lista'?'la lista':'la ficha')+' a todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${on?'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6':'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg></button>`;};
@@ -165,6 +165,7 @@ function mpintar(G){
   </section>${mplan(G)}${mventa(G)}`;
   const sc=root.querySelector('.ms-pay-scroll');if(sc)sc.scrollLeft=left;
   const vs=root.querySelector('.ms-vt-scroll');if(vs){vs.scrollLeft=vPos[0];vs.scrollTop=vPos[1];}
+  const dsc=root.querySelector('.ms-vt-det-scroll'),ped=root.querySelector('.ms-ped');if(dsc&&ped)ped.style.width=`${dsc.clientWidth-40}px`;
   if(search){const e=root.querySelector(`[data-acc="${search}"]`);e.focus({preventScroll:true});e.setSelectionRange(cursor,cursor);}
   msvg(G);
 }
@@ -226,6 +227,21 @@ function mmapa(G,turns){
   const max=Math.max(1e-9,...cells.flat().map(r=>r.val||0));
   return `<div class="ms-map"><table><thead><tr><th>Turno</th>${['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${cells.map(rs=>`<tr><th>${mesc(B.P.turnos[rs[0].turn])}</th>${rs.map(r=>`<td style="background:color-mix(in srgb,var(--accent) ${Math.round(5+(r.val||0)/max*40)}%,var(--bg-card))">${mboton('weekday',`${r.w}|${r.turn}`,r.n?(st.mapa==='% venta'?mpct(r.val):msol(r.val,st.mapa==='Propinas'?0:2)):'—',st.weekday===r.w&&st.celda?.turn===r.turn,`${r.n} mesas · ${msol(r.p)} de propina`)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
+// La ficha de un pedido (#856), del contrato FICHA de ventas_meseros_datos.py.
+const MFI=['cod','mesa','salon','adultos','ninos','apertura','primer','ultimo','precuenta','n_precuenta','comprobante','usuario','canal','descuento','docs','pagos','platos'];
+function mfichaDe(B,ped){const f=(B.P.fichas||{})[ped];if(!f)return null;const o={};MFI.forEach((k,i)=>o[k]=f[i]);return o;}
+// Los tiempos llegan en minutos desde las 00:00 de P.base; el día sólo se escribe si no es el del pedido.
+function mreloj(B,m,dia){if(m==null)return '—';const abs=mdia(B.P.base)*1440+m,d=Math.floor(abs/1440),h=abs-d*1440;
+  const hm=`${String(Math.floor(h/60)).padStart(2,'0')}:${String(h%60).padStart(2,'0')}`;return dia!=null&&d!==dia?`${mdm(d)} ${hm}`:hm;}
+const mmin=(a,b)=>a==null||b==null||b<a?null:b-a;
+const mdur=m=>m==null?'—':m<60?`${m} min`:`${Math.floor(m/60)} h ${String(m%60).padStart(2,'0')}`;
+// Una boleta sin cliente sale con el genérico del POS («CLIENTE -», 11111111).
+// Un nombre vacío con RUC es una empresa cuya razón social el POS guarda en tEmpresa:
+// se muestra el RUC. El «-» de un apellido vacío se quita.
+const mgenerico=d=>/^(0+|1+)$/.test(String(d[3]||'').trim())||/^cliente\s*-?$/i.test(String(d[2]||'').trim())||(!d[2]&&!d[3]);
+const mnomCli=d=>{const n=String(d[2]||'').replace(/(\s+-)+\s*$/,'').trim();return n||(d[3]?`${String(d[3]).length===11?'RUC':'Doc.'} ${d[3]}`:'');};
+const mcliente=fi=>{const ds=(fi?.docs||[]).filter(d=>!mgenerico(d));return ds.length?ds.map(mnomCli).filter((x,i,a)=>a.indexOf(x)===i).join(' · '):'Consumidor final';};
+const mpago=fi=>(fi?.pagos||[]).map(p=>`${p[0]}${p[1]?' '+p[1]:''}`).filter((x,i,a)=>a.indexOf(x)===i).join(' + ')||'—';
 // La celda que se eligió para ver sus pedidos: «ms~fila», con ms = id o 't' (todos)
 // y fila = 'k:<clave de fila>', 's:<grupo|subgrupo>' (una sección) o 't' (lo visible).
 function mfilasDe(fila,vis){
@@ -241,28 +257,65 @@ function mpedidos(B,st,C,vis){
   const m=new Map();
   for(const r of mturno(B,B.items,st.turno)){
     if(!C.pasa(r)||!keys.has(C.clave(r))||(ms!=='t'&&r.ms!==+ms))continue;
-    if(!m.has(r.ped)){const p=B.porPed.get(r.ped);m.set(r.ped,{ped:r.ped,f:r.f,ms:r.ms,hora:p?.hora??null,doc:p?B.P.docs[p.doc]:'',pax:p?.personas??null,u:0,v:0,lineas:0});}
+    if(!m.has(r.ped)){const p=B.porPed.get(r.ped),fi=mfichaDe(B,r.ped);
+      m.set(r.ped,{ped:r.ped,f:r.f,ms:r.ms,hora:p?.hora??null,doc:p?B.P.docs[p.doc]:'',pax:p?.personas??null,total:p?.venta??null,fi,
+        dur:mmin(fi?.apertura,fi?.comprobante),propina:p?.propina??null,u:0,v:0,lineas:0});}
     const a=m.get(r.ped);a.u+=r.cant;a.v+=r.venta;a.lineas++;
   }
-  const lista=[...m.values()].sort((a,b)=>b.f-a.f||(b.hora??0)-(a.hora??0)||b.ped-a.ped);
+  const lista=[...m.values()];
+  // Orden de la tabla (#856): por la columna elegida; de entrada, el más nuevo arriba.
+  const o=st.vdetOrden||'f',d=st.vdetDir??-1,txt={mesa:p=>p.fi?.mesa||'',ms:p=>B.P.meseros[p.ms],cli:p=>mcliente(p.fi),pago:p=>mpago(p.fi),doc:p=>p.doc||''}[o];
+  const num={f:p=>p.fi?.apertura??((p.f-mdia(B.P.base))*1440+(p.hora??0)/60000),ap:p=>p.fi?.apertura,pri:p=>p.fi?.primer,ult:p=>p.fi?.ultimo,pre:p=>p.fi?.precuenta,comp:p=>p.fi?.comprobante,
+    dur:p=>p.dur,pax:p=>p.fi?.adultos??p.pax,u:p=>p.u,v:p=>p.v,total:p=>p.total,prop:p=>p.propina}[o]||(p=>p.f);
+  lista.sort((a,b)=>txt?txt(a).localeCompare(txt(b),'es',{numeric:true})*d||b.f-a.f:((num(a)??-Infinity)-(num(b)??-Infinity))*d||b.ped-a.ped);
   const nombre=fila==='t'?'Todo lo visible':fila.startsWith('s:')?fila.slice(2).split('|').reverse().join(' · '):(vis.find(f=>f.k===fila.slice(2))?.label??C.filas.find(f=>f.k===fila.slice(2))?.label??'');
   return {ms,fila,nombre,mesero:ms==='t'?'Todos los meseros':B.P.meseros[+ms],lista,u:msum(lista,'u'),v:msum(lista,'v')};
 }
 const mhora=ms=>ms==null?'—':`${String(Math.floor(ms/3600e3)).padStart(2,'0')}:${String(Math.floor(ms/60000)%60).padStart(2,'0')}`;
+// La ficha abierta de un pedido: el recorrido de la mesa, el comprobante y el pago,
+// lo cobrado (con lo de la celda marcado) y cómo se fue pidiendo (#856).
+function mfichaPedido(G,p,keys,conMs){
+  const {B,D}=G,fi=p.fi,und=v=>mnum(v,Math.abs(v-Math.round(v))<1e-6?0:2);
+  const lineas=B.items.filter(r=>r.ped===p.ped).sort((a,b)=>b.venta-a.venta);
+  const pasos=fi?[['Apertura',fi.apertura],['Primer plato',fi.primer],['Último plato',fi.ultimo],['Precuenta',fi.precuenta],['Comprobante',fi.comprobante],
+    ['Pago',(fi.pagos||[]).reduce((x,q)=>q[5]!=null&&(x==null||q[5]>x)?q[5]:x,null)]]:[];
+  let prev=null;
+  const linea=pasos.length?`<ol class="ms-tl">${pasos.map(([t,m])=>{const dm=mmin(prev,m);if(m!=null)prev=m;return `<li class="${m==null?'nada':''}"><b>${mreloj(B,m,p.f)}</b><span>${t}</span>${dm!=null&&t!=='Apertura'?`<small>+${mdur(dm)}</small>`:''}</li>`;}).join('')}</ol>
+    <div class="ms-caption">La mesa duró ${mdur(mmin(fi.apertura,fi.comprobante))} de la apertura al comprobante${fi.n_precuenta>1?` · ${fi.n_precuenta} precuentas`:''}.</div>`
+    :`<p class="ms-empty">${B.P.hay_mesa===false?'Sin pedidos.parquet: la mesa y los tiempos no llegan.':'Este pedido no está en pedidos.parquet.'}</p>`;
+  const docs=(fi?.docs||[]).map(d=>`<div>${mesc(d[1]||'Comprobante')} <b>${mesc(d[0])}</b><br>${mgenerico(d)?'Consumidor final':`${mesc(mnomCli(d))}${d[2]&&d[3]?` · ${mesc(d[3])}`:''}`}</div>`).join('')||`<div>${mesc(p.doc||'—')}</div>`;
+  const pagos=(fi?.pagos||[]).map(q=>`<div>${mesc(q[0])}${q[1]?` · ${mesc(q[1])}`:''} <b>S/ ${mnum(q[2]??0,2)}</b>${q[3]?` · propina S/ ${mnum(q[3],2)}`:''}<br><small>${mesc(q[4]||'')} ${q[5]!=null?mreloj(B,q[5],p.f):''}</small></div>`).join('')||'<div>—</div>';
+  const mesa=fi?`<div><b>Mesa ${mesc(fi.mesa||'—')}</b>${fi.salon?` · ${mesc(fi.salon)}`:''}<br>${mnum(fi.adultos??p.pax??0)} adultos${fi.ninos?` · ${mnum(fi.ninos)} niños`:''} · ${mesc(fi.canal||'')}<br><small>Abrió ${mesc(fi.usuario||'—')}${fi.descuento?` · descuento: ${mesc(fi.descuento)}`:''}</small></div>`:'';
+  const cobrado=`<table><tbody>${lineas.map(r=>`<tr class="${keys.has(G.C.clave(r))&&(conMs||r.ms===+D.ms)?'on':''}"><td>${mesc(B.P.prods[r.prod])}</td><td class="ms-num">${und(r.cant)}</td><td class="ms-num">${mnum(r.venta,2)}</td></tr>`).join('')}</tbody></table>
+    <div class="ms-caption">${lineas.length} líneas · S/ ${mnum(msum(lineas,'venta'),2)}. En color, lo de esta celda.</div>`;
+  // Las tandas: lo marcado en el mismo minuto va junto.
+  const tandas=new Map();for(const [n,m,c] of fi?.platos||[]){const k=m??-1;if(!tandas.has(k))tandas.set(k,[]);tandas.get(k).push([n,c]);}
+  const pedido=fi?.platos==null?`<p class="ms-empty">${B.P.hay_platos?'Sin la hora de los platos de este pedido.':'La hora de cada plato llega con rangos de hasta tres meses.'}</p>`
+    :`<ul class="ms-tandas">${[...tandas].map(([m,xs])=>`<li><b>${mreloj(B,m<0?null:m,p.f)}</b> ${xs.map(([n,c])=>`${mesc(n)}${c&&c!==1?` ×${und(c)}`:''}`).join(' · ')}</li>`).join('')}</ul>`;
+  return `<div class="ms-ped">${linea}<div class="ms-ped-cajas">${mesa}<div>${docs}</div><div>${pagos}</div></div>
+    <div class="ms-ped-cols"><section><h4>Lo cobrado</h4>${cobrado}</section><section><h4>Cómo se fue pidiendo</h4>${pedido}</section></div></div>`;
+}
 function mdetalle(G){
   const {B,st}=G,D=G.D;if(!D)return '';
   const und=v=>mnum(v,Math.abs(v-Math.round(v))<1e-6?0:2);
-  const conMs=D.ms==='t',keys=mfilasDe(D.fila,G.Cvis||[]);
+  const conMs=D.ms==='t',keys=mfilasDe(D.fila,G.Cvis||[]),tabla=st.vdetVista==='Tabla';
+  const fl=k=>(st.vdetOrden||'f')===k?(st.vdetDir===1?' ▲':' ▼'):'';
+  const th=(k,t,cls='')=>`<th class="${cls}">${mboton('vdetorden',k,t+fl(k),(st.vdetOrden||'f')===k,'Ordenar')}</th>`;
+  const cols=tabla?[['f','Fecha'],['mesa','Mesa'],...(conMs?[['ms','Mesero']]:[]),['pax','Adultos','n'],['ap','Apertura'],['pri','1er plato'],['ult','Último plato'],['pre','Precuenta'],['comp','Comprobante'],['dur','Duración','n'],['doc','N° comprobante'],['cli','Cliente'],['pago','Pago'],['prop','Propina','n'],['u','Und','n'],['v','S/','n'],['total','Total pedido','n']]
+    :[['f','Fecha'],['ap','Hora'],['doc','Comprobante'],...(conMs?[['ms','Mesero']]:[]),['u','Und','n'],['v','S/','n'],['pu','P. unit.','n']];
+  const celda=(k,p)=>{const fi=p.fi;switch(k){
+    case 'f':return mdm(p.f);case 'mesa':return mesc(fi?.mesa||'—');case 'ms':return mesc(B.P.meseros[p.ms]);case 'pax':return mnum(fi?.adultos??p.pax??0);
+    case 'ap':return tabla?mreloj(B,fi?.apertura,p.f):(fi?.apertura!=null?mreloj(B,fi.apertura,p.f):mhora(p.hora));
+    case 'pri':return mreloj(B,fi?.primer,p.f);case 'ult':return mreloj(B,fi?.ultimo,p.f);case 'pre':return mreloj(B,fi?.precuenta,p.f);case 'comp':return mreloj(B,fi?.comprobante,p.f);
+    case 'dur':return mdur(p.dur);case 'doc':return mesc(p.doc||B.P.pedidos[p.ped]);case 'cli':return mesc(mcliente(fi));case 'pago':return mesc(mpago(fi));
+    case 'prop':return p.propina?mnum(p.propina,2):'·';case 'u':return und(p.u);case 'v':return mnum(p.v,2);case 'total':return p.total!=null?mnum(p.total,2):'—';case 'pu':return p.u>0?mnum(p.v/p.u,2):'—';}};
   const filas=D.lista.map(p=>{const abierto=st.vdetPed===p.ped;
-    const lineas=abierto?B.items.filter(r=>r.ped===p.ped).sort((a,b)=>b.venta-a.venta):[];
-    const sub=abierto?`<tr class="ms-vt-det-lin"><td colspan="${conMs?7:6}"><table><tbody>${lineas.map(r=>`<tr class="${keys.has(G.C.clave(r))&&(conMs||r.ms===+D.ms)?'on':''}"><td>${mesc(B.P.prods[r.prod])}</td><td class="ms-num">${und(r.cant)}</td><td class="ms-num">${mnum(r.venta,2)}</td></tr>`).join('')}</tbody></table>
-      <div class="ms-caption">Todo el pedido: ${lineas.length} líneas · S/ ${mnum(msum(lineas,'venta'),2)}${p.pax?` · ${mnum(p.pax)} adultos`:''}. En color, lo de esta celda.</div></td></tr>`:'';
-    return `<tr data-acc="vdetped" data-v="${p.ped}" tabindex="0" class="${abierto?'on':''}" title="Ver todo el pedido"><td>${mdm(p.f)}</td><td>${mhora(p.hora)}</td><td>${mesc(p.doc||B.P.pedidos[p.ped])}</td>${conMs?`<td>${mesc(B.P.meseros[p.ms])}</td>`:''}<td class="ms-num">${und(p.u)}</td><td class="ms-num">${mnum(p.v,2)}</td><td class="ms-num">${p.u>0?mnum(p.v/p.u,2):'—'}</td></tr>${sub}`;}).join('');
-  return `<aside class="ms-vt-det" role="dialog" aria-label="Pedidos de la celda"><div class="ms-head"><h3>${mesc(D.nombre)}</h3>${mboton('excelped','','Excel')}${mboton('vdetcerrar','','✕',false,'Cerrar (Esc)')}</div>
+    return `<tr data-acc="vdetped" data-v="${p.ped}" tabindex="0" class="${abierto?'on':''}" title="Ver la ficha del pedido">${cols.map(([k,,n])=>`<td class="${n?'ms-num':''}">${celda(k,p)}</td>`).join('')}</tr>${abierto?`<tr class="ms-vt-det-lin"><td colspan="${cols.length}">${mfichaPedido(G,p,keys,conMs)}</td></tr>`:''}`;}).join('');
+  return `<aside class="ms-vt-det${tabla||D.lista.some(p=>p.ped===st.vdetPed)?' ancho':''}" role="dialog" aria-label="Pedidos de la celda"><div class="ms-head"><h3>${mesc(D.nombre)}</h3>${msegmento('vdetvista',['Lista','Tabla'],tabla?'Tabla':'Lista')}${mboton('excelped','','Excel')}${mboton('vdetcerrar','','✕',false,'Cerrar (Esc)')}</div>
     <div class="ms-caption">${mesc(D.mesero)} · ${mesc(st.turno)} · ${B.P.rango.map(s=>mfecha(mdia(s))).join('–')}</div>
     <div class="ms-vt-det-sum"><b>${und(D.u)}</b> und · <b>S/ ${mnum(D.v,2)}</b> · ${D.lista.length} pedido${D.lista.length===1?'':'s'}${D.u>0?` · S/ ${mnum(D.v/D.u,2)} c/u`:''}</div>
-    ${D.lista.length?`<div class="ms-scroll ms-vt-det-scroll"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Comprobante</th>${conMs?'<th>Mesero</th>':''}<th>Und</th><th>S/</th><th>P. unit.</th></tr></thead><tbody>${filas}</tbody></table></div>
-    <div class="ms-caption">Un clic en un pedido muestra todo lo que se pidió en él.</div>`:'<p class="ms-empty">Sin pedidos: esta celda no tuvo venta con estos filtros.</p>'}</aside>`;
+    ${D.lista.length?`<div class="ms-scroll ms-vt-det-scroll"><table><thead><tr>${cols.map(([k,t,n])=>k==='pu'?`<th class="ms-num">${t}</th>`:th(k,t,n?'ms-num':'')).join('')}</tr></thead><tbody>${filas}</tbody></table></div>
+    <div class="ms-caption">Un clic en un pedido abre su ficha: la mesa, los tiempos, el pago, el cliente y cómo se fue pidiendo.${tabla?' «Und» y «S/» son lo de esta celda; «Total pedido», el pedido entero.':''}</div>`:'<p class="ms-empty">Sin pedidos: esta celda no tuvo venta con estos filtros.</p>'}</aside>`;
 }
 function mventa(G){
   const {B,st}=G,C=mcruce(B,st),vis=mvisibles(st,C);G.C=C;G.Cvis=vis;
@@ -332,11 +385,18 @@ function mexcelVenta(G){
 }
 function mexcelPedidos(G){
   const {B,st,D}=G;if(!D)return;
-  const lineas=D.lista.flatMap(p=>B.items.filter(r=>r.ped===p.ped).map(r=>[mfecha(p.f),mhora(p.hora),p.doc||B.P.pedidos[p.ped],B.P.meseros[r.ms],B.P.prods[r.prod],mgnom(B,r.grupo),msnom(B,r.sub),r.cant,r.venta]));
+  const t=(m,p)=>m==null?null:mreloj(B,m,p.f);
+  const pedidos=D.lista.map(p=>{const fi=p.fi;return [mfecha(p.f),fi?.mesa||null,fi?.salon||null,B.P.meseros[p.ms],fi?.adultos??p.pax,t(fi?.apertura,p),t(fi?.primer,p),t(fi?.ultimo,p),t(fi?.precuenta,p),t(fi?.comprobante,p),p.dur,
+    p.doc||B.P.pedidos[p.ped],mcliente(fi),(fi?.docs||[]).filter(d=>!mgenerico(d)).map(d=>d[3]).join(' · ')||null,mpago(fi),p.propina,fi?.canal||null,fi?.descuento||null,p.u,p.v,p.total];});
+  const lineas=D.lista.flatMap(p=>B.items.filter(r=>r.ped===p.ped).map(r=>[mfecha(p.f),p.doc||B.P.pedidos[p.ped],p.fi?.mesa||null,B.P.meseros[r.ms],B.P.prods[r.prod],mgnom(B,r.grupo),msnom(B,r.sub),r.cant,r.venta]));
+  const marcado=D.lista.flatMap(p=>(p.fi?.platos||[]).map(([n,m,c])=>[mfecha(p.f),p.doc||B.P.pedidos[p.ped],p.fi?.mesa||null,t(m,p),n,c]));
+  const pagos=D.lista.flatMap(p=>(p.fi?.pagos||[]).map(q=>[mfecha(p.f),p.doc||B.P.pedidos[p.ped],q[0],q[1]||null,q[2],q[3],q[4]||null,t(q[5],p)]));
   bajar(`Pedidos_${archivo(D.nombre)}_${archivo(D.mesero)}.xlsx`,libro([
-    {nombre:'Pedidos',cabeza:['Fecha','Hora','Comprobante','Mesero','Unidades','Venta','Precio unitario'],filas:D.lista.map(p=>[mfecha(p.f),mhora(p.hora),p.doc||B.P.pedidos[p.ped],B.P.meseros[p.ms],p.u,p.v,p.u>0?p.v/p.u:null])},
-    {nombre:'Pedidos enteros',cabeza:['Fecha','Hora','Comprobante','Mesero','Plato','Grupo','Subgrupo','Unidades','Venta'],filas:lineas},
-    {nombre:'Contexto',cabeza:['Dato','Valor'],filas:[['Celda',D.nombre],['Mesero',D.mesero],['Turno',st.turno],['Desde',B.P.rango[0]],['Hasta',B.P.rango[1]],['Unidades',D.u],['Venta',D.v]]}]));
+    {nombre:'Pedidos',cabeza:['Fecha','Mesa','Salón','Mesero','Adultos','Apertura','Primer plato','Último plato','Precuenta','Comprobante (hora)','Minutos de mesa','Comprobante','Cliente','Doc. cliente','Pago','Propina','Canal','Descuento','Unidades (celda)','Venta (celda)','Total del pedido'],filas:pedidos},
+    {nombre:'Lo cobrado',cabeza:['Fecha','Comprobante','Mesa','Mesero','Plato','Grupo','Subgrupo','Unidades','Venta'],filas:lineas},
+    {nombre:'Cómo se pidió',cabeza:['Fecha','Comprobante','Mesa','Hora','Plato','Cantidad'],filas:marcado},
+    {nombre:'Pagos',cabeza:['Fecha','Comprobante','Forma','Tarjeta u otro','Monto','Propina','Cajero','Hora'],filas:pagos},
+    {nombre:'Contexto',cabeza:['Dato','Valor'],filas:[['Celda',D.nombre],['Mesero',D.mesero],['Turno',st.turno],['Desde',B.P.rango[0]],['Hasta',B.P.rango[1]],['Unidades',D.u],['Venta',D.v],['Tiempos','Hora de Lima; mesa y tiempos de pedidos.parquet, la hora de cada plato del paloteo']]}]));
 }
 function msvg(G){
   const {root,B,st}=G,tr=root.querySelector('.ms-tramos');
@@ -384,6 +444,8 @@ function menlazar(G){
     else if(acc==='vcel'){st.vdet=st.vdet===v?null:v;st.vdetPed=null;}
     else if(acc==='vdetcerrar'){st.vdet=null;st.vdetPed=null;}
     else if(acc==='vdetped')st.vdetPed=st.vdetPed===+v?null:+v;
+    else if(acc==='vdetvista')st.vdetVista=v;
+    else if(acc==='vdetorden'){st.vdetDir=(st.vdetOrden||'f')===v?-(st.vdetDir??-1):(['mesa','ms','cli','pago','doc'].includes(v)?1:-1);st.vdetOrden=v;}
     else if(acc==='excelped'){mexcelPedidos(G);return;}
     else if(acc==='vsec')st.vsec=!msecciones(st);
     else if(acc==='vsin')st.vsin=!st.vsin;

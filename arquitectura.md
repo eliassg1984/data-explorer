@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-856 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+857 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (296)
 
@@ -906,7 +906,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#844** — Un boceto aprobado es el contrato entero: Período se rehízo con sus medidas, y la foto se…
 - **#852** — Ventas › Meseros: «Venta por mesero», lo vendido por grupo, subgrupo o plato × mesero, con su…
 
-**Datos, R2 y DuckDB** (133)
+**Datos, R2 y DuckDB** (134)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -1041,8 +1041,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#773** — Compras › Detalle docs. abre en la lista, y dice cuándo un documento no está entero
 - **#777** — El día 1, Ventas abre en el mes anterior; y la escala de letra de la app: 12 y 17
 - **#823** — La franja de Ajuste no tiene «Filtros»: Evolución y la Tabla dinámica traen el suyo
+- **#857** — Los pedidos de un número: la tabla con todo y la ficha de cada pedido (mesa, tiempos, pago,…
 
-**SUNAT y SIRE** (83)
+**SUNAT y SIRE** (84)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -1127,6 +1128,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#802** — Costos en el lenguaje de Costo de Carta: con esta, toda la app
 - **#825** — Cada hoja termina a 8 px del borde de abajo, como a los costados
 - **#826** — El margen de abajo de cada hoja es de 24 px
+- **#857** — Los pedidos de un número: la tabla con todo y la ficha de cada pedido (mesa, tiempos, pago,…
 
 **Fechas, rangos y cortes** (27)
 
@@ -59897,6 +59899,42 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      suave distinto del de «Más filtros», la ⤢ al borde en las tres zonas y el título sin
      «un clic» con la explicación en su `title`.
 
+857. **Los pedidos de un número: la tabla con todo y la ficha de cada pedido (mesa, tiempos, pago, cliente).**
+   A pedido, sobre el panel de la #855: «más detalle del pedido: número de mesa, cliente
+   facturado, forma de pago, hora de apertura, hora de envío de los productos, hora de cierre».
+   - **El panel tiene «Lista | Tabla».** La Tabla es una fila por pedido —mesa, adultos,
+     apertura, primer y último plato, precuenta, comprobante, duración (apertura →
+     comprobante), número, cliente, pago, propina, lo de la celda y el total del pedido—,
+     ordenable por cualquier columna, y el panel pasa a todo el ancho de la tarjeta (tapa la
+     tabla: para elegir otro número se cierra, ✕ o Esc). Abrir un pedido también lo ensancha.
+   - **La ficha del pedido** (un clic en una fila, en las dos formas): el recorrido apertura →
+     primer plato → último plato → precuenta → comprobante → pago con los minutos entre cada
+     paso; la mesa, el comprobante con su cliente y cada pago (forma, tarjeta, monto, propina,
+     cajero, hora); lo cobrado, con lo de la celda marcado, y «Cómo se fue pidiendo»: los
+     platos por la hora en que se marcaron, juntos los del mismo minuto. Va pegada a la vista
+     (`position: sticky` y el ancho del panel, que pone `mpintar`): en la Tabla la fila es más
+     ancha que el panel.
+   - **De dónde sale** (`ventas_meseros_datos.fichas`, contrato `FICHA`): el pago, el
+     comprobante y el cliente, de la venta (cada pago y cada comprobante UNA vez, #517); la mesa
+     y los tiempos, de `pedidos.parquet` por `CODIGO PEDIDO DDOCUMENTO` (445 de 445 en noviembre
+     de 2026); la hora de cada plato, del paloteo (`FECHA ITEM`), con rangos de hasta tres meses
+     (`_DIAS_PLATOS`). Los tiempos viajan en minutos desde la base. La «hora de envío» es cuando
+     el mesero marca el plato: el POS no guarda cuándo lo despacha la cocina.
+   - **El cliente** llega desde el 2026-11-12 en `ventas.parquet` (`CLIENTE`, `DOC CLIENTE`, de
+     `MDOCUMENTO.tCodigoCliente` → `TCLIENTE`, una ficha por código: no duplica filas). Una
+     EMPRESA tiene vacío `tNombre` y la razón social en `tEmpresa`: hasta que la consulta lo
+     tome, la app dice su RUC; el «-» de un apellido vacío se quita; «CLIENTE» con 11111111 es el
+     genérico del POS y se lee «Consumidor final». Las tildes del pago llegan rotas (U+FFFD,
+     del extractor): `_tildes` repara las que se muestran.
+   - Su Excel trae Pedidos (todas las columnas), Lo cobrado, Cómo se pidió, Pagos y Contexto.
+   - Dos trampas del mismo día: en `armar`, `pedidos` y `mesas` ya eran nombres de adentro (una
+     función y una variable del bucle), así que el parámetro se llama `pedidos_pos`; y en el
+     `.js` ya había un `mficha` (la del mesero): la de un pedido es `mfichaDe`. Un `isin` con un
+     dict no filtra por sus claves: va `set(...)`.
+   - `test_meseros_pieza.py`: la ficha contra el fixture (tiempos, platos, dos pagos y no
+     cuatro, el cliente), sin los dos parquets, y en Chromium la Tabla, su orden, la ficha, el
+     cliente de una empresa sin nombre y su Excel.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59909,7 +59947,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#856**; la próxima toma el número siguiente.
+> última regla es la **#857**; la próxima toma el número siguiente.
 
 >
 

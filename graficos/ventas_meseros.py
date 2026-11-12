@@ -748,6 +748,43 @@ _K_PIEZA_CACHE = "_vt_mes_pieza_cache"
 _CARTA = "cartacosteada.parquet"
 
 
+_PEDIDOS = "pedidos.parquet"
+_PALOTEO = "paloteoinsumosnivel1.parquet"
+_DIAS_PLATOS = 93
+"""La hora de cada plato viaja si el rango tiene hasta tres meses (#856): por
+pedido son ~15 líneas, y un año mandaría cientos de miles al navegador."""
+
+
+def _pedidos_rango(ini, fin):
+    """`pedidos.parquet` del rango (la mesa, los tiempos), con dos días antes y
+    uno después: un pedido abierto antes de medianoche se cobra al otro día."""
+    try:
+        return cargar_rango(_PEDIDOS, "FECHA APERTURA", ini - _dt.timedelta(days=2),
+                            fin + _dt.timedelta(days=1), turno=False)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, show_spinner=False, persist="disk")
+def _horas_platos(sello, ini, fin):
+    """La hora en que se marcó cada plato de cada pedido (#856): del paloteo
+    (una fila por insumo; acá una por pedido, plato y hora). `sello` es la
+    versión del parquet (#367). Sin R2 o sin la columna, None."""
+    from data import get_conn, secrets_disponibles
+    if not secrets_disponibles():
+        return None
+    try:
+        url = f"s3://{st.secrets['R2_BUCKET']}/{_PALOTEO}"
+        return get_conn().execute(
+            f"""SELECT DISTINCT CAST("COD PEDIDO" AS VARCHAR) AS cod, PRODUCTO AS prod,
+                       "FECHA ITEM" AS hora, "CANT VENDIDA" AS cant
+                FROM read_parquet('{url}')
+                WHERE CAST("FECHA PEDIDO" AS DATE) BETWEEN ? AND ? AND "FECHA ITEM" IS NOT NULL""",
+            [ini - _dt.timedelta(days=2), fin + _dt.timedelta(days=1)]).df()
+    except Exception:
+        return None
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _carta_activa(sello):
     """Los platos ACTIVOS de la carta (Costo de Carta), con su grupo y subgrupo:
@@ -782,7 +819,8 @@ def _ventas_meseros(d_pagos, filtrar_cb=None, firma=None):
                                    label="Elegir fechas")
         ini, fin = _rango(None)
         archivo = REPORTES.get("Ventas", {}).get("archivo", "ventas.parquet")
-        clave = (sello_datos(archivo), sello_datos(_CARTA), firma, ini, fin, id(d_pagos),
+        clave = (sello_datos(archivo), sello_datos(_CARTA), sello_datos(_PEDIDOS),
+                 sello_datos(_PALOTEO), firma, ini, fin, id(d_pagos),
                  None if d_pagos is None else d_pagos.shape)
         cache = st.session_state.get(_K_PIEZA_CACHE)
         if cache is None or cache[0] != clave:
@@ -796,8 +834,11 @@ def _ventas_meseros(d_pagos, filtrar_cb=None, firma=None):
                 P0 = _pedidos_tramo(ini0, fin0, filtrar_cb, firma)
                 ini12 = (pd.Timestamp(fin).to_period("M") - 11).start_time.date()
                 P12 = _pedidos_tramo(ini12, fin, filtrar_cb, firma)
+                horas = (_horas_platos(sello_datos(_PALOTEO), ini, fin)
+                         if (fin - ini).days < _DIAS_PLATOS else None)
                 mensaje = datos.armar(d_pagos, P, items, P0, P12, (ini, fin), firma,
-                                      carta=_carta_activa(sello_datos(_CARTA)))
+                                      carta=_carta_activa(sello_datos(_CARTA)),
+                                      pedidos_pos=_pedidos_rango(ini, fin), horas=horas)
                 st.session_state[_K_PIEZA_CACHE] = (clave, mensaje)
         else:
             mensaje = cache[1]

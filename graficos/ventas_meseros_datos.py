@@ -31,6 +31,110 @@ def extras(d):
             for p, g in t.groupby("ped", sort=False)}
 
 
+FICHA = ("cod", "mesa", "salon", "adultos", "ninos", "apertura", "primer", "ultimo",
+         "precuenta", "n_precuenta", "comprobante", "usuario", "canal", "descuento",
+         "docs", "pagos", "platos")
+"""Contrato de la ficha de un pedido (#856), por posición: los tiempos van en
+minutos desde las 00:00 de `base`; `docs` = [número, tipo, cliente, doc. cliente];
+`pagos` = [forma, tarjeta u otro, monto, propina, cajero, minuto]; `platos` =
+[plato, minuto, cantidad] o None si el rango no los trae."""
+
+
+def _txt(v):
+    return "" if v is None or (isinstance(v, float) and not np.isfinite(v)) or pd.isna(v) else str(v).strip()
+
+
+_TILDES = {"Cr�dito": "Crédito", "D�bito": "Débito", "Cr�d": "Créd"}
+"""El parquet de ventas trae las tildes rotas (U+FFFD, del extractor): la ficha
+repara las palabras de los pagos que muestra."""
+
+
+def _tildes(s):
+    for k, v in _TILDES.items():
+        s = s.replace(k, v)
+    return s
+
+
+def fichas(d_pagos, peds, base, pedidos=None, horas=None):
+    """La ficha de cada pedido del rango (#856), {índice de `peds`: lista FICHA}.
+
+    Sale de tres lados, cada uno con su grano: el pago, el comprobante y el
+    cliente, de las filas por ítem y pago de la venta (cada pago y cada
+    comprobante UNA vez, #517); la mesa y los tiempos, de `pedidos.parquet`
+    (una fila por pedido, por su CÓDIGO); la hora de cada plato, de `horas`
+    (pedido, plato, hora, cantidad). Lo que no llega queda vacío. Pura."""
+    from graficos.base import _resolver
+    if d_pagos is None or d_pagos.empty or not peds:
+        return {}
+    r = lambda *n: _resolver(d_pagos, list(n))  # noqa: E731
+    c = {"ped": r("Llave Local Pedido"), "cod": r("Codigo Pedido Ddocumento"),
+         "pago": r("Llave Local Documento Correlativo Pago"), "forma": r("Nombre Tipo Pago"),
+         "tarjeta": r("Nombre Tarjeta Pago"), "otro": r("Nombre Otro Tipo Pago Doc"),
+         "monto": r("Monto Tipo Pago Doc"), "propina": r("Monto Propina"),
+         "cajero": r("Usuario Reg Pago Doc"), "hpago": r("Fecha Registro Pago Doc"),
+         "cliente": r("Cliente"), "doccli": r("Doc Cliente"), "tipo": r("Tipo Doc"),
+         "numero": r("Numero Documento"), "desc": r("Nombre Descuento"), "canal": r("Canal Venta")}
+    if not c["ped"]:
+        return {}
+    ip = {str(p): i for i, p in enumerate(peds)}
+    d = d_pagos[d_pagos[c["ped"]].astype(str).isin(set(ip))]
+    base = pd.Timestamp(base).normalize()
+
+    def col(k):
+        return d[c[k]] if c[k] else pd.Series(None, index=d.index, dtype=object)
+
+    def minuto(v):
+        t = pd.to_datetime(v, errors="coerce")
+        return None if pd.isna(t) else int((t - base).total_seconds() // 60)
+
+    def num(v):
+        v = pd.to_numeric(v, errors="coerce")
+        return round(float(v), 6) if pd.notna(v) else None
+
+    out = {}
+    t = pd.DataFrame({"ped": d[c["ped"]].astype(str), "cod": col("cod"), "pago": col("pago"),
+                      "forma": col("forma"), "tarjeta": col("tarjeta"), "otro": col("otro"),
+                      "monto": col("monto"), "propina": col("propina"), "cajero": col("cajero"),
+                      "hpago": col("hpago"), "cliente": col("cliente"), "doccli": col("doccli"),
+                      "tipo": col("tipo"), "numero": col("numero"), "desc": col("desc"), "canal": col("canal")})
+    for r_ in t.drop_duplicates("ped").itertuples(index=False):
+        out[r_.ped] = [_txt(r_.cod), "", "", None, None, None, None, None, None, None, None, "",
+                       _txt(r_.canal), _txt(r_.desc), [], [], None]
+    # Un comprobante y un pago, una vez cada uno: las filas son por ítem × pago.
+    for r_ in t.drop_duplicates(["ped", "numero"]).itertuples(index=False):
+        if _txt(r_.numero):
+            out[r_.ped][14].append([_txt(r_.numero), _txt(r_.tipo), _txt(r_.cliente), _txt(r_.doccli)])
+    pagos = t[t["pago"].notna()].drop_duplicates(["ped", "pago"])
+    for r_ in pagos.itertuples(index=False):
+        out[r_.ped][15].append([_tildes(_txt(r_.forma)), _tildes(_txt(r_.tarjeta) or _txt(r_.otro)), num(r_.monto),
+                                num(r_.propina), _txt(r_.cajero), minuto(r_.hpago)])
+    por_cod = {}
+    for ped, f in out.items():
+        if f[0]:
+            por_cod.setdefault(f[0], []).append(ped)
+    if pedidos is not None and not pedidos.empty and "CODIGO PEDIDO" in pedidos.columns:
+        pc = lambda n: pedidos[n] if n in pedidos.columns else pd.Series(None, index=pedidos.index)  # noqa: E731
+        p = pd.DataFrame({"cod": pedidos["CODIGO PEDIDO"].map(_txt), "mesa": pc("MESA"), "salon": pc("SALON"),
+                          "adultos": pc("ADULTOS"), "ninos": pc("NINOS"), "apertura": pc("FECHA APERTURA"),
+                          "primer": pc("PRIMER ITEM"), "ultimo": pc("ULTIMO ITEM"),
+                          "precuenta": pc("FECHA PRECUENTA"), "n_prec": pc("PRECUENTAS"),
+                          "comp": pc("ULTIMO COMPROBANTE"), "usuario": pc("USUARIO PEDIDO")})
+        for r_ in p[p["cod"].isin(set(por_cod))].drop_duplicates("cod").itertuples(index=False):
+            for ped in por_cod[r_.cod]:
+                f = out[ped]
+                f[1:12] = [_txt(r_.mesa), _txt(r_.salon), num(r_.adultos), num(r_.ninos),
+                           minuto(r_.apertura), minuto(r_.primer), minuto(r_.ultimo),
+                           minuto(r_.precuenta), num(r_.n_prec), minuto(r_.comp), _txt(r_.usuario)]
+    if horas is not None:
+        for f in out.values():
+            f[16] = []
+        h = horas[horas["cod"].map(_txt).isin(set(por_cod))].sort_values(["cod", "hora"], kind="stable")
+        for cod, prod, hora, cant in h[["cod", "prod", "hora", "cant"]].itertuples(index=False, name=None):
+            for ped in por_cod[_txt(cod)]:
+                out[ped][16].append([_txt(prod), minuto(hora), num(cant)])
+    return {str(ip[p]): f for p, f in out.items()}
+
+
 def _carta_sin_venta(items, carta):
     """Los platos activos de la carta que no están en `items`, con el grupo y el
     subgrupo escritos como en la venta cuando coinciden sin mayúsculas (#855)."""
@@ -50,9 +154,10 @@ def _carta_sin_venta(items, carta):
     return out
 
 
-def armar(d_pagos, P, items, P0, P12, rango, firma=None, carta=None):
+def armar(d_pagos, P, items, P0, P12, rango, firma=None, carta=None, pedidos_pos=None, horas=None):
     """Importes a 6 decimales; la hora del último día se aplica en Python.
-    `carta`: los platos activos (prod, grupo, sub) para mostrarlos en cero."""
+    `carta`: los platos activos (prod, grupo, sub) para mostrarlos en cero.
+    `pedidos_pos` (pedidos.parquet) y `horas`: la mesa y los tiempos, y la hora de cada plato (#856)."""
     ini, fin = rango
     ini0, fin0 = vm.periodo_anterior(ini, fin)
     hora = vm.hora_de_corte(P, fin)
@@ -125,6 +230,8 @@ def armar(d_pagos, P, items, P0, P12, rango, firma=None, carta=None):
                "meseros": meseros, "sin_mesero": im[vm.SIN_MESERO], "turnos": turnos,
                "pedidos": peds, "docs": docs, "prods": prods, "grupos": grupos, "subs": subs,
                "carta": [[ipr[p], ig[g], isb[s]] for p, g, s in sin_venta],
+               "fichas": fichas(d_pagos, peds, base, pedidos_pos, horas),
+               "hay_platos": horas is not None, "hay_mesa": pedidos_pos is not None,
                "actual": pedidos(P, True), "previo": pedidos(P0, False),
                "items": lineas, "historia": hist, "libros": libros, "filtros": filtros,
                "hay_descuento": bool(dv.columna(d_pagos, dv.DESCUENTO_ITEM)),

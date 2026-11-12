@@ -39,7 +39,13 @@ def ventas():
                   'MONTO PROPINA':tip if k==0 else 0,'NOMB ITEM VENTA':prod,
                   'GRUPO':'Alimentos' if i==0 else 'Bebidas s/ Alcohol','SUB GRUPO':'Fondos' if i==0 else 'Aguas','CLASE VENTA':clase,
                   'DESCUENTO ITEM DDOCUMENTO':desc*(.7 if i==0 else .3),
-                  'FECHA REGISTRO PAGO DOC':pd.Timestamp(f)+pd.Timedelta(minutes=1)})
+                  'FECHA REGISTRO PAGO DOC':pd.Timestamp(f)+pd.Timedelta(minutes=1),
+                  # #856: el código del pedido, el pago y el cliente del comprobante.
+                  'CODIGO PEDIDO DDOCUMENTO':ped,'MONTO TIPO PAGO DOC':venta/pagos,
+                  'NOMBRE TARJETA PAGO':'Visa' if tarj and k==0 else None,'USUARIO REG PAGO DOC':'CAJA1',
+                  'TIPO DOC':'Factura' if mesero=='BETO' else 'Boleta',
+                  'CLIENTE':'Empresa SAC' if mesero=='BETO' else 'CLIENTE -',
+                  'DOC CLIENTE':'20000000002' if mesero=='BETO' else '11111111'})
     for k,f in enumerate(pd.date_range('2025-11-01','2026-10-23',freq='7D')):
         for j,nom in enumerate(['ANA','BETO','CARLA']):
             for turno,hora in [('ALMUERZO',13),('CENA',22)]:
@@ -63,7 +69,21 @@ CARTA=pd.DataFrame({'prod':['Risotto','agua','Coco'],'grupo':['ALIMENTOS','Bebid
                     'sub':['fondos','Aguas','Postres']})
 
 
-def armar(d=None,rango=(INI,FIN),P0_missing=False,carta=CARTA):
+def pedidos_y_horas(d):
+    """#856: pedidos.parquet y las horas del paloteo, de mentira: la mesa se abre
+    2 h antes del comprobante, los platos se marcan 115 min antes y el último 40."""
+    t=d.drop_duplicates('LLAVE LOCAL PEDIDO')
+    f=t['FEC REG DOCUMENTO']
+    ped=pd.DataFrame({'CODIGO PEDIDO':t['LLAVE LOCAL PEDIDO'].values,'MESA':[str(100+i%9) for i in range(len(t))],'SALON':'SALON',
+        'ADULTOS':t['CANT PAX'].values,'NINOS':0,'FECHA APERTURA':(f-pd.Timedelta(hours=2)).values,
+        'PRIMER ITEM':(f-pd.Timedelta(minutes=115)).values,'ULTIMO ITEM':(f-pd.Timedelta(minutes=40)).values,
+        'FECHA PRECUENTA':(f-pd.Timedelta(minutes=10)).values,'PRECUENTAS':1,'ULTIMO COMPROBANTE':f.values,'USUARIO PEDIDO':'MOZO1'})
+    horas=pd.concat([pd.DataFrame({'cod':t['LLAVE LOCAL PEDIDO'].values,'prod':n,'hora':(f-pd.Timedelta(minutes=m)).values,'cant':c})
+                     for n,m,c in [('Plato',115,1.0),('Agua',115,2.0)]],ignore_index=True)
+    return ped,horas
+
+
+def armar(d=None,rango=(INI,FIN),P0_missing=False,carta=CARTA,sin_extra=False):
     d=ventas() if d is None else d
     P,H=vm.preparar(d)
     actual=P[P.dia.dt.date.between(*rango)]
@@ -71,7 +91,8 @@ def armar(d=None,rango=(INI,FIN),P0_missing=False,carta=CARTA):
     raw=d[d['FEC REG DOCUMENTO'].dt.date.between(*rango)]
     i0,f0=vm.periodo_anterior(*rango)
     prev=P[P.dia.dt.date.between(i0,f0)]
-    return datos.armar(raw,actual,items,None if P0_missing else prev,P,rango,(('Alimentos',),(),(),()),carta=carta),actual,items,prev,P
+    ped,horas=(None,None) if sin_extra else pedidos_y_horas(raw)
+    return datos.armar(raw,actual,items,None if P0_missing else prev,P,rango,(('Alimentos',),(),(),()),carta=carta,pedidos_pos=ped,horas=horas),actual,items,prev,P
 
 
 class Contrato(unittest.TestCase):
@@ -125,6 +146,34 @@ class CartaSinVenta(unittest.TestCase):
         self.assertEqual(sorted(filas),[('Coco','Postres','Postres'),('Risotto','Alimentos','Fondos')])
         P2,*_=armar(carta=None)
         self.assertEqual(P2['carta'],[])
+
+
+class FichaPedido(unittest.TestCase):
+    def test_ficha_de_cada_pedido(self):
+        # #856: cada pago y cada comprobante UNA vez, los tiempos en minutos desde la base.
+        P,actual,*_=armar()
+        F={P['pedidos'][int(k)]:dict(zip(datos.FICHA,v)) for k,v in P['fichas'].items()}
+        self.assertEqual(set(F),set(P['pedidos']))
+        for ped,f in F.items():
+            with self.subTest(ped=ped):
+                self.assertEqual(f['comprobante']-f['apertura'],120)
+                self.assertEqual(f['ultimo']-f['primer'],75)
+                self.assertEqual([x[0] for x in f['platos']],['Plato','Agua'])
+                self.assertEqual(len(f['docs']),1)
+        # Dos pagos (efectivo y tarjeta) en las filas de los dos ítems: dos pagos, no cuatro.
+        dos=next(p for p in F if p.split('-')[1:2]==['0'])
+        self.assertEqual(len(F[dos]['pagos']),2)
+        self.assertEqual(F[dos]['pagos'][0][:2],['Tarjeta de Crédito','Visa'])
+        beto=next(p for p in F if p.split('-')[1:2]==['1'])
+        self.assertEqual(F[beto]['docs'][0][2:],['Empresa SAC','20000000002'])
+        self.assertEqual(json.loads(json.dumps(P['fichas'],allow_nan=False)),P['fichas'])
+        # Sin los dos parquets la ficha sigue, sin mesa ni platos.
+        P2,*_=armar(sin_extra=True)
+        f=dict(zip(datos.FICHA,next(iter(P2['fichas'].values()))))
+        self.assertIsNone(f['apertura']);self.assertIsNone(f['platos']);self.assertFalse(P2['hay_platos'])
+
+    def test_tildes_rotas_del_pago(self):
+        self.assertEqual(datos._tildes('Tarjeta de Cr�dito'),'Tarjeta de Crédito')
 
 
 class Navegador(unittest.TestCase):
@@ -403,12 +452,63 @@ class Navegador(unittest.TestCase):
             p=Path(temp)/'pedidos.xlsx';dl.value.save_as(str(p))
             with zipfile.ZipFile(p) as z:
                 wb=z.read('xl/workbook.xml').decode()
-                for h in ['Pedidos','Pedidos enteros','Contexto']:self.assertIn(h,wb)
+                for h in ['Pedidos','Lo cobrado','Cómo se pidió','Pagos','Contexto']:self.assertIn(h,wb)
         pg.keyboard.press('Escape');self.assertEqual(card.locator('.ms-vt-det').count(),0)
         # El total de abajo abre todo lo visible: la venta entera del rango.
         card.locator('tfoot td[data-acc="vcel"]').last.click()
         self.assertAlmostEqual(pg.evaluate('__vtMes.D.v'),it['venta'].sum(),places=4)
         self.assertEqual(pg.evaluate('__vtMes.D.lista.length'),it['ped'].nunique())
+
+    def test_tabla_de_pedidos_y_ficha(self):
+        # #856: «Tabla» con una fila por pedido y todas las columnas; la ficha del
+        # pedido con su recorrido, el comprobante, el pago y cómo se fue pidiendo.
+        self.mount();pg=self.pg;card=pg.locator('.ms-vt');it=self.items
+        card.locator('[data-acc="vdim"][data-v="Plato"]').click()
+        ana=self.P['meseros'].index('Ana');ip=self.P['prods'].index('Plato')
+        card.locator(f'td[data-acc="vcel"][data-v="{ana}~k:{ip}"]').last.click()
+        det=card.locator('.ms-vt-det')
+        det.locator('[data-acc="vdetvista"][data-v="Tabla"]').click()
+        self.assertIn('ancho',det.get_attribute('class'))
+        cab=[t.strip(' ▲▼') for t in det.locator('thead th').all_inner_texts()]
+        for c in ['Mesa','Apertura','Precuenta','Duración','Cliente','Pago','Propina','Total pedido']:self.assertIn(c,cab)
+        ref=it[(it['prod']=='Plato')&(it['mesero']=='Ana')]
+        self.assertEqual(det.locator('tbody tr[data-acc="vdetped"]').count(),ref['ped'].nunique())
+        self.assertIn('2 h 00',det.locator('tbody tr[data-acc="vdetped"]').first.inner_text())
+        # Ordenar por mesa y al revés.
+        det.locator('[data-acc="vdetorden"][data-v="mesa"]').click()
+        mesas=pg.evaluate('__vtMes.D.lista.map(p=>p.fi.mesa)')
+        self.assertEqual(mesas,sorted(mesas,key=int))
+        det.locator('[data-acc="vdetorden"][data-v="mesa"]').click()
+        self.assertEqual(pg.evaluate('__vtMes.D.lista.map(p=>p.fi.mesa)'),sorted(mesas,key=int,reverse=True))
+        # La ficha: seis pasos, Ana factura con boleta genérica, dos tandas en el mismo minuto.
+        det.locator('tbody tr[data-acc="vdetped"]').first.click()
+        ficha=det.locator('.ms-ped')
+        self.assertEqual(ficha.locator('.ms-tl li').count(),6)
+        self.assertIn('Consumidor final',ficha.inner_text())
+        self.assertEqual(ficha.locator('.ms-tandas li').count(),1)
+        self.assertIn('Agua ×2',ficha.locator('.ms-tandas').inner_text())
+        self.assertIn('+1 h 15',ficha.locator('.ms-tl').inner_text())
+        with pg.expect_download() as dl:det.locator('[data-acc="excelped"]').click()
+        with tempfile.TemporaryDirectory() as temp:
+            p=Path(temp)/'pedidos.xlsx';dl.value.save_as(str(p))
+            with zipfile.ZipFile(p) as z:
+                wb=z.read('xl/workbook.xml').decode()
+                for h in ['Pedidos','Lo cobrado','Pagos','Contexto']:self.assertIn(h,wb)
+                ns={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                hoja=ET.fromstring(z.read('xl/worksheets/sheet1.xml'))
+                self.assertEqual(len(hoja.findall('.//s:row',ns))-1,ref['ped'].nunique())
+        # El cliente: una empresa sin nombre (la razón social está en tEmpresa) dice su RUC;
+        # el genérico del POS es «Consumidor final»; el «-» de un apellido vacío se quita.
+        casos=[[['F1','Factura','','20000000001']],[['B1','Boleta','CLIENTE','11111111']],
+               [['B2','Boleta','PEREZ JUAN -','40000000']],[['B3','Boleta','EMPRESA FICTICIA S.A.','20000000001']]]
+        self.assertEqual(pg.evaluate('cs=>cs.map(d=>__mesCalc.cliente({docs:d}))',casos),
+                         ['RUC 20000000001','Consumidor final','PEREZ JUAN','EMPRESA FICTICIA S.A.'])
+        # Un pedido de Beto lleva la factura con su cliente.
+        pg.keyboard.press('Escape')  # el panel ancho tapa la tabla: se cierra para elegir otra celda
+        beto=self.P['meseros'].index('Beto')
+        card.locator(f'td[data-acc="vcel"][data-v="{beto}~k:{ip}"]').last.click()
+        det.locator('tbody tr[data-acc="vdetped"]').first.click()
+        self.assertIn('Empresa SAC',det.locator('.ms-ped').inner_text())
 
     def test_excel_de_ajuste_deja_sin_base_el_porcentaje(self):
         self.mount();pg=self.pg;root=pg.locator('.msp')
