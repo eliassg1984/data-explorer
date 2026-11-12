@@ -31,8 +31,28 @@ def extras(d):
             for p, g in t.groupby("ped", sort=False)}
 
 
-def armar(d_pagos, P, items, P0, P12, rango, firma=None):
-    """Importes a 6 decimales; la hora del último día se aplica en Python."""
+def _carta_sin_venta(items, carta):
+    """Los platos activos de la carta que no están en `items`, con el grupo y el
+    subgrupo escritos como en la venta cuando coinciden sin mayúsculas (#855)."""
+    if carta is None or len(carta) == 0:
+        return []
+    vendidos = {str(p).strip().lower() for p in items["prod"]}
+    gs = {str(g).strip().lower(): g for g in items["grupo"]}
+    ss = {str(s).strip().lower(): s for s in items["sub"]} if "sub" in items else {}
+    out, vistos = [], set()
+    for p, g, s in carta[["prod", "grupo", "sub"]].itertuples(index=False, name=None):
+        k = str(p).strip().lower()
+        if not k or k in vendidos or k in vistos:
+            continue
+        vistos.add(k)
+        out.append((str(p).strip(), gs.get(str(g).strip().lower(), str(g).strip()),
+                    ss.get(str(s).strip().lower(), str(s).strip())))
+    return out
+
+
+def armar(d_pagos, P, items, P0, P12, rango, firma=None, carta=None):
+    """Importes a 6 decimales; la hora del último día se aplica en Python.
+    `carta`: los platos activos (prod, grupo, sub) para mostrarlos en cero."""
     ini, fin = rango
     ini0, fin0 = vm.periodo_anterior(ini, fin)
     hora = vm.hora_de_corte(P, fin)
@@ -44,8 +64,10 @@ def armar(d_pagos, P, items, P0, P12, rango, firma=None):
     meseros = sorted({vm.SIN_MESERO} | set(P["mesero"]) | set(P0["mesero"]) | set(H["mesero"]))
     turnos = sorted(set(P["turno"]) | set(P0["turno"]) | set(H["turno"]))
     peds = sorted(set(P["ped"]) | set(items["ped"]))
-    prods, grupos = sorted(set(items["prod"])), sorted(set(items["grupo"]))
-    subs = sorted(set(items["sub"])) if "sub" in items else [""]
+    sin_venta = _carta_sin_venta(items, carta)
+    prods = sorted(set(items["prod"]) | {p for p, _, _ in sin_venta})
+    grupos = sorted(set(items["grupo"]) | {g for _, g, _ in sin_venta})
+    subs = sorted((set(items["sub"]) if "sub" in items else {""}) | {s for _, _, s in sin_venta})
     docs = sorted({v["doc"] for v in e.values()} | {""})
     im, it, ip, idc = ({v: i for i, v in enumerate(vs)} for vs in (meseros, turnos, peds, docs))
     ipr, ig, isb = ({v: i for i, v in enumerate(vs)} for vs in (prods, grupos, subs))
@@ -102,6 +124,7 @@ def armar(d_pagos, P, items, P0, P12, rango, firma=None):
                "hay_anterior": anterior is not None, "hay_historia": P12 is not None,
                "meseros": meseros, "sin_mesero": im[vm.SIN_MESERO], "turnos": turnos,
                "pedidos": peds, "docs": docs, "prods": prods, "grupos": grupos, "subs": subs,
+               "carta": [[ipr[p], ig[g], isb[s]] for p, g, s in sin_venta],
                "actual": pedidos(P, True), "previo": pedidos(P0, False),
                "items": lineas, "historia": hist, "libros": libros, "filtros": filtros,
                "hay_descuento": bool(dv.columna(d_pagos, dv.DESCUENTO_ITEM)),

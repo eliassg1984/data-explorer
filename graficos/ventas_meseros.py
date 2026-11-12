@@ -745,6 +745,26 @@ _PIEZA = st.components.v2.component(
     + (Path(__file__).parent / "ventas_meseros.js").read_text(encoding="utf-8")),
 )
 _K_PIEZA_CACHE = "_vt_mes_pieza_cache"
+_CARTA = "cartacosteada.parquet"
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _carta_activa(sello):
+    """Los platos ACTIVOS de la carta (Costo de Carta), con su grupo y subgrupo:
+    «Venta por mesero» los muestra en cero aunque no se hayan vendido (#855).
+    `sello` es la versión del parquet (#367). Sin el archivo, nada."""
+    try:
+        from data import cargar
+        df = cargar(_CARTA)
+    except Exception:
+        return None
+    if df is None or df.empty or "ITEM VENT" not in df.columns:
+        return None
+    t = lambda c: (df[c].fillna("").astype(str).str.strip() if c in df.columns  # noqa: E731
+                   else pd.Series("", index=df.index))
+    activo = t("ITEM VENT ACT").str.upper().eq("ACTIV") if "ITEM VENT ACT" in df.columns else True
+    out = pd.DataFrame({"prod": t("ITEM VENT"), "grupo": t("GRUPO"), "sub": t("SUBGRUPO")})[activo]
+    return out[out["prod"] != ""].drop_duplicates("prod").reset_index(drop=True)
 
 
 @una_vez_por_corrida
@@ -762,7 +782,7 @@ def _ventas_meseros(d_pagos, filtrar_cb=None, firma=None):
                                    label="Elegir fechas")
         ini, fin = _rango(None)
         archivo = REPORTES.get("Ventas", {}).get("archivo", "ventas.parquet")
-        clave = (sello_datos(archivo), firma, ini, fin, id(d_pagos),
+        clave = (sello_datos(archivo), sello_datos(_CARTA), firma, ini, fin, id(d_pagos),
                  None if d_pagos is None else d_pagos.shape)
         cache = st.session_state.get(_K_PIEZA_CACHE)
         if cache is None or cache[0] != clave:
@@ -776,7 +796,8 @@ def _ventas_meseros(d_pagos, filtrar_cb=None, firma=None):
                 P0 = _pedidos_tramo(ini0, fin0, filtrar_cb, firma)
                 ini12 = (pd.Timestamp(fin).to_period("M") - 11).start_time.date()
                 P12 = _pedidos_tramo(ini12, fin, filtrar_cb, firma)
-                mensaje = datos.armar(d_pagos, P, items, P0, P12, (ini, fin), firma)
+                mensaje = datos.armar(d_pagos, P, items, P0, P12, (ini, fin), firma,
+                                      carta=_carta_activa(sello_datos(_CARTA)))
                 st.session_state[_K_PIEZA_CACHE] = (clave, mensaje)
         else:
             mensaje = cache[1]

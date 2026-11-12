@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-854 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+855 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (295)
 
@@ -621,7 +621,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#849** — Diferencias del cierre: el panel de los números con los gráficos chicos, y Barras y 6 cierres…
 - **#854** — Período ordenado: 20 px bajo la barra, una ⤢ por zona, la línea bajo los controles, cajas…
 
-**AgGrid y tablas** (99)
+**AgGrid y tablas** (100)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -722,6 +722,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#740** — La tabla dinámica de Ajuste es otra perspectiva visible, aunque comparta la pestaña Evolución
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 - **#797** — «Qué faltó» con cantidad, unidad y código; y «Explorar», la tabla dinámica de Ajuste
+- **#855** — Venta por mesero como la planilla de la semana: Und | S/, secciones, platos sin venta y los…
 
 **Streamlit** (178)
 
@@ -1212,7 +1213,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
-**Decisiones de diseño y UX** (284)
+**Decisiones de diseño y UX** (285)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1498,6 +1499,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#851** — La franja es la barra de la app, con las vistas a la vista; Período, con sus controles juntos
 - **#852** — Ventas › Meseros: «Venta por mesero», lo vendido por grupo, subgrupo o plato × mesero, con su…
 - **#853** — Venta por mesero: Grupo y Subgrupo como columnas, «Precio unitario» y filas elegidas a mano
+- **#855** — Venta por mesero como la planilla de la semana: Und | S/, secciones, platos sin venta y los…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59836,6 +59838,36 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      `test_porcionamientos_pieza.py::TestIconosAntepuestos` lo exige a toda pieza que monte
      ese `.js`.
 
+855. **Venta por mesero como la planilla de la semana: Und | S/, secciones, platos sin venta y los pedidos de cada número.**
+   A pedido, con una foto de la planilla que se arma a mano («Semana 45»: unidades y soles por
+   mesero, los platos por sección, también los que no se vendieron) y «alguna forma de ver los
+   pedidos o documentos que corresponden a esos números».
+   - **«Unidades y venta» es la medida de entrada**: dos columnas por mesero y en el Total, Und
+     | S/, con la cabecera en dos renglones. Ordena y colorea por la venta (`mmedOrden`).
+   - **Con Plato, secciones por subgrupo** («Secciones», prendido de entrada): una banda con el
+     subtotal antes de sus platos, ordenadas por grupo y subgrupo, y adentro el orden elegido.
+     Con secciones no van las columnas Grupo y Subgrupo de la #853: las dice la banda. Una celda
+     que suma cero (sin venta) dice «·», también en la banda y el pie.
+   - **Platos sin venta, en cero**: Python manda los platos ACTIVOS de la carta
+     (`cartacosteada.parquet`, `ITEM VENT ACT` = «ACTIV»; `ventas_meseros._carta_activa`, con su
+     sello en la clave) que no se vendieron en el rango (`P.carta`, por nombre sin mayúsculas, con
+     el grupo y el subgrupo escritos como en la venta). «Con los que no se vendieron» los suma; si
+     no, sólo aparecen los ELEGIDOS: así la planilla de la semana sale con los mismos platos cada
+     vez. Un plato vendido sólo en el otro turno también entra en cero. Abre apagado: del 1 al 11
+     de noviembre de 2026 fueron 512 platos activos sin venta contra 164 vendidos.
+   - **Un clic en cualquier número abre sus pedidos** en un panel encima de la tabla, a la
+     derecha (`mpedidos`, `mdetalle`): fecha, hora, comprobante, unidades, S/ y precio; un pedido
+     se abre con TODO lo que se pidió en él, con lo de la celda marcado. Sirve en la celda, la
+     banda de una sección (todo lo visible de ella) y el pie (todo lo visible). ✕ o Esc lo
+     cierran; cambiar de corte o de fecha también. Su Excel trae los pedidos, los pedidos enteros
+     y el contexto. Un panel y no un pop porque una celda llena tiene 10 pedidos o más.
+   - El Excel de la tabla sigue a la medida (dos columnas por mesero con «Unidades y venta») y a
+     las secciones (una fila «(subtotal)» por subgrupo).
+   - `test_meseros_pieza.py`: el contrato de la carta (sin repetir lo vendido, grupo como en la
+     venta) y, en Chromium, las dos columnas, los subtotales contra pandas, los sin venta y los
+     elegidos en cero, los pedidos de una celda contra pandas, el pedido entero, su Excel, Esc y
+     el pie. Las cinco medidas no entraban a 390 px: en el celular la botonera se parte.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59848,7 +59880,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#854**; la próxima toma el número siguiente.
+> última regla es la **#855**; la próxima toma el número siguiente.
 
 >
 

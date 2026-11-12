@@ -283,7 +283,7 @@ y vendido de Python; los seis Excel canónicos, con fórmulas y decimales;
 filtros que conservan el equipo del pozo, celdas, mapa, pedidos, móvil y
 remontaje en Chromium. Ver `arquitectura.md` regla #719. Desde la #852,
 «Venta por mesero» (grupo, subgrupo o plato × mesero) contra un groupby de pandas, sus
-controles y su Excel. Desde la #853, el precio unitario, el subgrupo y las filas elegidas.
+controles y su Excel. Desde la #853, el precio unitario, el subgrupo y las filas elegidas. Desde la #855, Und | S/ por mesero, las secciones, los platos sin venta de la carta y los pedidos de cada número.
 
 `test_cierre_pieza.py` vigila Ajuste › «Diferencias del cierre» como
 pieza propia (`graficos/ajuste/_cierre.py`, `_cierre_datos.py`, `cierre.js`

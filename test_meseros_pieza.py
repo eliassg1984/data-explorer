@@ -57,7 +57,13 @@ def ventas():
     return pd.DataFrame(filas)
 
 
-def armar(d=None,rango=(INI,FIN),P0_missing=False):
+# #855: la carta activa trae un plato sin venta, uno vendido (no se repite) y el
+# grupo en otra caja de letras (se escribe como en la venta).
+CARTA=pd.DataFrame({'prod':['Risotto','agua','Coco'],'grupo':['ALIMENTOS','Bebidas s/ Alcohol','Postres'],
+                    'sub':['fondos','Aguas','Postres']})
+
+
+def armar(d=None,rango=(INI,FIN),P0_missing=False,carta=CARTA):
     d=ventas() if d is None else d
     P,H=vm.preparar(d)
     actual=P[P.dia.dt.date.between(*rango)]
@@ -65,7 +71,7 @@ def armar(d=None,rango=(INI,FIN),P0_missing=False):
     raw=d[d['FEC REG DOCUMENTO'].dt.date.between(*rango)]
     i0,f0=vm.periodo_anterior(*rango)
     prev=P[P.dia.dt.date.between(i0,f0)]
-    return datos.armar(raw,actual,items,None if P0_missing else prev,P,rango,(('Alimentos',),(),(),())),actual,items,prev,P
+    return datos.armar(raw,actual,items,None if P0_missing else prev,P,rango,(('Alimentos',),(),(),()),carta=carta),actual,items,prev,P
 
 
 class Contrato(unittest.TestCase):
@@ -111,6 +117,16 @@ except ImportError:
 
 
 @unittest.skipIf(sync_playwright is None,'sin Playwright')
+class CartaSinVenta(unittest.TestCase):
+    def test_platos_activos_sin_venta_en_el_contrato(self):
+        P,*_=armar()
+        filas=[(P['prods'][a],P['grupos'][b],P['subs'][c]) for a,b,c in P['carta']]
+        # «agua» se vendió como «Agua»: no se repite; el grupo y el subgrupo, como en la venta.
+        self.assertEqual(sorted(filas),[('Coco','Postres','Postres'),('Risotto','Alimentos','Fondos')])
+        P2,*_=armar(carta=None)
+        self.assertEqual(P2['carta'],[])
+
+
 class Navegador(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -252,7 +268,7 @@ class Navegador(unittest.TestCase):
         num=lambda:float(foot().replace(',',''))
         self.assertAlmostEqual(num(),total,delta=.51)
         card.locator('[data-acc="vdim"][data-v="Plato"]').click()
-        self.assertEqual(card.locator('tbody tr').count(),self.items['prod'].nunique())
+        self.assertEqual(card.locator('tbody tr:not(.ms-vt-secc)').count(),self.items['prod'].nunique())
         g=self.P['grupos'].index('Alimentos')
         card.locator('[data-acc="vgrupo"]').select_option(str(g))
         self.assertEqual(pg.evaluate('__vtMes.C.filas.map(f=>f.label)'),['Plato'])
@@ -260,7 +276,7 @@ class Navegador(unittest.TestCase):
         # Buscar escribiendo de a una letra: el foco no se pierde con el redibujo.
         card.locator('[data-acc="vbuscar"]').press_sequentially('agu')
         self.assertEqual(pg.evaluate('document.activeElement.dataset?.acc||document.activeElement.shadowRoot?.activeElement?.dataset.acc'),'vbuscar')
-        self.assertEqual(card.locator('tbody tr').count(),1)
+        self.assertEqual(card.locator('tbody tr:not(.ms-vt-secc)').count(),1)
         self.assertIn('Total de lo visible',card.locator('tfoot').inner_text())
         agua=self.items.loc[self.items['prod']=='Agua','venta'].sum()
         self.assertAlmostEqual(num(),agua,delta=.51)
@@ -304,6 +320,7 @@ class Navegador(unittest.TestCase):
             else:self.assertIsNone(o['pu'])
         self.mount();pg=self.pg;card=pg.locator('.ms-vt')
         card.locator('[data-acc="vdim"][data-v="Plato"]').click()
+        card.locator('[data-acc="vsec"]').click()  # sin secciones, Grupo y Subgrupo son columnas
         cab=[t.strip(' ▲▼') for t in card.locator('thead th').all_inner_texts()]
         self.assertEqual(cab[:3],['Plato','Grupo','Subgrupo'])
         # Subgrupo: las opciones siguen al grupo, y filtra.
@@ -319,7 +336,7 @@ class Navegador(unittest.TestCase):
             card.locator(f'[data-acc="vsel"][data-v="{n}"]').check()
         card.locator('[data-acc="vsolo"]').click()
         self.assertEqual(pg.evaluate('__vtMes.st.vq'),'')
-        self.assertEqual(sorted(card.locator('tbody b').all_inner_texts()),elegidos)
+        self.assertEqual(sorted(card.locator('.ms-vt-nom b').all_inner_texts()),elegidos)
         total=it.loc[it['prod'].isin(elegidos),'venta'].sum()
         self.assertAlmostEqual(float(card.locator('tfoot td').last.inner_text().replace(',','')),total,delta=.51)
         card.locator('[data-acc="vmed"][data-v="Precio unitario"]').click()
@@ -335,9 +352,63 @@ class Navegador(unittest.TestCase):
                 self.assertAlmostEqual(sum(ventas),total,places=1)
         # Las elegidas son por nombre: sobreviven a otra fecha (remontaje).
         pg.evaluate('P=>__montarMes({data:{...P,sello:"otro"},parentElement:document.querySelector("#montar")})',self.P)
-        self.assertEqual(sorted(card.locator('tbody b').all_inner_texts()),elegidos)
+        self.assertEqual(sorted(card.locator('.ms-vt-nom b').all_inner_texts()),elegidos)
         card.locator('[data-acc="vlimpiar"]').click()
-        self.assertEqual(card.locator('tbody tr').count(),it['prod'].nunique())
+        self.assertEqual(card.locator('tbody tr:not(.ms-vt-secc)').count(),it['prod'].nunique())
+
+    def test_unidades_y_venta_secciones_sin_venta_y_pedidos(self):
+        # #855: dos columnas por mesero, secciones con subtotal, platos sin venta
+        # (carta activa y elegidos) y el panel con los pedidos de una celda.
+        self.mount();pg=self.pg;card=pg.locator('.ms-vt');it=self.items
+        self.assertEqual(pg.evaluate('__vtMes.st.vmed'),'Unidades y venta')
+        ncols=pg.evaluate('__vtMes.C.cols.length')
+        self.assertEqual(card.locator('.ms-vt-sub th').count(),2*ncols+2)
+        num=lambda t:float(t.replace(',',''))
+        self.assertAlmostEqual(num(card.locator('tfoot td').last.inner_text()),it['venta'].sum(),delta=.006)
+        self.assertAlmostEqual(num(card.locator('tfoot td').nth(-2).inner_text()),it['cant'].sum(),delta=.006)
+        card.locator('[data-acc="vdim"][data-v="Plato"]').click()
+        bandas=card.locator('tr.ms-vt-secc')
+        self.assertEqual(bandas.count(),2)
+        for sub in ['Fondos','Aguas']:
+            fila=bandas.filter(has_text=sub).locator('td')
+            self.assertAlmostEqual(num(fila.last.inner_text()),it.loc[it['sub']==sub,'venta'].sum(),delta=.006)
+        # Los de la carta sin venta, en cero y en su sección; el total no cambia.
+        card.locator('[data-acc="vsin"]').click()
+        noms=card.locator('.ms-vt-nom b').all_inner_texts()
+        for n in ['Risotto','Coco']:self.assertIn(n,noms)
+        self.assertEqual(card.locator('tr.ms-vt-secc').count(),3)
+        self.assertIn('Risotto',card.locator('tr.ms-vt-secc',has_text='Fondos').locator('xpath=following-sibling::tr[1]').inner_text()+card.locator('tbody').inner_text())
+        self.assertAlmostEqual(num(card.locator('tfoot td').last.inner_text()),it['venta'].sum(),delta=.006)
+        # Un elegido sin venta se queda aunque se apague el interruptor.
+        card.locator('[data-acc="vsel"][data-v="Risotto"]').check()
+        card.locator('[data-acc="vsin"]').click()
+        self.assertIn('Risotto',card.locator('.ms-vt-nom b').all_inner_texts())
+        self.assertNotIn('Coco',card.locator('.ms-vt-nom b').all_inner_texts())
+        card.locator('[data-acc="vlimpiar"]').click()
+        # Los pedidos de Ana × Plato: los mismos que en pandas, y suman la celda.
+        ana=self.P['meseros'].index('Ana');ip=self.P['prods'].index('Plato')
+        card.locator(f'td[data-acc="vcel"][data-v="{ana}~k:{ip}"]').last.click()
+        det=card.locator('.ms-vt-det');self.assertEqual(det.count(),1)
+        D=pg.evaluate('(()=>{const D=__vtMes.D;return {peds:D.lista.map(p=>__vtMes.B.P.pedidos[p.ped]),u:D.u,v:D.v}})()')
+        ref=it[(it['prod']=='Plato')&(it['mesero']=='Ana')]
+        self.assertEqual(sorted(D['peds']),sorted(ref['ped'].astype(str).unique()))
+        self.assertAlmostEqual(D['u'],ref['cant'].sum(),places=5);self.assertAlmostEqual(D['v'],ref['venta'].sum(),places=5)
+        # Abrir un pedido muestra todas sus líneas, y la de la celda marcada.
+        det.locator('tr[data-acc="vdetped"]').first.click()
+        ped=pg.evaluate('__vtMes.B.P.pedidos[__vtMes.st.vdetPed]')
+        self.assertEqual(det.locator('.ms-vt-det-lin tbody tr').count(),int((it['ped'].astype(str)==ped).sum()))
+        self.assertEqual(det.locator('.ms-vt-det-lin tbody tr.on').count(),1)
+        with pg.expect_download() as dl:det.locator('[data-acc="excelped"]').click()
+        with tempfile.TemporaryDirectory() as temp:
+            p=Path(temp)/'pedidos.xlsx';dl.value.save_as(str(p))
+            with zipfile.ZipFile(p) as z:
+                wb=z.read('xl/workbook.xml').decode()
+                for h in ['Pedidos','Pedidos enteros','Contexto']:self.assertIn(h,wb)
+        pg.keyboard.press('Escape');self.assertEqual(card.locator('.ms-vt-det').count(),0)
+        # El total de abajo abre todo lo visible: la venta entera del rango.
+        card.locator('tfoot td[data-acc="vcel"]').last.click()
+        self.assertAlmostEqual(pg.evaluate('__vtMes.D.v'),it['venta'].sum(),places=4)
+        self.assertEqual(pg.evaluate('__vtMes.D.lista.length'),it['ped'].nunique())
 
     def test_excel_de_ajuste_deja_sin_base_el_porcentaje(self):
         self.mount();pg=self.pg;root=pg.locator('.msp')
