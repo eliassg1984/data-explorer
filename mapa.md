@@ -41,7 +41,8 @@ en ambos ejes, y `.css` reserva su lugar. Los enlaces en otra pestaña usan
 un token transitorio (dos horas); vuelven al origen en la pestaña actual.
 `js_movil` conecta la reposición del estado local de las piezas. Regla #742.
 
-Desde 901px, la franja superior es la barra de la app, de borde a borde (#851):
+Desde 901px, la franja superior es la barra de la app, de borde a borde (#851),
+con 20 px de lavanda hasta la hoja (#854):
 selector de grupo cuando el área reúne varios reportes y, al lado, las vistas
 del reporte en pantalla en pastillas, sin menú. El menú de grupos se abre por
 clic y recuerda la última vista de cada grupo (#817).

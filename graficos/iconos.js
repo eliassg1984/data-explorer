@@ -23,5 +23,6 @@ const ICONOS={
   refrescar:'<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/>',
   numeros:'<path d="M6 19v-7M12 19V5M18 19v-10"/>',
   fijar:'<path d="M9 4h6l-1 6 3 3H7l3-3z"/><path d="M12 13v7"/>',
+  documento:'<path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4M9.5 12h6M9.5 15.5h6"/>',
 };
 const icono=(n,cls='')=>`<svg class="ico${cls?` ${cls}`:''}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONOS[n]||''}</svg>`;

@@ -561,7 +561,7 @@ const G = window.__cpPer || (window.__cpPer = { st: null, F: null, raiz: null })
 G.tandas = G.tandas || {};
 const estadoInicial = () => ({ gran: 'Semana', fam: [], sub: [], prov: [], prod: [], docu: 'Todos', montos: 'Sin IGV',
   partir: FAM, res: { [FAM]: null, [SUB]: null, [PROV]: null, [PRECIO]: null }, modo: 'Resumen Total', foco: null, doc: null, provDet: null, menu: null, q: {}, orden: {}, ctx: '',
-  filtrosAbiertos: false, lectura: null, zona: 'graf', med: 'valor', contra: 'ano', item: null, kAb: false });
+  filtrosAbiertos: false, lectura: null, zona: 'graf', med: 'valor', contra: 'ano', item: null, docProd: null, kAb: false });
 // Los tonos de «Partir por», del acento al gris, en el orden de la lista.
 const TONOS = ['var(--cp-t0)', 'var(--cp-t1)', 'var(--cp-t2)', 'var(--cp-t3)', 'var(--cp-t4)', 'var(--cp-t5)'];
 const colorParte = (V, k) => (/^(Otras|Otros) \(/.test(V.partes[k][0]) ? 'var(--cp-otro)' : G.st.partir === PRECIO ? V.partes[k][1] : TONOS[k % TONOS.length]);
@@ -892,6 +892,8 @@ function detalle(F, V, st) {
   }
   const itemK = campoParte(st);
   if (itemK && st.item != null) amb = amb.filter((l) => l[itemK] === st.item);
+  // #854: un producto de la ficha lleva a SUS documentos; sólo recorta esta zona.
+  if (st.docProd != null) { amb = amb.filter((l) => l.prod === st.docProd); nombre = `${nombre} · ${F.prods[st.docProd]}`; }
   const g = new Map();
   amb.forEach((l) => {
     const a = g.get(l.compra) || { compra: l.compra, fecha: l.d, doc: l.docLeg, prov: l.prov, lineas: 0, valor: 0, neto: 0, igv: 0, tipo: l.tipo, usd: l.usd };
@@ -984,6 +986,7 @@ const ampliar = (st, cual, rot) => {
   return `<button class="ib amp-b" data-acc="amp" data-v="${cual}" aria-pressed="${on}" data-tip="${n}" data-tip-der aria-label="${n}">${on ? ICO_VOLVER : icono('ampliar')}</button>`;
 };
 function nivel2(F, V, st) {
+  const movil = esMovil();
   const zonas = [['graf', 'Gráfico'], ['tabla', 'Tabla'], ['docs', `Documentos${V && !V.vacio ? ` <span class="cnt">${num(new Set(V.dd.map((l) => l.compra)).size, 0)}</span>` : ''}`]];
   const como = st.como ? `<div class="pop-como" role="dialog"><p>Lo comprado en el rango, sin IGV salvo que «Más filtros» diga otra cosa, con las notas de crédito ya restadas.</p><dl>`
     + '<dt>Compra</dt><dd>El valor comprado, contra el mismo tramo del año pasado o del período anterior. El período en curso se compara contra los mismos días.</dd>'
@@ -991,8 +994,7 @@ function nivel2(F, V, st) {
     + '<dt>Efecto del precio</dt><dd>Lo pagado menos lo que hubiera costado al precio habitual (la mediana de los 90 días anteriores), producto por producto, sin las compras para revisar.</dd>'
     + '<dt>Para revisar</dt><dd>Una compra de S/ 50 o más a 2,5 veces su habitual o a menos de 0,4, o con decimales en una unidad entera.</dd>'
     + '<dt>Documento</dt><dd>«Todos» es lo que suman los reportes de ingresos del Almacén, menos las notas de crédito. Sólo esta tarjeta.</dd></dl><p>Es un cálculo propio, no un estándar.</p></div>' : '';
-  G.comoHtml = `<span class="como"><button class="link" data-acc="como" aria-expanded="${!!st.como}">Cómo se calcula</button>${como}</span>`;
-  const movil = esMovil();
+  G.comoHtml = `<span class="como"><button class="${movil ? 'link' : 'ib'}" data-acc="como" aria-expanded="${!!st.como}"${movil ? '' : ' data-tip="Cómo se calcula" data-tip-der aria-label="Cómo se calcula"'}>${movil ? 'Cómo se calcula' : icono('info')}</button>${como}</span>`;
   return `<div class="n2"><div class="tabs" role="tablist">${zonas.map(([k, t]) => `<button role="tab" class="${k === st.zona ? 'on' : ''}" data-acc="zona" data-v="${k}" aria-selected="${k === st.zona}">${t}</button>`).join('')}</div>`
     + (movil || !V || V.vacio ? '' : capsula(F, V, st))
     + `<div class="n2-der">${movil ? G.comoHtml : ''}</div></div>`;
@@ -1037,7 +1039,7 @@ function cabecera(F, V, st) {
   // celular «Excel» sigue con su nombre y no hay «Ampliar».
   const acciones = movil ? '<button class="excel" data-acc="excel" title="Baja lo que se ve">Excel ↓</button>'
     : `<div class="acc">${G.comoHtml || ''}<button class="ib" data-acc="excel" data-tip="Descargar Excel" aria-label="Descargar Excel">${icono('bajar')}</button>`
-      + (V && !V.vacio ? ampliar(st, 'izq', { graf: 'el gráfico', tabla: 'la tabla', docs: 'los documentos' }[st.zona]) : '') + '</div>';
+      + '</div>';
   return `<div class="cab"><span class="lugar-fecha" aria-hidden="true"></span>`
     + `<button class="filtros-toggle" data-acc="panel-filtros" aria-expanded="${!!st.filtrosAbiertos}">Filtros${todos ? ` · ${todos} activo${todos === 1 ? '' : 's'}` : ''} <span aria-hidden="true">${st.filtrosAbiertos ? '▴' : '▾'}</span></button>`
     + `<div class="fils">${fil}</div><div class="mens">${menusVista(F, V, st)}</div><span class="esp"></span>${acciones}</div>`
@@ -1123,10 +1125,10 @@ function panelLista(F, V, st) {
       it.ls.forEach((l) => prods.set(l.prod, (prods.get(l.prod) || 0) + l.v));
       const top = [...prods.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
       const ef = suma(it.ls.filter((l) => !l.fl && l.cant > 0 && finito(l.refT)), (l) => l.neto - l.refT * l.cant);
-      ficha = `<div class="pn-ficha"><div class="pn-cab"><b title="${esc(nombreParte(F, st, st.item))}">${esc(nombreParte(F, st, st.item))}</b><button class="quita" data-acc="item" data-v="${st.item}">Soltar</button></div>`
+      ficha = `<div class="pn-ficha"><div class="pn-cab"><b title="${esc(nombreParte(F, st, st.item))}">${esc(nombreParte(F, st, st.item))}</b><button class="ib docs-b" data-acc="ver-docs" data-tip="Ver sus documentos" data-tip-der aria-label="Ver sus documentos">${icono('documento')}</button><button class="quita" data-acc="item" data-v="${st.item}">Soltar</button></div>`
         + `<div class="pr"><span>Pesa en lo elegido</span><b>${Math.round(it.v / total * 100)} %</b></div><div class="pr"><span>Efecto del precio</span><b class="${ef > 0.5 ? 'sube' : ef < -0.5 ? 'baja' : ''}">${esc(fD0(ef))}</b></div>`
-        + top.map(([p, v]) => `<div class="pr"><span title="${esc(F.prods[p])}">${esc(F.prods[p])}</span><b>${esc(fmtK(v))}</b></div>`).join('')
-        + `<button class="ir" data-acc="zona" data-v="docs">Ver sus documentos →</button></div>`;
+        + top.map(([p, v]) => `<button class="pr prod" data-acc="prod-docs" data-v="${p}" title="Ver los documentos de ${esc(F.prods[p])}"><span>${esc(F.prods[p])}</span><b>${esc(fmtK(v))}</b></button>`).join('')
+        + '</div>';
     }
   } else {
     filas = V.partes.map((p, q) => { const v = foco ? p[2][V.ix.get(foco)] : suma(p[2], (x) => x), t = foco ? V.tot[V.ix.get(foco)] : suma(V.tot, (x) => x); return `<div class="fi"><span class="n"><i style="background:${colorParte(V, q)}"></i>${esc(p[0])}</span><b>${esc(fmtK(v))}</b><small>${Math.round((t ? v / t : 0) * 100)} %</small></div>`; }).join('');
@@ -1169,7 +1171,7 @@ function pintar() {
     const fantasma = V.ghost.some((x) => x != null) && st.med === 'valor';
     const grano = esc(`por ${AGRUPADO[V.gran]}`);
     const ley = fantasma ? `<span class="ley"><i></i>${st.contra === 'ano' ? 'año pasado' : 'período anterior'}</span>` : '';
-    izq = `<div class="tit"><span class="t">${NOM[st.med]} ${grano}<small>· ${esc(SUBT[st.med])}${hayPar ? ' · * período incompleto' : ''}</small></span>${quitar}<span class="esp"></span>${ley}${st.amp === 'izq' ? ampliar(st, 'izq', 'el gráfico') : ''}</div>`
+    izq = `<div class="tit"><span class="t">${NOM[st.med]} ${grano}<small>· ${esc(SUBT[st.med])}${hayPar ? ' · * período incompleto' : ''}</small></span>${quitar}<span class="esp"></span>${ley}${ampliar(st, 'izq', 'el gráfico')}</div>`
       + `<div class="graf" data-graf="1"><div class="tip" hidden></div></div>`;
     if (esMovil()) {
       izq += st.lectura != null && st.lectura < V.n ? `<div class="lectura" role="region" aria-label="Detalle del período"><button class="lectura-cerrar" data-acc="cerrar-lectura" aria-label="Cerrar detalle">×</button><div>${tip(F, V, st, st.lectura)}</div><button class="ver-documentos" data-acc="ver-barra" data-v="${st.lectura}">Ver documentos de este período</button></div>` : '<p class="ayuda-tocar">Toca una barra para ver su desglose.</p>';
@@ -1179,11 +1181,11 @@ function pintar() {
   } else if (st.zona === 'tabla') {
     const z = st.modo === 'Resumen del Período' ? resumenProveedores(F, V, st) : resumenTotal(F, V, st);
     G.zona = z;
-    izq = `<div class="tit"><div class="seg chico">${[['Resumen Total', 'Por período'], ['Resumen del Período', 'Por proveedor']].map(([k, t]) => `<button class="${k === st.modo ? 'on' : ''}" data-acc="modo" data-v="${k}">${t}</button>`).join('')}</div><span class="cap">${z.pie}</span>${st.amp === 'izq' ? ampliar(st, 'izq', 'la tabla') : ''}</div><div class="zona">${z.html}</div>`;
+    izq = `<div class="tit"><div class="seg chico">${[['Resumen Total', 'Por período'], ['Resumen del Período', 'Por proveedor']].map(([k, t]) => `<button class="${k === st.modo ? 'on' : ''}" data-acc="modo" data-v="${k}">${t}</button>`).join('')}</div><span class="cap">${z.pie}</span>${ampliar(st, 'izq', 'la tabla')}</div><div class="zona">${z.html}</div>`;
   } else {
     const z = detalle(F, V, st);
     G.zona = z;
-    izq = `<div class="tit"><span class="cap">${z.pie}</span>${quitar}${st.amp === 'izq' ? ampliar(st, 'izq', 'los documentos') : ''}</div><div class="zona">${z.html}</div>`;
+    izq = `<div class="tit"><span class="cap">${z.pie}</span>${quitar}${st.docProd != null ? `<button class="quita" data-acc="quita-prod" title="Volver a todos los documentos">${esc(F.prods[st.docProd])} ✕</button>` : ''}<span class="esp"></span>${ampliar(st, 'izq', 'los documentos')}</div><div class="zona">${z.html}</div>`;
     if (z.panel) panel = z.panel;
   }
   html += `<div class="cuerpo" data-amp="${st.amp || ''}"><div class="izq">${izq}</div><aside class="panel" aria-label="Lo que hay adentro">${panel}</aside></div>`;
@@ -1195,6 +1197,9 @@ function pintar() {
   const casilla = cas ? [cas.dataset.acc, cas.dataset.k || '', cas.dataset.v] : null;
   raiz.innerHTML = html;
   [...raiz.querySelectorAll('.tl')].forEach((e, i) => { if (listas[i]) e.scrollTop = listas[i]; });
+  // #854: la lista del panel que sigue más abajo lo dice con un degradé al pie, y no
+  // con un renglón cortado por la mitad que parece un error.
+  raiz.querySelectorAll('.panel .lista').forEach((e) => { const m = () => { const v = e.scrollTop + e.clientHeight < e.scrollHeight - 2 ? '1' : ''; if (e.dataset.sigue !== v) e.dataset.sigue = v; }; m(); e.addEventListener('scroll', m, { passive: true }); requestAnimationFrame(m); });
   const menus2 = [...raiz.querySelectorAll(MENUS)];
   if (menus2.length === menus.length) menus2.forEach((e, i) => { if (menus[i]) e.scrollTop = menus[i]; });
   if (q) { const n = raiz.querySelector(`.ms-q[data-k="${q.dataset.k}"], .ff-q[data-k="${q.dataset.k}"]`); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }
@@ -1291,9 +1296,12 @@ function accion(acc, val, el) {
   } else if (acc === 'limpiar') { st[val] = []; }
   else if (acc === 'medida') { st.med = val; st.item = null; }
   else if (acc === 'kpis') st.kAb = !st.kAb;
-  else if (acc === 'zona') { st.zona = val; if (val === 'tabla' && st.modo === 'Detalle') st.modo = 'Resumen Total'; }
+  else if (acc === 'zona') { st.zona = val; st.docProd = null; if (val === 'tabla' && st.modo === 'Detalle') st.modo = 'Resumen Total'; }
+  else if (acc === 'ver-docs') { st.zona = 'docs'; st.docProd = null; }
+  else if (acc === 'prod-docs') { st.zona = 'docs'; st.docProd = Number(val); }
+  else if (acc === 'quita-prod') st.docProd = null;
   else if (acc === 'quita-foco') { st.foco = null; st.doc = null; }
-  else if (acc === 'item') { const k = Number(val), igual = st.item === k; st.item = igual ? null : k; const nom = igual ? null : nombreParte(G.F, st, k); st.res[st.partir] = nom != null && V.opsRes.includes(nom) ? nom : null; }
+  else if (acc === 'item') { const k = Number(val), igual = st.item === k; st.item = igual ? null : k; st.docProd = null; const nom = igual ? null : nombreParte(G.F, st, k); st.res[st.partir] = nom != null && V.opsRes.includes(nom) ? nom : null; }
   else if (acc === 'pagina') { const P = G.F.familias, el = P.elegidas.length ? P.elegidas : P.todas.map((x) => x[0]); P.elegidas = el.includes(val) ? el.filter((x) => x !== val) : [...el, val]; G.pagina = P.elegidas.slice(); st.menu = 'pag'; }
   else if (acc === 'pagina-todas') { G.pagina = G.F.familias.todas.map((x) => x[0]); G.enviar?.('familias', G.pagina); return; }
   // #843: la ficha de familias. Las casillas marcan `G.ffPend` y se aplican al

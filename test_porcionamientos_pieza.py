@@ -178,4 +178,16 @@ class Navegador(unittest.TestCase):
         self.assertEqual(self.pg.evaluate('__movPeriodo.D.nDocs'),1)
 
 
+
+class TestIconosAntepuestos(unittest.TestCase):
+    def test_toda_pieza_con_movimientos_periodo_lleva_los_iconos(self):
+        """#854: `movimientos_periodo.js` llama a `icono()` desde la #845. Porcionamientos
+        lo montaba sin `iconos.js` y la pieza moría con «icono is not defined»."""
+        raiz = Path(__file__).parent / 'graficos'
+        for f in raiz.glob('*.py'):
+            t = f.read_text(encoding='utf-8')
+            if "'movimientos_periodo.js'" in t or '"movimientos_periodo.js"' in t:
+                self.assertIn('iconos.js', t, f.name)
+                self.assertLess(t.index('iconos.js'), t.index('movimientos_periodo.js'), f.name)
+
 if __name__=='__main__':unittest.main(verbosity=2)

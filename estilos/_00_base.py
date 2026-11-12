@@ -170,7 +170,9 @@ CSS = """    <style>
            tiene que arrancar debajo de ella. */
         /* 2026-11-09: 44 -> 60, regla #842: la franja deja 12 px entre la
            píldora de la ruta y la hoja, como el boceto. */
-        --cab-offset-contenido: 60px;
+        /* 2026-11-12: 60 -> 68, regla #854: 20 px entre la barra y la hoja (eran
+           12, y la hoja se leía pegada a la barra). */
+        --cab-offset-contenido: 68px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido

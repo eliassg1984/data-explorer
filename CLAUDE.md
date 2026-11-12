@@ -1109,8 +1109,11 @@ vistas); las otras cinco siguen con el ícono ⚙. Lo que muerde:
   afuera y el valor en una caja con borde (`semanal.js::menu`, `.men .caja`), con el
   `<select>` transparente encima. La #848 los había llevado a las palabras del título,
   la leyenda y el panel; esos títulos vuelven a ser texto. Las pestañas Gráfico | Tabla
-  | Documentos van en 14 px, la elegida índigo con raya de 3 px. Las acciones: «Cómo se calcula» y los
-  íconos de la app (`graficos/iconos.js`) para descargar y ampliar. «Más filtros» son
+  | Documentos van en 14 px, la elegida índigo con raya de 3 px. Las acciones, íconos de la
+  app (`graficos/iconos.js`): ⓘ «Cómo se calcula» y descargar. **Desde la #854** cada ⤢ va
+  al final del título de su zona, una línea separa los controles del contenido, todo lo que
+  tiene caja mide 32 px con 13 px, y la ficha de lo elegido abre sus documentos con un ícono
+  junto a «Soltar» —y cada producto, los suyos (`st.docProd`)—. «Más filtros» son
   cuatro campos plegados, Documento y Montos. Los colores son la escala de controles,
   `--ctl-*` en `estilos/_00_base.py`: gris cambia la forma de ver, lavanda recorta,
   contorno es un campo. Hoy la usa sólo esta vista.

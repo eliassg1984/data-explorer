@@ -506,3 +506,37 @@ button.fi:hover { background: var(--bg-hover); }
   /* La leyenda de las barras grises con forma de barra, no de casilla. */
   .ley i { width: 8px; height: 12px; border-radius: 2px; }
 }
+
+/* #854 (boceto https://claude.ai/artifact/5FTip3mmWATyCGWUmhjPgo, «Recomendada»):
+   - Una ⤢ por zona, al final de SU título: la del gráfico (o la tabla, o los
+     documentos) iba arriba a la derecha, encima del panel, y se leía como suya.
+   - Arriba a la derecha, sólo lo de toda la vista: ⓘ «Cómo se calcula» y descargar.
+   - Una línea de borde a borde separa los controles del contenido, la misma que
+     hay bajo las pestañas, y los dos títulos de zona quedan en un renglón de 40 px.
+   - Cajas parejas: todo lo que tiene caja en la hoja mide 32 px y escribe en
+     13 px; en la ficha, 28 px.
+   - La ficha lleva a los documentos con un ícono junto a «Soltar», y cada
+     producto, a los suyos. */
+/* El producto de la ficha es un botón: se ve como su renglón, también en el celular. */
+.pr.prod { width: calc(100% + 12px); margin: 0 -6px; padding: 0 6px; border: 0; border-radius: 5px; background: none;
+  font: inherit; font-size: 12.5px; color: inherit; text-align: left; cursor: pointer; }
+.pr.prod b { color: var(--text-primary); }
+@media (min-width: 901px) {
+  .cab { position: relative; }
+  .cab::after { content: ''; position: absolute; left: -12px; right: -12px; bottom: -5px; height: 1px;
+    background: var(--ctl-linea, var(--border)); pointer-events: none; }
+  .tit, .panel > .pn-cab { box-sizing: border-box; height: 40px; min-height: 40px; padding-top: 6px; align-items: center; }
+  .tit .amp-b, .panel > .pn-cab .amp-b { flex: none; width: 32px; height: 32px; }
+  .tit .amp-b { margin-left: 8px; }
+  .men .caja { height: 32px; padding: 0 10px; font-size: 13px; font-weight: 400; }
+  .cpp .ff-chip { height: 32px; border-radius: 16px; }
+  .cpp .ff-chip .ff-b { height: 32px; border-radius: 16px 0 0 16px; }
+  .pn-ficha .pn-cab .docs-b { margin-left: auto; width: 28px; height: 28px; }
+  .pn-ficha .pn-cab .quita { height: 28px; min-height: 28px; margin-left: 4px; border-radius: 6px; }
+  .panel .lista[data-sigue="1"] { -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent);
+    mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent); }
+  .pr.prod:hover { background: var(--ctl-gris, var(--bg-hover)); }
+  .pr.prod:hover span { color: var(--accent-deep); text-decoration: underline; text-underline-offset: 3px; }
+  .pr.prod:hover b::after { content: ' →'; color: var(--accent-deep); }
+  .pr.prod:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+}

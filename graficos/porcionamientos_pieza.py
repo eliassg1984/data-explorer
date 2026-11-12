@@ -11,8 +11,11 @@ from . import porcionamientos_datos as datos
 
 _DIR=Path(__file__).parent
 _PIEZA=st.components.v2.component('porcionamientos_periodo',
-    css=css_movil((_DIR/'movimientos_periodo.css').read_text(encoding='utf-8')),
-    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'movimientos_periodo.js').read_text(encoding='utf-8')))
+    # Los íconos de la app van antepuestos, como en movimientos_periodo_pieza: el
+    # .js común los usa desde la #845 y sin ellos la pieza moría con «icono is not
+    # defined» (#854).
+    css=css_movil((_DIR/'iconos.css').read_text(encoding='utf-8')+(_DIR/'movimientos_periodo.css').read_text(encoding='utf-8')),
+    js=js_movil((_DIR/'_xlsx.js').read_text(encoding='utf-8')+(_DIR/'iconos.js').read_text(encoding='utf-8')+(_DIR/'movimientos_periodo.js').read_text(encoding='utf-8')))
 
 
 def _huella(d):

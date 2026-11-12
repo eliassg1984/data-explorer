@@ -559,9 +559,10 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             pg.close()
 
     def test_cabecera_como_el_boceto(self):
-        """#844 y #851: el nivel 3 con las medidas del boceto: los filtros, los tres
-        controles de la vista juntos y en caja, las acciones como íconos y «Más
-        filtros» con sus campos plegados."""
+        """#844, #851 y #854: el nivel 3 con las medidas del boceto: los filtros, los
+        tres controles de la vista juntos y en caja, las acciones como íconos, una
+        línea debajo, la ⤢ de cada zona en su título y «Más filtros» con sus campos
+        plegados. Todo lo que tiene caja mide 32 px y escribe en 13 px (#854)."""
         _h, P = _armar_una_pantalla(_ficha(("ALIMENTOS", "VINOS")))
         pg = self.b.new_page(viewport={"width": 1323, "height": 680})
         caja = lambda s: pg.locator(s).first.bounding_box()  # noqa: E731
@@ -570,7 +571,7 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             # «Más filtros» arranca donde las pestañas, y los grupos se separan por cercanía.
             tabs, mas, chip = caja(".tabs"), caja(".ms-b"), caja(".ff-chip")
             self.assertAlmostEqual(mas["x"], tabs["x"], delta=1)
-            self.assertEqual((mas["height"], chip["height"]), (32, 28))
+            self.assertEqual((mas["height"], chip["height"]), (32, 32))
             self.assertAlmostEqual(chip["x"] - (mas["x"] + mas["width"]), 4, delta=1)
             # #851: las pestañas son el segundo nivel de navegación: 14 px, la elegida en
             # índigo con raya de 3 px, su texto en el borde del contenido y el número en cápsula.
@@ -588,7 +589,8 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             self.assertEqual(pg.locator(".mens").evaluate("e => getComputedStyle(e).borderLeftWidth"), "1px")
             self.assertAlmostEqual(caja(".mens")["x"] - (caja(".ff-chip")["x"] + caja(".ff-chip")["width"]), 16, delta=1)
             for c in pg.locator(".cab .men .caja").all():
-                self.assertEqual(c.bounding_box()["height"], 28)
+                self.assertEqual(c.bounding_box()["height"], 32)
+                self.assertEqual(c.evaluate("e => getComputedStyle(e).fontSize"), "13px")
                 self.assertEqual(c.evaluate("e => getComputedStyle(e).borderTopWidth"), "1px")
                 self.assertEqual(c.locator("select").evaluate("e => getComputedStyle(e).opacity"), "0")
             # Los títulos son texto que dice lo elegido: sin controles adentro.
@@ -608,25 +610,45 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             pg.locator('[data-acc="zona"][data-v="tabla"]').first.click()
             self.assertEqual(pg.locator(".cab .men").evaluate_all(menus), [["Agrupar", "Mes"], ["Contra", "Año pasado"], ["Partir por", "Familia"]])
             pg.locator('[data-acc="zona"][data-v="graf"]').first.click()
-            # Las acciones, al final y detrás de una raya: un enlace y dos íconos con nombre.
+            # Las acciones de toda la vista, al final y detrás de una raya: dos íconos con
+            # nombre (#854: «Cómo se calcula» también es ícono, y la ⤢ va a su zona).
             acc = pg.locator(".acc")
             self.assertEqual(acc.evaluate("e => getComputedStyle(e).borderLeftWidth"), "1px")
-            self.assertEqual(acc.locator("> *").evaluate_all("xs => xs.map((e) => e.getAttribute('aria-label') || e.innerText.trim())"),
-                             ["Cómo se calcula", "Descargar Excel", "Ampliar el gráfico"])
-            for s in ('.acc [data-acc="excel"]', ".acc .amp-b", ".pn-cab .amp-b"):
+            self.assertEqual(acc.locator("button").evaluate_all("xs => xs.map((e) => e.getAttribute('aria-label') || e.innerText.trim())"),
+                             ["Cómo se calcula", "Descargar Excel"])
+            self.assertEqual(pg.locator(".acc .amp-b").count(), 0)
+            for s in ('.acc [data-acc="como"]', '.acc [data-acc="excel"]', ".tit .amp-b", ".panel > .pn-cab .amp-b"):
                 b = caja(s)
                 self.assertEqual((b["width"], b["height"]), (32, 32), s)
                 self.assertEqual(pg.locator(s).first.get_attribute("data-tip"), pg.locator(s).first.get_attribute("aria-label"))
                 self.assertEqual(pg.locator(s).first.locator("svg.ico").count(), 1)
             der = caja(".acc")["x"] + caja(".acc")["width"]
             self.assertAlmostEqual(der, caja(".cab")["x"] + caja(".cab")["width"], delta=1)
-            # Ampliar esconde el nivel 3; el camino de vuelta queda en el renglón del gráfico.
-            pg.locator(".acc .amp-b").click()
+            # #854: cada ⤢ al final del título de su zona, las dos en el mismo renglón; y
+            # una línea de borde a borde entre los controles y los títulos.
+            self.assertEqual(pg.locator(".tit .amp-b").get_attribute("aria-label"), "Ampliar el gráfico")
+            self.assertEqual(pg.locator(".panel > .pn-cab .amp-b").get_attribute("aria-label"), "Ampliar la lista")
+            self.assertAlmostEqual(caja(".tit .amp-b")["y"], caja(".panel > .pn-cab .amp-b")["y"], delta=1)
+            self.assertAlmostEqual(caja(".tit .amp-b")["x"] + 32, caja(".tit")["x"] + caja(".tit")["width"], delta=1)
+            linea = pg.locator(".cab").evaluate("e => { const a = getComputedStyle(e, '::after'); return [a.height, a.backgroundColor, a.content]; }")
+            self.assertEqual(linea[0], "1px")
+            self.assertNotEqual(linea[2], "none")
+            self.assertGreater(caja(".tit")["y"], caja(".cab")["y"] + caja(".cab")["height"])
+            for t in ("graf", "tabla", "docs"):
+                pg.locator(f'[data-acc="zona"][data-v="{t}"]').first.click()
+                self.assertEqual(pg.locator(".tit .amp-b").count(), 1, t)
+            pg.locator('[data-acc="zona"][data-v="graf"]').first.click()
+            # «Cómo se calcula» abre su explicación desde el ícono.
+            pg.locator('.acc [data-acc="como"]').click()
+            self.assertEqual(pg.locator(".pop-como").count(), 1)
+            pg.locator('.acc [data-acc="como"]').click()
+            # Ampliar esconde el nivel 3; el camino de vuelta queda en el mismo lugar.
+            pg.locator(".tit .amp-b").click()
             self.assertFalse(pg.locator(".cab").is_visible())
             self.assertEqual(pg.locator(".tit .amp-b").get_attribute("aria-label"), "Volver (Esc)")
             pg.keyboard.press("Escape")
             self.assertTrue(pg.locator(".cab").is_visible())
-            self.assertEqual(pg.locator(".tit .amp-b").count(), 0)
+            self.assertEqual(pg.locator(".tit .amp-b").get_attribute("aria-label"), "Ampliar el gráfico")
             # «Más filtros»: cuatro campos plegados que dicen lo elegido, Documento y Montos.
             pg.locator(".ms-b").click()
             panel = caja(".ms-l")
@@ -666,6 +688,48 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             # Una pantalla: nada de esto la hace pedir scroll.
             pg.keyboard.press("Escape")
             self.assertLessEqual(pg.evaluate("document.querySelector('.cpp').getBoundingClientRect().bottom"), 680)
+        finally:
+            pg.close()
+
+    def test_la_ficha_lleva_a_los_documentos(self):
+        """#854: sin «Ver sus documentos →» fijo. El ícono junto a «Soltar» abre los
+        documentos de lo elegido, y cada producto de la ficha, sólo los suyos, con una
+        ficha ✕ para volver a todos. Elegir otra cosa suelta el producto."""
+        _h, P = _armar_una_pantalla(_ficha(("ALIMENTOS", "VINOS")))
+        pg = self.b.new_page(viewport={"width": 1323, "height": 680})
+        n_docs = lambda: int(pg.locator(".tit .cap").inner_text().split(" documentos")[0].split("· ")[-1])  # noqa: E731
+        try:
+            self._montar(pg, P)
+            pg.locator(".lista .fi").first.click()
+            self.assertEqual(pg.locator(".pn-ficha .ir").count(), 0)
+            docs_b = pg.locator(".pn-ficha .docs-b")
+            self.assertEqual((docs_b.get_attribute("aria-label"), docs_b.get_attribute("data-tip")), ("Ver sus documentos", "Ver sus documentos"))
+            self.assertEqual(docs_b.bounding_box()["height"], 28)
+            self.assertEqual(pg.locator(".pn-ficha .quita").bounding_box()["height"], 28)
+            prods = pg.locator(".pn-ficha .pr.prod")
+            self.assertGreater(prods.count(), 0)
+            # El ícono: los documentos de lo elegido, sin producto.
+            docs_b.click()
+            self.assertEqual(pg.evaluate("[window.__cpPer.st.zona, window.__cpPer.st.docProd]"), ["docs", None])
+            todos = n_docs()
+            pg.locator('[data-acc="zona"][data-v="graf"]').first.click()
+            # Un producto: sus documentos, menos que todos, y cada uno lo trae.
+            nombre = pg.locator(".pn-ficha .pr.prod span").first.inner_text()
+            pg.locator(".pn-ficha .pr.prod").first.click()
+            self.assertEqual(pg.evaluate("window.__cpPer.st.zona"), "docs")
+            self.assertIn(nombre, pg.locator(".tit .cap").inner_text())
+            chip = pg.locator('.tit [data-acc="quita-prod"]')
+            self.assertEqual(chip.inner_text(), f"{nombre} ✕")
+            uno = n_docs()
+            self.assertLessEqual(uno, todos)
+            self.assertGreater(uno, 0)
+            # La ✕ vuelve a todos; cambiar de pestaña o de elección suelta el producto.
+            chip.click()
+            self.assertEqual(n_docs(), todos)
+            pg.locator('[data-acc="zona"][data-v="graf"]').first.click()
+            pg.locator(".pn-ficha .pr.prod").first.click()
+            pg.locator('[data-acc="zona"][data-v="tabla"]').first.click()
+            self.assertIsNone(pg.evaluate("window.__cpPer.st.docProd"))
         finally:
             pg.close()
 

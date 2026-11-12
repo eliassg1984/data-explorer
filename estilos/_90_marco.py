@@ -1093,9 +1093,10 @@ CSS = """
             border-radius: 0;
             /* La línea de abajo y, debajo de ella, el lavanda hasta la hoja: lo que
                asoma por encima de la hoja (los controles de Stock, `top: -40px`)
-               quedaba debajo de la franja, que antes llegaba hasta ahí. */
+               quedaba debajo de la franja, que antes llegaba hasta ahí. El alto es
+               el hueco entre la barra y la hoja (20 px desde la #854). */
             box-shadow: 0 1px 0 var(--ctl-linea),
-                        0 calc(var(--marco-hoja) - var(--franja-arriba)) 0 var(--marco-fondo);
+                        0 calc(var(--cab-offset-contenido) + var(--marco-hoja) - var(--franja-arriba) - var(--franja-rep-alto)) 0 var(--marco-fondo);
         }
         .st-key-nav_franja_rep > [data-testid="stElementContainer"]:first-child {
             width: auto !important; flex: none !important;

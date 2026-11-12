@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-853 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+854 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (294)
+**CSS y estilos** (295)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -361,6 +361,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#848** — Período: Agrupar, Partir por y Contra viven donde se ve lo que cambian (opción C)
 - **#850** — Los costados de la hoja: 8 px más a la izquierda y 16 a la derecha, en toda la app
 - **#851** — La franja es la barra de la app, con las vistas a la vista; Período, con sus controles juntos
+- **#854** — Período ordenado: 20 px bajo la barra, una ⤢ por zona, la línea bajo los controles, cajas…
 
 **Layout y alturas** (115)
 
@@ -480,7 +481,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#833** — La ubicación, la distribución y el orden de capas de un insertado son decisiones distintas
 - **#836** — Una pieza completa no equivale a una capa entre sus controles
 
-**Plotly y figuras** (136)
+**Plotly y figuras** (137)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -618,6 +619,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#847** — Gráficos chicos compartidos, traducidos de Tremor: graficos/mini.js + .css
 - **#848** — Período: Agrupar, Partir por y Contra viven donde se ve lo que cambian (opción C)
 - **#849** — Diferencias del cierre: el panel de los números con los gráficos chicos, y Barras y 6 cierres…
+- **#854** — Período ordenado: 20 px bajo la barra, una ⤢ por zona, la línea bajo los controles, cajas…
 
 **AgGrid y tablas** (99)
 
@@ -59790,6 +59792,50 @@ base nula, año bisiesto, conciliación y validación de enlaces).
    - `test_meseros_pieza.py` compara el precio unitario con pandas y recorre en Chromium el
      subgrupo, las columnas, elegir buscando, «Solo elegidas», su total, su Excel y el remontaje.
 
+854. **Período ordenado: 20 px bajo la barra, una ⤢ por zona, la línea bajo los controles, cajas parejas y los documentos desde la ficha.**
+   A pedido, sobre una captura de Período en Cloud («el espacio entre la franja y la tarjeta
+   lo veo muy angosto», «dos flechas de maximizar», «"Ver sus documentos": otra forma que no
+   sea una etiqueta siempre visible») y una barra lavanda que el usuario dibujó entre los
+   controles y el contenido. Boceto aprobado, «Recomendada»:
+   https://claude.ai/artifact/5FTip3mmWATyCGWUmhjPgo.
+   - **20 px entre la barra y la hoja, en toda la app** (eran 12): `--cab-offset-contenido`
+     60 → 68 y `alturas._CAB_OFFSET` igual (test_graficos coteja los dos). La sombra lavanda
+     de la barra (#851) cubre ese hueco con una cuenta, no con un número:
+     `--cab-offset-contenido + --marco-hoja − --franja-arriba − --franja-rep-alto`.
+   - **Cada ⤢ va al final del título de SU zona** (`semanal.js::ampliar`): la del gráfico
+     —o la tabla, o los documentos— estaba arriba a la derecha, encima del panel, y se leía
+     como del panel, que tiene la suya. Las dos quedan en el mismo renglón.
+   - **Arriba a la derecha, sólo lo de toda la vista**: «Cómo se calcula» es un ícono ⓘ con
+     su nombre al cursor (`iconos.js::info`) y descargar. En el celular sigue escrito.
+   - **Una línea de borde a borde separa los controles del contenido** (`.cab::after`), la
+     misma que hay bajo las pestañas, y los dos títulos de zona van en un renglón de 40 px:
+     quedan a la misma altura (estaban 3 px corridos). La banda lavanda que dibujó el usuario
+     se descartó en el boceto: es el color del fondo de la app —la hoja parecía partida en
+     dos— y el de lo elegido, y escondía el cuadrito de «año pasado». Una gris, también.
+   - **Cajas parejas**: lo que tiene caja en la hoja mide 32 px y escribe en 13 px (la
+     cápsula, Más filtros, la ficha de familias, Agrupar/Contra/Partir por, los íconos);
+     los tres selectores medían 28 px con 12 px junto a «Más filtros» de 32. En la ficha de
+     lo elegido, «Soltar» y el ícono de documentos, 28 px.
+   - **Los documentos, desde la ficha**: se fue «Ver sus documentos →». Un ícono de
+     documento junto a «Soltar» (`iconos.js::documento`, nuevo) abre los de lo elegido, y
+     cada producto de la ficha es un botón que abre SÓLO los suyos (`st.docProd`): un
+     recorte de la zona Documentos, no un filtro de la vista, con una ficha «Producto ✕» en
+     el título para volver a todos. Cambiar de pestaña o de elección lo suelta.
+   - **La lista del panel que sigue más abajo se apaga al pie** (`data-sigue`, un degradé de
+     24 px): con 8 px menos de alto, el quinto renglón quedaba cortado por la mitad.
+   - **Comparada con el boceto, píxel por píxel**: barra, columna, pestañas, controles,
+     títulos, lista y ficha, iguales. Difiere el gráfico, y es el boceto el que estaba mal: lo
+     armé inyectando los cambios sobre la página, y el gráfico no se volvió a dibujar y quedó
+     14 px más abajo; la app lo dibuja a su alto.
+   - `test_compras_periodo.py` cubre las cajas de 32/13, la línea, cada ⤢ en su título en
+     las tres zonas, la ⓘ y, en `test_la_ficha_lleva_a_los_documentos`, el ícono, el producto,
+     su ✕ y que otra elección lo suelte.
+   - **De paso, Producción › Porcionamientos estaba caído** con «icono is not defined»:
+     `movimientos_periodo.js` usa `icono()` desde la #845 y `porcionamientos_pieza.py` lo
+     montaba sin `iconos.js` (y su `.css`). Va antepuesto, como en la otra pieza, y
+     `test_porcionamientos_pieza.py::TestIconosAntepuestos` lo exige a toda pieza que monte
+     ese `.js`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59802,7 +59848,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#853**; la próxima toma el número siguiente.
+> última regla es la **#854**; la próxima toma el número siguiente.
 
 >
 
