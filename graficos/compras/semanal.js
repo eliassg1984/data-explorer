@@ -957,32 +957,24 @@ const nomFam = (f) => { const x = String(f).toLowerCase(); return x.charAt(0).to
 // transparente, que es el que abre la lista y recibe el teclado.
 function menu(k, rot, aria, ops, val) {
   const txt = (ops.find(([v]) => v === val) || ops[0] || ['', ''])[1];
-  return `<label class="men"><small>${rot}:</small><span>${esc(txt)}</span><i aria-hidden="true">▾</i>`
-    + `<select data-sel="${k}" aria-label="${aria}">${ops.map(([v, t]) => `<option value="${esc(v)}"${v === val ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
+  const sel = `<select data-sel="${k}" aria-label="${aria}">${ops.map(([v, t]) => `<option value="${esc(v)}"${v === val ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+  if (esMovil()) return `<label class="men"><small>${rot}:</small><span>${esc(txt)}</span><i aria-hidden="true">▾</i>${sel}</label>`;
+  // #851 (opción B del boceto): el rótulo afuera y el valor en su caja, que es la
+  // que abre la lista.
+  const Txt = String(txt).charAt(0).toUpperCase() + String(txt).slice(1);
+  return `<label class="men"><small>${rot}</small><span class="caja"><span>${esc(Txt)}</span><i aria-hidden="true">▾</i>${sel}</span></label>`;
 }
-// Desde la #848 (opción C del boceto), en escritorio cada uno vive donde se ve
-// lo que cambia: Agrupar en el título del gráfico («Compra por semana ▾»),
-// Partir por en el encabezado del panel («Por familia ▾») y Contra en la
-// leyenda («contra año pasado ▾»). La palabra ES el control: índigo, subrayado
-// punteado y el mismo `<select>` transparente encima. En el nivel 3 quedan sólo
-// los que no tienen dónde verse: en Tabla y Documentos, Agrupar y Contra; en
-// Documentos, también Partir por (su panel es otro). En el celular, todos ahí.
+// Desde la #851 (opción B del boceto https://claude.ai/artifact/MhVrH9AW34qFidWQ3Kk8cC)
+// Agrupar, Contra y Partir por van JUNTOS en el nivel 3, detrás de una raya y en
+// el orden en que se piensa, también en el gráfico. La #848 los había llevado a
+// las palabras del título, de la leyenda y del panel: tres lugares para tres
+// controles que hacen lo mismo. Los títulos vuelven a ser texto que dice lo elegido.
 const OPS_CONTRA = [['ano', 'año pasado'], ['ant', 'período anterior'], ['no', 'sin comparar']];
-const OPS_GRAN_PAL = GRANOS.map(([v]) => [v, AGRUPADO[v]]);
-const PARTIR_PAL = { [FAM]: 'familia', [SUB]: 'subfamilia', [PROV]: 'proveedor', [PRECIO]: 'precio habitual' };
-const enSitio = () => !esMovil();
-function palabra(k, aria, ops, val) {
-  const txt = (ops.find(([v]) => v === val) || ops[0] || ['', ''])[1];
-  return `<label class="pal" title="${aria}"><span>${esc(txt)}</span><i aria-hidden="true">▾</i>`
-    + `<select data-sel="${k}" aria-label="${aria}">${ops.map(([v, t]) => `<option value="${esc(v)}"${v === val ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
-}
-const partirEnPanel = (V, st) => enSitio() && st.zona !== 'docs' && V.partidaGran && (V.opsPartir || []).length;
 function menusVista(F, V, st) {
   if (!V || V.vacio) return '';
-  const graf = enSitio() && st.zona === 'graf';
-  return (graf ? '' : menu('gran', 'Agrupar', 'Agrupar', GRANOS, st.gran))
-    + (V.partidaGran && !partirEnPanel(V, st) ? menu('partir', 'Partir por', 'Partir por', (V.opsPartir || []).map((k) => [k, k]), st.partir) : '')
-    + (F.C.length && !graf ? menu('contra', 'Contra', 'Contra qué comparar', OPS_CONTRA, st.contra) : '');
+  return menu('gran', 'Agrupar', 'Agrupar', GRANOS, st.gran)
+    + (F.C.length ? menu('contra', 'Contra', 'Contra qué comparar', OPS_CONTRA, st.contra) : '')
+    + (V.partidaGran ? menu('partir', 'Partir por', 'Partir por', (V.opsPartir || []).map((k) => [k, k]), st.partir) : '');
 }
 // Nivel 2: qué se mira, y a la derecha «Cómo se calcula» (#792). Los íconos son
 // los de la app (`iconos.js`, antepuesto; regla #821), con su nombre al cursor.
@@ -992,7 +984,7 @@ const ampliar = (st, cual, rot) => {
   return `<button class="ib amp-b" data-acc="amp" data-v="${cual}" aria-pressed="${on}" data-tip="${n}" data-tip-der aria-label="${n}">${on ? ICO_VOLVER : icono('ampliar')}</button>`;
 };
 function nivel2(F, V, st) {
-  const zonas = [['graf', 'Gráfico'], ['tabla', 'Tabla'], ['docs', `Documentos${V && !V.vacio ? ` · ${num(new Set(V.dd.map((l) => l.compra)).size, 0)}` : ''}`]];
+  const zonas = [['graf', 'Gráfico'], ['tabla', 'Tabla'], ['docs', `Documentos${V && !V.vacio ? ` <span class="cnt">${num(new Set(V.dd.map((l) => l.compra)).size, 0)}</span>` : ''}`]];
   const como = st.como ? `<div class="pop-como" role="dialog"><p>Lo comprado en el rango, sin IGV salvo que «Más filtros» diga otra cosa, con las notas de crédito ya restadas.</p><dl>`
     + '<dt>Compra</dt><dd>El valor comprado, contra el mismo tramo del año pasado o del período anterior. El período en curso se compara contra los mismos días.</dd>'
     + '<dt>Documentos</dt><dd>Comprobantes distintos en el rango, y lo comprado por documento.</dd>'
@@ -1145,9 +1137,7 @@ function panelLista(F, V, st) {
     const sumar = P.ficha ? '<button class="quita" data-acc="ffam-todas">Sumarlas</button>' : P.en_panel ? '' : '<button class="quita" data-acc="pagina-todas">Sumarlas</button>';
     if (fx.length && Math.abs(v) >= 0.5) fuera = `<div class="fuera"><span>Fuera de esta cuenta: ${esc(fS0(v))} de ${esc(fx.slice(0, 2).map(([f]) => nomFam(f)).join(', '))}${fx.length > 2 ? '…' : ''}.</span>${sumar}</div>`;
   }
-  const titC = partirEnPanel(V, st)
-    ? `${foco ? `${tit} · por` : 'Por'} ${palabra('partir', 'Partir por', V.opsPartir.map((k) => [k, PARTIR_PAL[k] || k]), st.partir)}` : tit;
-  return `<div class="pn-cab"><b>${titC}</b>${ampliar(st, 'panel', 'la lista')}</div><div class="lista">${filas || '<p class="mas">Nada que mostrar.</p>'}</div>${ficha}${fuera}`;
+  return `<div class="pn-cab"><b>${tit}</b>${ampliar(st, 'panel', 'la lista')}</div><div class="lista">${filas || '<p class="mas">Nada que mostrar.</p>'}</div>${ficha}${fuera}`;
 }
 // ── Dibujar ──────────────────────────────────────────────────────────────
 function pintar() {
@@ -1176,12 +1166,10 @@ function pintar() {
     const NOM = { valor: 'Compra', docs: 'Documentos', precio: 'Efecto del precio', revisar: 'Compras para revisar' };
     const SUBT = { valor: V.sufijo.replace(/^ · /, ''), docs: 'comprobantes distintos', precio: 'lo que subió arriba, lo que bajó abajo', revisar: 'valor de las líneas marcadas' };
     const hayPar = V.claves.some((k) => { const [a, b] = cobertura(k, V.gran, V.rango); return V.gran !== 'Por documento' && V.gran !== 'Día' && a < b; });
-    const sitio = enSitio(), fantasma = V.ghost.some((x) => x != null) && st.med === 'valor';
-    const grano = sitio ? `por ${palabra('gran', 'Agrupar', OPS_GRAN_PAL, st.gran)}` : esc(`por ${AGRUPADO[V.gran]}`);
-    const ley = sitio && F.C.length
-      ? `<span class="ley">${fantasma && st.contra !== 'no' ? '<i></i>' : ''}${st.contra === 'no' ? '' : 'contra '}${palabra('contra', 'Contra qué comparar', OPS_CONTRA, st.contra)}</span>`
-      : fantasma ? `<span class="ley"><i></i>${st.contra === 'ano' ? 'año pasado' : 'período anterior'}</span>` : '';
-    izq = `<div class="tit"><span class="t">${NOM[st.med]} ${grano}<small> · ${esc(SUBT[st.med])}${hayPar ? ' · * período incompleto' : ''}</small></span>${quitar}<span class="esp"></span>${ley}${st.amp === 'izq' ? ampliar(st, 'izq', 'el gráfico') : ''}</div>`
+    const fantasma = V.ghost.some((x) => x != null) && st.med === 'valor';
+    const grano = esc(`por ${AGRUPADO[V.gran]}`);
+    const ley = fantasma ? `<span class="ley"><i></i>${st.contra === 'ano' ? 'año pasado' : 'período anterior'}</span>` : '';
+    izq = `<div class="tit"><span class="t">${NOM[st.med]} ${grano}<small>· ${esc(SUBT[st.med])}${hayPar ? ' · * período incompleto' : ''}</small></span>${quitar}<span class="esp"></span>${ley}${st.amp === 'izq' ? ampliar(st, 'izq', 'el gráfico') : ''}</div>`
       + `<div class="graf" data-graf="1"><div class="tip" hidden></div></div>`;
     if (esMovil()) {
       izq += st.lectura != null && st.lectura < V.n ? `<div class="lectura" role="region" aria-label="Detalle del período"><button class="lectura-cerrar" data-acc="cerrar-lectura" aria-label="Cerrar detalle">×</button><div>${tip(F, V, st, st.lectura)}</div><button class="ver-documentos" data-acc="ver-barra" data-v="${st.lectura}">Ver documentos de este período</button></div>` : '<p class="ayuda-tocar">Toca una barra para ver su desglose.</p>';

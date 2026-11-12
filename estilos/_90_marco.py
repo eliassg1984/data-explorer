@@ -234,7 +234,7 @@ CSS = """
 
     /* ── LA FRANJA: EL BORDE DE ARRIBA DE LA HOJA ──────────────────────── */
     .st-key-nav_franja_rep {
-        top: var(--marco-hoja) !important;
+        top: var(--franja-arriba, var(--marco-hoja)) !important;
         left: calc(var(--rail-reserva) + var(--marco-izq)) !important;
         right: var(--marco-lado) !important;
         border-radius: var(--marco-radio) var(--marco-radio) 0 0 !important;
@@ -356,18 +356,18 @@ CSS = """
         box-shadow: 0 0 0 2px var(--bg-primary);
     }
     #sello-actualizacion {
-        top: calc(var(--marco-hoja) + (var(--franja-rep-alto) - 30px) / 2) !important;
+        top: calc(var(--franja-arriba, var(--marco-hoja)) + (var(--franja-rep-alto) - 30px) / 2) !important;
         right: calc(var(--marco-der) + var(--barra-f) + var(--barra-act, 0px)
                     + var(--barra-fecha)) !important;
     }
     .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-        top: calc(var(--marco-hoja) + (var(--franja-rep-alto) - 30px) / 2) !important;
+        top: calc(var(--franja-arriba, var(--marco-hoja)) + (var(--franja-rep-alto) - 30px) / 2) !important;
         right: var(--marco-der) !important;
         border-left: none !important;
         background: transparent !important;
     }
     .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
-        top: calc(var(--marco-hoja) + (var(--franja-rep-alto) - 30px) / 2) !important;
+        top: calc(var(--franja-arriba, var(--marco-hoja)) + (var(--franja-rep-alto) - 30px) / 2) !important;
         right: calc(var(--marco-der) + var(--barra-f) + var(--barra-act, 0px)) !important;
     }
     .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla [data-testid="stPopover"] button,
@@ -552,7 +552,7 @@ CSS = """
     /* Cada fecha de Ajuste conserva su widget y sigue a la vista del rail. */
     @media (min-width: 901px) {
         [data-ajuste-vista] {
-            --ajuste-fecha-top: calc(var(--marco-hoja, 8px) + (var(--franja-rep-alto, 44px) - 30px) / 2);
+            --ajuste-fecha-top: calc(var(--franja-arriba, var(--marco-hoja, 8px)) + (var(--franja-rep-alto, 44px) - 30px) / 2);
             --ajuste-fecha-right: calc(var(--marco-der, 16px) + 6px);
         }
         [data-ajuste-vista] .st-key-aj_sec_persp_cierre {
@@ -682,7 +682,7 @@ CSS = """
         [data-mov-vista="mov_sec_persp_lados"] :is(.st-key-mov_f_req_periodo_escala, .st-key-mov_f_sal_periodo_escala) {
             display: flex !important;
             position: fixed !important;
-            inset: calc(var(--marco-hoja, 8px) + (var(--franja-rep-alto, 44px) - 30px) / 2)
+            inset: calc(var(--franja-arriba, var(--marco-hoja, 8px)) + (var(--franja-rep-alto, 44px) - 30px) / 2)
                 calc(var(--marco-der, 16px) + var(--barra-f, 120px) + var(--barra-act, 0px)) auto auto !important;
             width: max-content !important;
             z-index: 1000012 !important;
@@ -725,7 +725,7 @@ CSS = """
         [data-compras-vista="compras_sec_tabla"] .st-key-compras_sec_tabla .st-key-tabla_fila_hdr {
             display: flex !important;
             position: fixed !important;
-            inset: calc(var(--marco-hoja, 8px) + (var(--franja-rep-alto, 44px) - 30px) / 2)
+            inset: calc(var(--franja-arriba, var(--marco-hoja, 8px)) + (var(--franja-rep-alto, 44px) - 30px) / 2)
                 calc(var(--marco-der, 16px) + var(--barra-f, 120px) + var(--barra-act, 0px)) auto auto !important;
             width: max-content !important;
             visibility: visible !important;
@@ -1043,6 +1043,175 @@ CSS = """
         .franja-ruta[data-franja-compacta] .fr-vista {
             font-weight: 500;
             color: var(--text-primary);
+        }
+    }
+    /* ── #851: LA FRANJA ES LA BARRA DE LA APP, Y LAS VISTAS ESTÁN A LA VISTA ──
+       A pedido, sobre el boceto https://claude.ai/artifact/MhVrH9AW34qFidWQ3Kk8cC
+       («Barra alineada»). Desde 901px:
+       - La píldora de la #841 pasa a ser una barra blanca de borde a borde, sin
+         esquinas ni sombra, con una línea fina abajo: el marco de la app. Es el
+         MISMO `::before`, estirado hasta la ventana por los dos costados; la
+         franja va encima de la columna (z-index) para que la cruce. Sube 12 px
+         (`--franja-arriba`, que también usan los controles fijos de la franja):
+         todo lo de la barra queda centrado en y = 26, el botón de ocultar la
+         columna incluido.
+       - La ruta deja el menú de vistas: «Compras ▾» (el menú de reportes del
+         área) y, al lado, las vistas del reporte en pantalla, en pastillas. Son
+         los botones de `nav_franja_idx` —los de siempre, con sus keys—: se
+         muestra sólo la columna del reporte en pantalla (`franja-activo`, de
+         `navegacion.py`), en fila. El menú de reportes cuelga aparte.
+       - «Compras» empieza en el mismo borde que el contenido de la hoja (106 px con
+         la columna plegada).
+       Lo que abre una capa no se mueve al abrirse (#465): abrir «Compras ▾» no
+       toca las pastillas. */
+    @media (min-width: 901px) {
+        :root { --franja-arriba: -4px; }
+        /* La franja ya no recorta (la barra se le sale a los costados): recorta la
+           fila de vistas, que es lo único que podría no entrar. */
+        :root .st-key-nav_franja_rep.st-key-nav_franja_rep {
+            overflow: visible !important;
+            background: transparent !important;
+            border-radius: 0 !important;
+        }
+        .st-key-nav_franja_rep.st-key-nav_franja_rep {
+            z-index: 1000011 !important;
+            width: auto !important;
+            max-width: none !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            flex-wrap: nowrap !important;
+            gap: 0 !important;
+            /* La franja empieza donde la hoja: «Compras» en el borde de su contenido
+               (106 px plegada, 274 fijada, 50 oculta). */
+            padding-left: 18px !important;
+        }
+        .st-key-nav_franja_rep.st-key-nav_franja_rep::before {
+            left: calc(-1 * (var(--rail-reserva) + var(--marco-izq)));
+            right: calc(-1 * var(--marco-lado));
+            top: 0;
+            height: 100%;
+            border-radius: 0;
+            /* La línea de abajo y, debajo de ella, el lavanda hasta la hoja: lo que
+               asoma por encima de la hoja (los controles de Stock, `top: -40px`)
+               quedaba debajo de la franja, que antes llegaba hasta ahí. */
+            box-shadow: 0 1px 0 var(--ctl-linea),
+                        0 calc(var(--marco-hoja) - var(--franja-arriba)) 0 var(--marco-fondo);
+        }
+        .st-key-nav_franja_rep > [data-testid="stElementContainer"]:first-child {
+            width: auto !important; flex: none !important;
+        }
+        /* Lo fijo que vive en la barra va encima de ella: la fecha de la franja
+           (Ventas) y «Filtros» nacían en 1000000 y 1000002, debajo. La fecha, además,
+           vive dentro de `fila_ajuste_top` (sticky, 1000002), que la limita. */
+        :root .st-key-fila_ajuste_top.st-key-fila_ajuste_top.st-key-fila_ajuste_top,
+        :root .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill,
+        :root .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla,
+        :root #sello-actualizacion {
+            z-index: 1000012 !important;
+        }
+        .st-key-rail_vis_visible.st-key-rail_vis_visible,
+        .st-key-rail_vis_oculto.st-key-rail_vis_oculto {
+            top: calc(var(--franja-arriba) + (var(--franja-rep-alto) - 32px) / 2) !important;
+        }
+        /* «Compras ▾» a la izquierda de su caja, no centrado: el texto marca el borde. */
+        .barra-ctx[data-barra-compacta] .barra-reporte,
+        .franja-ruta[data-franja-nombre] .fr-grupo-boton {
+            justify-content: flex-start; min-width: 0; padding-left: 0; margin-left: 0;
+        }
+        .st-key-nav_franja_rep .fr-grupo { font-weight: 500 !important; }
+        .franja-ruta[data-franja-compacta] :is(.fr-vista, .fr-sep-vista) { display: none !important; }
+
+        /* Las vistas: la columna del reporte en pantalla, en fila. */
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx.st-key-nav_franja_idx {
+            display: flex !important;
+            position: static !important;
+            flex: 0 1 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: none !important;
+            height: auto !important;
+            max-height: none !important;
+            margin: 0 0 0 8px !important;
+            padding: 2px !important;
+            gap: 0 !important;
+            align-items: center !important;
+            overflow: hidden !important;
+            background: none !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+        /* Las cajas de Streamlit alrededor de cada columna no ocupan lugar: así la
+           fila es sólo la del reporte en pantalla y el menú de reportes cuelga aparte. */
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx > [data-testid="stLayoutWrapper"] {
+            display: contents !important;
+        }
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx [class*="st-key-nav_franja_g"]:not(:has(.franja-activo)) {
+            display: none !important;
+        }
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx [class*="st-key-nav_franja_g"]:has(.franja-activo) {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 2px !important;
+            width: auto !important;
+        }
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx [class*="st-key-nav_franja_g"] > [data-testid="stElementContainer"]:first-child {
+            display: none !important;
+        }
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx [class*="st-key-nav_franja_g"] :is([data-testid="stElementContainer"], [data-testid="stButton"]) {
+            width: auto !important;
+        }
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx [data-testid="stButton"] button {
+            width: auto !important; height: 28px !important; min-height: 28px !important;
+            padding: 0 10px !important; border: 0 !important; border-radius: 14px !important;
+            background: transparent !important; color: var(--ctl-texto-2) !important;
+            box-shadow: none !important; justify-content: center !important;
+            font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            font-size: 13px !important; font-weight: 500 !important;
+        }
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx [data-testid="stButton"] button p {
+            font-size: 13px !important; font-weight: 500 !important; color: inherit !important;
+            font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            white-space: nowrap !important;
+        }
+        /* La fecha, en 13 px como la ruta (era 14, la de Streamlit). */
+        .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill [data-testid="stPopover"] button p,
+        [data-compras-vista] :is(
+            .st-key-cp_sem_escala, .st-key-cp_rank_escala, .st-key-cp_prod_escala,
+            .st-key-cp_vol_escala, .st-key-cp_vap_f_escala, .st-key-cp_docs_escala
+        ) button[data-testid="stPopoverButton"] p {
+            font-size: 13px !important;
+        }
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx [data-testid="stButton"] button:hover {
+            background: var(--ctl-gris) !important; color: var(--text-primary) !important;
+        }
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx [data-testid="stButton"] button.vista-en-pantalla {
+            background: var(--accent-deep) !important; color: var(--bg-card) !important;
+        }
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx [data-testid="stButton"] button.vista-en-pantalla p {
+            font-weight: 600 !important;
+        }
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx button.vista-en-pantalla::after {
+            content: none !important;
+        }
+        /* El menú de reportes del área («Compras ▾»): cuelga de la barra, aparte. */
+        :root .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx .st-key-nav_franja_secciones {
+            display: none !important;
+        }
+        :root[data-franja-menu="ruta-secciones"] .st-key-nav_franja_rep .st-key-nav_franja_idx.st-key-nav_franja_idx .st-key-nav_franja_secciones {
+            display: block !important;
+            position: absolute !important;
+            top: calc(100% - 4px) !important;
+            left: var(--fr-x, 160px) !important;
+            z-index: 1100 !important;
+            box-sizing: border-box !important;
+            width: 196px !important;
+            padding: 5px !important;
+            border-radius: 9px !important;
+            border: 1px solid var(--border);
+            background: var(--bg-card) !important;
+            box-shadow: 0 8px 24px color-mix(in srgb, var(--text-primary) 12%, transparent) !important;
         }
     }
     @media (max-width: 900px) {

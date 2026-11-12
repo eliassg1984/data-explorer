@@ -635,6 +635,14 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   keys (el temporizador los marca, los hace saltar y reescribe la ruta al
   bajar); el menú lo abre `_SCRIPT_CAPAS` con `<html data-franja-menu>`, y la
   franja deja de recortar (`overflow`) mientras está abierto.
+  **Desde la #851 la franja es la BARRA de la app, de borde a borde, y las vistas
+  del reporte en pantalla están a la vista**, en pastillas: «Compras ▾ [Período]
+  Proveedor …». Es el mismo `::before` de la píldora, estirado hasta la ventana
+  y encima de la columna; todo sube a y = 26 con `--franja-arriba` (lo usan los
+  controles fijos que antes sumaban `--marco-hoja`). La columna del reporte en
+  pantalla lleva `franja-activo` (`navegacion.py`) y va en fila; el menú de
+  vistas queda oculto y el de reportes («Compras ▾») cuelga aparte. La franja ya
+  no recorta: recorta la fila de vistas.
 
 **Y cada vista es una hoja blanca** (reglas #764, #776, #825 y #826, `estilos/_90_marco.py`),
 que termina a 24 px del borde de abajo, con sus cuatro esquinas a la vista. **Los costados
@@ -1094,11 +1102,12 @@ vistas); las otras cinco siguen con el ícono ⚙. Lo que muerde:
   lleva a las ocho y «Las de siempre» vuelve a las cinco. Sin filtro no hay ficha.
   Familia y Subfamilia están SIEMPRE en «Más filtros», como campos (#844).
 - **El nivel 3 de Período tiene las medidas del boceto** (#844): «Más filtros» y la
-  ficha y, detrás de una raya, las acciones. **Desde la #848 Agrupar, Partir por y
-  Contra no están ahí en el Gráfico**: la palabra que decía su valor es el control
-  —«Compra por semana ▾», «Por familia ▾», «contra año pasado ▾»—, índigo con subrayado
-  punteado y un `<select>` transparente encima (`semanal.js::palabra`). En Tabla,
-  Documentos y el celular vuelven al nivel 3 como «Agrupar: Semana ▾». Las acciones: «Cómo se calcula» y los
+  ficha y, detrás de una raya, las acciones. **Desde la #851 (opción B) Agrupar, Contra y
+  Partir por van JUNTOS ahí, también en el Gráfico**: detrás de una raya, el rótulo
+  afuera y el valor en una caja con borde (`semanal.js::menu`, `.men .caja`), con el
+  `<select>` transparente encima. La #848 los había llevado a las palabras del título,
+  la leyenda y el panel; esos títulos vuelven a ser texto. Las pestañas Gráfico | Tabla
+  | Documentos van en 14 px, la elegida índigo con raya de 3 px. Las acciones: «Cómo se calcula» y los
   íconos de la app (`graficos/iconos.js`) para descargar y ampliar. «Más filtros» son
   cuatro campos plegados, Documento y Montos. Los colores son la escala de controles,
   `--ctl-*` en `estilos/_00_base.py`: gris cambia la forma de ver, lavanda recorta,

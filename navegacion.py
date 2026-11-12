@@ -242,14 +242,18 @@ _SCRIPT_CAPAS = """<script>
       }
     }
     else if (ev.target && ev.target.closest && ev.target.closest(".st-key-nav_franja_idx")
-             && /^(ArrowDown|ArrowUp|Home|End)$/.test(ev.key)) {
-      var opciones = Array.from(doc.querySelectorAll(".st-key-nav_franja_idx button"))
+             && /^(ArrowDown|ArrowUp|ArrowLeft|ArrowRight|Home|End)$/.test(ev.key)) {
+      // #851: las vistas en fila (flechas a los costados) y el menú de reportes
+      // (arriba y abajo) se recorren cada uno por su lado.
+      var cont = ev.target.closest(".st-key-nav_franja_secciones")
+        || ev.target.closest('[class*="st-key-nav_franja_g"]') || ev.target.closest(".st-key-nav_franja_idx");
+      var opciones = Array.from(cont.querySelectorAll("button"))
         .filter(function (b) { return b.getClientRects().length && !b.disabled; });
       if (!opciones.length) return;
       ev.preventDefault();
       var i = opciones.indexOf(ev.target.closest("button"));
       var siguiente = ev.key === "Home" ? 0 : ev.key === "End" ? opciones.length - 1
-        : (i + (ev.key === "ArrowDown" ? 1 : -1) + opciones.length) % opciones.length;
+        : (i + (/Down|Right/.test(ev.key) ? 1 : -1) + opciones.length) % opciones.length;
       opciones[siguiente].focus();
     }
     else if ((ev.key === "Enter" || ev.key === " ") && ev.target && ev.target.closest && ev.target.closest(".franja-ruta")) { ev.preventDefault(); abrirMenu(); }
@@ -421,7 +425,7 @@ def _html_barra_contexto(nombre, icono, ruta=None, *, menu_compacto=False):
                 + (icono_html if grupo_en_nombre else '') + '<span class="fr-grupo">'
                 f'{grupo}</span><i aria-hidden="true">▾</i></button>')
         partes.append(
-            '<span class="fr-sep" aria-hidden="true">›</span>'
+            '<span class="fr-sep fr-sep-vista" aria-hidden="true">›</span>'
             '<button type="button" class="fr-vista" data-franja-abrir="vistas" '
             'aria-haspopup="true" aria-expanded="false"><span class="fr-txt">'
             f'{vista}</span><i aria-hidden="true">▾</i></button></span>')
@@ -1486,9 +1490,13 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                     _en_ruta = "" if len(_pestanas) == 1 else _rot_m
                     _seleccion = st.session_state.get(_sk)
                     _ultima = next((v[0] for v in _vs if v[0] == _seleccion), _vs[0][0])
+                    # #851: desde 901px las vistas del reporte en pantalla van A LA VISTA
+                    # en la barra, sin menú; su columna se reconoce por `franja-activo`
+                    # (una clase: el CSS la pregunta con `:has()`, #469).
+                    _activo = " franja-activo" if _m == _m0 else ""
                     with st.container(key=f"nav_franja_g{_i}"):
                         st.markdown(
-                            f'<span class="franja-miembro" data-ruta="{html.escape(_en_ruta)}" '
+                            f'<span class="franja-miembro{_activo}" data-ruta="{html.escape(_en_ruta)}" '
                             f'data-reporte="{html.escape(_m)}" '
                             f'data-franja-destino="{claves_vista(_m, _ultima)[0]}">'
                             f'{html.escape(_rot_m)}</span>', unsafe_allow_html=True)

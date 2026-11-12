@@ -114,8 +114,9 @@ class Navegador(unittest.TestCase):
         for i, m in enumerate(miembros):
             vs = nav._vistas_de(m)[1]
             ruta = rotulo(m) if len(miembros) > 1 else ""
+            activo = " franja-activo" if m == reporte else ""
             menus.append(f'<div class="st-key-nav_franja_g{i}">'
-                         f'<span class="franja-miembro" data-ruta="{html.escape(ruta)}" '
+                         f'<span class="franja-miembro{activo}" data-ruta="{html.escape(ruta)}" '
                          f'data-reporte="{html.escape(m)}" '
                          f'data-franja-destino="{nav.claves_vista(m, vs[0][0])[0]}"></span>')
             for oid, label, *_ in vs:
@@ -149,22 +150,26 @@ class Navegador(unittest.TestCase):
         }""")
         return vistas
 
-    def test_todos_los_reportes_abren_solo_sus_vistas(self):
+    def test_todos_los_reportes_muestran_sus_vistas(self):
+        """#851: las vistas del reporte en pantalla están a la vista en la barra, sin
+        abrir nada; la elegida en pastilla índigo. El menú de vistas ya no se ve."""
         for reporte in data.REPORTES:
             if not nav._vistas_de(reporte):
                 continue
             with self.subTest(reporte=reporte):
                 vistas = self.montar(reporte)
-                trigger = self.page.locator('[data-franja-abrir="vistas"]')
-                trigger.click()
+                self.assertFalse(self.page.locator('[data-franja-abrir="vistas"]').is_visible())
                 visibles = self.page.locator('.st-key-nav_franja_idx button[data-vista]:visible')
                 self.assertEqual(visibles.all_text_contents(), [
                     nav.ROTULO_PESTANA.get((reporte, v[0]), v[1]) for v in vistas])
-                for b in visibles.all():
-                    r = b.bounding_box()
+                cajas = [b.bounding_box() for b in visibles.all()]
+                for r in cajas:
                     self.assertGreaterEqual(r['x'], 0)
                     self.assertLessEqual(r['x'] + r['width'], 1100)
-                self.assertEqual(trigger.evaluate("e=>getComputedStyle(e).borderTopWidth"), "0px")
+                # En una fila.
+                self.assertLessEqual(max(r['y'] for r in cajas) - min(r['y'] for r in cajas), 1)
+                elegida = self.page.locator('.st-key-nav_franja_idx button.vista-en-pantalla')
+                self.assertEqual(elegida.evaluate("e=>getComputedStyle(e).backgroundColor"), "rgb(73, 56, 184)")
         self.assertEqual(self.errors, [])
 
     def test_grupo_recupera_la_vista_navegada_sin_rerun(self):
@@ -172,7 +177,8 @@ class Navegador(unittest.TestCase):
         key = nav.claves_vista("Ajuste de Inventario", "Evolución del ajuste")[0]
         self.page.evaluate("k=>window.__franjaUltimas={'Ajuste de Inventario':k}", key)
         self.page.locator('[data-franja-abrir="secciones"]').click()
-        ancho = self.page.locator('.st-key-nav_franja_secciones').bounding_box()['width']
+        # El panel lleva su relleno (#851): la opción ocupa el ancho de su lista.
+        ancho = self.page.locator('.franja-secciones').bounding_box()['width']
         opcion = self.page.locator('.franja-seccion[data-grupo="Ajuste"]')
         self.assertAlmostEqual(opcion.bounding_box()['width'], ancho, delta=1)
         opcion.click()
@@ -180,26 +186,33 @@ class Navegador(unittest.TestCase):
                          [["Ajuste de Inventario", "Evolución del ajuste"]])
         self.assertIsNone(self.page.locator('html').get_attribute('data-franja-menu'))
 
-    def test_teclado_escape_clic_fuera_y_hover(self):
+    def test_teclado_escape_clic_fuera(self):
+        """#851: las vistas se recorren con las flechas a los costados; el menú de
+        reportes abre con flecha abajo y se cierra con Escape o con un clic afuera."""
         self.montar("Ventas")
-        trigger = self.page.locator('[data-franja-abrir="vistas"]')
-        self.page.locator('.fr-sep').first.click()
+        vs = nav._vistas_de("Ventas")[1]
+        activa = "document.activeElement.dataset.vista"
+        self.page.locator('.st-key-nav_franja_idx button[data-vista]').first.focus()
+        self.page.keyboard.press("ArrowRight")
+        self.assertEqual(self.page.evaluate(activa), vs[1][0])
+        self.page.keyboard.press("ArrowLeft")
+        self.assertEqual(self.page.evaluate(activa), vs[0][0])
         self.assertIsNone(self.page.locator('html').get_attribute('data-franja-menu'))
-        trigger.hover()
-        self.assertIsNone(self.page.locator('html').get_attribute('data-franja-menu'))
+        self.montar("Inventario Valorizado")
+        trigger = self.page.locator('[data-franja-abrir="secciones"]')
         trigger.focus()
         self.page.keyboard.press("ArrowDown")
-        self.assertEqual(self.page.evaluate("document.activeElement.dataset.vista"),
-                         nav._vistas_de("Ventas")[1][0][0])
-        self.page.keyboard.press("ArrowDown")
-        self.assertEqual(self.page.evaluate("document.activeElement.dataset.vista"),
-                         nav._vistas_de("Ventas")[1][1][0])
+        self.assertEqual(self.page.locator('html').get_attribute('data-franja-menu'), "ruta-secciones")
+        self.assertTrue(self.page.evaluate("document.activeElement.classList.contains('franja-seccion')"))
+        # Abrir el menú no mueve las vistas (#465).
+        self.assertTrue(self.page.locator('.st-key-nav_franja_idx button[data-vista]').first.is_visible())
         self.page.keyboard.press("Escape")
         self.assertEqual(trigger.get_attribute("aria-expanded"), "false")
         self.assertTrue(trigger.evaluate("e=>document.activeElement===e"))
         trigger.click()
         self.page.locator('.fuera').click()
         self.assertIsNone(self.page.locator('html').get_attribute('data-franja-menu'))
+        self.assertEqual(self.errors, [])
 
 
 if __name__ == "__main__":

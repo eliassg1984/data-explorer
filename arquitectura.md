@@ -63,9 +63,9 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-850 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+851 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (293)
+**CSS y estilos** (294)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -360,6 +360,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#847** — Gráficos chicos compartidos, traducidos de Tremor: graficos/mini.js + .css
 - **#848** — Período: Agrupar, Partir por y Contra viven donde se ve lo que cambian (opción C)
 - **#850** — Los costados de la hoja: 8 px más a la izquierda y 16 a la derecha, en toda la app
+- **#851** — La franja es la barra de la app, con las vistas a la vista; Período, con sus controles juntos
 
 **Layout y alturas** (115)
 
@@ -1208,7 +1209,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
-**Decisiones de diseño y UX** (281)
+**Decisiones de diseño y UX** (282)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1491,6 +1492,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#845** — Movimientos › Req. y salidas con la opción D: carpetas, indicadores en la banda y «Contar…
 - **#846** — Movimientos sin «Filtros» en la ruta, y la cápsula con la letra del boceto: se compara…
 - **#849** — Diferencias del cierre: el panel de los números con los gráficos chicos, y Barras y 6 cierres…
+- **#851** — La franja es la barra de la app, con las vistas a la vista; Período, con sus controles juntos
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59690,6 +59692,57 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      en mayúsculas se lee más lento, ocupa ~20 % más («Diferencias» 71 → 86 px) y
      tira el ojo hacia la navegación en vez de los números.
 
+851. **La franja es la barra de la app, con las vistas a la vista; Período, con sus controles juntos.**
+   A pedido, sobre el boceto https://claude.ai/artifact/MhVrH9AW34qFidWQ3Kk8cC (fotos de la
+   app), elegido de a un paso: las pestañas, la opción B, las vistas a la vista sin título y
+   la barra «alineada» (la que dibujó el usuario, con el ⊟ de vuelta y «Compras» en el borde
+   del contenido).
+   - **La barra, desde 901 px y en toda la app** (`estilos/_90_marco.py`). El `::before` de
+     la píldora (#841) se estira hasta la ventana por los dos costados, sin esquinas ni
+     sombra, con una línea abajo (`--ctl-linea`). La franja va encima de la columna
+     (`z-index`) para cruzarla, y ya no recorta: recorta la fila de vistas. Sube 12 px con
+     `--franja-arriba` (−4 px), que usan también los controles fijos que se ubicaban con
+     `--marco-hoja`: todo queda centrado en y = 26, el ⊟ incluido.
+   - **Debajo de la línea, una segunda sombra lavanda tapa hasta la hoja.** La franja
+     llegaba hasta la hoja (y = 68) y tapaba lo que asoma por encima de ella —los controles
+     de Stock, con `top: -40px` (#765)—; la barra termina en 56 y sin eso asomaban.
+   - **Lo fijo de la barra tiene que ir ENCIMA de ella** (1000012). Con la franja en
+     1000011 quedaron tapadas la fecha de Ventas (`fecha_ajuste_pill`, 1000000, y además
+     dentro de `fila_ajuste_top`, sticky en 1000002, que la limita) y «Filtros»
+     (`chips_ajuste_tabla`). Se vio en el recorrido, no en Período. Un control nuevo en
+     la barra necesita lo mismo.
+   - **«Compras» va a 18 px del borde de la franja**, que empieza donde la hoja: queda
+     en el borde del contenido con la columna plegada (106), fijada (274) y oculta (50).
+   - **Las vistas, sin menú.** `navegacion.py` marca la columna del reporte en pantalla con
+     `franja-activo` y el CSS la pone en fila, en pastillas (la elegida en índigo); las
+     cajas de Streamlit alrededor van en `display: contents`. Son los mismos botones con
+     las mismas keys: el temporizador los sigue marcando y haciendo saltar. «Compras ▾»
+     abre el menú de reportes del área, que ahora cuelga aparte (`nav_franja_secciones`,
+     absoluto) y no mueve las pastillas (#465). El menú de vistas (`.fr-vista`) sigue en el
+     HTML, oculto. Las flechas recorren cada fila por su lado (`teclaMenu`). Vuelve en parte
+     la #817: sólo las vistas del reporte en pantalla, no las de toda el área, que en
+     Inventario no entraban en una fila.
+   - **Período, opción B** (`semanal.js::menu` y `menusVista`, `semanal.css`). Agrupar,
+     Contra y Partir por vuelven al nivel 3, juntos y en ese orden, detrás de una raya, con
+     el rótulo afuera y el valor en una caja con borde; también en el Gráfico. Deshace la
+     #848: el título del gráfico, la leyenda y el encabezado del panel vuelven a ser texto.
+     En el celular, como estaban.
+   - **Las pestañas de nivel 2 de Período**: 14 px, la elegida en índigo con raya de 3 px,
+     el cursor con fondo gris y raya gris, el número de documentos en cápsula (`.cnt`). El
+     texto de la primera en el borde del contenido (106 px), no su caja (−12 px de margen).
+   - Del boceto de controles: «Más filtros» y la cápsula del total con borde de contorno
+     (3,5:1 sobre blanco), la cifra del total en 17 px y la muestra de «año pasado» como una
+     barrita de 8 × 12 (parecía una casilla).
+   - **Comparado contra el boceto, pieza por pieza** (36: `getComputedStyle` y lugar, en los
+     dos lados): iguales, salvo lo que se buscó corregir. Las pestañas 12 px a la izquierda
+     (el texto, no la caja, en 106), la cápsula hasta 1289 como los íconos (`.n2-der:empty`;
+     terminaba en 1273) y 10 px de aire a su derecha. **«3 más ‹» no estaba cortado**
+     (medido: el texto termina 1 px antes de su caja): la ‹ quedaba a 2 px del borde y se
+     leía como un paréntesis partido.
+   - **Queda fuera:** las pestañas nuevas y la opción B son sólo de Período; las demás
+     vistas siguen con las suyas. La forma común de pestañas que propuso el boceto (un
+     módulo compartido para las 25 piezas) no está hecha.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59702,7 +59755,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#850**; la próxima toma el número siguiente.
+> última regla es la **#851**; la próxima toma el número siguiente.
 
 >
 

@@ -559,8 +559,9 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             pg.close()
 
     def test_cabecera_como_el_boceto(self):
-        """#844: el nivel 3 con las medidas del boceto: tres grupos, «Nombre: valor ▾»
-        sin caja, las acciones como íconos y «Más filtros» con sus campos plegados."""
+        """#844 y #851: el nivel 3 con las medidas del boceto: los filtros, los tres
+        controles de la vista juntos y en caja, las acciones como íconos y «Más
+        filtros» con sus campos plegados."""
         _h, P = _armar_una_pantalla(_ficha(("ALIMENTOS", "VINOS")))
         pg = self.b.new_page(viewport={"width": 1323, "height": 680})
         caja = lambda s: pg.locator(s).first.bounding_box()  # noqa: E731
@@ -571,43 +572,41 @@ class LasCuentasEnElNavegador(unittest.TestCase):
             self.assertAlmostEqual(mas["x"], tabs["x"], delta=1)
             self.assertEqual((mas["height"], chip["height"]), (32, 28))
             self.assertAlmostEqual(chip["x"] - (mas["x"] + mas["width"]), 4, delta=1)
-            # #848, opción C: en el gráfico el nivel 3 no tiene menús; cada uno es la
-            # palabra que ya decía su valor, donde se ve lo que cambia.
-            self.assertEqual(pg.locator(".cab .men").count(), 0)
-            texto = "e => [...e.children].filter((c) => c.tagName !== 'SELECT').map((c) => c.textContent).join(' ')"
-            visto = lambda s: pg.locator(s).first.evaluate(r"e => { const c = e.cloneNode(true); c.querySelectorAll('select').forEach((x) => x.remove()); return c.textContent.replace(/\s+/g, ' ').replace(/\s*▾/g, ' ▾').trim(); }")  # noqa: E731
-            pal = lambda s: pg.locator(f"{s} .pal").evaluate(texto)  # noqa: E731
-            self.assertEqual((pal(".tit .t"), pal(".pn-cab"), pal(".tit .ley")), ("semana ▾", "familia ▾", "año pasado ▾"))
-            self.assertTrue(visto(".tit .t").startswith("Compra por semana ▾ · "))
-            self.assertEqual(visto(".pn-cab b"), "Por familia ▾")
-            self.assertEqual(visto(".tit .ley"), "contra año pasado ▾")
-            for s in (".tit .t .pal", ".pn-cab .pal", ".tit .ley .pal"):
-                e = pg.locator(s)
-                self.assertGreaterEqual(e.bounding_box()["height"], 24, s)
-                self.assertEqual(e.locator("> span").evaluate("e => getComputedStyle(e).textDecorationStyle"), "dashed", s)
-                self.assertEqual(e.evaluate("e => getComputedStyle(e).color"), "rgb(73, 56, 184)", s)
-                self.assertEqual(e.locator("select").evaluate("e => getComputedStyle(e).opacity"), "0", s)
-            # Mismo tamaño y peso que el texto donde va.
-            self.assertEqual(pg.locator(".tit .t .pal").evaluate("e => getComputedStyle(e).fontWeight"),
-                             pg.locator(".tit .t").evaluate("e => getComputedStyle(e).fontWeight"))
-            self.assertEqual(pg.locator(".tit .ley .pal").evaluate("e => getComputedStyle(e).fontSize"), "12px")
-            pg.locator('.tit select[data-sel="gran"]').select_option("Mes")
-            self.assertTrue(visto(".tit .t").startswith("Compra por mes ▾"))
-            pg.locator('.pn-cab select[data-sel="partir"]').select_option("Proveedor")
-            self.assertEqual(pal(".pn-cab"), "proveedor ▾")
-            pg.locator('.pn-cab select[data-sel="partir"]').select_option("Familia")
-            pg.locator('.tit select[data-sel="contra"]').select_option("no")
-            # Sin comparar, la leyenda no tiene muestra pero sigue siendo el camino de vuelta.
-            self.assertEqual(pal(".tit .ley"), "sin comparar ▾")
-            self.assertEqual(pg.locator(".tit .ley > i").count(), 0)
+            # #851: las pestañas son el segundo nivel de navegación: 14 px, la elegida en
+            # índigo con raya de 3 px, su texto en el borde del contenido y el número en cápsula.
+            on = pg.locator(".tabs button.on")
+            self.assertEqual(on.evaluate("e => [getComputedStyle(e).fontSize, getComputedStyle(e).color, getComputedStyle(e).borderBottomWidth]"),
+                             ["14px", "rgb(73, 56, 184)", "3px"])
+            texto_x = on.evaluate("e => { const r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect().left; }")
+            self.assertAlmostEqual(texto_x, mas["x"], delta=1)
+            self.assertEqual(pg.locator('.tabs [data-v="docs"] .cnt').count(), 1)
+            # #851, opción B: Agrupar, Contra y Partir por juntos en el nivel 3, detrás de
+            # una raya, con el rótulo afuera y el valor en su caja; también en el gráfico.
+            visto = lambda s: pg.locator(s).first.evaluate(r"e => { const c = e.cloneNode(true); c.querySelectorAll('select').forEach((x) => x.remove()); return c.textContent.replace(/\s+/g, ' ').trim(); }")  # noqa: E731
+            menus = "xs => xs.map((e) => [e.querySelector('small').textContent, e.querySelector('.caja > span').textContent])"
+            self.assertEqual(pg.locator(".cab .men").evaluate_all(menus), [["Agrupar", "Semana"], ["Contra", "Año pasado"], ["Partir por", "Familia"]])
+            self.assertEqual(pg.locator(".mens").evaluate("e => getComputedStyle(e).borderLeftWidth"), "1px")
+            self.assertAlmostEqual(caja(".mens")["x"] - (caja(".ff-chip")["x"] + caja(".ff-chip")["width"]), 16, delta=1)
+            for c in pg.locator(".cab .men .caja").all():
+                self.assertEqual(c.bounding_box()["height"], 28)
+                self.assertEqual(c.evaluate("e => getComputedStyle(e).borderTopWidth"), "1px")
+                self.assertEqual(c.locator("select").evaluate("e => getComputedStyle(e).opacity"), "0")
+            # Los títulos son texto que dice lo elegido: sin controles adentro.
+            self.assertEqual(pg.locator(".tit .t select, .pn-cab select, .tit .ley select").count(), 0)
+            self.assertTrue(visto(".tit .t").startswith("Compra por semana· "), visto(".tit .t"))
+            self.assertEqual(visto(".pn-cab b"), "Por familia")
+            pg.locator('.cab select[data-sel="gran"]').select_option("Mes")
+            self.assertTrue(visto(".tit .t").startswith("Compra por mes"))
+            pg.locator('.cab select[data-sel="partir"]').select_option("Proveedor")
+            self.assertEqual(visto(".pn-cab b"), "Por proveedor")
+            pg.locator('.cab select[data-sel="partir"]').select_option("Familia")
+            pg.locator('.cab select[data-sel="contra"]').select_option("no")
+            self.assertEqual(pg.locator(".tit .ley").count(), 0)
             self.assertEqual(pg.evaluate("[window.__cpPer.st.gran, window.__cpPer.st.contra]"), ["Mes", "no"])
-            pg.locator('.tit select[data-sel="contra"]').select_option("ano")
-            # En Tabla no hay título que lo diga: Agrupar y Contra vuelven al nivel 3.
+            pg.locator('.cab select[data-sel="contra"]').select_option("ano")
+            # En Tabla, los mismos tres en el mismo lugar.
             pg.locator('[data-acc="zona"][data-v="tabla"]').first.click()
-            menus = "xs => xs.map((e) => [...e.children].filter((c) => c.tagName !== 'SELECT').map((c) => c.textContent).join(' '))"
-            self.assertEqual(pg.locator(".cab .men").evaluate_all(menus), ["Agrupar: Mes ▾", "Contra: año pasado ▾"])
-            self.assertEqual(pg.locator(".cab .men").first.evaluate("e => getComputedStyle(e).backgroundColor"), "rgba(0, 0, 0, 0)")
-            self.assertAlmostEqual(caja(".cab .men")["x"] - (caja(".ff-chip")["x"] + caja(".ff-chip")["width"]), 24, delta=1)
+            self.assertEqual(pg.locator(".cab .men").evaluate_all(menus), [["Agrupar", "Mes"], ["Contra", "Año pasado"], ["Partir por", "Familia"]])
             pg.locator('[data-acc="zona"][data-v="graf"]').first.click()
             # Las acciones, al final y detrás de una raya: un enlace y dos íconos con nombre.
             acc = pg.locator(".acc")

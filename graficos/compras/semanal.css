@@ -239,7 +239,7 @@
 .panel { flex: 0 0 332px; min-width: 0; min-height: 0; border-left: 1px solid var(--border); padding-left: 14px; display: flex; flex-direction: column; gap: 6px; }
 .tit { min-height: 26px; gap: 8px; }
 .tit .t { font-size: 12.5px; font-weight: 600; }
-.tit .t small { font-size: 12.5px; margin-left: 0; }
+.tit .t small { font-size: 12.5px; margin-left: 6px; }
 .tit .cap { font-size: 12px; color: var(--text-secondary); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .quita { border: 0; background: var(--accent-tint); color: var(--accent-deep) !important; border-radius: 8px; min-height: 26px; padding: 0 9px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; flex: none; }
 .ley { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
@@ -466,18 +466,43 @@ button.fi:hover { background: var(--bg-hover); }
   .ops button { min-height: 44px; }
 }
 
-/* #848, opción C: la palabra que ya decía el valor es el control. Índigo con
-   subrayado punteado pegado al texto (no relleno: eso es un filtro), el mismo tamaño y peso del
-   texto donde va, y el `<select>` transparente encima, como `.men`. */
-.pal { position: relative; display: inline-flex; align-items: center; gap: 3px; min-height: 24px; padding: 0 2px; margin: 0 -2px;
-  color: var(--accent-deep); border-radius: 4px;
-  cursor: pointer; white-space: nowrap; vertical-align: middle; box-sizing: border-box; }
-.pal > span { text-decoration: underline dashed 1px color-mix(in srgb, var(--accent) 60%, transparent); text-underline-offset: 3px; }
-.pal:hover { background: var(--ctl-filtro, var(--accent-tint)); }
-.pal:hover > span { text-decoration-color: var(--accent-deep); }
-.pal i { font-style: normal; font-size: 10px; color: inherit; }
-.pal select { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; border: 0; opacity: 0; cursor: pointer; font: inherit; }
-.pal:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
-.tit .t .pal { margin-left: 0; }
-.ley .pal { font-size: 12px; }
-.pn-cab b .pal { font-weight: inherit; }
+/* #851 (opción B del boceto https://claude.ai/artifact/MhVrH9AW34qFidWQ3Kk8cC): la
+   #848 llevaba Agrupar, Contra y Partir por a las palabras del gráfico; vuelven al
+   nivel 3, juntos y detrás de una raya, con el rótulo afuera y el valor en su caja.
+   Y las pestañas son el segundo nivel de navegación: 14 px, la elegida en índigo con
+   raya de 3 px, el cursor con fondo gris y el número en cápsula. */
+.tabs .cnt { font-size: 12px; font-weight: 500; line-height: 18px; padding: 0 6px; border-radius: 9px;
+  background: var(--ctl-gris, var(--rail-fondo)); color: var(--ctl-texto-2, var(--text-secondary)); }
+@media (min-width: 901px) {
+  .tabs { gap: 4px; }
+  .tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-bottom-width: 3px;
+    border-radius: 6px 6px 0 0; font-size: 14px; font-weight: 500; color: var(--ctl-texto-2, var(--text-secondary)) !important; }
+  /* El texto de la primera, en el borde del contenido (106 px), no su caja. */
+  .tabs button:first-child { margin-left: -12px; }
+  .tabs button:hover { background: var(--ctl-gris, var(--rail-fondo)); color: var(--text-primary) !important; border-bottom-color: var(--ctl-contorno, var(--border)); }
+  .tabs button.on { background: none; color: var(--accent-deep) !important; font-weight: 600; border-bottom-color: var(--accent); }
+  .tabs button.on .cnt { background: var(--ctl-filtro, var(--accent-tint)); color: var(--accent-deep); }
+  /* Sin nada a la derecha, la cápsula llega al borde del contenido (1289), como los íconos. */
+  .n2-der:empty { display: none; }
+  .tit .t { font-size: 13px; }
+  .mens { height: 32px; gap: 16px; margin-left: 16px; padding-left: 16px; border-left: 1px solid var(--ctl-linea, var(--border)); }
+  .men, .cab .men { height: auto; padding: 0; gap: 6px; border-radius: 0; background: none; font-size: 12px; cursor: default; }
+  .men:hover { background: none; }
+  .men:focus-within { outline: none; }
+  .men small { font-size: 12px; color: var(--text-secondary); }
+  .men .caja { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px; box-sizing: border-box;
+    border: 1px solid var(--ctl-contorno, var(--border)); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-weight: 500; cursor: pointer; }
+  .men .caja:hover { background: var(--bg-hover); }
+  .men .caja:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .men .caja i { font-size: 12px; color: var(--text-secondary); }
+  /* Abrir más filtros y desplegar el total: botones con borde (3,5:1 sobre blanco). */
+  .ms-b:not(.on) { border: 1px solid var(--ctl-contorno, var(--border)); background: var(--bg-card); }
+  .ms-b:not(.on):hover { background: var(--bg-hover); }
+  /* «3 más ‹» no estaba cortado (medido): la ‹ quedaba a 2 px del borde y se leía
+     como un paréntesis partido. 10 px de aire a la derecha. */
+  .kcap { padding-right: 10px; border: 1px solid var(--ctl-contorno, var(--border)); background: var(--bg-card); }
+  .kcap:hover { background: var(--bg-hover); }
+  .kcap .v { font-size: 17px; }
+  /* La leyenda de las barras grises con forma de barra, no de casilla. */
+  .ley i { width: 8px; height: 12px; border-radius: 2px; }
+}

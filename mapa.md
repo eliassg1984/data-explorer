@@ -41,9 +41,10 @@ en ambos ejes, y `.css` reserva su lugar. Los enlaces en otra pestaña usan
 un token transitorio (dos horas); vuelven al origen en la pestaña actual.
 `js_movil` conecta la reposición del estado local de las piezas. Regla #742.
 
-Desde 901px, la franja superior muestra la ruta integrada: selector de grupo
-cuando el área reúne varios reportes y selector de las vistas del grupo actual.
-Los menús se abren por clic y recuerdan la última vista de cada grupo (#817).
+Desde 901px, la franja superior es la barra de la app, de borde a borde (#851):
+selector de grupo cuando el área reúne varios reportes y, al lado, las vistas
+del reporte en pantalla en pastillas, sin menú. El menú de grupos se abre por
+clic y recuerda la última vista de cada grupo (#817).
 Los iconos de la columna cambian de área o reporte sin abrir paneles al
 pasar el cursor (2026-11-01). Al fijar la columna abierta se conserva la
 lista de vistas del reporte activo.
