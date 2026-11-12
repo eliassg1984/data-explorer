@@ -63,7 +63,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 ## Índice por tema
 
-851 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+852 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (294)
 
@@ -721,7 +721,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#766** — Venta por Periodo: Gráfico o Tabla en UNA zona, la variación sigue a «Contra» y la fecha es…
 - **#797** — «Qué faltó» con cantidad, unidad y código; y «Explorar», la tabla dinámica de Ajuste
 
-**Streamlit** (177)
+**Streamlit** (178)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -900,6 +900,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#785** — Inventario en la franja común (#782) y nada bajo 12 px
 - **#833** — La ubicación, la distribución y el orden de capas de un insertado son decisiones distintas
 - **#844** — Un boceto aprobado es el contrato entero: Período se rehízo con sus medidas, y la foto se…
+- **#852** — Ventas › Meseros: «Venta por mesero», lo vendido por grupo, subgrupo o plato × mesero, con su…
 
 **Datos, R2 y DuckDB** (133)
 
@@ -1209,7 +1210,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#832** — Una tarjeta insertada dentro de una pieza tiene su propia key y su propia selección
 - **#835** — Crear en el lienzo no exige selección, y una capa es una posición entre vecinos
 
-**Decisiones de diseño y UX** (282)
+**Decisiones de diseño y UX** (283)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1493,6 +1494,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 - **#846** — Movimientos sin «Filtros» en la ruta, y la cápsula con la letra del boceto: se compara…
 - **#849** — Diferencias del cierre: el panel de los números con los gráficos chicos, y Barras y 6 cierres…
 - **#851** — La franja es la barra de la app, con las vistas a la vista; Período, con sus controles juntos
+- **#852** — Ventas › Meseros: «Venta por mesero», lo vendido por grupo, subgrupo o plato × mesero, con su…
 
 **Mantenimiento y trampas del lenguaje** (17)
 
@@ -59743,6 +59745,33 @@ base nula, año bisiesto, conciliación y validación de enlaces).
      vistas siguen con las suyas. La forma común de pestañas que propuso el boceto (un
      módulo compartido para las 25 piezas) no está hecha.
 
+852. **Ventas › Meseros: «Venta por mesero», lo vendido por grupo, subgrupo o plato × mesero, con su Excel.**
+   A pedido: «la venta detallada, platos o grupos, por mesero». Hasta ese día, la ficha de un
+   mesero («Lo que vendió») mostraba sus 8 platos y sus 5 bebidas con más unidades, y los grupos
+   en unidades: ni el detalle completo, ni soles por grupo, ni meseros lado a lado, ni Excel.
+   - **Una tercera tarjeta de la pieza** (`graficos/ventas_meseros.js::mventa`), debajo de la
+     planilla, de una pantalla como ella: filas = Grupo | Subgrupo | Plato, columnas = cada
+     mesero de más a menos venta y «Sin mesero» al final, y Total. Así la última columna da la
+     venta entera del rango y turno.
+   - **Medida: Venta | Unidades | % de su venta.** El % es sobre la COLUMNA (qué parte de lo que
+     vendió ese mesero fue esa fila), con el turno y el grupo elegidos: el total de cada columna
+     da 100 %. Con el buscador, el pie dice «Total de lo visible» y suma sólo esas filas.
+   - **Controles locales, sin corrida**: el turno de arriba manda también acá; además el filtro
+     de grupo, el buscador (que no pierde el foco al redibujar), el orden por cualquier columna y
+     la columna del mesero elegido arriba, marcada.
+   - **No pidió datos nuevos**: los ítems ya viajaban uno por línea (#517) con mesero, plato y
+     grupo. Se sumó el SUBGRUPO en la posición 8 (`MIT.sub`, `P.subs`), de la columna «Sub Grupo»
+     del parquet; si no viene, «Sin subgrupo».
+   - **Excel venta**: la tabla como se ve (en la medida elegida; el % como número × 100), una hoja
+     «Detalle» (mesero × grupo × subgrupo × plato, unidades y venta) y «Contexto».
+   - `test_meseros_pieza.py` compara cada celda, por nombre de columna, con un `groupby` de
+     pandas en los tres turnos y los tres cortes, y en Chromium los controles, la búsqueda y el
+     Excel (el Detalle suma la venta del rango).
+   - **Ojo al probar en la laptop:** un `streamlit` viejo de otra sesión seguía escuchando en el
+     8503 y contestaba `localhost` con la pieza de antes, aunque el servidor nuevo se había
+     levantado después de los cambios. Ante «no aparece lo que acabo de escribir», mirar quién
+     escucha el puerto (`Get-NetTCPConnection -LocalPort 8503`) antes de sospechar del código.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -59755,7 +59784,7 @@ base nula, año bisiesto, conciliación y validación de enlaces).
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#851**; la próxima toma el número siguiente.
+> última regla es la **#852**; la próxima toma el número siguiente.
 
 >
 

@@ -99,3 +99,16 @@
 .msp .ms-panes.amp-ficha>.ms-ficha{border-left:0;padding-left:0;}
 .msp .ms-amp svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle}
 
+/* #852: Venta por mesero. Una pantalla como la planilla; el mesero elegido arriba
+   lleva su columna marcada y la fila de totales queda pegada abajo. */
+.msp .ms-vt{height:var(--alto-util,600px);}
+.msp .ms-rot{font-size:12px;color:var(--text-secondary);}
+.msp .ms-vt-scroll th{text-align:right;min-width:78px;}
+.msp .ms-vt-scroll th.ms-sticky{text-align:left;z-index:4;background:var(--accent-tint);min-width:190px;}
+.msp .ms-vt-scroll td.ms-sticky{white-space:normal;min-width:190px;max-width:260px;}
+.msp .ms-vt-scroll th.ms-col-on,.msp .ms-vt-scroll td.ms-col-on{box-shadow:inset 2px 0 var(--accent),inset -2px 0 var(--accent);}
+.msp .ms-vt-scroll .ms-vt-tot{font-weight:650;}
+.msp .ms-vt-scroll tfoot{position:sticky;bottom:0;z-index:3;}
+.msp .ms-vt-scroll tfoot td{font-weight:650;background:var(--accent-tint);border-top:1px solid var(--border-lavender);border-bottom:0;}
+.msp .ms-vt-scroll tbody tr:hover td{background:var(--accent-tint);}
+@media(max-width:900px){.msp .ms-vt{height:auto;}.msp .ms-vt .ms-toolbar input[type=search]{width:100%;}.msp .ms-vt-scroll th.ms-sticky,.msp .ms-vt-scroll td.ms-sticky{min-width:130px;max-width:160px;}}

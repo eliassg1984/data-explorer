@@ -45,9 +45,10 @@ def armar(d_pagos, P, items, P0, P12, rango, firma=None):
     turnos = sorted(set(P["turno"]) | set(P0["turno"]) | set(H["turno"]))
     peds = sorted(set(P["ped"]) | set(items["ped"]))
     prods, grupos = sorted(set(items["prod"])), sorted(set(items["grupo"]))
+    subs = sorted(set(items["sub"])) if "sub" in items else [""]
     docs = sorted({v["doc"] for v in e.values()} | {""})
     im, it, ip, idc = ({v: i for i, v in enumerate(vs)} for vs in (meseros, turnos, peds, docs))
-    ipr, ig = ({v: i for i, v in enumerate(vs)} for vs in (prods, grupos))
+    ipr, ig, isb = ({v: i for i, v in enumerate(vs)} for vs in (prods, grupos, subs))
     base = min(P["dia"].min(), P0["dia"].min() if not P0.empty else P["dia"].min())
 
     def dia(v):
@@ -71,7 +72,8 @@ def armar(d_pagos, P, items, P0, P12, rango, firma=None):
     hi = hi.groupby(["mes", "mesero", "turno"], as_index=False, sort=True).agg(
         propina=("propina", "sum"), venta=("venta", "sum"))
     hist = [[m, im[me], it[tu], n(p), n(v)] for m, me, tu, p, v in hi.itertuples(index=False, name=None)]
-    lineas = [[ip[r.ped], im[r.mesero], dia(r.dia), it[r.turno], ipr[r.prod], ig[r.grupo], n(r.cant), n(r.venta)]
+    lineas = [[ip[r.ped], im[r.mesero], dia(r.dia), it[r.turno], ipr[r.prod], ig[r.grupo], n(r.cant), n(r.venta),
+               isb[getattr(r, "sub", "")]]
               for r in items.itertuples(index=False)]
     filtros = {rot: [str(v) for v in vs] for rot, vs in zip(
         ("Grupo", "Subgrupo", "Canal", "Servicio"), firma or ((), (), (), ()))}
@@ -99,7 +101,7 @@ def armar(d_pagos, P, items, P0, P12, rango, firma=None):
                "corte_ms": int(hora.total_seconds() * 1000) if hora is not None else None,
                "hay_anterior": anterior is not None, "hay_historia": P12 is not None,
                "meseros": meseros, "sin_mesero": im[vm.SIN_MESERO], "turnos": turnos,
-               "pedidos": peds, "docs": docs, "prods": prods, "grupos": grupos,
+               "pedidos": peds, "docs": docs, "prods": prods, "grupos": grupos, "subs": subs,
                "actual": pedidos(P, True), "previo": pedidos(P0, False),
                "items": lineas, "historia": hist, "libros": libros, "filtros": filtros,
                "hay_descuento": bool(dv.columna(d_pagos, dv.DESCUENTO_ITEM)),

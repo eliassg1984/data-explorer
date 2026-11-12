@@ -1,7 +1,7 @@
 // Ventas > Meseros (#719). Pedidos y pagos ya separados por Python (#517).
 // La búsqueda y la ficha no cambian la población del pozo ni la planilla.
 const MP={ped:0,mesero:1,dia:2,hora:3,turno:4,venta:5,items:6,pax:7,propina:8,tarjeta:9,efectivo:10,desc:11,doc:12};
-const MIT={ped:0,mesero:1,dia:2,turno:3,prod:4,grupo:5,cant:6,venta:7};
+const MIT={ped:0,mesero:1,dia:2,turno:3,prod:4,grupo:5,cant:6,venta:7,sub:8};
 const MDIA=864e5, MCORTES=[.001,5,9.5,10.5,15,Infinity];
 const mdia=s=>Date.parse(s+'T00:00:00Z')/MDIA;
 const miso=n=>new Date(n*MDIA).toISOString().slice(0,10);
@@ -22,7 +22,7 @@ const msum=(rs,k)=>rs.reduce((s,r)=>s+(r[k]||0),0);
 function mleer(P){
   const base=mdia(P.base),leer=rows=>rows.map(r=>({id:r[MP.ped],ms:r[MP.mesero],f:base+r[MP.dia],hora:r[MP.hora],turn:r[MP.turno],
     venta:r[MP.venta],items:r[MP.items],personas:r[MP.pax],propina:r[MP.propina],tarjeta:r[MP.tarjeta],solo_efectivo:r[MP.efectivo],desc:r[MP.desc],doc:r[MP.doc]}));
-  const items=P.items.map(r=>({ped:r[MIT.ped],ms:r[MIT.mesero],f:base+r[MIT.dia],turn:r[MIT.turno],prod:r[MIT.prod],grupo:r[MIT.grupo],cant:r[MIT.cant],venta:r[MIT.venta]}));
+  const items=P.items.map(r=>({ped:r[MIT.ped],ms:r[MIT.mesero],f:base+r[MIT.dia],turn:r[MIT.turno],prod:r[MIT.prod],grupo:r[MIT.grupo],cant:r[MIT.cant],venta:r[MIT.venta],sub:r[MIT.sub]??0}));
   return {P,rows:leer(P.actual),prev:leer(P.previo),items,cache:new Map()};
 }
 const mturno=(B,rs,t)=>t==='Todo el día'?rs:rs.filter(r=>B.P.turnos[r.turn]===t);
@@ -57,6 +57,33 @@ function mvendido(B,items){
   const gs=new Map();for(const r of items)gs.set(r.grupo,(gs.get(r.grupo)||0)+r.cant);
   return {platos:agrupar(items.filter(r=>B.P.grupos[r.grupo]==='Alimentos')).slice(0,8),bebidas:agrupar(items.filter(r=>/bebida|vino|espumante/i.test(B.P.grupos[r.grupo]))).slice(0,5),grupos:[...gs].filter(([,u])=>u>0).sort((a,b)=>b[1]-a[1]||a[0]-b[0])};
 }
+// «Venta por mesero» (#852): lo vendido (grupo, subgrupo o plato) × mesero,
+// con el turno de arriba y su propio filtro de grupo. Cada ítem una vez (#517).
+const MDIMS=['Grupo','Subgrupo','Plato'],MMEDS=['Venta','Unidades','% de su venta'];
+const mnorm=s=>String(s??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLocaleLowerCase('es');
+const mgnom=(B,g)=>B.P.grupos[g]||'Sin grupo',msnom=(B,s)=>(B.P.subs||[])[s]||'Sin subgrupo';
+function mcruce(B,st){
+  const g=st.vgrupo??-1,dim=st.vdim||'Grupo',items=mturno(B,B.items,st.turno).filter(r=>g<0||r.grupo===g);
+  const fil=new Map(),col=new Map(),det=new Map(),tot={u:0,v:0},suma=(a,r)=>{a.u+=r.cant;a.v+=r.venta;};
+  for(const r of items){
+    const k=dim==='Grupo'?String(r.grupo):dim==='Subgrupo'?`${r.grupo}|${r.sub}`:String(r.prod);
+    if(!fil.has(k))fil.set(k,{k,label:dim==='Grupo'?mgnom(B,r.grupo):dim==='Subgrupo'?msnom(B,r.sub):B.P.prods[r.prod],
+      sub:dim==='Grupo'?'':dim==='Subgrupo'?mgnom(B,r.grupo):`${mgnom(B,r.grupo)}${B.P.subs?.[r.sub]?' › '+B.P.subs[r.sub]:''}`,cel:new Map(),u:0,v:0});
+    const f=fil.get(k);if(!f.cel.has(r.ms))f.cel.set(r.ms,{u:0,v:0});suma(f.cel.get(r.ms),r);suma(f,r);
+    if(!col.has(r.ms))col.set(r.ms,{u:0,v:0});suma(col.get(r.ms),r);suma(tot,r);
+    const kd=`${r.ms}|${r.prod}|${r.grupo}|${r.sub}`;if(!det.has(kd))det.set(kd,{ms:r.ms,prod:r.prod,grupo:r.grupo,sub:r.sub,fila:k,u:0,v:0});suma(det.get(kd),r);
+  }
+  const cols=[...col].sort(([a,x],[b,y])=>(a===B.P.sin_mesero)-(b===B.P.sin_mesero)||y.v-x.v||a-b).map(([id])=>id);
+  return {dim,cols,col,tot,filas:[...fil.values()],det:[...det.values()]};
+}
+// La medida de una celda; el % es sobre lo que vendió ese mesero (su columna).
+function mvalor(med,c,ct){if(!c)return null;return med==='Unidades'?c.u:med==='% de su venta'?mdiv(c.v,ct?.v):c.v;}
+function mvisibles(st,C){
+  const q=mnorm(st.vq),o=st.vorden??'t',d=st.vdir??-1;
+  const vs=C.filas.filter(f=>!q||mnorm(f.label).includes(q)||mnorm(f.sub).includes(q));
+  const clave=f=>o==='nombre'?null:o==='t'?mvalor(st.vmed,f,C.tot):mvalor(st.vmed,f.cel.get(+o),C.col.get(+o));
+  return vs.sort((a,b)=>{if(o==='nombre')return a.label.localeCompare(b.label,'es')*d;const x=clave(a),y=clave(b);return ((x??-Infinity)-(y??-Infinity))*d||b.v-a.v||a.label.localeCompare(b.label,'es');});
+}
 function mequipo(B,turno){
   if(B.cache.has(turno))return B.cache.get(turno);
   const rows=mturno(B,B.rows,turno),prev=mturno(B,B.prev,turno),R=mresumen(rows),R0=mresumen(prev),z=mpozo(B,rows);
@@ -83,9 +110,9 @@ function mhistoria(B,st){
     if(!m.has(mes))m.set(mes,{mes,propina:0,venta:0,equipo:0});const a=m.get(mes);a.equipo+=p;a.venta+=v;if(st.ms===-1||ms===st.ms)a.propina+=p;}
   return [...m.values()].sort((a,b)=>a.mes.localeCompare(b.mes));
 }
-window.__mesCalc={leer:mleer,resumen:mresumen,pozo:mpozo,planilla:mplanilla,distribucion:mdistribucion,vendido:mvendido,equipo:mequipo,scope:mscope,historia:mhistoria};
+window.__mesCalc={leer:mleer,resumen:mresumen,pozo:mpozo,planilla:mplanilla,distribucion:mdistribucion,vendido:mvendido,cruce:mcruce,valor:mvalor,visibles:mvisibles,equipo:mequipo,scope:mscope,historia:mhistoria};
 
-function minicial(){return {turno:'Todo el día',modo:'Por mesero',ms:null,q:'',orden:'propina',dir:-1,mas:false,tab:'Propinas',filtro:'Todos',celda:null,weekday:null,pedido:null,limite:150,mapa:'Por mesa',ayuda:false};}
+function minicial(){return {turno:'Todo el día',modo:'Por mesero',ms:null,q:'',vdim:'Grupo',vmed:'Venta',vgrupo:-1,vq:'',vorden:'t',vdir:-1,orden:'propina',dir:-1,mas:false,tab:'Propinas',filtro:'Todos',celda:null,weekday:null,pedido:null,limite:150,mapa:'Por mesa',ayuda:false};}
 const mboton=(a,v,t,on=false,tip='')=>`<button type="button" data-acc="${a}" data-v="${mesc(v)}" class="${on?'on':''}" aria-pressed="${on}" title="${mesc(tip)}">${mesc(t)}</button>`;
 // ⤢ amplía la lista o la ficha a todo el ancho; ↙ o Esc vuelven (#788, como Recetas).
 const mamp=(st,cual)=>{const on=st.amp===cual;return `<button type="button" class="ms-amp" data-acc="amp" data-v="${cual}" aria-pressed="${on}" title="${on?'Volver a las dos columnas (Esc)':'Ampliar '+(cual==='lista'?'la lista':'la ficha')+' a todo el ancho'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${on?'M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6':'M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6'}"/></svg></button>`;};
@@ -97,8 +124,8 @@ function mpintar(G){
   const {B,st,root}=G,T=mequipo(B,st.turno);G.T=T;
   if(st.ms==null||st.ms!==-1&&!T.R.some(r=>r.id===st.ms))st.ms=T.rank[0]?.id??-1;
   G.S=mscope(B,T,st);G.plan=mplanilla(T.z,st.modo);
-  const oldScroll=root.querySelector('.ms-pay-scroll'),left=oldScroll?.scrollLeft||0;
-  const focus=root.getRootNode().activeElement,search=focus?.matches?.('[data-acc="buscar"]'),cursor=search?focus.selectionStart:0;
+  const oldScroll=root.querySelector('.ms-pay-scroll'),left=oldScroll?.scrollLeft||0,vOld=root.querySelector('.ms-vt-scroll'),vPos=[vOld?.scrollLeft||0,vOld?.scrollTop||0];
+  const focus=root.getRootNode().activeElement,search=focus?.matches?.('[data-acc="buscar"],[data-acc="vbuscar"]')?focus.dataset.acc:null,cursor=search?focus.selectionStart:0;
   const t=T.t,t0=T.t0,pct=mdiv(t.propina,t.venta),vp=B.P.hay_anterior?mvar(t.propina,t0.propina):null;
   const corte=B.P.corte_ms!=null&&B.P.corte_ms<20*3600e3?` · último día hasta ${String(Math.floor(B.P.corte_ms/3600e3)).padStart(2,'0')}:${String(Math.floor(B.P.corte_ms/60000)%60).padStart(2,'0')}`:'';
   const sin=T.R.find(r=>r.id===B.P.sin_mesero);
@@ -107,9 +134,10 @@ function mpintar(G){
     <div class="ms-kpis">${mkpi('Propinas',msol(t.propina,0),mdelta(vp),'Propina registrada; sin «Sin mesero»',mcolor(vp))}${mkpi('% de la venta',mpct(pct),B.P.hay_anterior&&t0.venta>0?`${mnum((pct-t0.propina/t0.venta)*100,1)} pp vs anterior`:'Propina / venta')}${mkpi('Por mesa',msol(mdiv(t.propina,t.mesas)),`${t.mesas} mesas`)}${mkpi('Por persona',msol(mdiv(t.propina,t.personas)),`${mnum(t.personas)} adultos`)}<button class="ms-kpi ms-kpi-button" data-acc="sinpropina">${mkpi('Tarjeta sin propina',mpct(mdiv(t.sin_propina,t.tarjeta)),`${t.sin_propina} de ${t.tarjeta} · ver mesas`)}</button>${mkpi('Sólo efectivo',`${t.solo_efectivo} mesas`,'Propina no registrada en POS')}</div>
     <div class="ms-panes${st.amp?' amp-'+st.amp:''}"><div class="ms-list"><div class="ms-toolbar"><input type="search" data-acc="buscar" aria-label="Buscar mesero en la lista" placeholder="Buscar mesero…" value="${mesc(st.q)}">${mboton('mas','','Más datos',st.mas)}${mboton('equipo','','Equipo',st.ms===-1)}${mamp(st,'lista')}</div>${mrank(G)}<div class="ms-caption">Comparación Almuerzo/Cena: % de la venta de cada turno. La búsqueda acota la lista.</div>${sin?.mesas?`<div class="ms-caption">${mboton('sinmesero','','Sin mesero: '+sin.mesas+' pedidos')} · ${msol(sin.venta,0)}</div>`:''}</div>${mficha(G)}</div>
     ${st.ayuda?`<div class="ms-help">${mboton('ayuda','','Cerrar')}<p>Mesas = pedidos con venta; personas = adultos. Cada ítem suma venta una vez y cada pago suma propina una vez. El día es el del comprobante.</p><p>La propina se registra con tarjeta. Efectivo puede incluir una propina que el POS no registra. El % usa la venta de la mesa; los descuentos se explican en la ficha.</p><p>Pozo común: partes iguales por día y turno entre meseros con al menos una mesa. Es la regla supuesta de esta vista. El rango y el turno fijan el reparto; búsqueda, selección y filtros de ficha son análisis.</p><p>La comparación conserva los mismos días del mes anterior y la hora de corte del último día. Las muestras y los importes describen lo registrado.</p></div>`:''}
-  </section>${mplan(G)}`;
+  </section>${mplan(G)}${mventa(G)}`;
   const sc=root.querySelector('.ms-pay-scroll');if(sc)sc.scrollLeft=left;
-  if(search){const e=root.querySelector('[data-acc="buscar"]');e.focus({preventScroll:true});e.setSelectionRange(cursor,cursor);}
+  const vs=root.querySelector('.ms-vt-scroll');if(vs){vs.scrollLeft=vPos[0];vs.scrollTop=vPos[1];}
+  if(search){const e=root.querySelector(`[data-acc="${search}"]`);e.focus({preventScroll:true});e.setSelectionRange(cursor,cursor);}
   msvg(G);
 }
 function mrank(G){
@@ -170,6 +198,41 @@ function mmapa(G,turns){
   const max=Math.max(1e-9,...cells.flat().map(r=>r.val||0));
   return `<div class="ms-map"><table><thead><tr><th>Turno</th>${['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${cells.map(rs=>`<tr><th>${mesc(B.P.turnos[rs[0].turn])}</th>${rs.map(r=>`<td style="background:color-mix(in srgb,var(--accent) ${Math.round(5+(r.val||0)/max*40)}%,var(--bg-card))">${mboton('weekday',`${r.w}|${r.turn}`,r.n?(st.mapa==='% venta'?mpct(r.val):msol(r.val,st.mapa==='Propinas'?0:2)):'—',st.weekday===r.w&&st.celda?.turn===r.turn,`${r.n} mesas · ${msol(r.p)} de propina`)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
+function mventa(G){
+  const {B,st}=G,C=mcruce(B,st),vis=mvisibles(st,C);G.C=C;G.Cvis=vis;
+  const med=st.vmed,pct=med==='% de su venta';
+  const fmt=v=>v==null?'·':pct?mpct(v):med==='Unidades'?mnum(v,Math.abs(v-Math.round(v))<1e-6?0:2):mnum(v,0);
+  const cols=C.cols,vt=new Map(cols.map(id=>[id,{u:0,v:0}])),vtot={u:0,v:0};
+  for(const f of vis){for(const [id,c] of f.cel){const a=vt.get(id);a.u+=c.u;a.v+=c.v;}vtot.u+=f.u;vtot.v+=f.v;}
+  const max=Math.max(1e-9,...vis.flatMap(f=>cols.map(id=>Math.abs(mvalor(med,f.cel.get(id),C.col.get(id))||0))));
+  const tono=v=>v==null?'':` style="background:color-mix(in srgb,var(--accent) ${Math.round(Math.min(1,Math.abs(v)/max)*30)}%,var(--bg-card))"`;
+  const flecha=k=>String(st.vorden)===String(k)?(st.vdir===1?' ▲':' ▼'):'';
+  const th=(k,t,tip,cls='')=>`<th class="${cls}">${mboton('vorden',k,t+flecha(k),String(st.vorden)===String(k),tip)}</th>`;
+  const grupos=[...new Set(B.items.map(r=>r.grupo))].sort((a,b)=>mgnom(B,a).localeCompare(mgnom(B,b),'es'));
+  const head=`<tr>${th('nombre',st.vdim,'Ordenar por nombre','ms-sticky')}${cols.map(id=>th(id,B.P.meseros[id],`Ordenar por ${B.P.meseros[id]}`,id===st.ms?'ms-col-on':'')).join('')}${th('t','Total','Ordenar por el total','ms-vt-tot')}</tr>`;
+  const body=vis.map(f=>`<tr><td class="ms-sticky"><b>${mesc(f.label)}</b>${f.sub?`<small>${mesc(f.sub)}</small>`:''}</td>${cols.map(id=>{const v=mvalor(med,f.cel.get(id),C.col.get(id));return `<td class="ms-num${id===st.ms?' ms-col-on':''}"${tono(v)} title="${mesc(B.P.meseros[id])} · ${mesc(f.label)}">${fmt(v)}</td>`;}).join('')}<td class="ms-num ms-vt-tot">${fmt(mvalor(med,f,C.tot))}</td></tr>`).join('');
+  const pie=`<tr><td class="ms-sticky">Total${vis.length<C.filas.length?' de lo visible':''}</td>${cols.map(id=>`<td class="ms-num${id===st.ms?' ms-col-on':''}">${fmt(mvalor(med,vt.get(id),C.col.get(id)))}</td>`).join('')}<td class="ms-num ms-vt-tot">${fmt(mvalor(med,vtot,C.tot))}</td></tr>`;
+  const tabla=!C.filas.length?'<p class="ms-empty">Sin ventas para este turno y grupo.</p>':!vis.length?'<p class="ms-empty">Nada coincide con la búsqueda.</p>':
+    `<div class="ms-scroll ms-vt-scroll"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${pie}</tfoot></table></div>`;
+  const nota=pct?'% de su venta: qué parte de lo que vendió cada mesero (con el turno y el grupo elegidos) fue cada fila.':med==='Venta'?'Venta en S/, como en el resto de Ventas: notas de crédito restadas, sin cortesías ni anulados.':'Unidades vendidas; una devolución resta.';
+  return `<section class="ms-card ms-vt"><div class="ms-head"><h3>Venta por mesero · ${mesc(st.turno)}</h3>${mboton('excelventa','','Excel venta')}</div>
+    <div class="ms-toolbar"><span class="ms-rot">Filas</span>${msegmento('vdim',MDIMS,st.vdim)}<span class="ms-rot">Medida</span>${msegmento('vmed',MMEDS,med)}
+      <select data-acc="vgrupo" aria-label="Filtrar por grupo"><option value="-1"${st.vgrupo<0?' selected':''}>Todos los grupos</option>${grupos.map(g=>`<option value="${g}"${st.vgrupo===g?' selected':''}>${mesc(mgnom(B,g))}</option>`).join('')}</select>
+      <input type="search" data-acc="vbuscar" aria-label="Buscar en las filas" placeholder="Buscar ${st.vdim==='Plato'?'plato':st.vdim==='Grupo'?'grupo':'subgrupo'}…" value="${mesc(st.vq)}"></div>
+    <div class="ms-caption">${vis.length} de ${C.filas.length} filas · ${cols.length} meseros, de más a menos venta${cols.includes(B.P.sin_mesero)?'; «Sin mesero» al final':''}. El turno es el de arriba. ${nota}</div>${tabla}</section>`;
+}
+function mexcelVenta(G){
+  const {B,st,C}=G,vis=G.Cvis||[],med=st.vmed,pct=med==='% de su venta',x=v=>v==null?null:pct?v*100:v,conG=st.vdim!=='Grupo';
+  const cab=[st.vdim,...(conG?['Grupo']:[]),...C.cols.map(id=>B.P.meseros[id]),'Total'];
+  const filas=vis.map(f=>[f.label,...(conG?[f.sub]:[]),...C.cols.map(id=>x(mvalor(med,f.cel.get(id),C.col.get(id)))),x(mvalor(med,f,C.tot))]);
+  const vt=new Map(C.cols.map(id=>[id,{u:0,v:0}])),vtot={u:0,v:0};for(const f of vis){for(const [id,c] of f.cel){vt.get(id).u+=c.u;vt.get(id).v+=c.v;}vtot.u+=f.u;vtot.v+=f.v;}
+  filas.push(['Total',...(conG?['']:[]),...C.cols.map(id=>x(mvalor(med,vt.get(id),C.col.get(id)))),x(mvalor(med,vtot,C.tot))]);
+  const keys=new Set(vis.map(f=>f.k));
+  const det=C.det.filter(r=>keys.has(r.fila)).sort((a,b)=>B.P.meseros[a.ms].localeCompare(B.P.meseros[b.ms],'es')||b.v-a.v).map(r=>[B.P.meseros[r.ms],mgnom(B,r.grupo),msnom(B,r.sub),B.P.prods[r.prod],r.u,r.v]);
+  const contexto=[['Desde',B.P.rango[0]],['Hasta',B.P.rango[1]],['Turno',st.turno],['Filas',st.vdim],['Medida',pct?'% de la venta de cada mesero':med],['Grupo',st.vgrupo<0?'Todos':mgnom(B,st.vgrupo)],['Búsqueda',st.vq||'—'],['Venta','Notas de crédito restadas; sin cortesías ni anulados; cada ítem una vez']];
+  for(const [k,vs] of Object.entries(B.P.filtros))contexto.push([k,vs.length?vs.join(' / '):'Todos']);
+  bajar(`Venta_por_mesero_${archivo(st.vdim)}_${archivo(st.turno)}.xlsx`,libro([{nombre:`${st.vdim} × mesero`,cabeza:cab,filas},{nombre:'Detalle',cabeza:['Mesero','Grupo','Subgrupo','Plato','Unidades','Venta'],filas:det},{nombre:'Contexto',cabeza:['Dato','Valor'],filas:contexto}]));
+}
 function msvg(G){
   const {root,B,st}=G,tr=root.querySelector('.ms-tramos');
   if(tr&&G.tramos){const {counts,team}=G.tramos,n=counts.reduce((a,b)=>a+b,0),nt=team.reduce((a,b)=>a+b,0),w=tr.clientWidth||430,h=154,L=72,R=60,span=w-L-R;
@@ -209,14 +272,18 @@ function menlazar(G){
     else if(acc==='weekday'){const [w,t]=v.split('|');st.ms=-1;mlimpiar(st);st.weekday=+w;st.celda={f:null,turn:+t};st.tab='Mesas';}
     else if(acc==='excelplan'){mexcelPlan(G);return;}
     else if(acc==='excelmesas'){mexcelMesas(G);return;}
+    else if(acc==='excelventa'){mexcelVenta(G);return;}
+    else if(acc==='vdim'){st.vdim=v;st.vq='';}
+    else if(acc==='vmed')st.vmed=v;
+    else if(acc==='vorden'){st.vdir=st.vorden===v?-st.vdir:(v==='nombre'?1:-1);st.vorden=v;}
     else return;
     mpintar(G);
     if(['celda','weekday','sinpropina','sinmesero'].includes(acc))root.querySelector('.ms-ficha')?.scrollIntoView({block:'nearest',behavior:'smooth'});
   });
   // Esc en el document: el redibujo se lleva el botón que tenía el foco.
   document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&st.amp&&root.isConnected){st.amp=null;mpintar(G);}});
-  root.addEventListener('input',ev=>{if(ev.target.dataset.acc==='buscar'){st.q=ev.target.value;mpintar(G);}});
-  root.addEventListener('change',ev=>{if(ev.target.dataset.acc==='filtro'){st.filtro=ev.target.value;st.pedido=null;st.limite=150;mpintar(G);}});
+  root.addEventListener('input',ev=>{const a=ev.target.dataset.acc;if(a==='buscar'){st.q=ev.target.value;mpintar(G);}else if(a==='vbuscar'){st.vq=ev.target.value;mpintar(G);}});
+  root.addEventListener('change',ev=>{const a=ev.target.dataset.acc;if(a==='filtro'){st.filtro=ev.target.value;st.pedido=null;st.limite=150;mpintar(G);}else if(a==='vgrupo'){st.vgrupo=+ev.target.value;mpintar(G);}});
   root.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(st.ayuda)st.ayuda=false;else st.pedido=null;mpintar(G);}const r=ev.target.closest('tr[data-acc]');if(r&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();r.click();}});
   root.addEventListener('scroll',ev=>{const e=ev.target;if(e.matches('.ms-mesas-scroll')&&e.scrollTop+e.clientHeight>e.scrollHeight-70&&st.limite<G.S.rows.length){const y=e.scrollTop,x=e.scrollLeft;st.limite+=150;mpintar(G);const next=root.querySelector('.ms-mesas-scroll');next.scrollTop=y;next.scrollLeft=x;}},true);
 }
@@ -224,7 +291,8 @@ window.__mesUI={inicial:minicial,pintar:mpintar};
 export default function(component){
   const {data:P,parentElement}=component;if(!P)return;
   const old=window.__vtMes,st=old?.st||minicial();old?.observer?.disconnect();clearTimeout(old?.resizeTimer);
-  if(old&&old.B.P.sello!==P.sello){const nombre=old.B.P.meseros[st.ms];st.ms=st.ms===-1?-1:P.meseros.indexOf(nombre);if(st.ms<0)st.ms=-1;mlimpiar(st);}
+  if(old&&old.B.P.sello!==P.sello){const nombre=old.B.P.meseros[st.ms];st.ms=st.ms===-1?-1:P.meseros.indexOf(nombre);if(st.ms<0)st.ms=-1;mlimpiar(st);
+    if(st.vgrupo>=0)st.vgrupo=P.grupos.indexOf(old.B.P.grupos[st.vgrupo]);}
   let root=parentElement.querySelector('.msp');if(!root){root=document.createElement('div');root.className='msp';parentElement.appendChild(root);}
   const G={root,st,B:old?.B.P.sello===P.sello?old.B:mleer(P)};window.__vtMes=G;
   // Un remontaje sobre la misma raíz no acumula manejadores.

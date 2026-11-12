@@ -114,6 +114,7 @@ def columnas(df):
         "tipo_pago": r("Nombre Tipo Pago"),
         "prod": r("Nomb Item Venta", "Nombre Producto"),
         "grupo": r("Grupo"),
+        "sub": r("Sub Grupo", "Sub_Grupo", "Subgrupo"),
         "numero": r("Numero Documento"),
         "fecha_pago": r("Fecha Registro Pago Doc"),
     }
@@ -139,7 +140,8 @@ def preparar(d_pagos):
     `pedidos` tiene una fila por pedido: mesero, día y hora del cobro, turno,
     venta, productos, personas, propina, si se pagó con tarjeta y si se pagó
     sólo en efectivo. `items` tiene una fila por ítem vendido (mesero, turno,
-    día, producto, grupo, unidades, venta), para «Lo que vendió». Sin las
+    día, producto, grupo, subgrupo, unidades, venta), para «Lo que vendió»
+    y «Venta por mesero». Sin las
     columnas que hacen falta, `(None, None)`."""
     # Acá y no arriba: `graficos.ventas` importa este módulo.
     from graficos.ventas import unico_por_item
@@ -176,6 +178,9 @@ def preparar(d_pagos):
                  .str.strip() if c["prod"] else pd.Series("—", index=it.index)),
         "grupo": (it[c["grupo"]].where(it[c["grupo"]].notna(), "").astype(str)
                   if c["grupo"] else pd.Series("", index=it.index)),
+        # Subgrupo: sólo para la tarjeta «Venta por mesero» (#852).
+        "sub": (it[c["sub"]].where(it[c["sub"]].notna(), "").astype(str).str.strip()
+                if c["sub"] else pd.Series("", index=it.index)),
     })
     items = items[items["cobro"].notna()]
     if items.empty:

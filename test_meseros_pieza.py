@@ -37,7 +37,7 @@ def ventas():
                   'LLAVE LOCAL DOCUMENTO CORRELATIVO PAGO':ped+'P'+str(k),
                   'NOMBRE TIPO PAGO':'Tarjeta de Crédito' if tarj and k==0 else 'Efectivo',
                   'MONTO PROPINA':tip if k==0 else 0,'NOMB ITEM VENTA':prod,
-                  'GRUPO':'Alimentos' if i==0 else 'Bebidas s/ Alcohol','CLASE VENTA':clase,
+                  'GRUPO':'Alimentos' if i==0 else 'Bebidas s/ Alcohol','SUB GRUPO':'Fondos' if i==0 else 'Aguas','CLASE VENTA':clase,
                   'DESCUENTO ITEM DDOCUMENTO':desc*(.7 if i==0 else .3),
                   'FECHA REGISTRO PAGO DOC':pd.Timestamp(f)+pd.Timedelta(minutes=1)})
     for k,f in enumerate(pd.date_range('2025-11-01','2026-10-23',freq='7D')):
@@ -82,6 +82,9 @@ class Contrato(unittest.TestCase):
         self.assertTrue(P['hay_descuento'])
         self.assertIn('const MP={ped:0,mesero:1,dia:2,hora:3,turno:4,venta:5,items:6,pax:7,propina:8,tarjeta:9,efectivo:10,desc:11,doc:12};',JS)
         self.assertNotIn('setTriggerValue',JS)
+        # #852: el subgrupo viaja en la posición 8 de cada ítem.
+        self.assertIn('const MIT={ped:0,mesero:1,dia:2,turno:3,prod:4,grupo:5,cant:6,venta:7,sub:8};',JS)
+        self.assertEqual({P['subs'][r[8]] for r in P['items']},{'Fondos','Aguas'})
         self.assertNotRegex(JS+CSS,r'#[0-9a-fA-F]{6}\b')
 
     def test_seis_excels_canonicos_con_decimales_y_contexto(self):
@@ -222,6 +225,70 @@ class Navegador(unittest.TestCase):
         P,*_=armar(P0_missing=True)
         self.mount(P)
         self.assertIn('sin datos anteriores disponibles',root.inner_text())
+
+    def test_venta_por_mesero_contra_pandas(self):
+        # #852: cada celda, por nombre de columna, contra un groupby de pandas.
+        col={'Grupo':'grupo','Subgrupo':'sub','Plato':'prod'}
+        for turno in vm.TURNOS:
+            it=vm.del_turno(self.items,turno)
+            ref=it.groupby([c for c in ['grupo','sub','prod','mesero']],as_index=False).agg(u=('cant','sum'),v=('venta','sum'))
+            por_ms=it.groupby('mesero')['venta'].sum()
+            for dim,c in col.items():
+                with self.subTest(turno=turno,dim=dim):
+                    out=self.pg.evaluate("""([P,s])=>{const B=__mesCalc.leer(P),st={...__mesUI.inicial(),...s},C=__mesCalc.cruce(B,st);
+                      return C.filas.flatMap(f=>[...f.cel].map(([ms,x])=>({fila:f.label,ms:P.meseros[ms],u:x.u,v:x.v,pct:__mesCalc.valor('% de su venta',x,C.col.get(ms))})))}""",[self.P,{'turno':turno,'vdim':dim}])
+                    r2=ref.groupby([c,'mesero'],as_index=False).agg(u=('u','sum'),v=('v','sum'))
+                    self.assertEqual(len(out),len(r2))
+                    idx={(a,b):(u,v) for a,b,u,v in r2[[c,'mesero','u','v']].itertuples(index=False,name=None)}
+                    for o in out:
+                        u,v=idx[(o['fila'],o['ms'])]
+                        self.assertAlmostEqual(o['u'],u,places=5);self.assertAlmostEqual(o['v'],v,places=5)
+                        if por_ms[o['ms']]>0:self.assertAlmostEqual(o['pct'],v/por_ms[o['ms']],places=6)
+
+    def test_venta_por_mesero_controles_filtros_y_excel(self):
+        self.mount();pg=self.pg;card=pg.locator('.ms-vt')
+        total=self.items['venta'].sum()
+        foot=lambda:card.locator('tfoot td').last.inner_text()
+        num=lambda:float(foot().replace(',',''))
+        self.assertAlmostEqual(num(),total,delta=.51)
+        card.locator('[data-acc="vdim"][data-v="Plato"]').click()
+        self.assertEqual(card.locator('tbody tr').count(),self.items['prod'].nunique())
+        g=self.P['grupos'].index('Alimentos')
+        card.locator('[data-acc="vgrupo"]').select_option(str(g))
+        self.assertEqual(pg.evaluate('__vtMes.C.filas.map(f=>f.label)'),['Plato'])
+        card.locator('[data-acc="vgrupo"]').select_option('-1')
+        # Buscar escribiendo de a una letra: el foco no se pierde con el redibujo.
+        card.locator('[data-acc="vbuscar"]').press_sequentially('agu')
+        self.assertEqual(pg.evaluate('document.activeElement.dataset?.acc||document.activeElement.shadowRoot?.activeElement?.dataset.acc'),'vbuscar')
+        self.assertEqual(card.locator('tbody tr').count(),1)
+        self.assertIn('Total de lo visible',card.locator('tfoot').inner_text())
+        agua=self.items.loc[self.items['prod']=='Agua','venta'].sum()
+        self.assertAlmostEqual(num(),agua,delta=.51)
+        card.locator('[data-acc="vbuscar"]').fill('')
+        card.locator('[data-acc="vmed"][data-v="% de su venta"]').click()
+        self.assertEqual(foot(),'100.0%')
+        # Ordenar por un mesero y al revés.
+        ana=self.P['meseros'].index('Ana')
+        card.locator(f'[data-acc="vorden"][data-v="{ana}"]').click()
+        self.assertEqual(pg.evaluate('[__vtMes.st.vorden,__vtMes.st.vdir]'),[str(ana),-1])
+        card.locator(f'[data-acc="vorden"][data-v="{ana}"]').click()
+        self.assertEqual(pg.evaluate('__vtMes.st.vdir'),1)
+        card.locator('[data-acc="vmed"][data-v="Venta"]').click()
+        with pg.expect_download() as dl:card.locator('[data-acc="excelventa"]').click()
+        with tempfile.TemporaryDirectory() as temp:
+            p=Path(temp)/'venta.xlsx';dl.value.save_as(str(p))
+            with zipfile.ZipFile(p) as z:
+                wb=z.read('xl/workbook.xml').decode()
+                for h in ['Plato × mesero','Detalle','Contexto']:self.assertIn(h,wb)
+                ns={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                det=ET.fromstring(z.read('xl/worksheets/sheet2.xml'))
+                ventas=[float(c.find('s:v',ns).text) for c in det.iter('{%s}c'%ns['s']) if c.attrib['r'].startswith('F') and c.find('s:v',ns) is not None]
+                self.assertAlmostEqual(sum(ventas),total,places=1)
+        # El turno de arriba manda también acá.
+        pg.locator('.ms-overview [data-acc="turno"][data-v="Cena"]').click()
+        self.assertIn('Venta por mesero · Cena',card.inner_text())
+        cena=vm.del_turno(self.items,'Cena')['venta'].sum()
+        self.assertAlmostEqual(num(),cena,delta=.51)
 
     def test_excel_de_ajuste_deja_sin_base_el_porcentaje(self):
         self.mount();pg=self.pg;root=pg.locator('.msp')

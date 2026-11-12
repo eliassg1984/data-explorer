@@ -281,7 +281,9 @@ Ver `arquitectura.md` reglas #718 y #770.
 turnos y los dos repartos contra resumen, pozo, planilla, tramos, mensual
 y vendido de Python; los seis Excel canónicos, con fórmulas y decimales;
 filtros que conservan el equipo del pozo, celdas, mapa, pedidos, móvil y
-remontaje en Chromium. Ver `arquitectura.md` regla #719.
+remontaje en Chromium. Ver `arquitectura.md` regla #719. Desde la #852,
+«Venta por mesero» (grupo, subgrupo o plato × mesero) contra un groupby de pandas, sus
+controles y su Excel.
 
 `test_cierre_pieza.py` vigila Ajuste › «Diferencias del cierre» como
 pieza propia (`graficos/ajuste/_cierre.py`, `_cierre_datos.py`, `cierre.js`
