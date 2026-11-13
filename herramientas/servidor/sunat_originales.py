@@ -483,6 +483,67 @@ def click_texto_visible(pagina, texto, timeout_ms=10000):
     raise Exception(f"'{texto}' no apareció visible en {timeout_ms}ms.")
 
 
+# ===========================================================================
+# FOTO DEL FALLO DEL MENÚ
+# ===========================================================================
+# Del 6 al 13 de noviembre de 2026 el nocturno no bajó un solo comprobante:
+# entraba a SOL y no encontraba "Comprobantes de pago" en el menú. El log
+# decía QUÉ texto faltaba, pero no qué había en pantalla en su lugar, así que
+# no se podía saber si el portal cambió el menú, si pedía un paso nuevo
+# después del login o si la clave había vencido. Esto deja la pantalla —foto
+# y HTML— en logs/ y escribe en el log los textos del menú que sí se ven.
+#
+# Sólo para el fallo del MENÚ: el "Error del Servidor" del formulario es
+# transitorio, pasa miles de veces y ya tiene su aviso.
+FOTOS_MAX_POR_CORRIDA = 3      # la 4ª foto de la misma noche no dice nada nuevo
+FOTOS_DIAS_GUARDADAS = 14
+_fotos_tomadas = 0
+
+
+def foto_del_fallo(pagina, motivo):
+    """Guarda lo que hay en pantalla cuando el menú no responde. Nunca
+    lanza: un diagnóstico que rompe la tanda es peor que no tenerlo."""
+    global _fotos_tomadas
+    if _fotos_tomadas >= FOTOS_MAX_POR_CORRIDA:
+        return
+    _fotos_tomadas += 1
+    try:
+        carpeta = AQUI / "logs"
+        carpeta.mkdir(exist_ok=True)
+        limite = time.time() - FOTOS_DIAS_GUARDADAS * 86400
+        for viejo in carpeta.glob("sunat_fallo_*"):
+            if viejo.stat().st_mtime < limite:
+                viejo.unlink()
+        base = carpeta / f"sunat_fallo_{time.strftime('%Y%m%d_%H%M%S')}"
+        log(f"    foto del fallo: {base.name}.png — {motivo[:80]}")
+        try:
+            log(f"    página: {pagina.url[:150]} · título: {pagina.title()[:80]}")
+        except Exception as e:
+            log(f"    (no se pudo leer la dirección: {str(e)[:80]})")
+        try:
+            vistos = []
+            for item in pagina.locator(
+                    ".list-group-item, .nivel1, .nivel2, .nivel3, .nivel4").all()[:400]:
+                if item.is_visible():
+                    texto = " ".join(item.inner_text().split())[:60]
+                    if texto and texto not in vistos:
+                        vistos.append(texto)
+            log(f"    menú visible ({len(vistos)}): " + " | ".join(vistos[:40]))
+        except Exception as e:
+            log(f"    (no se pudo leer el menú: {str(e)[:80]})")
+        try:
+            pagina.screenshot(path=str(base) + ".png", full_page=True)
+        except Exception as e:
+            log(f"    (no se pudo sacar la foto: {str(e)[:80]})")
+        try:
+            (base.parent / (base.name + ".html")).write_text(
+                pagina.content(), encoding="utf-8")
+        except Exception as e:
+            log(f"    (no se pudo guardar el HTML: {str(e)[:80]})")
+    except Exception as e:
+        log(f"    (la foto del fallo falló: {str(e)[:80]})")
+
+
 def ir_a_consulta(pagina):
     """Menú → Consulta de Comprobantes, arrancando de una página limpia.
 
@@ -492,14 +553,18 @@ def ir_a_consulta(pagina):
     visible". Un reload cuesta un par de segundos y deja siempre el mismo
     estado conocido.
     """
-    pagina.goto(URL_MENU_SOL, wait_until="domcontentloaded")
-    pagina.locator(".list-group-item").filter(has_text="Empresas").first.click(force=True)
-    time.sleep(1.5)
-    for texto in ("Comprobantes de pago", "Comprobantes de Pago",
-                  "Consulta de Comprobantes de Pago",
-                  "Nueva Consulta de comprobantes de pago"):
-        click_texto_visible(pagina, texto)
-        time.sleep(0.8)
+    try:
+        pagina.goto(URL_MENU_SOL, wait_until="domcontentloaded")
+        pagina.locator(".list-group-item").filter(has_text="Empresas").first.click(force=True)
+        time.sleep(1.5)
+        for texto in ("Comprobantes de pago", "Comprobantes de Pago",
+                      "Consulta de Comprobantes de Pago",
+                      "Nueva Consulta de comprobantes de pago"):
+            click_texto_visible(pagina, texto)
+            time.sleep(0.8)
+    except Exception as e:
+        foto_del_fallo(pagina, str(e))
+        raise
 
 
 def etiqueta_tipo(tipo_cdp, serie):
